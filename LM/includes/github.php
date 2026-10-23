@@ -836,7 +836,7 @@ if (!function_exists('lm_github_download_zipball')) {
      * @param string $destination
      * @return array{ok:bool,error:string,bytes:int}
      */
-    function lm_github_download_zipball($owner, $repo, $ref, $token, $destination)
+    function lm_github_download_zipball($owner, $repo, $ref, $token, $destination, $onProgress = null)
     {
         $out = array('ok' => false, 'error' => '', 'bytes' => 0);
 
@@ -896,6 +896,15 @@ if (!function_exists('lm_github_download_zipball')) {
                     return strlen($header);
                 },
             ));
+
+            if ($onProgress !== null) {
+                curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+                curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($ch, $dlTotal, $dlNow) use ($onProgress) {
+                    // Called very often by cURL — the callback throttles itself.
+                    call_user_func($onProgress, (int) $dlNow, (int) $dlTotal);
+                    return 0;
+                });
+            }
 
             $ok = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1619,6 +1628,36 @@ if (!function_exists('lm_github_preview')) {
     }
 }
 
+if (!function_exists('lm_github_pull_stage')) {
+    /**
+     * Report a pull stage to whoever asked for progress.
+     *
+     * A background worker passes an `on_stage` callback so the console can
+     * show a real stage instead of a timer. Foreground callers pass nothing
+     * and pay no cost.
+     *
+     * @param array  $options
+     * @param string $stage
+     * @param int    $progress
+     * @param string $message
+     * @return void
+     */
+    function lm_github_pull_stage(array $options, $stage, $progress, $message = '')
+    {
+        if (empty($options['on_stage']) || !is_callable($options['on_stage'])) {
+            return;
+        }
+
+        try {
+            call_user_func($options['on_stage'], $stage, (int) $progress, (string) $message);
+        } catch (Exception $e) {
+            // Progress reporting must never break a pull.
+        } catch (Throwable $e) {
+            // PHP 7+ errors.
+        }
+    }
+}
+
 if (!function_exists('lm_github_pull')) {
     /**
      * Pull the latest commit from GitHub and publish it as a new update.
@@ -1681,6 +1720,8 @@ if (!function_exists('lm_github_pull')) {
             return $result;
         }
 
+        lm_github_pull_stage($options, 'starting', 6, 'Reading the repository…');
+
         $info = lm_github_repo_info($config['owner'], $config['repo'], $config['token']);
         if (!$info['ok']) {
             $result['message'] = $info['error'];
@@ -1733,6 +1774,7 @@ if (!function_exists('lm_github_pull')) {
             $result['message'] = 'Already up to date — no new commits on ' . $branch . ' since the last pull.';
             $result['commit'] = $head['commit']['short'];
             $result['commit_title'] = $head['commit']['title'];
+            lm_github_pull_stage($options, 'done', 100, 'Already up to date.');
             return $result;
         }
 
@@ -1869,7 +1911,32 @@ if (!function_exists('lm_github_pull')) {
         }
 
         if (!$download['ok']) {
-            $download = lm_github_download_zipball($config['owner'], $config['repo'], $headSha, $config['token'], $downloadPath);
+            lm_github_pull_stage($options, 'downloading', 18, 'Downloading the archive from GitHub…');
+
+            $lastTick = 0;
+            $download = lm_github_download_zipball(
+                $config['owner'],
+                $config['repo'],
+                $headSha,
+                $config['token'],
+                $downloadPath,
+                function ($now, $total) use ($options, &$lastTick) {
+                    // One progress write every 5 s keeps the job's heartbeat
+                    // fresh without hammering the database. Skip the first
+                    // call: cURL fires it before a byte has arrived.
+                    if ($now < 65536 || time() - $lastTick < 5) {
+                        return;
+                    }
+                    $lastTick = time();
+
+                    $progress = 18;
+                    if ($total > 0) {
+                        $progress = 18 + (int) floor(32 * min(1, $now / max(1, $total)));
+                    }
+
+                    lm_github_pull_stage($options, 'downloading', $progress, 'Downloading ' . lm_format_bytes((int) $now) . '…');
+                }
+            );
             if (!$download['ok']) {
                 $result['message'] = $download['error'];
                 return $result;
@@ -1877,6 +1944,7 @@ if (!function_exists('lm_github_pull')) {
         }
         $result['download_cached'] = !empty($download['cached']);
         $timings['download'] = round(microtime(true) - $timed, 2);
+        lm_github_pull_stage($options, 'packaging', 55, 'Packaging ' . lm_format_bytes((int) $download['bytes']) . '…');
 
         $targetFile = $tierDir . DIRECTORY_SEPARATOR . 'update_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $version) . '.zip';
 
@@ -1926,6 +1994,8 @@ if (!function_exists('lm_github_pull')) {
             @unlink($normalizedPath);
         }
         @chmod($targetFile, 0644);
+
+        lm_github_pull_stage($options, 'publishing', 80, 'Publishing v' . $version . '…');
 
         $publish = lm_publish_update($pdo, $tier, $version, $targetFile, $changelogHtml, array(
             'source' => 'github',
@@ -1980,8 +2050,8 @@ if (!function_exists('lm_github_pull')) {
                 count($commits),
                 (int) $rewrite['files'] > 0 ? (int) $rewrite['files'] : count($files),
                 (int) $download['bytes'],
-                'Pulled via admin',
-                $_SESSION['admin_username'] ?? 'admin',
+                'Pulled via ' . (!empty($options['actor']) ? (string) $options['actor'] : 'admin'),
+                !empty($options['actor']) ? (string) $options['actor'] : ($_SESSION['admin_username'] ?? 'admin'),
                 $rewrite['root'] !== '' ? $rewrite['root'] : null,
                 (int) $rewrite['files'],
             ));

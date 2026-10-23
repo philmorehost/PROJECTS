@@ -76,7 +76,7 @@ $requested = '';
 if (isset($_GET['tasks'])) {
     $requested = (string) $_GET['tasks'];
 }
-$tasks = array('mail', 'notifications', 'cleanup', 'github');
+$tasks = array('mail', 'notifications', 'cleanup', 'github', 'pull_jobs');
 if ($requested !== '') {
     $tasks = array_values(array_intersect(array_map('trim', explode(',', $requested)), $tasks));
 }
@@ -112,11 +112,39 @@ if (in_array('cleanup', $tasks, true)) {
         lm_log('cron: token cleanup failed — ' . $e->getMessage());
     }
 
-    $lmReport['tasks']['cleanup'] = array('expired_tokens' => $expired);
+    // Finished pull jobs are only useful as a short history.
+    $oldJobs = 0;
+    try {
+        $stmt = $pdo->prepare(
+            "DELETE FROM github_pull_jobs
+              WHERE status IN ('success', 'error', 'skipped')
+                AND finished_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)"
+        );
+        $stmt->execute();
+        $oldJobs = $stmt->rowCount();
+    } catch (PDOException $e) {
+        // Table not created yet — nothing to clean.
+    }
+
+    $lmReport['tasks']['cleanup'] = array('expired_tokens' => $expired, 'old_pull_jobs' => $oldJobs);
 }
 
 /* -------------------------------------------------------------------------
- * 4. GitHub auto-pull (per project, opt-in, throttled to 30 minutes)
+ * 4. Background pull queue
+ *
+ * Pulls are queued by the console and normally run in their own worker. This
+ * is the safety net: if exec() is disabled and the loopback request was
+ * blocked (a proxy, a maintenance page), the queued job still finishes here.
+ * It also reaps jobs whose worker died mid-pull.
+ * ---------------------------------------------------------------------- */
+if (in_array('pull_jobs', $tasks, true)) {
+    require_once __DIR__ . '/includes/pull_jobs.php';
+    // CLI cron can wait; a web cron should not sit on a 100 MB download.
+    $lmReport['tasks']['pull_jobs'] = lm_pull_jobs_drain($pdo, $lmIsCli ? 2 : 1);
+}
+
+/* -------------------------------------------------------------------------
+ * 5. GitHub auto-pull (per project, opt-in, throttled to 30 minutes)
  * ---------------------------------------------------------------------- */
 if (in_array('github', $tasks, true)) {
     require_once __DIR__ . '/includes/github.php';
@@ -137,10 +165,19 @@ if (in_array('github', $tasks, true)) {
         $errors[] = $e->getMessage();
     }
 
+    require_once __DIR__ . '/includes/pull_jobs.php';
+
     foreach ($autoTiers as $tier) {
         $lastPull = !empty($tier['github_last_pull_at']) ? strtotime($tier['github_last_pull_at'] . ' UTC') : 0;
         if ($lastPull > 0 && (time() - $lastPull) < 1800) {
             $skipped[] = array('tier' => $tier['tier_name'], 'reason' => 'Throttled (30 min).');
+            continue;
+        }
+
+        // A background pull is already publishing this project: do not start
+        // a second one over the top of it.
+        if (lm_pull_job_active($pdo, (int) $tier['id'])) {
+            $skipped[] = array('tier' => $tier['tier_name'], 'reason' => 'A background pull is running.');
             continue;
         }
 
@@ -176,6 +213,7 @@ lm_log('cron: completed in ' . $lmReport['duration_ms'] . ' ms — ' . json_enco
     'mail' => isset($lmReport['tasks']['mail']['processed']) ? $lmReport['tasks']['mail']['processed'] : null,
     'notifications' => isset($lmReport['tasks']['notifications']['processed']) ? $lmReport['tasks']['notifications']['processed'] : null,
     'github' => isset($lmReport['tasks']['github']['published']) ? count($lmReport['tasks']['github']['published']) : null,
+    'pull_jobs' => isset($lmReport['tasks']['pull_jobs']['done']) ? (int) $lmReport['tasks']['pull_jobs']['done'] : null,
 )));
 
 if ($lmLocked) {

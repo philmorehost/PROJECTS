@@ -318,9 +318,37 @@ HTML
   <li><strong>Version to publish</strong> — pre-filled from the previous release. Overwrite it if you tag releases by hand.</li>
   <li><strong>Changelog</strong> — edit before publishing; this text goes into the email, the manifest and the update row. Switch HTML / plain text with the radios.</li>
   <li><strong>Email customers</strong> — same behaviour as a manual upload.</li>
-  <li><strong>🚀 Pull &amp; publish</strong> — downloads the archive, filters it to your selection, injects <code>manifest.json</code>, publishes and records the pull.</li>
+  <li><strong>🚀 Pull &amp; publish</strong> — queues the pull, then downloads the archive, filters it to your selection, injects <code>manifest.json</code>, publishes and records the pull.</li>
 </ul>
 <p>Changing only the selection (no new commits) still publishes a new package — the LM compares the commit <em>and</em> the stored selection.</p>
+<p class="lm-guide-note">The pull runs in the background: the page returns immediately and the progress card shows the real stage. See <a href="guide.php#background">Pulls run in the background</a>.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'background',
+                        'title' => 'Pulls run in the background',
+                        'html' => <<<'HTML'
+<p>Downloading and repacking a monorepo takes longer than a browser request should stay open, so the console no longer waits for it:</p>
+<ol class="lm-guide-steps">
+  <li><strong>Queue</strong> — pressing <em>Pull &amp; publish</em> stores the job and answers straight away. A worker starts on the server (a detached CLI process, or a loopback request when <code>exec()</code> is disabled).</li>
+  <li><strong>Close the tab</strong> — the job keeps running. Nothing depends on the page staying open.</li>
+  <li><strong>Watch the stage</strong> — the card shows <em>Reading the repository → Downloading → Packaging → Publishing</em> with real progress from the server, not a guess.</li>
+  <li><strong>Come back later</strong> — reopening <em>GitHub Pull</em> restores the running job, or shows the finished result if it completed while you were away.</li>
+</ol>
+<p>When the pull finishes, two things happen without you doing anything:</p>
+<ul>
+  <li><strong>You get an email</strong> at <em>Settings → Admin email</em> with the version, commit, file count, archive size and duration — or the exact error if it failed.</li>
+  <li><strong>Customers get the update email</strong> immediately. <code>lm_publish_update()</code> queues one email per licence and this job sends the batch right away instead of waiting for the next cron run. The next-day reminder still runs from cron.</li>
+</ul>
+<table class="lm-guide-table">
+  <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
+  <tbody>
+    <tr><td>You press pull twice</td><td>The second press returns the job that is already running — never two pulls for one project.</td></tr>
+    <tr><td>Worker cannot start (no <code>exec()</code>, blocked loopback)</td><td>The job stays queued and <code>cron.php</code> runs it on its next pass (within 10 minutes). The progress card says so.</td></tr>
+    <tr><td>The worker dies mid-pull</td><td>No heartbeat for 45 minutes → the job is marked failed with a readable reason, so the project is never locked.</td></tr>
+    <tr><td>Pull fails</td><td>You get the failure email; no customer email is sent and no update row is created.</td></tr>
+  </tbody>
+</table>
 HTML
                     ),
                     array(
@@ -570,6 +598,7 @@ HTML
     <tr><td><code>notifications</code></td><td>Sends update emails and the next-day reminders, up to the batch size.</td></tr>
     <tr><td><code>cleanup</code></td><td>Deletes download tokens that expired more than a day ago.</td></tr>
     <tr><td><code>github</code></td><td>Auto-pull for projects that enabled it, throttled to once every 30 minutes.</td></tr>
+    <tr><td><code>pull_jobs</code></td><td>Runs background pulls that no worker could start, and reaps jobs whose worker disappeared.</td></tr>
   </tbody>
 </table>
 <p>A lock file (<code>storage/cron.lock</code>) prevents overlapping runs, so a slow SMTP connection cannot stack up.</p>

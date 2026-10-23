@@ -645,7 +645,7 @@ if (!function_exists('lm_schema_version')) {
      */
     function lm_schema_version()
     {
-        return '2026_10_23_github_paths';
+        return '2026_10_23_pull_jobs';
     }
 }
 
@@ -665,6 +665,52 @@ if (!function_exists('lm_migration_github_paths')) {
         lm_db_add_column($pdo, 'script_tiers', 'github_pulled_includes', "TEXT NULL");
         lm_db_add_column($pdo, 'github_pulls', 'package_root', "VARCHAR(190) NULL");
         lm_db_add_column($pdo, 'github_pulls', 'files_packaged', "INT NULL");
+    }
+}
+
+if (!function_exists('lm_migration_pull_jobs')) {
+    /**
+     * Background GitHub pull jobs.
+     *
+     * A pull downloads and re-packs an archive that can be hundreds of MB, far
+     * longer than a browser request should stay open. The request enqueues a
+     * row; a worker (spawned process, loopback request or cron) runs it and
+     * writes the stage/result here so the console can poll.
+     *
+     * @param PDO $pdo
+     * @return void
+     */
+    function lm_migration_pull_jobs(PDO $pdo)
+    {
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS `github_pull_jobs` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tier_id` INT NOT NULL,
+                `status` VARCHAR(16) NOT NULL DEFAULT 'queued',
+                `stage` VARCHAR(32) NOT NULL DEFAULT 'queued',
+                `progress` TINYINT NOT NULL DEFAULT 0,
+                `message` TEXT NULL,
+                `payload` MEDIUMTEXT NULL,   -- a file selection can be hundreds of KB
+                `result` MEDIUMTEXT NULL,
+                `run_token` VARCHAR(64) NOT NULL,
+                `update_id` INT NULL,
+                `version` VARCHAR(20) NULL,
+                `commit_sha` VARCHAR(64) NULL,
+                `actor` VARCHAR(100) NULL,
+                `notified` TINYINT NOT NULL DEFAULT 0,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `started_at` DATETIME NULL,
+                `heartbeat_at` DATETIME NULL,
+                `dispatched_at` DATETIME NULL, -- last time a worker was started for this job
+                `finished_at` DATETIME NULL,
+                KEY `idx_status` (`status`),
+                KEY `idx_tier` (`tier_id`),
+                KEY `idx_created` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        lm_db_add_column($pdo, 'github_pull_jobs', 'notified', "TINYINT NOT NULL DEFAULT 0");
+        lm_db_add_column($pdo, 'github_pull_jobs', 'dispatched_at', "DATETIME NULL");
     }
 }
 
@@ -722,6 +768,7 @@ if (!function_exists('lm_run_migrations')) {
             '2026_10_23_backfill_domains' => 'lm_migration_backfill_domains',
             '2026_10_23_notifications_github' => 'lm_migration_notifications_github',
             '2026_10_23_github_paths' => 'lm_migration_github_paths',
+            '2026_10_23_pull_jobs' => 'lm_migration_pull_jobs',
         );
 
         foreach ($migrations as $version => $callback) {

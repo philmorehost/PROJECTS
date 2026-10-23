@@ -3,7 +3,10 @@
  * admin/ajax_github.php
  *
  * GitHub update source for a script project:
- *   save_config | test | preview | pull | clear_token | pulls
+ *   save_config | test | preview | pull | pull_status | pull_last | clear_token | pulls
+ *
+ * `pull` queues a background job and returns at once; the page then polls
+ * `pull_status` and restores `pull_last` when it is reopened.
  */
 
 session_start();
@@ -343,70 +346,102 @@ if ($action === 'pull') {
         lm_json(array('status' => 'error', 'message' => 'ZIP support is unavailable: enable the PHP zlib extension.'));
     }
 
-    try {
-        $result = lm_github_pull($pdo, $tierId, array(
-            'version' => trim((string) ($_POST['version'] ?? '')),
-            'changelog' => trim((string) ($_POST['changelog'] ?? '')),
-            'changelog_format' => (($_POST['changelog_format'] ?? 'html') === 'text') ? 'text' : 'html',
-            'increment' => in_array(($_POST['increment'] ?? ''), array('major', 'minor', 'patch'), true) ? $_POST['increment'] : '',
-            'notify' => !isset($_POST['notify']) || (string) $_POST['notify'] !== '0',
-            'force' => !empty($_POST['force']),
-            'ref' => trim((string) ($_POST['ref'] ?? '')),
-            'paths' => isset($_POST['paths'])
-                ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
-                : (isset($_POST['selection_cleared']) ? array() : null),
-        ));
-    } catch (Exception $e) {
-        lm_json(array('status' => 'error', 'message' => 'Pull failed: ' . $e->getMessage()));
-    } catch (Throwable $e) {
-        lm_json(array('status' => 'error', 'message' => 'Pull failed: ' . $e->getMessage()));
+    require_once __DIR__ . '/../includes/pull_jobs.php';
+
+    // A pull takes minutes. Queue it and answer now: the console polls for the
+    // stage, and the work finishes even if the browser is closed.
+    $job = lm_pull_job_enqueue($pdo, $tierId, array(
+        'version' => trim((string) ($_POST['version'] ?? '')),
+        'changelog' => trim((string) ($_POST['changelog'] ?? '')),
+        'changelog_format' => (($_POST['changelog_format'] ?? 'html') === 'text') ? 'text' : 'html',
+        'increment' => in_array(($_POST['increment'] ?? ''), array('major', 'minor', 'patch'), true) ? $_POST['increment'] : '',
+        'notify' => !isset($_POST['notify']) || (string) $_POST['notify'] !== '0',
+        'force' => !empty($_POST['force']),
+        'ref' => trim((string) ($_POST['ref'] ?? '')),
+        'paths' => isset($_POST['paths'])
+            ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
+            : (isset($_POST['selection_cleared']) ? array() : null),
+    ), (isset($_SESSION['admin_username']) && $_SESSION['admin_username'] !== '' ? (string) $_SESSION['admin_username'] : 'admin'));
+
+    if (!$job) {
+        lm_json(array('status' => 'error', 'message' => 'Could not queue the pull. Run the database repair tool, then try again.'));
     }
 
-    if (!$result['ok']) {
-        lm_json(array('status' => 'error', 'message' => $result['message'], 'result' => $result));
-    }
-
-    if ($result['status'] === 'up_to_date') {
-        lm_json(array(
-            'status' => 'success',
-            'message' => $result['message'],
-            'up_to_date' => true,
-            'commit' => $result['commit'],
-            'commit_title' => $result['commit_title'],
-        ));
-    }
-
-    $notes = $result['notifications'];
-    $message = $result['message'];
-    if (!empty($notes)) {
-        $message .= ' ' . (int) ($notes['queued'] ?? 0) . ' customer notification(s) queued';
-        if (!empty($notes['skipped'])) {
-            $message .= ', ' . (int) $notes['skipped'] . ' skipped (already updated)';
+    $started = '';
+    if (lm_pull_job_should_dispatch($job, 0)) {
+        $started = lm_pull_job_dispatch($job);
+        if ($started !== '') {
+            lm_pull_job_mark_dispatched($pdo, (int) $job['id']);
         }
-        $message .= '.';
     }
+    $payload = lm_pull_job_public($job);
+
+    // Another pull was already running for this project: return it rather than
+    // pretending a second one started.
+    $already = ($job['status'] !== 'queued');
 
     lm_json(array(
         'status' => 'success',
-        'message' => $message,
-        'up_to_date' => false,
-        'version' => $result['version'],
-        'previous_version' => $result['previous_version'],
-        'update_id' => $result['update_id'],
-        'commit' => $result['commit'],
-        'commit_title' => $result['commit_title'],
-        'commits' => $result['commits'],
-        'files_changed' => $result['files_changed'],
-        'bytes' => $result['bytes'],
-        'bytes_human' => lm_format_bytes($result['bytes']),
-        'zip_path' => $result['zip_path'],
-        'cpanel_dir' => $result['cpanel_dir'],
-        'notifications' => $result['notifications'],
-        'package_root' => $result['package_root'],
-        'files_packaged' => $result['files_selected'],
-        'seconds' => isset($result['seconds']) ? $result['seconds'] : null,
-        'timings' => isset($result['timings']) ? $result['timings'] : null,
+        'message' => $already
+            ? 'A pull is already running for this project.'
+            : ($started === ''
+                ? 'Pull queued. Waiting for a worker — cron picks it up within 10 minutes if nothing starts it sooner.'
+                : 'Pull started in the background. You can close this page.'),
+        'background' => true,
+        'job_id' => (int) $job['id'],
+        'job' => $payload,
+        'dispatch' => $started,
+        'already_running' => $already,
     ));
+}
+
+if ($action === 'pull_status') {
+    require_once __DIR__ . '/../includes/pull_jobs.php';
+
+    $jobId = (int) ($_POST['job_id'] ?? 0);
+    $job = $jobId > 0 ? lm_pull_job_get($pdo, $jobId) : null;
+
+    if (!$job && $tierId > 0) {
+        $job = lm_pull_job_latest($pdo, $tierId);
+    }
+
+    if (!$job) {
+        lm_json(array('status' => 'success', 'job' => null));
+    }
+
+    // A queued job whose worker never started is picked up on the next poll so
+    // the admin is not left waiting for cron. One attempt per minute: a
+    // successful start must not be repeated on every 2-second poll.
+    if ($job['status'] === 'queued') {
+        lm_pull_job_reap($pdo);
+        $fresh = lm_pull_job_get($pdo, (int) $job['id']) ?: $job;
+
+        if (lm_pull_job_should_dispatch($fresh)) {
+            if (lm_pull_job_dispatch($fresh) !== '') {
+                lm_pull_job_mark_dispatched($pdo, (int) $fresh['id']);
+                $fresh['dispatched_at'] = gmdate('Y-m-d H:i:s');
+            }
+        }
+
+        $job = $fresh;
+    }
+
+    $payload = lm_pull_job_public($job);
+    $payload['message_text'] = lm_pull_job_summary($payload);
+
+    lm_json(array('status' => 'success', 'job' => $payload));
+}
+
+if ($action === 'pull_last') {
+    require_once __DIR__ . '/../includes/pull_jobs.php';
+
+    $job = $tierId > 0 ? lm_pull_job_latest($pdo, $tierId) : null;
+    $payload = lm_pull_job_public($job);
+    if ($payload) {
+        $payload['message_text'] = lm_pull_job_summary($payload);
+    }
+
+    lm_json(array('status' => 'success', 'job' => $payload ?: null));
 }
 
 if ($action === 'tree') {

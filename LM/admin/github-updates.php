@@ -238,6 +238,8 @@ lm_admin_page_start('GitHub Pull', 'github');
             </div>
         </div>
 
+        <div id="pullJobCard"></div>
+
         <div class="card" style="margin:0;">
             <div class="card-head">
                 <div>
@@ -927,6 +929,10 @@ lm_admin_page_start('GitHub Pull', 'github');
         loadPreview();
         loadPulls();
 
+        // A pull may have finished while the admin was away — surface it.
+        stopPolling();
+        checkLatestJob(true);
+
         if (currentProject.repo_full) {
             loadBranches();
             loadTree();
@@ -1243,7 +1249,9 @@ lm_admin_page_start('GitHub Pull', 'github');
         html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
             + '<button class="btn btn-primary" type="button" id="pullBtn">🚀 Pull &amp; publish v' + escapeHtml(data.next_version) + '</button>'
             + '<button class="btn btn-ghost" type="button" id="forcePullBtn">Force re-publish</button>'
-            + '</div>';
+            + '</div>'
+            + '<div class="hint" style="margin-top:9px;">Runs in the background — you can close this page. '
+            + 'You get an e-mail when it finishes, and customers get the update e-mail automatically.</div>';
 
         el('previewBody').innerHTML = html;
 
@@ -1255,6 +1263,161 @@ lm_admin_page_start('GitHub Pull', 'github');
         el('forcePullBtn').addEventListener('click', () => doPull(true));
     }
 
+    /* =====================================================================
+     * Background pulls
+     * =====================================================================
+     * The server queues the pull and answers at once. From here we poll the
+     * job, draw the real stage, and keep the outcome on screen after a reload.
+     */
+
+    let POLL = { timer: null, ticker: null };
+
+    function stopPolling() {
+        if (POLL.timer) { clearTimeout(POLL.timer); POLL.timer = null; }
+        if (POLL.ticker) { clearInterval(POLL.ticker); POLL.ticker = null; }
+    }
+
+    function renderJobCard(job) {
+        const box = el('pullJobCard');
+        if (!box) return;
+
+        if (!job) { box.innerHTML = ''; return; }
+
+        const running = !job.finished;
+        const ok = job.status === 'success';
+        const skipped = job.status === 'skipped';
+        const pct = Math.max(0, Math.min(100, Number(job.progress) || 0));
+        const summary = job.message_text || job.message || '';
+
+        if (running) {
+            box.innerHTML = '<div class="card" style="margin:0 0 20px;">'
+                + '<div class="card-head"><div><h2>Pulling ' + escapeHtml(currentProject ? currentProject.name : 'project') + '</h2>'
+                + '<p id="jobStageLabel">' + escapeHtml(job.stage_label || 'Working…') + '</p></div>'
+                + '<span class="badge badge-info">Running in the background</span></div>'
+                + '<div class="card-body">'
+                + '<div class="progress-track"><div class="progress-fill" id="jobFill" style="width:' + pct + '%;"></div></div>'
+                + '<div class="tiny muted" style="margin-top:10px;" id="jobHint">This keeps running if you close the page — you will get an e-mail when it finishes.</div>'
+                + '</div></div>';
+            return;
+        }
+
+        const tone = job.status === 'error' ? 'banner-err' : (skipped ? 'banner-info' : 'banner-ok');
+        const title = job.status === 'error'
+            ? 'Pull failed'
+            : (skipped ? 'Already up to date' : 'Background pull finished');
+        const icon = job.status === 'error' ? '⚠️' : (skipped ? '✓' : '✅');
+        const time = job.finished_at ? ' · ' + formatDate(job.finished_at) : '';
+        const dismissKey = 'lmPullSeen' + (currentProject ? currentProject.id : '');
+
+        box.innerHTML = '<div class="card" style="margin:0 0 20px;">'
+            + '<div class="card-head"><div><h2>' + icon + ' ' + title + '</h2>'
+            + '<p>' + escapeHtml(currentProject ? currentProject.name : '') + time + '</p></div>'
+            + (ok ? '<a class="btn btn-ghost btn-sm" href="updates.php">View in Push Updates</a>' : '')
+            + '</div>'
+            + '<div class="card-body">'
+            + '<div class="banner ' + tone + '" style="margin:0;">' + escapeHtml(summary) + '</div>'
+            + (ok && job.version ? '<div class="tiny muted" style="margin-top:10px;">Published <strong>v'
+                + escapeHtml(job.version) + '</strong>'
+                + (job.commit ? ' from <code>' + escapeHtml(String(job.commit).slice(0, 7)) + '</code>' : '')
+                + (job.update_id ? ' · update #' + escapeHtml(String(job.update_id)) : '') + '</div>' : '')
+            + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'
+            + '<button class="btn btn-ghost btn-sm" type="button" id="jobDismissBtn">Dismiss</button>'
+            + '</div></div></div>';
+
+        const dismiss = el('jobDismissBtn');
+        if (dismiss) {
+            dismiss.addEventListener('click', () => {
+                try { localStorage.setItem(dismissKey, String(job.id)); } catch (e) {}
+                box.innerHTML = '';
+            });
+        }
+    }
+
+    async function checkLatestJob(announce) {
+        if (!currentProject) return;
+
+        const result = await lmPost('ajax_github.php', { action: 'pull_last', tier_id: currentProject.id });
+        if (!result || !result.job) { renderJobCard(null); return; }
+
+        const job = result.job;
+        let seen = '0';
+        try { seen = localStorage.getItem('lmPullSeen' + currentProject.id) || '0'; } catch (e) {}
+
+        if (!job.finished) {
+            // A pull is still running from an earlier visit: resume polling.
+            renderJobCard(job);
+            pollJob(job.id);
+            return;
+        }
+
+        // Already seen (or dismissed) on this browser: stay quiet.
+        if (String(job.id) === seen) { renderJobCard(null); return; }
+
+        renderJobCard(job);
+
+        // Tell the admin it finished while they were away (once per job).
+        if (announce) {
+            const ok = job.status === 'success';
+            toast((job.status === 'error' ? 'Background pull failed: ' : 'Background pull finished: ')
+                + (job.message_text || job.message || ''), ok ? 'ok' : (job.status === 'error' ? 'err' : 'ok'));
+            try { localStorage.setItem('lmPullSeen' + currentProject.id, String(job.id)); } catch (e) {}
+        }
+    }
+
+    function pollJob(jobId) {
+        stopPolling();
+
+        const started = Date.now();
+        let attempts = 0;
+
+        const ticker = setInterval(() => {
+            const hint = el('jobHint');
+            if (!hint) return;
+            const secs = Math.round((Date.now() - started) / 1000);
+            hint.textContent = 'Running for ' + secs + ' s. You can close this page — the pull continues and you will get an e-mail when it finishes.';
+        }, 1000);
+
+        const step = async () => {
+            attempts++;
+            const result = await lmPost('ajax_github.php', { action: 'pull_status', job_id: jobId, tier_id: currentProject ? currentProject.id : 0 });
+
+            if (!result || !result.job) {
+                // Transient failure (network, server busy): keep trying.
+                POLL.timer = setTimeout(step, Math.min(15000, 2000 + attempts * 500));
+                return;
+            }
+
+            const job = result.job;
+
+            if (!job.finished) {
+                renderJobCard(job);
+                // Slow down once the download is clearly long: 2 s → 5 s.
+                const delay = attempts < 30 ? 2000 : 5000;
+                POLL.timer = setTimeout(step, delay);
+                return;
+            }
+
+            stopPolling();
+            renderJobCard(job);
+
+            const ok = job.status === 'success';
+            const text = job.message_text || job.message || '';
+            toast(job.status === 'error' ? ('Pull failed: ' + text) : text, job.status === 'error' ? 'err' : 'ok');
+
+            try { localStorage.setItem('lmPullSeen' + (job.tier_id || (currentProject ? currentProject.id : '')), String(job.id)); } catch (e) {}
+
+            if (ok) {
+                loadPulls();
+                // The branch head moved: refresh the preview so "next release"
+                // reflects the release that was just published.
+                loadPreview();
+            }
+        };
+
+        POLL.timer = setTimeout(step, 1200);
+        POLL.ticker = ticker;
+    }
+
     async function doPull(force) {
         if (!currentProject) return;
         const button = force ? el('forcePullBtn') : el('pullBtn');
@@ -1264,17 +1427,7 @@ lm_admin_page_start('GitHub Pull', 'github');
         const forceBtn = el('forcePullBtn');
         if (forceBtn) forceBtn.disabled = true;
         const original = button.textContent;
-
-        // A monorepo archive can take a minute: show elapsed time and the stage
-        // instead of a frozen button.
-        const started = Date.now();
-        const tick = () => {
-            const secs = Math.round((Date.now() - started) / 1000);
-            const stage = secs < 12 ? 'Downloading archive' : (secs < 20 ? 'Packaging files' : 'Still packaging');
-            button.textContent = stage + '… ' + secs + 's';
-        };
-        tick();
-        const timer = setInterval(tick, 1000);
+        button.textContent = 'Queuing…';
 
         const format = document.querySelector('input[name="pullFormat"]:checked');
         const summary = selectionSummary();
@@ -1302,26 +1455,21 @@ lm_admin_page_start('GitHub Pull', 'github');
 
         const result = await lmPost('ajax_github.php', payload);
 
-        clearInterval(timer);
         button.disabled = false;
         button.textContent = original;
         if (forceBtn) forceBtn.disabled = false;
-        toast(result.message, result.status === 'error' ? 'err' : 'ok');
 
-        if (result.status === 'success' && !result.up_to_date) {
-            el('previewBody').innerHTML = '<div class="banner banner-ok" style="margin:0 0 14px;">✓ Published <strong>v'
-                + escapeHtml(result.version) + '</strong> from <code>' + escapeHtml(String(result.commit || '').slice(0, 7)) + '</code>. '
-                + (result.files_packaged ? '<strong>' + result.files_packaged + ' files</strong> packaged'
-                    + (result.package_root ? ' from <code>' + escapeHtml(result.package_root + '/') + '</code>' : '') + '. '
-                    : '')
-                + escapeHtml(result.bytes_human || '') + ' written to <code>' + escapeHtml(result.cpanel_dir || '') + '</code>'
-                + (result.seconds ? ' in <strong>' + escapeHtml(String(result.seconds)) + ' s</strong>'
-                    + (result.timings ? ' <span class="tiny muted">(download ' + escapeHtml(String(result.timings.download))
-                        + ' s · package ' + escapeHtml(String(result.timings.package)) + ' s)</span>' : '') : '')
-                + '.</div>'
-                + '<a class="btn btn-ghost" href="updates.php">View in Push Updates</a>';
-            loadPulls();
+        if (!result || result.status === 'error') {
+            toast((result && result.message) || 'Could not start the pull.', 'err');
+            return;
         }
+
+        toast(result.message || 'Pull started.', 'ok');
+
+        if (result.job) {
+            renderJobCard(result.job);
+        }
+        pollJob(result.job_id);
     }
 
     async function loadPulls() {

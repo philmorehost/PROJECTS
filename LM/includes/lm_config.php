@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.7.1');
+    define('LM_VERSION', '8.8.0');
 }
 
 if (!function_exists('lm_lm_dir')) {

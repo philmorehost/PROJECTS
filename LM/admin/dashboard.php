@@ -19,6 +19,24 @@ $inactive_licenses = count(array_filter($licenses, fn($l) => $l['status'] === 'i
 // Get transaction count
 $stmt = $pdo->query("SELECT COUNT(*) as count FROM transactions");
 $transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+// Most recent background GitHub pull (the in-app side of the completion
+// notice — the e-mail version goes to the admin address).
+$latestPull = null;
+try {
+    $stmt = $pdo->query(
+        "SELECT j.*, t.tier_name
+           FROM github_pull_jobs j
+           LEFT JOIN script_tiers t ON t.id = j.tier_id
+          WHERE j.status IN ('success', 'error', 'skipped')
+            AND j.finished_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)
+          ORDER BY j.id DESC
+          LIMIT 1"
+    );
+    $latestPull = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+} catch (PDOException $e) {
+    $latestPull = null; // older install, or migrations not run yet
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -244,6 +262,31 @@ $transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             <h2>Dashboard</h2>
             <a href="logout.php" class="logout-btn">Logout</a>
         </div>
+
+        <?php if ($latestPull): ?>
+            <?php
+            $pullOk = ($latestPull['status'] === 'success');
+            $pullSkipped = ($latestPull['status'] === 'skipped');
+            $pullColor = $pullOk ? '#10b981' : ($pullSkipped ? '#0ea5e9' : '#ef4444');
+            $pullTint = $pullOk ? '#ecfdf5' : ($pullSkipped ? '#eff6ff' : '#fef2f2');
+            $pullTime = $latestPull['finished_at'] ? strtotime($latestPull['finished_at'] . ' UTC') : 0;
+            $pullSummary = trim((string) $latestPull['message']);
+            ?>
+            <div style="display:flex;gap:14px;align-items:flex-start;background:<?= $pullTint ?>;border:1px solid <?= $pullColor ?>33;border-left:4px solid <?= $pullColor ?>;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+                <div style="font-size:20px;line-height:1;"><?= $pullOk ? '✅' : ($pullSkipped ? '✓' : '⚠️') ?></div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;color:#0f172a;font-size:14px;">
+                        <?= $pullOk ? 'Background pull finished' : ($pullSkipped ? 'Background pull: nothing to publish' : 'Background pull failed') ?>
+                        &middot; <?= htmlspecialchars((string) ($latestPull['tier_name'] ?? 'project')) ?>
+                    </div>
+                    <div style="font-size:13px;color:#334155;margin-top:3px;"><?= htmlspecialchars($pullSummary) ?></div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;">
+                        <?= $pullTime ? htmlspecialchars(gmdate('M j, Y H:i', $pullTime)) . ' UTC' : '' ?>
+                        &middot; <a href="github-updates.php" style="color:<?= $pullColor ?>;font-weight:600;text-decoration:none;">Open GitHub Pull →</a>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="stats-grid">
             <div class="stat-card">
