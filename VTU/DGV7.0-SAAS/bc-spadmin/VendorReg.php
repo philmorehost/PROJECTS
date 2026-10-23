@@ -1,10 +1,11 @@
 <?php session_start();
     // Use basic configs to allow optional login
     include("../func/bc-connect.php");
-	include("../func/bc-tables.php");
+    include("../func/bc-tables.php");
     include("../func/bc-email-templates.php");
     include_once("../func/bc-func.php");
     include("../func/whmcs-func.php");
+    include_once("../func/whmp-func.php");
     // The password-hashing helpers (bc_hash_password / bc_verify_password / bc_password_is_legacy)
     // live in bc-security.php, which only the full configs load (bc-config, bc-admin-config,
     // bc-spadmin-config). This page deliberately bootstraps with the "basic configs" so it can run
@@ -855,6 +856,9 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                 return;
             }
             domainVal = (domainInput + extension).toLowerCase();
+            // Set app_base_url so the server receives the full domain even if SEARCH wasn't clicked
+            document.getElementById('app_base_url_input').value = domainVal;
+            document.getElementById('domain_fee_input').value = domainFee || 0;
         } else {
             domainVal = document.getElementById('existing_domain').value.trim().toLowerCase();
             if (domainVal === '') {

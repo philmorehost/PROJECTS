@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
+    include_once("../func/whmp-func.php");
 
     // Handle actions
     if(isset($_GET['action']) && isset($_GET['id'])) {
@@ -54,14 +55,23 @@
                         if(mysqli_query($connection_server, $insert_sql)) {
                         $new_vendor_id = mysqli_insert_id($connection_server);
 
-                            // Trigger WHMCS Domain Registration if domain fee was paid
+                            // ─── WHMP Domain Registration ────────────────────────────────────────
                             if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
-                                include_once("../func/bc-func.php");
-                                include_once("../func/whmcs-func.php");
-                                // We need a WHMCS Client ID. For now, we use a placeholder or logic to find/create one.
-                                // In a real scenario, you might have already created the client or have a dedicated account for automation.
-                                $whmcs_client_id = getSuperAdminOption('whmcs_default_client_id', '1');
-                                whmcsCreateOrder($whmcs_client_id, $pending_vendor['app_base_url']);
+                                if (whmp_is_configured()) {
+                                    // Try WHMP first
+                                    $whmp_result = whmp_register_domain($pending_vendor['app_base_url']);
+                                    if ($whmp_result['status'] === 'success') {
+                                        error_log('[WHMP] Domain registered on approval: ' . $pending_vendor['app_base_url']);
+                                    } else {
+                                        error_log('[WHMP] Domain registration failed on approval for ' . $pending_vendor['app_base_url'] . ': ' . ($whmp_result['message'] ?? 'Unknown error'));
+                                    }
+                                } else {
+                                    // Fallback to WHMCS
+                                    include_once("../func/bc-func.php");
+                                    include_once("../func/whmcs-func.php");
+                                    $whmcs_client_id = getSuperAdminOption('whmcs_default_client_id', '1');
+                                    whmcsCreateOrder($whmcs_client_id, $pending_vendor['app_base_url']);
+                                }
                             }
 
                         // 3. Set subscription dates

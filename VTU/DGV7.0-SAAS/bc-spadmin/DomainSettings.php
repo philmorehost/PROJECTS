@@ -1,6 +1,7 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
     include("../func/bc-tables.php");
+    include_once("../func/whmp-func.php");
 
     // Handle Domain Extension Management
     if(isset($_POST['add_extension'])) {
@@ -48,6 +49,68 @@
             $_SESSION['page_alert'] = "Settings saved successfully!";
         } else {
             $_SESSION['page_alert'] = "Error saving settings: " . mysqli_error($connection_server);
+        }
+        header("Location: DomainSettings.php");
+        exit();
+    }
+
+    // ─── WHMP API Configuration ───────────────────────────────────────────────────────────────────
+    if(isset($_POST['save_whmp_config'])) {
+        $whmp_api_url = mysqli_real_escape_string($connection_server, trim($_POST['whmp_api_url'] ?? 'https://client.philmorehost.com/api'));
+        $whmp_api_key = mysqli_real_escape_string($connection_server, trim($_POST['whmp_api_key'] ?? ''));
+        $whmp_api_secret = mysqli_real_escape_string($connection_server, trim($_POST['whmp_api_secret'] ?? ''));
+
+        mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('whmp_api_url', '$whmp_api_url')");
+        if ($whmp_api_key) {
+            mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('whmp_api_key', '$whmp_api_key')");
+        }
+        if ($whmp_api_secret) {
+            mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('whmp_api_secret', '$whmp_api_secret')");
+        }
+        $_SESSION['page_alert'] = "WHMP API configuration saved!";
+        unset($_SESSION['super_admin_options_cache']);
+        header("Location: DomainSettings.php");
+        exit();
+    }
+
+    // Sync domain extensions from WHMP reseller pricing
+    if(isset($_POST['sync_whmp_extensions'])) {
+        if (!whmp_is_configured()) {
+            $_SESSION['page_alert'] = "WHMP API is not configured. Please add your API key and secret first.";
+        } else {
+            $pricing = whmp_get_pricing();
+            if ($pricing['status'] === 'success') {
+                $synced = 0;
+                foreach ($pricing['data']['domains'] ?? [] as $dom) {
+                    $ext = $dom['tld'] ?? '';
+                    if (empty($ext)) continue;
+                    $reseller_price = (float)($dom['register']['reseller'] ?? 0);
+                    $list_price = (float)($dom['register']['list'] ?? 0);
+                    $promo = ($reseller_price > 0 && $reseller_price < $list_price) ? $reseller_price : 0;
+                    mysqli_query($connection_server,
+                        "INSERT INTO sas_domain_extensions (extension, price, promo_price) VALUES ('" . mysqli_real_escape_string($connection_server, $ext) . "', '$list_price', '$promo') ON DUPLICATE KEY UPDATE price='$list_price', promo_price='$promo'");
+                    $synced++;
+                }
+                $_SESSION['page_alert'] = "WHMP sync complete! $synced domain extensions updated.";
+            } else {
+                $_SESSION['page_alert'] = "WHMP sync failed: " . ($pricing['message'] ?? 'Unknown error');
+            }
+        }
+        header("Location: DomainSettings.php");
+        exit();
+    }
+
+    // Test WHMP connection
+    if(isset($_POST['test_whmp'])) {
+        if (!whmp_is_configured()) {
+            $_SESSION['page_alert'] = "WHMP API is not configured.";
+        } else {
+            $ping = whmp_request('GET', 'ping');
+            if ($ping['status'] === 'success') {
+                $_SESSION['page_alert'] = "WHMP connection successful! API is reachable.";
+            } else {
+                $_SESSION['page_alert'] = "WHMP connection failed: " . ($ping['message'] ?? 'Unknown error');
+            }
         }
         header("Location: DomainSettings.php");
         exit();
@@ -210,6 +273,72 @@
                                 <i class="bi bi-save2 me-2"></i>SAVE GLOBAL SETTINGS
                             </button>
                         </form>
+                    </div>
+                </div>
+
+                <!-- WHMP Billing Portal Configuration -->
+                <div class="card mb-4 border-0 border-primary border-2">
+                    <div class="card-header bg-primary bg-opacity-10 py-3 border-0">
+                        <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-boxes me-2"></i>WHMP Billing Portal</h5>
+                        <span class="badge bg-success" id="whmp-status-badge" style="font-size:0.7rem;">Checking...</span>
+                    </div>
+                    <div class="card-body p-4">
+                        <p class="small text-muted mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            WHMP (Philmore Host Unlimited) is our in-house billing platform for domain name registration.
+                            <a href="https://client.philmorehost.com/client/reseller/docs" target="_blank" class="text-primary">API Docs</a>
+                        </p>
+
+                        <?php
+                        $whmp_status = whmp_get_config_status();
+                        $whmp_api_url = getSuperAdminOption('whmp_api_url', 'https://client.philmorehost.com/api');
+                        $whmp_api_key = getSuperAdminOption('whmp_api_key', '');
+                        $whmp_api_secret = getSuperAdminOption('whmp_api_secret', '');
+                        ?>
+
+                        <form method="POST" action="">
+                            <div class="mb-3">
+                                <label class="form-label">API Base URL</label>
+                                <input type="text" class="form-control" name="whmp_api_url" value="<?php echo htmlspecialchars($whmp_api_url); ?>" placeholder="https://client.philmorehost.com/api">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">API Key</label>
+                                <input type="password" class="form-control" name="whmp_api_key" value="<?php echo htmlspecialchars($whmp_api_key); ?>" placeholder="Your WHMP API key">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">API Secret</label>
+                                <input type="password" class="form-control" name="whmp_api_secret" value="<?php echo htmlspecialchars($whmp_api_secret); ?>" placeholder="Your WHMP API secret">
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" name="save_whmp_config" class="btn btn-primary btn-sm px-4">
+                                    <i class="bi bi-save2 me-1"></i>Save
+                                </button>
+                                <button type="submit" name="test_whmp" class="btn btn-outline-primary btn-sm px-4">
+                                    <i class="bi bi-broadcast me-1"></i>Test
+                                </button>
+                            </div>
+                        </form>
+
+                        <hr class="my-3">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Sync Domain Extensions from WHMP</label>
+                            <p class="small text-muted">Fetch the latest TLD prices from WHMP reseller pricing and update your extension list.</p>
+                            <button type="submit" name="sync_whmp_extensions" form="whmp-sync-form" class="btn btn-info btn-sm px-4">
+                                <i class="bi bi-cloud-arrow-down me-1"></i>Sync Extensions
+                            </button>
+                            <form id="whmp-sync-form" method="POST" action="" class="d-none"></form>
+                        </div>
+
+                        <div class="alert alert-light border small mb-0">
+                            <i class="bi bi-shield-check me-1 text-success"></i>
+                            <strong>Status:</strong>
+                            <?php if ($whmp_status['configured']): ?>
+                                <span class="text-success">Configured</span> — Domain availability checking and registration via WHMP is active.
+                            <?php else: ?>
+                                <span class="text-warning">Not configured</span> — Domain checking falls back to WHMCS. Domain registration will be manual.
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
