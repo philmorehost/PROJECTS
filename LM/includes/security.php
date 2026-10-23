@@ -143,6 +143,14 @@ if (!function_exists('lm_admin_gate')) {
         }
 
         $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+
+        // Only the console is gated. A public page must never be redirected to
+        // admin/profile.php (that path does not exist from the site root).
+        $path = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (strpos($path, '/admin/') === false && dirname($path) !== '/admin') {
+            return;
+        }
+
         if (in_array($script, array('profile.php', 'logout.php', 'index.php'), true)) {
             return;
         }

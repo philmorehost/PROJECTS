@@ -253,6 +253,7 @@ $flash = $_GET['flash'] ?? '';
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <aside class="sidebar">
         <div class="brand"><span class="logo">🔐</span> License Manager</div>
         <div class="section">Overview</div>

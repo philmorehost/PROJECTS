@@ -11,6 +11,7 @@ if (!$user_email) {
 }
 
 require_once('../db.php');
+require_once __DIR__ . '/../includes/ui.php';
 
 // Fetch user's active/inactive licenses
 $stmt = $pdo->prepare("SELECT * FROM licenses WHERE customer_email = ? ORDER BY created_at DESC");
@@ -35,7 +36,8 @@ $profile = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Licenses - License Manager</title>
+    <title>My licences — <?= htmlspecialchars(lm_site_name()) ?></title>
+    <?php lm_public_assets(); ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * {
@@ -45,7 +47,7 @@ $profile = [
         }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg);
             min-height: 100vh;
         }
         .navbar {
@@ -323,19 +325,16 @@ $profile = [
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <h1>🔐 License Manager</h1>
-        <div class="navbar-links">
-            <a href="profile.php">👤 Profile</a>
-            <a href="index.php">📜 My Licenses</a>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+<?php lm_public_header('account'); ?>
 
-    <div class="container">
+    <div class="container" style="padding-top:8px">
         <div class="header">
-            <h2>My Licenses</h2>
-            <p>Manage and monitor all your active licenses</p>
+            <h2>My licences</h2>
+            <p>Signed in as <?= htmlspecialchars($user_email) ?></p>
+            <div class="lm-flex" style="margin-top:14px">
+                <a class="lm-btn lm-btn--ghost lm-btn--sm" href="profile.php">Profile</a>
+                <a class="lm-btn lm-btn--ghost lm-btn--sm" href="logout.php">Sign out</a>
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -442,6 +441,9 @@ $profile = [
             </div>
         </div>
     </div>
+
+    <?php lm_public_footer(); ?>
+    <?php lm_public_tabbar('account'); ?>
 
     <script>
         function copyToClipboard(text) {

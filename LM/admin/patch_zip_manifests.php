@@ -127,6 +127,7 @@ $all_updates = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN s
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
 <h1>🩹 Patch ZIP Manifests</h1>
 <p class="subtitle">Injects a <code>manifest.json</code> into any stored update ZIP that is missing one, then regenerates the checksum. <strong>Delete this file after use.</strong></p>
 

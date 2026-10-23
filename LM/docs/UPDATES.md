@@ -512,6 +512,58 @@ Paystack keys, SMTP password, GitHub token, API secret and cron secret.
 
 ---
 
+## 6f. New public site (9.0.0)
+
+The visitor-facing pages were rebuilt on one small design system — no
+framework, no build step, two files: `assets/site.css` and `assets/site.js`.
+
+**What changed**
+
+| Page | What it is now |
+|---|---|
+| `index.php` | Dark hero, six feature cards, the three-step release pipeline, a copyable API sample, a closing call to action and a four-column footer |
+| `order.php` | Two-column request form with “what happens next” beside it; stacks on phones |
+| `user/login.php` | Centred card on the new shell, key/reference hint, links to the request form |
+| `api-docs.php` | The reference keeps its content, wrapped in the new header, footer and a 980px content column |
+| `success.php`, `success_manual.php` | Result cards with progress, copy-key, install guide and clear next steps |
+| `admin/index.php` | Split sign-in: brand panel with the security guarantees, form on the right |
+| `user/index.php`, `profile.php`, `license-details.php`, `change-domain.php` | Shared header, footer and tab bar around the existing dashboard cards |
+
+**The menu**
+
+* **Desktop** — a sticky, translucent header with pill links and a primary
+  “Get a licence” button. Each page marks itself with `aria-current="page"`.
+* **Mobile** — the links collapse into a 42px menu button that opens a
+  right-hand drawer (Escape closes it, background scroll locks, focus moves
+  into the panel and returns to the button).
+* **Footer menu** — on screens up to 940px a fixed tab bar sits at the bottom
+  with five destinations: Home, Licences, API docs, Account, Admin. It respects
+  `safe-area-inset-bottom`, so it clears the iPhone home indicator, and the
+  footer grows to make room for it.
+
+The admin console got the same treatment in `admin/_mobile_nav.php`:
+
+* a dark top app bar with the current screen name,
+* a drawer with every console page grouped the way the sidebar groups them,
+* a five-tab footer bar — Home, Licences, Updates, GitHub, More,
+* the legacy sidebar is hidden below 980px and restyled into rounded pills
+  above it, without editing twenty stylesheets.
+
+**Accessibility and motion**
+
+Skip link, visible focus rings, 44px targets, labelled `<nav>` regions,
+`aria-expanded` on the menus, `aria-modal` on the drawers, and every animation
+disabled under `prefers-reduced-motion`.
+
+**Caching** — asset URLs carry `?v=<filemtime>`, so a deploy cannot serve a
+stale stylesheet.
+
+> The public shell is in `includes/ui.php` (`lm_public_header()`,
+> `lm_public_footer()`, `lm_public_tabbar()`, `lm_public_assets()`). Any new
+> page gets the full chrome with four lines.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |

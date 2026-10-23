@@ -84,6 +84,7 @@ if (file_exists($log_file)) {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
 <h1>🔧 License Tier Diagnostic & Repair</h1>
 <p class="subtitle">Use this tool to inspect and correct license tier assignments. <strong>Delete this file after use.</strong></p>
 

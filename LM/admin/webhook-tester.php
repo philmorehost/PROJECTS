@@ -176,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_webhook'])) {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <div class="container">
         <a href="dashboard.php" class="back-link">← Back to Dashboard</a>
         <h1>🔌 Webhook Tester</h1>

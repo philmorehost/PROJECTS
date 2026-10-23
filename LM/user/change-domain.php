@@ -9,6 +9,7 @@ if (!isset($_SESSION['user_email'])) {
 }
 
 require_once('../db.php');
+require_once __DIR__ . '/../includes/ui.php';
 
 $user_email = $_SESSION['user_email'];
 $license_id = $_GET['id'] ?? $_SESSION['user_license_id'] ?? null;
@@ -102,14 +103,15 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Change Domain - License Manager</title>
+    <?php lm_public_assets(); ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg);
             min-height: 100vh;
-            padding: 2rem;
+            padding: 0;
         }
         .container {
             max-width: 800px;
@@ -265,6 +267,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
     </style>
 </head>
 <body>
+<?php lm_public_header('account'); ?>
     <div class="container">
         <a href="index.php" class="back-link">← Back to Dashboard</a>
         <h1>🌐 Change License Domain</h1>
@@ -353,5 +356,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
             <?php endif; ?>
         </div>
     </div>
+<?php lm_public_footer(); ?>
+<?php lm_public_tabbar('account'); ?>
 </body>
 </html>

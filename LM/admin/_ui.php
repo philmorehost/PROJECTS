@@ -279,6 +279,7 @@ if (!function_exists('lm_admin_page_start')) {
     </script>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <aside class="sidebar">
         <div class="brand"><span class="logo">🔐</span> License Manager</div>
         <?php foreach ($items as $key => $item): ?>

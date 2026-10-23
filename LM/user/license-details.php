@@ -10,6 +10,7 @@ if (!$user_email) {
 }
 
 require_once('../db.php');
+require_once __DIR__ . '/../includes/ui.php';
 
 $license_id = $_GET['id'] ?? null;
 
@@ -37,6 +38,7 @@ $api_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>License Details - License Manager</title>
+    <?php lm_public_assets(); ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * {
@@ -46,7 +48,7 @@ $api_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "
         }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg);
             min-height: 100vh;
         }
         .navbar {
@@ -270,14 +272,7 @@ $api_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <h1>🔐 License Manager</h1>
-        <div class="navbar-links">
-            <a href="index.php">📜 My Licenses</a>
-            <a href="profile.php">👤 Profile</a>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+<?php lm_public_header('account'); ?>
 
     <div class="container">
         <a href="index.php" class="back-btn">← Back to Licenses</a>
@@ -377,5 +372,7 @@ $api_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "
             });
         }
     </script>
+<?php lm_public_footer(); ?>
+<?php lm_public_tabbar('account'); ?>
 </body>
 </html>
