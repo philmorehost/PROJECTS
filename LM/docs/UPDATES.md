@@ -141,15 +141,30 @@ quick path: type `LM`, save, and auto-pull uses it — or press
 Changing only the selection (no new commits) still publishes a new package: the
 pull compares both the commit SHA and the stored selection.
 
-### Creating the token
+### One token for every repository
 
-* **Fine-grained token** (recommended): *Repository access* → the repository,
-  *Permissions* → **Contents: Read-only**.
+Create the token **once** in *Settings → GitHub Access Token*. Every project
+without a token of its own inherits it, so a new project only needs
+`owner/repo` — no second key to generate, paste and rotate.
+
+* **Fine-grained token** (recommended): *Repository access* → **All
+  repositories** (covers repositories created later), *Permissions* →
+  **Contents: Read-only** (+ *Metadata: Read-only*).
 * **Classic token**: scope `repo` (read access is enough).
 
-Paste it once. It is encrypted with AES-256-GCM using `LM/storage/app_secret.key`
-and never rendered back into the page. Use **Remove stored token** to revoke it
-from the LM side.
+Press **Test token** to see the account (`@login`), the token kind, how many
+repositories it can see and the remaining API quota before relying on it.
+Private repositories return `404` — not `403` — when the token cannot see them,
+so a *selected repositories* fine-grained token looks like a typo until you
+check the access setting.
+
+A project can still override the shared token under *GitHub Pull → Repository
+settings*; the badge then reads **Project token** instead of **Shared token**.
+**Remove project token** falls the project back to the shared one.
+
+Tokens are encrypted with AES-256-GCM using `LM/storage/app_secret.key` and are
+only ever displayed masked (`ghp_1a2b…9f3c`). When a token expires, pulls start
+returning `401` until it is replaced.
 
 ### Versioning
 
@@ -309,6 +324,7 @@ admin/updates.php             publish, history, storage
 admin/github-updates.php      GitHub pull console
 admin/update-notifications.php notification log and schedule
 admin/projects.php            multi-project management
+admin/ajax_github_token.php   shared-token test (account, repo count, quota)
 admin/guide.php               full admin manual (+ cron tester)
 includes/guide.php            guide content + contextual help drawer
 email_templates/update_available.html

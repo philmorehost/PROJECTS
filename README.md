@@ -30,5 +30,9 @@ projects, uploads, GitHub tokens and the folder picker, notifications, SMTP, and
 cron setup with a live tester. Every release screen also has a *📖 How this page
 works* button that opens the relevant sections in a side drawer.
 
+GitHub pulls need a token only once: *Settings → GitHub Access Token* stores one
+encrypted token for the whole installation, and every project without its own
+token inherits it.
+
 Setup, integration snippets and troubleshooting: [`LM/docs/UPDATES.md`](LM/docs/UPDATES.md).
 Cron: `*/10 * * * * /usr/local/bin/php /home/USER/public_html/lm/cron.php`.

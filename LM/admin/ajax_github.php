@@ -119,12 +119,17 @@ if ($action === 'save_config') {
         lm_json(array('status' => 'error', 'message' => 'Could not save the GitHub configuration: ' . $e->getMessage()));
     }
 
+    $fresh = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
+    $fresh->execute(array($tierId));
+    $freshTier = $fresh->fetch(PDO::FETCH_ASSOC) ?: $tier;
+
     lm_json(array(
         'status' => 'success',
         'message' => 'GitHub configuration saved for ' . $tier['tier_name'] . '.',
         'repo' => $repoInput,
         'branch' => $branch,
-        'has_token' => $tokenInput !== '' || (!empty($_POST['clear_token']) ? false : !empty($tier['github_token'])),
+        'has_token' => trim((string) ($freshTier['github_token'] ?? '')) !== '',
+        'token_source' => lm_github_token_source($freshTier),
         'includes' => $cleanIncludes,
         'package_root' => $rootFromSelection,
     ));
@@ -132,7 +137,16 @@ if ($action === 'save_config') {
 
 if ($action === 'clear_token') {
     $pdo->prepare("UPDATE script_tiers SET github_token = NULL WHERE id = ?")->execute(array($tierId));
-    lm_json(array('status' => 'success', 'message' => 'Stored GitHub token removed.'));
+    $source = lm_github_token_source(array('github_token' => null));
+    $message = $source === 'default'
+        ? 'Project token removed — this project now uses the shared token from Settings.'
+        : 'Project token removed. No shared token is configured, so only public repositories will work.';
+    lm_json(array(
+        'status' => 'success',
+        'message' => $message,
+        'has_token' => false,
+        'token_source' => $source,
+    ));
 }
 
 if ($action === 'test') {

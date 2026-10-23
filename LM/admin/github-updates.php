@@ -34,6 +34,7 @@ foreach ($tiers as $tier) {
         'branch' => $config['branch'],
         'subdir' => rtrim($config['subdir'], '/'),
         'has_token' => $config['has_token'],
+        'token_source' => $config['token_source'],
         'version_source' => $config['version_source'],
         'increment' => $config['increment'],
         'changelog_format' => $config['changelog_format'],
@@ -95,7 +96,7 @@ lm_admin_page_start('GitHub Pull', 'github');
         <div class="card-head">
             <div>
                 <h2>Repository settings</h2>
-                <p>Token is encrypted at rest with the LM application secret.</p>
+                <p>Tokens are encrypted at rest. Projects without their own token use the shared one from Settings.</p>
             </div>
             <span class="badge badge-cyan" id="tokenBadge">No token</span>
         </div>
@@ -121,9 +122,9 @@ lm_admin_page_start('GitHub Pull', 'github');
                 <div class="field">
                     <label for="githubToken">Personal access token</label>
                     <input class="input mono" type="password" id="githubToken" name="github_token" autocomplete="new-password" placeholder="ghp_… or github_pat_…">
-                    <div class="hint" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-                        <span>Leave blank to keep the stored token.</span>
-                        <button class="btn btn-ghost btn-sm" type="button" id="clearTokenBtn">Remove stored token</button>
+                    <div class="hint" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+                        <span>Leave blank to keep this project on the <a href="settings.php#github" style="color:#4f46e5;font-weight:700;">shared token from Settings</a>.</span>
+                        <button class="btn btn-ghost btn-sm" type="button" id="clearTokenBtn">Remove project token</button>
                     </div>
                 </div>
                 <div class="grid-2">
@@ -626,6 +627,23 @@ lm_admin_page_start('GitHub Pull', 'github');
         return matched;
     }
 
+    function tokenBadge(project) {
+        const badge = el('tokenBadge');
+        if (project.token_source === 'project') {
+            badge.textContent = 'Project token';
+            badge.className = 'badge badge-green';
+        } else if (project.token_source === 'default' || project.token_source === 'default_after_save') {
+            badge.textContent = 'Shared token';
+            badge.className = 'badge badge-indigo';
+        } else if (project.has_token) {
+            badge.textContent = 'Token saved';
+            badge.className = 'badge badge-green';
+        } else {
+            badge.textContent = 'No token';
+            badge.className = 'badge badge-slate';
+        }
+    }
+
     function fillForm(project) {
         el('githubRepo').value = project.repo || '';
         el('githubBranch').value = project.branch || '';
@@ -638,8 +656,7 @@ lm_admin_page_start('GitHub Pull', 'github');
         el('githubAutoPull').checked = !!project.auto_pull;
         el('repoLabel').textContent = project.repo_full || '—';
         el('lastPullLabel').textContent = project.last_pull_at ? formatDate(project.last_pull_at) : 'never';
-        el('tokenBadge').textContent = project.has_token ? 'Token saved' : 'No token';
-        el('tokenBadge').className = 'badge ' + (project.has_token ? 'badge-green' : 'badge-slate');
+        tokenBadge(project);
     }
 
     function formatDate(value) {
@@ -693,9 +710,9 @@ lm_admin_page_start('GitHub Pull', 'github');
         if (result.status !== 'error') {
             currentProject.repo = result.repo || data.github_repo;
             currentProject.has_token = !!result.has_token;
+            currentProject.token_source = result.token_source || (result.has_token ? 'project' : 'none');
             el('githubToken').value = '';
-            el('tokenBadge').textContent = result.has_token ? 'Token saved' : 'No token';
-            el('tokenBadge').className = 'badge ' + (result.has_token ? 'badge-green' : 'badge-slate');
+            tokenBadge(currentProject);
         }
     });
 
@@ -705,8 +722,8 @@ lm_admin_page_start('GitHub Pull', 'github');
         toast(result.message, result.status === 'error' ? 'err' : 'ok');
         if (result.status !== 'error') {
             currentProject.has_token = false;
-            el('tokenBadge').textContent = 'No token';
-            el('tokenBadge').className = 'badge badge-slate';
+            currentProject.token_source = result.token_source || 'none';
+            tokenBadge(currentProject);
         }
     });
 

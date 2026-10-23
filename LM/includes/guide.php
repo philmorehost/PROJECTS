@@ -60,7 +60,7 @@ HTML
   <li><strong>Settings → SMTP</strong> — fill in host, port and password, then press <em>Send test email</em>. Use encryption <em>Auto</em>: port 465 gets SSL, port 587 gets STARTTLS.</li>
   <li><strong>Settings → Public Site URL</strong> — set it explicitly. Cron runs without a web request, so it cannot detect the domain, and emails would contain broken links.</li>
   <li><strong>Script Projects</strong> — create one project per script you sell. The project code is permanent.</li>
-  <li><strong>GitHub Pull</strong> (optional) — link each project to a repository and tick the folder that belongs to it.</li>
+  <li><strong>GitHub Pull</strong> (optional) — paste <em>one</em> token in <em>Settings → GitHub Access Token</em>, then link each project to its repository and tick the folder that belongs to it.</li>
   <li><strong>Cron</strong> — add the cron job from <a href="guide.php#cron">Guide → Cron</a>. Without it nothing is sent automatically.</li>
   <li><strong>Publish a test release</strong> — push a version, check the email, then download the ZIP from the link to confirm the package contents.</li>
 </ol>
@@ -240,27 +240,28 @@ HTML
                     ),
                     array(
                         'id' => 'token',
-                        'title' => 'Step 2 — private repositories (token)',
+                        'title' => 'Step 2 — one token for every repository',
                         'html' => <<<'HTML'
-<p>Public repositories need no token. For private ones, create a personal access token:</p>
+<p>Public repositories need no token. For private ones you need a personal access token — but only <strong>one for the whole installation</strong>. Paste it once in <em>Settings → GitHub Access Token</em>; every project without a token of its own uses it, including projects you create next month.</p>
 <table class="lm-guide-table">
-  <thead><tr><th>Type</th><th>Where</th><th>Permission</th></tr></thead>
+  <thead><tr><th>Type</th><th>Where</th><th>Access to set</th></tr></thead>
   <tbody>
     <tr>
       <td><strong>Fine-grained</strong> (recommended)</td>
       <td>GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens</td>
-      <td>Repository access: <em>Only select repositories</em> → this repo. Permissions: <em>Contents → Read-only</em>.</td>
+      <td>Repository access: <strong>All repositories</strong> (covers repositories created later). Permissions: <em>Contents → Read-only</em>, <em>Metadata → Read-only</em>.</td>
     </tr>
     <tr>
       <td><strong>Classic</strong></td>
       <td>… → Tokens (classic) → Generate new token</td>
-      <td>Scope <code>repo</code>. If the repository belongs to an organisation with SSO, authorise the token for that organisation.</td>
+      <td>Scope <code>repo</code> — gives every repository the account can see, current and future. Organisation repos with SSO must be authorised for the token.</td>
     </tr>
   </tbody>
 </table>
-<p>Paste it into <strong>Personal access token</strong> and save. The token is encrypted with <code>storage/app_secret.key</code> and never displayed again — the badge only says <em>Token saved</em>.</p>
-<p>Tokens are only ever sent to <code>api.github.com</code>; the archive download follows GitHub's signed redirect without credentials.</p>
-<p><strong>Remove stored token</strong> deletes it from the database.</p>
+<p>Set the expiry to whatever your policy allows and put a reminder in the calendar — when the token expires, pulls start returning 401 until it is replaced. A classic token can be created without an expiry.</p>
+<p><strong>Settings → GitHub Access Token → Test token</strong> shows the account the token belongs to, how many repositories it can see and how many API calls are left, so you know it covers everything before you rely on it.</p>
+<p>Overrides are still possible: a project that must read a repository the shared token cannot see can store its own token in <em>GitHub Pull → Repository settings</em>. The badge then reads <em>Project token</em> instead of <em>Shared token</em>.</p>
+<p>Tokens are encrypted with <code>storage/app_secret.key</code> and never displayed again — only a masked hint such as <code>ghp_1a2b…9f3c</code>. They are only ever sent to <code>api.github.com</code>; the archive download follows GitHub's signed redirect without credentials.</p>
 HTML
                     ),
                     array(
@@ -418,7 +419,7 @@ HTML
             'settings' => array(
                 'title' => 'Settings',
                 'icon' => '⚙️',
-                'summary' => 'SMTP transport, site URL, storage limits and the cron key.',
+                'summary' => 'SMTP transport, site URL, storage limits, the shared GitHub token and the cron key.',
                 'sections' => array(
                     array(
                         'id' => 'smtp',
@@ -451,6 +452,22 @@ HTML
                         'html' => <<<'HTML'
 <p><strong>Storage directory</strong> defaults to <code>secure_updates/</code> next to <code>LM/</code>, outside the web root. Each project gets a sub-folder named after its code. Absolute paths are allowed if you keep packages on a separate volume.</p>
 <p><strong>Maximum package size</strong> applies to uploads and GitHub archives. It must be smaller than PHP's <code>upload_max_filesize</code> for uploads to reach the LM at all.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'github',
+                        'title' => 'GitHub access token',
+                        'html' => <<<'HTML'
+<p>One token for the whole installation. Projects that have no token of their own inherit it, so adding a project never means creating another key.</p>
+<ol class="lm-guide-steps">
+  <li>GitHub → Settings → Developer settings → Personal access tokens.</li>
+  <li>Create a <strong>fine-grained</strong> token with repository access <strong>All repositories</strong> and <em>Contents: Read-only</em>, or a <strong>classic</strong> token with the <code>repo</code> scope.</li>
+  <li>Paste it here and press <strong>Save Settings</strong>. The field is write-only — leave it blank to keep the current token.</li>
+  <li>Press <strong>Test token</strong>. It reports <code>@login</code>, the token kind, how many repositories are visible and the remaining API quota.</li>
+</ol>
+<p class="lm-guide-note">“All repositories” covers repositories created later too. A fine-grained token limited to <em>select repositories</em> will silently 404 on every other repo — the usual cause of “not found” on a repo you can see in the browser.</p>
+<p><strong>Remove the shared token</strong> clears it; projects with their own token keep working, the rest fall back to public-only access.</p>
+<p>Rate limit: 5,000 requests per hour per token. A pull uses a handful; the tree view one more per load.</p>
 HTML
                     ),
                     array(

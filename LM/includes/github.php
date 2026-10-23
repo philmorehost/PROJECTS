@@ -79,9 +79,39 @@ if (!function_exists('lm_github_parse_repo')) {
     }
 }
 
+if (!function_exists('lm_github_default_token')) {
+    /**
+     * Shared GitHub token configured once in Settings.
+     *
+     * Every project without its own PAT uses this one, so a new project only
+     * needs a repository name. Stored encrypted in settings.json.
+     *
+     * @return string
+     */
+    function lm_github_default_token()
+    {
+        $stored = trim((string) lm_setting('github_token', ''));
+        if ($stored === '') {
+            return '';
+        }
+
+        $plain = trim(lm_decrypt($stored));
+        if ($plain !== '') {
+            return $plain;
+        }
+
+        // Tolerate a token that was written to settings.json by hand.
+        if (preg_match('/^(gh[pousr]_|github_pat_)/', $stored)) {
+            return $stored;
+        }
+
+        return '';
+    }
+}
+
 if (!function_exists('lm_github_tier_token')) {
     /**
-     * Decrypt the stored PAT for a tier.
+     * Resolve the PAT for a tier: its own token, otherwise the shared one.
      *
      * @param array $tier
      * @return string
@@ -89,10 +119,100 @@ if (!function_exists('lm_github_tier_token')) {
     function lm_github_tier_token(array $tier)
     {
         $stored = trim((string) ($tier['github_token'] ?? ''));
-        if ($stored === '') {
-            return '';
+        if ($stored !== '') {
+            $own = trim(lm_decrypt($stored));
+            if ($own !== '') {
+                return $own;
+            }
         }
-        return trim(lm_decrypt($stored));
+
+        return lm_github_default_token();
+    }
+}
+
+if (!function_exists('lm_github_token_source')) {
+    /**
+     * Where a tier's credentials come from.
+     *
+     * @param array $tier
+     * @return string project|default|none
+     */
+    function lm_github_token_source(array $tier)
+    {
+        $stored = trim((string) ($tier['github_token'] ?? ''));
+        if ($stored !== '' && trim(lm_decrypt($stored)) !== '') {
+            return 'project';
+        }
+
+        return lm_github_default_token() !== '' ? 'default' : 'none';
+    }
+}
+
+if (!function_exists('lm_github_token_probe')) {
+    /**
+     * Describe a token: who it belongs to, how many repositories it can see
+     * and what scopes it carries.
+     *
+     * @param string $token
+     * @return array
+     */
+    function lm_github_token_probe($token)
+    {
+        $token = trim((string) $token);
+        $out = array(
+            'ok' => false,
+            'error' => '',
+            'login' => '',
+            'name' => '',
+            'kind' => strpos($token, 'github_pat_') === 0 ? 'fine-grained' : 'classic',
+            'scopes' => array(),
+            'repositories' => null,
+            'private_repositories' => null,
+            'remaining' => null,
+            'limit' => null,
+        );
+
+        if ($token === '') {
+            $out['error'] = 'No token to test yet.';
+            return $out;
+        }
+
+        $user = lm_github_request('/user', $token);
+        if (!$user['ok']) {
+            $out['error'] = $user['error'];
+            return $out;
+        }
+
+        $data = is_array($user['data']) ? $user['data'] : array();
+        $out['login'] = (string) ($data['login'] ?? '');
+        $out['name'] = (string) ($data['name'] ?? '');
+        $out['remaining'] = $user['rate_limit']['remaining'];
+        $out['limit'] = $user['rate_limit']['limit'];
+
+        // Count every repository the token can reach, including organisations.
+        // One row per page keeps the call cheap; the Link header carries the total.
+        $repos = lm_github_request('/user/repos?per_page=1&affiliation=owner,collaborator,organization_member', $token);
+        if ($repos['ok']) {
+            $count = is_array($repos['data']) ? count($repos['data']) : 0;
+            $linkHeader = (string) ($repos['headers']['link'] ?? '');
+            if ($linkHeader !== '' && preg_match('/[?&]page=(\d+)>;\s*rel="last"/', $linkHeader, $matches)) {
+                $count = (int) $matches[1];
+            }
+            $out['repositories'] = $count;
+        }
+
+        if (!empty($user['headers']['x-oauth-scopes'])) {
+            $scopes = array_filter(array_map('trim', explode(',', (string) $user['headers']['x-oauth-scopes'])));
+            $out['scopes'] = array_values($scopes);
+        }
+
+        // Fine-grained tokens report their permissions on a different header.
+        if (empty($out['scopes']) && !empty($user['headers']['x-accepted-github-permissions'])) {
+            $out['scopes'] = array_map('trim', explode(',', (string) $user['headers']['x-accepted-github-permissions']));
+        }
+
+        $out['ok'] = true;
+        return $out;
     }
 }
 
@@ -991,6 +1111,23 @@ if (!function_exists('lm_github_tier_config')) {
     {
         $parsed = lm_github_parse_repo((string) ($tier['github_repo'] ?? ''));
 
+        $increment = (string) ($tier['github_increment'] ?? 'patch');
+        if (!in_array($increment, array('major', 'minor', 'patch'), true)) {
+            $increment = 'patch';
+        }
+
+        $versionSource = (string) ($tier['github_version_source'] ?? 'auto_increment');
+        if (!in_array($versionSource, array('auto_increment', 'git_tag'), true)) {
+            $versionSource = 'auto_increment';
+        }
+
+        $changelogFormat = ((string) ($tier['github_changelog_format'] ?? 'html') === 'text') ? 'text' : 'html';
+
+        $changelogMode = (string) ($tier['github_changelog_mode'] ?? 'commits');
+        if (!in_array($changelogMode, array('commits', 'files', 'both'), true)) {
+            $changelogMode = 'commits';
+        }
+
         return array(
             'repo_input' => (string) ($tier['github_repo'] ?? ''),
             'owner' => $parsed ? $parsed['owner'] : '',
@@ -1000,10 +1137,12 @@ if (!function_exists('lm_github_tier_config')) {
             'includes' => lm_github_tier_includes($tier),
             'token' => lm_github_tier_token($tier),
             'has_token' => trim((string) ($tier['github_token'] ?? '')) !== '',
-            'increment' => in_array(($tier['github_increment'] ?? 'patch'), array('major', 'minor', 'patch'), true) ? $tier['github_increment'] : 'patch',
-            'version_source' => in_array(($tier['github_version_source'] ?? 'auto_increment'), array('auto_increment', 'git_tag'), true) ? ($tier['github_version_source'] ?? 'auto_increment') : 'auto_increment',
-            'changelog_format' => (($tier['github_changelog_format'] ?? 'html') === 'text') ? 'text' : 'html',
-            'changelog_mode' => in_array(($tier['github_changelog_mode'] ?? 'commits'), array('commits', 'files', 'both'), true) ? ($tier['github_changelog_mode'] ?? 'commits') : 'commits',
+            'token_source' => lm_github_token_source($tier),
+            'has_default_token' => lm_github_default_token() !== '',
+            'increment' => $increment,
+            'version_source' => $versionSource,
+            'changelog_format' => $changelogFormat,
+            'changelog_mode' => $changelogMode,
             'last_sha' => trim((string) ($tier['github_last_sha'] ?? '')),
             'last_pull_at' => $tier['github_last_pull_at'] ?? null,
             'auto_pull' => !empty($tier['github_auto_pull']),

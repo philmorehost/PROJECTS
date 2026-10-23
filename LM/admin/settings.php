@@ -9,6 +9,7 @@ require_once('../db.php');
 require_once('../includes/mailer.php');
 require_once('../includes/updates.php');
 require_once('../includes/guide.php');
+require_once('../includes/github.php');
 
 $settings_file = '../settings.json';
 $settings = lm_settings(true);
@@ -29,6 +30,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new['payment_gateway_enabled'] = isset($_POST['payment_gateway_enabled']);
         $new['max_domain_changes'] = max(1, (int) ($_POST['max_domain_changes'] ?? 3));
         $new['api_secret_key'] = trim($_POST['api_secret_key'] ?? '');
+
+        // Shared GitHub token: write-only field. Blank keeps the stored value.
+        $new['github_token'] = (string) ($settings['github_token'] ?? '');
+        $new['github_token_saved_at'] = (string) ($settings['github_token_saved_at'] ?? '');
+        $incomingGithubToken = trim((string) ($_POST['github_token'] ?? ''));
+
+        if ($incomingGithubToken !== '') {
+            // A freshly pasted token wins over the "remove" tick.
+            if (strlen($incomingGithubToken) < 20) {
+                $saveError = 'That does not look like a GitHub token. Paste the full token (ghp_… or github_pat_…).';
+            } else {
+                $new['github_token'] = lm_encrypt($incomingGithubToken);
+                $new['github_token_saved_at'] = date('c');
+            }
+        } elseif (!empty($_POST['clear_github_token'])) {
+            $new['github_token'] = '';
+            $new['github_token_saved_at'] = '';
+        }
 
         $whitelistedIps = $_POST['whitelisted_ips'] ?? '';
         $new['whitelisted_ips'] = array_values(array_filter(array_map('trim', explode(',', (string) $whitelistedIps))));
@@ -73,14 +92,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if (lm_save_settings($new)) {
-            header('Location: settings.php?saved=1');
-            exit();
+        if ($saveError === '') {
+            if (lm_save_settings($new)) {
+                header('Location: settings.php?saved=1');
+                exit();
+            }
+            $saveError = 'Could not write settings.json. Check the file permissions (0640) on the LM folder.';
         }
-        $saveError = 'Could not write settings.json. Check the file permissions (0640) on the LM folder.';
     }
 
     $settings = lm_settings(true);
+}
+
+$sharedGithubToken = lm_github_default_token();
+$sharedGithubMasked = $sharedGithubToken !== ''
+    ? substr($sharedGithubToken, 0, 7) . '…' . substr($sharedGithubToken, -4)
+    : '';
+$githubProjectsUsingDefault = 0;
+try {
+    $stmtDefaultProjects = $pdo->query(
+        "SELECT COUNT(*) FROM script_tiers WHERE github_repo <> '' AND (github_token IS NULL OR github_token = '')"
+    );
+    $githubProjectsUsingDefault = (int) $stmtDefaultProjects->fetchColumn();
+} catch (Exception $e) {
+    $githubProjectsUsingDefault = 0;
 }
 
 $cronSecret = lm_get_cron_secret();
@@ -616,6 +651,49 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                     </div>
                 </div>
 
+                <div class="card" id="github">
+                    <div class="card-header"><h3>GitHub Access Token</h3></div>
+                    <div class="card-body">
+                        <p style="color:#475569;font-size:14px;line-height:1.7;margin-bottom:14px;">
+                            Create <strong>one</strong> token for the whole installation. Every project without its own
+                            token uses this one, so a new project only needs a repository name.
+                            A <em>classic</em> token with the <code>repo</code> scope, or a <em>fine-grained</em> token with
+                            repository access set to <strong>All repositories</strong>, sees every repository you own —
+                            including ones you create later.
+                        </p>
+
+                        <div class="input-group wide-input">
+                            <label for="githubTokenDefault">Personal access token</label>
+                            <input type="password" id="githubTokenDefault" name="github_token" value=""
+                                   autocomplete="new-password" placeholder="ghp_… or github_pat_…">
+                            <small>
+                                <?php if ($sharedGithubMasked !== ''): ?>
+                                    Saved: <code><?= htmlspecialchars($sharedGithubMasked) ?></code>
+                                    <?php if (!empty($settings['github_token_saved_at'])): ?>
+                                        on <?= htmlspecialchars(date('j M Y', strtotime((string) $settings['github_token_saved_at']))) ?>
+                                    <?php endif; ?>
+                                    · used by <?= (int) $githubProjectsUsingDefault ?> project<?= $githubProjectsUsingDefault === 1 ? '' : 's' ?> without their own token.
+                                <?php else: ?>
+                                    No shared token yet — projects fall back to “no credentials”, which only works for public repositories.
+                                <?php endif; ?>
+                                Leave blank to keep it.
+                            </small>
+                        </div>
+
+                        <div class="checkbox-row" style="margin-top:10px;">
+                            <input type="checkbox" name="clear_github_token" value="1" id="clearGithubToken">
+                            <span>Remove the shared token <small style="color:#64748b;">(projects with their own token keep working)</small></span>
+                        </div>
+
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;">
+                            <button type="button" class="btn" id="testGithubTokenBtn" style="background:linear-gradient(135deg,#0f172a,#334155);">Test token</button>
+                            <a href="github-updates.php" style="color:#4f46e5;font-weight:600;font-size:13px;">Open GitHub Pull →</a>
+                        </div>
+                        <div id="githubTokenResult" style="margin-top:12px;font-size:13px;line-height:1.65;"></div>
+                        <small style="display:block;margin-top:8px;color:#94a3b8;">Save first if you just pasted a token — the test uses the saved value, or the one still in the field.</small>
+                    </div>
+                </div>
+
                 <div class="card" id="automation">
                     <div class="card-header"><h3>Automation &amp; Cron</h3></div>
                     <div class="card-body">
@@ -647,6 +725,47 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
     </div>
 
     <script>
+    document.getElementById('testGithubTokenBtn').addEventListener('click', async function () {
+        const button = this;
+        const typed = document.getElementById('githubTokenDefault').value.trim();
+        const box = document.getElementById('githubTokenResult');
+        button.disabled = true;
+        button.textContent = 'Checking…';
+        box.innerHTML = '<span style="color:#64748b;">Asking GitHub who this token belongs to…</span>';
+
+        const body = new FormData();
+        body.append('token', typed);
+        body.append('csrf_token', <?= json_encode(lm_csrf_token()) ?>);
+
+        try {
+            const response = await fetch('ajax_github_token.php', { method: 'POST', body: body, credentials: 'same-origin' });
+            const text = await response.text();
+            let result;
+            try { result = JSON.parse(text); } catch (e) { result = { status: 'error', message: 'Unexpected response: ' + text.slice(0, 300) }; }
+
+            if (result.status === 'success') {
+                const bits = [];
+                if (result.login) bits.push('@' + result.login);
+                if (result.kind) bits.push(result.kind + ' token');
+                if (result.repositories !== null && result.repositories !== undefined) {
+                    bits.push(result.repositories + ' repositories visible');
+                }
+                if (result.remaining !== null && result.remaining !== undefined) {
+                    bits.push(result.remaining + '/' + result.limit + ' API calls left');
+                }
+                box.innerHTML = '<div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:12px 14px;border-radius:10px;">✓ ' + result.message +
+                    (bits.length ? '<div style="margin-top:6px;font-size:12.5px;">' + bits.join(' · ') + '</div>' : '') + '</div>';
+            } else {
+                box.innerHTML = '<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;">' + result.message + '</div>';
+            }
+        } catch (e) {
+            box.innerHTML = '<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;">Network error: ' + e.message + '</div>';
+        }
+
+        button.disabled = false;
+        button.textContent = 'Test token';
+    });
+
     document.getElementById('testSmtpBtn').addEventListener('click', async function () {
         const button = this;
         const email = document.getElementById('testEmail').value.trim();
