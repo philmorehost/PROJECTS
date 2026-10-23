@@ -109,6 +109,71 @@ if (!function_exists('lm_github_default_token')) {
     }
 }
 
+if (!function_exists('lm_github_mask_token')) {
+    /**
+     * Short safe representation of a token: ghp_1a2b…9f3c
+     *
+     * @param string $token
+     * @return string
+     */
+    function lm_github_mask_token($token)
+    {
+        $token = (string) $token;
+        $length = strlen($token);
+        if ($length === 0) {
+            return '';
+        }
+        if ($length <= 12) {
+            return str_repeat('•', max(3, $length - 2)) . substr($token, -2);
+        }
+        return substr($token, 0, 7) . '…' . substr($token, -4);
+    }
+}
+
+if (!function_exists('lm_github_default_token_state')) {
+    /**
+     * Describe what is stored in Settings → GitHub Access Token.
+     *
+     * Distinguishes "nothing stored" from "stored but unreadable", which is
+     * what a regenerated app_secret.key looks like from the outside: the token
+     * is there, pulls fail, and nothing on screen explains why.
+     *
+     * @return array{state:string,masked:string,saved_at:string,length:int,raw_length:int}
+     */
+    function lm_github_default_token_state()
+    {
+        $stored = trim((string) lm_setting('github_token', ''));
+
+        $out = array(
+            'state' => 'none',
+            'masked' => '',
+            'saved_at' => (string) lm_setting('github_token_saved_at', ''),
+            'length' => 0,
+            'raw_length' => strlen($stored),
+        );
+
+        if ($stored === '') {
+            return $out;
+        }
+
+        $plain = trim(lm_decrypt($stored));
+        if ($plain === '' && preg_match('/^(gh[pousr]_|github_pat_)/', $stored)) {
+            // Written by hand into settings.json without encryption.
+            $plain = $stored;
+        }
+
+        if ($plain === '') {
+            $out['state'] = 'unreadable';
+            return $out;
+        }
+
+        $out['state'] = 'ok';
+        $out['masked'] = lm_github_mask_token($plain);
+        $out['length'] = strlen($plain);
+        return $out;
+    }
+}
+
 if (!function_exists('lm_github_tier_token')) {
     /**
      * Resolve the PAT for a tier: its own token, otherwise the shared one.

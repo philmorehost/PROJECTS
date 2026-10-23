@@ -481,7 +481,17 @@ HTML
   <li>Press <strong>Test token</strong>. It reports <code>@login</code>, the token kind, how many repositories are visible and the remaining API quota.</li>
 </ol>
 <p class="lm-guide-note">“All repositories” covers repositories created later too. A fine-grained token limited to <em>select repositories</em> will silently 404 on every other repo — the usual cause of “not found” on a repo you can see in the browser.</p>
-<p><strong>Remove the shared token</strong> clears it; projects with their own token keep working, the rest fall back to public-only access.</p>
+<p><strong>Show</strong> reveals the stored token (masked in the field, hidden again after 60 seconds) and <strong>Copy</strong> puts it on the clipboard — useful when you need the same key in another tool. <strong>Remove</strong> clears it; projects with their own token keep working, the rest fall back to public-only access.</p>
+<p>The status chip above the field tells you which of these you are in:</p>
+<table class="lm-guide-table">
+  <thead><tr><th>Chip</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>✓ Token stored</td><td>Encrypted, readable, and inherited by every project without its own token.</td></tr>
+    <tr><td>No token stored</td><td>Nothing saved yet — only public repositories work.</td></tr>
+    <tr><td>⚠ Token stored but unreadable</td><td>The ciphertext is there but <code>storage/app_secret.key</code> changed (a redeploy that replaced the storage folder). Paste the token again and press <em>Save token</em>. Nothing else is lost.</td></tr>
+  </tbody>
+</table>
+<p class="lm-guide-note">Every save is verified before it is written: the token is encrypted and decrypted again in the same request. If the round-trip does not match, the save is refused with the reason instead of storing a value that would look empty later.</p>
 <p>Rate limit: 5,000 requests per hour per token. A pull uses a handful; the tree view one more per load.</p>
 HTML
                     ),

@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.5.0');
+    define('LM_VERSION', '8.6.0');
 }
 
 if (!function_exists('lm_lm_dir')) {
@@ -143,14 +143,77 @@ if (!function_exists('lm_settings')) {
     }
 }
 
-if (!function_exists('lm_save_settings')) {
+if (!function_exists('lm_settings_lock')) {
     /**
-     * Persist the settings array atomically (temp file + rename).
+     * Exclusive lock for read-modify-write cycles on settings.json.
+     *
+     * Nested calls are reference-counted, so lm_update_setting() can hold the
+     * lock and still call lm_save_settings() safely.
+     *
+     * @return bool
+     */
+    function lm_settings_lock()
+    {
+        if (!isset($GLOBALS['lm_settings_lock_state'])) {
+            $GLOBALS['lm_settings_lock_state'] = array('handle' => null, 'depth' => 0);
+        }
+        $state = &$GLOBALS['lm_settings_lock_state'];
+
+        if ($state['depth'] > 0) {
+            $state['depth']++;
+            return true;
+        }
+
+        if ($state['handle'] === null) {
+            if (!lm_ensure_dir(lm_storage_dir(), 0755)) {
+                return false;
+            }
+            $handle = @fopen(lm_storage_dir() . DIRECTORY_SEPARATOR . 'settings.lock', 'c');
+            if ($handle === false) {
+                return false;
+            }
+            $state['handle'] = $handle;
+        }
+
+        if (!@flock($state['handle'], LOCK_EX)) {
+            return false;
+        }
+
+        $state['depth'] = 1;
+        return true;
+    }
+}
+
+if (!function_exists('lm_settings_unlock')) {
+    /**
+     * Release the settings lock acquired by lm_settings_lock().
+     *
+     * @return void
+     */
+    function lm_settings_unlock()
+    {
+        if (!isset($GLOBALS['lm_settings_lock_state'])) {
+            return;
+        }
+        $state = &$GLOBALS['lm_settings_lock_state'];
+
+        if ($state['depth'] > 0) {
+            $state['depth']--;
+        }
+        if ($state['depth'] === 0 && $state['handle'] !== null) {
+            @flock($state['handle'], LOCK_UN);
+        }
+    }
+}
+
+if (!function_exists('lm_write_settings_file')) {
+    /**
+     * Write the settings array atomically (temp file + rename). No locking.
      *
      * @param array $settings
      * @return bool
      */
-    function lm_save_settings(array $settings)
+    function lm_write_settings_file(array $settings)
     {
         $file = lm_settings_file();
         $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -174,6 +237,24 @@ if (!function_exists('lm_save_settings')) {
     }
 }
 
+if (!function_exists('lm_save_settings')) {
+    /**
+     * Persist the settings array atomically (temp file + rename).
+     *
+     * @param array $settings
+     * @return bool
+     */
+    function lm_save_settings(array $settings)
+    {
+        $locked = lm_settings_lock();
+        $ok = lm_write_settings_file($settings);
+        if ($locked) {
+            lm_settings_unlock();
+        }
+        return $ok;
+    }
+}
+
 if (!function_exists('lm_update_setting')) {
     /**
      * Update one or more keys and persist.
@@ -183,11 +264,22 @@ if (!function_exists('lm_update_setting')) {
      */
     function lm_update_setting(array $values)
     {
+        // Hold the lock across read + write so a concurrent request cannot
+        // write back an older copy of settings.json.
+        $locked = lm_settings_lock();
+
         $settings = lm_settings(true);
         foreach ($values as $key => $value) {
             $settings[$key] = $value;
         }
-        return lm_save_settings($settings);
+
+        $ok = lm_write_settings_file($settings);
+
+        if ($locked) {
+            lm_settings_unlock();
+        }
+
+        return $ok;
     }
 }
 
@@ -251,6 +343,67 @@ if (!function_exists('lm_app_secret')) {
     }
 }
 
+if (!function_exists('lm_secret_health')) {
+    /**
+     * Can lm_app_secret() keep the same key between requests?
+     *
+     * If storage/ is not writable the key is regenerated on every request,
+     * which silently makes every stored secret unreadable. Callers use this
+     * to refuse a save instead of writing a token nobody can decrypt.
+     *
+     * @return array{ok:bool,path:string,exists:bool,writable:bool,message:string}
+     */
+    function lm_secret_health()
+    {
+        $dir = lm_storage_dir();
+        $file = $dir . DIRECTORY_SEPARATOR . 'app_secret.key';
+
+        $out = array(
+            'ok' => false,
+            'path' => $file,
+            'exists' => is_file($file),
+            'writable' => false,
+            'message' => '',
+        );
+
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            $out['message'] = 'The folder LM/storage does not exist and cannot be created.';
+            return $out;
+        }
+
+        // A real write test — is_writable() lies on some shared hosts.
+        $probe = $dir . DIRECTORY_SEPARATOR . '.write-test-' . getmypid();
+        $written = @file_put_contents($probe, 'ok');
+        if ($written === false) {
+            $out['message'] = 'LM/storage is not writable by PHP, so the encryption key cannot be stored.';
+            return $out;
+        }
+        @unlink($probe);
+
+        $out['writable'] = true;
+
+        if ($out['exists'] && !is_readable($file)) {
+            $out['message'] = 'LM/storage/app_secret.key exists but is not readable. Fix its permissions (0600, owner = PHP user).';
+            return $out;
+        }
+
+        if ($out['exists']) {
+            $stored = trim((string) @file_get_contents($file));
+            if (!(strlen($stored) === 64 && ctype_xdigit($stored))) {
+                $out['message'] = 'LM/storage/app_secret.key is corrupted — delete it and re-save the token.';
+                return $out;
+            }
+        }
+
+        $out['ok'] = true;
+        $out['message'] = $out['exists']
+            ? 'Encryption key present.'
+            : 'Encryption key will be created now.';
+
+        return $out;
+    }
+}
+
 if (!function_exists('lm_encrypt')) {
     /**
      * Encrypt a secret (e.g. GitHub PAT) for storage in the database/settings.
@@ -308,6 +461,10 @@ if (!function_exists('lm_decrypt')) {
         $rawKey = hex2bin(lm_app_secret());
 
         if (strpos($payload, 'gcm1:') === 0) {
+            if (!function_exists('openssl_decrypt')) {
+                // Ciphertext written on a host with OpenSSL, read here without it.
+                return '';
+            }
             $blob = base64_decode(substr($payload, 5), true);
             if ($blob === false || strlen($blob) < 29) {
                 return '';
@@ -320,6 +477,9 @@ if (!function_exists('lm_decrypt')) {
         }
 
         if (strpos($payload, 'cbc1:') === 0) {
+            if (!function_exists('openssl_decrypt')) {
+                return '';
+            }
             $blob = base64_decode(substr($payload, 5), true);
             if ($blob === false || strlen($blob) < 33) {
                 return '';

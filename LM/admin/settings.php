@@ -13,6 +13,7 @@ require_once('../includes/github.php');
 
 $settings_file = '../settings.json';
 $settings = lm_settings(true);
+$secretHealth = lm_secret_health();
 $saveError = '';
 $saveOk = isset($_GET['saved']);
 
@@ -31,18 +32,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new['max_domain_changes'] = max(1, (int) ($_POST['max_domain_changes'] ?? 3));
         $new['api_secret_key'] = trim($_POST['api_secret_key'] ?? '');
 
-        // Shared GitHub token: write-only field. Blank keeps the stored value.
-        $new['github_token'] = (string) ($settings['github_token'] ?? '');
-        $new['github_token_saved_at'] = (string) ($settings['github_token_saved_at'] ?? '');
+        // Shared GitHub token: write-only field. Blank keeps whatever is on disk
+        // right now — not the snapshot taken when the page loaded, otherwise the
+        // "Save token" button would be undone by the big form's Save Settings.
+        $tokenOnDisk = lm_settings(true);
+        $new['github_token'] = (string) ($tokenOnDisk['github_token'] ?? '');
+        $new['github_token_saved_at'] = (string) ($tokenOnDisk['github_token_saved_at'] ?? '');
         $incomingGithubToken = trim((string) ($_POST['github_token'] ?? ''));
 
         if ($incomingGithubToken !== '') {
             // A freshly pasted token wins over the "remove" tick.
             if (strlen($incomingGithubToken) < 20) {
                 $saveError = 'That does not look like a GitHub token. Paste the full token (ghp_… or github_pat_…).';
+            } elseif ($secretHealth['ok'] === false) {
+                $saveError = 'GitHub token not saved. ' . $secretHealth['message'];
             } else {
-                $new['github_token'] = lm_encrypt($incomingGithubToken);
-                $new['github_token_saved_at'] = date('c');
+                $cipher = lm_encrypt($incomingGithubToken);
+                if ($cipher === '' || lm_decrypt($cipher) !== $incomingGithubToken) {
+                    $saveError = 'GitHub token not saved. It could not be encrypted consistently — check that '
+                        . 'LM/storage is writable and LM/storage/app_secret.key is readable.';
+                } else {
+                    $new['github_token'] = $cipher;
+                    $new['github_token_saved_at'] = date('c');
+                }
             }
         } elseif (!empty($_POST['clear_github_token'])) {
             $new['github_token'] = '';
@@ -104,10 +116,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $settings = lm_settings(true);
 }
 
-$sharedGithubToken = lm_github_default_token();
-$sharedGithubMasked = $sharedGithubToken !== ''
-    ? substr($sharedGithubToken, 0, 7) . '…' . substr($sharedGithubToken, -4)
-    : '';
+$gitHubTokenState = lm_github_default_token_state();
+$sharedGithubMasked = $gitHubTokenState['masked'];
+$sharedGithubSavedAt = '';
+if (!empty($gitHubTokenState['saved_at'])) {
+    $stamp = strtotime((string) $gitHubTokenState['saved_at']);
+    $sharedGithubSavedAt = $stamp ? date('j M Y, H:i', $stamp) : (string) $gitHubTokenState['saved_at'];
+}
 $githubProjectsUsingDefault = 0;
 try {
     $stmtDefaultProjects = $pdo->query(
@@ -662,35 +677,59 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                             including ones you create later.
                         </p>
 
+                        <div id="ghTokenState" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;margin-bottom:14px;">
+                            <?php if ($gitHubTokenState['state'] === 'ok'): ?>
+                                <span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf5;color:#047857;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">✓ Token stored</span>
+                                <code id="ghTokenMasked" style="font-size:12px;color:#0f172a;"><?= htmlspecialchars($sharedGithubMasked) ?></code>
+                                <span style="font-size:12px;color:#64748b;" id="ghTokenMeta">
+                                    <?= $sharedGithubSavedAt !== '' ? 'saved ' . htmlspecialchars($sharedGithubSavedAt) : '' ?>
+                                    <?= $githubProjectsUsingDefault > 0 ? ' · used by ' . (int) $githubProjectsUsingDefault . ' project' . ($githubProjectsUsingDefault === 1 ? '' : 's') : '' ?>
+                                </span>
+                            <?php elseif ($gitHubTokenState['state'] === 'unreadable'): ?>
+                                <span style="display:inline-flex;align-items:center;gap:6px;background:#fef2f2;color:#b91c1c;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">⚠ Token stored but unreadable</span>
+                                <span style="font-size:12px;color:#991b1b;line-height:1.6;" id="ghTokenMeta">The encryption key changed (LM/storage/app_secret.key). Paste the token again and press <strong>Save token</strong>.</span>
+                            <?php else: ?>
+                                <span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#475569;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">No token stored</span>
+                                <span style="font-size:12px;color:#64748b;" id="ghTokenMeta">Only public repositories work until you add one. Leave the field below empty if you do not need private repos.</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if (!$secretHealth['ok']): ?>
+                            <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.6;margin-bottom:14px;">
+                                <strong>Encryption key problem:</strong> <?= htmlspecialchars($secretHealth['message']) ?>
+                                Tokens cannot be stored safely until this is fixed.
+                            </div>
+                        <?php endif; ?>
+
                         <div class="input-group wide-input">
                             <label for="githubTokenDefault">Personal access token</label>
-                            <input type="password" id="githubTokenDefault" name="github_token" value=""
-                                   autocomplete="new-password" placeholder="ghp_… or github_pat_…">
+                            <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;">
+                                <input type="password" id="githubTokenDefault" name="github_token" value=""
+                                       autocomplete="new-password" placeholder="ghp_… or github_pat_…"
+                                       style="flex:1;min-width:220px;">
+                                <button type="button" class="btn" id="ghRevealBtn" title="Show or hide the token"
+                                        style="background:#fff;border:1px solid #cbd5e1;color:#334155;box-shadow:none;">👁 Show</button>
+                                <button type="button" class="btn" id="ghCopyBtn" title="Copy the token"
+                                        style="background:#fff;border:1px solid #cbd5e1;color:#334155;box-shadow:none;">📋 Copy</button>
+                            </div>
                             <small>
-                                <?php if ($sharedGithubMasked !== ''): ?>
-                                    Saved: <code><?= htmlspecialchars($sharedGithubMasked) ?></code>
-                                    <?php if (!empty($settings['github_token_saved_at'])): ?>
-                                        on <?= htmlspecialchars(date('j M Y', strtotime((string) $settings['github_token_saved_at']))) ?>
-                                    <?php endif; ?>
-                                    · used by <?= (int) $githubProjectsUsingDefault ?> project<?= $githubProjectsUsingDefault === 1 ? '' : 's' ?> without their own token.
-                                <?php else: ?>
-                                    No shared token yet — projects fall back to “no credentials”, which only works for public repositories.
-                                <?php endif; ?>
-                                Leave blank to keep it.
+                                The field is write-only: leave it empty to keep the stored token.
+                                <strong>Show</strong> reveals the saved token so you can copy it; it hides again after 60 seconds.
                             </small>
                         </div>
 
-                        <div class="checkbox-row" style="margin-top:10px;">
-                            <input type="checkbox" name="clear_github_token" value="1" id="clearGithubToken">
-                            <span>Remove the shared token <small style="color:#64748b;">(projects with their own token keep working)</small></span>
-                        </div>
-
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;">
+                            <button type="button" class="btn" id="ghSaveTokenBtn" style="background:linear-gradient(135deg,#4f46e5,#3730a3);">Save token</button>
                             <button type="button" class="btn" id="testGithubTokenBtn" style="background:linear-gradient(135deg,#0f172a,#334155);">Test token</button>
+                            <button type="button" class="btn" id="ghRemoveTokenBtn"
+                                    style="background:#fff;border:1px solid #fecaca;color:#b91c1c;box-shadow:none;">Remove</button>
                             <a href="github-updates.php" style="color:#4f46e5;font-weight:600;font-size:13px;">Open GitHub Pull →</a>
                         </div>
                         <div id="githubTokenResult" style="margin-top:12px;font-size:13px;line-height:1.65;"></div>
-                        <small style="display:block;margin-top:8px;color:#94a3b8;">Save first if you just pasted a token — the test uses the saved value, or the one still in the field.</small>
+                        <small style="display:block;margin-top:8px;color:#94a3b8;">
+                            <strong>Save token</strong> stores this one value immediately and verifies it can be read back.
+                            The main <em>Save Settings</em> button at the bottom saves it too — the two do not conflict.
+                        </small>
                     </div>
                 </div>
 
@@ -725,6 +764,218 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
     </div>
 
     <script>
+    /* ---------------- shared GitHub token ---------------- */
+    const ghToken = {
+        field: document.getElementById('githubTokenDefault'),
+        revealBtn: document.getElementById('ghRevealBtn'),
+        copyBtn: document.getElementById('ghCopyBtn'),
+        saveBtn: document.getElementById('ghSaveTokenBtn'),
+        removeBtn: document.getElementById('ghRemoveTokenBtn'),
+        result: document.getElementById('githubTokenResult'),
+        stateBox: document.getElementById('ghTokenState'),
+        hideTimer: null,
+        revealedFromServer: false
+    };
+
+    function ghTokenShow(kind, message, extra) {
+        const palette = {
+            ok: 'background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;',
+            err: 'background:#fef2f2;border:1px solid #fecaca;color:#991b1b;',
+            info: 'background:#eef2ff;border:1px solid #dbe3ff;color:#3730a3;'
+        };
+        ghToken.result.innerHTML = '<div style="' + (palette[kind] || palette.info) + 'padding:12px 14px;border-radius:10px;">'
+            + message + (extra ? '<div style="margin-top:6px;font-size:12.5px;">' + extra + '</div>' : '') + '</div>';
+    }
+
+    function ghTokenMaskForDisplay() {
+        const value = ghToken.field.value.trim();
+        if (value.length < 14) return value;
+        return value.slice(0, 7) + '…' + value.slice(-4);
+    }
+
+    function ghTokenStateLine(state, masked, savedAt, projects) {
+        const box = ghToken.stateBox;
+        if (!box) return;
+
+        if (state === 'ok') {
+            box.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf5;color:#047857;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">✓ Token stored</span>'
+                + '<code style="font-size:12px;color:#0f172a;">' + masked + '</code>'
+                + '<span style="font-size:12px;color:#64748b;">'
+                + (savedAt ? 'saved ' + savedAt : '')
+                + (projects ? ' · used by ' + projects + ' project' + (projects === 1 ? '' : 's') : '')
+                + '</span>';
+        } else if (state === 'unreadable') {
+            box.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#fef2f2;color:#b91c1c;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">⚠ Token stored but unreadable</span>'
+                + '<span style="font-size:12px;color:#991b1b;">The encryption key changed. Paste the token again and press Save token.</span>';
+        } else {
+            box.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#475569;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">No token stored</span>'
+                + '<span style="font-size:12px;color:#64748b;">Only public repositories work until you add one.</span>';
+        }
+    }
+
+    function ghTokenHide(clearServerValue) {
+        ghToken.field.type = 'password';
+        ghToken.revealBtn.textContent = '👁 Show';
+        if (clearServerValue && ghToken.revealedFromServer) {
+            ghToken.field.value = '';
+        }
+        ghToken.revealedFromServer = false;
+        if (ghToken.hideTimer) {
+            clearTimeout(ghToken.hideTimer);
+            ghToken.hideTimer = null;
+        }
+    }
+
+    function ghTokenScheduleHide() {
+        if (ghToken.hideTimer) clearTimeout(ghToken.hideTimer);
+        ghToken.hideTimer = setTimeout(function () {
+            ghTokenHide(true);
+            ghTokenShow('info', 'Hidden again. Press <strong>Show</strong> to reveal the saved token.');
+        }, 60000);
+    }
+
+    async function ghFetch(action, payload) {
+        const body = new FormData();
+        body.append('action', action);
+        body.append('csrf_token', <?= json_encode(lm_csrf_token()) ?>);
+        Object.keys(payload || {}).forEach(key => body.append(key, payload[key]));
+
+        const response = await fetch('ajax_github_token.php', { method: 'POST', body: body, credentials: 'same-origin' });
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return { status: 'error', message: 'Unexpected response: ' + text.slice(0, 200) };
+        }
+    }
+
+    ghToken.revealBtn.addEventListener('click', async function () {
+        const button = this;
+
+        // Hiding
+        if (ghToken.field.type === 'text') {
+            ghTokenHide(true);
+            ghTokenShow('info', 'Token hidden.');
+            return;
+        }
+
+        // Reveal whatever is typed but not saved yet
+        if (ghToken.field.value.trim() !== '') {
+            ghToken.field.type = 'text';
+            button.textContent = '🙈 Hide';
+            ghTokenScheduleHide();
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = '…';
+        const result = await ghFetch('reveal', {});
+        button.disabled = false;
+
+        if (result.status === 'error') {
+            button.textContent = '👁 Show';
+            ghTokenShow('err', result.message);
+            ghTokenStateLine('unreadable', '', '', 0);
+            return;
+        }
+
+        ghToken.field.value = result.token;
+        ghToken.field.type = 'text';
+        ghToken.revealedFromServer = true;
+        button.textContent = '🙈 Hide';
+        ghTokenScheduleHide();
+        ghTokenShow('info', 'Saved token revealed: <code>' + result.masked + '</code>'
+            + (result.saved_at ? ' <span style="color:#64748b;">(saved ' + result.saved_at + ')</span>' : '')
+            + '. It hides again after 60 seconds.');
+    });
+
+    ghToken.copyBtn.addEventListener('click', async function () {
+        const button = this;
+
+        button.disabled = true;
+        let value = ghToken.field.value.trim();
+
+        if (value === '') {
+            const result = await ghFetch('reveal', {});
+            if (result.status === 'error') {
+                button.disabled = false;
+                ghTokenShow('err', result.message);
+                return;
+            }
+            value = result.token;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(value);
+            } else {
+                const scratch = document.createElement('textarea');
+                scratch.value = value;
+                scratch.style.position = 'fixed';
+                scratch.style.opacity = '0';
+                document.body.appendChild(scratch);
+                scratch.select();
+                document.execCommand('copy');
+                document.body.removeChild(scratch);
+            }
+            button.textContent = '✓ Copied';
+            ghTokenShow('ok', 'Token copied to the clipboard.');
+        } catch (e) {
+            ghTokenShow('err', 'The browser blocked clipboard access. Press <strong>Show</strong> and copy the value manually.');
+        }
+
+        setTimeout(function () { button.textContent = '📋 Copy'; button.disabled = false; }, 1600);
+    });
+
+    ghToken.saveBtn.addEventListener('click', async function () {
+        const button = this;
+        const value = ghToken.field.value.trim();
+
+        if (value === '') {
+            ghTokenShow('err', 'Paste the token into the field first.');
+            ghToken.field.focus();
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Saving…';
+        const result = await ghFetch('save', { token: value });
+        button.disabled = false;
+        button.textContent = 'Save token';
+
+        if (result.status === 'error') {
+            ghTokenShow('err', result.message);
+            return;
+        }
+
+        ghTokenHide(false);
+        ghToken.field.value = '';
+        ghTokenShow('ok', '✓ ' + result.message, 'Stored value: <code>' + result.masked + '</code>');
+        ghTokenStateLine(result.token_state, result.masked, result.saved_at, 0);
+    });
+
+    ghToken.removeBtn.addEventListener('click', async function () {
+        if (!confirm('Remove the shared GitHub token? Projects with their own token keep working.')) return;
+
+        const button = this;
+        button.disabled = true;
+        const result = await ghFetch('clear', {});
+        button.disabled = false;
+
+        if (result.status === 'error') {
+            ghTokenShow('err', result.message);
+            return;
+        }
+
+        ghTokenHide(true);
+        ghToken.field.value = '';
+        ghTokenShow('ok', '✓ ' + result.message);
+        ghTokenStateLine('none', '', '', 0);
+    });
+
+    // The token field is write-only; a page reload clears it again.
+    window.addEventListener('pageshow', function () { ghToken.field.type = 'password'; });
+
     document.getElementById('testGithubTokenBtn').addEventListener('click', async function () {
         const button = this;
         const typed = document.getElementById('githubTokenDefault').value.trim();

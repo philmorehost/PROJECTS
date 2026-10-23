@@ -78,9 +78,12 @@ if ($action === 'repos') {
     $source = $tier ? lm_github_token_source($tier) : (lm_github_default_token() !== '' ? 'default' : 'none');
 
     if ($token === '') {
+        $state = lm_github_default_token_state();
         lm_json(array(
             'status' => 'error',
-            'message' => 'No GitHub token yet. Add one in Settings → GitHub Access Token.',
+            'message' => $state['state'] === 'unreadable'
+                ? 'The stored GitHub token cannot be decrypted (LM/storage/app_secret.key changed). Re-save it in Settings → GitHub Access Token.'
+                : 'No GitHub token yet. Add one in Settings → GitHub Access Token.',
         ));
     }
 

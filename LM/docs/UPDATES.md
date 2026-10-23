@@ -172,8 +172,16 @@ without a token of its own inherits it, so a new project only needs
   **Contents: Read-only** (+ *Metadata: Read-only*).
 * **Classic token**: scope `repo` (read access is enough).
 
-Press **Test token** to see the account (`@login`), the token kind, how many
-repositories it can see and the remaining API quota before relying on it.
+Press **Save token** (stores and verifies that one value) and **Test token**
+(account `@login`, token kind, reachable repositories, remaining API quota).
+
+**Show** reveals the stored token so it can be copied elsewhere; it is never in
+the page source, only fetched on demand, and it hides again after 60 seconds.
+The status chip above the field reports `✓ Token stored`, `No token stored`, or
+`⚠ Token stored but unreadable` when `storage/app_secret.key` has changed since
+the token was saved — in that last case paste it again and save. Every save is
+round-trip verified before writing, so a token that cannot be decrypted is
+refused rather than silently stored.
 Private repositories return `404` — not `403` — when the token cannot see them,
 so a *selected repositories* fine-grained token looks like a typo until you
 check the access setting.
