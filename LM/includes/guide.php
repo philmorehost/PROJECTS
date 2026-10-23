@@ -828,6 +828,15 @@ if (!function_exists('lm_guide_assets')) {
 <script>
     var LM_GUIDE = { pages: <?= $json ?>, open: null };
 
+    function lmGuideEscape(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function lmGuideEnsure() {
         if (document.getElementById('lmGuideDrawer')) return;
 
@@ -843,7 +852,7 @@ if (!function_exists('lm_guide_assets')) {
         drawer.setAttribute('aria-modal', 'true');
         drawer.innerHTML = '<header><span class="icon" id="lmGuideIcon">📖</span>'
             + '<div style="flex:1;min-width:0;"><h3 id="lmGuideTitle">Guide</h3><p id="lmGuideSummary"></p></div>'
-            + '<button type="button" aria-label="Close" onclick="lmGuideClose()">✕</button></header>'
+            + '<button type="button" aria-label="Close" data-lm-guide-close>✕</button></header>'
             + '<div class="lm-guide-scroll" id="lmGuideScroll"></div>';
 
         document.body.appendChild(backdrop);
@@ -867,10 +876,11 @@ if (!function_exists('lm_guide_assets')) {
     }
 
     function lmGuideOpen(key) {
-        lmGuideEnsure();
-        var page = LM_GUIDE.pages[key];
-        if (!page) return;
+        var page = LM_GUIDE.pages && LM_GUIDE.pages[key];
+        if (!page) return false;
 
+        lmGuideEnsure();
+        LM_GUIDE.trigger = document.activeElement;
         LM_GUIDE.open = key;
         document.getElementById('lmGuideIcon').textContent = page.icon || '📖';
         document.getElementById('lmGuideTitle').textContent = page.title;
@@ -901,6 +911,12 @@ if (!function_exists('lm_guide_assets')) {
         document.getElementById('lmGuideScroll').scrollTop = 0;
         document.getElementById('lmGuideBackdrop').classList.add('open');
         document.getElementById('lmGuideDrawer').classList.add('open');
+        document.body.style.overflow = 'hidden';
+
+        var closeBtn = document.querySelector('#lmGuideDrawer [data-lm-guide-close]');
+        if (closeBtn) closeBtn.focus();
+
+        return true;
     }
 
     function lmGuideClose() {
@@ -908,7 +924,31 @@ if (!function_exists('lm_guide_assets')) {
         var drawer = document.getElementById('lmGuideDrawer');
         if (backdrop) backdrop.classList.remove('open');
         if (drawer) drawer.classList.remove('open');
+        if (LM_GUIDE.open) {
+            LM_GUIDE.open = null;
+            document.body.style.overflow = '';
+            if (LM_GUIDE.trigger && LM_GUIDE.trigger.focus) LM_GUIDE.trigger.focus();
+        }
     }
+
+    // One delegated listener: works for every button on the page, whatever
+    // order the markup arrives in, and without inline event attributes.
+    document.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!target || !target.closest) return;
+
+        var trigger = target.closest('[data-lm-guide]');
+        if (trigger) {
+            var key = trigger.getAttribute('data-lm-guide');
+            if (lmGuideOpen(key)) event.preventDefault();
+            return;
+        }
+
+        if (target.closest('[data-lm-guide-close]')) {
+            event.preventDefault();
+            lmGuideClose();
+        }
+    });
 </script>
         <?php
     }
@@ -931,14 +971,15 @@ if (!function_exists('lm_guide_help_button')) {
 
         lm_guide_assets();
 
-        $call = "lmGuideOpen('" . addslashes((string) $key) . "')";
-
-        return '<button type="button" class="lm-guide-btn"'
+        // An <a> rather than a <button>: the drawer intercepts the click, but if
+        // JavaScript is unavailable the link still lands on the full guide.
+        return '<a class="lm-guide-btn" data-lm-guide="' . htmlspecialchars($key, ENT_QUOTES) . '"'
+            . ' href="guide.php#' . rawurlencode($key) . '"'
             . ' style="display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:10px;'
             . 'border:1px solid #d7deea;background:#fff;color:#334155;font-family:inherit;font-size:13px;'
-            . 'font-weight:700;cursor:pointer;white-space:nowrap;"'
-            . ' onmouseover="this.style.background=\'#f8faff\'" onmouseout="this.style.background=\'#fff\'"'
-            . ' onclick="' . htmlspecialchars($call, ENT_QUOTES) . '">'
-            . '📖 ' . htmlspecialchars($label) . '</button>';
+            . 'font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;line-height:1.2;"'
+            . ' onmouseover="this.style.background=\'#f8faff\';this.style.borderColor=\'#c7d2fe\';"'
+            . ' onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#d7deea\';">'
+            . '📖 ' . htmlspecialchars($label) . '</a>';
     }
 }
