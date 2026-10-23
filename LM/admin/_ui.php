@@ -248,7 +248,27 @@ if (!function_exists('lm_admin_page_start')) {
                 const response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
                 const text = await response.text();
                 try { return JSON.parse(text); }
-                catch (e) { return { status: 'error', message: 'Unexpected server response: ' + text.slice(0, 300) }; }
+                catch (e) {
+                    // A PHP warning printed into the body used to surface as raw
+                    // HTML. Show the readable part and keep the rest for support.
+                    const clean = text
+                        .replace(/<br\s*\/?>/gi, '\n')
+                        .replace(/<[^>]*>/g, '')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+
+                    const first = clean.split('\n').filter(function (line) { return line.trim() !== ''; }).slice(0, 2).join(' ');
+                    const hinted = /Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)
+                        ? ' (server error — check the PHP error log)'
+                        : '';
+
+                    return {
+                        status: 'error',
+                        message: (first || 'The server returned an unreadable response.') + hinted,
+                        raw: clean.slice(0, 600)
+                    };
+                }
             } catch (e) {
                 return { status: 'error', message: 'Network error: ' + e.message };
             }

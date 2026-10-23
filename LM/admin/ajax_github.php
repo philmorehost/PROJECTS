@@ -9,6 +9,10 @@
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+// A PHP warning printed into the body turns a valid response into
+// "Unexpected server response". Keep them in the error log instead.
+@ini_set('display_errors', '0');
+
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/updates.php';
 require_once __DIR__ . '/../includes/github.php';
@@ -288,6 +292,10 @@ if ($action === 'preview') {
     $previewPaths = isset($_POST['paths'])
         ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
         : null;
+
+    // Stored selectors for this project (the preview may target another repo,
+    // but the saved folder selection still belongs to the tier).
+    $config = lm_github_tier_config($tier);
 
     $preview = lm_github_preview($pdo, $tier, array(
         'paths' => $previewPaths,

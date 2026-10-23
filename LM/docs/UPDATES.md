@@ -323,6 +323,7 @@ edited in the same commit as the feature it documents.
 | E-mails stay queued | Cron is not running. Open Licences (triggers the queue) or hit `cron.php?key=…`. |
 | `SQLSTATE[40001] … Deadlock` | Migrations now run once. If you still see it, check that `schema_migrations` exists and contains `2026_10_23_notifications_github`. |
 | GitHub `404` | Wrong `owner/repo`, or the token lacks **Contents: Read**. |
+| “Unexpected server response” on a card | A PHP warning was printed into a JSON body. Fixed in 8.6.1: `ajax_*.php` no longer display warnings (they go to the error log) and the page now shows the readable part of a malformed response. Still check the cPanel error log for the underlying warning. |
 | “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |
 | Package missing files you ticked | Check the file still exists on the branch and that it is a file (not a submodule). The pull result shows the packaged file count. |
 | Nothing packaged | No ticks = whole repository. Tick a folder if the ZIP is too big. |

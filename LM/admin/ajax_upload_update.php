@@ -7,6 +7,10 @@
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+// A PHP warning printed into the body turns a valid JSON response into
+// "Unexpected server response". Keep warnings in the error log instead.
+@ini_set('display_errors', '0');
+
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/updates.php';
 require_once __DIR__ . '/../includes/notifications.php';
