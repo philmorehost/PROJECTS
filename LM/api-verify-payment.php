@@ -198,47 +198,42 @@ try {
 }
 
 function send_license_email($email, $license_key, $domain, $settings) {
-    try {
-        require 'includes/src/Exception.php';
-        require 'includes/src/PHPMailer.php';
-        require 'includes/src/SMTP.php';
-        
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        
-        $mail->isSMTP();
-        $mail->Host = $settings['smtp_host'] ?? 'smtp.example.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = $settings['smtp_user'] ?? 'user@example.com';
-        $mail->Password = $settings['smtp_pass'] ?? 'password';
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = $settings['smtp_port'] ?? 587;
-        
-        $mail->setFrom($settings['admin_email'] ?? 'from@example.com', $settings['site_name'] ?? 'License Manager');
-        $mail->addAddress($email);
-        $mail->addBCC($settings['admin_email'] ?? 'admin@example.com');
-        
-        $mail->isHTML(true);
-        $mail->Subject = 'Your License Key - ' . ($settings['site_name'] ?? 'License Manager');
-        
-        $template = file_get_contents('email_template.html');
-        if (!$template) {
-            $template = get_default_email_template();
-        }
-        
-        $body = str_replace(
-            ['{license_key}', '{domain}', '{site_name}'],
-            [$license_key, $domain, $settings['site_name'] ?? 'License Manager'],
-            $template
-        );
-        
-        $mail->Body = $body;
-        $mail->AltBody = "Thank you for your purchase!\n\nYour License Key: {$license_key}\nDomain: {$domain}";
-        
-        $mail->send();
-        error_log("License email sent to: " . $email);
-        
-    } catch (Exception $e) {
-        error_log("Failed to send license email: " . $e->getMessage());
+    require_once __DIR__ . '/includes/mailer.php';
+
+    $template_file = __DIR__ . '/email_template.html';
+    $template = is_file($template_file)
+        ? (string) file_get_contents($template_file)
+        : get_default_email_template();
+
+    $site_name = $settings['site_name'] ?? 'License Manager';
+    $body = str_replace(
+        array('{license_key}', '{domain}', '{site_name}', '{year}', '{site_url}'),
+        array($license_key, $domain, $site_name, gmdate('Y'), lm_site_url()),
+        $template
+    );
+
+    $alt = "Thank you for your purchase!\n\n"
+        . "Your license key: {$license_key}\n"
+        . "Domain: {$domain}\n\n"
+        . "Paste the key into your script's licence settings to activate it.\n\n"
+        . $site_name;
+
+    $subject = 'Your License Key - ' . $site_name;
+
+    $result = lm_send_mail($email, $subject, $body, $alt, array(
+        'bcc' => $settings['admin_email'] ?? '',
+    ));
+
+    if ($result['ok']) {
+        error_log('License email sent to ' . $email . ' via ' . $result['transport']);
+        return;
+    }
+
+    error_log('Failed to send license email: ' . $result['error']);
+
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        $queued = lm_queue_email($GLOBALS['pdo'], $email, $subject, $body, $alt, array('priority' => 1));
+        error_log($queued ? 'Licence email queued for retry (queue #' . $queued . ')' : 'Could not queue the licence email.');
     }
 }
 

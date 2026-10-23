@@ -224,6 +224,9 @@ $transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             <a href="dashboard.php" class="active">📊 Dashboard</a>
             <a href="licenses.php">📜 Licenses</a>
             <a href="updates.php">🚀 Push Updates</a>
+            <a href="github-updates.php">🐙 GitHub Pull</a>
+            <a href="update-notifications.php">🔔 Notifications</a>
+            <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php">💳 Transactions</a>
             <a href="settings.php">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>

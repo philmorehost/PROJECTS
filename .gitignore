@@ -1,0 +1,21 @@
+# License Manager runtime data (never commit secrets, logs or packages)
+LM/storage/*
+!LM/storage/.htaccess
+!LM/storage/index.php
+!LM/storage/tmp/
+LM/storage/tmp/*
+!LM/storage/tmp/index.php
+!LM/storage/logs/
+LM/storage/logs/*
+!LM/storage/logs/index.php
+LM/uploads/
+LM/*.log
+LM/*_debug.log
+LM/check_update_log.txt
+LM/download_log.txt
+secure_updates/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp

@@ -140,7 +140,7 @@ if (file_exists($log_file)) {
                 <?php endif; ?>
             </td>
             <td>
-                <strong style="color:<?= str_contains($effective, 'fallback') ? '#a16207' : '#166534' ?>">
+                <strong style="color:<?= (strpos($effective, 'fallback') !== false) ? '#a16207' : '#166534' ?>">
                     <?= htmlspecialchars($effective) ?>
                 </strong>
             </td>
@@ -170,7 +170,7 @@ if (file_exists($log_file)) {
         <p style="color:#94a3b8">No log file found at: <code><?= htmlspecialchars($log_file) ?></code></p>
     <?php else: ?>
         <div class="log-box"><?php foreach ($log_lines as $line): 
-            $cls = str_contains($line, 'WARNING') ? 'log-warn' : (str_contains($line, 'INFO') ? 'log-info' : '');
+            $cls = (strpos($line, 'WARNING') !== false) ? 'log-warn' : ((strpos($line, 'INFO') !== false) ? 'log-info' : '');
         ?><span class="<?= $cls ?>"><?= htmlspecialchars($line) ?></span>
 <?php endforeach; ?></div>
     <?php endif; ?>

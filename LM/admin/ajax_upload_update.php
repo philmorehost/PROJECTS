@@ -1,152 +1,198 @@
 <?php
+/**
+ * admin/ajax_upload_update.php
+ * Uploads a manual OTA package and publishes it (optionally notifying customers).
+ */
+
 session_start();
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
-if (!isset($_SESSION['admin_logged_in'])) {
-    http_response_code(403);
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized access.']);
-    exit();
-}
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../includes/updates.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
-require_once('../db.php');
+lm_require_admin(true);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid request method.']);
-    exit();
+    lm_json(array('status' => 'error', 'message' => 'Invalid request method.'), 405);
 }
 
-// 1. Validate Inputs
-$tier_id = intval($_POST['tier_id'] ?? 0);
-$version_number = trim($_POST['version_number'] ?? '');
-$changelog = trim($_POST['changelog'] ?? '');
-
-if ($tier_id <= 0 || empty($version_number)) {
-    echo json_encode(['status' => 'error', 'message' => 'Tier and Version number are required.']);
-    exit();
+if (!lm_verify_csrf()) {
+    lm_json(array('status' => 'error', 'message' => 'Your session expired. Refresh the page and try again.'), 419);
 }
 
-// Fetch the tier code to create the folder name
-$stmt = $pdo->prepare("SELECT tier_code FROM script_tiers WHERE id = ?");
-$stmt->execute([$tier_id]);
+if (!lm_zip_available()) {
+    lm_json(array('status' => 'error', 'message' => 'ZIP support is unavailable: enable the PHP zlib extension.'));
+}
+
+$tierId = (int) ($_POST['tier_id'] ?? 0);
+$versionInput = trim((string) ($_POST['version_number'] ?? ''));
+$changelog = trim((string) ($_POST['changelog'] ?? ''));
+$changelogFormat = (($_POST['changelog_format'] ?? 'html') === 'text') ? 'text' : 'html';
+$autoVersion = !empty($_POST['auto_version']);
+$notify = !isset($_POST['notify']) || (string) $_POST['notify'] !== '0';
+$delayMinutes = isset($_POST['notify_delay_minutes']) && $_POST['notify_delay_minutes'] !== ''
+    ? max(0, (int) $_POST['notify_delay_minutes'])
+    : null;
+$forceVersion = !empty($_POST['force_version']);
+
+if ($tierId <= 0) {
+    lm_json(array('status' => 'error', 'message' => 'Choose the target script project.'));
+}
+
+$stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
+$stmt->execute(array($tierId));
 $tier = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$tier) {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid script tier selected.']);
-    exit();
+    lm_json(array('status' => 'error', 'message' => 'The selected script project does not exist.'));
 }
 
-$tier_code = strtolower(preg_replace('/[^a-zA-Z0-9_-]/', '_', $tier['tier_code']));
-
-// 2. Validate File Upload
-if (!isset($_FILES['update_zip']) || $_FILES['update_zip']['error'] !== UPLOAD_ERR_OK) {
-    $upload_err = $_FILES['update_zip']['error'] ?? 'Unknown error';
-    echo json_encode(['status' => 'error', 'message' => "File upload failed with error code: {$upload_err}"]);
-    exit();
+if (!isset($_FILES['update_zip']) || !is_array($_FILES['update_zip'])) {
+    lm_json(array('status' => 'error', 'message' => 'No ZIP file was uploaded.'));
 }
 
 $file = $_FILES['update_zip'];
-$ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
 
-if ($ext !== 'zip') {
-    echo json_encode(['status' => 'error', 'message' => 'Only .zip files are allowed.']);
-    exit();
+switch ((int) $file['error']) {
+    case UPLOAD_ERR_OK:
+        break;
+    case UPLOAD_ERR_INI_SIZE:
+    case UPLOAD_ERR_FORM_SIZE:
+        lm_json(array('status' => 'error', 'message' => 'The ZIP is larger than the server upload limit (' . ini_get('upload_max_filesize') . '). Increase upload_max_filesize / post_max_size or use GitHub pull.'));
+        break;
+    case UPLOAD_ERR_NO_FILE:
+        lm_json(array('status' => 'error', 'message' => 'Please select a ZIP file.'));
+        break;
+    default:
+        lm_json(array('status' => 'error', 'message' => 'Upload failed (PHP error code ' . (int) $file['error'] . ').'));
 }
 
-// 3. Setup Secure Storage Directory Outside Web Root
-// We assume 'lm' is inside the web root, so we go up two levels from 'lm/admin' to the root, then create 'secure_updates'.
-// e.g. /home/user/public_html/lm/admin/ajax_upload_update.php -> /home/user/secure_updates/
-$lm_dir = dirname(dirname(__DIR__)); // Gets to the parent of 'lm'
-$secure_updates_dir = $lm_dir . DIRECTORY_SEPARATOR . 'secure_updates';
-$tier_dir = $secure_updates_dir . DIRECTORY_SEPARATOR . $tier_code;
-
-// Create directories if they don't exist
-if (!is_dir($secure_updates_dir)) {
-    if (!@mkdir($secure_updates_dir, 0755, true)) {
-        echo json_encode(['status' => 'error', 'message' => "Failed to create secure_updates directory at: {$secure_updates_dir}. Check server permissions."]);
-        exit();
-    }
-    // Create an index.php to prevent directory listing just in case it ends up in a public place
-    @file_put_contents($secure_updates_dir . DIRECTORY_SEPARATOR . 'index.php', '<?php exit("Forbidden"); ?>');
+if (!is_uploaded_file($file['tmp_name'])) {
+    lm_json(array('status' => 'error', 'message' => 'Invalid upload.'), 400);
 }
 
-if (!is_dir($tier_dir)) {
-    if (!@mkdir($tier_dir, 0755, true)) {
-        echo json_encode(['status' => 'error', 'message' => 'Failed to create tier directory.']);
-        exit();
-    }
+$extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+if ($extension !== 'zip') {
+    lm_json(array('status' => 'error', 'message' => 'Only .zip packages are accepted.'));
 }
 
-// 4. Move File
-$safe_version = preg_replace('/[^a-zA-Z0-9._-]/', '_', $version_number);
-$filename = "update_{$safe_version}.zip";
-$target_path = $tier_dir . DIRECTORY_SEPARATOR . $filename;
-
-if (!move_uploaded_file($file['tmp_name'], $target_path)) {
-    echo json_encode(['status' => 'error', 'message' => 'Failed to move uploaded file to secure storage.']);
-    exit();
+$settings = lm_settings();
+$maxBytes = max(1, (int) ($settings['max_update_size_mb'] ?? 128)) * 1024 * 1024;
+if ((int) $file['size'] > $maxBytes) {
+    lm_json(array('status' => 'error', 'message' => 'The ZIP is larger than the configured limit (' . lm_format_bytes($maxBytes) . ').'));
 }
 
-// 5. Auto-inject manifest.json if missing from the ZIP
-$zip = new ZipArchive();
-if ($zip->open($target_path) === TRUE) {
-    $has_manifest = false;
+$tmpDir = lm_storage_dir() . DIRECTORY_SEPARATOR . 'tmp';
+lm_ensure_dir($tmpDir, 0700);
+$tmpZip = $tmpDir . DIRECTORY_SEPARATOR . 'upload_' . bin2hex(random_bytes(6)) . '.zip';
 
-    // Check root level and one level deep for manifest.json
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $name = $zip->getNameIndex($i);
-        // Match manifest.json at root or one subfolder deep
-        if ($name === 'manifest.json' || preg_match('#^[^/]+/manifest\.json$#', $name)) {
-            $has_manifest = true;
-            break;
-        }
-    }
+if (!move_uploaded_file($file['tmp_name'], $tmpZip)) {
+    lm_json(array('status' => 'error', 'message' => 'Could not move the uploaded file into private storage. Check folder permissions.'));
+}
 
-    if (!$has_manifest) {
-        // Build and inject a default manifest.json at the ZIP root
-        $manifest = [
-            'version'          => ltrim(strtolower($version_number), 'v'),
-            'tier'             => strtoupper($tier['tier_code']),
-            'changelog'        => $changelog,
-            'files_to_delete'  => [],
-            'database_queries' => []
-        ];
-        $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-    }
+// Validate the archive (structure + zip-slip protection).
+$inspect = lm_zip_inspect($tmpZip);
+if (!$inspect['ok']) {
+    @unlink($tmpZip);
+    lm_json(array('status' => 'error', 'message' => $inspect['error']));
+}
+if ($inspect['files'] === 0) {
+    @unlink($tmpZip);
+    lm_json(array('status' => 'error', 'message' => 'The ZIP is empty.'));
+}
 
-    $zip->close();
+// Version selection.
+if ($autoVersion || $versionInput === '') {
+    $version = lm_next_version($pdo, (int) $tier['id'], 'patch');
 } else {
-    @unlink($target_path);
-    echo json_encode(['status' => 'error', 'message' => 'Could not open the uploaded ZIP file to validate it.']);
-    exit();
+    $version = lm_version_clean($versionInput);
 }
 
-// 6. Generate Checksum (after any manifest injection)
-$checksum = hash_file('sha256', $target_path);
+if ($version === '') {
+    @unlink($tmpZip);
+    lm_json(array('status' => 'error', 'message' => 'Enter a valid version number such as 7.03 or 1.4.0.'));
+}
 
-// 7. Update Database
-try {
-    // Check if this version already exists
-    $check_stmt = $pdo->prepare("SELECT id FROM script_updates WHERE tier_id = ? AND version_number = ?");
-    $check_stmt->execute([$tier_id, $version_number]);
-    $existing = $check_stmt->fetch();
-    
-    if ($existing) {
-        // Update existing record
-        $update_stmt = $pdo->prepare("UPDATE script_updates SET zip_path = ?, checksum = ?, changelog = ?, release_date = CURRENT_TIMESTAMP, is_released = 1 WHERE id = ?");
-        $update_stmt->execute([$target_path, $checksum, $changelog, $existing['id']]);
-    } else {
-        // Insert new record
-        $insert_stmt = $pdo->prepare("INSERT INTO script_updates (tier_id, version_number, zip_path, checksum, changelog, is_released) VALUES (?, ?, ?, ?, ?, 1)");
-        $insert_stmt->execute([$tier_id, $version_number, $target_path, $checksum, $changelog]);
+$latest = lm_latest_update_for_tier($pdo, (int) $tier['id'], false);
+if (!$forceVersion && $latest && lm_version_compare($version, $latest['version_number']) <= 0) {
+    @unlink($tmpZip);
+    lm_json(array(
+        'status' => 'error',
+        'message' => 'v' . $version . ' is not newer than the current v' . $latest['version_number']
+            . '. Use "Force re-publish" if you really want to overwrite it.',
+    ));
+}
+
+if ($changelog === '') {
+    $changelog = $changelogFormat === 'text'
+        ? "- Maintenance improvements\n- Bug fixes"
+        : '<ul><li>Maintenance improvements</li><li>Bug fixes</li></ul>';
+}
+
+// Manifest so the target script knows exactly what to do.
+$changelogText = $changelogFormat === 'text' ? $changelog : lm_changelog_plain($changelog, 'html');
+$manifest = array(
+    'version' => $version,
+    'tier' => strtoupper((string) $tier['tier_code']),
+    'project' => (string) $tier['tier_name'],
+    'source' => 'manual',
+    'released_at' => gmdate('c'),
+    'changelog' => $changelogText,
+    'files_to_delete' => array(),
+    'database_queries' => array(),
+);
+
+if (!lm_zip_inject_manifest($tmpZip, $manifest, true)) {
+    @unlink($tmpZip);
+    lm_json(array('status' => 'error', 'message' => 'Could not add manifest.json to the ZIP.'));
+}
+
+$tierDir = lm_tier_storage_dir($tier, true);
+$targetFile = $tierDir . DIRECTORY_SEPARATOR . 'update_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $version) . '.zip';
+
+// Replace an older file with the same version name, if present.
+$resolvedExisting = lm_resolve_update_path($targetFile, $tier['tier_code']);
+if ($resolvedExisting['exists'] && $resolvedExisting['path'] !== $targetFile) {
+    @unlink($resolvedExisting['path']);
+}
+
+if (!@rename($tmpZip, $targetFile)) {
+    if (!@copy($tmpZip, $targetFile)) {
+        @unlink($tmpZip);
+        lm_json(array('status' => 'error', 'message' => 'Could not move the package to ' . $tierDir . '. Check folder permissions.'));
     }
-    
-    echo json_encode([
-        'status' => 'success', 
-        'message' => "Update v{$version_number} successfully published!"
-    ]);
-
-} catch (PDOException $e) {
-    // Attempt to delete the file if DB insert fails
-    @unlink($target_path);
-    echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
+    @unlink($tmpZip);
 }
+@chmod($targetFile, 0644);
+
+$publish = lm_publish_update($pdo, $tier, $version, $targetFile, $changelogFormat === 'text' ? lm_changelog_from_text($changelog) : $changelog, array(
+    'source' => 'manual',
+    'changelog_format' => $changelogFormat,
+    'changelog_text' => $changelogText,
+    'notify' => $notify,
+    'notify_delay_minutes' => $delayMinutes,
+    'actor' => $_SESSION['admin_username'] ?? 'admin',
+));
+
+if (!$publish['ok']) {
+    @unlink($targetFile);
+    lm_json(array('status' => 'error', 'message' => $publish['error']));
+}
+
+$queue = $publish['notification_queue'] ?? array('queued' => 0, 'skipped' => 0);
+
+lm_json(array(
+    'status' => 'success',
+    'message' => 'v' . $version . ' published for ' . $tier['tier_name'] . '. '
+        . ($notify ? $queue['queued'] . ' notification(s) queued' . ($queue['skipped'] ? ', ' . $queue['skipped'] . ' skipped' : '') . '.' : 'Notifications were not sent.'),
+    'version' => $version,
+    'update_id' => $publish['id'],
+    'checksum' => $publish['checksum'],
+    'file_size' => $publish['file_size'],
+    'zip_path' => $targetFile,
+    'cpanel_dir' => $tierDir,
+    'files_in_zip' => $inspect['files'],
+    'had_manifest' => $inspect['has_manifest'],
+    'notifications' => $queue,
+));
