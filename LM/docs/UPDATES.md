@@ -249,6 +249,38 @@ The e-mail template is `LM/email_templates/update_available.html` — a responsi
 gradient card with a licence-specific direct download link, the formatted
 changelog, an unsubscribe link and a plain-text alternative.
 
+**The licensed domain in the email** (8.8.1). `licenses.domain` is only what the
+payment gateway happened to receive; it can be `N/A`, or a leftover
+`yourdomain.com` from a test purchase. The renderer now resolves the site
+properly:
+
+```
+licenses.domain ─┐
+                 ├─► clean (strip scheme/path/port/www, lowercase)
+licensed_domains ┘        │
+  (domains that actually  ├─► placeholder? (N/A, example.com, localhost, private IP…)
+   called check-update)   │        └─► "your website" — never a made-up domain
+                          └─► primary + "+N more domains" on the licence
+```
+
+`licensed_domains` wins over `licenses.domain` because a domain that called
+`check-update.php` is provably running the script. The admin preview renders a
+real customer of the project (and says whose email it is) instead of the old
+hard-coded `yourdomain.com`, which is what made a placeholder look like a live
+send.
+
+**How to install** (8.8.1). The email no longer says "upload through cPanel".
+It carries two routes, in the order customers use them:
+
+| Option | Wording |
+|---|---|
+| 1 · Admin dashboard | Sign in as super admin → *System Update Centre* → **Install Update Automatically** (backup + automatic rollback). |
+| 2 · Control-panel cron | One daily job in cPanel → Cron Jobs (Plesk/DirectAdmin equivalent). It installs the release and emails the result. |
+
+Both texts can be overridden per installation in **Settings → Email update
+instructions** (`update_instructions_admin`, `update_instructions_cron`);
+blank means the built-in wording, which names the project and version.
+
 Manage everything in **Admin → Update Notifications**: schedule, delivery log,
 per-row cancel, “send due emails now”, and an iframe preview of both variants.
 
@@ -455,6 +487,7 @@ next-day reminder still comes from `cron.php`.
 | GitHub `404` | Wrong `owner/repo`, or the token lacks **Contents: Read**. |
 | Token empty after an update | **Settings → Settings File & Recovery** → **Restore** the newest snapshot with a `token ✓` chip. If there is none, paste the token again. Fixed as a class of bug in 8.7.0: settings are no longer shipped in packages. |
 | “Maximum package size” reverts to 128 | 8.7.0 shipped a nested `<form>` on the settings page; the browser closed the settings form early. Fixed in 8.7.1 — use **Save storage settings**. |
+| Email says “your website” instead of the domain | The licence has no usable domain and no site has checked in yet. The domain appears as soon as the installation calls `check-update.php`; the licence value is used only when it is a real hostname (not `N/A` or `yourdomain.com`). |
 | Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
 | Pull card stuck on “Queued” | No worker could be started (host disables `exec()` and blocks loopback HTTP). `cron.php` picks the job up on its next run; check **Settings → Automation** that cron is alive. |
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |

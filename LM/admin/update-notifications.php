@@ -277,6 +277,7 @@ lm_admin_page_start('Update notifications', 'notifications');
             <div>
                 <h3>Email preview</h3>
                 <p class="tiny muted" style="margin-top:4px;" id="previewSubject">—</p>
+                <p class="tiny muted" style="margin-top:4px;" id="previewRecipient"></p>
             </div>
             <button class="modal-close" type="button" onclick="closeModal('previewModal')">✕</button>
         </div>
@@ -317,6 +318,16 @@ lm_admin_page_start('Update notifications', 'notifications');
             return;
         }
         document.getElementById('previewSubject').textContent = result.subject;
+
+        // Say whose email this is, so a placeholder can never look real.
+        const who = document.getElementById('previewRecipient');
+        if (result.sample || !result.customer_email) {
+            who.textContent = 'Sample preview — no active licence yet, so the domain shows as “your website”.';
+        } else {
+            who.textContent = 'Exactly what ' + result.customer_email
+                + ' receives, for ' + (result.domain || 'their website') + '.';
+        }
+
         document.getElementById('previewFrame').srcdoc = result.html;
         openModal('previewModal');
     }

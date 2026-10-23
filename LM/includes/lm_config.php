@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.8.0');
+    define('LM_VERSION', '8.8.1');
 }
 
 if (!function_exists('lm_lm_dir')) {
@@ -127,6 +127,10 @@ if (!function_exists('lm_settings')) {
             'update_reminder_max'          => 1,
             'update_skip_if_downloaded'    => true,
             'update_email_batch_size'      => 25,
+            // Wording of the "how to update" block in the customer email.
+            // Empty = the built-in text (admin dashboard + control-panel cron).
+            'update_instructions_admin'    => '',
+            'update_instructions_cron'     => '',
             // Storage
             'updates_storage_dir'          => '',
             'max_update_size_mb'           => 128,

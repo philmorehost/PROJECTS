@@ -32,11 +32,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
     }
 }
 
-$saveScope = isset($_POST['save_scope']) ? preg_replace('/[^a-z]/', '', (string) $_POST['save_scope']) : 'all';
+$saveScope = isset($_POST['save_scope']) ? preg_replace('/[^a-z_]/', '', (string) $_POST['save_scope']) : 'all';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!lm_verify_csrf()) {
         $saveError = 'Your session expired. Refresh the page and try again.';
+    } elseif ($saveScope === 'email_help') {
+        // Wording of the "how to update" block inside the customer e-mail.
+        // Blank falls back to the built-in text, which follows the project.
+        if (lm_update_setting(array(
+            'update_instructions_admin' => trim((string) ($_POST['update_instructions_admin'] ?? '')),
+            'update_instructions_cron' => trim((string) ($_POST['update_instructions_cron'] ?? '')),
+        ))) {
+            header('Location: settings.php?saved=email_help#email-help');
+            exit();
+        }
+        $saveError = 'Could not write settings.json. Check the file permissions (0640) on the LM folder.';
     } elseif ($saveScope === 'storage') {
         // Dedicated button on the Update Storage card: only these two fields
         // are touched, so a half-filled form elsewhere cannot fail the save.
@@ -550,6 +561,10 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
             <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">
                 ✓ Storage settings saved — the new limit applies to the next upload or GitHub pull.
             </div>
+        <?php elseif ($savedScope === 'email_help'): ?>
+            <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">
+                ✓ Email instructions saved — the next update email uses this wording.
+            </div>
         <?php elseif ($saveOk): ?>
             <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">✓ Settings saved.</div>
         <?php endif; ?>
@@ -927,6 +942,33 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
             </div>
         </form>
         <div style="margin-top:24px;">
+                <div class="card" id="email-help">
+                    <div class="card-header"><h3>Email update instructions</h3></div>
+                    <div class="card-body">
+                        <p style="color:#475569;font-size:14px;line-height:1.7;margin-bottom:14px;">
+                            Every update email tells the customer how to install it: from their admin dashboard, or
+                            with a daily cron job in cPanel / Plesk / DirectAdmin. Leave a box empty to use the built-in
+                            wording; fill it in when a project names its screens differently.
+                        </p>
+                        <form method="POST">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token()) ?>">
+                            <input type="hidden" name="save_scope" value="email_help">
+                            <div class="input-group wide-input">
+                                <label>How to update from the admin dashboard</label>
+                                <textarea name="update_instructions_admin" rows="4" style="font-size:13.5px;line-height:1.6;"><?= htmlspecialchars((string) ($settings['update_instructions_admin'] ?? '')) ?></textarea>
+                                <small style="color:#64748b;font-size:12px;">Plain text. Example: Sign in to the super admin, open System Update Centre, press Install Update Automatically.</small>
+                            </div>
+                            <div class="input-group wide-input">
+                                <label>How to automate it from the control panel</label>
+                                <textarea name="update_instructions_cron" rows="4" style="font-size:13.5px;line-height:1.6;"><?= htmlspecialchars((string) ($settings['update_instructions_cron'] ?? '')) ?></textarea>
+                                <small style="color:#64748b;font-size:12px;">Plain text. The command itself is always included from the project's own cron job.</small>
+                            </div>
+                            <div class="form-footer" style="margin-top:4px;">
+                                <button type="submit" class="btn">Save email instructions</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
                 <div class="card" id="safety">
                     <div class="card-header"><h3>Settings File &amp; Recovery</h3></div>
                     <div class="card-body">

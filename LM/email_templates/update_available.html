@@ -202,38 +202,20 @@
                                 </tr>
                             </table>
 
-                            <!-- STEPS -->
+                            <!-- HOW TO UPDATE (routes generated in PHP) -->
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
                                     <td class="lm-pad" style="padding: 26px 40px 0 40px;">
                                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #edf0f7;">
                                             <tr>
                                                 <td style="padding-top:22px;">
-                                                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:#94a3b8; padding-bottom:14px;">
-                                                        How to install
+                                                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:#94a3b8; padding-bottom:6px;">
+                                                        How to update your website
                                                     </div>
-                                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                                                        <tr>
-                                                            <td class="lm-stack lm-stack-pad" width="33.33%" valign="top" style="padding-right:14px;">
-                                                                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13.5px; color:#334155; line-height:1.6;" class="lm-text">
-                                                                    <span style="display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background-color:#eef2ff; color:#4338ca; font-size:11px; font-weight:800; margin-right:6px;">1</span>
-                                                                    Download the package
-                                                                </div>
-                                                            </td>
-                                                            <td class="lm-stack lm-stack-pad" width="33.33%" valign="top" style="padding-right:14px;">
-                                                                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13.5px; color:#334155; line-height:1.6;" class="lm-text">
-                                                                    <span style="display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background-color:#eef2ff; color:#4338ca; font-size:11px; font-weight:800; margin-right:6px;">2</span>
-                                                                    Upload through cPanel
-                                                                </div>
-                                                            </td>
-                                                            <td class="lm-stack" width="33.33%" valign="top">
-                                                                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13.5px; color:#334155; line-height:1.6;" class="lm-text">
-                                                                    <span style="display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background-color:#eef2ff; color:#4338ca; font-size:11px; font-weight:800; margin-right:6px;">3</span>
-                                                                    Confirm the new version
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    </table>
+                                                    <div class="lm-muted" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.65; color:#64748b; padding-bottom:16px;">
+                                                        Two ways to install v{{VERSION}} on <strong style="color:#334155;">{{LICENSE_DOMAIN}}</strong> &mdash; pick whichever suits you.
+                                                    </div>
+                                                    {{UPDATE_OPTIONS}}
                                                 </td>
                                             </tr>
                                         </table>
@@ -249,10 +231,7 @@
                                             <tr>
                                                 <td style="padding-top:20px;">
                                                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12.5px; line-height:1.9; color:#64748b;" class="lm-muted">
-                                                        <tr>
-                                                            <td style="padding:2px 0;">Licensed domain</td>
-                                                            <td align="right" style="padding:2px 0; color:#334155; font-weight:600;" class="lm-text">{{LICENSE_DOMAIN}}</td>
-                                                        </tr>
+                                                        {{DOMAIN_ROW}}
                                                         <tr>
                                                             <td style="padding:2px 0;">Released</td>
                                                             <td align="right" style="padding:2px 0; color:#334155; font-weight:600;" class="lm-text">{{RELEASE_DATE}}</td>
@@ -276,7 +255,7 @@
                     <tr>
                         <td style="padding: 22px 30px 34px 30px; text-align:center;">
                             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.7; color:#94a3b8;">
-                                You are receiving this because you hold an active {{TIER_NAME}} licence at <strong style="color:#64748b;">{{LICENSE_DOMAIN}}</strong>.
+                                You are receiving this because you hold an active {{TIER_NAME}} licence for <strong style="color:#64748b;">{{LICENSE_DOMAIN}}</strong>.
                             </div>
                             <div style="height:10px; line-height:10px;">&nbsp;</div>
                             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.7; color:#94a3b8;">

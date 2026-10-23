@@ -169,6 +169,380 @@ if (!function_exists('lm_update_email_site_logo')) {
     }
 }
 
+if (!function_exists('lm_email_domain_clean')) {
+    /**
+     * Turn whatever is stored in `licenses.domain` into a bare hostname.
+     *
+     * Purchases arrive from a payment gateway, and the metadata is written by
+     * hand: "https://shop.example.com/", "shop.example.com:443",
+     * "www.shop.example.com" and "SHOP.EXAMPLE.COM" all mean the same site.
+     *
+     * @param mixed $value
+     * @return string Empty when the value is not a usable domain
+     */
+    function lm_email_domain_clean($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        // Strip a pasted URL down to its host.
+        if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $value)) {
+            $host = parse_url($value, PHP_URL_HOST);
+            $value = is_string($host) ? $host : '';
+        }
+
+        $value = preg_replace('#^//#', '', (string) $value);
+        $value = preg_split('~[/?#]~', $value);
+        $value = is_array($value) ? $value[0] : (string) $value;
+
+        // Drop a port and any userinfo.
+        $value = preg_replace('#^.*@#', '', $value);
+        $value = preg_replace('#:\d+$#', '', $value);
+        $value = rtrim(trim($value), '.');
+
+        $value = strtolower($value);
+
+        if (!preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/', $value)) {
+            return '';
+        }
+
+        return $value;
+    }
+}
+
+if (!function_exists('lm_email_domain_is_placeholder')) {
+    /**
+     * Values that look like a domain but are not the customer's site.
+     *
+     * Older purchases stored "N/A" or the field was typed by hand during
+     * testing, and the template used to print whatever was there — which is
+     * how "yourdomain.com" ended up in a release email.
+     *
+     * @param string $domain Already cleaned domain
+     * @return bool
+     */
+    function lm_email_domain_is_placeholder($domain)
+    {
+        $domain = strtolower(trim((string) $domain));
+        if ($domain === '') {
+            return true;
+        }
+
+        $exact = array(
+            'n/a', 'na', 'none', 'null', 'unknown', 'localhost', 'test', 'demo',
+            'example.com', 'example.org', 'example.net', 'test.com', 'domain.com',
+            'site.com', 'website.com', 'yoursite.com', 'your-domain.com',
+            'yourwebsite.com', 'yourdomain.com', 'mydomain.com', 'mysite.com',
+            'sample.com', 'placeholder.com', 'email.com', 'admin.com',
+        );
+
+        $bare = preg_replace('#^www\.#', '', $domain);
+        if (in_array($bare, $exact, true)) {
+            return true;
+        }
+
+        // RFC 2606 / RFC 6761 reserved names, and anything that ends in them.
+        foreach (array('.example.com', '.example.org', '.example.net', '.test', '.invalid', '.localhost') as $suffix) {
+            if (substr($bare, -strlen($suffix)) === $suffix) {
+                return true;
+            }
+        }
+
+        // Loopback and private-network hosts are never a customer's public site.
+        if (preg_match('#^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)#', $bare)
+            || preg_match('#\.(local|localdomain|internal)$#', $bare)) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('lm_license_domain_info')) {
+    /**
+     * Work out which site a licence email is about.
+     *
+     * `licenses.domain` is only what the gateway happened to receive. The sites
+     * that really run the script are the ones that called `check-update.php`
+     * and were registered in `licensed_domains` — that list is the accurate
+     * source, so it is consulted when the stored value is missing or is a
+     * leftover placeholder.
+     *
+     * @param PDO|null $pdo      Pass null to skip the licensed_domains lookup
+     * @param array    $license  licenses row (may be partial)
+     * @return array{known:bool,primary:string,display:string,all:array,note:string,prose:string}
+     */
+    function lm_license_domain_info($pdo, array $license)
+    {
+        static $cache = array();
+
+        $cacheKey = (int) ($license['id'] ?? 0) . '|' . strtolower(trim((string) ($license['domain'] ?? '')));
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        $candidates = array();
+        $seen = array();
+
+        $add = function ($value) use (&$candidates, &$seen) {
+            $clean = lm_email_domain_clean($value);
+            if ($clean === '' || lm_email_domain_is_placeholder($clean)) {
+                return;
+            }
+            $key = preg_replace('#^www\.#', '', $clean);
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $candidates[] = preg_replace('#^www\.#', '', $clean);
+        };
+
+        // 1. The domain stored on the licence.
+        $add($license['domain'] ?? '');
+
+        // 2. Every domain that has actually checked in for this licence.
+        $licenseId = (int) ($license['id'] ?? 0);
+        if ($pdo instanceof PDO && $licenseId > 0) {
+            try {
+                $stmt = $pdo->prepare(
+                    "SELECT domain_name FROM licensed_domains
+                      WHERE license_id = ?
+                      ORDER BY last_update_check DESC, id DESC"
+                );
+                $stmt->execute(array($licenseId));
+                foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $domainName) {
+                    $add($domainName);
+                }
+            } catch (PDOException $e) {
+                // Table missing or a partial install — the licence value stands.
+            } catch (Throwable $e) {
+                // Same.
+            }
+        }
+
+        if (empty($candidates)) {
+            $cache[$cacheKey] = array(
+                'known' => false,
+                'primary' => '',
+                'display' => 'your website',
+                'all' => array(),
+                'note' => '',
+                'prose' => 'your website',
+            );
+            return $cache[$cacheKey];
+        }
+
+        $primary = $candidates[0];
+        $extra = count($candidates) - 1;
+        $note = $extra > 0
+            ? '+' . $extra . ' more ' . ($extra === 1 ? 'domain' : 'domains') . ' on this licence'
+            : '';
+
+        $cache[$cacheKey] = array(
+            'known' => true,
+            'primary' => $primary,
+            'display' => $primary,
+            'all' => $candidates,
+            'note' => $note,
+            'prose' => $primary,
+        );
+        return $cache[$cacheKey];
+    }
+}
+
+if (!function_exists('lm_preview_license')) {
+    /**
+     * Pick a realistic licence for an email preview.
+     *
+     * The preview used to be rendered with a hard-coded `yourdomain.com`,
+     * which is exactly what leaked into a real-looking screenshot. Use the
+     * customer being previewed when given, otherwise a real recipient that has
+     * a domain, otherwise any recipient on the project.
+     *
+     * @param PDO   $pdo
+     * @param array $update    script_updates row
+     * @param int   $licenseId Preferred licence
+     * @return array{id:int,domain:string,customer_email:string}
+     */
+    function lm_preview_license(PDO $pdo, array $update, $licenseId = 0)
+    {
+        $fallback = array('id' => 0, 'domain' => '', 'customer_email' => 'customer@example.com');
+
+        if ($licenseId > 0) {
+            try {
+                $stmt = $pdo->prepare("SELECT * FROM licenses WHERE id = ?");
+                $stmt->execute(array((int) $licenseId));
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    return $row;
+                }
+            } catch (PDOException $e) {
+                // Fall through to the automatic pick.
+            }
+        }
+
+        $tierId = (int) ($update['tier_id'] ?? 0);
+        if ($tierId <= 0) {
+            return $fallback;
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                "SELECT * FROM licenses
+                  WHERE tier_id = ? AND status = 'active'
+                    AND customer_email IS NOT NULL AND customer_email <> ''
+                  ORDER BY id ASC
+                  LIMIT 25"
+            );
+            $stmt->execute(array($tierId));
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            return $fallback;
+        }
+
+        $firstRow = null;
+        foreach ($rows as $row) {
+            if ($firstRow === null) {
+                $firstRow = $row;
+            }
+            $info = lm_license_domain_info($pdo, $row);
+            if (!empty($info['known'])) {
+                return $row;
+            }
+        }
+
+        return $firstRow ? $firstRow : $fallback;
+    }
+}
+
+if (!function_exists('lm_update_email_options')) {
+    /**
+     * The "how do I update?" block used inside the customer email.
+     *
+     * Two routes, in the order customers actually use them:
+     *   1. the script's own admin area — one button, no files to move;
+     *   2. a daily cron job in cPanel / Plesk / DirectAdmin that updates itself.
+     *
+     * The wording can be replaced per installation from settings.json with
+     * `update_instructions_admin` and `update_instructions_cron`.
+     *
+     * @param array  $tier   script_tiers row
+     * @param string $version
+     * @param array  $domain Domain info from lm_license_domain_info()
+     * @return array{html:string,text:string,cron:string}
+     */
+    function lm_update_email_options(array $tier, $version, array $domain)
+    {
+        $settings = lm_settings();
+        $project = trim((string) ($tier['tier_name'] ?? 'your script'));
+        $project = $project !== '' ? $project : 'your script';
+
+        $cron = '0 1 * * * /usr/local/bin/php /home/USER/public_html/bc-spadmin/cron_update.php >> /home/USER/ota_updates.log 2>&1';
+
+        $adminOverride = trim((string) ($settings['update_instructions_admin'] ?? ''));
+        $cronOverride = trim((string) ($settings['update_instructions_cron'] ?? ''));
+
+        $adminText = $adminOverride !== ''
+            ? $adminOverride
+            : 'Sign in to ' . $project . ' as the super admin, open <strong>System Update Centre</strong> '
+                . 'and press <strong>Install Update Automatically</strong>. The script downloads v' . $version
+                . ', backs up your files and database first, and rolls back on its own if anything fails.';
+
+        $cronText = $cronOverride !== ''
+            ? $cronOverride
+            : 'Prefer it hands-free? In <strong>cPanel &rarr; Cron Jobs</strong> (Plesk and DirectAdmin work the same way) '
+                . 'add one daily job. It checks for a release, installs it and e-mails you the result &mdash; '
+                . 'no dashboard visit needed.';
+
+        $escAdmin = $adminOverride !== '' ? nl2br(htmlspecialchars($adminOverride, ENT_QUOTES, 'UTF-8')) : $adminText;
+        $escCron = $cronOverride !== '' ? nl2br(htmlspecialchars($cronOverride, ENT_QUOTES, 'UTF-8')) : $cronText;
+
+        $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+        $option = function ($number, $tone, $title, $body, $code, $foot) use ($font) {
+            $html = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="lm-surface" '
+                . 'style="border:1px solid #e6ebf5; border-left:4px solid ' . $tone . '; border-radius:14px; background-color:#fbfcff;">'
+                . '<tr><td style="padding:18px 20px;">'
+                . '<div style="font-family:' . $font . '; font-size:10px; font-weight:800; letter-spacing:1.5px; '
+                . 'text-transform:uppercase; color:' . $tone . ';">Option ' . $number . '</div>'
+                . '<div class="lm-h1 lm-text" style="margin-top:5px; font-family:' . $font . '; font-size:15px; font-weight:700; color:#0f172a; line-height:1.4;">'
+                . $title . '</div>'
+                . '<div class="lm-text" style="margin-top:7px; font-family:' . $font . '; font-size:13.5px; line-height:1.65; color:#475569;">'
+                . $body . '</div>';
+
+            if ($code !== '') {
+                $html .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">'
+                    . '<tr><td style="background-color:#0f172a; border-radius:10px; padding:13px 15px; '
+                    . 'font-family:Consolas,Menlo,Monaco,\'Liberation Mono\',monospace; font-size:11.5px; line-height:1.7; '
+                    . 'color:#e2e8f0; word-break:break-all;">' . $code . '</td></tr></table>';
+            }
+
+            if ($foot !== '') {
+                $html .= '<div style="margin-top:9px; font-family:' . $font . '; font-size:11.5px; line-height:1.6; color:#94a3b8;">'
+                    . $foot . '</div>';
+            }
+
+            return $html . '</td></tr></table>';
+        };
+
+        $cronCode = '<span style="color:#7dd3fc;">0 1 * * *</span> /usr/local/bin/php /home/USER/public_html/'
+            . 'bc-spadmin/cron_update.php &gt;&gt; /home/USER/ota_updates.log 2&gt;&amp;1';
+
+        $html = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+            . '<tr><td style="padding-bottom:12px;">'
+            . $option(
+                '1',
+                '#4338ca',
+                'From your admin dashboard',
+                $escAdmin,
+                '',
+                'No files to move. The update is applied for you, and the page shows the progress step by step.'
+            )
+            . '</td></tr>'
+            . '<tr><td align="center" style="padding:0 0 12px 0; font-family:' . $font . '; font-size:10.5px; '
+            . 'font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:#cbd5e1;">or</td></tr>'
+            . '<tr><td>'
+            . $option(
+                '2',
+                '#0e7490',
+                'Automatic, from your control panel',
+                $escCron,
+                $cronCode,
+                'Copy the exact line from <strong>Super Admin &rarr; Cron Jobs</strong> &mdash; it already contains your own paths.'
+            )
+            . '</td></tr>'
+            . '</table>'
+            . '<div class="lm-muted" style="margin-top:14px; font-family:' . $font . '; font-size:12px; line-height:1.65; color:#94a3b8;">'
+            . 'Either route installs v' . htmlspecialchars((string) $version, ENT_QUOTES, 'UTF-8') . '. '
+            . 'If you would rather do it by hand, download the package from your dashboard and upload it in '
+            . 'cPanel &rarr; File Manager, then press <strong>Force Check</strong> on the update page.'
+            . '</div>';
+
+        $plain = function ($value) {
+            return trim(html_entity_decode(strip_tags((string) $value), ENT_QUOTES, 'UTF-8'));
+        };
+
+        $text = "OPTION 1 - FROM YOUR ADMIN DASHBOARD\n"
+            . ($adminOverride !== '' ? $adminOverride : $plain($adminText)) . "\n\n"
+            . "OPTION 2 - AUTOMATIC FROM YOUR CONTROL PANEL\n"
+            . ($cronOverride !== '' ? $cronOverride : $plain($cronText)) . "\n"
+            . "cPanel > Cron Jobs (daily):\n"
+            . "0 1 * * * /usr/local/bin/php /home/USER/public_html/bc-spadmin/cron_update.php >> /home/USER/ota_updates.log 2>&1\n"
+            . "(the exact line is on Super Admin > Cron Jobs in your installation)\n\n"
+            . "Manual: download the package from your dashboard, upload it in cPanel > File Manager, then press Force Check.";
+
+        return array(
+            'html' => $html,
+            'text' => $text,
+            'cron' => $cron,
+            'admin' => $adminOverride !== '' ? $adminOverride : $plain($adminText),
+            'cron_text' => $cronOverride !== '' ? $cronOverride : $plain($cronText),
+        );
+    }
+}
+
 if (!function_exists('lm_render_update_email')) {
     /**
      * Render the update / reminder email.
@@ -178,25 +552,35 @@ if (!function_exists('lm_render_update_email')) {
      * @param array  $license  licenses row (may be partial)
      * @param string $kind     initial|reminder|resend
      * @param array  $extra    download_url
-     * @return array{subject:string,html:string,alt:string}
+     * @param PDO|null $pdo    Needed to look up the domains that checked in
+     * @return array{subject:string,html:string,alt:string,domain:string}
      */
-    function lm_render_update_email(array $update, array $tier, array $license, $kind = 'initial', array $extra = array())
+    function lm_render_update_email(array $update, array $tier, array $license, $kind = 'initial', array $extra = array(), $pdo = null)
     {
         $settings = lm_settings();
 
         $templatePath = lm_lm_dir() . '/email_templates/update_available.html';
         $template = is_file($templatePath) ? (string) file_get_contents($templatePath) : '';
         if ($template === '') {
-            $template = '<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#111;"><h2>{{HEADLINE}}</h2><p>{{INTRO}}</p><div>{{CHANGELOG}}</div><p><a href="{{CTA_URL}}">{{CTA_LABEL}}</a></p></body></html>';
+            $template = '<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#111;">'
+                . '<h2>{{HEADLINE}}</h2><p>{{INTRO}}</p><div>{{CHANGELOG}}</div>'
+                . '{{UPDATE_OPTIONS}}'
+                . '<p><a href="{{CTA_URL}}">{{CTA_LABEL}}</a></p></body></html>';
         }
 
         $siteName = lm_site_name();
         $version = $update['version_number'];
         $tierName = $tier['tier_name'] ?? ($tier['tier_code'] ?? 'Script');
-        $domain = $license['domain'] ?? ($license['customer_email'] ?? '');
-        if ($domain === '' || $domain === 'N/A') {
-            $domain = 'your website';
-        }
+
+        // Which site is this about? `licenses.domain` is what the payment
+        // gateway passed along; the domains that actually checked in are more
+        // trustworthy, and a leftover placeholder is not a domain at all.
+        $domainInfo = lm_license_domain_info($pdo, $license);
+        $domain = $domainInfo['display'];
+        $domainKnown = !empty($domainInfo['known']);
+        $domainHtml = $domainKnown
+            ? '<strong style="color:#0f172a;">' . htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') . '</strong>'
+            : '<strong style="color:#0f172a;">your website</strong>';
 
         $isReminder = ($kind === 'reminder');
         $format = $update['changelog_format'] ?? 'html';
@@ -243,7 +627,7 @@ if (!function_exists('lm_render_update_email')) {
             $eyebrow = 'A quick reminder';
             $headline = 'Your update is ready when you are';
             $intro = 'A little while ago we released <strong>' . htmlspecialchars($tierName, ENT_QUOTES, 'UTF-8') . ' v' . htmlspecialchars($version, ENT_QUOTES, 'UTF-8')
-                . '</strong>. Our records show that <strong>' . htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') . '</strong> has not been updated yet, so here is one friendly nudge.'
+                . '</strong>. Our records show that ' . $domainHtml . ($domainKnown ? '' : ' (the site on this licence)') . ' has not been updated yet, so here is one friendly nudge.'
                 . ' Installing the latest version keeps your site secure and gives you everything listed below.';
             $preheader = 'Reminder: ' . $tierName . ' v' . $version . ' has not been installed on ' . $domain . ' yet.';
         } else {
@@ -255,8 +639,26 @@ if (!function_exists('lm_render_update_email')) {
             $eyebrow = 'Fresh release';
             $headline = 'A new version is ready for your website';
             $intro = 'We have just published <strong>' . htmlspecialchars($tierName, ENT_QUOTES, 'UTF-8') . ' v' . htmlspecialchars($version, ENT_QUOTES, 'UTF-8')
-                . '</strong> for <strong>' . htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') . '</strong>. It includes the improvements below and is ready to install from your dashboard.';
-            $preheader = $tierName . ' v' . $version . ' is now available for ' . $domain . '.';
+                . '</strong> for ' . $domainHtml . '. It includes the improvements below, and you can install it in '
+                . '<strong>one click from your admin dashboard</strong> &mdash; or let the daily cron job do it for you.';
+            $preheader = $tierName . ' v' . $version . ' is ready for ' . $domain . ' — install it from your dashboard or your update cron.';
+        }
+
+        $updateOptions = lm_update_email_options($tier, $version, $domainInfo);
+
+        // Only claim a licensed domain when we actually know one.
+        $domainRow = '';
+        if ($domainKnown) {
+            $domainRow = '<tr>'
+                . '<td style="padding:2px 0;">Licensed domain</td>'
+                . '<td align="right" style="padding:2px 0; color:#334155; font-weight:600;">'
+                . htmlspecialchars($domain, ENT_QUOTES, 'UTF-8')
+                . ($domainInfo['note'] !== ''
+                    ? '<div style="font-size:11px; font-weight:400; color:#94a3b8;">'
+                        . htmlspecialchars($domainInfo['note'], ENT_QUOTES, 'UTF-8') . '</div>'
+                    : '')
+                . '</td>'
+                . '</tr>';
         }
 
         $logoUrl = lm_update_email_site_logo();
@@ -289,6 +691,10 @@ if (!function_exists('lm_render_update_email')) {
             '{{CTA_LABEL}}'        => htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8'),
             '{{CTA_NOTE}}'         => $ctaNote,
             '{{LICENSE_DOMAIN}}'   => htmlspecialchars($domain, ENT_QUOTES, 'UTF-8'),
+            '{{DOMAIN_ROW}}'       => $domainRow,
+            '{{DOMAIN_NOTE}}'      => htmlspecialchars($domainInfo['note'], ENT_QUOTES, 'UTF-8'),
+            '{{UPDATE_OPTIONS}}'   => $updateOptions['html'],
+            '{{UPDATE_CRON}}'      => htmlspecialchars($updateOptions['cron'], ENT_QUOTES, 'UTF-8'),
             '{{PACKAGE_NAME}}'     => 'update_' . htmlspecialchars($version, ENT_QUOTES, 'UTF-8') . '.zip',
             '{{SUPPORT_EMAIL}}'    => htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8'),
             '{{UNSUBSCRIBE_URL}}'  => htmlspecialchars($unsubUrl, ENT_QUOTES, 'UTF-8'),
@@ -299,15 +705,16 @@ if (!function_exists('lm_render_update_email')) {
 
         $alt = $subject . "\n\n"
             . strtoupper($headline) . "\n\n"
-            . trim(preg_replace('/\s+/', ' ', strip_tags($intro))) . "\n\n"
+            . trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags($intro), ENT_QUOTES, 'UTF-8'))) . "\n\n"
             . "What's new in v" . $version . ":\n" . $changelogText . "\n\n"
-            . 'Install: ' . $ctaUrl . "\n"
-            . 'Licensed domain: ' . $domain . "\n"
-            . 'Released: ' . $releaseDate . "\n\n"
+            . $updateOptions['text'] . "\n\n"
+            . 'Licensed domain: ' . $domain . ($domainInfo['note'] !== '' ? ' (' . $domainInfo['note'] . ')' : '') . "\n"
+            . 'Released: ' . $releaseDate . "\n"
+            . 'Download / dashboard: ' . $ctaUrl . "\n\n"
             . 'Stop receiving update reminders: ' . $unsubUrl . "\n"
-            . '© ' . $year . ' ' . $siteName;
+            . '(c) ' . $year . ' ' . $siteName;
 
-        return array('subject' => $subject, 'html' => $html, 'alt' => $alt);
+        return array('subject' => $subject, 'html' => $html, 'alt' => $alt, 'domain' => $domain);
     }
 }
 
@@ -636,7 +1043,7 @@ if (!function_exists('lm_dispatch_update_notifications')) {
             }
 
             $downloadUrl = lm_create_update_download_link($pdo, (int) $update['id'], (int) $license['id'], 7);
-            $email = lm_render_update_email($update, $update, $license, $row['kind'], array('download_url' => $downloadUrl));
+            $email = lm_render_update_email($update, $update, $license, $row['kind'], array('download_url' => $downloadUrl), $pdo);
 
             $result = lm_send_mail($license['customer_email'], $email['subject'], $email['html'], $email['alt']);
 

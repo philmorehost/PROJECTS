@@ -396,6 +396,35 @@ HTML
 HTML
                     ),
                     array(
+                        'id' => 'domain',
+                        'title' => 'Which domain the email names',
+                        'html' => <<<'HTML'
+<p>Each email talks about <strong>one site</strong>: the customer's own domain. It comes from two places, in this order:</p>
+<ol class="lm-guide-steps">
+  <li><strong>The domains that checked in.</strong> Every domain that calls <code>check-update.php</code> is stored in <code>licensed_domains</code> for that licence. This is the accurate list — it is the site that is actually running the script.</li>
+  <li><strong>The domain on the licence.</strong> What the payment gateway received at checkout. It is used only when nothing has checked in yet.</li>
+</ol>
+<p>Both are cleaned before they are printed: <code>https://Shop.Example.com/checkout</code>, <code>shop.example.com:443</code> and <code>www.shop.example.com</code> all become <code>shop.example.com</code>.</p>
+<p><strong>Placeholders are never printed.</strong> <code>N/A</code>, <code>example.com</code>, <code>yourdomain.com</code>, <code>localhost</code> and private IPs are treated as "unknown", and the email says <em>your website</em> instead of inventing a name. When a licence has more than one site, the email shows the primary one and <em>+N more domains</em>.</p>
+<p class="lm-guide-note">The preview on <em>Update Notifications</em> renders a real customer of that project, and tells you whose email you are looking at. The old preview used a hard-coded domain, which is how a placeholder could look like a real send.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'instructions',
+                        'title' => 'The “how to update” block',
+                        'html' => <<<'HTML'
+<p>Under the changelog every email carries two routes to install the release, because customers do not all work the same way:</p>
+<table class="lm-guide-table">
+  <thead><tr><th>Option</th><th>What the customer does</th></tr></thead>
+  <tbody>
+    <tr><td><strong>1 · Admin dashboard</strong></td><td>Signs in to the script as super admin, opens <em>System Update Centre</em> and presses <em>Install Update Automatically</em>. The script downloads the package, backs up files + database and rolls back on failure.</td></tr>
+    <tr><td><strong>2 · Control-panel cron</strong></td><td>Adds one daily job in cPanel → Cron Jobs (Plesk and DirectAdmin work the same way). It installs the release and emails the result. The exact command is shown in the email and on <em>Super Admin → Cron Jobs</em>.</td></tr>
+  </tbody>
+</table>
+<p>The wording follows the project name automatically. If a project names its screens differently, override it per installation in <a href="settings.php#email-help">Settings → Email update instructions</a> — leave a box empty to keep the built-in text.</p>
+HTML
+                    ),
+                    array(
                         'id' => 'reminders',
                         'title' => 'The next-day reminder',
                         'html' => <<<'HTML'
@@ -535,6 +564,18 @@ HTML
 <p>The archive is downloaded straight to disk with cURL, then re-packed <strong>once</strong>: the wrapper folder is stripped, only the ticked files are kept and <code>manifest.json</code> is written in the same pass. An older build copied the archive twice, which roughly doubled the packaging time — a 117 MB / 600-file archive went from 2.05 s to 0.81 s of packaging in testing.</p>
 <p>A failed pull keeps the downloaded archive for that commit, so pressing <strong>Pull &amp; publish</strong> again resumes from packaging instead of downloading 100 MB a second time.</p>
 <p class="lm-guide-note">While it runs, the button shows the stage and the elapsed seconds. If it always stops around 30–60 s, the host is killing the request: raise <code>max_execution_time</code>, or tick fewer folders so the package is smaller.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'emailhelp',
+                        'title' => 'Email update instructions',
+                        'html' => <<<'HTML'
+<p>Controls the “How to update your website” block in every customer update email:</p>
+<ul>
+  <li><strong>From the admin dashboard</strong> — the text of option 1.</li>
+  <li><strong>Automated from the control panel</strong> — the text of option 2. The daily cron command is still added from the project, so the paths are always right.</li>
+</ul>
+<p>Both boxes are plain text and both are optional: an empty box means the built-in wording, which names the project and the version automatically. The card has its own <em>Save email instructions</em> button and cannot be affected by the main settings form.</p>
 HTML
                     ),
                     array(

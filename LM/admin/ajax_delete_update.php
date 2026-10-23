@@ -221,11 +221,22 @@ if ($action === 'preview_email') {
         lm_json(array('status' => 'error', 'message' => 'Update not found.'));
     }
 
-    $license = array('id' => 0, 'domain' => 'example.com', 'customer_email' => 'customer@example.com');
+    // A real customer on this project — not a placeholder domain.
+    $license = lm_preview_license($pdo, $update, (int) ($_POST['license_id'] ?? 0));
     $kind = ($_POST['kind'] ?? 'initial') === 'reminder' ? 'reminder' : 'initial';
 
-    $email = lm_render_update_email($update, $update, $license, $kind);
-    lm_json(array('status' => 'success', 'subject' => $email['subject'], 'html' => $email['html'], 'alt' => $email['alt']));
+    $email = lm_render_update_email($update, $update, $license, $kind, array(), $pdo);
+
+    lm_json(array(
+        'status' => 'success',
+        'subject' => $email['subject'],
+        'html' => $email['html'],
+        'alt' => $email['alt'],
+        'domain' => $email['domain'],
+        'license_id' => (int) ($license['id'] ?? 0),
+        'customer_email' => (string) ($license['customer_email'] ?? ''),
+        'sample' => empty($license['id']) || empty($license['domain']),
+    ));
 }
 
 lm_json(array('status' => 'error', 'message' => 'Unknown action.'), 400);
