@@ -1,73 +1,69 @@
 <?php
-session_start();
+/**
+ * Customer sign-in.
+ *
+ * 8.9.0 removes the legacy "?email=…&license_key=…" GET sign-in: a licence
+ * key in a URL ends up in access logs, Referer headers and browser history,
+ * and it let a crafted link sign a visitor into somebody else's dashboard.
+ * Sign-in is POST-only, CSRF-protected and throttled.
+ */
+
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 
 $error = '';
 
-// Support auto-login via GET for redirects from the success page (fallback)
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['email'], $_GET['license_key'])) {
-    $email = trim($_GET['email']);
-    $license_key = trim($_GET['license_key']);
-
-    if (!empty($email) && !empty($license_key)) {
-        require_once('../db.php');
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM licenses WHERE customer_email = ? AND license_key = ?");
-            $stmt->execute([$email, $license_key]);
-            $license = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($license) {
-                $_SESSION['user_email'] = $email;
-                $_SESSION['user_license_id'] = $license['id'];
-                header('Location: index.php');
-                exit();
-            } else {
-                $stmt_req = $pdo->prepare("SELECT * FROM license_requests WHERE customer_email = ? AND request_ref = ?");
-                $stmt_req->execute([$email, $license_key]);
-                $req = $stmt_req->fetch(PDO::FETCH_ASSOC);
-                if ($req) {
-                    $_SESSION['user_email'] = $email;
-                    header('Location: index.php');
-                    exit();
-                }
-            }
-        } catch (PDOException $e) {
-            // Ignore and fall through to the login form
-        }
-    }
+if (!empty($_SESSION['user_email'])) {
+    header('Location: index.php');
+    exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = $_POST['email'] ?? '';
-    $license_key = $_POST['license_key'] ?? '';
+    $email = trim((string) ($_POST['email'] ?? ''));
+    $license_key = trim((string) ($_POST['license_key'] ?? ''));
 
-    if (empty($email) || empty($license_key)) {
+    $bucket = lm_rate_limit_ip('user-login', strtolower($email));
+    $state = lm_rate_limit($bucket, 8, 900, false);
+
+    if (!lm_verify_csrf()) {
+        $error = 'Your session expired. Refresh the page and try again.';
+    } elseif (!$state['allowed']) {
+        $minutes = max(1, (int) ceil($state['retry_after'] / 60));
+        $error = 'Too many attempts. Try again in ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . '.';
+        http_response_code(429);
+    } elseif ($email === '' || $license_key === '') {
         $error = 'Please enter both email and your key/reference.';
     } else {
         require_once('../db.php');
 
         try {
-            $stmt = $pdo->prepare("SELECT * FROM licenses WHERE customer_email = ? AND license_key = ?");
-            $stmt->execute([$email, $license_key]);
+            $stmt = $pdo->prepare('SELECT id, customer_email FROM licenses WHERE customer_email = ? AND license_key = ? LIMIT 1');
+            $stmt->execute(array($email, $license_key));
             $license = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($license) {
+            $request = null;
+            if (!$license) {
+                $stmt_req = $pdo->prepare('SELECT id, customer_email FROM license_requests WHERE customer_email = ? AND request_ref = ? LIMIT 1');
+                $stmt_req->execute(array($email, $license_key));
+                $request = $stmt_req->fetch(PDO::FETCH_ASSOC);
+            }
+
+            if ($license || $request) {
+                lm_session_start(true);
                 $_SESSION['user_email'] = $email;
-                $_SESSION['user_license_id'] = $license['id'];
+                if ($license) {
+                    $_SESSION['user_license_id'] = (int) $license['id'];
+                }
+                unset($_SESSION['lm_csrf']);
+                lm_csrf_token();
+                lm_rate_limit_reset($bucket);
                 header('Location: index.php');
                 exit();
-            } else {
-                $stmt_req = $pdo->prepare("SELECT * FROM license_requests WHERE customer_email = ? AND request_ref = ?");
-                $stmt_req->execute([$email, $license_key]);
-                $req = $stmt_req->fetch(PDO::FETCH_ASSOC);
-                
-                if ($req) {
-                    $_SESSION['user_email'] = $email;
-                    header('Location: index.php');
-                    exit();
-                } else {
-                    $error = 'Invalid email or License Key / Request Reference.';
-                }
             }
+
+            lm_rate_limit($bucket, 8, 900, true);
+            $error = 'Invalid email or License Key / Request Reference.';
         } catch (PDOException $e) {
             $error = 'A database error occurred. Please try again.';
         }
@@ -226,7 +222,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="error">✗ <?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
-                <form method="POST">
+                <form method="POST" autocomplete="on">
+                    <?= lm_csrf_field() ?>
                     <div class="form-group">
                         <label for="email">Email Address</label>
                         <input type="email" id="email" name="email" placeholder="Enter your email" required>

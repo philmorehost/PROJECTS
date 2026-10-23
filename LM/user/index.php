@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 // Check if user is logged in via email
 $user_email = $_SESSION['user_email'] ?? null;
 

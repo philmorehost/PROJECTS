@@ -8,7 +8,9 @@
  * through exactly the same pipeline as a manual upload.
  */
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();

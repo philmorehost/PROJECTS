@@ -1,10 +1,18 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 
 // Check if user is admin
 if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: ../index.php');
+    header('Location: index.php');
     exit;
+}
+
+require_once('../db.php');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !lm_verify_csrf()) {
+    die('Your session expired. Go back, refresh the page and try again.');
 }
 
 $messages = [];
@@ -298,6 +306,7 @@ if (isset($_POST['repair'])) {
 
             <div class="form-group">
                 <form method="POST">
+    <?= lm_csrf_field() ?>
                     <button type="submit" name="repair" value="1">🔨 Run Database Repair</button>
                 </form>
             </div>

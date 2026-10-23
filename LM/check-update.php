@@ -74,6 +74,26 @@ function lm_ota_issue_download(PDO $pdo, array $update, $licenseId)
 
 $requesterIp = lm_client_ip();
 
+/*
+ * Throttle before doing any work.
+ *
+ * Every successful call mints a download token row, so an unthrottled loop is
+ * a cheap way to fill the table and to enumerate licence keys. A real
+ * installation polls a few times a day; 240/hour per address is generous.
+ */
+$otaLimit = lm_rate_limit(lm_rate_limit_ip('check-update'), 240, 3600, true);
+if (!$otaLimit['allowed']) {
+    header('Retry-After: ' . (int) $otaLimit['retry_after']);
+    http_response_code(429);
+    echo json_encode(array(
+        'status' => 'error',
+        'message' => 'Too many update checks from this address. Try again later.',
+        'latest_version' => '0.00',
+        'update_required' => false,
+    ));
+    exit;
+}
+
 /* -------------------------------------------------------------------------
  * 1. Whitelisted (internal / unlicensed) platforms
  * ---------------------------------------------------------------------- */
@@ -143,6 +163,20 @@ if (in_array($requesterIp, $whitelisted, true)) {
  * ---------------------------------------------------------------------- */
 
 $licenseKey = trim((string) ($_REQUEST['license_key'] ?? $_REQUEST['key'] ?? ''));
+
+// A wrong key is cheap to send and expensive to absorb: cap the misses.
+$keyLimit = lm_rate_limit(lm_rate_limit_ip('check-update-key', substr($licenseKey, 0, 24)), 30, 3600, true);
+if ($licenseKey !== '' && !$keyLimit['allowed']) {
+    header('Retry-After: ' . (int) $keyLimit['retry_after']);
+    http_response_code(429);
+    echo json_encode(array(
+        'status' => 'error',
+        'message' => 'Too many attempts for this licence key.',
+        'latest_version' => '0.00',
+        'update_required' => false,
+    ));
+    exit;
+}
 $requestingDomain = lm_normalize_domain($_REQUEST['domain'] ?? '');
 $currentVersion = lm_version_clean($_REQUEST['current_version'] ?? '');
 

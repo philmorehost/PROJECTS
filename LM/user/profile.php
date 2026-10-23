@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 $user_email = $_SESSION['user_email'] ?? null;
 
 if (!$user_email) {
@@ -12,6 +13,13 @@ require_once('../db.php');
 
 $success_message = '';
 $error_message = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!lm_verify_csrf()) {
+        $error_message = 'Your session expired. Refresh the page and try again.';
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = $_POST['name'] ?? '';
@@ -260,6 +268,7 @@ $user_company = $_SESSION['user_company'] ?? '';
                 </div>
 
                 <form method="POST">
+    <?= lm_csrf_field() ?>
                     <div class="form-group">
                         <label for="name">Full Name</label>
                         <input type="text" id="name" name="name" value="<?= htmlspecialchars($user_name) ?>" placeholder="Enter your full name">

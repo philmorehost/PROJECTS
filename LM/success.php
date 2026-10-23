@@ -30,7 +30,7 @@
     </div>
 
     <script>
-        const ref = '<?= isset($_GET['ref']) ? htmlspecialchars($_GET['ref']) : '' ?>';
+        const ref = <?= json_encode((string) ($_GET['ref'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         let attemptCount = 0;
         const maxAttempts = 30; // Try for up to 60 seconds
         
@@ -39,7 +39,10 @@
             
             try {
                 // Use the new verification endpoint that checks Paystack API
-                const response = await fetch('api-verify-payment.php?ref=' + encodeURIComponent(ref));
+                const params = new URLSearchParams({ ref: ref });
+                const claimed = new URLSearchParams(window.location.search).get('email');
+                if (claimed) { params.set('email', claimed); }
+                const response = await fetch('api-verify-payment.php?' + params.toString());
                 const data = await response.json();
                 
                 if (data.success) {
@@ -64,13 +67,20 @@
         }
         
         function displaySuccess(data) {
+            const masked = !data.license_key;
+
+            const keyBlock = masked
+                ? `<div class="processing">${escapeHtml(data.message || 'Your licence is ready — the key has been e-mailed to you.')}</div>
+                   <a href="user/login.php" class="btn">Sign in to your dashboard</a>`
+                : `<div class="license-key" id="licenseKey">${escapeHtml(data.license_key)}</div>
+                   <button class="btn" onclick="copyLicense()">Copy Key</button>
+                   <a href="user/index.php" class="btn" style="background-color: #10b981; margin-left: 0.5rem;">Go to Dashboard</a>
+                   <p style="color: #475569; margin-top: 1rem; font-size: 0.95rem;">Your license key has been copied to the clipboard. Redirecting you to your dashboard in a few seconds.</p>`;
+
             const html = `
                 <h1>✓ Payment Successful!</h1>
-                <p>Thank you for your purchase. Your license key has been sent to your email.</p>
-                <div class="license-key" id="licenseKey">${escapeHtml(data.license_key)}</div>
-                <button class="btn" onclick="copyLicense()">Copy Key</button>
-                <a href="user/index.php" class="btn" style="background-color: #10b981; margin-left: 0.5rem;">Go to Dashboard</a>
-                <p style="color: #475569; margin-top: 1rem; font-size: 0.95rem;">Your license key has been copied to the clipboard. Redirecting you to your dashboard in a few seconds.</p>
+                <p>Thank you for your purchase.</p>
+                ${keyBlock}
                 ${data.auto_login_token ? `<p style="margin-top: 0.75rem; color: #475569; font-size: 0.9rem;">If automatic login does not work, <a href="user/auto_login.php?token=${encodeURIComponent(data.auto_login_token)}">click here to continue</a>.</p>` : ''}
                 
                 <div class="installation-guide">
@@ -81,7 +91,7 @@
                         <li>You will be asked for the following details on the first step:</li>
                         <ul>
                             <li><strong>License Server URL:</strong> <code>${window.location.origin}</code></li>
-                            <li><strong>Your License Key:</strong> (The key shown above)</li>
+                            <li><strong>Your License Key:</strong> ${masked ? 'the key from your e-mail' : '(The key shown above)'}</li>
                             <li><strong>Your Domain Name:</strong> The domain you entered during purchase.</li>
                         </ul>
                         <li>Follow the on-screen instructions to complete the installation.</li>
@@ -89,21 +99,20 @@
                 </div>
             `;
             document.getElementById('content').innerHTML = html;
-            copyLicense(true);
+
+            if (!masked) {
+                copyLicense(true);
+            }
+
             if (data.auto_login_token) {
-                // Submit token to server-side auto-login endpoint
+                // Submit token to the server-side auto-login endpoint.
                 setTimeout(() => {
                     submitToken(data.auto_login_token);
                 }, 1500);
-            } else if (data.customer_email) {
-                setTimeout(() => {
-                    autoLogin(data.customer_email, data.license_key);
-                }, 3000);
-            } else {
-                setTimeout(() => {
-                    window.location.href = 'user/index.php';
-                }, 7000);
             }
+            // Without a key or a token there is nothing this browser may see:
+            // stay on the page and let the customer sign in. Never post the
+            // e-mail/key pair around — that is what the old GET login did.
         }
         
         function displayProcessing(message, attempt, max) {
@@ -143,19 +152,6 @@
                     alert('Unable to copy license key automatically. Please copy it manually.');
                 }
             });
-        }
-
-        function autoLogin(email, licenseKey) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'user/login.php';
-            form.style.display = 'none';
-            form.innerHTML = `
-                <input type="hidden" name="email" value="${escapeHtml(email)}">
-                <input type="hidden" name="license_key" value="${escapeHtml(licenseKey)}">
-            `;
-            document.body.appendChild(form);
-            form.submit();
         }
 
         function submitToken(token) {

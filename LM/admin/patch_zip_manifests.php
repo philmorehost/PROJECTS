@@ -3,12 +3,19 @@
 // Patches all stored update ZIPs that are missing manifest.json.
 // Run once, then DELETE this file.
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     die('Unauthorized. Log in to the License Manager admin first.');
 }
 
 require_once('../db.php');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !lm_verify_csrf()) {
+    die('Your session expired. Go back, refresh the page and try again.');
+}
 
 $results = [];
 $action = $_POST['action'] ?? '';
@@ -167,6 +174,7 @@ $all_updates = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN s
 </div>
 
 <form method="POST">
+    <?= lm_csrf_field() ?>
     <input type="hidden" name="action" value="patch">
     <button type="submit" class="btn-patch">🩹 Patch All Missing Manifests Now</button>
 </form>

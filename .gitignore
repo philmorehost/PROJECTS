@@ -4,6 +4,8 @@
 # tracked — LM/settings.sample.json is the reference copy.
 LM/settings.json
 LM/settings.json.tmp.*
+# Database credentials for one host — never commit.
+LM/db.local.php
 LM/user/error_log
 LM/storage/*
 !LM/storage/.htaccess

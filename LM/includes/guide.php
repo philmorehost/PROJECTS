@@ -727,6 +727,62 @@ HTML
             ),
 
             /* ---------------------------------------------------------- */
+            'security' => array(
+                'title' => 'Security',
+                'icon' => '🛡️',
+                'summary' => 'What protects the console, and the three settings only you can get wrong.',
+                'sections' => array(
+                    array(
+                        'id' => 'signin',
+                        'title' => 'Signing in',
+                        'html' => <<<'HTML'
+<p>The admin password is the only thing between the internet and every licence, key and customer address you hold, so it is treated that way:</p>
+<ul>
+  <li><strong>Slow guesses.</strong> Five wrong passwords for one username — or twenty from one address — and sign-in stops for 15 minutes. The limit applies before the password is checked, so it cannot be used to test whether a password is correct.</li>
+  <li><strong>No shared default.</strong> A new installation no longer creates <code>admin</code> / <code>password</code>. It generates one and writes it to <code>storage/initial-admin.txt</code> for you to read and delete. An installation that still has the factory password can sign in once, but is held on the profile screen until it is replaced.</li>
+  <li><strong>Fresh session on sign-in.</strong> The session id is replaced the moment you authenticate, so an id planted in your browser before sign-in is worthless. Signing out clears the data as well as the id.</li>
+</ul>
+HTML
+                    ),
+                    array(
+                        'id' => 'requests',
+                        'title' => 'Requests that change something',
+                        'html' => <<<'HTML'
+<p>Every form that writes — approving a request, revoking a token, toggling a licence, saving settings, changing a password — carries a token tied to your session. A page on another site cannot make your browser submit it.</p>
+<p>The public endpoints are guarded differently, because they have no session to tie to:</p>
+<table class="lm-guide-table">
+  <thead><tr><th>Endpoint</th><th>What proves the caller</th></tr></thead>
+  <tbody>
+    <tr><td><code>check-update.php</code></td><td>Licence key + domain, throttled per address and per key.</td></tr>
+    <tr><td><code>download.php</code></td><td>One-time token, 30-minute life, burned on first use.</td></tr>
+    <tr><td><code>cron.php</code></td><td>The cron secret in <code>settings.json</code>, compared in constant time.</td></tr>
+    <tr><td><code>api-create-license.php</code></td><td>The API secret from Settings.</td></tr>
+    <tr><td><code>webhook.php</code></td><td>Paystack's HMAC signature over the raw body.</td></tr>
+    <tr><td><code>unsubscribe.php</code></td><td>A signed link, and a confirmation button — opening the link no longer changes anything.</td></tr>
+  </tbody>
+</table>
+HTML
+                    ),
+                    array(
+                        'id' => 'proxies',
+                        'title' => 'Whitelisted IPs behind a proxy',
+                        'html' => <<<'HTML'
+<p>Settings → <em>Trusted proxies</em> is the one setting that can quietly undo the rest. The client address used for the IP whitelist and the login throttle comes from the connection itself, not from a header — because a header is just something the caller typed.</p>
+<p class="lm-guide-note">If your site runs behind Cloudflare, a load balancer or a reverse proxy, list that proxy here (IPs or CIDR ranges such as <code>173.245.48.0/20</code>). Leave it empty otherwise. With it empty, a visitor sending <code>X-Forwarded-For: 127.0.0.1</code> still counts as themselves.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'files',
+                        'title' => 'Files that must not be reachable',
+                        'html' => <<<'HTML'
+<p><code>settings.json</code> holds the GitHub token, the SMTP password, the Paystack secret and the API secret. It is denied by <code>.htaccess</code>, as are <code>storage/</code>, logs, database dumps and backups. <code>includes/</code> and <code>uploads/</code> refuse to execute PHP.</p>
+<p><strong>System Check → File integrity</strong> scans the tree for the patterns used by PHP web shells. If it reports a file, treat the installation as compromised: delete the file and change every credential in Settings, plus the database password.</p>
+<p>If the site runs on nginx, those Apache rules do not apply — reproduce them in the server block before going live.</p>
+HTML
+                    ),
+                ),
+            ),
+
             'script' => array(
                 'title' => 'Script integration',
                 'icon' => '🔌',

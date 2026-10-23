@@ -10,8 +10,9 @@
  * Requires an authenticated admin session OR the cron secret.
  */
 
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/includes/mailer.php';
 

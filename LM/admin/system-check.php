@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 
 // Check if user is admin
 if (!isset($_SESSION['admin_logged_in'])) {
@@ -9,6 +11,85 @@ if (!isset($_SESSION['admin_logged_in'])) {
 
 require_once('../db.php');
 
+/**
+ * Look for the file patterns used by PHP web shells.
+ *
+ * 8.9.0 shipped after finding `admin-cron-uvdv.php` in the LM folder: a
+ * WordPress-themed remote-access shell with a hard-coded key and handlers for
+ * shell, read, write, upload, delete and SQL. It is deleted from the package,
+ * but a restored backup or a re-upload can bring it back — so the panel now
+ * checks the tree and reports anything that looks like a dropper.
+ *
+ * Deliberately conservative: one match is enough to surface the path, and the
+ * scan never executes the file.
+ *
+ * @return array{paths:array<int,string>,scanned:int}
+ */
+function lm_scan_for_shells()
+{
+    $root = dirname(__DIR__);
+    $needles = array(
+        'WP_Theme_Worker',
+        'do_maintenance_cron',
+        'php_uname()',
+        'pcntl_exec',
+        'shell_exec(',
+        'passthru(',
+        'assert($_',
+        'eval($_',
+        'gzinflate(base64_decode',
+        'str_rot13(',
+    );
+
+    $allowed = array(
+        // Legitimate, reviewed uses.
+        'includes/src/PHPMailer.php' => array('str_rot13('),
+        'includes/src/SMTP.php' => array('str_rot13('),
+    );
+
+    $hits = array();
+    $scanned = 0;
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($iterator as $file) {
+        if (!$file->isFile() || strtolower($file->getExtension()) !== 'php') {
+            continue;
+        }
+        $path = $file->getPathname();
+        if (strpos($path, DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR) !== false) {
+            continue;
+        }
+        if ($file->getSize() > 1048576) {
+            continue;
+        }
+
+        $scanned++;
+        $body = @file_get_contents($path);
+        if (!is_string($body) || $body === '') {
+            continue;
+        }
+
+        $rel = ltrim(str_replace($root, '', $path), DIRECTORY_SEPARATOR);
+        $patterns = $allowed[$rel] ?? array();
+
+        foreach ($needles as $needle) {
+            if (in_array($needle, $patterns, true)) {
+                continue;
+            }
+            if (stripos($body, $needle) !== false) {
+                $hits[] = $rel . ' (' . $needle . ')';
+                break;
+            }
+        }
+    }
+
+    sort($hits);
+    return array('paths' => $hits, 'scanned' => $scanned);
+}
+
 $diagnostics = [
     'curl_enabled' => extension_loaded('curl'),
     'paystack_configured' => false,
@@ -17,7 +98,10 @@ $diagnostics = [
     'smtp_configured' => false,
     'licenses_table_ok' => false,
     'transactions_table_ok' => false,
+    'shell_scan' => ['paths' => [], 'scanned' => 0],
 ];
+
+$diagnostics['shell_scan'] = lm_scan_for_shells();
 
 $settings = [];
 if (file_exists('../settings.json')) {
@@ -255,7 +339,24 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                 </div>
             </div>
 
-            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok']): ?>
+            <div class="check-item" style="margin-top:14px;">
+                <div class="check-icon <?= empty($diagnostics['shell_scan']['paths']) ? 'pass' : 'fail' ?>">
+                    <?= empty($diagnostics['shell_scan']['paths']) ? '✓' : '✗' ?>
+                </div>
+                <div>
+                    <h3>File integrity</h3>
+                    <small>
+                        <?php if (empty($diagnostics['shell_scan']['paths'])): ?>
+                            <?= (int) $diagnostics['shell_scan']['scanned'] ?> PHP files scanned — no shell patterns found
+                        <?php else: ?>
+                            Suspicious file(s) found — delete them and rotate every credential:
+                            <br><code><?= htmlspecialchars(implode(' · ', $diagnostics['shell_scan']['paths']), ENT_QUOTES, 'UTF-8') ?></code>
+                        <?php endif; ?>
+                    </small>
+                </div>
+            </div>
+
+            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok'] && empty($diagnostics['shell_scan']['paths'])): ?>
                 <div class="next-step" style="background: #d1fae5; border-color: #a7f3d0; color: #065f46;">
                     <h3>✓ All Systems Ready!</h3>
                     <p>Your payment system is fully configured. You're ready to process payments.</p>
@@ -276,6 +377,9 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                         <?php endif; ?>
                         <?php if (!$diagnostics['smtp_configured']): ?>
                             <li><strong>Configure SMTP:</strong> Go to <a href="settings.php" style="color: #3b82f6; font-weight: 500;">Settings</a> and add your SMTP details so customers receive license emails</li>
+                        <?php endif; ?>
+                        <?php if (!empty($diagnostics['shell_scan']['paths'])): ?>
+                            <li><strong>File integrity:</strong> a file matching a known web-shell pattern is present. Delete it, then change the database password, the admin password, the Paystack keys, the SMTP password and the GitHub token — a shell can read all of them.</li>
                         <?php endif; ?>
                         <?php if (!$diagnostics['licenses_table_ok'] || !$diagnostics['transactions_table_ok']): ?>
                             <li><strong>Database Schema Issue:</strong> <a href="database-repair.php" style="color: #3b82f6; font-weight: 500;">Run Database Repair</a> to fix missing columns</li>

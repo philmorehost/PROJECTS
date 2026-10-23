@@ -989,6 +989,16 @@ if (!function_exists('lm_delete_update')) {
         $resolved = lm_resolve_update_path($update['zip_path'], $tierCode);
         $zipPath = $resolved['path'];
 
+        // Defence in depth: the stored path comes from the database, and this
+        // deletes it. Never unlink something outside the update store, even if
+        // the row was edited by hand or by a bug elsewhere.
+        if ($zipPath !== null && !lm_path_is_inside($zipPath, array(lm_updates_root(), lm_storage_dir()))) {
+            lm_log('updates', 'Refused to delete out-of-store path: ' . $zipPath);
+            $zipPath = null;
+            $report['error'] = 'The package path is outside the update storage folder; nothing was deleted.';
+            return $report;
+        }
+
         if ($zipPath !== null) {
             if (@unlink($zipPath)) {
                 $report['removed'][] = $zipPath;
@@ -1011,9 +1021,14 @@ if (!function_exists('lm_delete_update')) {
             $searchDirs[] = lm_tier_storage_dir($tierCode, false);
         }
 
+        // Exact names only. A substring match on the version number used to
+        // delete unrelated packages: v1.2 matched update_1.20.zip, and a
+        // version such as "1" matched everything.
+        $versionSlug = preg_replace('/[^A-Za-z0-9._-]/', '_', (string) $update['version_number']);
         $needles = array(
-            $update['version_number'],
-            'update_' . $update['version_number'],
+            'update_' . $versionSlug . '.zip',
+            'update_' . $versionSlug,
+            'update_' . (int) $update['id'],
             'extracted_' . (int) $update['id'],
             'build_' . (int) $update['id'],
         );
@@ -1031,14 +1046,12 @@ if (!function_exists('lm_delete_update')) {
                     continue;
                 }
                 $full = $dir . DIRECTORY_SEPARATOR . $item;
-                $matched = false;
-                foreach ($needles as $needle) {
-                    if ($needle !== '' && strpos($item, $needle) !== false) {
-                        $matched = true;
-                        break;
-                    }
+                if (!in_array($item, $needles, true)) {
+                    continue;
                 }
-                if (!$matched) {
+                // The scandir() entry must resolve to a child of $dir, not a
+                // symlink pointing somewhere else.
+                if (!lm_path_is_inside($full, array($dir))) {
                     continue;
                 }
                 if (is_dir($full)) {

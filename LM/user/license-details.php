@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 $user_email = $_SESSION['user_email'] ?? null;
 
 if (!$user_email) {

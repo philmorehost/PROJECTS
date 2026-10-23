@@ -1,5 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 $settings_file = 'settings.json';
 if (!file_exists($settings_file) || !is_readable($settings_file)) {
     die("Configuration error: settings.json not found or not readable.");
@@ -115,6 +118,7 @@ if (json_last_error() !== JSON_ERROR_NONE) {
         <?php endif; ?>
 
         <form id="requestForm" method="POST" action="request_license.php">
+            <?= lm_csrf_field() ?>
             <div class="input-group">
                 <label for="email">Email Address</label>
                 <input type="email" id="email" name="email" required>

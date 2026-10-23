@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -110,6 +112,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $whitelistedIps = $_POST['whitelisted_ips'] ?? '';
         $new['whitelisted_ips'] = array_values(array_filter(array_map('trim', explode(',', (string) $whitelistedIps))));
 
+        // Only these peers may set X-Forwarded-For. Blank = trust nobody.
+        $trustedProxies = trim((string) ($_POST['trusted_proxies'] ?? ''));
+        $proxyList = array_values(array_filter(array_map('trim', explode(',', $trustedProxies))));
+        foreach ($proxyList as $proxy) {
+            if (strpos($proxy, '/') === false && filter_var($proxy, FILTER_VALIDATE_IP) === false) {
+                $saveError = 'Trusted proxies must be IP addresses or CIDR ranges (for example 10.0.0.0/8).';
+                break;
+            }
+            if (strpos($proxy, '/') !== false) {
+                list($net, $bits) = explode('/', $proxy, 2);
+                if (filter_var($net, FILTER_VALIDATE_IP) === false || !ctype_digit($bits)) {
+                    $saveError = 'Trusted proxies must be IP addresses or CIDR ranges (for example 10.0.0.0/8).';
+                    break;
+                }
+            }
+        }
+        $new['trusted_proxies'] = implode(', ', $proxyList);
+
         $new['smtp_host'] = trim($_POST['smtp_host'] ?? '');
         $new['smtp_port'] = trim($_POST['smtp_port'] ?? '587');
         $new['smtp_user'] = trim($_POST['smtp_user'] ?? '');
@@ -144,9 +164,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
             $targetDir = '../uploads/';
             lm_ensure_dir($targetDir, 0755);
+
             $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($_FILES['site_logo']['name']));
-            if ($safeName !== '' && move_uploaded_file($_FILES['site_logo']['tmp_name'], $targetDir . $safeName)) {
-                $new['site_logo'] = 'uploads/' . $safeName;
+            $extension = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
+
+            // A logo is an image. Accepting any extension here would let a
+            // .php file be written into the web root and requested directly.
+            $allowedExtensions = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
+
+            if (!in_array($extension, $allowedExtensions, true)) {
+                $saveError = 'The logo must be a PNG, JPG, GIF, WebP or SVG image.';
+            } elseif ((int) $_FILES['site_logo']['size'] > 2097152) {
+                $saveError = 'The logo must be smaller than 2 MB.';
+            } elseif ($extension === 'svg' && preg_match('/<script|onload=|onerror=/i', (string) file_get_contents($_FILES['site_logo']['tmp_name'])) === 1) {
+                // An SVG is XML: it can carry script that runs on the admin origin.
+                $saveError = 'That SVG contains script and cannot be used as a logo.';
+            } else {
+                $safeName = 'logo-' . bin2hex(random_bytes(6)) . '.' . $extension;
+                if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $targetDir . $safeName)) {
+                    $new['site_logo'] = 'uploads/' . $safeName;
+                } else {
+                    $saveError = 'The logo could not be written to uploads/. Check the folder permissions.';
+                }
             }
         }
 
@@ -655,6 +694,15 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                                 <label>OTA Whitelisted IPs (comma-separated)</label>
                                 <input type="text" name="whitelisted_ips" value="<?= htmlspecialchars(isset($settings['whitelisted_ips']) ? implode(', ', (array)$settings['whitelisted_ips']) : '') ?>" placeholder="e.g. 127.0.0.1, ::1">
                                 <small>IP addresses allowed to download SAAS unlicensed packages directly without key verification.</small>
+                            </div>
+                            <div class="input-group wide-input">
+                                <label>Trusted proxies (comma-separated IPs or CIDR ranges)</label>
+                                <input type="text" name="trusted_proxies" value="<?= htmlspecialchars((string) ($settings['trusted_proxies'] ?? '')) ?>" placeholder="Leave empty unless you are behind Cloudflare, a load balancer or a reverse proxy">
+                                <small>
+                                    Only these addresses are allowed to set <code>X-Forwarded-For</code>. Leave it empty and the client address is always
+                                    <code>REMOTE_ADDR</code> — which is what stops a visitor from claiming to be one of the whitelisted IPs above.
+                                    Behind Cloudflare use their published ranges, e.g. <code>173.245.48.0/20, 103.21.244.0/22</code>.
+                                </small>
                             </div>
                         </div>
                     </div>

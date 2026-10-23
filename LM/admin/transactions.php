@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -223,6 +225,7 @@ try {
                                                 <td>
                                                     <?php if (!empty($tx['auto_login_token'])): ?>
                                                         <form method="POST" action="invalidate_token.php" style="display:inline">
+    <?= lm_csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= htmlspecialchars($tx['id']) ?>">
                                                             <button type="submit" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer;">Revoke</button>
                                                         </form>

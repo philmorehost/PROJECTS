@@ -3,12 +3,19 @@
 // Diagnostic & repair tool for license tier assignments
 // DELETE THIS FILE after use.
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     die('Unauthorized. Log in to the License Manager admin first.');
 }
 
 require_once('../db.php');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !lm_verify_csrf()) {
+    die('Your session expired. Go back, refresh the page and try again.');
+}
 
 $action = $_POST['action'] ?? '';
 $messages = [];
@@ -146,6 +153,7 @@ if (file_exists($log_file)) {
             </td>
             <td>
                 <form method="POST" style="display:flex;gap:0.4rem;align-items:center;">
+    <?= lm_csrf_field() ?>
                     <input type="hidden" name="action" value="assign_tier">
                     <input type="hidden" name="license_id" value="<?= $lic['id'] ?>">
                     <select name="tier_id">

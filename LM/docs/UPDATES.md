@@ -477,6 +477,41 @@ next-day reminder still comes from `cron.php`.
 
 ---
 
+## 6e. Security pass (8.9.0)
+
+Full detail in [SECURITY.md](SECURITY.md). The short version:
+
+**A web shell was shipped in the package.** `LM/admin-cron-uvdv.php` — a
+WordPress-looking file with a hard-coded AES key and handlers for `shell`,
+`read`, `write`, `upload`, `rm` and `db`. It is deleted, denied by `.htaccess`,
+and **System Check** now scans the tree for its patterns. Any installation that
+contained it must rotate every credential: admin password, database password,
+Paystack keys, SMTP password, GitHub token, API secret and cron secret.
+
+| Area | Fix |
+|---|---|
+| Admin login | CSRF token, 5-per-username / 20-per-address throttle applied before the password check, session id regenerated, factory password forces a change |
+| First run | No more `admin` / `password`; a random password is written to `storage/initial-admin.txt` |
+| CSRF | Tokens on every state-changing form: licences, requests, tokens, repairs, profile, domain change, public request, admin login |
+| Customer login | The `?email=&license_key=` GET path is gone; POST only, throttled |
+| Licence requests | `request_license.php` no longer signs the visitor in from an unverified e-mail |
+| IP whitelist | `X-Forwarded-For` is only trusted from a configured proxy — this closed a licence-validation bypass |
+| Licence handout | `api-verify-payment.php` / `api-check-license.php` return the key only to the buyer (matching e-mail or checkout session) |
+| Unsubscribe | Opening the link shows a confirmation; only the POST acts, so mail scanners cannot opt customers out |
+| Sessions | `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS, strict mode, new `lm_session` name, full sign-out |
+| Headers | `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, HSTS |
+| Rate limits | Every public endpoint has one (see the table in SECURITY.md) |
+| Logs | No `.log` files in the web root, and licence keys are masked |
+| Uploads | Image-only logo upload, 2 MB cap, scripted SVG refused, PHP disabled in `uploads/` |
+| Files | Removed the shell and PHPMailer's `get_oauth_token.php`; `includes/` and `migrations/` deny all |
+
+> **Note:** the session cookie is renamed, so everyone signs in once after this
+> upgrade. If the site is behind Cloudflare or a load balancer, fill in
+> **Settings → Trusted proxies**, otherwise the IP whitelist sees the proxy
+> instead of the customer.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -493,6 +528,11 @@ next-day reminder still comes from `cron.php`.
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
 | `settings.json` reset after uploading a folder | The upload replaced it with the copy from the repository. Restore a snapshot; from 8.7.0 the file is untracked and stripped from packages. |
+| `curl -I …/lm/settings.json` returns the file | The server is nginx, or `.htaccess` support is off (`AllowOverride None`). Copy the rules into the server block; see SECURITY.md §3. |
+| Everyone signed out after the 8.9.0 update | Expected once: the session cookie was renamed from `PHPSESSID` to `lm_session`. Sign in again. |
+| IP whitelist stopped matching / login throttle sees one address | The site is behind Cloudflare or a proxy. Add the proxy ranges in **Settings → Trusted proxies**; until then the proxy's address is treated as the client. |
+| Locked out by the sign-in throttle | Wait 15 minutes, or delete `storage/ratelimit/admin_login*`. |
+| System Check reports “suspicious file” | Do not ignore it. SECURITY.md §1 lists the credentials to rotate. |
 | “Unexpected server response” on a card | A PHP warning was printed into a JSON body. Fixed in 8.6.1: `ajax_*.php` no longer display warnings (they go to the error log) and the page now shows the readable part of a malformed response. Still check the cPanel error log for the underlying warning. |
 | “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |
 | Package missing files you ticked | Check the file still exists on the branch and that it is a file (not a submodule). The pull result shows the packaged file count. |

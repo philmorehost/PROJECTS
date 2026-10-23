@@ -14,8 +14,10 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.8.1');
+    define('LM_VERSION', '8.9.0');
 }
+
+require_once __DIR__ . '/security.php';
 
 if (!function_exists('lm_lm_dir')) {
     /** Absolute path to the /LM directory. */
@@ -38,6 +40,38 @@ if (!function_exists('lm_storage_dir')) {
     function lm_storage_dir()
     {
         return lm_lm_dir() . DIRECTORY_SEPARATOR . 'storage';
+    }
+}
+
+if (!function_exists('lm_path_is_inside')) {
+    /**
+     * True when $path resolves to something inside one of $roots.
+     *
+     * Used before unlinking: a stored path or a scandir() entry must not be
+     * able to point outside the update store (a hand-edited row, a symlink, or
+     * a "../" smuggled through some future call site).
+     *
+     * @param string $path
+     * @param array  $roots
+     * @return bool
+     */
+    function lm_path_is_inside($path, array $roots)
+    {
+        $real = @realpath((string) $path);
+        if ($real === false) {
+            return false;
+        }
+        foreach ($roots as $root) {
+            $rootReal = @realpath((string) $root);
+            if ($rootReal === false) {
+                continue;
+            }
+            $rootReal = rtrim($rootReal, DIRECTORY_SEPARATOR);
+            if ($real === $rootReal || strpos($real, $rootReal . DIRECTORY_SEPARATOR) === 0) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
@@ -110,6 +144,9 @@ if (!function_exists('lm_settings')) {
             'paystack_secret_key'          => '',
             'api_secret_key'               => '',
             'whitelisted_ips'              => array(),
+            // Only these addresses may set X-Forwarded-For / X-Forwarded-Proto.
+            // Empty = trust nobody and always use REMOTE_ADDR (safe default).
+            'trusted_proxies'              => '',
             'smtp_host'                    => '',
             'smtp_port'                    => '587',
             'smtp_user'                    => '',
@@ -425,12 +462,16 @@ if (!function_exists('lm_write_settings_file')) {
         if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
             return false;
         }
-        @chmod($tmp, 0640);
+        // The settings file holds the GitHub token, the SMTP password and the
+        // Paystack secret. Only the account running PHP has any business
+        // reading it, so it is 0600 — not group-readable.
+        @chmod($tmp, 0600);
 
         if (!@rename($tmp, $file)) {
             @unlink($tmp);
             return false;
         }
+        @chmod($file, 0600);
 
         lm_settings_backup('after-write');
 
@@ -1080,23 +1121,67 @@ if (!function_exists('lm_is_admin')) {
     }
 }
 
+if (!function_exists('lm_admin_password_change_required')) {
+    /**
+     * True while the signed-in admin is still using a factory password.
+     *
+     * @return bool
+     */
+    function lm_admin_password_change_required()
+    {
+        return !empty($_SESSION['lm_password_change_required']);
+    }
+}
+
 if (!function_exists('lm_require_admin')) {
     /**
      * Guard an endpoint. Sends JSON 401/403 for AJAX, redirect for pages.
+     *
+     * Also holds an admin on the profile screen while a factory password is
+     * still in place — a known password must not unlock the rest of the panel.
      *
      * @param bool $json
      * @return void
      */
     function lm_require_admin($json = true)
     {
-        if (lm_is_admin()) {
-            return;
+        if (!lm_is_admin()) {
+            if ($json) {
+                lm_json(array('status' => 'error', 'message' => 'Unauthorized. Please sign in again.'), 401);
+            }
+            header('Location: index.php');
+            exit;
         }
-        if ($json) {
-            lm_json(array('status' => 'error', 'message' => 'Unauthorized. Please sign in again.'), 401);
+
+        if (lm_admin_password_change_required()) {
+            $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+            $allowed = array('profile.php', 'logout.php', 'index.php');
+
+            if (!in_array($script, $allowed, true)) {
+                if ($json) {
+                    lm_json(array(
+                        'status' => 'error',
+                        'code' => 'password_change_required',
+                        'message' => 'Set a new admin password before using this page.',
+                    ), 403);
+                }
+                header('Location: profile.php?force=1');
+                exit;
+            }
         }
-        header('Location: index.php');
-        exit;
+    }
+}
+
+if (!function_exists('lm_csrf_field')) {
+    /**
+     * Hidden CSRF input for a form.
+     *
+     * @return string
+     */
+    function lm_csrf_field()
+    {
+        return '<input type="hidden" name="csrf_token" value="'
+            . htmlspecialchars(lm_csrf_token(), ENT_QUOTES, 'UTF-8') . '">';
     }
 }
 
@@ -1213,18 +1298,170 @@ if (!function_exists('lm_format_bytes')) {
     }
 }
 
-if (!function_exists('lm_client_ip')) {
-    /** @return string */
-    function lm_client_ip()
+if (!function_exists('lm_trusted_proxy_list')) {
+    /**
+     * Addresses (or CIDR ranges) allowed to speak for another client.
+     *
+     * Comes from the `trusted_proxies` setting or the LM_TRUSTED_PROXIES
+     * environment variable. Empty by default: a spoofed X-Forwarded-For must
+     * never be able to impersonate a whitelisted address.
+     *
+     * @return array<int,string>
+     */
+    function lm_trusted_proxy_list()
     {
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $first = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
-            if (filter_var($first, FILTER_VALIDATE_IP)) {
-                $ip = $first;
+        static $list = null;
+        if ($list !== null) {
+            return $list;
+        }
+
+        $env = getenv('LM_TRUSTED_PROXIES');
+        if (is_string($env) && trim($env) !== '') {
+            $raw = $env;
+        } else {
+            $settings = lm_settings();
+            $raw = $settings['trusted_proxies'] ?? '';
+        }
+
+        $items = is_array($raw) ? $raw : explode(',', (string) $raw);
+        $list = array();
+        foreach ($items as $item) {
+            $item = trim((string) $item);
+            if ($item !== '') {
+                $list[] = $item;
             }
         }
-        return $ip;
+
+        return $list;
+    }
+}
+
+if (!function_exists('lm_ip_in_range')) {
+    /**
+     * Exact-IP or CIDR match, for IPv4 and IPv6.
+     *
+     * @param string $ip
+     * @param string $range
+     * @return bool
+     */
+    function lm_ip_in_range($ip, $range)
+    {
+        $ip = trim((string) $ip);
+        $range = trim((string) $range);
+
+        if ($ip === '' || $range === '' || filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return false;
+        }
+        if (filter_var($range, FILTER_VALIDATE_IP) !== false) {
+            return $range === $ip;
+        }
+        if (strpos($range, '/') === false) {
+            return false;
+        }
+
+        list($subnet, $bits) = explode('/', $range, 2);
+        $bits = (int) $bits;
+
+        $ipBin = @inet_pton($ip);
+        $netBin = @inet_pton($subnet);
+        if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
+            return false;
+        }
+
+        $maxBits = strlen($ipBin) * 8;
+        if ($bits < 0 || $bits > $maxBits) {
+            return false;
+        }
+
+        $bytes = intdiv($bits, 8);
+        $remainder = $bits % 8;
+
+        if ($bytes > 0 && substr($ipBin, 0, $bytes) !== substr($netBin, 0, $bytes)) {
+            return false;
+        }
+        if ($remainder === 0) {
+            return true;
+        }
+
+        $mask = chr((0xFF << (8 - $remainder)) & 0xFF);
+        return (substr($ipBin, $bytes, 1) & $mask) === (substr($netBin, $bytes, 1) & $mask);
+    }
+}
+
+if (!function_exists('lm_peer_is_trusted_proxy')) {
+    /**
+     * Is the machine that connected to us one we configured as a proxy?
+     *
+     * @return bool
+     */
+    function lm_peer_is_trusted_proxy()
+    {
+        $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        if ($remote === '') {
+            return false;
+        }
+        foreach (lm_trusted_proxy_list() as $range) {
+            if (lm_ip_in_range($remote, $range)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('lm_client_ip')) {
+    /**
+     * Client address, resistant to header spoofing.
+     *
+     * X-Forwarded-For is only read when the direct peer is a configured
+     * proxy, and the chain is then walked from the right: the first address
+     * that is not itself a proxy is the client. Anything a caller stacks in
+     * front of that is ignored, so a public request can no longer claim to
+     * come from a whitelisted IP.
+     *
+     * @return string
+     */
+    function lm_client_ip()
+    {
+        $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        if (filter_var($remote, FILTER_VALIDATE_IP) === false) {
+            $remote = '0.0.0.0';
+        }
+
+        if (!lm_peer_is_trusted_proxy()) {
+            return $remote;
+        }
+
+        $header = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($header === '') {
+            return $remote;
+        }
+
+        $proxies = lm_trusted_proxy_list();
+        $hops = array_reverse(array_map('trim', explode(',', $header)));
+
+        foreach ($hops as $hop) {
+            if (preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $hop, $m)) {
+                $hop = $m[1];
+            }
+            if (filter_var($hop, FILTER_VALIDATE_IP) === false) {
+                continue;
+            }
+
+            $isProxy = false;
+            foreach ($proxies as $range) {
+                if (lm_ip_in_range($hop, $range)) {
+                    $isProxy = true;
+                    break;
+                }
+            }
+
+            if (!$isProxy) {
+                return $hop;
+            }
+        }
+
+        return $remote;
     }
 }
 

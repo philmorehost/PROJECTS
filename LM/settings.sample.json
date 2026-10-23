@@ -10,6 +10,7 @@
     "paystack_secret_key": "",
     "api_secret_key": "",
     "whitelisted_ips": [],
+    "trusted_proxies": "",
     "smtp_host": "",
     "smtp_port": "587",
     "smtp_user": "",

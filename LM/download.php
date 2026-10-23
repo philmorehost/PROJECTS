@@ -8,7 +8,20 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/updates.php';
 
+lm_security_headers();
+
+// Tokens are 64 hex characters; anything else is not worth a database query.
 $token = trim((string) ($_GET['token'] ?? ''));
+
+// Guessing tokens or hammering the endpoint is rate limited per address.
+$dlLimit = lm_rate_limit(lm_rate_limit_ip('download'), 60, 600, true);
+if (!$dlLimit['allowed']) {
+    http_response_code(429);
+    header('Retry-After: ' . (int) $dlLimit['retry_after']);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('status' => 'error', 'message' => 'Too many download attempts. Try again later.'));
+    exit;
+}
 
 if ($token === '') {
     http_response_code(400);
@@ -17,7 +30,7 @@ if ($token === '') {
     exit;
 }
 
-lm_log('ota', 'Download attempt with token ' . substr($token, 0, 12) . '…');
+lm_log('ota', 'Download attempt with token ' . substr($token, 0, 12) . '… from ' . lm_client_ip());
 
 try {
     // Housekeeping: only remove tokens that expired more than a day ago so a

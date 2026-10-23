@@ -1,11 +1,16 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
 }
 
-require_once('../db.php');
+require_once __DIR__ . '/../db.php';
+
+$forcePasswordChange = lm_admin_password_change_required();
 
 $success_message = '';
 $error = '';
@@ -36,14 +41,20 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $new_username = $_POST['username'];
-    $new_password = $_POST['password'];
-    $confirm_password = $_POST['password_confirm'];
+    $new_username = trim((string) ($_POST['username'] ?? ''));
+    $new_password = (string) ($_POST['password'] ?? '');
+    $confirm_password = (string) ($_POST['password_confirm'] ?? '');
 
-    if (empty($new_username)) {
+    if (!lm_verify_csrf()) {
+        $error = 'Your session expired. Refresh the page and try again.';
+    } elseif (empty($new_username)) {
         $error = "Username cannot be empty.";
+    } elseif ($forcePasswordChange && $new_password === '') {
+        $error = 'Choose a new password — the factory password cannot be kept.';
     } elseif (!empty($new_password) && $new_password !== $confirm_password) {
         $error = 'Passwords do not match.';
+    } elseif ($new_password !== '' && ($weak = lm_password_problem($new_password, $new_username)) !== '') {
+        $error = $weak;
     } else {
         try {
             if (!empty($new_password)) {
@@ -60,6 +71,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             // Update the username displayed on the form
             $current_username = $new_username;
+
+            if ($new_password !== '') {
+                /*
+                 * Changing the credential is a privilege change: give the
+                 * session a new id and a fresh CSRF token, and drop the
+                 * "must change password" gate.
+                 */
+                $_SESSION['admin_username'] = $new_username;
+                $_SESSION['lm_password_change_required'] = false;
+                unset($_SESSION['lm_csrf']);
+                lm_session_start(true);
+                lm_csrf_token();
+                $forcePasswordChange = false;
+                lm_log('admin', 'Admin password changed for ' . $new_username);
+            }
         } catch (PDOException $e) {
             if ($e->errorInfo[1] == 1062) { // SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry
                 $error = "That username is already taken.";
@@ -266,18 +292,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php if (!empty($error)): ?>
                     <div class="error">✗ <?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
-                <form method="POST">
+                <?php if ($forcePasswordChange): ?>
+                    <div class="error" style="margin-bottom:18px;">
+                        ⚠ This installation is still using the factory password, which is public knowledge.
+                        Choose a new password below before using the rest of the panel.
+                    </div>
+                <?php endif; ?>
+                <form method="POST" autocomplete="off">
+                    <?= lm_csrf_field() ?>
                     <div class="input-group">
                         <label>Username</label>
-                        <input type="text" name="username" value="<?= htmlspecialchars($current_username) ?>" required>
+                        <input type="text" name="username" value="<?= htmlspecialchars($current_username) ?>" autocomplete="username" required>
                     </div>
                     <div class="input-group">
                         <label>New Password (leave blank to keep current password)</label>
-                        <input type="password" name="password">
+                        <input type="password" name="password" autocomplete="new-password" <?= $forcePasswordChange ? 'required' : '' ?>>
                     </div>
                     <div class="input-group">
                         <label>Confirm New Password</label>
-                        <input type="password" name="password_confirm">
+                        <input type="password" name="password_confirm" autocomplete="new-password" <?= $forcePasswordChange ? 'required' : '' ?>>
                     </div>
                     <button type="submit" class="btn">💾 Update Profile</button>
                 </form>

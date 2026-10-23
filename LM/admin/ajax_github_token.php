@@ -14,7 +14,9 @@
  * never be decrypted.
  */
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 header('Content-Type: application/json; charset=utf-8');
 
 // A PHP warning printed into the body turns a valid JSON response into
