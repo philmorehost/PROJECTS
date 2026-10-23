@@ -1,4 +1,17 @@
 
+# Never serve configuration or runtime files over HTTP.
+# settings.json holds the GitHub token, SMTP password and Paystack secret key.
+<IfModule mod_authz_core.c>
+    <FilesMatch "^(settings\.json|settings\.json\..*|settings\.sample\.json|.*\.log|app_secret\.key)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^(settings\.json|settings\.json\..*|settings\.sample\.json|.*\.log|app_secret\.key)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
 
 # php -- BEGIN cPanel-generated handler, do not edit
 # Set the “ea-php74” package as the default “PHP” programming language.

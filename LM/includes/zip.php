@@ -150,6 +150,68 @@ function lm_zip_is_safe_entry($name)
 }
 
 /**
+ * True for files that belong to an install, never to a package: the settings
+ * file (GitHub token, SMTP password, Paystack keys), its temporary copies, the
+ * encryption key, logs and storage/backups, storage/logs, storage/tmp.
+ *
+ * Shipping these in an update package overwrites the customer's live
+ * configuration — and a token encrypted with another install's key can never be
+ * read back.
+ *
+ * @param string $name Archive path (already cleaned)
+ * @return bool
+ */
+function lm_zip_is_runtime_file($name)
+{
+    $name = ltrim(lm_zip_clean_name($name), '/');
+    if ($name === '') {
+        return false;
+    }
+
+    $base = basename($name);
+    if ($base === 'settings.json' || $base === 'settings.sample.json' || $base === 'app_secret.key') {
+        return true;
+    }
+    if (preg_match('/^settings\.json(\.|$)/', $base)) {
+        return true;
+    }
+    if (preg_match('/\.log$/i', $base)) {
+        return true;
+    }
+    // Only LM's runtime folders, so an app that legitimately ships a storage/
+    // folder (templates, .gitignore stubs) still updates cleanly.
+    foreach (array('storage/backups/', 'storage/logs/', 'storage/tmp/') as $prefix) {
+        if (strpos($name, $prefix) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * List the entries in an archive that will be dropped as runtime files.
+ *
+ * @param string $file
+ * @return array
+ */
+function lm_zip_runtime_files($file)
+{
+    $entries = lm_zip_entries($file);
+    if ($entries === false) {
+        return array();
+    }
+    $out = array();
+    foreach ($entries as $entry) {
+        $name = lm_zip_clean_name($entry['name']);
+        if (lm_zip_is_runtime_file($name)) {
+            $out[] = $name;
+        }
+    }
+    return $out;
+}
+
+/**
  * Normalise an entry name to a clean relative path (no leading ./ or /).
  *
  * @param string $name
@@ -347,6 +409,7 @@ function lm_zip_write_header($out, $name, $method, $crc, $compressedSize, $size,
  *     root:    string  Prefix removed after filtering, so its contents land at the root
  *     add:     array   name => contents to add/replace
  *     remove:  array   list of names to drop
+ *     runtime: bool    Drop settings.json / keys / storage (default true)
  * }
  * @return array|false array{count:int, skipped:int, bytes:int}
  */
@@ -372,6 +435,8 @@ function lm_zip_copy($source, $destination, array $options = array())
     }
     $add = isset($options['add']) && is_array($options['add']) ? $options['add'] : array();
     $remove = isset($options['remove']) && is_array($options['remove']) ? $options['remove'] : array();
+    // A package is code, never configuration: keep the customer's settings.json.
+    $stripRuntime = !isset($options['runtime']) || $options['runtime'];
     $removeNames = array();
     foreach ($remove as $name) {
         $removeNames[lm_zip_clean_name($name)] = true;
@@ -430,6 +495,10 @@ function lm_zip_copy($source, $destination, array $options = array())
             $name = substr($name, strlen($prefix));
         }
         if ($name === '' || isset($removeNames[$name])) {
+            continue;
+        }
+        if ($stripRuntime && lm_zip_is_runtime_file($name)) {
+            $skipped++;
             continue;
         }
 

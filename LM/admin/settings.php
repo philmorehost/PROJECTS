@@ -17,6 +17,21 @@ $secretHealth = lm_secret_health();
 $saveError = '';
 $saveOk = isset($_GET['saved']);
 
+$restoreNotice = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
+    if (!lm_verify_csrf()) {
+        $restoreNotice = 'error:Your session expired. Refresh the page and try again.';
+    } else {
+        $restored = lm_settings_restore((string) $_POST['restore_backup']);
+        if ($restored['ok']) {
+            header('Location: settings.php?restored=1');
+            exit();
+        }
+        $restoreNotice = 'error:' . $restored['error'];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!lm_verify_csrf()) {
         $saveError = 'Your session expired. Refresh the page and try again.';
@@ -131,6 +146,31 @@ try {
     $githubProjectsUsingDefault = (int) $stmtDefaultProjects->fetchColumn();
 } catch (Exception $e) {
     $githubProjectsUsingDefault = 0;
+}
+
+$settingsFilePath = lm_settings_file();
+$settingsFileExists = is_file($settingsFilePath);
+$settingsFileMtime = $settingsFileExists ? (int) filemtime($settingsFilePath) : 0;
+$settingsFileSize = $settingsFileExists ? (int) filesize($settingsFilePath) : 0;
+$keyFilePath = lm_storage_dir() . DIRECTORY_SEPARATOR . 'app_secret.key';
+$keyFileMtime = is_file($keyFilePath) ? (int) filemtime($keyFilePath) : 0;
+$keyFingerprint = lm_secret_fingerprint(lm_app_secret());
+$archivedKeyCount = count(lm_archived_secrets());
+$settingsBackups = lm_settings_backups(8);
+
+// Does a snapshot still hold a token this install can read?
+$recoverableBackups = array();
+foreach ($settingsBackups as $backup) {
+    if ($backup['token_ok'] && $gitHubTokenState['state'] !== 'ok') {
+        $recoverableBackups[] = $backup;
+    }
+}
+
+$currentFilled = 0;
+foreach ($settings as $value) {
+    if (is_string($value) ? trim($value) !== '' : !empty($value)) {
+        $currentFilled++;
+    }
 }
 
 $cronSecret = lm_get_cron_secret();
@@ -450,6 +490,29 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
             </div>
         </div>
 
+        <?php if (isset($_GET['restored'])): ?>
+            <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">✓ Settings restored from a backup.</div>
+        <?php endif; ?>
+        <?php if ($restoreNotice !== ''): ?>
+            <?php $isError = strpos($restoreNotice, 'error:') === 0; ?>
+            <div style="background:<?= $isError ? '#fef2f2;border:1px solid #fecaca;color:#991b1b' : '#ecfdf5;border:1px solid #bbf7d0;color:#166534' ?>;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">
+                <?= htmlspecialchars(preg_replace('/^error:/', '', $restoreNotice)) ?>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($recoverableBackups)): ?>
+            <div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:16px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;line-height:1.65;">
+                <strong>⚠ Your stored settings were replaced, probably by an update.</strong><br>
+                <code>settings.json</code> no longer contains a GitHub token, but a backup from
+                <strong><?= htmlspecialchars(date('j M Y, H:i', $recoverableBackups[0]['time'])) ?></strong> does — with a token this install can still decrypt.
+                Restoring brings back the token, the site URL and the cron key.
+                <form method="POST" style="margin-top:12px;"
+                      onsubmit="return confirm('Restore the settings from <?= htmlspecialchars(date('j M Y, H:i', $recoverableBackups[0]['time'])) ?>?');">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token()) ?>">
+                    <input type="hidden" name="restore_backup" value="<?= htmlspecialchars($recoverableBackups[0]['name']) ?>">
+                    <button type="submit" class="btn" style="background:linear-gradient(135deg,#b45309,#92400e);">Restore that backup</button>
+                </form>
+            </div>
+        <?php endif; ?>
         <?php if ($saveOk): ?>
             <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">✓ Settings saved.</div>
         <?php endif; ?>
@@ -666,6 +729,90 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                     </div>
                 </div>
 
+                <div class="card" id="safety">
+                    <div class="card-header"><h3>Settings File &amp; Recovery</h3></div>
+                    <div class="card-body">
+                        <p style="color:#475569;font-size:14px;line-height:1.7;margin-bottom:14px;">
+                            Everything on this page — the GitHub token, SMTP password, site URL and cron key — lives in
+                            <code>settings.json</code>. It is <strong>not</strong> part of the LM code, so uploading a new
+                            version must never replace it. A snapshot is written to <code>storage/backups/</code> every time it changes.
+                        </p>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px;">
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
+                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">settings.json</div>
+                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
+                                    <?= $settingsFileExists ? htmlspecialchars(date('j M Y, H:i', $settingsFileMtime)) : 'missing' ?>
+                                    <?= $settingsFileExists ? '<span style="color:#94a3b8;">· ' . number_format($settingsFileSize) . ' bytes · ' . (int) $currentFilled . ' fields</span>' : '' ?>
+                                </div>
+                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;word-break:break-all;"><?= htmlspecialchars($settingsFilePath) ?></div>
+                            </div>
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
+                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Encryption key</div>
+                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
+                                    <code><?= htmlspecialchars($keyFingerprint) ?></code>
+                                    <span style="color:#94a3b8;"><?= $keyFileMtime ? '· ' . htmlspecialchars(date('j M Y', $keyFileMtime)) : '' ?></span>
+                                </div>
+                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+                                    <?= $archivedKeyCount ?> archived key<?= $archivedKeyCount === 1 ? '' : 's' ?> available for recovery
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if (empty($settingsBackups)): ?>
+                            <p style="font-size:12.5px;color:#64748b;">No snapshots yet — one is created the next time settings are saved.</p>
+                        <?php else: ?>
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                                <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+                                    <thead>
+                                        <tr style="background:#f8fafc;color:#64748b;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;">
+                                            <th style="text-align:left;padding:9px 12px;">Snapshot</th>
+                                            <th style="text-align:left;padding:9px 12px;">Contains</th>
+                                            <th style="text-align:right;padding:9px 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($settingsBackups as $index => $backup): ?>
+                                        <tr style="border-top:1px solid #eef2f8;">
+                                            <td style="padding:9px 12px;color:#0f172a;">
+                                                <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>
+                                                <span style="color:#94a3b8;font-size:11px;">· <?= number_format($backup['size']) ?> B</span>
+                                            </td>
+                                            <td style="padding:9px 12px;color:#475569;">
+                                                <?= (int) $backup['fields'] ?> fields
+                                                <?php if ($backup['token_ok']): ?>
+                                                    <span style="background:#ecfdf5;color:#047857;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token ✓</span>
+                                                <?php elseif ($backup['has_token']): ?>
+                                                    <span style="background:#fef2f2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token unreadable</span>
+                                                <?php endif; ?>
+                                                <?php if ($backup['has_cron']): ?>
+                                                    <span style="background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">cron key</span>
+                                                <?php endif; ?>
+                                                <?php if ($backup['smtp_host'] !== ''): ?>
+                                                    <span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">SMTP</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding:9px 12px;text-align:right;">
+                                                <form method="POST" style="display:inline;"
+                                                      onsubmit="return confirm('Restore settings from <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>?\n\nThe current file is copied to storage/backups first, so this can be undone.');">
+                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token()) ?>">
+                                                    <input type="hidden" name="restore_backup" value="<?= htmlspecialchars($backup['name']) ?>">
+                                                    <button type="submit" class="btn" style="background:#fff;border:1px solid #cbd5e1;color:#334155;box-shadow:none;padding:6px 12px;font-size:12px;">Restore</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <small style="display:block;margin-top:10px;color:#94a3b8;">
+                                Restoring merges the snapshot over the current values — fields you changed since then are kept unless the snapshot has them too.
+                                The current file is snapshotted first, so a restore can be undone.
+                            </small>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <div class="card" id="github">
                     <div class="card-header"><h3>GitHub Access Token</h3></div>
                     <div class="card-body">
@@ -687,12 +834,24 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                                 </span>
                             <?php elseif ($gitHubTokenState['state'] === 'unreadable'): ?>
                                 <span style="display:inline-flex;align-items:center;gap:6px;background:#fef2f2;color:#b91c1c;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">⚠ Token stored but unreadable</span>
-                                <span style="font-size:12px;color:#991b1b;line-height:1.6;" id="ghTokenMeta">The encryption key changed (LM/storage/app_secret.key). Paste the token again and press <strong>Save token</strong>.</span>
+                                <span style="font-size:12px;color:#991b1b;line-height:1.6;" id="ghTokenMeta">
+                                    No key on this install can open the stored value — not <code>storage/app_secret.key</code> and not any archived key.
+                                    Paste the token again and press <strong>Save token</strong>.
+                                    <?php if (!empty($recoverableBackups)): ?>A backup below still holds a readable token.<?php endif; ?>
+                                </span>
                             <?php else: ?>
                                 <span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#475569;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;">No token stored</span>
                                 <span style="font-size:12px;color:#64748b;" id="ghTokenMeta">Only public repositories work until you add one. Leave the field below empty if you do not need private repos.</span>
                             <?php endif; ?>
                         </div>
+
+                        <?php if (!empty($gitHubTokenState['healed'])): ?>
+                            <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.6;margin-bottom:14px;">
+                                <strong>Token recovered.</strong>
+                                It was encrypted with a key this install no longer uses, so it has been decrypted with the archived key
+                                and re-encrypted with the current one. Nothing to do.
+                            </div>
+                        <?php endif; ?>
 
                         <?php if (!$secretHealth['ok']): ?>
                             <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.6;margin-bottom:14px;">

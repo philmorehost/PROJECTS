@@ -298,6 +298,40 @@ missing path is listed.
 
 ---
 
+## 6b. Settings that survive an update (8.7.0)
+
+`LM/settings.json` holds the GitHub token, the SMTP password, the Paystack keys
+and the cron key. It is **installation state, not code**.
+
+Up to 8.6.x the file was committed to Git, so every upload of the LM folder
+replaced the live file with the copy from the repository: the token disappeared,
+the site URL reset and `storage/app_secret.key` (which was not committed) was
+regenerated — leaving the stored ciphertext unreadable. That is the "my token
+became unreachable after the update" report.
+
+**What changed**
+
+| Layer | Change |
+|---|---|
+| Git | `LM/settings.json`, `LM/user/error_log` are ignored and untracked. `LM/settings.sample.json` is the reference copy. |
+| Web server | `LM/.htaccess` denies `settings.json`, `settings.*`, `app_secret.key` and `*.log` — they were downloadable before. |
+| Packages | `lm_zip_copy()` drops runtime files (`settings.json`, `settings.sample.json`, `app_secret.key`, `*.log`, `storage/backups`, `storage/logs`, `storage/tmp`) from every package it writes, so uploading an old ZIP no longer clobbers anything. The upload result lists what was removed. |
+| Snapshots | Every settings write stores `storage/backups/settings-YYYYmmdd-HHMMSS-xxxxxx.json` (newest 12 kept), before and after the write. |
+| Keys | `storage/app_secret.key` is archived as `storage/backups/key-<fingerprint>.key` (newest 5). If the live key is missing, the newest archived key is reused instead of generating one that cannot read anything. |
+| Decryption | `lm_decrypt()` tries the current key, then every archived key. When an archived key was needed, the GitHub token is re-encrypted with the current key on the spot. |
+| UI | **Settings → Settings File & Recovery**: key fingerprint, file timestamp, snapshot table with a `token ✓` chip, one-click **Restore** (merge that never blanks newer values, snapshot taken first). A yellow banner appears when the current file has no token but a readable one exists in a snapshot. |
+
+**What to do once after upgrading to 8.7.0**
+
+1. Open **Settings**. If the yellow banner is there, press **Restore that backup**.
+2. Otherwise paste the token once and press **Save token** — the token that was
+   lost during the bad update cannot be recovered from the repository copy.
+3. Because the old `settings.json` was public in the repository (and downloadable
+   over HTTP), rotate anything that was in it: the Paystack secret key, the SMTP
+   password and the GitHub token.
+
+---
+
 ## 6a. Built-in help
 
 Everything above is also inside the admin area:
@@ -323,6 +357,8 @@ edited in the same commit as the feature it documents.
 | E-mails stay queued | Cron is not running. Open Licences (triggers the queue) or hit `cron.php?key=…`. |
 | `SQLSTATE[40001] … Deadlock` | Migrations now run once. If you still see it, check that `schema_migrations` exists and contains `2026_10_23_notifications_github`. |
 | GitHub `404` | Wrong `owner/repo`, or the token lacks **Contents: Read**. |
+| Token empty after an update | **Settings → Settings File & Recovery** → **Restore** the newest snapshot with a `token ✓` chip. If there is none, paste the token again. Fixed as a class of bug in 8.7.0: settings are no longer shipped in packages. |
+| `settings.json` reset after uploading a folder | The upload replaced it with the copy from the repository. Restore a snapshot; from 8.7.0 the file is untracked and stripped from packages. |
 | “Unexpected server response” on a card | A PHP warning was printed into a JSON body. Fixed in 8.6.1: `ajax_*.php` no longer display warnings (they go to the error log) and the page now shows the readable part of a malformed response. Still check the cPanel error log for the underlying warning. |
 | “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |
 | Package missing files you ticked | Check the file still exists on the branch and that it is a file (not a submodule). The pull result shows the packaged file count. |

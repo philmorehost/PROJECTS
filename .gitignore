@@ -1,4 +1,10 @@
 # License Manager runtime data (never commit secrets, logs or packages)
+# settings.json holds the GitHub token, SMTP password and cron key. It is
+# created on the server and must never be replaced by a deploy, so it is not
+# tracked — LM/settings.sample.json is the reference copy.
+LM/settings.json
+LM/settings.json.tmp.*
+LM/user/error_log
 LM/storage/*
 !LM/storage/.htaccess
 !LM/storage/index.php

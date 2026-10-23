@@ -1,0 +1,19 @@
+{
+    "site_name": "License Manager",
+    "site_url": "",
+    "admin_email": "",
+    "license_price": "0",
+    "payment_gateway_enabled": false,
+    "paystack_public_key": "",
+    "paystack_secret_key": "",
+    "smtp_host": "",
+    "smtp_port": "465",
+    "smtp_user": "",
+    "smtp_pass": "",
+    "smtp_encryption": "auto",
+    "smtp_from_email": "",
+    "smtp_from_name": "",
+    "cron_secret": "",
+    "github_token": "",
+    "whitelisted_ips": []
+}

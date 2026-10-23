@@ -488,11 +488,43 @@ HTML
   <tbody>
     <tr><td>✓ Token stored</td><td>Encrypted, readable, and inherited by every project without its own token.</td></tr>
     <tr><td>No token stored</td><td>Nothing saved yet — only public repositories work.</td></tr>
-    <tr><td>⚠ Token stored but unreadable</td><td>The ciphertext is there but <code>storage/app_secret.key</code> changed (a redeploy that replaced the storage folder). Paste the token again and press <em>Save token</em>. Nothing else is lost.</td></tr>
+    <tr><td>⚠ Token stored but unreadable</td><td>The ciphertext is there but no key on this install can open it — neither <code>storage/app_secret.key</code> nor any archived key. Paste the token again and press <em>Save token</em>. Nothing else is lost.</td></tr>
   </tbody>
 </table>
 <p class="lm-guide-note">Every save is verified before it is written: the token is encrypted and decrypted again in the same request. If the round-trip does not match, the save is refused with the reason instead of storing a value that would look empty later.</p>
+<p class="lm-guide-note">If an update replaced the encryption key, the token is recovered from the archived key and re-encrypted with the current one during the first request — no action needed. Settings → <em>Settings File &amp; Recovery</em> shows how many archived keys are available.</p>
 <p>Rate limit: 5,000 requests per hour per token. A pull uses a handful; the tree view one more per load.</p>
+HTML
+                    ),
+                    array(
+                        'id' => 'survives',
+                        'title' => 'Settings survive updates',
+                        'html' => <<<'HTML'
+<p><code>settings.json</code> holds the GitHub token, the SMTP password, the Paystack keys and the cron key. It belongs to the <em>installation</em>, not to the code — uploading a new version must never replace it.</p>
+<table class="lm-guide-table">
+  <thead><tr><th>File</th><th>Tracked in Git</th><th>In an update package</th></tr></thead>
+  <tbody>
+    <tr><td><code>LM/settings.json</code></td><td>No — ignored, created on the server</td><td>Never — stripped on upload</td></tr>
+    <tr><td><code>LM/settings.sample.json</code></td><td>Yes — the reference copy</td><td>Never</td></tr>
+    <tr><td><code>LM/storage/app_secret.key</code></td><td>No</td><td>Never</td></tr>
+    <tr><td><code>LM/storage/backups/</code></td><td>No</td><td>Never</td></tr>
+  </tbody>
+</table>
+<h4>Two safety nets</h4>
+<ol class="lm-guide-steps">
+  <li><strong>Snapshots.</strong> Every save of <code>settings.json</code> writes a copy to <code>storage/backups/settings-YYYYmmdd-HHMMSS-xxxxxx.json</code>. The newest 12 are kept.</li>
+  <li><strong>Archived keys.</strong> <code>storage/app_secret.key</code> is backed up next to them whenever it is created or read. If a redeploy deletes it, the LM reuses the newest archived key; if the file comes back with a different key, a token encrypted under an older key is decrypted with that archived key and immediately re-encrypted under the current one.</li>
+</ol>
+<h4>Restoring</h4>
+<p>Settings → <em>Settings File &amp; Recovery</em> lists the snapshots with what each one contains: a green <span class="lm-guide-chip">token ✓</span> means the token in it can still be decrypted on this install. <strong>Restore</strong> merges that snapshot over the current values — fields you changed since are kept unless the snapshot has a value too. The current file is snapshotted first, so a restore can be undone by restoring again.</p>
+<p class="lm-guide-note">A restore only applies non-empty values, so restoring an old snapshot never blanks a field you have since filled in.</p>
+<h4>When the token looks empty after an update</h4>
+<ol class="lm-guide-steps">
+  <li>Open Settings. If a yellow banner offers a backup with a readable token, press <strong>Restore that backup</strong>.</li>
+  <li>Otherwise paste the token and press <strong>Save token</strong> — a new fine-grained token is a good moment to rotate it anyway.</li>
+  <li>Check <code>storage/backups/</code> over SFTP or the cPanel file manager if you need an older copy by hand.</li>
+</ol>
+<p>Uploading a package that still contains <code>settings.json</code> no longer breaks anything: the upload strips it, and the success message lists the files that were removed.</p>
 HTML
                     ),
                     array(
@@ -856,6 +888,7 @@ if (!function_exists('lm_guide_assets')) {
     .lm-guide-table th { text-align: left; background: #f8fafc; color: #64748b; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; padding: 7px 9px; border: 1px solid #e9eef7; }
     .lm-guide-table td { padding: 7px 9px; border: 1px solid #eef2f8; vertical-align: top; line-height: 1.6; }
     .lm-guide-note { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 9px; padding: 9px 11px; color: #1e40af; font-size: 12px; }
+    .lm-guide-chip { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 800; }
     .lm-guide-pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 9px; overflow: auto; font-size: 11px; line-height: 1.6; font-family: 'JetBrains Mono', monospace; margin: 0 0 10px; }
     .lm-guide-code { margin: 10px 0 4px; }
     .lm-guide-code-head { display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: #cbd5e1; font-size: 10.5px;

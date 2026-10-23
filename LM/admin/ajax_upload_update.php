@@ -134,6 +134,10 @@ if ($changelog === '') {
         : '<ul><li>Maintenance improvements</li><li>Bug fixes</li></ul>';
 }
 
+// Anything that belongs to an install rather than to the code (settings.json,
+// the encryption key, logs) is stripped when the manifest is injected below.
+$runtimeFiles = lm_zip_runtime_files($tmpZip);
+
 // Manifest so the target script knows exactly what to do.
 $changelogText = $changelogFormat === 'text' ? $changelog : lm_changelog_plain($changelog, 'html');
 $manifest = array(
@@ -186,10 +190,20 @@ if (!$publish['ok']) {
 
 $queue = $publish['notification_queue'] ?? array('queued' => 0, 'skipped' => 0);
 
+$successMessage = 'v' . $version . ' published for ' . $tier['tier_name'] . '. ';
+$successMessage .= $notify
+    ? (int) $queue['queued'] . ' notification(s) queued' . (!empty($queue['skipped']) ? ', ' . (int) $queue['skipped'] . ' skipped' : '') . '.'
+    : 'Notifications were not sent.';
+if (!empty($runtimeFiles)) {
+    $successMessage .= ' ' . count($runtimeFiles) . ' install file(s) were removed from the package ('
+        . implode(', ', array_slice($runtimeFiles, 0, 3))
+        . (count($runtimeFiles) > 3 ? ', …' : '') . ').';
+}
+
 lm_json(array(
+    'stripped' => array_values($runtimeFiles),
     'status' => 'success',
-    'message' => 'v' . $version . ' published for ' . $tier['tier_name'] . '. '
-        . ($notify ? $queue['queued'] . ' notification(s) queued' . ($queue['skipped'] ? ', ' . $queue['skipped'] . ' skipped' : '') . '.' : 'Notifications were not sent.'),
+    'message' => $successMessage,
     'version' => $version,
     'update_id' => $publish['id'],
     'checksum' => $publish['checksum'],

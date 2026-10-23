@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.6.1');
+    define('LM_VERSION', '8.7.0');
 }
 
 if (!function_exists('lm_lm_dir')) {
@@ -38,6 +38,21 @@ if (!function_exists('lm_storage_dir')) {
     function lm_storage_dir()
     {
         return lm_lm_dir() . DIRECTORY_SEPARATOR . 'storage';
+    }
+}
+
+if (!function_exists('lm_storage_backups_dir')) {
+    /**
+     * Where settings.json snapshots and previous encryption keys are kept.
+     *
+     * Lives under storage/ so a deploy that replaces the LM folder does not
+     * take the recovery copies with it.
+     *
+     * @return string
+     */
+    function lm_storage_backups_dir()
+    {
+        return lm_storage_dir() . DIRECTORY_SEPARATOR . 'backups';
     }
 }
 
@@ -143,6 +158,182 @@ if (!function_exists('lm_settings')) {
     }
 }
 
+if (!function_exists('lm_settings_backup')) {
+    /**
+     * Snapshot settings.json before it is overwritten.
+     *
+     * Keeps the newest 12 copies in storage/backups. Returns the new path or ''.
+     *
+     * @param string $reason
+     * @return string
+     */
+    function lm_settings_backup($reason = 'save')
+    {
+        $file = lm_settings_file();
+        if (!is_file($file) || filesize($file) === 0) {
+            return '';
+        }
+
+        $dir = lm_storage_backups_dir();
+        if (!lm_ensure_dir($dir, 0700)) {
+            return '';
+        }
+
+        $stamp = gmdate('Ymd-His');
+        $target = $dir . DIRECTORY_SEPARATOR . 'settings-' . $stamp . '-' . substr(sha1($file . $stamp . mt_rand()), 0, 6) . '.json';
+
+        if (!@copy($file, $target)) {
+            return '';
+        }
+        @chmod($target, 0600);
+
+        // Prune everything beyond the ten newest snapshots.
+        $existing = glob($dir . DIRECTORY_SEPARATOR . 'settings-*.json');
+        if (is_array($existing) && count($existing) > 12) {
+            usort($existing, function ($a, $b) {
+                return filemtime($b) <=> filemtime($a);
+            });
+            foreach (array_slice($existing, 12) as $old) {
+                @unlink($old);
+            }
+        }
+
+        return $target;
+    }
+}
+
+if (!function_exists('lm_settings_backups')) {
+    /**
+     * Describe the settings snapshots on disk, newest first.
+     *
+     * `token_ok` says whether the token inside a snapshot still decrypts with
+     * one of the known keys — i.e. whether restoring it actually helps.
+     *
+     * @param int $limit
+     * @return array
+     */
+    function lm_settings_backups($limit = 10)
+    {
+        $dir = lm_storage_backups_dir();
+        $files = glob($dir . DIRECTORY_SEPARATOR . 'settings-*.json');
+        if (!is_array($files)) {
+            return array();
+        }
+
+        usort($files, function ($a, $b) {
+            return filemtime($b) <=> filemtime($a);
+        });
+
+        $out = array();
+        foreach (array_slice($files, 0, $limit) as $path) {
+            $raw = (string) @file_get_contents($path);
+            $data = json_decode($raw, true);
+            if (!is_array($data)) {
+                continue;
+            }
+
+            $storedToken = trim((string) ($data['github_token'] ?? ''));
+            $tokenOk = false;
+            if ($storedToken !== '') {
+                $plain = trim(lm_decrypt($storedToken));
+                if ($plain === '' && preg_match('/^(gh[pousr]_|github_pat_)/', $storedToken)) {
+                    $plain = $storedToken;
+                }
+                $tokenOk = $plain !== '';
+            }
+
+            $filled = 0;
+            foreach ($data as $value) {
+                if (is_string($value) ? trim($value) !== '' : !empty($value)) {
+                    $filled++;
+                }
+            }
+
+            $out[] = array(
+                'path' => $path,
+                'name' => basename($path),
+                'time' => (int) filemtime($path),
+                'size' => (int) filesize($path),
+                'fields' => $filled,
+                'has_token' => $storedToken !== '',
+                'token_ok' => $tokenOk,
+                'has_site_url' => trim((string) ($data['site_url'] ?? '')) !== '',
+                'has_cron' => trim((string) ($data['cron_secret'] ?? '')) !== '',
+                'smtp_host' => (string) ($data['smtp_host'] ?? ''),
+            );
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('lm_settings_restore')) {
+    /**
+     * Restore settings.json from one of its snapshots.
+     *
+     * Only files inside storage/backups are accepted, and the current file is
+     * snapshotted first so a restore can be undone.
+     *
+     * @param string $path
+     * @return array{ok:bool,error:string,fields:int}
+     */
+    function lm_settings_restore($path)
+    {
+        $out = array('ok' => false, 'error' => '', 'fields' => 0);
+
+        $path = (string) $path;
+
+        // Accept a bare snapshot name so the page never has to print an
+        // absolute server path into the HTML.
+        if ($path !== '' && basename($path) === $path) {
+            $path = lm_storage_backups_dir() . DIRECTORY_SEPARATOR . $path;
+        }
+
+        $dir = realpath(lm_storage_backups_dir());
+        $real = realpath($path);
+
+        if ($dir === false || $real === false || strpos($real, $dir . DIRECTORY_SEPARATOR) !== 0) {
+            $out['error'] = 'That backup file is not in storage/backups.';
+            return $out;
+        }
+
+        $data = json_decode((string) @file_get_contents($real), true);
+        if (!is_array($data)) {
+            $out['error'] = 'That backup is not valid JSON.';
+            return $out;
+        }
+
+        $current = lm_settings(true);
+        lm_settings_backup('before-restore');
+
+        // A snapshot holds the whole settings array, defaults included, so a
+        // blind merge would wipe newer values with the snapshot's empty ones.
+        // Only non-empty values from the snapshot are applied.
+        $merged = $current;
+        foreach ($data as $key => $value) {
+            $emptyString = is_string($value) && trim($value) === '';
+            $emptyArray = is_array($value) && count($value) === 0;
+            if ($emptyString || $emptyArray) {
+                continue;
+            }
+            $merged[$key] = $value;
+        }
+
+        if (!lm_save_settings($merged)) {
+            $out['error'] = 'Could not write settings.json. Check its permissions (0640).';
+            return $out;
+        }
+
+        $out['ok'] = true;
+        $out['path'] = $real;
+        $out['name'] = basename($real);
+        $out['fields'] = count($data);
+        $out['token_ok'] = trim((string) ($merged['github_token'] ?? '')) !== ''
+            && trim(lm_decrypt((string) $merged['github_token'])) !== '';
+        return $out;
+    }
+}
+
 if (!function_exists('lm_settings_lock')) {
     /**
      * Exclusive lock for read-modify-write cycles on settings.json.
@@ -221,6 +412,11 @@ if (!function_exists('lm_write_settings_file')) {
             return false;
         }
 
+        // Snapshot what is on disk before replacing it (rollback), then
+        // snapshot the result (so the newest snapshot always holds the secrets
+        // that are actually in use).
+        lm_settings_backup('before-write');
+
         $tmp = $file . '.tmp.' . getmypid();
         if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
             return false;
@@ -231,6 +427,8 @@ if (!function_exists('lm_write_settings_file')) {
             @unlink($tmp);
             return false;
         }
+
+        lm_settings_backup('after-write');
 
         lm_settings(true);
         return true;
@@ -326,8 +524,20 @@ if (!function_exists('lm_app_secret')) {
             $stored = trim((string) @file_get_contents($file));
             if (strlen($stored) === 64 && ctype_xdigit($stored)) {
                 $secret = $stored;
+                lm_archive_secret($secret);
                 return $secret;
             }
+        }
+
+        // The key file is gone (a redeploy that replaced storage/). Reuse the
+        // newest archived copy instead of generating a key that cannot read
+        // anything already stored.
+        $archived = lm_archived_secrets();
+        if (!empty($archived)) {
+            $secret = $archived[0];
+            @file_put_contents($file, $secret, LOCK_EX);
+            @chmod($file, 0600);
+            return $secret;
         }
 
         try {
@@ -338,6 +548,7 @@ if (!function_exists('lm_app_secret')) {
 
         @file_put_contents($file, $secret, LOCK_EX);
         @chmod($file, 0600);
+        lm_archive_secret($secret);
 
         return $secret;
     }
@@ -404,6 +615,93 @@ if (!function_exists('lm_secret_health')) {
     }
 }
 
+if (!function_exists('lm_archive_secret')) {
+    /**
+     * Keep a copy of the app secret so a lost storage/ folder is recoverable.
+     *
+     * @param string $secret 64 hex chars
+     * @return void
+     */
+    function lm_archive_secret($secret)
+    {
+        $secret = trim((string) $secret);
+        if (!(strlen($secret) === 64 && ctype_xdigit($secret))) {
+            return;
+        }
+
+        $dir = lm_storage_backups_dir();
+        if (!lm_ensure_dir($dir, 0700)) {
+            return;
+        }
+
+        $file = $dir . DIRECTORY_SEPARATOR . 'key-' . lm_secret_fingerprint($secret) . '.key';
+        if (is_file($file)) {
+            return;
+        }
+
+        @file_put_contents($file, $secret, LOCK_EX);
+        @chmod($file, 0600);
+
+        // Never keep more than five old keys.
+        $keys = glob($dir . DIRECTORY_SEPARATOR . 'key-*.key');
+        if (is_array($keys) && count($keys) > 5) {
+            usort($keys, function ($a, $b) {
+                return filemtime($b) <=> filemtime($a);
+            });
+            foreach (array_slice($keys, 5) as $old) {
+                @unlink($old);
+            }
+        }
+    }
+}
+
+if (!function_exists('lm_secret_fingerprint')) {
+    /**
+     * Short, non-reversible identifier for a key — safe to show in the UI.
+     *
+     * @param string $secret
+     * @return string
+     */
+    function lm_secret_fingerprint($secret)
+    {
+        $secret = trim((string) $secret);
+        if ($secret === '') {
+            return '';
+        }
+        return substr(hash('sha256', 'fingerprint:' . $secret), 0, 12);
+    }
+}
+
+if (!function_exists('lm_archived_secrets')) {
+    /**
+     * Every archived key, newest first.
+     *
+     * @return array
+     */
+    function lm_archived_secrets()
+    {
+        $dir = lm_storage_backups_dir();
+        $files = glob($dir . DIRECTORY_SEPARATOR . 'key-*.key');
+        if (!is_array($files)) {
+            return array();
+        }
+
+        usort($files, function ($a, $b) {
+            return filemtime($b) <=> filemtime($a);
+        });
+
+        $keys = array();
+        foreach ($files as $file) {
+            $value = trim((string) @file_get_contents($file));
+            if (strlen($value) === 64 && ctype_xdigit($value) && !in_array($value, $keys, true)) {
+                $keys[] = $value;
+            }
+        }
+
+        return $keys;
+    }
+}
+
 if (!function_exists('lm_encrypt')) {
     /**
      * Encrypt a secret (e.g. GitHub PAT) for storage in the database/settings.
@@ -444,21 +742,27 @@ if (!function_exists('lm_encrypt')) {
     }
 }
 
-if (!function_exists('lm_decrypt')) {
+if (!function_exists('lm_decrypt_with_key')) {
     /**
-     * Reverse lm_encrypt(). Returns '' when the payload cannot be trusted.
+     * Reverse lm_encrypt() with an explicit key. Returns '' when the payload
+     * cannot be trusted (wrong key, tampered MAC, unsupported format).
      *
      * @param string $payload
      * @return string
      */
-    function lm_decrypt($payload)
+    function lm_decrypt_with_key($payload, $secret)
     {
         $payload = (string) $payload;
-        if ($payload === '') {
+        $secret = trim((string) $secret);
+
+        if ($payload === '' || $secret === '') {
             return '';
         }
 
-        $rawKey = hex2bin(lm_app_secret());
+        $rawKey = @hex2bin($secret);
+        if ($rawKey === false || strlen($rawKey) !== 32) {
+            return '';
+        }
 
         if (strpos($payload, 'gcm1:') === 0) {
             if (!function_exists('openssl_decrypt')) {
@@ -501,6 +805,59 @@ if (!function_exists('lm_decrypt')) {
 
         // Legacy plain value (e.g. token saved before encryption existed).
         return $payload;
+    }
+}
+
+if (!function_exists('lm_decrypt')) {
+    /**
+     * Decrypt a payload with the current key, falling back to archived keys.
+     *
+     * The fallback is what keeps a stored token readable when a redeploy
+     * replaced storage/app_secret.key; callers that care can re-encrypt with
+     * lm_secret_used_for() to heal the value.
+     *
+     * @param string $payload
+     * @return string
+     */
+    function lm_decrypt($payload)
+    {
+        $payload = (string) $payload;
+        if ($payload === '') {
+            return '';
+        }
+
+        $current = lm_app_secret();
+        $plain = lm_decrypt_with_key($payload, $current);
+        if ($plain !== '') {
+            $GLOBALS['lm_decrypt_key'] = $current;
+            return $plain;
+        }
+
+        foreach (lm_archived_secrets() as $candidate) {
+            if ($candidate === $current) {
+                continue;
+            }
+            $plain = lm_decrypt_with_key($payload, $candidate);
+            if ($plain !== '') {
+                $GLOBALS['lm_decrypt_key'] = $candidate;
+                return $plain;
+            }
+        }
+
+        $GLOBALS['lm_decrypt_key'] = '';
+        return '';
+    }
+}
+
+if (!function_exists('lm_secret_used_for')) {
+    /**
+     * Which key decrypted the most recent payload ('' when none did).
+     *
+     * @return string
+     */
+    function lm_secret_used_for()
+    {
+        return isset($GLOBALS['lm_decrypt_key']) ? (string) $GLOBALS['lm_decrypt_key'] : '';
     }
 }
 

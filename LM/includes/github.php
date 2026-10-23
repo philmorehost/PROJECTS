@@ -150,6 +150,8 @@ if (!function_exists('lm_github_default_token_state')) {
             'saved_at' => (string) lm_setting('github_token_saved_at', ''),
             'length' => 0,
             'raw_length' => strlen($stored),
+            'healed' => false,
+            'key_recovered' => false,
         );
 
         if ($stored === '') {
@@ -167,9 +169,25 @@ if (!function_exists('lm_github_default_token_state')) {
             return $out;
         }
 
+        // Decrypted with an older key (the key file was replaced by a deploy):
+        // re-encrypt under the current key so this only happens once.
+        $usedKey = lm_secret_used_for();
+        $currentKey = lm_app_secret();
+        $out['healed'] = false;
+
+        if ($usedKey !== '' && $usedKey !== $currentKey) {
+            $reencrypted = lm_encrypt($plain);
+            if ($reencrypted !== '' && lm_decrypt_with_key($reencrypted, $currentKey) === $plain) {
+                if (lm_update_setting(array('github_token' => $reencrypted))) {
+                    $out['healed'] = true;
+                }
+            }
+        }
+
         $out['state'] = 'ok';
         $out['masked'] = lm_github_mask_token($plain);
         $out['length'] = strlen($plain);
+        $out['key_recovered'] = ($usedKey !== '' && $usedKey !== $currentKey);
         return $out;
     }
 }
