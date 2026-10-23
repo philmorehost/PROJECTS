@@ -167,6 +167,15 @@ if (!function_exists('lm_public_header')) {
         $subtitle = isset($options['subtitle']) ? (string) $options['subtitle'] : 'Licence Manager';
         ?>
 <a class="lm-skip" href="#main">Skip to content</a>
+<noscript>
+    <style>
+        @media (max-width: 940px) {
+            .lm-menu-btn { display: none !important; }
+            .lm-nav { display: flex !important; flex-wrap: wrap; width: 100%; margin: 0 0 10px; }
+            .lm-header__inner { flex-wrap: wrap; }
+        }
+    </style>
+</noscript>
 <header class="lm-header">
     <div class="lm-wrap lm-header__inner">
         <a class="lm-brand" href="<?= htmlspecialchars(lm_public_url('index.php')) ?>">
