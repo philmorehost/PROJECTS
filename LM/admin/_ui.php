@@ -161,6 +161,22 @@ if (!function_exists('lm_admin_page_start')) {
         .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
         .progress-track { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
         .progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4f46e5, #06b6d4); transition: width .25s ease; }
+
+        /* Repository file tree (GitHub pull) */
+        .tree { border: 1px solid var(--line); border-radius: 12px; background: #fff; max-height: 420px; overflow: auto; }
+        .tree-row { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 12.5px; border-bottom: 1px solid #f6f8fc; line-height: 1.4; }
+        .tree-row:last-child { border-bottom: none; }
+        .tree-row:hover { background: #f8faff; }
+        .tree-row.is-dir { font-weight: 600; color: #1e293b; }
+        .tree-row .twisty { width: 18px; height: 18px; border: none; background: transparent; cursor: pointer; color: #64748b; font-size: 10px; padding: 0; flex: 0 0 18px; display: grid; place-items: center; }
+        .tree-row .twisty.empty { visibility: hidden; }
+        .tree-row input[type="checkbox"] { accent-color: var(--indigo); width: 14px; height: 14px; flex: 0 0 auto; margin: 0; cursor: pointer; }
+        .tree-row .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+        .tree-row .fmeta { color: #94a3b8; font-size: 10.5px; flex: 0 0 auto; }
+        .tree-row .fcount { color: #94a3b8; font-size: 10.5px; font-weight: 500; flex: 0 0 auto; }
+        .tree-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .tree-status { font-size: 11.5px; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 7px 10px; margin-top: 10px; line-height: 1.55; }
+        .tree-status strong { color: #0f172a; }
         @media (max-width: 980px) {
             body { flex-direction: column; }
             .sidebar { position: relative; width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; padding: 18px 14px; }
@@ -170,6 +186,51 @@ if (!function_exists('lm_admin_page_start')) {
             .main { margin-left: 0; width: 100%; padding: 24px 18px 50px; }
         }
     </style>
+    <script>
+        /* Shared helpers — defined in <head> so page scripts can use them. */
+        const LM_CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        function escapeHtml(value) {
+            return String(value === undefined || value === null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function toast(message, kind) {
+            const el = document.getElementById('toast');
+            if (!el) { console.log(message); return; }
+            el.textContent = message;
+            el.className = 'toast show ' + (kind || '');
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => { el.className = 'toast'; }, 7000);
+        }
+
+        async function lmPost(url, data) {
+            const fd = new FormData();
+            Object.keys(data || {}).forEach(key => {
+                const value = data[key];
+                if (Array.isArray(value)) {
+                    value.forEach(item => {
+                        if (item !== undefined && item !== null) fd.append(key, item);
+                    });
+                } else if (value !== undefined && value !== null) {
+                    fd.append(key, value);
+                }
+            });
+            fd.append('csrf_token', LM_CSRF);
+            try {
+                const response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+                const text = await response.text();
+                try { return JSON.parse(text); }
+                catch (e) { return { status: 'error', message: 'Unexpected server response: ' + text.slice(0, 300) }; }
+            } catch (e) {
+                return { status: 'error', message: 'Network error: ' + e.message };
+            }
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    </script>
 </head>
 <body>
     <aside class="sidebar">
@@ -203,40 +264,6 @@ if (!function_exists('lm_admin_page_end')) {
     <div class="toast" id="toast"></div>
 
     <script>
-        const LM_CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        function toast(message, kind) {
-            const el = document.getElementById('toast');
-            el.textContent = message;
-            el.className = 'toast show ' + (kind || '');
-            clearTimeout(window.__toastTimer);
-            window.__toastTimer = setTimeout(() => { el.className = 'toast'; }, 7000);
-        }
-
-        function escapeHtml(value) {
-            return String(value === undefined || value === null ? '' : value)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-        }
-
-        async function lmPost(url, data) {
-            const fd = new FormData();
-            Object.keys(data || {}).forEach(key => {
-                if (data[key] !== undefined && data[key] !== null) fd.append(key, data[key]);
-            });
-            fd.append('csrf_token', LM_CSRF);
-            try {
-                const response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
-                const text = await response.text();
-                try { return JSON.parse(text); }
-                catch (e) { return { status: 'error', message: 'Unexpected server response: ' + text.slice(0, 300) }; }
-            } catch (e) {
-                return { status: 'error', message: 'Network error: ' + e.message };
-            }
-        }
-
-        function openModal(id) { document.getElementById(id).classList.add('open'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', event => { if (event.target === modal) modal.classList.remove('open'); });
         });

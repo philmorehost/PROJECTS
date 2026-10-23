@@ -342,11 +342,11 @@ function lm_zip_write_header($out, $name, $method, $crc, $compressedSize, $size,
  * @param string $source
  * @param string $destination
  * @param array  $options {
- *     strip_prefix: string  Remove this folder (and everything outside it)
- *     keep_prefix:  string  Only keep entries under this folder, then strip it
- *     add:          array   name => contents to add/replace
- *     remove:       array   list of names to drop
- *     drop_dotfiles: bool
+ *     wrapper: string  GitHub "owner-repo-sha" folder to strip (others dropped)
+ *     include: array   Exact archive paths to keep (empty = keep everything)
+ *     root:    string  Prefix removed after filtering, so its contents land at the root
+ *     add:     array   name => contents to add/replace
+ *     remove:  array   list of names to drop
  * }
  * @return array|false array{count:int, skipped:int, bytes:int}
  */
@@ -357,8 +357,19 @@ function lm_zip_copy($source, $destination, array $options = array())
         return false;
     }
 
-    $stripPrefix = isset($options['strip_prefix']) ? trim((string) $options['strip_prefix'], '/') : '';
-    $keepPrefix = isset($options['keep_prefix']) ? trim((string) $options['keep_prefix'], '/') : '';
+    // wrapper — GitHub's "owner-repo-sha/" folder. Files outside it are dropped.
+    $wrapper = isset($options['wrapper']) ? trim((string) $options['wrapper'], '/') : '';
+    // root — prefix removed after filtering (e.g. "LM" so its contents sit at the ZIP root).
+    $root = isset($options['root']) ? trim((string) $options['root'], '/') : '';
+    // include — exact archive paths to keep (folder selection is expanded by the caller).
+    $include = isset($options['include']) && is_array($options['include']) ? $options['include'] : array();
+    $includeSet = array();
+    foreach ($include as $name) {
+        $clean = lm_zip_clean_name($name);
+        if ($clean !== '') {
+            $includeSet[$clean] = true;
+        }
+    }
     $add = isset($options['add']) && is_array($options['add']) ? $options['add'] : array();
     $remove = isset($options['remove']) && is_array($options['remove']) ? $options['remove'] : array();
     $removeNames = array();
@@ -398,17 +409,21 @@ function lm_zip_copy($source, $destination, array $options = array())
             $skipped++;
             continue;
         }
-        // Order matters: drop the wrapper folder first (GitHub zipballs),
-        // then narrow down to the optional sub-directory (monorepos).
-        if ($stripPrefix !== '') {
-            $prefix = $stripPrefix . '/';
+        // 1. Drop GitHub's wrapper folder (and anything beside it).
+        if ($wrapper !== '') {
+            $prefix = $wrapper . '/';
             if (strpos($name, $prefix) !== 0) {
                 continue;
             }
             $name = substr($name, strlen($prefix));
         }
-        if ($keepPrefix !== '') {
-            $prefix = $keepPrefix . '/';
+        // 2. Keep only the selected files (repo-relative, post-wrapper).
+        if (!empty($includeSet) && !isset($includeSet[$name])) {
+            continue;
+        }
+        // 3. Re-root: strip the selected folder so its contents land at the ZIP root.
+        if ($root !== '') {
+            $prefix = $root . '/';
             if (strpos($name, $prefix) !== 0) {
                 continue;
             }

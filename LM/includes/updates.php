@@ -456,20 +456,27 @@ if (!function_exists('lm_zip_inject_manifest')) {
 
 if (!function_exists('lm_zip_rewrite')) {
     /**
-     * Re-pack a ZIP, optionally stripping the GitHub top-level folder and/or
-     * keeping only files below a sub-directory (monorepos).
+     * Re-pack a downloaded archive into an update package.
+     *
+     * Strips GitHub's wrapper folder, keeps only the selected files and
+     * re-roots the package so the selected folder's contents land at the ZIP
+     * root (that is what the target script expects).
      *
      * @param string $source
      * @param string $destination
-     * @param bool   $stripTopLevel
-     * @param string $onlyUnder   e.g. "backend" (kept, prefix removed)
+     * @param bool   $stripTopLevel  Remove the "owner-repo-sha/" wrapper
+     * @param string $onlyUnder      Legacy single sub-folder (kept + stripped)
      * @param int    $maxFiles
      * @param int    $maxBytes
-     * @return array{ok:bool,error:string,files:int,bytes:int}
+     * @param array  $options {
+     *     files:  array  Exact repo-relative paths to include (checked boxes)
+     *     root:   string Folder to strip after filtering (auto-detected)
+     * }
+     * @return array{ok:bool,error:string,files:int,bytes:int,root:string,skipped:int}
      */
-    function lm_zip_rewrite($source, $destination, $stripTopLevel = true, $onlyUnder = '', $maxFiles = 25000, $maxBytes = 524288000)
+    function lm_zip_rewrite($source, $destination, $stripTopLevel = true, $onlyUnder = '', $maxFiles = 25000, $maxBytes = 524288000, array $options = array())
     {
-        $out = array('ok' => false, 'error' => '', 'files' => 0, 'bytes' => 0);
+        $out = array('ok' => false, 'error' => '', 'files' => 0, 'bytes' => 0, 'root' => '', 'skipped' => 0);
 
         if (!lm_zip_available()) {
             $out['error'] = 'ZIP support is unavailable: the zlib extension is not enabled.';
@@ -485,14 +492,14 @@ if (!function_exists('lm_zip_rewrite')) {
             $out['error'] = 'Could not read the downloaded archive (corrupt, ZIP64, or not a ZIP).';
             return $out;
         }
-        if (count($entries) > $maxFiles) {
-            $out['error'] = 'Archive contains more than ' . $maxFiles . ' files.';
+        if (count($entries) > $maxFiles * 4) {
+            $out['error'] = 'Archive contains more than ' . ($maxFiles * 4) . ' entries.';
             return $out;
         }
 
-        // Work out which top-level folder names exist, so "strip the wrapper"
-        // does not silently drop sibling folders when the archive has no
-        // common root (e.g. a plain "zip -r update.zip *").
+        // Which top-level folders exist? A GitHub zipball has exactly one
+        // ("owner-repo-sha"); a hand-made archive may have several, in which
+        // case stripping would lose files, so it is left alone.
         $topLevels = array();
         foreach ($entries as $entry) {
             $name = lm_zip_clean_name($entry['name']);
@@ -502,17 +509,14 @@ if (!function_exists('lm_zip_rewrite')) {
             }
         }
 
-        $strip = '';
+        $wrapper = '';
         if ($stripTopLevel && count($topLevels) === 1) {
-            // GitHub zipballs wrap everything in "owner-repo-sha/". Only strip
-            // when *every* file lives below that folder, otherwise root files
-            // (a hand-made archive) would be lost.
             $candidate = (string) key($topLevels);
             $prefix = $candidate . '/';
             $allUnder = true;
             foreach ($entries as $entry) {
                 $check = lm_zip_clean_name($entry['name']);
-                if (substr($check, -1) === '/') {
+                if (substr($check, -1) === '/' || strpos($check, '__MACOSX/') === 0) {
                     continue;
                 }
                 if (strpos($check, $prefix) !== 0) {
@@ -521,13 +525,39 @@ if (!function_exists('lm_zip_rewrite')) {
                 }
             }
             if ($allUnder) {
-                $strip = $candidate;
+                $wrapper = $candidate;
+            }
+        }
+
+        // An explicit file list wins; otherwise fall back to the legacy
+        // "only under this folder" option.
+        $files = isset($options['files']) && is_array($options['files']) ? $options['files'] : array();
+        $root = isset($options['root']) ? trim(str_replace('\\', '/', (string) $options['root']), '/') : '';
+
+        if (empty($files) && trim((string) $onlyUnder) !== '') {
+            $root = trim(str_replace('\\', '/', (string) $onlyUnder), '/');
+        }
+
+        // If a file list is given without an explicit root, derive the root
+        // from the common parent directory of those files.
+        if (!empty($files) && $root === '') {
+            $root = lm_zip_common_root($files);
+        }
+
+        $include = array();
+        if (!empty($files)) {
+            foreach ($files as $file) {
+                $clean = lm_zip_clean_name($file);
+                if ($clean !== '' && lm_zip_is_safe_entry($clean)) {
+                    $include[] = $clean;
+                }
             }
         }
 
         $result = lm_zip_copy($source, $destination, array(
-            'strip_prefix' => $strip,
-            'keep_prefix' => trim((string) $onlyUnder, '/'),
+            'wrapper' => $wrapper,
+            'include' => $include,
+            'root' => $root,
         ));
 
         if (!$result) {
@@ -538,15 +568,25 @@ if (!function_exists('lm_zip_rewrite')) {
 
         if ($result['count'] < 1) {
             @unlink($destination);
-            $out['error'] = $onlyUnder !== ''
-                ? 'No files were found below "' . $onlyUnder . '" in the repository.'
-                : 'The repository archive appears to be empty.';
+            if (!empty($include)) {
+                $out['error'] = 'None of the selected files were found in the repository archive. Refresh the file list and try again.';
+            } elseif ($root !== '') {
+                $out['error'] = 'No files were found below "' . $root . '" in the repository.';
+            } else {
+                $out['error'] = 'The repository archive appears to be empty.';
+            }
+            return $out;
+        }
+
+        if ($result['count'] > $maxFiles) {
+            @unlink($destination);
+            $out['error'] = 'The selection contains ' . $result['count'] . ' files — the limit is ' . $maxFiles . '. Select fewer folders.';
             return $out;
         }
 
         if ($result['bytes'] > $maxBytes) {
             @unlink($destination);
-            $out['error'] = 'The unpacked package exceeds ' . lm_format_bytes($maxBytes) . '.';
+            $out['error'] = 'The unpacked package exceeds ' . lm_format_bytes($maxBytes) . '. Select fewer files.';
             return $out;
         }
 
@@ -555,7 +595,60 @@ if (!function_exists('lm_zip_rewrite')) {
         $out['ok'] = true;
         $out['files'] = (int) $result['count'];
         $out['bytes'] = (int) $result['bytes'];
+        $out['skipped'] = (int) $result['skipped'];
+        $out['root'] = $root;
         return $out;
+    }
+}
+
+if (!function_exists('lm_zip_common_root')) {
+    /**
+     * Deepest directory that contains every given path.
+     *
+     * lm_zip_common_root(array('LM/a.php', 'LM/b/c.php')) === 'LM'
+     * lm_zip_common_root(array('LM/a.php'))               === 'LM'
+     * lm_zip_common_root(array('LM/a.php', 'VTU/x.php'))  === ''
+     *
+     * @param array $paths
+     * @return string
+     */
+    function lm_zip_common_root(array $paths)
+    {
+        $common = null;
+
+        foreach ($paths as $path) {
+            $path = lm_zip_clean_name($path);
+            if ($path === '') {
+                continue;
+            }
+
+            $slash = strrpos($path, '/');
+            $dir = $slash === false ? '' : substr($path, 0, $slash);
+
+            if ($common === null) {
+                $common = $dir;
+                continue;
+            }
+            if ($common === '') {
+                return '';
+            }
+
+            $a = explode('/', $common);
+            $b = $dir === '' ? array() : explode('/', $dir);
+            $shared = array();
+
+            $limit = min(count($a), count($b));
+            for ($i = 0; $i < $limit; $i++) {
+                if ($a[$i] !== $b[$i]) {
+                    break;
+                }
+                $shared[] = $a[$i];
+            }
+
+            $common = implode('/', $shared);
+        }
+
+        return $common === null ? '' : $common;
     }
 }
 

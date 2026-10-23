@@ -420,6 +420,8 @@ if (!function_exists('lm_migration_notifications_github')) {
             'github_branch'           => "VARCHAR(120) NULL",
             'github_token'            => "TEXT NULL",
             'github_subdir'           => "VARCHAR(190) NULL",
+            'github_includes'         => "TEXT NULL",
+            'github_pulled_includes'  => "TEXT NULL",
             'github_version_source'   => "VARCHAR(20) NOT NULL DEFAULT 'auto_increment'",
             'github_increment'        => "VARCHAR(10) NOT NULL DEFAULT 'patch'",
             'github_changelog_format' => "VARCHAR(10) NOT NULL DEFAULT 'html'",
@@ -643,7 +645,26 @@ if (!function_exists('lm_schema_version')) {
      */
     function lm_schema_version()
     {
-        return '2026_10_23_notifications_github';
+        return '2026_10_23_github_paths';
+    }
+}
+
+if (!function_exists('lm_migration_github_paths')) {
+    /**
+     * Folder/file picker for GitHub pulls.
+     *
+     * `github_includes` stores the ticked paths as a JSON array, so a cron
+     * auto-pull repeats exactly the same selection without an admin present.
+     *
+     * @param PDO $pdo
+     * @return void
+     */
+    function lm_migration_github_paths(PDO $pdo)
+    {
+        lm_db_add_column($pdo, 'script_tiers', 'github_includes', "TEXT NULL");
+        lm_db_add_column($pdo, 'script_tiers', 'github_pulled_includes', "TEXT NULL");
+        lm_db_add_column($pdo, 'github_pulls', 'package_root', "VARCHAR(190) NULL");
+        lm_db_add_column($pdo, 'github_pulls', 'files_packaged', "INT NULL");
     }
 }
 
@@ -700,6 +721,7 @@ if (!function_exists('lm_run_migrations')) {
             '2026_10_23_base' => 'lm_migration_base',
             '2026_10_23_backfill_domains' => 'lm_migration_backfill_domains',
             '2026_10_23_notifications_github' => 'lm_migration_notifications_github',
+            '2026_10_23_github_paths' => 'lm_migration_github_paths',
         );
 
         foreach ($migrations as $version => $callback) {

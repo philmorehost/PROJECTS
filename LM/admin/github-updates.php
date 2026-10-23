@@ -112,8 +112,9 @@ lm_admin_page_start('GitHub Pull', 'github');
                         <div class="hint">Empty = repository default branch.</div>
                     </div>
                     <div class="field">
-                        <label for="githubSubdir">Sub-folder <span class="muted tiny">(monorepos)</span></label>
-                        <input class="input mono" type="text" id="githubSubdir" name="github_subdir" placeholder="backend">
+                        <label for="githubSubdir">Default folder <span class="muted tiny">(optional)</span></label>
+                        <input class="input mono" type="text" id="githubSubdir" name="github_subdir" placeholder="LM">
+                        <div class="hint">Applied to auto-pull. Pick it visually in the file tree on the right.</div>
                     </div>
                 </div>
                 <div class="field">
@@ -173,8 +174,40 @@ lm_admin_page_start('GitHub Pull', 'github');
         </div>
     </div>
 
-    <!-- PREVIEW / PULL -->
+    <!-- PICKER / PREVIEW / PULL -->
     <div>
+        <div class="card" style="margin:0 0 20px;">
+            <div class="card-head">
+                <div>
+                    <h2>What goes into the update</h2>
+                    <p>Tick the folders and files to package. One repository can hold every project.</p>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" id="reloadTreeBtn">↻ Load files</button>
+            </div>
+            <div class="card-body" style="padding-bottom:16px;">
+                <div class="tree-bar">
+                    <input class="input" type="text" id="treeSearch" placeholder="Filter files… (e.g. updates.php, .php)" style="flex:1;min-width:170px;padding:9px 12px;">
+                    <button class="btn btn-ghost btn-sm" type="button" id="selectAllBtn">Select all</button>
+                    <button class="btn btn-ghost btn-sm" type="button" id="clearSelBtn">Clear</button>
+                </div>
+
+                <div class="tree" id="treeBox">
+                    <div class="empty" style="padding:26px 18px;font-size:12.5px;">
+                        Press <strong>Load files</strong> to browse the repository.
+                    </div>
+                </div>
+
+                <div class="tree-status" id="treeStatus">
+                    No file list loaded yet.
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                    <button class="btn btn-ghost btn-sm" type="button" id="saveSelectionBtn">💾 Save selection</button>
+                    <button class="btn btn-ghost btn-sm" type="button" id="selectSubdirBtn">Select the “sub-folder” above</button>
+                </div>
+            </div>
+        </div>
+
         <div class="card" style="margin:0 0 20px;">
             <div class="card-head">
                 <div>
@@ -217,6 +250,381 @@ lm_admin_page_start('GitHub Pull', 'github');
         return PROJECTS.find(p => String(p.id) === String(id)) || null;
     }
 
+    /* =====================================================================
+     * Repository file picker
+     * =====================================================================
+     * Selection state is a set of file paths. Folder checkboxes tick/untick
+     * every descendant, and render as indeterminate when only part of the
+     * folder is picked. When the selection is sent to PHP it is compressed
+     * back into folder selectors, so a 5,000-file folder costs one entry.
+     */
+    const PICKER = {
+        loaded: false,
+        loading: false,
+        files: [],          // [{path, size}]
+        dirs: [],           // ['LM', 'LM/admin', ...]
+        children: {},       // dirPath -> { dirs: [], files: [] }
+        dirFiles: {},       // dirPath -> [file paths]
+        dirBytes: {},       // dirPath -> total bytes
+        expanded: new Set(),
+        selected: new Set(),
+        query: ''
+    };
+
+    function fmtBytes(bytes) {
+        bytes = Number(bytes) || 0;
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+        return (bytes / 1073741824).toFixed(2) + ' GB';
+    }
+
+    function dirOf(path) {
+        const i = path.lastIndexOf('/');
+        return i === -1 ? '' : path.slice(0, i);
+    }
+
+    function baseOf(path) {
+        const i = path.lastIndexOf('/');
+        return i === -1 ? path : path.slice(i + 1);
+    }
+
+    function buildIndex() {
+        PICKER.children = { '': { dirs: [], files: [] } };
+        PICKER.dirFiles = {};
+        PICKER.dirBytes = {};
+
+        PICKER.dirs.forEach(dir => {
+            if (!PICKER.children[dir]) PICKER.children[dir] = { dirs: [], files: [] };
+            PICKER.dirFiles[dir] = [];
+            PICKER.dirBytes[dir] = 0;
+            const parent = dirOf(dir);
+            if (!PICKER.children[parent]) PICKER.children[parent] = { dirs: [], files: [] };
+            PICKER.children[parent].dirs.push(dir);
+        });
+
+        PICKER.files.forEach(file => {
+            const parent = dirOf(file.path);
+            if (!PICKER.children[parent]) PICKER.children[parent] = { dirs: [], files: [] };
+            PICKER.children[parent].files.push(file);
+        });
+
+        // Descendant file list per folder (used by checkboxes and totals).
+        const dirsByDepth = PICKER.dirs.slice().sort((a, b) => b.split('/').length - a.split('/').length);
+        dirsByDepth.forEach(dir => {
+            PICKER.dirFiles[dir] = [];
+            PICKER.dirBytes[dir] = 0;
+            PICKER.children[dir].files.forEach(file => {
+                PICKER.dirFiles[dir].push(file.path);
+                PICKER.dirBytes[dir] += Number(file.size) || 0;
+            });
+            PICKER.children[dir].dirs.forEach(child => {
+                PICKER.dirFiles[dir] = PICKER.dirFiles[dir].concat(PICKER.dirFiles[child] || []);
+                PICKER.dirBytes[dir] += PICKER.dirBytes[child] || 0;
+            });
+        });
+
+        Object.keys(PICKER.children).forEach(dir => {
+            PICKER.children[dir].dirs.sort();
+            PICKER.children[dir].files.sort((a, b) => a.path.localeCompare(b.path));
+        });
+    }
+
+    function dirState(dir) {
+        const files = PICKER.dirFiles[dir] || [];
+        if (!files.length) return 'none';
+        let checked = 0;
+        files.forEach(path => { if (PICKER.selected.has(path)) checked++; });
+        if (checked === 0) return 'none';
+        return checked === files.length ? 'all' : 'some';
+    }
+
+    function toggleDir(dir, on) {
+        (PICKER.dirFiles[dir] || []).forEach(path => {
+            if (on) PICKER.selected.add(path); else PICKER.selected.delete(path);
+        });
+    }
+
+    function renderTree() {
+        const box = el('treeBox');
+        if (!PICKER.loaded) return;
+
+        if (!PICKER.files.length) {
+            box.innerHTML = '<div class="empty" style="padding:24px;font-size:12.5px;">The repository is empty on this branch.</div>';
+            return;
+        }
+
+        // Filter mode: flat list of matching files.
+        if (PICKER.query !== '') {
+            const term = PICKER.query.toLowerCase();
+            const matches = PICKER.files.filter(file => file.path.toLowerCase().indexOf(term) !== -1).slice(0, 400);
+            if (!matches.length) {
+                box.innerHTML = '<div class="empty" style="padding:24px;font-size:12.5px;">No file matches “' + escapeHtml(PICKER.query) + '”.</div>';
+                return;
+            }
+            let html = '';
+            matches.forEach(file => {
+                const on = PICKER.selected.has(file.path);
+                html += '<div class="tree-row">'
+                    + '<button class="twisty empty" type="button"></button>'
+                    + '<input type="checkbox" class="tree-check" data-type="file" data-path="' + escapeHtml(file.path) + '"' + (on ? ' checked' : '') + '>'
+                    + '<span class="fname" title="' + escapeHtml(file.path) + '">' + escapeHtml(file.path) + '</span>'
+                    + '<span class="fmeta">' + fmtBytes(file.size) + '</span>'
+                    + '</div>';
+            });
+            if (matches.length === 400) {
+                html += '<div class="tree-row" style="justify-content:center;color:#94a3b8;font-size:11px;">Showing the first 400 matches — refine the filter.</div>';
+            }
+            box.innerHTML = html;
+            return;
+        }
+
+        let html = '';
+        const root = PICKER.children[''] || { dirs: [], files: [] };
+
+        root.files.forEach(file => {
+            html += fileRow(file, 0);
+        });
+        root.dirs.forEach(dir => {
+            html += dirRows(dir, 0);
+        });
+
+        box.innerHTML = html;
+        syncIndeterminate();
+    }
+
+    function fileRow(file, depth) {
+        const on = PICKER.selected.has(file.path);
+        return '<div class="tree-row" style="padding-left:' + (10 + depth * 16) + 'px;">'
+            + '<button class="twisty empty" type="button"></button>'
+            + '<input type="checkbox" class="tree-check" data-type="file" data-path="' + escapeHtml(file.path) + '"' + (on ? ' checked' : '') + '>'
+            + '<span class="fname" title="' + escapeHtml(file.path) + '">' + escapeHtml(baseOf(file.path)) + '</span>'
+            + '<span class="fmeta">' + fmtBytes(file.size) + '</span>'
+            + '</div>';
+    }
+
+    function dirRows(dir, depth) {
+        const expanded = PICKER.expanded.has(dir);
+        const count = (PICKER.dirFiles[dir] || []).length;
+        const state = dirState(dir);
+
+        let html = '<div class="tree-row is-dir" style="padding-left:' + (10 + depth * 16) + 'px;">'
+            + '<button class="twisty" type="button" data-toggle="' + escapeHtml(dir) + '">' + (expanded ? '▼' : '▶') + '</button>'
+            + '<input type="checkbox" class="tree-check" data-type="dir" data-path="' + escapeHtml(dir) + '"'
+            + (state === 'all' ? ' checked' : '') + ' data-state="' + state + '">'
+            + '<span class="fname" title="' + escapeHtml(dir) + '">' + escapeHtml(baseOf(dir)) + '</span>'
+            + '<span class="fcount">' + count + ' file' + (count === 1 ? '' : 's') + '</span>'
+            + '</div>';
+
+        if (expanded) {
+            const node = PICKER.children[dir] || { dirs: [], files: [] };
+            node.dirs.forEach(child => { html += dirRows(child, depth + 1); });
+            node.files.forEach(file => { html += fileRow(file, depth + 1); });
+        }
+
+        return html;
+    }
+
+    function syncIndeterminate() {
+        document.querySelectorAll('#treeBox .tree-check[data-type="dir"]').forEach(input => {
+            const state = dirState(input.getAttribute('data-path'));
+            input.checked = state === 'all';
+            input.indeterminate = state === 'some';
+        });
+    }
+
+    function projectRootField() {
+        return (el('githubSubdir').value || '').trim().replace(/^\/+|\/+$/g, '');
+    }
+
+    function selectionSummary() {
+        if (!PICKER.loaded) return { count: 0, bytes: 0, root: '', selectors: [], all: false };
+
+        let count = 0;
+        let bytes = 0;
+        const sizes = {};
+
+        PICKER.files.forEach(file => { sizes[file.path] = Number(file.size) || 0; });
+        PICKER.selected.forEach(path => {
+            if (sizes[path] !== undefined) {
+                count++;
+                bytes += sizes[path];
+            }
+        });
+
+        // Compress full folders into single selectors.
+        const selectors = [];
+        const covered = new Set();
+        const dirsByDepth = PICKER.dirs.slice().sort((a, b) => a.split('/').length - b.split('/').length);
+
+        dirsByDepth.forEach(dir => {
+            const files = PICKER.dirFiles[dir] || [];
+            if (!files.length) return;
+            let allSelected = true;
+            let alreadyCovered = true;
+            files.forEach(path => {
+                if (!PICKER.selected.has(path)) allSelected = false;
+                if (!covered.has(path)) alreadyCovered = false;
+            });
+            if (allSelected && !alreadyCovered) {
+                selectors.push(dir);
+                files.forEach(path => covered.add(path));
+            }
+        });
+
+        PICKER.selected.forEach(path => {
+            if (sizes[path] !== undefined && !covered.has(path)) selectors.push(path);
+        });
+
+        // Prefer the project's own folder when everything selected lives inside
+        // it, so ticking one file keeps its path (admin/updates.php) instead of
+        // collapsing it to the archive root.
+        const selectedFiles = Array.from(PICKER.selected);
+        let root = commonRoot(selectedFiles);
+        const projectRoot = projectRootField();
+
+        if (projectRoot && selectedFiles.length) {
+            const inside = selectedFiles.every(path => path.indexOf(projectRoot + '/') === 0);
+            if (inside) root = projectRoot;
+        }
+
+        return {
+            count: count,
+            bytes: bytes,
+            root: root,
+            selectors: selectors,
+            all: count === 0
+        };
+    }
+
+    function commonRoot(paths) {
+        if (!paths.length) return '';
+        let common = null;
+        paths.forEach(path => {
+            const dir = dirOf(path);
+            if (common === null) { common = dir; return; }
+            if (common === '') return;
+            const a = common.split('/');
+            const b = dir === '' ? [] : dir.split('/');
+            const shared = [];
+            const limit = Math.min(a.length, b.length);
+            for (let i = 0; i < limit; i++) {
+                if (a[i] !== b[i]) break;
+                shared.push(a[i]);
+            }
+            common = shared.join('/');
+        });
+        return common || '';
+    }
+
+    function updateStatus() {
+        const status = el('treeStatus');
+        if (!PICKER.loaded) {
+            status.innerHTML = 'No file list loaded yet.';
+            return;
+        }
+
+        const summary = selectionSummary();
+        const strip = summary.root ? summary.root + '/' : 'repository root';
+
+        if (summary.all) {
+            status.innerHTML = '⚠ Nothing ticked — the <strong>entire repository</strong> will be packaged '
+                + '(' + PICKER.files.length + ' files). Tick a folder to narrow it down.';
+        } else {
+            status.innerHTML = '📦 <strong>' + summary.count + '</strong> file' + (summary.count === 1 ? '' : 's')
+                + ' · ' + fmtBytes(summary.bytes)
+                + ' · root <strong>' + escapeHtml(strip) + '</strong>'
+                + (summary.root ? ' <span style="color:#64748b;">(files land at the ZIP root)</span>' : '')
+                + '<br><span style="color:#94a3b8;">Saved as ' + summary.selectors.length + ' selector'
+                + (summary.selectors.length === 1 ? '' : 's') + '</span>';
+        }
+    }
+
+    async function loadTree() {
+        if (!currentProject) return;
+        const button = el('reloadTreeBtn');
+        button.disabled = true;
+        button.textContent = 'Loading…';
+        PICKER.loading = true;
+
+        const result = await lmPost('ajax_github.php', { action: 'tree', tier_id: currentProject.id });
+
+        PICKER.loading = false;
+        button.disabled = false;
+        button.textContent = '↻ Load files';
+
+        if (result.status === 'error') {
+            el('treeBox').innerHTML = '<div class="banner banner-err" style="margin:12px;">' + escapeHtml(result.message) + '</div>';
+            el('treeStatus').textContent = 'Could not load the file list.';
+            return;
+        }
+
+        PICKER.files = result.files || [];
+        PICKER.dirs = result.dirs || [];
+        PICKER.selected = new Set();
+        PICKER.expanded = new Set();
+        PICKER.query = '';
+        el('treeSearch').value = '';
+        PICKER.loaded = true;
+
+        // Remember the project root so cron auto-pull and later pulls agree.
+        if (!projectRootField() && result.selection && result.selection.root) {
+            el('githubSubdir').value = result.selection.root;
+        }
+
+        buildIndex();
+
+        // Restore the saved selection, then fall back to the default folder.
+        const stored = (result.includes && result.includes.length) ? result.includes : [];
+        if (stored.length) {
+            stored.forEach(selector => selectPath(selector, true));
+        } else if (result.selection && result.selection.root) {
+            selectPath(result.selection.root, true);
+        }
+
+        // Open the first two levels so the structure is obvious.
+        PICKER.dirs.forEach(dir => {
+            if (dir.split('/').length <= 2) PICKER.expanded.add(dir);
+        });
+
+        renderTree();
+        updateStatus();
+
+        if (result.truncated) {
+            el('treeStatus').innerHTML += '<br><span style="color:#b45309;">This repository is very large — use the filter box; only the first '
+                + PICKER.files.length + ' entries were loaded.</span>';
+        }
+    }
+
+    function selectPath(path, expand) {
+        path = String(path || '').replace(/^\/+|\/+$/g, '');
+        if (!path) return false;
+
+        let matched = false;
+
+        if (PICKER.dirFiles[path]) {
+            toggleDir(path, true);
+            matched = true;
+        }
+
+        PICKER.files.forEach(file => {
+            if (file.path === path || file.path.indexOf(path + '/') === 0) {
+                PICKER.selected.add(file.path);
+                matched = true;
+            }
+        });
+
+        if (expand && matched) {
+            let dir = PICKER.dirFiles[path] ? path : dirOf(path);
+            while (dir) {
+                PICKER.expanded.add(dir);
+                dir = dirOf(dir);
+            }
+        }
+
+        return matched;
+    }
+
     function fillForm(project) {
         el('githubRepo').value = project.repo || '';
         el('githubBranch').value = project.branch || '';
@@ -244,9 +652,22 @@ lm_admin_page_start('GitHub Pull', 'github');
         currentProject = projectById(id);
         if (!currentProject) return;
         fillForm(currentProject);
+
+        PICKER.loaded = false;
+        PICKER.files = [];
+        PICKER.dirs = [];
+        PICKER.selected = new Set();
+        PICKER.expanded = new Set();
+        el('treeBox').innerHTML = '<div class="empty" style="padding:26px 18px;font-size:12.5px;">Press <strong>Load files</strong> to browse the repository.</div>';
+        el('treeStatus').textContent = 'No file list loaded yet.';
+
         el('previewBody').innerHTML = '<div class="empty" style="padding:30px 0;">Loading preview…</div>';
         loadPreview();
         loadPulls();
+
+        if (currentProject.repo_full) {
+            loadTree();
+        }
     }
 
     el('tierSelect').addEventListener('change', function () { selectProject(this.value); });
@@ -257,6 +678,13 @@ lm_admin_page_start('GitHub Pull', 'github');
         data.action = 'save_config';
         data.tier_id = currentProject.id;
         data.github_auto_pull = el('githubAutoPull').checked ? '1' : '0';
+
+        // Persist the ticked folders/files (cron auto-pull repeats them).
+        const summary = selectionSummary();
+        summary.selectors.forEach(selector => {
+            if (!Array.isArray(data['github_includes[]'])) data['github_includes[]'] = [];
+            data['github_includes[]'].push(selector);
+        });
 
         const result = await lmPost('ajax_github.php', data);
         toast(result.message, result.status === 'error' ? 'err' : 'ok');
@@ -278,6 +706,119 @@ lm_admin_page_start('GitHub Pull', 'github');
             currentProject.has_token = false;
             el('tokenBadge').textContent = 'No token';
             el('tokenBadge').className = 'badge badge-slate';
+        }
+    });
+
+    /* ---------- tree interactions ---------- */
+    el('reloadTreeBtn').addEventListener('click', loadTree);
+
+    el('treeBox').addEventListener('click', function (event) {
+        const twisty = event.target.closest('.twisty');
+        if (twisty && twisty.dataset.toggle) {
+            const dir = twisty.dataset.toggle;
+            if (PICKER.expanded.has(dir)) PICKER.expanded.delete(dir); else PICKER.expanded.add(dir);
+            renderTree();
+            updateStatus();
+        }
+    });
+
+    el('treeBox').addEventListener('change', function (event) {
+        const input = event.target.closest('.tree-check');
+        if (!input) return;
+
+        const path = input.dataset.path;
+        if (input.dataset.type === 'dir') {
+            toggleDir(path, input.checked);
+
+            // First tick on a folder seeds the project root.
+            if (input.checked && !projectRootField()) {
+                el('githubSubdir').value = path;
+            }
+        } else if (input.checked) {
+            PICKER.selected.add(path);
+        } else {
+            PICKER.selected.delete(path);
+        }
+
+        renderTree();
+        updateStatus();
+        schedulePreviewRefresh();
+    });
+
+    el('treeSearch').addEventListener('input', function () {
+        PICKER.query = this.value.trim();
+        renderTree();
+    });
+
+    el('selectAllBtn').addEventListener('click', function () {
+        if (!PICKER.loaded) return;
+        if (PICKER.query !== '') {
+            const term = PICKER.query.toLowerCase();
+            PICKER.files.forEach(file => {
+                if (file.path.toLowerCase().indexOf(term) !== -1) PICKER.selected.add(file.path);
+            });
+        } else {
+            PICKER.files.forEach(file => PICKER.selected.add(file.path));
+        }
+        renderTree();
+        updateStatus();
+        schedulePreviewRefresh();
+    });
+
+    el('clearSelBtn').addEventListener('click', function () {
+        PICKER.selected = new Set();
+        renderTree();
+        updateStatus();
+        schedulePreviewRefresh();
+    });
+
+    el('selectSubdirBtn').addEventListener('click', function () {
+        if (!PICKER.loaded) {
+            toast('Load the file list first.', 'err');
+            return;
+        }
+        const value = el('githubSubdir').value.trim();
+        if (!value) {
+            toast('Type a folder in “Default folder” first, e.g. LM', 'err');
+            return;
+        }
+        PICKER.selected = new Set();
+        if (!selectPath(value, true)) {
+            toast('“' + value + '” is not in this repository.', 'err');
+        }
+        renderTree();
+        updateStatus();
+        schedulePreviewRefresh();
+    });
+
+    el('saveSelectionBtn').addEventListener('click', async function () {
+        if (!currentProject) return;
+        if (!PICKER.loaded) {
+            toast('Load the file list first.', 'err');
+            return;
+        }
+
+        const summary = selectionSummary();
+        const data = {
+            action: 'save_config',
+            tier_id: currentProject.id,
+            github_repo: currentProject.repo || '',
+            github_branch: el('githubBranch').value.trim(),
+            github_subdir: summary.root,
+            github_version_source: el('githubVersionSource').value,
+            github_increment: el('githubIncrement').value,
+            github_changelog_format: el('githubChangelogFormat').value,
+            github_changelog_mode: el('githubChangelogMode').value,
+            github_auto_pull: el('githubAutoPull').checked ? '1' : '0'
+        };
+        data['github_includes[]'] = summary.selectors;
+
+        const result = await lmPost('ajax_github.php', data);
+        toast(result.message, result.status === 'error' ? 'err' : 'ok');
+        if (result.status !== 'error') {
+            currentProject.includes = summary.selectors;
+            currentProject.subdir = summary.root;
+            el('githubSubdir').value = summary.root;
         }
     });
 
@@ -312,10 +853,29 @@ lm_admin_page_start('GitHub Pull', 'github');
         toast('Repository reachable.', 'ok');
     });
 
-    async function loadPreview() {
+    let previewTimer = null;
+
+    function schedulePreviewRefresh() {
+        if (!currentProject || !PICKER.loaded) return;
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => { loadPreview(true); }, 600);
+    }
+
+    async function loadPreview(silent) {
         if (!currentProject) return;
-        el('previewBtn').disabled = true;
-        const result = await lmPost('ajax_github.php', { action: 'preview', tier_id: currentProject.id });
+        if (!silent) {
+            el('previewBtn').disabled = true;
+        }
+
+        const summary = selectionSummary();
+        const payload = { action: 'preview', tier_id: currentProject.id };
+        if (PICKER.loaded && summary.count > 0) {
+            payload['paths[]'] = summary.selectors;
+        } else if (PICKER.loaded) {
+            payload.selection_cleared = '1';
+        }
+
+        const result = await lmPost('ajax_github.php', payload);
         el('previewBtn').disabled = false;
 
         if (result.status === 'error') {
@@ -338,6 +898,9 @@ lm_admin_page_start('GitHub Pull', 'github');
         if (data.up_to_date) {
             html += '<div class="banner banner-ok" style="margin-bottom:16px;">✓ Branch is already published at this commit. '
                 + '<span class="tiny">Nothing to pull.</span></div>';
+        } else if (data.selection_changed) {
+            html += '<div class="banner banner-info" style="margin-bottom:16px;">ℹ This commit was already published, but the selected files changed — '
+                + 'pulling publishes a new package with the current selection.</div>';
         }
 
         html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;">'
@@ -387,8 +950,25 @@ lm_admin_page_start('GitHub Pull', 'github');
             + '<small>One email per licence, plus a reminder the next day if the site has not reported the new version.</small></span>'
             + '</label>';
 
+        const summary = selectionSummary();
+        let packageLine = '';
+
+        if (!PICKER.loaded) {
+            packageLine = '<div class="tree-status" style="margin:0 0 16px;">Press <strong>Load files</strong> above to choose what goes into the package. '
+                + 'Until then the project\'s saved selection is used.</div>';
+        } else if (summary.all) {
+            packageLine = '<div class="tree-status" style="margin:0 0 16px;">⚠ Nothing ticked: the whole repository will be packaged ('
+                + PICKER.files.length + ' files). Tick folders above to narrow it down.</div>';
+        } else {
+            packageLine = '<div class="tree-status" style="margin:0 0 16px;">📦 Packaging <strong>' + summary.count + '</strong> file'
+                + (summary.count === 1 ? '' : 's') + ' · ' + fmtBytes(summary.bytes)
+                + (summary.root ? ' · root <strong>' + escapeHtml(summary.root + '/') + '</strong>' : '') + '</div>';
+        }
+
+        html += packageLine;
+
         html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-            + '<button class="btn btn-primary" type="button" id="pullBtn"' + (data.up_to_date ? '' : '') + '>🚀 Pull &amp; publish v' + escapeHtml(data.next_version) + '</button>'
+            + '<button class="btn btn-primary" type="button" id="pullBtn">🚀 Pull &amp; publish v' + escapeHtml(data.next_version) + '</button>'
             + '<button class="btn btn-ghost" type="button" id="forcePullBtn">Force re-publish</button>'
             + '</div>';
 
@@ -412,7 +992,9 @@ lm_admin_page_start('GitHub Pull', 'github');
         button.textContent = 'Pulling from GitHub…';
 
         const format = document.querySelector('input[name="pullFormat"]:checked');
-        const result = await lmPost('ajax_github.php', {
+        const summary = selectionSummary();
+
+        const payload = {
             action: 'pull',
             tier_id: currentProject.id,
             version: el('pullVersion').value,
@@ -420,8 +1002,20 @@ lm_admin_page_start('GitHub Pull', 'github');
             changelog_format: format ? format.value : 'html',
             increment: el('githubIncrement').value,
             notify: el('pullNotify').checked ? '1' : '0',
-            force: force ? '1' : '0'
-        });
+            force: force ? '1' : '0',
+            root: summary.root
+        };
+
+        if (PICKER.loaded) {
+            if (summary.count > 0) {
+                payload['paths[]'] = summary.selectors;
+            } else {
+                // Explicit: the admin cleared every tick on purpose.
+                payload.selection_cleared = '1';
+            }
+        }
+
+        const result = await lmPost('ajax_github.php', payload);
 
         button.disabled = false;
         button.textContent = original;
@@ -430,6 +1024,9 @@ lm_admin_page_start('GitHub Pull', 'github');
         if (result.status === 'success' && !result.up_to_date) {
             el('previewBody').innerHTML = '<div class="banner banner-ok" style="margin:0 0 14px;">✓ Published <strong>v'
                 + escapeHtml(result.version) + '</strong> from <code>' + escapeHtml(String(result.commit || '').slice(0, 7)) + '</code>. '
+                + (result.files_packaged ? '<strong>' + result.files_packaged + ' files</strong> packaged'
+                    + (result.package_root ? ' from <code>' + escapeHtml(result.package_root + '/') + '</code>' : '') + '. '
+                    : '')
                 + escapeHtml(result.bytes_human || '') + ' written to <code>' + escapeHtml(result.cpanel_dir || '') + '</code>.</div>'
                 + '<a class="btn btn-ghost" href="updates.php">View in Push Updates</a>';
             loadPulls();

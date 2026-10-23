@@ -13,6 +13,9 @@ Recent work (LM 8.1):
 - **GitHub Pull** (`LM/admin/github-updates.php`) — publish straight from a branch, public or
   private (personal access token, encrypted at rest). Version numbers increment automatically
   from the previous release and the changelog is generated from the commits.
+- **Folder tree picker** — one repository can hold every project. Open the branch tree, expand
+  folders, tick whole folders or individual files (select all / filter), and only those files
+  are packaged, re-rooted so the chosen folder's contents sit at the ZIP root.
 - **Customer notifications** (`LM/admin/update-notifications.php`) — a designed HTML e-mail on
   publish, plus one reminder the next day for anyone whose site has not reported the new version.
   Unsubscribe links are signed; delivery is retried with back-off.

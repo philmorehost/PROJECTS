@@ -44,6 +44,8 @@ ALTER TABLE `script_tiers`
     ADD COLUMN `github_branch` VARCHAR(100) NULL,
     ADD COLUMN `github_token` TEXT NULL,                  -- AES-256-GCM ciphertext
     ADD COLUMN `github_subdir` VARCHAR(190) NULL,
+    ADD COLUMN `github_includes` TEXT NULL,                  -- ticked folders/files (JSON)
+    ADD COLUMN `github_pulled_includes` TEXT NULL,           -- selection used for the last pull
     ADD COLUMN `github_version_source` VARCHAR(20) NOT NULL DEFAULT 'auto_increment',
     ADD COLUMN `github_increment` VARCHAR(10) NOT NULL DEFAULT 'patch',
     ADD COLUMN `github_changelog_format` VARCHAR(10) NOT NULL DEFAULT 'html',
@@ -143,6 +145,8 @@ CREATE TABLE IF NOT EXISTS `github_pulls` (
     `status` VARCHAR(20) NOT NULL DEFAULT 'success',
     `message` TEXT NULL,
     `pulled_by` VARCHAR(100) NULL,
+    `package_root` VARCHAR(190) NULL,
+    `files_packaged` INT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     KEY `idx_tier` (`tier_id`),
     KEY `idx_created` (`created_at`)
@@ -166,3 +170,4 @@ UPDATE `script_tiers` SET `is_active` = 1 WHERE `is_active` IS NULL;
 UPDATE `licenses` SET `notify_updates` = 1 WHERE `notify_updates` IS NULL;
 
 INSERT IGNORE INTO `schema_migrations` (`version`) VALUES ('2026_10_23_notifications_github');
+INSERT IGNORE INTO `schema_migrations` (`version`) VALUES ('2026_10_23_github_paths');

@@ -50,6 +50,22 @@ if ($action === 'save_config') {
         ? $_POST['github_changelog_mode'] : 'commits';
     $autoPull = !empty($_POST['github_auto_pull']) ? 1 : 0;
 
+    // Folder/file selection coming from the tree picker.
+    $includes = isset($_POST['github_includes']) ? $_POST['github_includes'] : array();
+    if (!is_array($includes)) {
+        $includes = preg_split('/[\r\n,]+/', (string) $includes);
+    }
+    $cleanIncludes = array();
+    foreach ($includes as $include) {
+        $include = trim(str_replace('\\', '/', (string) $include));
+        $include = trim($include, '/');
+        if ($include !== '' && strpos($include, '..') === false) {
+            $cleanIncludes[$include] = true;
+        }
+    }
+    $cleanIncludes = array_keys($cleanIncludes);
+    sort($cleanIncludes);
+
     if ($repoInput !== '') {
         $parsed = lm_github_parse_repo($repoInput);
         if (!$parsed) {
@@ -75,8 +91,12 @@ if ($action === 'save_config') {
         $tokenParams[] = lm_encrypt($tokenInput);
     }
 
+    $rootFromSelection = !empty($cleanIncludes) && function_exists('lm_zip_common_root')
+        ? lm_zip_common_root($cleanIncludes)
+        : '';
+
     $sql = "UPDATE script_tiers
-            SET github_repo = ?, github_branch = ?, github_subdir = ?,
+            SET github_repo = ?, github_branch = ?, github_subdir = ?, github_includes = ?,
                 github_version_source = ?, github_increment = ?,
                 github_changelog_format = ?, github_changelog_mode = ?, github_auto_pull = ?"
         . $tokenSql . "
@@ -84,7 +104,8 @@ if ($action === 'save_config') {
     $params = array_merge(array(
         $repoInput !== '' ? $repoInput : null,
         $branch !== '' ? $branch : null,
-        $subdir !== '' ? rtrim($subdir, '/') . '/' : null,
+        $subdir !== '' ? rtrim($subdir, '/') . '/' : ($rootFromSelection !== '' ? $rootFromSelection . '/' : null),
+        !empty($cleanIncludes) ? json_encode($cleanIncludes, JSON_UNESCAPED_SLASHES) : null,
         $versionSource,
         $increment,
         $changelogFormat,
@@ -104,6 +125,8 @@ if ($action === 'save_config') {
         'repo' => $repoInput,
         'branch' => $branch,
         'has_token' => $tokenInput !== '' || (!empty($_POST['clear_token']) ? false : !empty($tier['github_token'])),
+        'includes' => $cleanIncludes,
+        'package_root' => $rootFromSelection,
     ));
 }
 
@@ -147,7 +170,11 @@ if ($action === 'test') {
 }
 
 if ($action === 'preview') {
-    $preview = lm_github_preview($pdo, $tier);
+    $previewPaths = isset($_POST['paths'])
+        ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
+        : null;
+
+    $preview = lm_github_preview($pdo, $tier, array('paths' => $previewPaths));
 
     if (!$preview['ok']) {
         lm_json(array('status' => 'error', 'message' => $preview['error']));
@@ -172,6 +199,9 @@ if ($action === 'preview') {
         'changelog_html' => $preview['changelog_html'],
         'changelog_text' => $preview['changelog_text'],
         'last_pull_at' => $preview['last_pull_at'],
+        'includes' => $config['includes'],
+        'selection' => $preview['selection'],
+        'selection_changed' => $preview['selection_changed'],
     ));
 }
 
@@ -189,6 +219,9 @@ if ($action === 'pull') {
             'notify' => !isset($_POST['notify']) || (string) $_POST['notify'] !== '0',
             'force' => !empty($_POST['force']),
             'ref' => trim((string) ($_POST['ref'] ?? '')),
+            'paths' => isset($_POST['paths'])
+                ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
+                : (isset($_POST['selection_cleared']) ? array() : null),
         ));
     } catch (Exception $e) {
         lm_json(array('status' => 'error', 'message' => 'Pull failed: ' . $e->getMessage()));
@@ -236,6 +269,68 @@ if ($action === 'pull') {
         'zip_path' => $result['zip_path'],
         'cpanel_dir' => $result['cpanel_dir'],
         'notifications' => $result['notifications'],
+        'package_root' => $result['package_root'],
+        'files_packaged' => $result['files_selected'],
+    ));
+}
+
+if ($action === 'tree') {
+    if (!lm_github_available()) {
+        lm_json(array('status' => 'error', 'message' => 'Enable the PHP cURL extension to browse the repository.'));
+    }
+
+    $config = lm_github_tier_config($tier);
+
+    if ($config['owner'] === '' || $config['repo'] === '') {
+        lm_json(array('status' => 'error', 'message' => 'Save a repository first, then load its files.'));
+    }
+
+    $info = lm_github_repo_info($config['owner'], $config['repo'], $config['token']);
+    if (!$info['ok']) {
+        lm_json(array('status' => 'error', 'message' => $info['error']));
+    }
+
+    $branch = $config['branch'] !== '' ? $config['branch'] : (string) ($info['data']['default_branch'] ?? 'main');
+    $ref = trim((string) ($_POST['ref'] ?? ''));
+    if ($ref === '') {
+        $ref = $branch;
+    }
+
+    $head = lm_github_branch_head($config['owner'], $config['repo'], $ref, $config['token']);
+    if (!$head['ok']) {
+        lm_json(array('status' => 'error', 'message' => $head['error']));
+    }
+
+    $tree = lm_github_tree($config['owner'], $config['repo'], $head['commit']['sha'], $config['token']);
+    if (!$tree['ok']) {
+        lm_json(array('status' => 'error', 'message' => $tree['error']));
+    }
+
+    $stored = isset($_POST['github_includes']) && is_array($_POST['github_includes'])
+        ? $_POST['github_includes']
+        : $config['includes'];
+
+    $selection = lm_github_expand_selection($tree['files'], $stored);
+
+    lm_json(array(
+        'status' => 'success',
+        'repo' => $info['data']['full_name'] ?? ($config['owner'] . '/' . $config['repo']),
+        'private' => !empty($info['data']['private']),
+        'branch' => $ref,
+        'commit' => $head['commit']['sha'],
+        'commit_short' => $head['commit']['short'],
+        'files' => $tree['files'],
+        'dirs' => $tree['dirs'],
+        'total' => $tree['total'],
+        'truncated' => $tree['truncated'],
+        'includes' => $config['includes'],
+        'selection' => array(
+            'root' => $selection['root'],
+            'files' => count($selection['files']),
+            'bytes' => $selection['bytes'],
+            'missing' => $selection['missing'],
+            'all' => $selection['all'],
+        ),
     ));
 }
 

@@ -541,6 +541,221 @@ if (!function_exists('lm_github_download_zipball')) {
     }
 }
 
+if (!function_exists('lm_github_tree')) {
+    /**
+     * List every file in a repository at a given commit.
+     *
+     * One API call (recursive git tree), so the admin can browse folders,
+     * expand them and tick exactly what goes into the update package.
+     *
+     * @param string $owner
+     * @param string $repo
+     * @param string $ref    Branch name, tag or commit SHA
+     * @param string $token
+     * @param int    $limit  Max entries to return to the browser
+     * @return array{ok:bool,error:string,files:array,dirs:array,truncated:bool,sha:string,total:int}
+     */
+    function lm_github_tree($owner, $repo, $ref, $token = '', $limit = 8000)
+    {
+        $out = array(
+            'ok' => false,
+            'error' => '',
+            'files' => array(),
+            'dirs' => array(),
+            'truncated' => false,
+            'sha' => '',
+            'total' => 0,
+        );
+
+        if ($owner === '' || $repo === '') {
+            $out['error'] = 'Repository is not configured.';
+            return $out;
+        }
+
+        $path = '/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
+            . '/git/trees/' . rawurlencode($ref) . '?recursive=1';
+        $res = lm_github_request($path, $token);
+
+        if (!$res['ok'] || !is_array($res['data']) || !isset($res['data']['tree'])) {
+            $out['error'] = $res['error'] !== '' ? $res['error'] : 'Could not read the repository file list.';
+            return $out;
+        }
+
+        $out['sha'] = (string) ($res['data']['sha'] ?? '');
+        $out['truncated'] = !empty($res['data']['truncated']);
+
+        $dirs = array();
+        $files = array();
+
+        foreach ($res['data']['tree'] as $node) {
+            if (!is_array($node) || empty($node['path'])) {
+                continue;
+            }
+            $pathName = lm_zip_clean_name($node['path']);
+            if ($pathName === '') {
+                continue;
+            }
+            $type = isset($node['type']) ? (string) $node['type'] : 'blob';
+
+            if ($type === 'tree') {
+                $dirs[$pathName] = true;
+                continue;
+            }
+            if ($type !== 'blob') {
+                continue; // submodules / symlinks we do not package
+            }
+
+            $out['total']++;
+            if (count($files) < $limit) {
+                $files[] = array(
+                    'path' => $pathName,
+                    'size' => isset($node['size']) ? (int) $node['size'] : 0,
+                );
+            }
+        }
+
+        // Folders that only exist implicitly (git trees list them anyway, but
+        // be safe for truncated responses).
+        foreach ($files as $file) {
+            $slash = strpos($file['path'], '/');
+            while ($slash !== false) {
+                $dirs[substr($file['path'], 0, $slash)] = true;
+                $slash = strpos($file['path'], '/', $slash + 1);
+            }
+        }
+
+        $dirList = array_keys($dirs);
+        sort($dirList);
+
+        $out['files'] = $files;
+        $out['dirs'] = $dirList;
+        $out['ok'] = true;
+
+        if (count($files) < $out['total']) {
+            $out['truncated'] = true;
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('lm_github_expand_selection')) {
+    /**
+     * Turn the admin's ticked folders/files into an exact list of files.
+     *
+     * A selector may be a file ("LM/index.php") or a folder ("LM/admin").
+     * The package root is the deepest directory common to every selected
+     * file, so a single folder is re-rooted (its contents land at the ZIP
+     * root) while a multi-folder selection keeps its structure.
+     *
+     * @param array  $blobs       array of array('path'=>string,'size'=>int)
+     * @param array  $selectors
+     * @param string $projectRoot Preferred package root (the project's folder)
+     * @return array{ok:bool,error:string,files:array,root:string,bytes:int,missing:array}
+     */
+    function lm_github_expand_selection(array $blobs, array $selectors, $projectRoot = '')
+    {
+        $result = array(
+            'ok' => true,
+            'error' => '',
+            'files' => array(),
+            'root' => '',
+            'bytes' => 0,
+            'missing' => array(),
+            'all' => false,
+        );
+
+        $normalised = array();
+        foreach ($selectors as $selector) {
+            $selector = lm_zip_clean_name($selector);
+            if ($selector === '') {
+                continue;
+            }
+            $normalised[$selector] = true;
+        }
+        $normalised = array_keys($normalised);
+
+        if (empty($normalised)) {
+            // No selection at all — the caller decides (whole repository).
+            $result['all'] = true;
+            foreach ($blobs as $blob) {
+                $result['files'][] = $blob['path'];
+                $result['bytes'] += (int) $blob['size'];
+            }
+            return $result;
+        }
+
+        $byPath = array();
+        foreach ($blobs as $blob) {
+            $byPath[$blob['path']] = (int) $blob['size'];
+        }
+
+        $picked = array();
+        $bytes = 0;
+
+        foreach ($normalised as $selector) {
+            $matched = false;
+
+            if (isset($byPath[$selector])) {
+                $picked[$selector] = true;
+                $bytes += $byPath[$selector];
+                $matched = true;
+            }
+
+            $prefix = $selector . '/';
+            foreach ($byPath as $filePath => $size) {
+                if (strpos($filePath, $prefix) === 0) {
+                    if (!isset($picked[$filePath])) {
+                        $bytes += $size;
+                    }
+                    $picked[$filePath] = true;
+                    $matched = true;
+                }
+            }
+
+            if (!$matched) {
+                $result['missing'][] = $selector;
+            }
+        }
+
+        if (count($result['missing']) === count($normalised) && empty($picked)) {
+            $result['ok'] = false;
+            $result['error'] = 'None of the selected folders exist in this branch. Refresh the file list and try again.';
+            return $result;
+        }
+
+        $files = array_keys($picked);
+        sort($files);
+
+        $result['files'] = $files;
+        $result['bytes'] = $bytes;
+
+        // Default: the deepest folder shared by every selected file.
+        $root = function_exists('lm_zip_common_root') ? lm_zip_common_root($files) : '';
+
+        // Prefer the project's own folder when the whole selection lives inside
+        // it. Ticking a single file (LM/admin/updates.php) must keep its path
+        // relative to LM/, not collapse it to the archive root.
+        $projectRoot = trim(str_replace('\\', '/', (string) $projectRoot), '/');
+        if ($projectRoot !== '' && !empty($files)) {
+            $insideProject = true;
+            foreach ($files as $file) {
+                if (strpos($file, $projectRoot . '/') !== 0) {
+                    $insideProject = false;
+                    break;
+                }
+            }
+            if ($insideProject) {
+                $root = $projectRoot;
+            }
+        }
+
+        $result['root'] = $root;
+
+        return $result;
+    }
+}
+
 if (!function_exists('lm_github_commit_category')) {
     /**
      * Map a conventional-commit prefix to a friendly section.
@@ -683,6 +898,88 @@ if (!function_exists('lm_github_build_changelog')) {
     }
 }
 
+if (!function_exists('lm_github_signature')) {
+    /**
+     * Canonical form of a stored selector list, so two identical selections
+     * compare equal regardless of order or JSON formatting.
+     *
+     * @param string $raw JSON array (or comma separated legacy value)
+     * @return string
+     */
+    function lm_github_signature($raw)
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $decoded = preg_split('/[\r\n,]+/', $raw);
+        }
+
+        $clean = array();
+        foreach ((array) $decoded as $item) {
+            $item = trim(str_replace('\\', '/', (string) $item), '/');
+            if ($item !== '') {
+                $clean[$item] = true;
+            }
+        }
+        $clean = array_keys($clean);
+        sort($clean);
+
+        return empty($clean) ? '' : json_encode($clean, JSON_UNESCAPED_SLASHES);
+    }
+}
+
+if (!function_exists('lm_github_tier_includes')) {
+    /**
+     * Stored file/folder selection for a project (the tree checkboxes).
+     *
+     * Falls back to the legacy single "sub-directory" value so projects
+     * configured before the picker existed keep working.
+     *
+     * @param array $tier
+     * @return array
+     */
+    function lm_github_tier_includes(array $tier)
+    {
+        $raw = isset($tier['github_includes']) ? (string) $tier['github_includes'] : '';
+        $list = array();
+
+        if (trim($raw) !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $list = $decoded;
+            } else {
+                // Tolerate a comma/newline separated value.
+                $list = preg_split('/[\r\n,]+/', $raw);
+            }
+        }
+
+        $clean = array();
+        foreach ((array) $list as $item) {
+            $item = trim(str_replace('\\', '/', (string) $item));
+            $item = trim($item, '/');
+            if ($item !== '' && strpos($item, '..') === false) {
+                $clean[$item] = true;
+            }
+        }
+
+        if (empty($clean)) {
+            $subdir = trim((string) ($tier['github_subdir'] ?? ''), '/');
+            if ($subdir !== '') {
+                $clean[$subdir] = true;
+            }
+        }
+
+        $clean = array_keys($clean);
+        sort($clean);
+
+        return $clean;
+    }
+}
+
 if (!function_exists('lm_github_tier_config')) {
     /**
      * Read + normalise the GitHub configuration of a tier.
@@ -700,6 +997,7 @@ if (!function_exists('lm_github_tier_config')) {
             'repo' => $parsed ? $parsed['repo'] : '',
             'branch' => trim((string) ($tier['github_branch'] ?? '')) !== '' ? trim((string) $tier['github_branch']) : ($parsed ? $parsed['branch'] : ''),
             'subdir' => trim((string) ($tier['github_subdir'] ?? '')),
+            'includes' => lm_github_tier_includes($tier),
             'token' => lm_github_tier_token($tier),
             'has_token' => trim((string) ($tier['github_token'] ?? '')) !== '',
             'increment' => in_array(($tier['github_increment'] ?? 'patch'), array('major', 'minor', 'patch'), true) ? $tier['github_increment'] : 'patch',
@@ -759,7 +1057,7 @@ if (!function_exists('lm_github_preview')) {
      * @param array $tier
      * @return array
      */
-    function lm_github_preview(PDO $pdo, array $tier)
+    function lm_github_preview(PDO $pdo, array $tier, array $options = array())
     {
         $config = lm_github_tier_config($tier);
 
@@ -802,7 +1100,32 @@ if (!function_exists('lm_github_preview')) {
         $preview['repo'] = $info['data'];
         $preview['branch'] = $branch;
         $preview['head'] = $head['commit'];
-        $preview['up_to_date'] = ($config['last_sha'] !== '' && $config['last_sha'] === $head['commit']['sha']);
+        // "Up to date" only when the commit AND the ticked folders match the
+        // last pull — changing the selection republishes the package.
+        $previewSelectors = $config['includes'];
+        if (isset($options['paths']) && is_array($options['paths'])) {
+            $previewSelectors = $options['paths'];
+        }
+        $previewClean = array();
+        foreach ((array) $previewSelectors as $selector) {
+            $selector = lm_zip_clean_name($selector);
+            if ($selector !== '' && strpos($selector, '..') === false) {
+                $previewClean[$selector] = true;
+            }
+        }
+        $previewClean = array_keys($previewClean);
+        sort($previewClean);
+
+        $previewSignature = empty($previewClean) ? '' : json_encode($previewClean, JSON_UNESCAPED_SLASHES);
+        $previewLast = lm_github_signature((string) ($tier['github_pulled_includes'] ?? ''));
+
+        $preview['up_to_date'] = ($config['last_sha'] !== ''
+            && $config['last_sha'] === $head['commit']['sha']
+            && $previewLast === $previewSignature);
+        $preview['selection'] = $previewClean;
+        $preview['selection_changed'] = ($config['last_sha'] !== ''
+            && $config['last_sha'] === $head['commit']['sha']
+            && $previewLast !== $previewSignature);
 
         $commits = array();
         $files = array();
@@ -878,6 +1201,8 @@ if (!function_exists('lm_github_pull')) {
             'commit_title' => '',
             'notifications' => array(),
             'pull_id' => 0,
+            'package_root' => '',
+            'files_selected' => 0,
         );
 
         $stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
@@ -919,7 +1244,35 @@ if (!function_exists('lm_github_pull')) {
         $headSha = $head['commit']['sha'];
         $force = !empty($options['force']);
 
-        if (!$force && $config['last_sha'] !== '' && $config['last_sha'] === $headSha) {
+        /* Which folders/files does the admin want in the package?
+         *   paths       → explicit list from the tree picker (may be empty = whole repo)
+         *   includes    → explicit list passed by another caller
+         *   (nothing)   → the saved selection for this project                       */
+        $requestedPaths = null;
+        if (isset($options['paths'])) {
+            $requestedPaths = is_array($options['paths']) ? $options['paths'] : preg_split('/[\r\n,]+/', (string) $options['paths']);
+        } elseif (array_key_exists('includes', $options)) {
+            $requestedPaths = is_array($options['includes']) ? $options['includes'] : array($options['includes']);
+        } else {
+            $requestedPaths = $config['includes'];
+        }
+
+        $selectors = array();
+        foreach ((array) $requestedPaths as $path) {
+            $clean = lm_zip_clean_name($path);
+            if ($clean !== '' && strpos($clean, '..') === false) {
+                $selectors[$clean] = true;
+            }
+        }
+        $selectors = array_keys($selectors);
+        sort($selectors);
+
+        $selectionSignature = empty($selectors) ? '' : json_encode($selectors, JSON_UNESCAPED_SLASHES);
+        $lastSignature = lm_github_signature((string) ($tier['github_pulled_includes'] ?? ''));
+
+        // Same commit AND same file selection → nothing to do. A different
+        // selection must still re-publish the package.
+        if (!$force && $config['last_sha'] !== '' && $config['last_sha'] === $headSha && $lastSignature === $selectionSignature) {
             $result['ok'] = true;
             $result['status'] = 'up_to_date';
             $result['message'] = 'Already up to date — no new commits on ' . $branch . ' since the last pull.';
@@ -980,6 +1333,50 @@ if (!function_exists('lm_github_pull')) {
             $changelogHtml = lm_safe_changelog_html($changelog);
         }
 
+        /* -----------------------------------------------------------------
+         * Folder / file selection
+         * -----------------------------------------------------------------
+         * The admin can tick any folders or files in the repository (a monorepo
+         * can hold many projects). The selection is expanded against the live
+         * tree so the package contains exactly those files, re-rooted so the
+         * chosen folder's contents sit at the ZIP root.
+         */
+        $filesToPackage = array();
+        $packageRoot = '';
+
+        if (!empty($selectors)) {
+            $tree = lm_github_tree($config['owner'], $config['repo'], $headSha, $config['token']);
+
+            if (!$tree['ok']) {
+                $result['message'] = 'Could not read the repository file list: ' . $tree['error'];
+                return $result;
+            }
+
+            $projectRoot = isset($options['root']) && trim((string) $options['root']) !== ''
+                ? trim((string) $options['root'])
+                : $config['subdir'];
+
+            $selection = lm_github_expand_selection($tree['files'], $selectors, $projectRoot);
+
+            if (!$selection['ok']) {
+                $result['message'] = $selection['error'];
+                return $result;
+            }
+
+            if (!empty($selection['missing'])) {
+                $result['message'] = 'These paths no longer exist in the branch: ' . implode(', ', array_slice($selection['missing'], 0, 5));
+                return $result;
+            }
+
+            $filesToPackage = $selection['files'];
+            $packageRoot = $selection['root'];
+
+            if (empty($filesToPackage)) {
+                $result['message'] = 'The selected folders contain no files.';
+                return $result;
+            }
+        }
+
         $tierDir = lm_tier_storage_dir($tier, true);
         $workDir = lm_storage_dir() . DIRECTORY_SEPARATOR . 'tmp';
         lm_ensure_dir($workDir, 0700);
@@ -993,7 +1390,10 @@ if (!function_exists('lm_github_pull')) {
             return $result;
         }
 
-        $rewrite = lm_zip_rewrite($downloadPath, $normalizedPath, true, $config['subdir']);
+        $rewrite = lm_zip_rewrite($downloadPath, $normalizedPath, true, '', 25000, 524288000, array(
+            'files' => $filesToPackage,
+            'root' => $packageRoot,
+        ));
         @unlink($downloadPath);
 
         if (!$rewrite['ok']) {
@@ -1048,16 +1448,33 @@ if (!function_exists('lm_github_pull')) {
             return $result;
         }
 
-        // Remember the pulled commit + audit trail.
+        // Remember the pulled commit, the selection (so auto-pull repeats it)
+        // and the audit trail.
         try {
-            $pdo->prepare("UPDATE script_tiers SET github_last_sha = ?, github_last_pull_at = NOW() WHERE id = ?")
-                ->execute(array($headSha, (int) $tier['id']));
+            $storedIncludes = null;
+            if (!empty($selectors)) {
+                $storedIncludes = json_encode(array_values($selectors), JSON_UNESCAPED_SLASHES);
+            }
+
+            $pdo->prepare(
+                "UPDATE script_tiers
+                 SET github_last_sha = ?, github_last_pull_at = NOW(),
+                     github_includes = ?,
+                     github_pulled_includes = ?
+                 WHERE id = ?"
+            )->execute(array(
+                $headSha,
+                $selectionSignature !== '' ? $selectionSignature : null,
+                $selectionSignature !== '' ? $selectionSignature : null,
+                (int) $tier['id'],
+            ));
 
             $pdo->prepare(
                 "INSERT INTO github_pulls
                     (tier_id, update_id, repository, branch, commit_sha, previous_sha, previous_version, version_number,
-                     commits_count, files_count, bytes, status, message, pulled_by, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', ?, ?, NOW())"
+                     commits_count, files_count, bytes, status, message, pulled_by, created_at,
+                     package_root, files_packaged)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', ?, ?, NOW(), ?, ?)"
             )->execute(array(
                 (int) $tier['id'],
                 (int) $publish['id'],
@@ -1068,10 +1485,12 @@ if (!function_exists('lm_github_pull')) {
                 $result['previous_version'] !== '' ? $result['previous_version'] : null,
                 $version,
                 count($commits),
-                count($files),
+                (int) $rewrite['files'] > 0 ? (int) $rewrite['files'] : count($files),
                 (int) $download['bytes'],
                 'Pulled via admin',
                 $_SESSION['admin_username'] ?? 'admin',
+                $rewrite['root'] !== '' ? $rewrite['root'] : null,
+                (int) $rewrite['files'],
             ));
             $result['pull_id'] = (int) $pdo->lastInsertId();
         } catch (PDOException $e) {
@@ -1092,6 +1511,9 @@ if (!function_exists('lm_github_pull')) {
         $result['commit_title'] = $head['commit']['title'];
         $result['notifications'] = $publish['notification_queue'] ?? array();
         $result['changelog'] = $changelogHtml;
+        $result['package_root'] = $rewrite['root'];
+        $result['files_selected'] = (int) $rewrite['files'];
+        $result['files_to_package'] = count($filesToPackage);
 
         lm_log('github', 'Pulled ' . $config['owner'] . '/' . $config['repo'] . '@' . $headSha . ' → v' . $version . ' (' . $result['bytes'] . ' bytes)');
 

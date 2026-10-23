@@ -94,6 +94,53 @@ Open **Admin → GitHub Pull**, choose a project, then:
 3. **Sub-folder** — for monorepos (e.g. `backend`). Only files below it are packaged.
 4. **Token** — required for private repositories.
 
+### Choosing what to package (folder tree picker)
+
+Most projects live in **one repository** — this one, for example, holds `LM/`,
+`VTU/` and every future project. After saving the repository settings, press
+**↻ Load files**: the LM reads the branch tree (one GitHub API call) and shows
+it as an expandable tree.
+
+* Click a folder name (or **▶**) to open it and see the files inside.
+* **Checkbox on a folder** → everything inside it. A partly-checked folder shows
+  the indeterminate dash and tells you how many files it holds.
+* **Checkbox on a file** → just that file. You can tick individual files in
+  different folders at once.
+* **Select all** / **Clear** and the filter box (e.g. `updates.php`, `.php`) act
+  on what you can see.
+* **💾 Save selection** stores the choice on the project, so a cron auto-pull
+  repeats exactly it.
+* The status line under the tree always shows the result:
+  `📦 148 files · 3.2 MB · root LM/` — plus how many selectors are stored.
+
+**How the package is rooted**
+
+The package root is the deepest folder shared by everything you ticked, and that
+prefix is removed:
+
+| Selection | ZIP contents |
+|---|---|
+| `LM` | `index.php`, `admin/…`, `includes/…` (LM's contents at the root) |
+| `LM/includes` | `mailer.php`, `zip.php`, … |
+| `LM/admin/updates.php` (single file, project folder `LM`) | `admin/updates.php` |
+| `LM` + `VTU` | `LM/…` and `VTU/…` (structure kept) |
+| `LM/index.php` + `VTU/app/Main.java` | `LM/index.php`, `VTU/app/Main.java` |
+| nothing ticked | the whole repository (wrapper folder removed) |
+
+Once a project has a **Default folder** (e.g. `LM`), the root is pinned to it as
+long as every ticked file lives inside it — so ticking one file keeps its path
+relative to the project instead of collapsing it to the archive root. Ticking
+files from two different projects falls back to the common parent (usually the
+repository root), keeping both trees intact.
+
+So a single tick gives you a clean, installable package, while a multi-project
+selection keeps its folders. The **Default folder** field on the left is the
+quick path: type `LM`, save, and auto-pull uses it — or press
+**Select the “sub-folder” above** to tick it in the tree.
+
+Changing only the selection (no new commits) still publishes a new package: the
+pull compares both the commit SHA and the stored selection.
+
 ### Creating the token
 
 * **Fine-grained token** (recommended): *Repository access* → the repository,
@@ -124,14 +171,18 @@ row.
 ### What the pull does
 
 1. `GET /repos/:owner/:repo` (validates the token and access)
-2. `GET /commits/:branch` and `POST /compare/:last..:head` (commits + files)
-3. `GET /repos/:owner/:repo/zipball/:sha` (token sent only to `api.github.com`; the
+2. `GET /git/trees/:sha?recursive=1` (the folder tree you tick) — skipped when
+   nothing is selected
+3. `GET /commits/:branch` and `POST /compare/:last..:head` (commits + files)
+4. `GET /repos/:owner/:repo/zipball/:sha` (token sent only to `api.github.com`; the
    signed `codeload` redirect is followed **without** credentials)
-4. Strips the GitHub wrapper folder, keeps the optional sub-folder
-5. Injects `manifest.json`
-6. Publishes through the same code path as a manual upload (checksum, DB row,
+5. Strips the GitHub wrapper folder, keeps **only the ticked paths**, removes the
+   common root
+6. Injects `manifest.json` at the package root
+7. Publishes through the same code path as a manual upload (checksum, DB row,
    notification queue)
-7. Records the result in `github_pulls` and updates `github_last_sha`
+8. Records the result (including `package_root` and `files_packaged`) in
+   `github_pulls` and updates `github_last_sha` / `github_pulled_includes`
 
 **Auto-pull** is opt-in per project. When enabled and `cron.php` runs, a new
 commit is published automatically (throttled to once every 30 minutes). Leave it
@@ -212,6 +263,9 @@ missing path is listed.
 | E-mails stay queued | Cron is not running. Open Licences (triggers the queue) or hit `cron.php?key=…`. |
 | `SQLSTATE[40001] … Deadlock` | Migrations now run once. If you still see it, check that `schema_migrations` exists and contains `2026_10_23_notifications_github`. |
 | GitHub `404` | Wrong `owner/repo`, or the token lacks **Contents: Read**. |
+| “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |
+| Package missing files you ticked | Check the file still exists on the branch and that it is a file (not a submodule). The pull result shows the packaged file count. |
+| Nothing packaged | No ticks = whole repository. Tick a folder if the ZIP is too big. |
 | GitHub `401` | Token expired or revoked. Save a new one. |
 | “ZIP support is unavailable” | Enable the PHP **zlib** extension on the host. |
 | Reminder not sent | Site already reports the new version, the customer unsubscribed, or `update_reminder_max` is 0. Check the delivery log for the reason. |
