@@ -291,7 +291,7 @@ $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_
 
 <section class="section">
 <?php if (isset($_SESSION["response"])): ?>
-    <div class="alert alert-info alert-dismissible fade show rounded-4"><?php echo $_SESSION["response"]; unset($_SESSION["response"]); ?><button class="btn-close" data-bs-dismiss="alert"></button></div>
+    <div class="alert alert-info alert-dismissible fade show rounded-4"><?php echo htmlspecialchars($_SESSION["response"], ENT_QUOTES, 'UTF-8'); unset($_SESSION["response"]); ?><button class="btn-close" data-bs-dismiss="alert"></button></div>
 <?php endif; ?>
 
 <div class="ai-header mb-4 shadow">

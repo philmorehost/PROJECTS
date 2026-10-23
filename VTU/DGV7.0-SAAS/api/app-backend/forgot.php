@@ -39,7 +39,15 @@ if (json_last_error() === JSON_ERROR_NONE) {
             $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "')");
             if (mysqli_num_rows($checkuser) == 1) {
                 $get_user_detail = mysqli_fetch_array($checkuser);
-                $new_user_password = substr(str_shuffle("1234567890abcdefghijklmnopqrstuvwxyz"), 0, 10);
+                // Generate a strong random password (12 chars from 62-char alphabet = ~3e22 combinations)
+                $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                $new_user_password = "";
+                for ($i = 0; $i < 12; $i++) {
+                    $new_user_password .= $chars[random_int(0, strlen($chars) - 1)];
+                }
+                // NOTE: MD5 is used here for mobile-app backward compatibility (the app sends
+                // md5(password) as the encoded-passkey and compares in SQL). The bcrypt migration
+                // requires updating the mobile apps first — see bc-security.php for details.
                 $new_user_password_hashed = md5($new_user_password);
 
                 $update_user_password = mysqli_query($connection_server, "UPDATE sas_users SET `password`='" . $new_user_password_hashed . "' WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "')");

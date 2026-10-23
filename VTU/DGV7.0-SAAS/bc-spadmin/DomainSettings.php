@@ -251,7 +251,7 @@
                     <div class="card-body p-4">
                         <?php if(isset($_SESSION['page_alert'])): ?>
                             <div class="alert alert-success alert-dismissible fade show border-0 rounded-3 small mb-4" role="alert">
-                                <i class="bi bi-check-circle-fill me-2"></i><?php echo $_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
+                                <i class="bi bi-check-circle-fill me-2"></i><?php echo htmlspecialchars($_SESSION['page_alert'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         <?php endif; ?>

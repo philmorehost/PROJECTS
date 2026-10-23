@@ -1,45 +1,97 @@
-# ── Performance: output compression & browser caching ──────────────────
-# Safe additions (wrapped in IfModule so they no-op if a module is absent).
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml
-</IfModule>
+# DGV7.0 — Root .htaccess
+# Security hardening: protect sensitive files, block directory listing,
+# enforce security headers, and prevent access to configuration files.
 
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType image/jpeg "access plus 1 month"
-    ExpiresByType image/png "access plus 1 month"
-    ExpiresByType image/gif "access plus 1 month"
-    ExpiresByType image/webp "access plus 1 month"
-    ExpiresByType image/svg+xml "access plus 1 month"
-    ExpiresByType text/css "access plus 1 week"
-    ExpiresByType application/javascript "access plus 1 week"
-    ExpiresByType font/woff2 "access plus 1 month"
-</IfModule>
+# ─── Block directory listing ───────────────────────────────────────────────────────────────────────
+Options -Indexes
 
-# ── Security hardening ─────────────────────────────────────────────────
-# Never serve these over HTTP. Installers can re-run migrations and create accounts, archives are not
-# content, and .log / .bak / .py leftovers leak credentials, customer data and internal logic.
-# NOTE: if you ever need to run the installer again, temporarily comment out the ^install rule.
-<FilesMatch "\.(zip|tar|gz|tgz|sql|log|bak|old|orig|swp|swo|py|sh|env|ini|yml|yaml)$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order allow,deny
-        Deny from all
-    </IfModule>
+# ─── Protect sensitive files and directories ──────────────────────────────────────────────────────
+# Block access to config files
+<FilesMatch "^(db-json|db-dtl|app-config|bc-config|bc-connect|bc-admin-config|bc-spadmin-config|bc-admin-config)\.php$">
+    Require all denied
 </FilesMatch>
 
-<FilesMatch "^(install.*|installer|setup|phpinfo|debug|diag|test|test_.*)\.php$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order allow,deny
-        Deny from all
-    </IfModule>
+# Block access to backup/sensitive directories
+RedirectMatch 403 ^/(backups?|logs?|tmp|temp|debug)/
+
+# Block access to common sensitive files
+<FilesMatch "\.(env|ini|log|sh|sql|bak|old|swp|swo|~|lock)$">
+    Require all denied
 </FilesMatch>
 
+# Block access to editor temp files
+<FilesMatch "\.(swp|swo|swn|bak)$">
+    Require all denied
+</FilesMatch>
+
+# Block access to IDE files
+<FilesMatch "(^\.vscode/|^\.idea/|\.vscode/|\.idea/|composer\.(lock|json))$">
+    Require all denied
+</FilesMatch>
+
+# ─── Security headers ──────────────────────────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    # Prevent MIME sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # XSS Protection (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Content Security Policy (moderate - allows inline styles for Bootstrap)
+    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'"
+
+    # Strict Transport Security (enable HTTPS)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+
+    # Permissions Policy
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+</IfModule>
+
+# ─── Block PHP execution in upload directories ─────────────────────────────────────────────────────
 <IfModule mod_rewrite.c>
-    RewriteRule ^(install|logs)/ - [F,L]
+    RewriteEngine On
+
+    # Block PHP execution in upload/image directories
+    RewriteRule ^(uploads?|uploaded-image|assets?|asset|images?|img|media)/.*\.php$ - [F,L]
+
+    # Block PHP execution in any non-PHP directory
+    RewriteCond %{REQUEST_URI} ^/[^/]+/[^/]+/[^/]+/.*\.php$
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ - [F,L]
 </IfModule>
+
+# ─── Prevent access to install directory after installation ───────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} ^/install/
+    RewriteCond %{DOCUMENT_ROOT}/install/install.php !-f
+    RewriteRule ^ - [F,L]
+</IfModule>
+
+# ─── Block common attack patterns in URLs ────────────────────────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Block SQL injection patterns
+    RewriteCond %{QUERY_STRING} (union|select|insert|update|delete|drop|create|alter|exec|script|benchmark|sleep|information_schema) [NC,OR]
+    RewriteCond %{QUERY_STRING} (\.\./|\.\.\\|%2e%2e%2f|%2e%2e%5c|%252e%252e%252f) [NC]
+    RewriteCond %{QUERY_STRING} (base64_decode|eval|assert|preg_replace|create_function) [NC]
+    RewriteRule ^ - [F,L]
+</IfModule>
+
+# ─── Block access to .git and version control directories ─────────────────────────────────────────
+RedirectMatch 403 ^\.git
+RedirectMatch 403 ^\.svn
+RedirectMatch 403 ^\.hg
+RedirectMatch 403 ^\.bzr
+
+# ─── Disable directory listing in specific directories ───────────────────────────────────────────
+<DirectoryMatch "^.*(backups?|logs?|tmp|temp|debug|cache)/">
+    Options -Indexes
+    Require all denied
+</DirectoryMatch>

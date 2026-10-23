@@ -348,11 +348,11 @@
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label small fw-bold">From</label>
-                                    <input name="start_date" type="date" value="<?php echo $_GET['start_date'] ?? ''; ?>" class="form-control" />
+                                    <input name="start_date" type="date" value="<?php echo htmlspecialchars($_GET['start_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="form-control" />
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label small fw-bold">To</label>
-                                    <input name="end_date" type="date" value="<?php echo $_GET['end_date'] ?? ''; ?>" class="form-control" />
+                                    <input name="end_date" type="date" value="<?php echo htmlspecialchars($_GET['end_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="form-control" />
                                 </div>
                                 <div class="col-md-3 d-flex gap-2">
                                     <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>

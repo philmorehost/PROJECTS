@@ -3,7 +3,6 @@ include_once("app-config.php");
 
 header("Content-Type: application/json");
 $incoming_post_request = file_get_contents("php://input");
-fwrite(fopen("forgot.txt", "a"), $incoming_post_request . "\n\n");
 $decode_post_request = json_decode($incoming_post_request, true);
 if (json_last_error() === JSON_ERROR_NONE) {
 
@@ -39,7 +38,12 @@ if (json_last_error() === JSON_ERROR_NONE) {
             $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "')");
             if (mysqli_num_rows($checkuser) == 1) {
                 $get_user_detail = mysqli_fetch_array($checkuser);
-                $new_user_password = substr(str_shuffle("1234567890abcdefghijklmnopqrstuvwxyz"), 0, 10);
+                // Generate a strong random password (12 chars from 62-char alphabet) 
+                $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                $new_user_password = "";
+                for ($i = 0; $i < 12; $i++) {
+                    $new_user_password .= $chars[random_int(0, strlen($chars) - 1)];
+                }
                 $new_user_password_hashed = md5($new_user_password);
 
                 $update_user_password = mysqli_query($connection_server, "UPDATE sas_users SET `password`='" . $new_user_password_hashed . "' WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "')");
@@ -72,10 +76,8 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 $status_msg = "Empty Username";
             }
         }
-        // fwrite(fopen("login.txt", "a"), $status_msg . "\n\n");
 
         $app_json = json_encode(array("json-status" => "success", "status" => $status_update, "status-msg" => $status_msg), true);
-        // fwrite(fopen("login.txt", "a"), $app_json . "\n\n");
     } else {
         //Website not registered
         $app_json = json_encode(array("json-status" => "failed", "status" => "failed", "status-msg" => "Website not registered"), true);

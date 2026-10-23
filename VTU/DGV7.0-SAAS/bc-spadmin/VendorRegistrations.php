@@ -9,13 +9,22 @@
 
         // Mark as Paid for manual deposit
         if($action == 'mark_paid') {
-            mysqli_query($connection_server, "UPDATE sas_pending_vendors SET payment_status='paid' WHERE id='$pending_id'") or die("Error marking as paid: " . mysqli_error($connection_server));
+            if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET payment_status='paid' WHERE id='$pending_id'")) {
+                error_log("[VendorReg] Error marking as paid: " . mysqli_error($connection_server));
+                $_SESSION["page_alert"] = "An error occurred. Please try again.";
+                header("Location: VendorRegistrations.php"); exit;
+            }
             $_SESSION['page_alert'] = "Vendor marked as paid.";
             header("Location: VendorRegistrations.php");
             exit();
         }
 
-        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error fetching pending vendor: " . mysqli_error($connection_server));
+        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'");
+        if (!$result) {
+            error_log("[VendorReg] Error fetching pending vendor: " . mysqli_error($connection_server));
+            $_SESSION["page_alert"] = "An error occurred. Please try again.";
+            header("Location: VendorRegistrations.php"); exit;
+        }
         if(mysqli_num_rows($result) > 0) {
             $pending_vendor = mysqli_fetch_assoc($result);
 
@@ -23,7 +32,8 @@
                 if(trim($pending_vendor['payment_status']) == 'paid') {
                     // 1. Get package details
                     $package_id = $pending_vendor['billing_package_id'];
-                    $package_result = mysqli_query($connection_server, "SELECT * FROM sas_billing_packages WHERE id='$package_id'") or die("Error fetching package details: " . mysqli_error($connection_server));
+                    $package_result = mysqli_query($connection_server, "SELECT * FROM sas_billing_packages WHERE id='$package_id'");
+                    if (!$package_result) { error_log("[VendorReg] Error fetching package: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
                     $package = mysqli_fetch_assoc($package_result);
                     $duration_days = $package['duration_days'];
 
@@ -80,16 +90,16 @@
 
                         // 4. Update vendor with subscription info
                         $update_sql = "UPDATE sas_vendors SET start_date='$start_date', expiry_date='$expiry_date', current_billing_id='$package_id' WHERE id='$new_vendor_id'";
-                        mysqli_query($connection_server, $update_sql) or die("Error updating vendor subscription: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, $update_sql)) { error_log("[VendorReg] Error updating subscription: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                         // 5. Log this initial subscription to the history table
                         $price = $package['price'];
                         $purchase_date = date('Y-m-d H:i:s');
                         $log_sql = "INSERT INTO sas_vendor_subscriptions (vendor_id, package_id, purchase_date, expiry_date, amount_paid) VALUES ('$new_vendor_id', '$package_id', '$purchase_date', '$expiry_date', '$price')";
-                        mysqli_query($connection_server, $log_sql) or die("Error logging subscription: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, $log_sql)) { error_log("[VendorReg] Error logging subscription: " . mysqli_error($connection_server)); }
 
                         // 6. Delete from pending vendors
-                        mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error deleting from pending vendors: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
 
                         // 6b. Add addon domain via cPanel API
                         include_once(__DIR__ . "/../func/cpanel-func.php");
@@ -167,7 +177,7 @@
                 $firstname = $pending_vendor['firstname'];
                 $lastname = $pending_vendor['lastname'];
 
-                mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error declining vendor: " . mysqli_error($connection_server));
+                if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                 // Send rejection email
                 $email_placeholders = array(
@@ -226,7 +236,7 @@
                         <?php if(isset($_SESSION['page_alert'])): ?>
                             <div class="px-4 pt-3">
                                 <div class="alert alert-info alert-dismissible fade show rounded-3 border-0 shadow-sm" role="alert">
-                                    <i class="bi bi-info-circle me-2"></i><?php echo $_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
+                                    <i class="bi bi-info-circle me-2"></i><?php echo htmlspecialchars($_SESSION['page_alert'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
                                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
                             </div>
@@ -251,7 +261,8 @@
                                                 FROM sas_pending_vendors pv
                                                 JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
                                                 ORDER BY pv.reg_date DESC";
-                                        $result = mysqli_query($connection_server, $sql) or die("Error fetching registration list: " . mysqli_error($connection_server));
+                                        $result = mysqli_query($connection_server, $sql);
+                                        if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
                                         $count = 1;
                                         if(mysqli_num_rows($result) > 0):
                                             while($row = mysqli_fetch_assoc($result)):
