@@ -719,8 +719,8 @@ if (!function_exists('bc_kyc_api_verifiable_checks')) {
 if (!function_exists('bc_kyc_provider_verify')) {
     /**
      * Verify a user's identity with the vendor's configured provider and, when the provider can prove
-     * everything that vendor requires, approve the account automatically - the same outcome VoveID's
-     * signed webhook produces.
+     * everything that vendor requires, approve the account automatically - the same outcome an
+     * identity provider's signed webhook produces.
      *
      * Policy (deliberate, money/access critical):
      *  - ONLY a definitive success may verify anything. A timeout, an unreadable reply or a name
@@ -894,6 +894,189 @@ if (!function_exists('bc_kyc_enabled_checks')) {
             if ((int)$status === 1 && $name !== '') $names[] = $name;
         }
         return $names;
+    }
+}
+
+// ─── AI KYC Compliance Engine: decision storage & logging ───────────────────────────────────────────
+
+if (!function_exists('bc_kyc_ai_store_result')) {
+    /**
+     * Store an AI KYC analysis result on the user row and optionally apply the decision.
+     *
+     * @param mysqli $connection_server
+     * @param int    $user_id
+     * @param int    $vendor_id
+     * @param array  $analysis  Full analysis result from bc_kyc_ai_analyze_all()
+     * @param bool   $auto_apply  Whether to apply the AI decision (set kyc_status)
+     * @return array ['stored' => bool, 'applied' => bool, 'decision' => array]
+     */
+    function bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, $auto_apply = false)
+    {
+        $decision = $analysis['decision'] ?? [];
+        $ai_status = $decision['status'] ?? 'error';
+        $reason = $decision['reason'] ?? '';
+        $confidence = (int)($decision['confidence'] ?? 0);
+        $kyc_status = (int)($decision['kyc_status'] ?? 0);
+        $tokens_used = (int)($analysis['total_tokens'] ?? 0);
+        $results_json = json_encode($analysis['results'] ?? [], JSON_UNESCAPED_UNICODE);
+
+        // Store the AI analysis on the user row
+        $decision_json = json_encode([
+            'decision' => $decision,
+            'results'  => $analysis['results'] ?? [],
+            'errors'   => $analysis['errors'] ?? [],
+        ], JSON_UNESCAPED_UNICODE);
+
+        mysqli_query($connection_server, "UPDATE sas_users SET
+            kyc_ai_status = '" . mysqli_real_escape_string($connection_server, $ai_status) . "',
+            kyc_ai_reason = '" . mysqli_real_escape_string($connection_server, $reason) . "',
+            kyc_ai_confidence = $confidence,
+            kyc_ai_decision = '" . mysqli_real_escape_string($connection_server, $decision_json) . "',
+            kyc_ai_analyzed_at = NOW(),
+            kyc_ai_tokens_used = $tokens_used
+            WHERE id='$user_id' AND vendor_id='$vendor_id'");
+
+        // Log to the audit table
+        bc_kyc_ai_log_result($connection_server, $user_id, $vendor_id, $analysis);
+
+        // Apply the decision if auto-apply is enabled and the AI recommends it
+        $applied = false;
+        if ($auto_apply && ($decision['auto_approved'] ?? false) === true) {
+            mysqli_query($connection_server, "UPDATE sas_users SET
+                kyc_status = $kyc_status,
+                kyc_reject_reason = '" . mysqli_real_escape_string($connection_server, $reason) . "',
+                kyc_approved_date = " . ($kyc_status === 2 ? "NOW()" : "NULL") . ",
+                kyc_reviewed_at = NOW()
+                WHERE id='$user_id' AND vendor_id='$vendor_id'");
+            $applied = true;
+        }
+
+        return [
+            'stored' => true,
+            'applied' => $applied,
+            'decision' => $decision,
+        ];
+    }
+}
+
+if (!function_exists('bc_kyc_ai_log_result')) {
+    /**
+     * Log an AI KYC analysis result to the audit table sas_kyc_ai_results.
+     *
+     * @param mysqli $connection_server
+     * @param int    $user_id
+     * @param int    $vendor_id
+     * @param array  $analysis  Full analysis result
+     */
+    function bc_kyc_ai_log_result($connection_server, $user_id, $vendor_id, $analysis)
+    {
+        $decision = $analysis['decision'] ?? [];
+        $billing = $analysis['billing'] ?? [];
+        $results_json = json_encode($analysis['results'] ?? [], JSON_UNESCAPED_UNICODE);
+
+        // Check if the audit table exists
+        $check = mysqli_query($connection_server, "SHOW TABLES LIKE 'sas_kyc_ai_results'");
+        if (!$check || mysqli_num_rows($check) === 0) return;
+
+        mysqli_query($connection_server, "INSERT INTO sas_kyc_ai_results (
+            vendor_id, user_id, username, ai_status, kyc_status, decision_reason, confidence,
+            ai_provider, ai_model, tokens_used, billing_markup, total_tokens, billed,
+            results_json, duration_ms
+        ) VALUES (
+            '$vendor_id', '$user_id', '" . mysqli_real_escape_string($connection_server, $analysis['username'] ?? '') . "',
+            '" . mysqli_real_escape_string($connection_server, $decision['status'] ?? 'error') . "',
+            '" . (int)($decision['kyc_status'] ?? 0) . "',
+            '" . mysqli_real_escape_string($connection_server, $decision['reason'] ?? '') . "',
+            '" . (int)($decision['confidence'] ?? 0) . "',
+            '" . mysqli_real_escape_string($connection_server, $analysis['provider'] ?? '') . "',
+            '" . mysqli_real_escape_string($connection_server, $analysis['model'] ?? '') . "',
+            '" . (int)($analysis['total_tokens'] ?? 0) . "',
+            '" . (int)($billing['markup_tokens'] ?? 0) . "',
+            '" . (int)($billing['total_tokens'] ?? 0) . "',
+            '" . (int)($billing['billed'] ?? 0) . "',
+            '" . mysqli_real_escape_string($connection_server, $results_json) . "',
+            '" . (int)($analysis['total_duration_ms'] ?? 0) . "'
+        )");
+    }
+}
+
+if (!function_exists('bc_kyc_ai_get_decision')) {
+    /**
+     * Get the current AI KYC decision for a user.
+     *
+     * @param mysqli $connection_server
+     * @param int    $user_id
+     * @return array|null  Decision array, or null if no AI analysis has been done
+     */
+    function bc_kyc_ai_get_decision($connection_server, $user_id)
+    {
+        $q = mysqli_query($connection_server, "SELECT kyc_ai_status, kyc_ai_reason, kyc_ai_confidence, kyc_ai_decision, kyc_ai_analyzed_at, kyc_ai_tokens_used FROM sas_users WHERE id='$user_id' LIMIT 1");
+        if (!$q) return null;
+        $row = mysqli_fetch_assoc($q);
+        if (!$row) return null;
+        if (empty($row['kyc_ai_status'])) return null;
+
+        $decision = json_decode($row['kyc_ai_decision'] ?? '', true);
+        if (!is_array($decision)) {
+            $decision = ['decision' => [], 'results' => [], 'errors' => []];
+        }
+
+        return [
+            'status' => $row['kyc_ai_status'],
+            'reason' => $row['kyc_ai_reason'] ?? '',
+            'confidence' => (int)($row['kyc_ai_confidence'] ?? 0),
+            'decision' => $decision['decision'] ?? [],
+            'results' => $decision['results'] ?? [],
+            'errors' => $decision['errors'] ?? [],
+            'analyzed_at' => $row['kyc_ai_analyzed_at'] ?? '',
+            'tokens_used' => (int)($row['kyc_ai_tokens_used'] ?? 0),
+        ];
+    }
+}
+
+if (!function_exists('bc_kyc_ai_check_satisfied')) {
+    /**
+     * Check whether an AI-verified KYC check is satisfied.
+     * This extends the standard check satisfaction with AI verification results.
+     *
+     * @param string $check  Check name (govt_id, liveliness_picture, etc.)
+     * @param array  $user   User data row
+     * @return bool  True if the check is satisfied by either file presence OR AI verification
+     */
+    function bc_kyc_ai_check_satisfied($check, $user)
+    {
+        // Standard file-based check first
+        if (bc_kyc_check_satisfied($check, $user)) {
+            return true;
+        }
+
+        // AI-verified check: look in the AI decision results
+        if (empty($user['kyc_ai_decision'])) {
+            return false;
+        }
+
+        $decision = json_decode($user['kyc_ai_decision'], true);
+        if (!is_array($decision)) {
+            return false;
+        }
+
+        $results = $decision['results'] ?? [];
+        $check_map = [
+            'govt_id'            => 'govt_id',
+            'liveliness_picture' => 'selfie',
+            'liveliness_video'   => 'liveliness_video',
+            'proof_of_address'   => 'proof_of_address',
+        ];
+
+        if (isset($check_map[$check]) && isset($results[$check_map[$check]])) {
+            $result = $results[$check_map[$check]];
+            if (($result['status'] ?? '') === 'success') {
+                // The AI verified this document
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

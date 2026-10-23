@@ -124,6 +124,9 @@ if (isset($_POST["update-ai-connection"])) {
     $provider = bc_sanitize($_POST["ai_provider"] ?? 'gemini');
     $key      = bc_sanitize($_POST["ai_api_key"] ?? '');
     $opts = ['ai_provider' => $provider, "ai_{$provider}_api_key" => $key, 'ai_api_key' => $key];
+    if ($provider === 'ollama') {
+        $opts['ai_ollama_url'] = bc_sanitize($_POST["ai_ollama_url"] ?? 'http://localhost:11434');
+    }
     
     // Cleanup any duplicates
     mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='ai_provider' AND id NOT IN (SELECT id FROM (SELECT MAX(id) as id FROM sas_super_admin_options WHERE option_name='ai_provider') x)");
@@ -134,6 +137,25 @@ if (isset($_POST["update-ai-connection"])) {
         mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('$esc_k', '$esc_v')");
     }
     $_SESSION["response"] = "✅ AI connection updated to " . ucfirst($provider) . ".";
+    unset($_SESSION['super_admin_options_cache']);
+    header("Location: AIManagement.php"); exit();
+}
+
+// ── Handle: Update Vision Configuration ──────────────────
+if (isset($_POST["update-vision-config"])) {
+    $vp = bc_sanitize($_POST["ai_vision_provider"] ?? '');
+    $vm = bc_sanitize($_POST["ai_vision_model"] ?? '');
+    if ($vp) {
+        mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('ai_vision_provider', '" . mysqli_real_escape_string($connection_server, $vp) . "')");
+    } else {
+        mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='ai_vision_provider'");
+    }
+    if ($vm) {
+        mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('ai_vision_model', '" . mysqli_real_escape_string($connection_server, $vm) . "')");
+    } else {
+        mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='ai_vision_model'");
+    }
+    $_SESSION["response"] = "✅ AI Vision configuration updated.";
     unset($_SESSION['super_admin_options_cache']);
     header("Location: AIManagement.php"); exit();
 }
@@ -164,6 +186,13 @@ $ai_key     = getSuperAdminOption('ai_api_key', '');
 $gemini_key   = getSuperAdminOption('ai_gemini_api_key', '');
 $deepseek_key = getSuperAdminOption('ai_deepseek_api_key', '');
 $groq_key     = getSuperAdminOption('ai_groq_api_key', '');
+$openai_key   = getSuperAdminOption('ai_openai_api_key', '');
+$anthropic_key = getSuperAdminOption('ai_anthropic_api_key', '');
+$ollama_url   = getSuperAdminOption('ai_ollama_url', 'http://localhost:11434');
+$hf_key       = getSuperAdminOption('ai_huggingface_api_key', '');
+// Vision provider for KYC document analysis (separate from text provider)
+$vision_provider = getSuperAdminOption('ai_vision_provider', '');
+$vision_model    = getSuperAdminOption('ai_vision_model', '');
 
 $ai = ai_engine();
 $ai_up = $ai->isAiOnline();
@@ -180,12 +209,44 @@ if ($ai_provider === 'gemini') {
         ['name' => 'deepseek-chat',    'size' => 'Cloud', 'desc' => 'Powerful reasoning & chat model.',        'tier' => 'Premium'],
         ['name' => 'deepseek-coder',   'size' => 'Cloud', 'desc' => 'Specialized for technical & logic tasks.', 'tier' => 'Standard'],
     ];
+} elseif ($ai_provider === 'openai') {
+    $model_catalog = [
+        ['name' => 'gpt-4o-mini',     'size' => 'Cloud', 'desc' => 'Fast & affordable, great for most tasks.',     'tier' => 'Standard'],
+        ['name' => 'gpt-4o',          'size' => 'Cloud', 'desc' => 'Multimodal flagship, excellent for vision.',    'tier' => 'Premium'],
+        ['name' => 'gpt-4-turbo',     'size' => 'Cloud', 'desc' => 'High intelligence for complex reasoning.',      'tier' => 'Premium'],
+    ];
+} elseif ($ai_provider === 'anthropic') {
+    $model_catalog = [
+        ['name' => 'claude-3-5-sonnet-latest', 'size' => 'Cloud', 'desc' => 'Best for complex reasoning & vision.', 'tier' => 'Premium'],
+        ['name' => 'claude-3-haiku-latest',    'size' => 'Cloud', 'desc' => 'Fast & affordable, good for most tasks.', 'tier' => 'Standard'],
+    ];
+} elseif ($ai_provider === 'ollama') {
+    $model_catalog = [
+        ['name' => 'llama3.2:3b',      'size' => 'Local', 'desc' => 'Lightweight, runs on modest hardware.',    'tier' => 'Free'],
+        ['name' => 'llama3.1:8b',      'size' => 'Local', 'desc' => 'Good balance of speed and capability.',    'tier' => 'Free'],
+        ['name' => 'qwen2.5:7b',       'size' => 'Local', 'desc' => 'Strong multilingual performance.',          'tier' => 'Free'],
+        ['name' => 'mistral:7b',       'size' => 'Local', 'desc' => 'Efficient, well-rounded model.',           'tier' => 'Free'],
+    ];
+} elseif ($ai_provider === 'huggingface') {
+    $model_catalog = [
+        ['name' => 'Salesforce/blip-image-captioning', 'size' => 'Cloud', 'desc' => 'Image captioning & description.', 'tier' => 'Standard'],
+        ['name' => 'deepset/zero-shot-classification', 'size' => 'Cloud', 'desc' => 'Text classification & analysis.', 'tier' => 'Standard'],
+    ];
 } else {
     $model_catalog = [
         ['name' => 'llama3-70b-8192',  'size' => 'Cloud', 'desc' => 'Llama 3 70B — extremely capable.',        'tier' => 'Premium'],
         ['name' => 'llama3-8b-8192',   'size' => 'Cloud', 'desc' => 'Llama 3 8B — ultra fast performance.',     'tier' => 'Standard'],
     ];
 }
+
+// Vision provider catalog for KYC document analysis
+$vision_catalog = [
+    'gemini'      => ['label' => 'Google Gemini Vision',      'models' => ['gemini-1.5-flash' => 'Fast & affordable', 'gemini-1.5-pro' => 'High accuracy']],
+    'openai'      => ['label' => 'OpenAI GPT-4o Vision',      'models' => ['gpt-4o-mini' => 'Fast & affordable', 'gpt-4o' => 'High accuracy']],
+    'anthropic'   => ['label' => 'Anthropic Claude Vision',   'models' => ['claude-3-5-sonnet-latest' => 'Best accuracy', 'claude-3-haiku-latest' => 'Fast & affordable']],
+    'ollama'      => ['label' => 'Ollama (Local/Open-source)','models' => ['llava:7b' => 'Local vision model', 'llava:13b' => 'Larger, more accurate']],
+    'huggingface' => ['label' => 'HuggingFace Inference',      'models' => ['Salesforce/blip-image-captioning' => 'Image captioning']],
+];
 
 $ai_rev_q = mysqli_query($connection_server, "SELECT SUM(cost_naira) as revenue, COUNT(*) as calls FROM sas_ai_transactions WHERE MONTH(created_at)=MONTH(NOW()) AND status='success'");
 $ai_rev = $ai_rev_q ? mysqli_fetch_assoc($ai_rev_q) : ['revenue' => 0, 'calls' => 0];
@@ -277,17 +338,46 @@ $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_
                 <form method="post">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Provider</label>
-                        <select name="ai_provider" class="form-select rounded-3 small">
+                        <select name="ai_provider" class="form-select rounded-3 small" onchange="updateApiKeyField()">
                             <option value="gemini" <?php echo ($ai_provider=='gemini')?'selected':''; ?>>Google Gemini</option>
                             <option value="deepseek" <?php echo ($ai_provider=='deepseek')?'selected':''; ?>>DeepSeek</option>
                             <option value="groq" <?php echo ($ai_provider=='groq')?'selected':''; ?>>Groq</option>
+                            <option value="openai" <?php echo ($ai_provider=='openai')?'selected':''; ?>>OpenAI (GPT-4o)</option>
+                            <option value="anthropic" <?php echo ($ai_provider=='anthropic')?'selected':''; ?>>Anthropic (Claude)</option>
+                            <option value="ollama" <?php echo ($ai_provider=='ollama')?'selected':''; ?>>Ollama (Local/Open-source)</option>
+                            <option value="huggingface" <?php echo ($ai_provider=='huggingface')?'selected':''; ?>>HuggingFace Inference</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">API Key</label>
                         <input type="password" name="ai_api_key" id="ai_api_key_field" class="form-control rounded-3 small" value="<?php echo htmlspecialchars($ai_key); ?>">
                     </div>
+                    <div class="mb-3 d-none" id="ollama_url_field">
+                        <label class="form-label small fw-bold">Ollama URL</label>
+                        <input type="text" name="ai_ollama_url" class="form-control rounded-3 small" value="<?php echo htmlspecialchars($ollama_url); ?>" placeholder="http://localhost:11434">
+                    </div>
                     <button type="submit" name="update-ai-connection" class="btn btn-dark btn-sm w-100 rounded-pill">Update Cloud Connection</button>
+                </form>
+
+                <!-- Vision Provider for KYC Document Analysis -->
+                <hr class="my-3">
+                <h6 class="fw-bold small text-muted text-uppercase mb-2">AI Vision Provider (for KYC Document Analysis)</h6>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Vision Provider</label>
+                        <select name="ai_vision_provider" class="form-select rounded-3 small">
+                            <option value="">— Use main provider —</option>
+                            <?php foreach (['gemini' => 'Google Gemini Vision', 'openai' => 'OpenAI GPT-4o Vision', 'anthropic' => 'Anthropic Claude Vision', 'ollama' => 'Ollama (Local)', 'huggingface' => 'HuggingFace Inference'] as $vp => $vlabel): ?>
+                                <option value="<?php echo $vp; ?>" <?php echo ($vision_provider===$vp)?'selected':''; ?>><?php echo $vlabel; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Vision Model</label>
+                        <input type="text" name="ai_vision_model" class="form-control rounded-3 small" value="<?php echo htmlspecialchars($vision_model); ?>" placeholder="Auto-detected from provider">
+                    </div>
+                    <button type="submit" name="update-vision-config" class="btn btn-info btn-sm w-100 rounded-pill">Update Vision Configuration</button>
+                </form>
                 </form>
             </div>
         </div>
@@ -431,5 +521,23 @@ $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_
 </div>
 </section>
 <?php include("../func/bc-spadmin-footer.php"); ?>
+<script>
+function updateApiKeyField() {
+    const provider = document.querySelector('select[name="ai_provider"]').value;
+    const ollamaField = document.getElementById('ollama_url_field');
+    if (provider === 'ollama') {
+        ollamaField.classList.remove('d-none');
+        document.getElementById('ai_api_key_field').parentElement.classList.add('d-none');
+    } else if (provider === 'huggingface') {
+        ollamaField.classList.add('d-none');
+    } else {
+        ollamaField.classList.add('d-none');
+        document.getElementById('ai_api_key_field').parentElement.classList.remove('d-none');
+    }
+}
+document.addEventListener('DOMContentLoaded', function() {
+    updateApiKeyField();
+});
+</script>
 </body>
 </html>
