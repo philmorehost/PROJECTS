@@ -92,7 +92,7 @@ if (!function_exists('lm_updates_storage_check')) {
         $normal = str_replace('\\', '/', $path);
         if ($normal === $lmDir || strpos($normal . '/', $lmDir . '/') === 0) {
             $out['error'] = 'That folder is inside the LM web root, where anyone could download the packages. '
-                . 'Use a folder outside it, e.g. ' . (rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . 'secure_updates') . '.';
+                . 'Use a folder outside it, e.g. ' . lm_updates_root() . '.';
             return $out;
         }
 
