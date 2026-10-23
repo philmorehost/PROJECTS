@@ -21,6 +21,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     lm_json(array('status' => 'error', 'message' => 'Invalid request method.'), 405);
 }
 
+// A body bigger than post_max_size arrives with $_POST and $_FILES empty, so
+// the CSRF check would blame the session. Say what actually happened.
+if (empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    lm_json(array(
+        'status' => 'error',
+        'message' => 'The upload was larger than PHP accepts in one request (post_max_size = '
+            . ini_get('post_max_size') . ', upload_max_filesize = ' . ini_get('upload_max_filesize')
+            . '). Raise both in cPanel → MultiPHP INI Editor, or publish through GitHub pull instead.',
+    ), 413);
+}
+
 if (!lm_verify_csrf()) {
     lm_json(array('status' => 'error', 'message' => 'Your session expired. Refresh the page and try again.'), 419);
 }

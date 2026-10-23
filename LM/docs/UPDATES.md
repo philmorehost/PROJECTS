@@ -298,6 +298,25 @@ missing path is listed.
 
 ---
 
+## 6a. Built-in help
+
+Everything above is also inside the admin area:
+
+* **Admin Guide** (`admin/guide.php`) — the full manual with a sticky table of
+  contents, search and a **live cron tester** that runs the job and shows the
+  JSON result.
+* **📖 How this page works** — every release screen (Push Updates, GitHub Pull,
+  Update Notifications, Script Projects, Settings) has this button in its header.
+  It opens a side drawer with only the sections relevant to that page, plus a
+  link into the full guide.
+* **Settings → Automation → Admin guide → Cron** — jumps straight to the cron
+  setup steps.
+
+The content lives in `includes/guide.php` (one array, no database), so it is
+edited in the same commit as the feature it documents.
+
+---
+
 ## 6b. Settings that survive an update (8.7.0)
 
 `LM/settings.json` holds the GitHub token, the SMTP password, the Paystack keys
@@ -332,22 +351,40 @@ became unreachable after the update" report.
 
 ---
 
-## 6a. Built-in help
+## 6c. Storage limits and pull speed (8.7.1)
 
-Everything above is also inside the admin area:
+**“Maximum package size” would not save.** The release card from 8.7.0 contained
+its own `<form>` for the restore buttons, nested inside the settings form. HTML
+does not allow nested forms: the browser closed the settings form early, so
+**Save Settings** was outside it and clicking it did nothing. The card now lives
+below the form, and the storage card has its own button.
 
-* **Admin Guide** (`admin/guide.php`) — the full manual with a sticky table of
-  contents, search and a **live cron tester** that runs the job and shows the
-  JSON result.
-* **📖 How this page works** — every release screen (Push Updates, GitHub Pull,
-  Update Notifications, Script Projects, Settings) has this button in its header.
-  It opens a side drawer with only the sections relevant to that page, plus a
-  link into the full guide.
-* **Settings → Automation → Admin guide → Cron** — jumps straight to the cron
-  setup steps.
+| Change | Detail |
+|---|---|
+| Dedicated save | **Save storage settings** posts `save_scope=storage` and writes only `updates_storage_dir` + `max_update_size_mb`. It cannot be blocked by an unrelated field. |
+| Validation | The folder is created if missing, must be writable, and is refused when it sits inside `LM/` (packages would be web-downloadable). |
+| Visibility | The card shows the effective folder, package count and size, free disk space and the limit in force. |
+| PHP headroom | A warning appears when the configured limit is above `post_max_size` / `upload_max_filesize`; a manual upload that big would never reach PHP. GitHub pull streams to disk and ignores both. |
+| Upload errors | A body over `post_max_size` now returns “larger than PHP accepts”, not “your session expired”. |
 
-The content lives in `includes/guide.php` (one array, no database), so it is
-edited in the same commit as the feature it documents.
+**Pull speed.** The pull used to copy the archive twice — once to strip the
+GitHub wrapper folder, once more to inject `manifest.json`. Both happen in a
+single pass now:
+
+```
+old: rewrite 1.27 s + inject 0.78 s = 2.05 s
+new: one pass                       0.81 s     (117 MB, 600 files — 2.5x)
+```
+
+The output is byte-identical (same SHA-256). Also:
+
+* the zipball is downloaded with HTTP/2 and 1 MB buffers,
+* a failed pull keeps the archive for that commit, so a retry skips the download,
+* `set_time_limit(0)` on the pull endpoint (a 100 MB archive outlives 30 s),
+* the button shows the stage and elapsed seconds, and the result reports
+  `download` / `package` timings.
+
+---
 
 ## 7. Troubleshooting
 
@@ -358,6 +395,8 @@ edited in the same commit as the feature it documents.
 | `SQLSTATE[40001] … Deadlock` | Migrations now run once. If you still see it, check that `schema_migrations` exists and contains `2026_10_23_notifications_github`. |
 | GitHub `404` | Wrong `owner/repo`, or the token lacks **Contents: Read**. |
 | Token empty after an update | **Settings → Settings File & Recovery** → **Restore** the newest snapshot with a `token ✓` chip. If there is none, paste the token again. Fixed as a class of bug in 8.7.0: settings are no longer shipped in packages. |
+| “Maximum package size” reverts to 128 | 8.7.0 shipped a nested `<form>` on the settings page; the browser closed the settings form early. Fixed in 8.7.1 — use **Save storage settings**. |
+| Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
 | `settings.json` reset after uploading a folder | The upload replaced it with the copy from the repository. Restore a snapshot; from 8.7.0 the file is untracked and stripped from packages. |
 | “Unexpected server response” on a card | A PHP warning was printed into a JSON body. Fixed in 8.6.1: `ajax_*.php` no longer display warnings (they go to the error log) and the page now shows the readable part of a malformed response. Still check the cPanel error log for the underlying warning. |
 | “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |

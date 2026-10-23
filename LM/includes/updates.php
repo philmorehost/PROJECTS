@@ -33,10 +33,11 @@ if (!function_exists('lm_updates_root')) {
             if ($configured[0] === '/' || preg_match('#^[A-Za-z]:[\\\\/]#', $configured)) {
                 $root = rtrim($configured, '/\\');
             } else {
-                $root = rtrim(lm_project_root() . DIRECTORY_SEPARATOR . $configured, '/\\');
+                $root = rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . $configured;
+                $root = rtrim($root, '/\\');
             }
         } else {
-            $root = lm_project_root() . DIRECTORY_SEPARATOR . 'secure_updates';
+            $root = rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . 'secure_updates';
         }
 
         return $root;
@@ -56,6 +57,100 @@ if (!function_exists('lm_safe_tier_code')) {
         $code = preg_replace('/[^a-z0-9_-]/', '_', $code);
         $code = trim($code, '_');
         return $code !== '' ? $code : 'general';
+    }
+}
+
+if (!function_exists('lm_updates_storage_check')) {
+    /**
+     * Validate (and optionally create) an update-storage directory.
+     *
+     * Used by the dedicated "Save storage settings" button so a bad path is
+     * reported at save time instead of failing later during a publish.
+     *
+     * @param string $dir    Value from the settings form (absolute or relative)
+     * @param bool   $create Create the directory when it is missing
+     * @return array{ok:bool,error:string,path:string,free:int,writable:bool}
+     */
+    function lm_updates_storage_check($dir, $create = false)
+    {
+        $out = array('ok' => false, 'error' => '', 'path' => '', 'free' => 0, 'writable' => false);
+        $dir = trim((string) $dir);
+
+        if ($dir === '') {
+            $path = rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . 'secure_updates';
+        } elseif ($dir[0] === '/' || preg_match('#^[A-Za-z]:[\\\\/]#', $dir)) {
+            $path = rtrim($dir, '/\\');
+        } else {
+            $path = rtrim(rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . $dir, '/\\');
+        }
+
+        $out['path'] = $path;
+
+        // Packages must never end up inside the LM folder: everything below it
+        // is reachable over HTTP, and an update ZIP is a download for customers.
+        $lmDir = rtrim(str_replace('\\', '/', lm_lm_dir()), '/');
+        $normal = str_replace('\\', '/', $path);
+        if ($normal === $lmDir || strpos($normal . '/', $lmDir . '/') === 0) {
+            $out['error'] = 'That folder is inside the LM web root, where anyone could download the packages. '
+                . 'Use a folder outside it, e.g. ' . (rtrim(lm_project_root(), '/\\') . DIRECTORY_SEPARATOR . 'secure_updates') . '.';
+            return $out;
+        }
+
+        if (!is_dir($path)) {
+            if (!$create) {
+                $out['ok'] = true;
+                $out['writable'] = true; // will be created on the first publish
+                return $out;
+            }
+            if (!lm_ensure_dir($path, 0755)) {
+                $out['error'] = 'Could not create ' . $path . '. Check that the parent folder is writable, '
+                    . 'or create it yourself in cPanel → File Manager.';
+                return $out;
+            }
+        }
+
+        if (!is_writable($path)) {
+            $out['error'] = $path . ' exists but PHP cannot write to it. Set the folder permissions to 0755.';
+            return $out;
+        }
+
+        $free = @disk_free_space($path);
+        $out['free'] = $free === false ? 0 : (int) $free;
+        $out['writable'] = true;
+        $out['ok'] = true;
+        return $out;
+    }
+}
+
+if (!function_exists('lm_updates_storage_size')) {
+    /**
+     * How much space the stored packages use, for the settings card.
+     *
+     * @return array{files:int,bytes:int}
+     */
+    function lm_updates_storage_size()
+    {
+        $root = lm_updates_root();
+        $out = array('files' => 0, 'bytes' => 0);
+        if (!is_dir($root)) {
+            return $out;
+        }
+
+        $paths = glob($root . DIRECTORY_SEPARATOR . '*.zip');
+        $nested = glob($root . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . '*.zip');
+        foreach (array($paths, $nested) as $list) {
+            if (!is_array($list)) {
+                continue;
+            }
+            foreach ($list as $file) {
+                if (is_file($file)) {
+                    $out['files']++;
+                    $out['bytes'] += (int) filesize($file);
+                }
+            }
+        }
+
+        return $out;
     }
 }
 
@@ -469,8 +564,10 @@ if (!function_exists('lm_zip_rewrite')) {
      * @param int    $maxFiles
      * @param int    $maxBytes
      * @param array  $options {
-     *     files:  array  Exact repo-relative paths to include (checked boxes)
-     *     root:   string Folder to strip after filtering (auto-detected)
+     *     files:    array  Exact repo-relative paths to include (checked boxes)
+     *     root:     string Folder to strip after filtering (auto-detected)
+     *     manifest: array  Written as manifest.json in the same pass, so a
+     *                      pull costs one copy of the archive instead of two
      * }
      * @return array{ok:bool,error:string,files:int,bytes:int,root:string,skipped:int}
      */
@@ -554,10 +651,26 @@ if (!function_exists('lm_zip_rewrite')) {
             }
         }
 
+        // Manifest in the same pass: this used to be two full copies of the
+        // archive (rewrite, then inject), which doubled the time of a pull.
+        $add = array();
+        $remove = array();
+        if (isset($options['manifest']) && is_array($options['manifest'])) {
+            $json = json_encode($options['manifest'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($json === false) {
+                $out['error'] = 'Could not encode manifest.json.';
+                return $out;
+            }
+            $add['manifest.json'] = $json;
+            $remove[] = 'manifest.json';
+        }
+
         $result = lm_zip_copy($source, $destination, array(
             'wrapper' => $wrapper,
             'include' => $include,
             'root' => $root,
+            'add' => $add,
+            'remove' => $remove,
         ));
 
         if (!$result) {

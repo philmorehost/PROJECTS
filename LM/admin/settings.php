@@ -32,9 +32,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
     }
 }
 
+$saveScope = isset($_POST['save_scope']) ? preg_replace('/[^a-z]/', '', (string) $_POST['save_scope']) : 'all';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!lm_verify_csrf()) {
         $saveError = 'Your session expired. Refresh the page and try again.';
+    } elseif ($saveScope === 'storage') {
+        // Dedicated button on the Update Storage card: only these two fields
+        // are touched, so a half-filled form elsewhere cannot fail the save.
+        $newStorageDir = trim((string) ($_POST['updates_storage_dir'] ?? ''));
+        $newMaxMb = max(1, min(4096, (int) ($_POST['max_update_size_mb'] ?? 128)));
+        $storageCheck = lm_updates_storage_check($newStorageDir, true);
+
+        if (!$storageCheck['ok']) {
+            $saveError = 'Storage not saved. ' . $storageCheck['error'];
+        } elseif (lm_update_setting(array(
+            'updates_storage_dir' => $newStorageDir,
+            'max_update_size_mb' => $newMaxMb,
+        ))) {
+            header('Location: settings.php?saved=storage#update-storage');
+            exit();
+        } else {
+            $saveError = 'Could not write settings.json. Check the file permissions (0640) on the LM folder.';
+        }
     } else {
         $new = $settings;
 
@@ -172,6 +192,18 @@ foreach ($settings as $value) {
         $currentFilled++;
     }
 }
+
+$storageCheck = lm_updates_storage_check((string) ($settings['updates_storage_dir'] ?? ''), false);
+$uploadMaxBytes = lm_ini_bytes((string) ini_get('upload_max_filesize'));
+$postMaxBytes = lm_ini_bytes((string) ini_get('post_max_size'));
+$configuredMaxBytes = (int) ($settings['max_update_size_mb'] ?? 128) * 1024 * 1024;
+$phpUploadLimit = min(
+    $uploadMaxBytes > 0 ? $uploadMaxBytes : PHP_INT_MAX,
+    $postMaxBytes > 0 ? $postMaxBytes : PHP_INT_MAX
+);
+$phpLimitBites = $phpUploadLimit !== PHP_INT_MAX && $configuredMaxBytes > $phpUploadLimit;
+$storageSize = lm_updates_storage_size();
+$savedScope = isset($_GET['saved']) ? (string) $_GET['saved'] : '';
 
 $cronSecret = lm_get_cron_secret();
 $cronUrl = lm_site_url('cron.php?key=' . rawurlencode($cronSecret));
@@ -511,9 +543,99 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                     <input type="hidden" name="restore_backup" value="<?= htmlspecialchars($recoverableBackups[0]['name']) ?>">
                     <button type="submit" class="btn" style="background:linear-gradient(135deg,#b45309,#92400e);">Restore that backup</button>
                 </form>
+
+        <div style="margin-top:24px;">
+                <div class="card" id="safety">
+                    <div class="card-header"><h3>Settings File &amp; Recovery</h3></div>
+                    <div class="card-body">
+                        <p style="color:#475569;font-size:14px;line-height:1.7;margin-bottom:14px;">
+                            Everything on this page — the GitHub token, SMTP password, site URL and cron key — lives in
+                            <code>settings.json</code>. It is <strong>not</strong> part of the LM code, so uploading a new
+                            version must never replace it. A snapshot is written to <code>storage/backups/</code> every time it changes.
+                        </p>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px;">
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
+                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">settings.json</div>
+                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
+                                    <?= $settingsFileExists ? htmlspecialchars(date('j M Y, H:i', $settingsFileMtime)) : 'missing' ?>
+                                    <?= $settingsFileExists ? '<span style="color:#94a3b8;">· ' . number_format($settingsFileSize) . ' bytes · ' . (int) $currentFilled . ' fields</span>' : '' ?>
+                                </div>
+                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;word-break:break-all;"><?= htmlspecialchars($settingsFilePath) ?></div>
+                            </div>
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
+                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Encryption key</div>
+                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
+                                    <code><?= htmlspecialchars($keyFingerprint) ?></code>
+                                    <span style="color:#94a3b8;"><?= $keyFileMtime ? '· ' . htmlspecialchars(date('j M Y', $keyFileMtime)) : '' ?></span>
+                                </div>
+                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+                                    <?= $archivedKeyCount ?> archived key<?= $archivedKeyCount === 1 ? '' : 's' ?> available for recovery
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if (empty($settingsBackups)): ?>
+                            <p style="font-size:12.5px;color:#64748b;">No snapshots yet — one is created the next time settings are saved.</p>
+                        <?php else: ?>
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                                <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+                                    <thead>
+                                        <tr style="background:#f8fafc;color:#64748b;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;">
+                                            <th style="text-align:left;padding:9px 12px;">Snapshot</th>
+                                            <th style="text-align:left;padding:9px 12px;">Contains</th>
+                                            <th style="text-align:right;padding:9px 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($settingsBackups as $index => $backup): ?>
+                                        <tr style="border-top:1px solid #eef2f8;">
+                                            <td style="padding:9px 12px;color:#0f172a;">
+                                                <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>
+                                                <span style="color:#94a3b8;font-size:11px;">· <?= number_format($backup['size']) ?> B</span>
+                                            </td>
+                                            <td style="padding:9px 12px;color:#475569;">
+                                                <?= (int) $backup['fields'] ?> fields
+                                                <?php if ($backup['token_ok']): ?>
+                                                    <span style="background:#ecfdf5;color:#047857;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token ✓</span>
+                                                <?php elseif ($backup['has_token']): ?>
+                                                    <span style="background:#fef2f2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token unreadable</span>
+                                                <?php endif; ?>
+                                                <?php if ($backup['has_cron']): ?>
+                                                    <span style="background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">cron key</span>
+                                                <?php endif; ?>
+                                                <?php if ($backup['smtp_host'] !== ''): ?>
+                                                    <span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">SMTP</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding:9px 12px;text-align:right;">
+                                                <form method="POST" style="display:inline;"
+                                                      onsubmit="return confirm('Restore settings from <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>?\n\nThe current file is copied to storage/backups first, so this can be undone.');">
+                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token()) ?>">
+                                                    <input type="hidden" name="restore_backup" value="<?= htmlspecialchars($backup['name']) ?>">
+                                                    <button type="submit" class="btn" style="background:#fff;border:1px solid #cbd5e1;color:#334155;box-shadow:none;padding:6px 12px;font-size:12px;">Restore</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <small style="display:block;margin-top:10px;color:#94a3b8;">
+                                Restoring merges the snapshot over the current values — fields you changed since then are kept unless the snapshot has them too.
+                                The current file is snapshotted first, so a restore can be undone.
+                            </small>
+                        <?php endif; ?>
+                    </div>
+                </div>
+        </div>
             </div>
         <?php endif; ?>
-        <?php if ($saveOk): ?>
+        <?php if ($savedScope === 'storage'): ?>
+            <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">
+                ✓ Storage settings saved — the new limit applies to the next upload or GitHub pull.
+            </div>
+        <?php elseif ($saveOk): ?>
             <div style="background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;padding:14px 18px;border-radius:14px;margin-bottom:20px;font-size:14px;font-weight:600;">✓ Settings saved.</div>
         <?php endif; ?>
         <?php if ($saveError !== ''): ?>
@@ -711,7 +833,7 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card" id="update-storage">
                     <div class="card-header"><h3>Update Storage</h3></div>
                     <div class="card-body">
                         <div class="input-grid">
@@ -722,94 +844,63 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                             </div>
                             <div class="input-group">
                                 <label>Maximum package size (MB)</label>
-                                <input type="number" min="1" max="2048" name="max_update_size_mb" value="<?= (int) ($settings['max_update_size_mb'] ?? 128) ?>">
-                                <small>Applies to uploads and GitHub archives.</small>
+                                <input type="number" min="1" max="4096" name="max_update_size_mb" value="<?= (int) ($settings['max_update_size_mb'] ?? 128) ?>">
+                                <small>Applies to uploads and GitHub archives. 512 MB is fine for a monorepo.</small>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <div class="card" id="safety">
-                    <div class="card-header"><h3>Settings File &amp; Recovery</h3></div>
-                    <div class="card-body">
-                        <p style="color:#475569;font-size:14px;line-height:1.7;margin-bottom:14px;">
-                            Everything on this page — the GitHub token, SMTP password, site URL and cron key — lives in
-                            <code>settings.json</code>. It is <strong>not</strong> part of the LM code, so uploading a new
-                            version must never replace it. A snapshot is written to <code>storage/backups/</code> every time it changes.
-                        </p>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid #eef2f8;">
+                            <button type="submit" name="save_scope" value="storage" class="btn"
+                                    style="background:linear-gradient(135deg,#0ea5e9,#2563eb);">
+                                💾 Save storage settings
+                            </button>
+                            <span style="font-size:12.5px;color:#64748b;">
+                                Saves only this card — the rest of the page is left untouched.
+                            </span>
+                        </div>
 
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px;">
-                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
-                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">settings.json</div>
-                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
-                                    <?= $settingsFileExists ? htmlspecialchars(date('j M Y, H:i', $settingsFileMtime)) : 'missing' ?>
-                                    <?= $settingsFileExists ? '<span style="color:#94a3b8;">· ' . number_format($settingsFileSize) . ' bytes · ' . (int) $currentFilled . ' fields</span>' : '' ?>
-                                </div>
-                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;word-break:break-all;"><?= htmlspecialchars($settingsFilePath) ?></div>
+                        <?php if ($phpLimitBites): ?>
+                            <div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:12px 14px;border-radius:10px;font-size:12.5px;line-height:1.6;">
+                                <strong>Headroom check:</strong> PHP accepts at most <strong><?= lm_format_bytes($phpUploadLimit) ?></strong> per
+                                upload request (<code>post_max_size</code> <?= htmlspecialchars(ini_get('post_max_size')) ?>,
+                                <code>upload_max_filesize</code> <?= htmlspecialchars(ini_get('upload_max_filesize')) ?>).
+                                The <?= (int) ($settings['max_update_size_mb'] ?? 128) ?> MB limit is above that, so a manual upload that big
+                                will be rejected before it reaches the LM. Raise both values in cPanel → MultiPHP INI Editor, or publish
+                                through <a href="github-updates.php" style="color:#92400e;font-weight:700;">GitHub pull</a>, which streams
+                                the archive to disk and is not bound by the upload limits.
                             </div>
-                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#f8fafc;">
-                                <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Encryption key</div>
-                                <div style="font-size:13px;margin-top:6px;color:#0f172a;">
-                                    <code><?= htmlspecialchars($keyFingerprint) ?></code>
-                                    <span style="color:#94a3b8;"><?= $keyFileMtime ? '· ' . htmlspecialchars(date('j M Y', $keyFileMtime)) : '' ?></span>
+                        <?php endif; ?>
+
+                        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
+                            <div style="border:1px solid <?= $storageCheck['ok'] ? '#e2e8f0' : '#fecaca' ?>;border-radius:10px;padding:10px 12px;background:<?= $storageCheck['ok'] ? '#f8fafc' : '#fef2f2' ?>;">
+                                <div style="font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Effective folder</div>
+                                <div style="font-size:12px;color:<?= $storageCheck['ok'] ? '#0f172a' : '#991b1b' ?>;margin-top:4px;word-break:break-all;">
+                                    <?= htmlspecialchars($storageCheck['path']) ?>
+                                </div>
+                                <?php if (!$storageCheck['ok']): ?>
+                                    <div style="font-size:11.5px;color:#991b1b;margin-top:6px;line-height:1.5;"><?= htmlspecialchars($storageCheck['error']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#f8fafc;">
+                                <div style="font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Space</div>
+                                <div style="font-size:12px;color:#0f172a;margin-top:4px;">
+                                    <strong><?= (int) $storageSize['files'] ?></strong> package<?= (int) $storageSize['files'] === 1 ? '' : 's' ?>
+                                    · <?= lm_format_bytes((int) $storageSize['bytes']) ?> used
                                 </div>
                                 <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
-                                    <?= $archivedKeyCount ?> archived key<?= $archivedKeyCount === 1 ? '' : 's' ?> available for recovery
+                                    <?= $storageCheck['free'] > 0 ? lm_format_bytes($storageCheck['free']) . ' free on the disk' : 'Free space unavailable' ?>
+                                </div>
+                            </div>
+                            <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#f8fafc;">
+                                <div style="font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;font-weight:800;">Active limit</div>
+                                <div style="font-size:12px;color:#0f172a;margin-top:4px;">
+                                    <strong><?= (int) ($settings['max_update_size_mb'] ?? 128) ?> MB</strong> per package
+                                </div>
+                                <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+                                    Uploads, GitHub archives and pulls.
                                 </div>
                             </div>
                         </div>
-
-                        <?php if (empty($settingsBackups)): ?>
-                            <p style="font-size:12.5px;color:#64748b;">No snapshots yet — one is created the next time settings are saved.</p>
-                        <?php else: ?>
-                            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-                                <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
-                                    <thead>
-                                        <tr style="background:#f8fafc;color:#64748b;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;">
-                                            <th style="text-align:left;padding:9px 12px;">Snapshot</th>
-                                            <th style="text-align:left;padding:9px 12px;">Contains</th>
-                                            <th style="text-align:right;padding:9px 12px;">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach ($settingsBackups as $index => $backup): ?>
-                                        <tr style="border-top:1px solid #eef2f8;">
-                                            <td style="padding:9px 12px;color:#0f172a;">
-                                                <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>
-                                                <span style="color:#94a3b8;font-size:11px;">· <?= number_format($backup['size']) ?> B</span>
-                                            </td>
-                                            <td style="padding:9px 12px;color:#475569;">
-                                                <?= (int) $backup['fields'] ?> fields
-                                                <?php if ($backup['token_ok']): ?>
-                                                    <span style="background:#ecfdf5;color:#047857;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token ✓</span>
-                                                <?php elseif ($backup['has_token']): ?>
-                                                    <span style="background:#fef2f2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:6px;">token unreadable</span>
-                                                <?php endif; ?>
-                                                <?php if ($backup['has_cron']): ?>
-                                                    <span style="background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">cron key</span>
-                                                <?php endif; ?>
-                                                <?php if ($backup['smtp_host'] !== ''): ?>
-                                                    <span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:4px;">SMTP</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td style="padding:9px 12px;text-align:right;">
-                                                <form method="POST" style="display:inline;"
-                                                      onsubmit="return confirm('Restore settings from <?= htmlspecialchars(date('j M Y, H:i', $backup['time'])) ?>?\n\nThe current file is copied to storage/backups first, so this can be undone.');">
-                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token()) ?>">
-                                                    <input type="hidden" name="restore_backup" value="<?= htmlspecialchars($backup['name']) ?>">
-                                                    <button type="submit" class="btn" style="background:#fff;border:1px solid #cbd5e1;color:#334155;box-shadow:none;padding:6px 12px;font-size:12px;">Restore</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <small style="display:block;margin-top:10px;color:#94a3b8;">
-                                Restoring merges the snapshot over the current values — fields you changed since then are kept unless the snapshot has them too.
-                                The current file is snapshotted first, so a restore can be undone.
-                            </small>
-                        <?php endif; ?>
                     </div>
                 </div>
 

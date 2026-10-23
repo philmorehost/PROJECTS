@@ -1261,8 +1261,20 @@ lm_admin_page_start('GitHub Pull', 'github');
         if (!confirm((force ? 'Force publish ' : 'Publish ') + el('pullVersion').value + ' for ' + currentProject.name + '?')) return;
 
         button.disabled = true;
+        const forceBtn = el('forcePullBtn');
+        if (forceBtn) forceBtn.disabled = true;
         const original = button.textContent;
-        button.textContent = 'Pulling from GitHub…';
+
+        // A monorepo archive can take a minute: show elapsed time and the stage
+        // instead of a frozen button.
+        const started = Date.now();
+        const tick = () => {
+            const secs = Math.round((Date.now() - started) / 1000);
+            const stage = secs < 12 ? 'Downloading archive' : (secs < 20 ? 'Packaging files' : 'Still packaging');
+            button.textContent = stage + '… ' + secs + 's';
+        };
+        tick();
+        const timer = setInterval(tick, 1000);
 
         const format = document.querySelector('input[name="pullFormat"]:checked');
         const summary = selectionSummary();
@@ -1290,8 +1302,10 @@ lm_admin_page_start('GitHub Pull', 'github');
 
         const result = await lmPost('ajax_github.php', payload);
 
+        clearInterval(timer);
         button.disabled = false;
         button.textContent = original;
+        if (forceBtn) forceBtn.disabled = false;
         toast(result.message, result.status === 'error' ? 'err' : 'ok');
 
         if (result.status === 'success' && !result.up_to_date) {
@@ -1300,7 +1314,11 @@ lm_admin_page_start('GitHub Pull', 'github');
                 + (result.files_packaged ? '<strong>' + result.files_packaged + ' files</strong> packaged'
                     + (result.package_root ? ' from <code>' + escapeHtml(result.package_root + '/') + '</code>' : '') + '. '
                     : '')
-                + escapeHtml(result.bytes_human || '') + ' written to <code>' + escapeHtml(result.cpanel_dir || '') + '</code>.</div>'
+                + escapeHtml(result.bytes_human || '') + ' written to <code>' + escapeHtml(result.cpanel_dir || '') + '</code>'
+                + (result.seconds ? ' in <strong>' + escapeHtml(String(result.seconds)) + ' s</strong>'
+                    + (result.timings ? ' <span class="tiny muted">(download ' + escapeHtml(String(result.timings.download))
+                        + ' s · package ' + escapeHtml(String(result.timings.package)) + ' s)</span>' : '') : '')
+                + '.</div>'
                 + '<a class="btn btn-ghost" href="updates.php">View in Push Updates</a>';
             loadPulls();
         }

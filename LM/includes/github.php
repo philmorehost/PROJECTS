@@ -882,6 +882,11 @@ if (!function_exists('lm_github_download_zipball')) {
                 CURLOPT_TIMEOUT => 900,
                 CURLOPT_LOW_SPEED_LIMIT => 512,
                 CURLOPT_LOW_SPEED_TIME => 120,
+                // GitHub serves codeload over HTTP/2 — fewer round trips and a
+                // single connection for the redirect that follows.
+                CURLOPT_HTTP_VERSION => defined('CURL_HTTP_VERSION_2TLS') ? CURL_HTTP_VERSION_2TLS : CURL_HTTP_VERSION_1_1,
+                CURLOPT_TCP_KEEPALIVE => 1,
+                CURLOPT_BUFFERSIZE => 1048576,
                 CURLOPT_SSL_VERIFYPEER => true,
                 CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$redirect) {
@@ -1625,6 +1630,13 @@ if (!function_exists('lm_github_pull')) {
      */
     function lm_github_pull(PDO $pdo, $tierId, array $options = array())
     {
+        // A 100 MB archive takes longer than the default 30 s execution limit.
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $pullStartedAt = microtime(true);
+        $timings = array('download' => 0, 'package' => 0, 'publish' => 0);
+
         $result = array(
             'ok' => false,
             'status' => 'error',
@@ -1643,6 +1655,9 @@ if (!function_exists('lm_github_pull')) {
             'pull_id' => 0,
             'package_root' => '',
             'files_selected' => 0,
+            'download_cached' => false,
+            'timings' => array(),
+            'seconds' => 0.0,
         );
 
         $stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
@@ -1821,26 +1836,47 @@ if (!function_exists('lm_github_pull')) {
         $workDir = lm_storage_dir() . DIRECTORY_SEPARATOR . 'tmp';
         lm_ensure_dir($workDir, 0700);
 
-        $downloadPath = $workDir . DIRECTORY_SEPARATOR . 'gh_' . (int) $tier['id'] . '_' . $headSha . '.zip';
-        $normalizedPath = $workDir . DIRECTORY_SEPARATOR . 'gh_' . (int) $tier['id'] . '_' . $headSha . '_normalized.zip';
+        // Cache key is the repository + commit, not the project: two projects
+        // that pull the same repo at the same commit share one download.
+        $repoKey = substr(sha1($config['owner'] . '/' . $config['repo']), 0, 12);
+        $downloadPath = $workDir . DIRECTORY_SEPARATOR . 'gh_' . $repoKey . '_' . $headSha . '.zip';
+        $normalizedPath = $workDir . DIRECTORY_SEPARATOR . 'gh_' . $repoKey . '_' . $headSha . '_normalized.zip';
 
-        $download = lm_github_download_zipball($config['owner'], $config['repo'], $headSha, $config['token'], $downloadPath);
+        // Do not let abandoned archives (a pull that died) pile up forever.
+        foreach (glob($workDir . DIRECTORY_SEPARATOR . 'gh_*.zip') ?: array() as $stale) {
+            if (is_file($stale) && filemtime($stale) < time() - 172800) {
+                @unlink($stale);
+            }
+        }
+
+        $timings = array('download' => 0, 'package' => 0, 'publish' => 0);
+        $timed = microtime(true);
+
+        // Reuse the archive from a previous attempt at this commit (a failed
+        // publish, a retry, a second selection): the download is the slowest
+        // part of a pull and GitHub archives are immutable per commit.
+        $download = array('ok' => false, 'error' => '', 'bytes' => 0, 'cached' => false);
+        if (is_file($downloadPath) && filesize($downloadPath) > 0) {
+            $cachedEntries = lm_zip_entries($downloadPath);
+            if (is_array($cachedEntries) && count($cachedEntries) > 0) {
+                $download = array(
+                    'ok' => true,
+                    'error' => '',
+                    'bytes' => (int) filesize($downloadPath),
+                    'cached' => true,
+                );
+            }
+        }
+
         if (!$download['ok']) {
-            $result['message'] = $download['error'];
-            return $result;
+            $download = lm_github_download_zipball($config['owner'], $config['repo'], $headSha, $config['token'], $downloadPath);
+            if (!$download['ok']) {
+                $result['message'] = $download['error'];
+                return $result;
+            }
         }
-
-        $rewrite = lm_zip_rewrite($downloadPath, $normalizedPath, true, '', 25000, 524288000, array(
-            'files' => $filesToPackage,
-            'root' => $packageRoot,
-        ));
-        @unlink($downloadPath);
-
-        if (!$rewrite['ok']) {
-            $result['message'] = $rewrite['error'];
-            @unlink($normalizedPath);
-            return $result;
-        }
+        $result['download_cached'] = !empty($download['cached']);
+        $timings['download'] = round(microtime(true) - $timed, 2);
 
         $targetFile = $tierDir . DIRECTORY_SEPARATOR . 'update_' . preg_replace('/[^A-Za-z0-9._-]/', '_', $version) . '.zip';
 
@@ -1858,12 +1894,29 @@ if (!function_exists('lm_github_pull')) {
             'database_queries' => array(),
         );
 
-        if (!lm_zip_inject_manifest($normalizedPath, $manifest, true)) {
+        // One pass: strip the wrapper, keep the selection, re-root and write
+        // manifest.json while the archive is copied. The old flow copied the
+        // whole archive twice (rewrite, then inject the manifest).
+        $timed = microtime(true);
+        // The package ceiling follows the setting (default 128 MB) instead of a
+        // hard-coded 500 MB, so raising "Maximum package size" really raises it.
+        $maxPackageBytes = max(1, (int) (lm_settings()['max_update_size_mb'] ?? 128)) * 1024 * 1024;
+        $rewrite = lm_zip_rewrite($downloadPath, $normalizedPath, true, '', 25000, $maxPackageBytes, array(
+            'files' => $filesToPackage,
+            'root' => $packageRoot,
+            'manifest' => $manifest,
+        ));
+
+        if (!$rewrite['ok']) {
+            // Keep the download: a retry then skips the slow part.
+            $result['message'] = $rewrite['error'];
             @unlink($normalizedPath);
-            $result['message'] = 'Could not write manifest.json into the package.';
             return $result;
         }
+        @unlink($downloadPath);
+        $timings['package'] = round(microtime(true) - $timed, 2);
 
+        $timed = microtime(true);
         if (!@rename($normalizedPath, $targetFile)) {
             if (!@copy($normalizedPath, $targetFile)) {
                 @unlink($normalizedPath);
@@ -1955,7 +2008,16 @@ if (!function_exists('lm_github_pull')) {
         $result['files_selected'] = (int) $rewrite['files'];
         $result['files_to_package'] = count($filesToPackage);
 
-        lm_log('github', 'Pulled ' . $config['owner'] . '/' . $config['repo'] . '@' . $headSha . ' → v' . $version . ' (' . $result['bytes'] . ' bytes)');
+        $timings['publish'] = round(microtime(true) - $timed, 2);
+        $timings['total'] = round(microtime(true) - $pullStartedAt, 2);
+        $result['timings'] = $timings;
+        $result['seconds'] = $timings['total'];
+        $result['message'] .= ' ' . $timings['total'] . ' s'
+            . ' (download ' . $timings['download'] . ' s, package ' . $timings['package'] . ' s).';
+
+        lm_log('github', 'Pulled ' . $config['owner'] . '/' . $config['repo'] . '@' . $headSha . ' → v' . $version
+            . ' (' . $result['bytes'] . ' bytes, ' . $timings['total'] . ' s: download ' . $timings['download']
+            . ' s, package ' . $timings['package'] . ' s)');
 
         return $result;
     }

@@ -466,7 +466,16 @@ HTML
                         'title' => 'Storage',
                         'html' => <<<'HTML'
 <p><strong>Storage directory</strong> defaults to <code>secure_updates/</code> next to <code>LM/</code>, outside the web root. Each project gets a sub-folder named after its code. Absolute paths are allowed if you keep packages on a separate volume.</p>
-<p><strong>Maximum package size</strong> applies to uploads and GitHub archives. It must be smaller than PHP's <code>upload_max_filesize</code> for uploads to reach the LM at all.</p>
+<p><strong>Maximum package size</strong> applies to uploads and GitHub archives.</p>
+<p class="lm-guide-note"><strong>Save storage settings</strong> is its own button: it saves only the two fields in that card, so a half-filled form elsewhere on the page can never block it. The card then shows the effective folder, how much space the packages use, the free space on the disk and the limit that is actually in force.</p>
+<table class="lm-guide-table">
+  <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+  <tbody>
+    <tr><td>Value reverts to the old number</td><td>Press <strong>Save storage settings</strong> (not just <strong>Save Settings</strong>) and watch for the green confirmation above the page. A red banner means the folder was rejected — read the message.</td></tr>
+    <tr><td>Upload rejected before it starts</td><td>PHP's <code>post_max_size</code> / <code>upload_max_filesize</code> are lower than the limit. The card warns you when this is the case; raise both in cPanel → MultiPHP INI Editor, or publish through GitHub pull, which streams to disk and ignores those limits.</td></tr>
+    <tr><td>Folder refused</td><td>The LM will not store packages inside its own web root (anyone could download them). Pick a folder outside <code>LM/</code>.</td></tr>
+  </tbody>
+</table>
 HTML
                     ),
                     array(
@@ -494,6 +503,10 @@ HTML
 <p class="lm-guide-note">Every save is verified before it is written: the token is encrypted and decrypted again in the same request. If the round-trip does not match, the save is refused with the reason instead of storing a value that would look empty later.</p>
 <p class="lm-guide-note">If an update replaced the encryption key, the token is recovered from the archived key and re-encrypted with the current one during the first request — no action needed. Settings → <em>Settings File &amp; Recovery</em> shows how many archived keys are available.</p>
 <p>Rate limit: 5,000 requests per hour per token. A pull uses a handful; the tree view one more per load.</p>
+<h4>Why a pull takes as long as it does</h4>
+<p>The archive is downloaded straight to disk with cURL, then re-packed <strong>once</strong>: the wrapper folder is stripped, only the ticked files are kept and <code>manifest.json</code> is written in the same pass. An older build copied the archive twice, which roughly doubled the packaging time — a 117 MB / 600-file archive went from 2.05 s to 0.81 s of packaging in testing.</p>
+<p>A failed pull keeps the downloaded archive for that commit, so pressing <strong>Pull &amp; publish</strong> again resumes from packaging instead of downloading 100 MB a second time.</p>
+<p class="lm-guide-note">While it runs, the button shows the stage and the elapsed seconds. If it always stops around 30–60 s, the host is killing the request: raise <code>max_execution_time</code>, or tick fewer folders so the package is smaller.</p>
 HTML
                     ),
                     array(

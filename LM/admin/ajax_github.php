@@ -26,6 +26,12 @@ if (!lm_verify_csrf()) {
     lm_json(array('status' => 'error', 'message' => 'Your session expired. Refresh the page and try again.'), 419);
 }
 
+// A pull downloads and packages an archive that can be hundreds of MB.
+if (($_POST['action'] ?? '') === 'pull') {
+    @set_time_limit(0);
+    @ignore_user_abort(true);
+}
+
 $action = (string) ($_POST['action'] ?? '');
 $tierId = (int) ($_POST['tier_id'] ?? 0);
 $tier = null;
@@ -398,6 +404,8 @@ if ($action === 'pull') {
         'notifications' => $result['notifications'],
         'package_root' => $result['package_root'],
         'files_packaged' => $result['files_selected'],
+        'seconds' => isset($result['seconds']) ? $result['seconds'] : null,
+        'timings' => isset($result['timings']) ? $result['timings'] : null,
     ));
 }
 

@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '8.7.0');
+    define('LM_VERSION', '8.7.1');
 }
 
 if (!function_exists('lm_lm_dir')) {
@@ -1157,6 +1157,37 @@ if (!function_exists('lm_random_key')) {
             $raw = strtoupper(substr(hash('sha256', uniqid('', true)), 0, $bytes * 2));
         }
         return $prefix . '-' . $raw;
+    }
+}
+
+if (!function_exists('lm_ini_bytes')) {
+    /**
+     * Turn a php.ini size ("128M", "1G", "512K") into bytes.
+     *
+     * @param string $value
+     * @return int  Bytes, or -1 when the value is unlimited/unknown
+     */
+    function lm_ini_bytes($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '' || $value === '-1' || strtolower($value) === 'unlimited') {
+            return -1;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $number = (float) $value;
+        switch ($unit) {
+            case 'g':
+                $number *= 1024;
+                // fall through
+            case 'm':
+                $number *= 1024;
+                // fall through
+            case 'k':
+                $number *= 1024;
+        }
+
+        return (int) $number;
     }
 }
 
