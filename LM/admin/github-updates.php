@@ -56,6 +56,7 @@ lm_admin_page_start('GitHub Pull', 'github');
         <p>Publish directly from a repository branch. The package is normalised (wrapper folder removed, monorepo sub-folder supported), the version number is incremented from the previous release and the changelog is generated from the commits.</p>
     </div>
     <div class="head-actions">
+        <?= lm_guide_help_button('github') ?>
         <a class="btn btn-ghost" href="updates.php">📦 Manual upload</a>
         <a class="btn btn-dark" href="projects.php">🧩 Projects</a>
     </div>

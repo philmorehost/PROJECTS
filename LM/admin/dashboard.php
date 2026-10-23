@@ -228,6 +228,7 @@ $transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             <a href="update-notifications.php">🔔 Notifications</a>
             <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php">💳 Transactions</a>
+            <a href="guide.php">📖 Admin Guide</a>
             <a href="settings.php">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>
             <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0;">

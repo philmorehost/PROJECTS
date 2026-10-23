@@ -8,6 +8,7 @@ if (!isset($_SESSION['admin_logged_in'])) {
 require_once('../db.php');
 require_once('../includes/mailer.php');
 require_once('../includes/updates.php');
+require_once('../includes/guide.php');
 
 $settings_file = '../settings.json';
 $settings = lm_settings(true);
@@ -381,16 +382,21 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
             <a href="update-notifications.php">🔔 Notifications</a>
             <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php">💳 Transactions</a>
+            <a href="guide.php">📖 Admin Guide</a>
             <a href="settings.php" class="active">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>
             <a href="logout.php">🚪 Logout</a>
         </nav>
     </div>
     <div class="main-content">
-        <div class="header">
+        <div class="header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
             <div>
                 <h2>Settings</h2>
                 <p style="color:#64748b;margin-top:8px;max-width:620px;">Delivery, automation and storage for the whole License Manager.</p>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <?= lm_guide_help_button('settings') ?>
+                <a href="guide.php#cron" style="display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:10px;border:1px solid #d7deea;background:#fff;color:#334155;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">⏱️ Cron setup guide</a>
             </div>
         </div>
 
@@ -626,6 +632,10 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                             <input type="checkbox" name="regenerate_cron" value="1">
                             <span>Generate a new cron key <small style="color:#64748b;">(existing cron jobs must be updated)</small></span>
                         </div>
+                        <p style="margin-top:14px;font-size:12.5px;color:#475569;line-height:1.6;">
+                            Step-by-step setup, the task breakdown and a live tester are in the
+                            <a href="guide.php#cron" style="color:#4f46e5;font-weight:700;">Admin guide → Cron</a>.
+                        </p>
                     </div>
                 </div>
             </div>

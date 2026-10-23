@@ -255,6 +255,23 @@ missing path is listed.
 
 ---
 
+## 6a. Built-in help
+
+Everything above is also inside the admin area:
+
+* **Admin Guide** (`admin/guide.php`) — the full manual with a sticky table of
+  contents, search and a **live cron tester** that runs the job and shows the
+  JSON result.
+* **📖 How this page works** — every release screen (Push Updates, GitHub Pull,
+  Update Notifications, Script Projects, Settings) has this button in its header.
+  It opens a side drawer with only the sections relevant to that page, plus a
+  link into the full guide.
+* **Settings → Automation → Admin guide → Cron** — jumps straight to the cron
+  setup steps.
+
+The content lives in `includes/guide.php` (one array, no database), so it is
+edited in the same commit as the feature it documents.
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -292,6 +309,8 @@ admin/updates.php             publish, history, storage
 admin/github-updates.php      GitHub pull console
 admin/update-notifications.php notification log and schedule
 admin/projects.php            multi-project management
+admin/guide.php               full admin manual (+ cron tester)
+includes/guide.php            guide content + contextual help drawer
 email_templates/update_available.html
 storage/                      secret key, logs, temp (denied by .htaccess)
 ```

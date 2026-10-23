@@ -25,5 +25,10 @@ Recent work (LM 8.1):
   which removes the `1213 Deadlock` during the domain backfill.
 - Deleting or cleaning up a release now removes the actual ZIP from cPanel storage.
 
+**In-app guide** — `LM/admin/guide.php` (nav: *Admin Guide*) is the manual: pipeline,
+projects, uploads, GitHub tokens and the folder picker, notifications, SMTP, and
+cron setup with a live tester. Every release screen also has a *📖 How this page
+works* button that opens the relevant sections in a side drawer.
+
 Setup, integration snippets and troubleshooting: [`LM/docs/UPDATES.md`](LM/docs/UPDATES.md).
 Cron: `*/10 * * * * /usr/local/bin/php /home/USER/public_html/lm/cron.php`.

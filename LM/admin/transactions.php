@@ -176,6 +176,7 @@ try {
             <a href="update-notifications.php">🔔 Notifications</a>
             <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php" class="active">💳 Transactions</a>
+            <a href="guide.php">📖 Admin Guide</a>
             <a href="settings.php">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>
             <a href="logout.php">🚪 Logout</a>

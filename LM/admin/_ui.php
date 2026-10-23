@@ -9,6 +9,8 @@
  *   lm_admin_page_end();
  */
 
+require_once __DIR__ . '/../includes/guide.php';
+
 if (!function_exists('lm_admin_nav_items')) {
     /**
      * Primary navigation for the release console.
@@ -25,6 +27,7 @@ if (!function_exists('lm_admin_nav_items')) {
             'github' => array('label' => 'GitHub Pull', 'icon' => '🐙', 'href' => 'github-updates.php', 'group' => 'Releases'),
             'notifications' => array('label' => 'Notifications', 'icon' => '🔔', 'href' => 'update-notifications.php', 'group' => 'Releases'),
             'projects' => array('label' => 'Script Projects', 'icon' => '🧩', 'href' => 'projects.php', 'group' => 'Releases'),
+            'guide' => array('label' => 'Admin Guide', 'icon' => '📖', 'href' => 'guide.php', 'group' => 'System'),
             'settings' => array('label' => 'Settings', 'icon' => '⚙️', 'href' => 'settings.php', 'group' => 'System'),
             'profile' => array('label' => 'Profile', 'icon' => '👤', 'href' => 'profile.php', 'group' => 'System'),
             'system-check' => array('label' => 'System Check', 'icon' => '✅', 'href' => 'system-check.php', 'group' => 'System'),

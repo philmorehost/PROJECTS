@@ -67,6 +67,7 @@ lm_admin_page_start('Update notifications', 'notifications');
         <p>When a release is published, every active licence holder gets one email. If their site has not reported the new version by the next day, a reminder is sent automatically.</p>
     </div>
     <div class="head-actions">
+        <?= lm_guide_help_button('notifications') ?>
         <button class="btn btn-primary" type="button" id="runNowBtn">▶ Send due emails now</button>
         <a class="btn btn-ghost" href="settings.php#smtp">⚙️ SMTP settings</a>
     </div>

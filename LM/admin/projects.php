@@ -66,6 +66,7 @@ lm_admin_page_start('Script projects', 'projects');
         <p>Every project you add here becomes a target for Push Updates and GitHub Pull. Each one gets its own storage folder in cPanel, its own version history and its own licence pool.</p>
     </div>
     <div class="head-actions">
+        <?= lm_guide_help_button('projects') ?>
         <button class="btn btn-primary" type="button" onclick="newProject()">＋ New project</button>
     </div>
 </div>

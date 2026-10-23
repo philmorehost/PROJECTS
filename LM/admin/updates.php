@@ -263,6 +263,7 @@ $flash = $_GET['flash'] ?? '';
         <a class="nav" href="update-notifications.php">🔔 Notifications</a>
         <a class="nav" href="projects.php">🧩 Script Projects</a>
         <div class="section">System</div>
+        <a class="nav" href="guide.php">📖 Admin Guide</a>
         <a class="nav" href="settings.php">⚙️ Settings</a>
         <a class="nav" href="profile.php">👤 Profile</a>
         <a class="nav" href="system-check.php">✅ System Check</a>
@@ -278,6 +279,7 @@ $flash = $_GET['flash'] ?? '';
                 <p>Publish new versions for any of your script projects. Customers are notified automatically, and a gentle reminder goes out the next day if their site has not been updated.</p>
             </div>
             <div class="head-actions">
+                <?= lm_guide_help_button('push') ?>
                 <a class="btn btn-ghost" href="github-updates.php">🐙 Pull from GitHub</a>
                 <a class="btn btn-ghost" href="update-notifications.php">🔔 Notifications</a>
                 <a class="btn btn-dark" href="projects.php">🧩 Manage projects</a>
