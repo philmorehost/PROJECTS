@@ -104,14 +104,29 @@ lm_admin_page_start('GitHub Pull', 'github');
             <form id="configForm">
                 <div class="field">
                     <label for="githubRepo">Repository</label>
-                    <input class="input mono" type="text" id="githubRepo" name="github_repo" placeholder="owner/repo or https://github.com/owner/repo">
-                    <div class="hint">Private repositories work too — paste a PAT below with <strong>Contents: Read</strong> permission.</div>
+                    <div class="repo-picker" id="repoPicker">
+                        <div class="repo-input-row">
+                            <input class="input mono" type="text" id="githubRepo" name="github_repo"
+                                   placeholder="Start typing — or pick from the list" autocomplete="off" spellcheck="false">
+                            <button class="btn btn-ghost btn-sm" type="button" id="repoRefreshBtn" title="Reload the list from GitHub">↻</button>
+                        </div>
+                        <div class="repo-menu" id="repoMenu" hidden>
+                            <div class="repo-menu-head">
+                                <input type="search" id="repoFilter" placeholder="Search repositories…" autocomplete="off">
+                                <span class="repo-menu-count" id="repoCount">—</span>
+                            </div>
+                            <div class="repo-menu-list" id="repoList"></div>
+                            <div class="repo-menu-foot" id="repoFoot"></div>
+                        </div>
+                    </div>
+                    <div class="hint" id="repoHint">Loading the repositories your token can see…</div>
                 </div>
                 <div class="grid-2">
                     <div class="field">
                         <label for="githubBranch">Branch</label>
-                        <input class="input mono" type="text" id="githubBranch" name="github_branch" placeholder="main">
-                        <div class="hint">Empty = repository default branch.</div>
+                        <input class="input mono" type="text" id="githubBranch" name="github_branch" list="branchList" placeholder="main" autocomplete="off">
+                        <datalist id="branchList"></datalist>
+                        <div class="hint">Picked automatically from the repository — empty = its default branch.</div>
                     </div>
                     <div class="field">
                         <label for="githubSubdir">Default folder <span class="muted tiny">(optional)</span></label>
@@ -542,6 +557,230 @@ lm_admin_page_start('GitHub Pull', 'github');
         }
     }
 
+    /* -----------------------------------------------------------------
+     * Repository list — every repo the shared token can see, fetched once
+     * per page load (server caches for 5 minutes) and searchable.
+     * ----------------------------------------------------------------- */
+    const REPOS = {
+        loaded: false,
+        loading: false,
+        items: [],
+        query: '',
+        truncated: false,
+        fetchedAt: 0,
+        error: ''
+    };
+
+    function repoMenuOpen() {
+        el('repoMenu').hidden = false;
+    }
+
+    function repoMenuClose() {
+        el('repoMenu').hidden = true;
+    }
+
+    function repoMatches(item, query) {
+        if (!query) return true;
+        const haystack = (item.full_name + ' ' + (item.description || '') + ' ' + (item.owner || '')).toLowerCase();
+        return query.toLowerCase().split(/\s+/).filter(Boolean).every(part => haystack.indexOf(part) !== -1);
+    }
+
+    function timeAgo(unix) {
+        if (!unix) return 'just now';
+        const seconds = Math.max(0, Math.round(Date.now() / 1000 - unix));
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return Math.round(seconds / 60) + ' min ago';
+        if (seconds < 86400) return Math.round(seconds / 3600) + ' h ago';
+        return Math.round(seconds / 86400) + ' d ago';
+    }
+
+    function renderRepoMenu() {
+        const box = el('repoList');
+
+        if (REPOS.loading) {
+            box.innerHTML = '<div class="repo-empty">Loading repositories from GitHub…</div>';
+            el('repoCount').textContent = '…';
+            return;
+        }
+
+        if (REPOS.error) {
+            box.innerHTML = '<div class="repo-empty">' + escapeHtml(REPOS.error) + '</div>';
+            el('repoCount').textContent = '—';
+            return;
+        }
+
+        const items = REPOS.items.filter(item => repoMatches(item, REPOS.query));
+        el('repoCount').textContent = items.length + ' / ' + REPOS.items.length;
+
+        if (!items.length) {
+            box.innerHTML = REPOS.items.length
+                ? '<div class="repo-empty">No repository matches “' + escapeHtml(REPOS.query) + '”.</div>'
+                : '<div class="repo-empty">This token cannot see any repository.</div>';
+            return;
+        }
+
+        const current = (el('githubRepo').value || '').trim().toLowerCase();
+        let html = '';
+
+        items.slice(0, 200).forEach(item => {
+            const active = item.full_name.toLowerCase() === current;
+            html += '<div class="repo-item' + (active ? ' active' : '') + '" data-repo="' + escapeHtml(item.full_name) + '"'
+                + ' data-branch="' + escapeHtml(item.default_branch || '') + '" tabindex="0">'
+                + '<span aria-hidden="true">' + (item.private ? '🔒' : '🌐') + '</span>'
+                + '<div style="flex:1;min-width:0;">'
+                + '<div class="name">' + escapeHtml(item.full_name) + '</div>'
+                + (item.description ? '<div class="meta">' + escapeHtml(item.description) + '</div>' : '')
+                + '</div>'
+                + (item.fork ? '<span class="badge badge-slate">fork</span>' : '')
+                + (item.archived ? '<span class="badge badge-amber">archived</span>' : '')
+                + '</div>';
+        });
+
+        if (items.length > 200) {
+            html += '<div class="repo-empty">' + (items.length - 200) + ' more matches — keep typing to narrow it down.</div>';
+        }
+
+        box.innerHTML = html;
+        el('repoFoot').textContent = REPOS.truncated
+            ? 'Showing the 500 most recently updated repositories.'
+            : '';
+    }
+
+    async function loadRepos(force) {
+        if (REPOS.loading) return;
+        if (REPOS.loaded && !force) {
+            renderRepoMenu();
+            return;
+        }
+
+        REPOS.loading = true;
+        REPOS.error = '';
+        renderRepoMenu();
+
+        const result = await lmPost('ajax_github.php', {
+            action: 'repos',
+            tier_id: currentProject ? currentProject.id : 0,
+            refresh: force ? 1 : 0
+        });
+
+        REPOS.loading = false;
+
+        if (result.status === 'error') {
+            REPOS.loaded = false;
+            REPOS.error = result.message;
+            el('repoHint').innerHTML = 'Could not list repositories — you can still type <code>owner/repo</code>.';
+            renderRepoMenu();
+            return;
+        }
+
+        REPOS.items = result.repos || [];
+        REPOS.loaded = true;
+        REPOS.truncated = !!result.truncated;
+        REPOS.fetchedAt = result.fetched_at || 0;
+
+        el('repoHint').innerHTML = '📚 <strong>' + REPOS.items.length + '</strong> repositor'
+            + (REPOS.items.length === 1 ? 'y' : 'ies')
+            + ' visible to your ' + (result.token_source === 'project' ? 'project' : 'shared') + ' token'
+            + (REPOS.truncated ? ' (newest 500)' : '')
+            + ' · updated ' + timeAgo(REPOS.fetchedAt) + '. Click the field to browse.';
+
+        renderRepoMenu();
+    }
+
+    async function loadBranches() {
+        if (!currentProject) return;
+
+        const repo = el('githubRepo').value.trim();
+        if (!repo) return;
+
+        const result = await lmPost('ajax_github.php', {
+            action: 'branches',
+            tier_id: currentProject.id,
+            repo: repo,
+            branch: el('githubBranch').value.trim()
+        });
+
+        if (result.status !== 'success') return;
+
+        el('branchList').innerHTML = (result.branches || [])
+            .map(branch => '<option value="' + escapeHtml(branch) + '"></option>')
+            .join('');
+
+        if (!el('githubBranch').value && result.branch) {
+            el('githubBranch').placeholder = result.branch;
+        }
+    }
+
+    async function chooseRepo(fullName, defaultBranch) {
+        el('githubRepo').value = fullName;
+        el('githubBranch').value = '';
+        el('githubBranch').placeholder = defaultBranch || 'default branch';
+        repoMenuClose();
+        REPOS.query = '';
+        el('repoFilter').value = '';
+
+        await loadBranches();
+        await loadTree();
+        loadPreview(true);
+    }
+
+    el('githubRepo').addEventListener('focus', function () {
+        repoMenuOpen();
+        loadRepos(false);
+    });
+
+    el('githubRepo').addEventListener('input', function () {
+        REPOS.query = this.value.trim();
+        repoMenuOpen();
+        renderRepoMenu();
+    });
+
+    el('githubRepo').addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+
+        const first = el('repoList').querySelector('.repo-item');
+        if (!el('repoMenu').hidden && first) {
+            chooseRepo(first.dataset.repo, first.dataset.branch);
+        } else {
+            repoMenuClose();
+            loadBranches();
+            loadTree();
+        }
+    });
+
+    el('repoFilter').addEventListener('input', function () {
+        REPOS.query = this.value.trim();
+        renderRepoMenu();
+    });
+
+    el('repoFilter').addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const first = el('repoList').querySelector('.repo-item');
+        if (first) chooseRepo(first.dataset.repo, first.dataset.branch);
+    });
+
+    el('repoList').addEventListener('click', function (event) {
+        const item = event.target.closest('.repo-item');
+        if (item) chooseRepo(item.dataset.repo, item.dataset.branch);
+    });
+
+    el('repoList').addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        const item = event.target.closest('.repo-item');
+        if (item) chooseRepo(item.dataset.repo, item.dataset.branch);
+    });
+
+    el('repoRefreshBtn').addEventListener('click', async function () {
+        repoMenuOpen();
+        await loadRepos(true);
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('#repoPicker')) repoMenuClose();
+    });
+
     async function loadTree() {
         if (!currentProject) return;
         const button = el('reloadTreeBtn');
@@ -549,7 +788,12 @@ lm_admin_page_start('GitHub Pull', 'github');
         button.textContent = 'Loading…';
         PICKER.loading = true;
 
-        const result = await lmPost('ajax_github.php', { action: 'tree', tier_id: currentProject.id });
+        const result = await lmPost('ajax_github.php', {
+            action: 'tree',
+            tier_id: currentProject.id,
+            repo: el('githubRepo').value.trim(),
+            branch: el('githubBranch').value.trim()
+        });
 
         PICKER.loading = false;
         button.disabled = false;
@@ -684,6 +928,7 @@ lm_admin_page_start('GitHub Pull', 'github');
         loadPulls();
 
         if (currentProject.repo_full) {
+            loadBranches();
             loadTree();
         }
     }
@@ -844,7 +1089,12 @@ lm_admin_page_start('GitHub Pull', 'github');
         const button = this;
         button.disabled = true;
         button.textContent = 'Testing…';
-        const result = await lmPost('ajax_github.php', { action: 'test', tier_id: currentProject.id });
+        const result = await lmPost('ajax_github.php', {
+            action: 'test',
+            tier_id: currentProject.id,
+            repo: el('githubRepo').value.trim(),
+            branch: el('githubBranch').value.trim()
+        });
         button.disabled = false;
         button.textContent = 'Test connection';
 
@@ -886,7 +1136,12 @@ lm_admin_page_start('GitHub Pull', 'github');
         }
 
         const summary = selectionSummary();
-        const payload = { action: 'preview', tier_id: currentProject.id };
+        const payload = {
+            action: 'preview',
+            tier_id: currentProject.id,
+            repo: el('githubRepo').value.trim(),
+            branch: el('githubBranch').value.trim()
+        };
         if (PICKER.loaded && summary.count > 0) {
             payload['paths[]'] = summary.selectors;
         } else if (PICKER.loaded) {
@@ -1077,6 +1332,7 @@ lm_admin_page_start('GitHub Pull', 'github');
     }
 
     selectProject(el('tierSelect').value);
+    loadRepos(false);
 </script>
 
 <?php endif; ?>

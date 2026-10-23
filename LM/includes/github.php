@@ -216,6 +216,215 @@ if (!function_exists('lm_github_token_probe')) {
     }
 }
 
+if (!function_exists('lm_github_link_rel')) {
+    /**
+     * Read a page number out of GitHub's Link header.
+     *
+     * `<https://api.github.com/user/repos?page=2>; rel="next", <...?page=7>; rel="last"`
+     *
+     * @param string $header
+     * @param string $rel next|last|prev|first
+     * @return int|null
+     */
+    function lm_github_link_rel($header, $rel = 'next')
+    {
+        if ((string) $header === '') {
+            return null;
+        }
+        if (preg_match('/[?&]page=(\d+)[^>]*>;\s*rel="' . preg_quote($rel, '/') . '"/i', (string) $header, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+}
+
+if (!function_exists('lm_github_normalize_repo')) {
+    /**
+     * Trim a `/user/repos` row down to what the picker needs.
+     *
+     * @param array $repo
+     * @return array
+     */
+    function lm_github_normalize_repo(array $repo)
+    {
+        $fullName = (string) ($repo['full_name'] ?? '');
+        $owner = (string) ($repo['owner']['login'] ?? '');
+        if ($fullName === '' && $owner !== '') {
+            $fullName = $owner . '/' . (string) ($repo['name'] ?? '');
+        }
+
+        $description = trim((string) ($repo['description'] ?? ''));
+        if (function_exists('mb_substr')) {
+            $description = mb_substr($description, 0, 120);
+        } else {
+            $description = substr($description, 0, 120);
+        }
+
+        return array(
+            'full_name' => $fullName,
+            'name' => (string) ($repo['name'] ?? ''),
+            'owner' => $owner,
+            'private' => !empty($repo['private']),
+            'fork' => !empty($repo['fork']),
+            'archived' => !empty($repo['archived']),
+            'default_branch' => (string) ($repo['default_branch'] ?? ''),
+            'description' => $description,
+            'updated_at' => (string) ($repo['updated_at'] ?? ''),
+            'pushed_at' => (string) ($repo['pushed_at'] ?? ''),
+        );
+    }
+}
+
+if (!function_exists('lm_github_list_repos')) {
+    /**
+     * Every repository the token can reach, with a short-lived disk cache.
+     *
+     * The list is what the admin picks from on the GitHub Pull screen, so it
+     * must include repositories created after the token was issued — a token
+     * with "All repositories" (or the classic `repo` scope) covers those.
+     *
+     * @param string $token
+     * @param array  $options refresh (bool), ttl (int), max_pages (int)
+     * @return array{ok:bool,error:string,repos:array,truncated:bool,cached:bool,fetched_at:int,count:int}
+     */
+    function lm_github_list_repos($token, array $options = array())
+    {
+        $token = trim((string) $token);
+        $out = array(
+            'ok' => false,
+            'error' => '',
+            'repos' => array(),
+            'truncated' => false,
+            'cached' => false,
+            'fetched_at' => 0,
+            'count' => 0,
+        );
+
+        if ($token === '') {
+            $out['error'] = 'No GitHub token is configured. Add one in Settings.';
+            return $out;
+        }
+        $ttl = isset($options['ttl']) ? (int) $options['ttl'] : 300;
+        $refresh = !empty($options['refresh']);
+        $maxPages = isset($options['max_pages']) ? max(1, (int) $options['max_pages']) : 5;
+
+        $cacheDir = lm_storage_dir() . DIRECTORY_SEPARATOR . 'cache';
+        $cacheFile = $cacheDir . DIRECTORY_SEPARATOR . 'github-repos-' . substr(sha1($token), 0, 12) . '.json';
+
+        if (!$refresh && $ttl > 0 && is_file($cacheFile) && (time() - (int) filemtime($cacheFile)) < $ttl) {
+            $cached = json_decode((string) @file_get_contents($cacheFile), true);
+            if (is_array($cached) && isset($cached['repos']) && is_array($cached['repos'])) {
+                $out['ok'] = true;
+                $out['repos'] = $cached['repos'];
+                $out['truncated'] = !empty($cached['truncated']);
+                $out['cached'] = true;
+                $out['fetched_at'] = (int) ($cached['fetched_at'] ?? filemtime($cacheFile));
+                $out['count'] = count($cached['repos']);
+                return $out;
+            }
+        }
+
+        if (!lm_github_available()) {
+            $out['error'] = 'The PHP cURL extension is required for GitHub integration.';
+            return $out;
+        }
+
+        $repos = array();
+        $hasMore = false;
+
+        for ($page = 1; $page <= $maxPages; $page++) {
+            $path = '/user/repos?per_page=100&sort=updated&direction=desc'
+                . '&affiliation=owner,collaborator,organization_member&page=' . $page;
+
+            $res = lm_github_request($path, $token);
+            if (!$res['ok']) {
+                $out['error'] = $res['error'];
+                return $out;
+            }
+
+            if (is_array($res['data'])) {
+                foreach ($res['data'] as $repo) {
+                    if (!is_array($repo)) {
+                        continue;
+                    }
+                    $normalized = lm_github_normalize_repo($repo);
+                    if ($normalized['full_name'] === '') {
+                        continue;
+                    }
+                    $repos[$normalized['full_name']] = $normalized;
+                }
+            }
+
+            $hasMore = lm_github_link_rel((string) ($res['headers']['link'] ?? ''), 'next') !== null;
+            if (!$hasMore) {
+                break;
+            }
+        }
+
+        $repos = array_values($repos);
+        $fetchedAt = time();
+
+        $out['ok'] = true;
+        $out['repos'] = $repos;
+        $out['truncated'] = $hasMore;
+        $out['fetched_at'] = $fetchedAt;
+        $out['count'] = count($repos);
+
+        if (lm_ensure_dir($cacheDir, 0700)) {
+            @file_put_contents($cacheFile, json_encode(array(
+                'fetched_at' => $fetchedAt,
+                'truncated' => $hasMore,
+                'repos' => $repos,
+            ), JSON_UNESCAPED_SLASHES));
+            @chmod($cacheFile, 0600);
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('lm_github_list_branches')) {
+    /**
+     * Branch names for a repository.
+     *
+     * @param string $owner
+     * @param string $repo
+     * @param string $token
+     * @param int    $limit
+     * @return array{ok:bool,error:string,branches:array,truncated:bool}
+     */
+    function lm_github_list_branches($owner, $repo, $token, $limit = 100)
+    {
+        $out = array('ok' => false, 'error' => '', 'branches' => array(), 'truncated' => false);
+
+        if ((string) $owner === '' || (string) $repo === '') {
+            $out['error'] = 'Choose a repository first.';
+            return $out;
+        }
+
+        $path = '/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
+            . '/branches?per_page=' . max(1, min(100, (int) $limit));
+
+        $res = lm_github_request($path, $token);
+        if (!$res['ok']) {
+            $out['error'] = $res['error'];
+            return $out;
+        }
+
+        if (is_array($res['data'])) {
+            foreach ($res['data'] as $branch) {
+                if (is_array($branch) && !empty($branch['name'])) {
+                    $out['branches'][] = (string) $branch['name'];
+                }
+            }
+        }
+
+        $out['truncated'] = lm_github_link_rel((string) ($res['headers']['link'] ?? ''), 'next') !== null;
+        $out['ok'] = true;
+        return $out;
+    }
+}
+
 if (!function_exists('lm_github_request')) {
     /**
      * Perform a GitHub REST API request.
@@ -1199,6 +1408,15 @@ if (!function_exists('lm_github_preview')) {
     function lm_github_preview(PDO $pdo, array $tier, array $options = array())
     {
         $config = lm_github_tier_config($tier);
+
+        // The picker previews a repository that may not be saved yet.
+        if (!empty($options['repo']) && ($parsedRepo = lm_github_parse_repo((string) $options['repo']))) {
+            $config['owner'] = $parsedRepo['owner'];
+            $config['repo'] = $parsedRepo['repo'];
+        }
+        if (!empty($options['branch'])) {
+            $config['branch'] = (string) $options['branch'];
+        }
 
         $preview = array(
             'ok' => false,

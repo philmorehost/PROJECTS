@@ -230,8 +230,8 @@ HTML
                         'html' => <<<'HTML'
 <ol class="lm-guide-steps">
   <li>Choose the <strong>script project</strong> at the top.</li>
-  <li><strong>Repository</strong> — accept these forms: <code>owner/repo</code>, <code>https://github.com/owner/repo</code>, <code>https://github.com/owner/repo.git</code>, or a branch URL <code>…/tree/dev</code> (the branch is read from the URL).</li>
-  <li><strong>Branch</strong> — empty means the repository's default branch.</li>
+  <li><strong>Repository</strong> — click the field and pick from the list of everything your token can see. Typing still works: <code>owner/repo</code>, <code>https://github.com/owner/repo</code>, <code>…/repo.git</code>, or a branch URL <code>…/tree/dev</code> (the branch is read from the URL).</li>
+  <li><strong>Branch</strong> — chosen from that repository's branches; empty means its default branch.</li>
   <li><strong>Default folder</strong> — the project's folder inside the repository, e.g. <code>LM</code>. Used for auto-pull and as the package root.</li>
   <li>Press <strong>Test connection</strong>. You should see the branch, the HEAD commit and whether the repository is public or private.</li>
 </ol>
@@ -239,8 +239,23 @@ HTML
 HTML
                     ),
                     array(
+                        'id' => 'repos',
+                        'title' => 'Step 2 — pick the repository and branch',
+                        'html' => <<<'HTML'
+<p>The page asks GitHub for every repository your token can reach as soon as it loads — old and new, personal and organisation, private included — and prints the count under the field.</p>
+<ol class="lm-guide-steps">
+  <li>Click the <strong>Repository</strong> field. The list opens, most recently updated first. 🔒 marks private repositories, 🌐 public ones, with <em>fork</em> and <em>archived</em> badges where they apply.</li>
+  <li>Type to narrow it down. Several words work — <code>acme admin</code> matches owner plus description.</li>
+  <li>Press <strong>Enter</strong> or click a row. The branch list fills from that repository and the file tree loads straight away — <strong>no need to save first</strong>.</li>
+  <li>Choose a <strong>branch</strong> from the suggestions, or leave it empty for the default branch.</li>
+</ol>
+<p class="lm-guide-note">The list is cached for five minutes on the server. Press <strong>↻</strong> to bypass the cache after creating a repository on GitHub.</p>
+<p>Loading is one API call per 100 repositories — a few units of your 5,000-per-hour quota — and up to 500 repositories are fetched (newest first). The hint under the field says when the list was truncated.</p>
+HTML
+                    ),
+                    array(
                         'id' => 'token',
-                        'title' => 'Step 2 — one token for every repository',
+                        'title' => 'Step 3 — one token for every repository',
                         'html' => <<<'HTML'
 <p>Public repositories need no token. For private ones you need a personal access token — but only <strong>one for the whole installation</strong>. Paste it once in <em>Settings → GitHub Access Token</em>; every project without a token of its own uses it, including projects you create next month.</p>
 <table class="lm-guide-table">
@@ -266,7 +281,7 @@ HTML
                     ),
                     array(
                         'id' => 'files',
-                        'title' => 'Step 3 — choose the folders and files',
+                        'title' => 'Step 4 — choose the folders and files',
                         'html' => <<<'HTML'
 <p>Press <strong>↻ Load files</strong>. The LM reads the branch tree and shows it as an expandable list.</p>
 <ul>
@@ -296,7 +311,7 @@ HTML
                     ),
                     array(
                         'id' => 'publish',
-                        'title' => 'Step 4 — preview and publish',
+                        'title' => 'Step 5 — preview and publish',
                         'html' => <<<'HTML'
 <p><strong>↻ Refresh preview</strong> shows the commits since the last pull, the changed files, the version that will be used and the generated changelog.</p>
 <ul>

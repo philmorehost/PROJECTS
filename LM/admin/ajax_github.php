@@ -24,17 +24,106 @@ if (!lm_verify_csrf()) {
 
 $action = (string) ($_POST['action'] ?? '');
 $tierId = (int) ($_POST['tier_id'] ?? 0);
+$tier = null;
 
-if ($tierId <= 0) {
-    lm_json(array('status' => 'error', 'message' => 'Choose a script project.'));
+if ($tierId > 0) {
+    $stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
+    $stmt->execute(array($tierId));
+    $tier = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
-$stmt->execute(array($tierId));
-$tier = $stmt->fetch(PDO::FETCH_ASSOC);
+/**
+ * Effective repository/branch for the current request.
+ *
+ * The picker works before anything is saved: the page sends the repository it
+ * has selected, and only falls back to the stored configuration.
+ *
+ * @param array $tier
+ * @param array $config Already normalised tier config
+ * @return array owner, repo, branch, token
+ */
+function lm_github_request_target(array $tier, array $config)
+{
+    $target = array(
+        'owner' => $config['owner'],
+        'repo' => $config['repo'],
+        'branch' => $config['branch'],
+        'token' => $config['token'],
+    );
+
+    $postedRepo = trim((string) ($_POST['repo'] ?? ''));
+    $parsed = $postedRepo !== '' ? lm_github_parse_repo($postedRepo) : false;
+    if ($parsed) {
+        $target['owner'] = $parsed['owner'];
+        $target['repo'] = $parsed['repo'];
+        if ($target['branch'] === '' && $parsed['branch'] !== '') {
+            $target['branch'] = $parsed['branch'];
+        }
+    }
+
+    $postedBranch = trim((string) ($_POST['branch'] ?? ''));
+    if ($postedBranch !== '') {
+        $target['branch'] = $postedBranch;
+    }
+
+    return $target;
+}
+
+if ($action === 'repos') {
+    if (!lm_github_available()) {
+        lm_json(array('status' => 'error', 'message' => 'Enable the PHP cURL extension to list repositories.'));
+    }
+
+    $token = $tier ? lm_github_tier_token($tier) : lm_github_default_token();
+    $source = $tier ? lm_github_token_source($tier) : (lm_github_default_token() !== '' ? 'default' : 'none');
+
+    if ($token === '') {
+        lm_json(array(
+            'status' => 'error',
+            'message' => 'No GitHub token yet. Add one in Settings → GitHub Access Token.',
+        ));
+    }
+
+    $list = lm_github_list_repos($token, array('refresh' => !empty($_POST['refresh'])));
+
+    if (!$list['ok']) {
+        lm_json(array('status' => 'error', 'message' => $list['error']));
+    }
+
+    lm_json(array(
+        'status' => 'success',
+        'repos' => $list['repos'],
+        'count' => $list['count'],
+        'truncated' => $list['truncated'],
+        'cached' => $list['cached'],
+        'fetched_at' => $list['fetched_at'],
+        'token_source' => $source,
+    ));
+}
 
 if (!$tier) {
-    lm_json(array('status' => 'error', 'message' => 'Project not found.'));
+    lm_json(array('status' => 'error', 'message' => 'Choose a script project.'), 400);
+}
+
+if ($action === 'branches') {
+    $config = lm_github_tier_config($tier);
+    $target = lm_github_request_target($tier, $config);
+
+    if ($target['owner'] === '' || $target['repo'] === '') {
+        lm_json(array('status' => 'error', 'message' => 'Choose a repository first.'));
+    }
+
+    $branches = lm_github_list_branches($target['owner'], $target['repo'], $target['token']);
+    if (!$branches['ok']) {
+        lm_json(array('status' => 'error', 'message' => $branches['error']));
+    }
+
+    lm_json(array(
+        'status' => 'success',
+        'branch' => $target['branch'],
+        'branches' => $branches['branches'],
+        'truncated' => $branches['truncated'],
+    ));
 }
 
 if ($action === 'save_config') {
@@ -154,7 +243,16 @@ if ($action === 'test') {
         lm_json(array('status' => 'error', 'message' => 'Enable the PHP cURL extension to connect to GitHub.'));
     }
 
-    $test = lm_github_test_connection($tier);
+    $postedRepo = trim((string) ($_POST['repo'] ?? ''));
+    $testTier = $tier;
+    if ($postedRepo !== '') {
+        $testTier['github_repo'] = $postedRepo;
+        if (trim((string) ($_POST['branch'] ?? '')) !== '') {
+            $testTier['github_branch'] = trim((string) $_POST['branch']);
+        }
+    }
+
+    $test = lm_github_test_connection($testTier);
 
     if (!$test['ok']) {
         lm_json(array('status' => 'error', 'message' => $test['error']));
@@ -188,7 +286,11 @@ if ($action === 'preview') {
         ? (is_array($_POST['paths']) ? $_POST['paths'] : array())
         : null;
 
-    $preview = lm_github_preview($pdo, $tier, array('paths' => $previewPaths));
+    $preview = lm_github_preview($pdo, $tier, array(
+        'paths' => $previewPaths,
+        'repo' => trim((string) ($_POST['repo'] ?? '')),
+        'branch' => trim((string) ($_POST['branch'] ?? '')),
+    ));
 
     if (!$preview['ok']) {
         lm_json(array('status' => 'error', 'message' => $preview['error']));
@@ -294,28 +396,29 @@ if ($action === 'tree') {
     }
 
     $config = lm_github_tier_config($tier);
+    $target = lm_github_request_target($tier, $config);
 
-    if ($config['owner'] === '' || $config['repo'] === '') {
-        lm_json(array('status' => 'error', 'message' => 'Save a repository first, then load its files.'));
+    if ($target['owner'] === '' || $target['repo'] === '') {
+        lm_json(array('status' => 'error', 'message' => 'Choose a repository first.'));
     }
 
-    $info = lm_github_repo_info($config['owner'], $config['repo'], $config['token']);
+    $info = lm_github_repo_info($target['owner'], $target['repo'], $target['token']);
     if (!$info['ok']) {
         lm_json(array('status' => 'error', 'message' => $info['error']));
     }
 
-    $branch = $config['branch'] !== '' ? $config['branch'] : (string) ($info['data']['default_branch'] ?? 'main');
+    $branch = $target['branch'] !== '' ? $target['branch'] : (string) ($info['data']['default_branch'] ?? 'main');
     $ref = trim((string) ($_POST['ref'] ?? ''));
     if ($ref === '') {
         $ref = $branch;
     }
 
-    $head = lm_github_branch_head($config['owner'], $config['repo'], $ref, $config['token']);
+    $head = lm_github_branch_head($target['owner'], $target['repo'], $ref, $target['token']);
     if (!$head['ok']) {
         lm_json(array('status' => 'error', 'message' => $head['error']));
     }
 
-    $tree = lm_github_tree($config['owner'], $config['repo'], $head['commit']['sha'], $config['token']);
+    $tree = lm_github_tree($target['owner'], $target['repo'], $head['commit']['sha'], $target['token']);
     if (!$tree['ok']) {
         lm_json(array('status' => 'error', 'message' => $tree['error']));
     }
@@ -328,7 +431,7 @@ if ($action === 'tree') {
 
     lm_json(array(
         'status' => 'success',
-        'repo' => $info['data']['full_name'] ?? ($config['owner'] . '/' . $config['repo']),
+        'repo' => $info['data']['full_name'] ?? ($target['owner'] . '/' . $target['repo']),
         'private' => !empty($info['data']['private']),
         'branch' => $ref,
         'commit' => $head['commit']['sha'],

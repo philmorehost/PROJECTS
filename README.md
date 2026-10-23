@@ -32,7 +32,8 @@ works* button that opens the relevant sections in a side drawer.
 
 GitHub pulls need a token only once: *Settings → GitHub Access Token* stores one
 encrypted token for the whole installation, and every project without its own
-token inherits it.
+token inherits it. GitHub Pull then lists every repository that token can see —
+pick one, pick a branch, tick folders and files.
 
 Setup, integration snippets and troubleshooting: [`LM/docs/UPDATES.md`](LM/docs/UPDATES.md).
 Cron: `*/10 * * * * /usr/local/bin/php /home/USER/public_html/lm/cron.php`.

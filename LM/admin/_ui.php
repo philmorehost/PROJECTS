@@ -118,6 +118,29 @@ if (!function_exists('lm_admin_page_start')) {
         .badge-amber { background: #fffbeb; color: #b45309; }
         .badge-red { background: #fef2f2; color: #b91c1c; }
         .badge-slate { background: #f1f5f9; color: #475569; }
+
+        /* Repository combobox — in flow, because cards clip overflow */
+        .repo-picker { position: relative; }
+        .repo-input-row { display: flex; gap: 8px; align-items: stretch; }
+        .repo-input-row .input { flex: 1; min-width: 0; }
+        .repo-menu { margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+            box-shadow: 0 12px 28px rgba(15,23,42,.08); overflow: hidden; }
+        .repo-menu-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid #f1f5f9; background: #fbfcfe; }
+        .repo-menu-head input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+            font: inherit; font-size: 12.5px; background: #fff; color: #0f172a; }
+        .repo-menu-head input:focus { outline: none; border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+        .repo-menu-count { font-size: 10.5px; color: #94a3b8; font-weight: 700; white-space: nowrap; }
+        .repo-menu-list { max-height: 270px; overflow-y: auto; }
+        .repo-item { display: flex; gap: 9px; align-items: center; padding: 9px 12px; cursor: pointer;
+            border-bottom: 1px solid #f6f8fb; }
+        .repo-item:last-child { border-bottom: 0; }
+        .repo-item:hover, .repo-item:focus { background: #f5f7ff; }
+        .repo-item.active { background: #eef2ff; }
+        .repo-item .name { font-size: 12.5px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; }
+        .repo-item .meta { font-size: 11px; color: #94a3b8; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .repo-empty { padding: 22px 14px; text-align: center; color: #94a3b8; font-size: 12.5px; line-height: 1.6; }
+        .repo-menu-foot { padding: 7px 12px; border-top: 1px solid #f1f5f9; background: #fbfcfe; font-size: 10.5px; color: #94a3b8; }
+        .repo-menu-foot:empty { display: none; }
         .banner { padding: 14px 18px; border-radius: 13px; font-size: 13.5px; font-weight: 600; margin-bottom: 18px; line-height: 1.6; }
         .banner-ok { background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; }
         .banner-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }

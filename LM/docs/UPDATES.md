@@ -88,11 +88,30 @@ A ready-to-paste PHP client is shown in **Projects → Integration**.
 
 Open **Admin → GitHub Pull**, choose a project, then:
 
-1. **Repository** — `owner/repo`, a full `https://github.com/owner/repo` URL, or a
-   `…/tree/branch` URL. The branch is picked up from `tree/` URLs.
-2. **Branch** — empty means the repository default branch.
+1. **Repository** — click the field and pick from the list, or type `owner/repo`,
+   a full `https://github.com/owner/repo` URL, or a `…/tree/branch` URL.
+2. **Branch** — suggestions come from the repository; empty means the default branch.
 3. **Sub-folder** — for monorepos (e.g. `backend`). Only files below it are packaged.
-4. **Token** — required for private repositories.
+4. **Token** — required for private repositories (one shared token covers all of them).
+
+### Picking the repository and branch
+
+The page loads your repository list when it opens: everything the token can see,
+personal and organisation, private included, newest first. The hint under the
+field shows the count and when it was fetched.
+
+* Click the **Repository** field to browse. 🔒 private · 🌐 public · *fork* /
+  *archived* badges.
+* Type to filter — several words match owner, name and description.
+* **Enter** or click a row: the branch list fills from that repository and the
+  file tree loads immediately, even before you save.
+* **↻** bypasses the five-minute server-side cache (use it after creating a repo).
+* Up to 500 repositories are fetched, five pages of 100; the hint says when the
+  list was truncated. One page is one API call.
+
+`GET /user/repos?affiliation=owner,collaborator,organization_member` is what
+GitHub returns here — the same set you see on github.com, so a token with
+**All repositories** keeps working as new repositories appear.
 
 ### Choosing what to package (folder tree picker)
 
@@ -101,6 +120,7 @@ Most projects live in **one repository** — this one, for example, holds `LM/`,
 **↻ Load files**: the LM reads the branch tree (one GitHub API call) and shows
 it as an expandable tree.
 
+* Press **↻ Load files** (or just pick a repository — the tree loads itself).
 * Click a folder name (or **▶**) to open it and see the files inside.
 * **Checkbox on a folder** → everything inside it. A partly-checked folder shows
   the indeterminate dash and tells you how many files it holds.
