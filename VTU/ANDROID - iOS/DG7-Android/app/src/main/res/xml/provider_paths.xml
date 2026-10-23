@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="receipt_cache" path="receipts/" />
+    <!-- External files dir: used to share the downloaded APK with the installer -->
+    <external-files-path name="external_files" path="." />
+</paths>

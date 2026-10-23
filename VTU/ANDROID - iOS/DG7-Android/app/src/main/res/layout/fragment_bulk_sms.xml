@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+                android:layout_height="40dp" android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Bulk SMS"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+
+            <!-- Sender ID section -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="From (Sender ID)"
+                    android:textSize="14sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                <Button android:id="@+id/btn_register_sender_id"
+                    android:layout_width="wrap_content" android:layout_height="36dp"
+                    android:text="+ Register ID" android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+            </LinearLayout>
+
+            <TextView android:id="@+id/tv_no_sender_id"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="No approved Sender IDs. Register one to get started."
+                android:textColor="@color/warning" android:textSize="13sp"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Select Sender ID"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_sender_id"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Network selection -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Network"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_network"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Recipients field with phone counter -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Recipients (comma-separated numbers)" style="@style/InputFieldStyle"
+                android:layout_marginBottom="4dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_recipients" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="textMultiLine"
+                    android:lines="3" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <TextView android:id="@+id/tv_phone_count"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Numbers: 0" android:textSize="12sp"
+                android:textColor="@color/text_primary" android:gravity="end"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Message field with char counter -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Message" style="@style/InputFieldStyle"
+                android:layout_marginBottom="4dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_message" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="textMultiLine"
+                    android:lines="5" android:gravity="top"
+                    android:maxLength="459" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <TextView android:id="@+id/tv_char_count"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="0/459" android:textSize="12sp"
+                android:textColor="@color/text_primary" android:gravity="end"
+                android:layout_marginBottom="24dp" />
+
+            <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+            <Button android:id="@+id/btn_send" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Send SMS"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

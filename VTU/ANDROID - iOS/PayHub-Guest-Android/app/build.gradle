@@ -1,0 +1,122 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.payhub.guest'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.payhub.guest"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+
+        // Change to your production API host before release.
+        buildConfigField "String", "BASE_URL", '"https://payhub.com.ng/"'
+    }
+
+    signingConfigs {
+        release {
+            // Loads credentials from key.properties (gitignored) or CI env vars — never hardcoded.
+            def keyPropsFile = rootProject.file("key.properties")
+            def keystoreBase64 = System.getenv("KEYSTORE_BASE64") ?: ""
+
+            if (keyPropsFile.exists()) {
+                def keyProps = new Properties()
+                keyPropsFile.withInputStream { keyProps.load(it) }
+                def storePath = keyProps['storeFile'] as String
+                def ksFile = rootProject.file(storePath)
+                if (ksFile.exists()) {
+                    storeFile     ksFile
+                    storePassword keyProps['storePassword'] as String
+                    keyAlias      keyProps['keyAlias'] as String
+                    keyPassword   keyProps['keyPassword'] as String
+                }
+            } else if (keystoreBase64) {
+                def keystoreFile = new File("${buildDir}/keystore-release.jks")
+                keystoreFile.parentFile.mkdirs()
+                keystoreFile.bytes = Base64.decoder.decode(keystoreBase64)
+                storeFile     keystoreFile
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias      System.getenv("KEY_ALIAS") ?: ""
+                keyPassword   System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Release builds REQUIRE a real release keystore — fail loudly instead of silently
+            // falling back to debug signing (debug-signed AABs are rejected by Play Store).
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.3'
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
+    implementation 'androidx.activity:activity-compose:1.8.0'
+
+    // Compose BOM keeps all Compose artifact versions in sync
+    implementation platform('androidx.compose:compose-bom:2023.10.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    // Material3 doesn't get pull-to-refresh (PullToRefreshBox) until a Compose BOM newer than
+    // the one pinned here — androidx.compose.material's pullRefresh/rememberPullRefreshState
+    // has been stable for years and mixes fine alongside material3 components.
+    implementation 'androidx.compose.material:material'
+    implementation 'androidx.navigation:navigation-compose:2.7.4'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2'
+
+    // Retrofit & Networking
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Coil for async image loading (network/provider logos)
+    implementation 'io.coil-kt:coil-compose:2.5.0'
+
+    // PDF receipt generation (android.graphics.pdf.PdfDocument, no extra dependency needed)
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation platform('androidx.compose:compose-bom:2023.10.01')
+    androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+}

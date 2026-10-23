@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+                android:layout_height="40dp" android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Buy Electricity"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Select Provider"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_provider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Meter Type"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary"
+                android:layout_marginBottom="6dp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/primary"
+                app:strokeWidth="1dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal">
+                    <Button
+                        android:id="@+id/btn_prepaid"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Prepaid"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        app:cornerRadius="0dp"
+                        style="@style/Widget.Material3.Button" />
+                    <Button
+                        android:id="@+id/btn_postpaid"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Postpaid"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        app:cornerRadius="0dp"
+                        style="@style/Widget.Material3.Button" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Meter Number" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_meter_number" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Amount (₦)" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_amount" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="numberDecimal" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <Button android:id="@+id/btn_verify"
+                android:layout_width="match_parent" android:layout_height="48dp"
+                android:text="Verify Meter"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_marginBottom="8dp" />
+            <LinearLayout android:id="@+id/layout_verified_info"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/success_light"
+                android:padding="12dp"
+                android:layout_marginBottom="24dp"
+                android:visibility="gone">
+                <TextView android:id="@+id/tv_verified_name"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/success" android:textSize="13sp"
+                    android:textStyle="bold" />
+                <TextView android:id="@+id/tv_verified_meter"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary" android:textSize="12sp"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+            <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+            <Button android:id="@+id/btn_buy" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Pay Electricity"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

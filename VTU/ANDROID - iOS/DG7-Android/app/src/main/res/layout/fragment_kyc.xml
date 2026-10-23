@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Toolbar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back"
+                android:layout_width="40dp" android:layout_height="40dp"
+                android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="KYC Verification"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+
+            <ProgressBar android:id="@+id/progress_bar"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="center" android:visibility="gone"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Status card -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="12dp" app:cardElevation="2dp"
+                xmlns:app="http://schemas.android.com/apk/res-auto">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="VERIFICATION STATUS" android:textSize="11sp" android:textStyle="bold"
+                        android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"/>
+                    <TextView android:id="@+id/tv_kyc_status"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="KYC Status: Loading..."
+                        android:textSize="15sp" android:textStyle="bold" android:layout_marginBottom="4dp"/>
+                    <TextView android:id="@+id/tv_bvn_status"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="BVN Saved: —"
+                        android:textSize="13sp" android:layout_marginBottom="2dp"/>
+                    <TextView android:id="@+id/tv_nin_status"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="NIN Saved: —"
+                        android:textSize="13sp"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <Button android:id="@+id/btn_start_vove_i_d"
+                android:layout_width="match_parent" android:layout_height="52dp"
+                android:text="Start VoveID Verification"
+                android:textSize="15sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary"
+                style="@style/Widget.Material3.Button"
+                android:layout_marginBottom="24dp" />
+
+            <!-- BVN / NIN Section -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="STEP 1 — ENTER BVN OR NIN" android:textSize="11sp" android:textStyle="bold"
+                android:textColor="@color/text_secondary" android:layout_marginBottom="12dp"/>
+
+            <!-- Radio group -->
+            <RadioGroup android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="12dp">
+                <RadioButton android:id="@+id/rb_bvn"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="BVN" android:checked="true" android:layout_marginEnd="20dp"/>
+                <RadioButton android:id="@+id/rb_nin"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="NIN" />
+            </RadioGroup>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="BVN or NIN Number"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="12dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_bvn_nin_value"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLength="12"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button android:id="@+id/btn_save_bvn_nin"
+                android:layout_width="match_parent" android:layout_height="48dp"
+                android:text="Save BVN / NIN"
+                android:textSize="14sp"
+                android:backgroundTint="@color/primary"
+                style="@style/Widget.Material3.Button"
+                android:layout_marginBottom="24dp"/>
+
+            <!-- Document Upload Section -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="STEP 2 — UPLOAD IDENTITY DOCUMENTS" android:textSize="11sp" android:textStyle="bold"
+                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Upload a government-issued ID card and a clear selfie. Supported formats: JPG, PNG."
+                android:textSize="12sp" android:textColor="@color/text_secondary"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- Govt ID picker -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+                <Button android:id="@+id/btn_pick_govt_id"
+                    android:layout_width="wrap_content" android:layout_height="42dp"
+                    android:text="Choose ID Card"
+                    android:textSize="13sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_marginEnd="12dp"/>
+                <TextView android:id="@+id/tv_govt_id_name"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="No file selected"
+                    android:textSize="12sp" android:textColor="@color/text_secondary"
+                    android:ellipsize="end" android:maxLines="1"/>
+            </LinearLayout>
+
+            <!-- Selfie picker -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:layout_marginBottom="20dp">
+                <Button android:id="@+id/btn_pick_selfie"
+                    android:layout_width="wrap_content" android:layout_height="42dp"
+                    android:text="Choose Selfie"
+                    android:textSize="13sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_marginEnd="12dp"/>
+                <TextView android:id="@+id/tv_selfie_name"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="No file selected"
+                    android:textSize="12sp" android:textColor="@color/text_secondary"
+                    android:ellipsize="end" android:maxLines="1"/>
+            </LinearLayout>
+
+            <Button android:id="@+id/btn_upload_documents"
+                android:layout_width="match_parent" android:layout_height="52dp"
+                android:text="Submit for Verification"
+                android:textSize="15sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary"
+                style="@style/Widget.Material3.Button"/>
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

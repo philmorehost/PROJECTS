@@ -1,0 +1,269 @@
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+192.168.57.97
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+192.168.211.97
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+localhost:8080
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+localhost:8080
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+192.168.77.97
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+localhost
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+192.168.205.97
+
+ || VENDOR ACCOUNT UPDATE || VTU Omotere
+Ebenezer
+philmoreict@gmail.com
+09068240860
+Ilorin Kwars State. Nigeria
+localhost
+
+beebayads@gmail.com || VENDOR REGISTRATION || Abdullah
+Ibrahim
+beebayads@gmail.com
+09024089614
+Edun
+localhost:9000
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 0.00
+Balance After: 1000000.00
+Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Type: credit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 0.00
+Balance After Transaction: 1000000.00
+Transaction Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Transaction Type: credit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 4770.00
+Balance After: 1004770.00
+Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Type: credit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 4770.00
+Balance After Transaction: 1004770.00
+Transaction Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Transaction Type: credit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR REGISTRATION || Abdulrahaman
+Habeebullahi
+beebayads@gmail.com
+08124232127
+EUYYUIEO EIEUIEUI
+192.168.99.97
+
+zainab@gmail.com || VENDOR REGISTRATION || Abdulmaleek
+Zainab
+zainab@gmail.com
+09068240860
+Ilorin Kwara
+192.168.164.97
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 0.00
+Balance After: 1000000.00
+Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Type: credit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 0.00
+Balance After Transaction: 1000000.00
+Transaction Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Transaction Type: credit
+
+Best regards,
+The Admin Team
+
+ || VENDOR ACCOUNT UPDATE || Abdulmaleek
+Zainab
+zainab@gmail.com
+09068240860
+Ilorin Kwara
+192.168.147.97
+
+ || VENDOR ACCOUNT UPDATE || Abdulmaleek
+Zainab
+zainab@gmail.com
+09068240860
+Ilorin Kwara
+169.254.6.116
+
+ || VENDOR ACCOUNT UPDATE || Abdulmaleek
+Zainab
+zainab@gmail.com
+09068240860
+Ilorin Kwara
+192.168.74.97
+
+beebayads@gmail.com || VENDOR REGISTRATION CONFIRMATION || Hello,
+
+We are delighted to welcome you as a potential vendor.
+
+Please find below the details you provided:
+
+First Name: Abdulrahaman
+Last Name: Habeebullahi
+Email: beebayads@gmail.com
+Phone: 09068240860
+Address: Ilorin Kwara
+Website: localhost
+
+Thank you for your interest in partnering with us.
+
+Best regards,
+The Vendor Registration Team
+
+ibrahim@gmail.com || VENDOR REGISTRATION CONFIRMATION || Hello,
+
+We are delighted to welcome you as a potential vendor.
+
+Please find below the details you provided:
+
+First Name: Abdulmaleek
+Last Name: Ibrahim
+Email: ibrahim@gmail.com
+Phone: 09068240860
+Address: Ilorin Kwara
+Website: 192.168.74.97
+
+Thank you for your interest in partnering with us.
+
+Best regards,
+The Vendor Registration Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulrahaman Habeebullahi,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 0.00
+Balance After: 1000000.00
+Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Type: credit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdulrahaman
+Balance Before Transaction: 0.00
+Balance After Transaction: 1000000.00
+Transaction Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Transaction Type: credit
+
+Best regards,
+The Admin Team
+
+ibrahim@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 0.00
+Balance After: 1000000.00
+Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Type: credit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: ibrahim@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 0.00
+Balance After Transaction: 1000000.00
+Transaction Amount: 1000000.00 @ 1000000.00
+Description: Account Credited By Admin
+Transaction Type: credit
+
+Best regards,
+The Admin Team

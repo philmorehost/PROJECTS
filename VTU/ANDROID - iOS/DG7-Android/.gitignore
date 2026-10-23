@@ -1,0 +1,11 @@
+.gradle/
+build/
+*.iml
+.idea/
+local.properties
+# Keystore files — stored as GitHub Actions secret (KEYSTORE_BASE64), not in VCS
+keystore/
+*.jks
+*.keystore
+# Release signing properties — contains passwords, never commit
+key.properties

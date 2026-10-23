@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+                android:layout_height="40dp" android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Cable TV"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Select Provider" android:textSize="14sp" android:textStyle="bold"
+                android:textColor="@color/text_primary" android:layout_marginBottom="12dp" />
+            <!-- Provider selector row -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="20dp">
+
+                <LinearLayout android:id="@+id/btn_dstv"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:id="@+id/img_dstv"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/cable_dstv" android:scaleType="fitCenter"
+                        android:contentDescription="DSTV" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="DSTV" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_gotv"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:id="@+id/img_gotv"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/cable_gotv" android:scaleType="fitCenter"
+                        android:contentDescription="GOtv" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="GOtv" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_startimes"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:id="@+id/img_startimes"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/cable_startimes" android:scaleType="fitCenter"
+                        android:contentDescription="StarTimes" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="StarTimes" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_showmax"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:id="@+id/img_showmax"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/cable_showmax" android:scaleType="fitCenter"
+                        android:contentDescription="Showmax" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Showmax" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Package plans dropdown - loaded once a provider is selected -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_plan"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Select Package"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_plan"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- SmartCard / IUC Number input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="SmartCard / IUC Number" style="@style/InputFieldStyle"
+                android:layout_marginBottom="8dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_smartcard" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Explicit verify button -->
+            <Button android:id="@+id/btn_verify_smartcard"
+                android:layout_width="match_parent" android:layout_height="48dp"
+                android:text="Verify SmartCard / IUC"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Verified account info panel -->
+            <LinearLayout android:id="@+id/layout_verified_info"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/success_light"
+                android:padding="12dp"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone">
+                <TextView android:id="@+id/tv_verified_name"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/success" android:textSize="13sp"
+                    android:textStyle="bold" />
+                <TextView android:id="@+id/tv_verified_smartcard"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary" android:textSize="12sp"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+            <Button android:id="@+id/btn_pay" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Pay Now"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

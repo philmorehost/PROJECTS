@@ -1,0 +1,2 @@
+rootProject.name = "DGV6"
+include ':app'

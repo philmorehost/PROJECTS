@@ -1,0 +1,7 @@
+[2026-10-21 11:32:21 Africa/Lagos] SMS LocalServer Gateway STARTED | {"product_name":"mtn","sms_type":"standard_sms","sender_id":"mooha","phone_no":"07030983343","schedule_date":"","api_base_url":"v6.datagifting.com.ng","api_key_set":true}
+[2026-10-21 11:32:21 Africa/Lagos] Initiating cURL to upstream API | https://v6.datagifting.com.ng/web/api/sms.php
+[2026-10-21 11:32:21 Africa/Lagos] Payload built for 'standard_sms' (upstream: 'standard_sms') | {"network":"mtn","sender_id":"mooha","phone_number":"07030983343","type":"standard_sms","message_len":6,"message_preview":"Ffeghf"}
+[2026-10-21 11:32:22 Africa/Lagos] cURL completed | {"http_code":200,"elapsed_ms":127,"curl_errno":0,"curl_error":null,"raw_response_preview":"{\"status\":\"failed\",\"desc\":\"Sender ID 'mooha' is not approved or not registered. Please submit for review.\"}"}
+[2026-10-21 11:32:22 Africa/Lagos] Response decoded successfully | {"status":"failed","desc":"Sender ID 'mooha' is not approved or not registered. Please submit for review."}
+[2026-10-21 11:32:22 Africa/Lagos] RESULT: failed (from provider response) | {"status":"failed","desc":"Sender ID 'mooha' is not approved or not registered. Please submit for review."}
+[2026-10-21 11:32:22 Africa/Lagos] SMS LocalServer Gateway FINISHED | {"api_response":"failed","api_response_status":3,"api_response_description":"Transaction Failed","api_response_text":"Sender ID 'mooha' is not approved or not registered. Please submit for review."}

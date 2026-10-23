@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background overrides for dark mode -->
+    <color name="background">#0F172A</color>
+    <color name="surface">#1E293B</color>
+    <color name="surface_variant">#334155</color>
+
+    <!-- Text overrides for dark mode -->
+    <color name="text_primary">#F1F5F9</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_hint">#64748B</color>
+
+    <!-- Status light backgrounds – dark equivalents for readability -->
+    <color name="primary_light">#1A2F4E</color>
+    <color name="success_light">#0D2E1A</color>
+    <color name="warning_light">#2E1F06</color>
+    <color name="error_light">#2E0F0F</color>
+    <color name="info_light">#0F1E3A</color>
+
+    <!-- Icon background overrides – muted dark versions of the pastel light colours -->
+    <color name="icon_airtime_bg">#3D1C0F</color>
+    <color name="icon_data_bg">#16194A</color>
+    <color name="icon_electric_bg">#2E250A</color>
+    <color name="icon_cable_bg">#0A2A1A</color>
+    <color name="icon_exam_bg">#180D2E</color>
+    <color name="icon_sms_bg">#1F0A38</color>
+    <color name="icon_giftcard_bg">#2E1A0A</color>
+    <color name="icon_vcard_bg">#0A2620</color>
+    <color name="icon_crypto_bg">#2E250A</color>
+    <color name="icon_share_bg">#0A2E10</color>
+    <color name="icon_withdraw_bg">#1E0A38</color>
+    <color name="icon_history_bg">#1A2030</color>
+    <color name="icon_bank_bg">#0D1E38</color>
+    <color name="icon_betting_bg">#2E0D0D</color>
+
+    <!-- Misc overrides for dark mode -->
+    <color name="divider">#334155</color>
+    <color name="card_border">#475569</color>
+    <color name="shimmer_base">#334155</color>
+    <color name="shimmer_highlight">#475569</color>
+</resources>

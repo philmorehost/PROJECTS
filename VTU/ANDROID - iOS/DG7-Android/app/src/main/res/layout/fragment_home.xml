@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/swipe_refresh_home"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+<androidx.core.widget.NestedScrollView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Header with gradient -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/primary"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="48dp"
+            android:paddingBottom="32dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="20dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_greeting"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Hello 👋"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_username"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@username"
+                        android:textColor="#BBDEFB"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btn_notifications"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_home"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#FFFFFF"
+                    android:contentDescription="Notifications" />
+            </LinearLayout>
+
+            <!-- Balance Card (Crypto-style) -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="6dp"
+                app:cardBackgroundColor="@color/primary">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <!-- Label row with eye toggle -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="WALLET BALANCE"
+                            android:textColor="#CCFFFFFF"
+                            android:textSize="11sp"
+                            android:letterSpacing="0.08"
+                            android:textAllCaps="true" />
+
+                        <ImageButton
+                            android:id="@+id/btn_toggle_balance"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:src="@drawable/ic_eye"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:tint="#CCFFFFFF"
+                            android:contentDescription="Toggle balance" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_balance"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="₦0.00"
+                        android:textColor="#FFFFFF"
+                        android:textSize="34sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="20dp" />
+
+                    <!-- Quick action buttons (icon-only, Crypto-style) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <LinearLayout
+                            android:id="@+id/btn_add_money"
+                            android:layout_width="0dp"
+                            android:layout_height="64dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:layout_marginEnd="4dp"
+                            android:background="#33FFFFFF"
+                            android:foreground="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true">
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_wallet"
+                                android:tint="#FFFFFF"
+                                android:contentDescription="Fund wallet" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/btn_withdraw"
+                            android:layout_width="0dp"
+                            android:layout_height="64dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:layout_marginEnd="4dp"
+                            android:background="#33FFFFFF"
+                            android:foreground="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true">
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_bank"
+                                android:tint="#FFFFFF"
+                                android:contentDescription="Withdraw" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/btn_share_balance"
+                            android:layout_width="0dp"
+                            android:layout_height="64dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:background="#33FFFFFF"
+                            android:foreground="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true">
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_share"
+                                android:tint="#FFFFFF"
+                                android:contentDescription="Share fund" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <!-- Services Grid -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quick Services"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Row 1 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <LinearLayout android:id="@+id/btn_airtime"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_airtime" android:padding="12dp"
+                        android:background="@drawable/bg_icon_airtime" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Airtime" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_data"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_data" android:padding="12dp"
+                        android:background="@drawable/bg_icon_data" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Data" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_electric"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_electric" android:padding="12dp"
+                        android:background="@drawable/bg_icon_electric" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Electric" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_cable"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_cable" android:padding="12dp"
+                        android:background="@drawable/bg_icon_cable" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Cable TV" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_nin"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_print" android:padding="12dp"
+                        android:background="@drawable/bg_icon_print" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="NIN" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Row 2 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <LinearLayout android:id="@+id/btn_exam"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_exam" android:padding="12dp"
+                        android:background="@drawable/bg_icon_exam" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Exam Pin" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_sms"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_message" android:padding="12dp"
+                        android:background="@drawable/bg_icon_data" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Bulk SMS" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_giftcard"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_giftcard" android:padding="12dp"
+                        android:background="@drawable/bg_icon_giftcard" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Gift Cards" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_vcard"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_vcard" android:padding="12dp"
+                        android:background="@drawable/bg_icon_vcard" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="V-Card" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_bvn"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_bvn_verify" android:padding="12dp"
+                        android:background="@drawable/bg_icon_bvn_verify" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="BVN" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Row 3 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <LinearLayout android:id="@+id/btn_crypto"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_bitcoin" android:padding="12dp"
+                        android:background="@drawable/bg_icon_crypto" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Crypto" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_betting"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_casino" android:padding="12dp"
+                        android:background="@drawable/bg_icon_betting" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Betting" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_print"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_print" android:padding="12dp"
+                        android:background="@drawable/bg_icon_print" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Print Cards" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_withdraw_shortcut"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_bank" android:padding="12dp"
+                        android:background="@drawable/bg_icon_bank" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Withdraw" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_history"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp">
+                    <ImageView android:layout_width="52dp" android:layout_height="52dp"
+                        android:src="@drawable/ic_grid" android:padding="12dp"
+                        android:background="@drawable/bg_icon_data" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="History" android:textSize="11sp" android:layout_marginTop="4dp"
+                        android:textColor="@color/text_primary" android:gravity="center" />
+                </LinearLayout>
+            </LinearLayout>
+
+
+        </LinearLayout>
+
+        <!-- Recent Transactions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Recent Transactions"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/btn_see_all"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="See All"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:padding="4dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_no_transactions"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No transactions yet"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_gravity="center"
+                android:visibility="gone"
+                android:padding="16dp" />
+
+            <LinearLayout
+                android:id="@+id/container_recent_tx"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

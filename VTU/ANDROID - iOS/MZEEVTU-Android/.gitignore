@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+build_log.txt
+
+# Keystore files — never committed to VCS
+keystore/
+*.jks
+*.keystore
+key.properties

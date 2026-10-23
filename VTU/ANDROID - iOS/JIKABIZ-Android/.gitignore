@@ -1,0 +1,16 @@
+.gradle/
+build/
+*.iml
+.idea/
+local.properties
+# Keystore files — stored as GitHub Actions secret (KEYSTORE_BASE64), not in VCS
+keystore/
+*.jks
+*.keystore
+# Release signing properties — contains passwords, never commit
+key.properties
+# Base64-encoded keystores (the CI path). DG7-Android/release.keystore.b64 is tracked in this
+# repo because nothing ignored *.b64 — do not repeat that here: a release keystore in VCS is
+# permanent (rewriting history does not remove it from clones or forks).
+*.b64
+*.jks.base64

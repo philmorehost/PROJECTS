@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Toolbar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back"
+                android:layout_width="40dp" android:layout_height="40dp"
+                android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Print Hub"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+
+            <!-- Service type tabs (horizontal scroll) -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="SERVICE TYPE" android:textSize="11sp" android:textStyle="bold"
+                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" />
+
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:scrollbars="none" android:layout_marginBottom="20dp">
+                <LinearLayout android:id="@+id/container_service_tabs"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btn_type_data"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Data Card" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button" />
+
+                    <Button android:id="@+id/btn_type_airtime"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Recharge Card" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_cable"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Cable Card" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_electric"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Electric Token" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_exam"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Exam PIN" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_betting"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="Betting Card" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_nin"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="NIN Slip" android:textSize="12sp"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <Button android:id="@+id/btn_type_bvn"
+                        android:layout_width="wrap_content" android:layout_height="36dp"
+                        android:text="BVN Verify" android:textSize="12sp"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Network selection (for data / airtime) -->
+            <LinearLayout android:id="@+id/section_network"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="NETWORK" android:textSize="11sp" android:textStyle="bold"
+                    android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:layout_marginBottom="20dp">
+
+                    <LinearLayout android:id="@+id/btn_mtn"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:gravity="center" android:padding="8dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/selector_network_btn"
+                        android:clickable="true" android:focusable="true">
+                        <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                            android:src="@drawable/net_mtn" android:scaleType="fitCenter"
+                            android:contentDescription="MTN" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="MTN" android:textSize="11sp"
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                    </LinearLayout>
+
+                    <LinearLayout android:id="@+id/btn_glo"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:gravity="center" android:padding="8dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/selector_network_btn"
+                        android:clickable="true" android:focusable="true">
+                        <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                            android:src="@drawable/net_glo" android:scaleType="fitCenter"
+                            android:contentDescription="Glo" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Glo" android:textSize="11sp"
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                    </LinearLayout>
+
+                    <LinearLayout android:id="@+id/btn_airtel"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:gravity="center" android:padding="8dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/selector_network_btn"
+                        android:clickable="true" android:focusable="true">
+                        <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                            android:src="@drawable/net_airtel" android:scaleType="fitCenter"
+                            android:contentDescription="Airtel" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Airtel" android:textSize="11sp"
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                    </LinearLayout>
+
+                    <LinearLayout android:id="@+id/btn_ninemobile"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical"
+                        android:gravity="center" android:padding="8dp"
+                        android:background="@drawable/selector_network_btn"
+                        android:clickable="true" android:focusable="true">
+                        <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                            android:src="@drawable/net_9mobile" android:scaleType="fitCenter"
+                            android:contentDescription="9mobile" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="9mobile" android:textSize="11sp"
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Provider dropdown (for cable / electric / exam / betting) -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_provider"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Select Provider"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_provider"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Plan selection (data type for data cards) -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_data_type"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Data Type"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp"
+                android:visibility="visible">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_data_type"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Plan dropdown -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Select Plan"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_plan"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"
+                    android:focusableInTouchMode="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Quantity -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Quantity (1–40)"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_quantity"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLength="2" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Total price display -->
+            <TextView android:id="@+id/tv_total_price"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Total: ₦0.00"
+                android:textSize="16sp" android:textStyle="bold"
+                android:textColor="@color/primary"
+                android:gravity="center"
+                android:layout_marginBottom="20dp" />
+
+            <ProgressBar android:id="@+id/progress_bar"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="center" android:visibility="gone"
+                android:layout_marginBottom="8dp" />
+
+            <Button android:id="@+id/btn_buy"
+                android:layout_width="match_parent" android:layout_height="52dp"
+                android:text="Buy Cards"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary"
+                style="@style/Widget.Material3.Button" />
+
+            <!-- Generated cards container -->
+            <TextView android:id="@+id/tv_cards_header"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="GENERATED CARDS"
+                android:textSize="11sp" android:textStyle="bold"
+                android:textColor="@color/text_secondary"
+                android:layout_marginTop="24dp" android:layout_marginBottom="8dp"
+                android:visibility="gone" />
+
+            <LinearLayout android:id="@+id/container_cards"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
+

@@ -1,0 +1,1579 @@
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: 192.168.211.97
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: 192.168.211.2
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5920.00
+Balance After: 5898.00
+Amount: 22.00 @ 22.00
+Description: API Checkout Charge: EXAM
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5920.00
+Balance After Transaction: 5898.00
+Transaction Amount: 22.00 @ 22.00
+Description: API Checkout Charge: EXAM
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || USER API STATUS UPDATE || Hello Abdulrahaman, Habeebullahi
+
+We wanted to inform you about the current status of your API:
+
+Activated
+
+Best regards,
+The API Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5898.00
+Balance After: 5676.00
+Amount: 222.00 @ 222.00
+Description: API Checkout Charge: ELECTRIC
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5898.00
+Balance After Transaction: 5676.00
+Transaction Amount: 222.00 @ 222.00
+Description: API Checkout Charge: ELECTRIC
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5676.00
+Balance After: 5655.00
+Amount: 21.00 @ 21.00
+Description: API Checkout Charge: DD-DATA
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5676.00
+Balance After Transaction: 5655.00
+Transaction Amount: 21.00 @ 21.00
+Description: API Checkout Charge: DD-DATA
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5655.00
+Balance After: 5641.00
+Amount: 14.00 @ 14.00
+Description: API Checkout Charge: DD-DATA
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5655.00
+Balance After Transaction: 5641.00
+Transaction Amount: 14.00 @ 14.00
+Description: API Checkout Charge: DD-DATA
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5641.00
+Balance After: 5610.00
+Amount: 31.00 @ 31.00
+Description: API Checkout Charge: EXAM
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5641.00
+Balance After Transaction: 5610.00
+Transaction Amount: 31.00 @ 31.00
+Description: API Checkout Charge: EXAM
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5610.00
+Balance After: 5585.00
+Amount: 25.00 @ 25.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5610.00
+Balance After Transaction: 5585.00
+Transaction Amount: 25.00 @ 25.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5676.00
+Balance After: 5223.00
+Amount: 453.00 @ 453.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5676.00
+Balance After Transaction: 5223.00
+Transaction Amount: 453.00 @ 453.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5585.00
+Balance After: 5560.00
+Amount: 25.00 @ 25.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5585.00
+Balance After Transaction: 5560.00
+Transaction Amount: 25.00 @ 25.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5560.00
+Balance After: 5525.00
+Amount: 35.00 @ 35.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5560.00
+Balance After Transaction: 5525.00
+Transaction Amount: 35.00 @ 35.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5525.00
+Balance After: 5472.00
+Amount: 53.00 @ 53.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5525.00
+Balance After Transaction: 5472.00
+Transaction Amount: 53.00 @ 53.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 1000000.00
+Balance After: 999750.00
+Amount: 250.00 @ 250.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 1000000.00
+Balance After Transaction: 999750.00
+Transaction Amount: 250.00 @ 250.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999750.00
+Balance After: 997750.00
+Amount: 2000.00 @ 2000.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 999750.00
+Balance After Transaction: 997750.00
+Transaction Amount: 2000.00 @ 2000.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 997750.00
+Balance After: 996450.00
+Amount: 1300.00 @ 1300.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 997750.00
+Balance After Transaction: 996450.00
+Transaction Amount: 1300.00 @ 1300.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 996450.00
+Balance After: 996250.00
+Amount: 200.00 @ 200.00
+Description: The Maintenance Fee Ensures The Continuous Upkeep, Enhancements, And Support Of Your Services. It Covers Ongoing Technical Updates, Security Measures, And Dedicated Assistance To Guarantee A Seamless And Reliable Experience For Your Business Operations. - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 996450.00
+Balance After Transaction: 996250.00
+Transaction Amount: 200.00 @ 200.00
+Description: The Maintenance Fee Ensures The Continuous Upkeep, Enhancements, And Support Of Your Services. It Covers Ongoing Technical Updates, Security Measures, And Dedicated Assistance To Guarantee A Seamless And Reliable Experience For Your Business Operations. - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 996250.00
+Balance After: 996150.00
+Amount: 100.00 @ 100.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 996250.00
+Balance After Transaction: 996150.00
+Transaction Amount: 100.00 @ 100.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || WELCOME TO OUR PLATFORM - COMPLETE YOUR REGISTRATION || Dear Abdul IBH,
+
+Thank you for registering with us. We are excited to have you on board!
+
+Please find below the details you provided during registration:
+
+- Email address: beebayads@gmail.com
+- Phone number: 08124232128
+- Username: ibrahim
+- Home address: Edun
+
+If you have any questions or need assistance, feel free to contact us.
+
+Best regards,
+The Support Team
+
+beebayads@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdul IBH,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 0.00
+- Balance After: 500000.00
+- Amount: 500000.00 @ 500000.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+beebayads@gmail.com || TRANSACTION DETAILS || Hello Abdullah, Ibrahim
+
+A transaction has been made by user ibrahim, Abdul.
+
+Previous balance: 0.00
+New balance: 500000.00
+
+Amount: 500000.00 @ 500000.00
+Description: Account Credited By Admin
+Type: credit
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 996150.00
+Balance After: 988650.00
+Amount: 7500.00 @ 7500.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 996150.00
+Balance After Transaction: 988650.00
+Transaction Amount: 7500.00 @ 7500.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR LOGIN NOTIFICATION || Hello Abdullah, Ibrahim,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: Abdullah, Ibrahim
+Email: beebayads@gmail.com
+IP Address: [::1]
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdullah Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 988650.00
+Balance After: 988417.00
+Amount: 233.00 @ 233.00
+Description: API Checkout Charge: CABLE
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdullah
+Balance Before Transaction: 988650.00
+Balance After Transaction: 988417.00
+Transaction Amount: 233.00 @ 233.00
+Description: API Checkout Charge: CABLE
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR LOGIN NOTIFICATION || Hello Abdullah, Ibrahim,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: Abdullah, Ibrahim
+Email: beebayads@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: [::1]
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5127.00
+Balance After: 5115.00
+Amount: 12.00 @ 12.00
+Description: API Checkout Charge: AIRTIME
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5127.00
+Balance After Transaction: 5115.00
+Transaction Amount: 12.00 @ 12.00
+Description: API Checkout Charge: AIRTIME
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 5115.00
+Balance After: 4770.00
+Amount: 345.00 @ 345.00
+Description: API Checkout Charge: AIRTIME
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 5115.00
+Balance After Transaction: 4770.00
+Transaction Amount: 345.00 @ 345.00
+Description: API Checkout Charge: AIRTIME
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 1004770.00
+Balance After: 996024.00
+Amount: 8746.00 @ 8746.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 1004770.00
+Balance After Transaction: 996024.00
+Transaction Amount: 8746.00 @ 8746.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 996024.00
+Balance After: 995481.00
+Amount: 543.00 @ 543.00
+Description: API Checkout Charge: SME-DATA
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 996024.00
+Balance After Transaction: 995481.00
+Transaction Amount: 543.00 @ 543.00
+Description: API Checkout Charge: SME-DATA
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+beebayads@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 45200.00
+- Balance After: 50200.00
+- Amount: 5000.00 @ 5000.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+philmoreict@gmail.com || TRANSACTION DETAILS || Hello VTU Omotere, Ebenezer
+
+A transaction has been made by user beebay, Abdulrahaman.
+
+Previous balance: 45200.00
+New balance: 50200.00
+
+Amount: 5000.00 @ 5000.00
+Description: Account Credited By Admin
+Type: credit
+
+beebayads@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 50200.00
+- Balance After: 50300.00
+- Amount: 100.00 @ 100.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+philmoreict@gmail.com || TRANSACTION DETAILS || Hello VTU Omotere, Ebenezer
+
+A transaction has been made by user beebay, Abdulrahaman.
+
+Previous balance: 50200.00
+New balance: 50300.00
+
+Amount: 100.00 @ 100.00
+Description: Account Credited By Admin
+Type: credit
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 995481.00
+Balance After: 995231.00
+Amount: 250.00 @ 250.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 995481.00
+Balance After Transaction: 995231.00
+Transaction Amount: 250.00 @ 250.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 995231.00
+Balance After: 993231.00
+Amount: 2000.00 @ 2000.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 995231.00
+Balance After Transaction: 993231.00
+Transaction Amount: 2000.00 @ 2000.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 993231.00
+Balance After: 991931.00
+Amount: 1300.00 @ 1300.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 993231.00
+Balance After Transaction: 991931.00
+Transaction Amount: 1300.00 @ 1300.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 991931.00
+Balance After: 991731.00
+Amount: 200.00 @ 200.00
+Description: The Maintenance Fee Ensures The Continuous Upkeep, Enhancements, And Support Of Your Services. It Covers Ongoing Technical Updates, Security Measures, And Dedicated Assistance To Guarantee A Seamless And Reliable Experience For Your Business Operations. - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 991931.00
+Balance After Transaction: 991731.00
+Transaction Amount: 200.00 @ 200.00
+Description: The Maintenance Fee Ensures The Continuous Upkeep, Enhancements, And Support Of Your Services. It Covers Ongoing Technical Updates, Security Measures, And Dedicated Assistance To Guarantee A Seamless And Reliable Experience For Your Business Operations. - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 991731.00
+Balance After: 991631.00
+Amount: 100.00 @ 100.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezer Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 991731.00
+Balance After Transaction: 991631.00
+Transaction Amount: 100.00 @ 100.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || WELCOME TO OUR PLATFORM - COMPLETE YOUR REGISTRATION || Dear Abdullahi Funsho,
+
+Thank you for registering with us. We are excited to have you on board!
+
+Please find below the details you provided during registration:
+
+- Email address: beebayads@gmail.com
+- Phone number: 09068240860
+- Username: beebay
+- Home address: Wuwuwwu
+
+If you have any questions or need assistance, feel free to contact us.
+
+Best regards,
+The Support Team
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 1000000.00
+Balance After: 999877.00
+Amount: 123.00 @ 123.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 1000000.00
+Balance After Transaction: 999877.00
+Transaction Amount: 123.00 @ 123.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR LOGIN NOTIFICATION || Hello VTU Omotere, Ebenezer,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: VTU Omotere, Ebenezer
+Email: philmoreict@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+beebayads@gmail.com || USER API STATUS UPDATE || Hello Abdulrahaman, Habeebullahi
+
+We wanted to inform you about the current status of your API:
+
+Deactivated
+
+Best regards,
+The API Team
+
+beebayads@gmail.com || USER API STATUS UPDATE || Hello Abdulrahaman, Habeebullahi
+
+We wanted to inform you about the current status of your API:
+
+Activated
+
+Best regards,
+The API Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 991631.00
+Balance After: 991508.00
+Amount: 123.00 @ 123.00
+Description: No Comment - Bill Charges
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 991631.00
+Balance After Transaction: 991508.00
+Transaction Amount: 123.00 @ 123.00
+Description: No Comment - Bill Charges
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 46197.20
+- Balance After: 46293.07
+- Amount: 100.00 @ 96.50
+- Description: Refund for Ref:\'0982053234\'
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+philmoreict@gmail.com || TRANSACTION DETAILS || Hello VTU Omotere, Ebenezer
+
+A transaction has been made by user beebay, Abdulrahaman.
+
+Previous balance: 46197.20
+New balance: 46293.07
+
+Amount: 100.00 @ 96.50
+Description: Refund for Ref:\'0982053234\'
+Type: credit
+
+beebayads@gmail.com || REFUND NOTIFICATION || Dear Abdulrahaman Habeebullahi,
+
+We are pleased to inform you that a refund has been processed for you.
+
+Amount: N96.500000000000000000000000000000
+Description: Refund for Ref No: 
+
+If you have any questions or concerns, feel free to reach out to our customer support team.
+
+Best regards,
+The Support Team
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999877.00
+Balance After: 999823.00
+Amount: 54.00 @ 54.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999877.00
+Balance After Transaction: 999823.00
+Transaction Amount: 54.00 @ 54.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdullahi Funsho,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 0.00
+- Balance After: 20000.00
+- Amount: 20000.00 @ 20000.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+zainab@gmail.com || TRANSACTION DETAILS || Hello Abdulmaleek, Zainab
+
+A transaction has been made by user beebay, Abdullahi.
+
+Previous balance: 0.00
+New balance: 20000.00
+
+Amount: 20000.00 @ 20000.00
+Description: Account Credited By Admin
+Type: credit
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999823.00
+Balance After: 999800.00
+Amount: 23.00 @ 23.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999823.00
+Balance After Transaction: 999800.00
+Transaction Amount: 23.00 @ 23.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999800.00
+Balance After: 999346.00
+Amount: 454.00 @ 454.00
+Description: API Checkout Charge: AIRTIME
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999800.00
+Balance After Transaction: 999346.00
+Transaction Amount: 454.00 @ 454.00
+Description: API Checkout Charge: AIRTIME
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 991508.00
+Balance After: 991055.00
+Amount: 453.00 @ 453.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 991508.00
+Balance After Transaction: 991055.00
+Transaction Amount: 453.00 @ 453.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999346.00
+Balance After: 999323.00
+Amount: 23.00 @ 23.00
+Description: API Checkout Charge: BULK-SMS
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999346.00
+Balance After Transaction: 999323.00
+Transaction Amount: 23.00 @ 23.00
+Description: API Checkout Charge: BULK-SMS
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+zainab@gmail.com || VENDOR LOGIN NOTIFICATION || Hello Abdulmaleek, Zainab,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: Abdulmaleek, Zainab
+Email: zainab@gmail.com
+IP Address: 192.168.74.97
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+beebayads@gmail.com || USER API STATUS UPDATE || Hello Abdullahi, Funsho
+
+We wanted to inform you about the current status of your API:
+
+Activated
+
+Best regards,
+The API Team
+
+zainab@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Zainab,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999323.00
+Balance After: 999200.00
+Amount: 123.00 @ 123.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: zainab@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999323.00
+Balance After Transaction: 999200.00
+Transaction Amount: 123.00 @ 123.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+philmoreict@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello VTU Omotere Ebenezer,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 991055.00
+Balance After: 990932.00
+Amount: 123.00 @ 123.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+philmoreict@gmail.com || VENDOR TRANSACTION DETAILS || Hello Ebenezerieui Ueueueueuhghg Omotere,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: philmoreict@gmail.com
+Vendor Name: VTU Omotere
+Balance Before Transaction: 991055.00
+Balance After Transaction: 990932.00
+Transaction Amount: 123.00 @ 123.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR LOGIN NOTIFICATION || Hello Abdulrahaman, Habeebullahi,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: Abdulrahaman, Habeebullahi
+Email: beebayads@gmail.com
+IP Address: ::1
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+ibrahim@gmail.com || VENDOR LOGIN NOTIFICATION || Hello Abdulmaleek, Ibrahim,
+
+We wanted to inform you that there has been a login to your vendor account. Here are the details:
+
+Name: Abdulmaleek, Ibrahim
+Email: ibrahim@gmail.com
+IP Address: 192.168.74.97
+
+If this login was not authorized by you, please contact support immediately.
+
+Best regards,
+The Vendor Management Team
+
+ibrahim@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 1000000.00
+Balance After: 999977.00
+Amount: 23.00 @ 23.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: ibrahim@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 1000000.00
+Balance After Transaction: 999977.00
+Transaction Amount: 23.00 @ 23.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulrahaman Habeebullahi,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 1000000.00
+Balance After: 999977.00
+Amount: 23.00 @ 23.00
+Description: API Checkout Charge: DATACARD
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdulrahaman
+Balance Before Transaction: 1000000.00
+Balance After Transaction: 999977.00
+Transaction Amount: 23.00 @ 23.00
+Description: API Checkout Charge: DATACARD
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+ibrahim@gmail.com || WELCOME TO OUR PLATFORM - COMPLETE YOUR REGISTRATION || Dear Abdulmaleek Ibrahim,
+
+Thank you for registering with us. We are excited to have you on board!
+
+Please find below the details you provided during registration:
+
+- Email address: ibrahim@gmail.com
+- Phone number: 08124232128
+- Username: ibrahim
+- Home address: Ilorin Kwara
+
+If you have any questions or need assistance, feel free to contact us.
+
+Best regards,
+The Support Team
+
+ibrahim@gmail.com || USER API STATUS UPDATE || Hello Abdulmaleek, Ibrahim
+
+We wanted to inform you about the current status of your API:
+
+Activated
+
+Best regards,
+The API Team
+
+zainab@gmail.com || WELCOME TO OUR PLATFORM - COMPLETE YOUR REGISTRATION || Dear Abdulmaleek Zainab,
+
+Thank you for registering with us. We are excited to have you on board!
+
+Please find below the details you provided during registration:
+
+- Email address: zainab@gmail.com
+- Phone number: 08124232127
+- Username: zainab
+- Home address: Ilorin Kwara
+
+If you have any questions or need assistance, feel free to contact us.
+
+Best regards,
+The Support Team
+
+zainab@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdulmaleek Zainab,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 0.00
+- Balance After: 150000.00
+- Amount: 150000.00 @ 150000.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+ibrahim@gmail.com || TRANSACTION DETAILS || Hello Abdulmaleek, Ibrahim
+
+A transaction has been made by user zainab, Abdulmaleek.
+
+Previous balance: 0.00
+New balance: 150000.00
+
+Amount: 150000.00 @ 150000.00
+Description: Account Credited By Admin
+Type: credit
+
+ibrahim@gmail.com || ACCOUNT UPDATE: TRANSACTION DETAILS || Hello Abdulmaleek Ibrahim,
+
+Your account has been updated with the following transaction details:
+
+- Balance Before: 0.00
+- Balance After: 200000.00
+- Amount: 200000.00 @ 200000.00
+- Description: Account Credited By Admin
+- Type: credit
+
+If you have any questions or concerns, feel free to reach out to us.
+
+Best regards,
+The Support Team
+
+beebayads@gmail.com || TRANSACTION DETAILS || Hello Abdulrahaman, Habeebullahi
+
+A transaction has been made by user ibrahim, Abdulmaleek.
+
+Previous balance: 0.00
+New balance: 200000.00
+
+Amount: 200000.00 @ 200000.00
+Description: Account Credited By Admin
+Type: credit
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulrahaman Habeebullahi,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999977.00
+Balance After: 997744.00
+Amount: 2233.00 @ 2233.00
+Description: API Checkout Charge: CABLE
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdulrahaman
+Balance Before Transaction: 999977.00
+Balance After Transaction: 997744.00
+Transaction Amount: 2233.00 @ 2233.00
+Description: API Checkout Charge: CABLE
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+ibrahim@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 999977.00
+Balance After: 997744.00
+Amount: 2233.00 @ 2233.00
+Description: API Checkout Charge: CABLE
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: ibrahim@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 999977.00
+Balance After Transaction: 997744.00
+Transaction Amount: 2233.00 @ 2233.00
+Description: API Checkout Charge: CABLE
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+beebayads@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulrahaman Habeebullahi,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 997744.00
+Balance After: 997701.00
+Amount: 43.00 @ 43.00
+Description: API Checkout Charge: ELECTRIC
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: beebayads@gmail.com
+Vendor Name: Abdulrahaman
+Balance Before Transaction: 997744.00
+Balance After Transaction: 997701.00
+Transaction Amount: 43.00 @ 43.00
+Description: API Checkout Charge: ELECTRIC
+Transaction Type: debit
+
+Best regards,
+The Admin Team
+
+ibrahim@gmail.com || VENDOR CREDIT/DEBIT NOTIFICATION || Hello Abdulmaleek Ibrahim,
+
+This email is to inform you about a recent transaction on your account.
+
+Balance Before: 997744.00
+Balance After: 997679.00
+Amount: 65.00 @ 65.00
+Description: API Checkout Charge: ELECTRIC
+Type: debit
+
+Thank you.
+
+beebayads@gmail.com || VENDOR TRANSACTION DETAILS || Hello Abdulrahaman Habeebullahi,
+
+A new transaction has been made by a vendor. Here are the details:
+
+Vendor Email: ibrahim@gmail.com
+Vendor Name: Abdulmaleek
+Balance Before Transaction: 997744.00
+Balance After Transaction: 997679.00
+Transaction Amount: 65.00 @ 65.00
+Description: API Checkout Charge: ELECTRIC
+Transaction Type: debit
+
+Best regards,
+The Admin Team

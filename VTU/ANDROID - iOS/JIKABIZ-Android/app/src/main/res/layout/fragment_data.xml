@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background">
+
+    <!-- Toolbar -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+        android:background="@color/primary" android:gravity="center_vertical"
+        android:paddingStart="8dp" android:paddingEnd="16dp">
+        <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+            android:layout_height="40dp" android:src="@drawable/ic_home"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:tint="#FFFFFF" android:contentDescription="Back" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="Buy Data"
+            android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+
+            <!-- Network Selection -->
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Select Network" android:textSize="14sp" android:textStyle="bold"
+                android:textColor="@color/text_primary" android:layout_marginBottom="12dp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="8dp">
+
+                <LinearLayout android:id="@+id/btn_mtn"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/net_mtn" android:scaleType="fitCenter"
+                        android:contentDescription="MTN" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="MTN" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_glo"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/net_glo" android:scaleType="fitCenter"
+                        android:contentDescription="Glo" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Glo" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_airtel"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/net_airtel" android:scaleType="fitCenter"
+                        android:contentDescription="Airtel" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Airtel" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/btn_ninemobile"
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="vertical"
+                    android:gravity="center" android:padding="8dp"
+                    android:background="@drawable/selector_network_btn"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/net_9mobile" android:scaleType="fitCenter"
+                        android:contentDescription="9mobile" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="9mobile" android:textSize="11sp"
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <Button android:id="@+id/btn_override_network"
+                android:layout_width="wrap_content" android:layout_height="32dp"
+                android:text="Override Network" android:textSize="12sp"
+                android:layout_gravity="end" android:layout_marginBottom="12dp"
+                android:visibility="gone"
+                style="@style/Widget.Material3.Button.OutlinedButton" />
+
+            <!-- Phone Number -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Phone Number" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_phone" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="phone" android:maxLength="11" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Data Type: drop-down instead of a list of radio-style rows -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Data Type"
+                android:layout_marginBottom="16dp"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_data_type"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none" android:focusable="false"
+                    android:clickable="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Data Plan: drop-down instead of a list of radio-style rows -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Select Plan"
+                android:layout_marginBottom="12dp"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinner_plan"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="none" android:focusable="false"
+                    android:clickable="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView android:id="@+id/tv_no_plans"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="No plans available for the selected network and data type."
+                android:textSize="13sp" android:textColor="@color/text_secondary"
+                android:gravity="center" android:padding="16dp"
+                android:visibility="gone" />
+
+            <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+
+            <Button android:id="@+id/btn_buy" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Buy Data"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

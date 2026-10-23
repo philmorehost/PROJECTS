@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Convert VTU Coins to wallet cash — mirrors web/CoinConversion.php.
+  Rate/minimum/balance all come from the server (bc_get_coin_settings / get_user_vtu_details);
+  nothing here is hardcoded so a vendor's own rate is always what the user sees.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/background">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+        android:background="@color/primary" android:gravity="center_vertical"
+        android:paddingStart="8dp" android:paddingEnd="16dp">
+        <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+            android:layout_height="40dp" android:src="@drawable/ic_home"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:tint="#FFFFFF" android:contentDescription="Back" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="Convert Coins"
+            android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:layout_gravity="center"
+        android:visibility="gone" android:layout_marginTop="16dp" />
+
+    <!-- Shown when the endpoint fails, so the screen never just renders blank fields. -->
+    <TextView android:id="@+id/tv_error" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:textSize="13sp"
+        android:textColor="#C62828" android:gravity="center"
+        android:padding="20dp" android:visibility="gone" />
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="16dp">
+
+            <!-- Balance / rate / minimum -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="#FFF8E1"
+                android:padding="16dp" android:layout_marginBottom="16dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="CURRENT BALANCE"
+                        android:textSize="12sp" android:textStyle="bold" android:textColor="#1E293B" />
+                    <TextView android:id="@+id/tv_coins_balance" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0 Coins"
+                        android:textSize="18sp" android:textStyle="bold" android:textColor="#1E293B" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:layout_marginTop="6dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Rate"
+                        android:textSize="12sp" android:textColor="#64748B" />
+                    <TextView android:id="@+id/tv_rate" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="—"
+                        android:textSize="12sp" android:textColor="#64748B" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:layout_marginTop="2dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:text="Minimum"
+                        android:textSize="12sp" android:textColor="#64748B" />
+                    <TextView android:id="@+id/tv_min" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="—"
+                        android:textSize="12sp" android:textColor="#64748B" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="POINTS TO CONVERT" android:textSize="12sp" android:textStyle="bold"
+                android:textColor="#64748B" android:layout_marginBottom="6dp" />
+
+            <EditText android:id="@+id/et_points" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:inputType="number"
+                android:hint="0" android:textSize="20sp" android:textStyle="bold"
+                android:maxLines="1" />
+
+            <TextView android:id="@+id/tv_naira_value" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="You will receive: ₦0.00"
+                android:textSize="18sp" android:textStyle="bold" android:textColor="#2E7D32"
+                android:gravity="center" android:padding="12dp" android:layout_marginTop="8dp" />
+
+            <!-- Shown only when the typed amount is below the minimum or above the balance, so a
+                 disabled button is never a mystery. -->
+            <TextView android:id="@+id/tv_hint" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textSize="12sp"
+                android:textColor="#C62828" android:gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+
+            <Button android:id="@+id/btn_submit" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="SUBMIT REQUEST"
+                android:enabled="false" android:layout_marginBottom="24dp" />
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="CONVERSION HISTORY" android:textSize="12sp"
+                android:textStyle="bold" android:textColor="#64748B"
+                android:layout_marginBottom="8dp" />
+
+            <TextView android:id="@+id/tv_empty" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="No conversion history found."
+                android:textColor="#64748B" android:textSize="14sp" android:gravity="center"
+                android:padding="24dp" android:visibility="gone" />
+
+            <LinearLayout android:id="@+id/container_history"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -1,0 +1,73 @@
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-primary text-white shadow-sm border-0 rounded-4">
+            <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="bg-white bg-opacity-20 p-2 rounded-3">
+                        <i class="bi bi-wallet2 fs-5 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="fw-semibold opacity-75 text-uppercase ls-1" style="font-size: 10px;">Balance</div>
+                        <div class="h5 fw-bold mb-0">₦<?php echo toDecimal($get_logged_user_details["balance"], "2"); ?></div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="Fund.php" class="btn btn-light btn-sm rounded-pill py-1 px-3 fw-bold shadow-sm" style="font-size: 11px;">Fund Wallet</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ls-1 { letter-spacing: 1px; }
+    .rounded-4 { border-radius: 1rem !important; }
+    .rounded-5 { border-radius: 1.5rem !important; }
+    .form-control, .form-select {
+        border-radius: 0.75rem;
+        padding: 0.75rem 1.25rem;
+        border: 1px solid #e2e8f0;
+    }
+    .btn {
+        border-radius: 0.75rem;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+    }
+    .btn-lg {
+        border-radius: 1rem;
+    }
+    .card {
+        border-radius: 1.25rem;
+    }
+    .carrier-grid {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 1rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .carrier-grid img {
+        transition: all 0.2s;
+        cursor: pointer;
+        opacity: 1;
+        border: 2px solid transparent !important;
+        width: 150px;
+        height: 150px;
+        object-fit: contain;
+        flex-shrink: 0;
+    }
+    @media (max-width: 767px) {
+        .carrier-grid img {
+            width: 100px;
+            height: 100px;
+        }
+    }
+    .carrier-grid img.selected {
+        opacity: 1;
+        border-color: #287bff !important;
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(40, 123, 255, 0.2);
+    }
+</style>

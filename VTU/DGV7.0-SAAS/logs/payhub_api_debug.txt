@@ -1,0 +1,1098 @@
+================================================
+[2026-10-15 20:59:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100004261015195904174392025434
+VID: 0 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11069","status":"success","payment_status":"success","paid":true,"reference":"100004261015195904174392025434","amount":120000,"currency":"NGN","domain":"live","gateway_amount":120000,"fee_amount":1920,"settled_amount":118080,"customer":{"email":"v40.firdausi2me@gmail.com"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-15 20:59:33","metadata":{"vendor_id":40,"target":"vendor","username":
+================================================
+================================================
+[2026-10-15 20:59:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 20:59:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 20:59:38] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-15 21:14:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100004261015201400174395982347
+VID: 0 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11070","status":"success","payment_status":"success","paid":true,"reference":"100004261015201400174395982347","amount":140000,"currency":"NGN","domain":"live","gateway_amount":140000,"fee_amount":2240,"settled_amount":137760,"customer":{"email":"v40.firdausi2me@gmail.com"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-15 21:14:35","metadata":{"vendor_id":40,"target":"vendor","username":
+================================================
+================================================
+[2026-10-15 21:14:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 21:14:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 21:14:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-15 21:15:19] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/PH_cb448c725fbc9384
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":false,"data":{"id":"11068","status":"pending","payment_status":"pending","paid":false,"reference":"PH_cb448c725fbc9384","amount":2040000,"currency":"NGN","domain":"live","gateway_amount":null,"fee_amount":0,"settled_amount":0,"customer":{"email":"firdausi2me@gmail.com"},"gateway_response":"Pending","channel":"card","created_at":"2026-10-15 19:05:10","metadata":{"vendor_id":40,"username":"nazeewizard","target":"user","reference":"17920874988
+================================================
+================================================
+[2026-10-15 21:15:25] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/PH_cb448c725fbc9384
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":false,"data":{"id":"11068","status":"pending","payment_status":"pending","paid":false,"reference":"PH_cb448c725fbc9384","amount":2040000,"currency":"NGN","domain":"live","gateway_amount":null,"fee_amount":0,"settled_amount":0,"customer":{"email":"firdausi2me@gmail.com"},"gateway_response":"Pending","channel":"card","created_at":"2026-10-15 19:05:10","metadata":{"vendor_id":40,"username":"nazeewizard","target":"user","reference":"17920874988
+================================================
+================================================
+[2026-10-15 22:45:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v18.omotereebenezer%40gmail.com
+VID: 18 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9738855697","account_name":"PHILMORE\/OMOTERE EBENEZER","customer_email":"v18.omotereebenezer@gmail.com","created_at":"2026-04-29 13:03:11","created_at_formatted":"2026-04-29 13:03:11"},"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:05:14] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261015220440613376284164
+VID: 0 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11071","status":"success","payment_status":"success","paid":true,"reference":"100033261015220440613376284164","amount":80000,"currency":"NGN","domain":"live","gateway_amount":80000,"fee_amount":1280,"settled_amount":78720,"customer":{"email":"v40.firdausi2me@gmail.com"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-15 23:05:07","metadata":{"vendor_id":40,"target":"vendor","username":"",
+================================================
+================================================
+[2026-10-15 23:05:14] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:05:14] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:05:14] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-15 23:07:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261015220712320986778440
+VID: 0 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11072","status":"success","payment_status":"success","paid":true,"reference":"100033261015220712320986778440","amount":500000,"currency":"NGN","domain":"live","gateway_amount":500000,"fee_amount":10000,"settled_amount":490000,"customer":{"email":"v40.firdausi2me@gmail.com"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-15 23:07:49","metadata":{"vendor_id":40,"target":"vendor","username"
+================================================
+================================================
+[2026-10-15 23:07:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:07:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:07:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-15 23:08:02] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261015220744579728076743
+VID: 0 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11073","status":"success","payment_status":"success","paid":true,"reference":"100033261015220744579728076743","amount":200000,"currency":"NGN","domain":"live","gateway_amount":200000,"fee_amount":3200,"settled_amount":196800,"customer":{"email":"v40.firdausi2me@gmail.com"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-15 23:08:00","metadata":{"vendor_id":40,"target":"vendor","username":
+================================================
+================================================
+[2026-10-15 23:08:02] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:08:03] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40.v40.firdausi2me%40gmail.com
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-15 23:08:03] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-16 04:20:08] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uustadgdata%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-16 04:20:09] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uustadgdata%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-16 04:20:09] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818278438","account_name":"PAYHUB\/HARIS ABDULKAREEM","customer_email":"v1uharitz@v6.datagifting.com.ng","created_at":"2026-10-14 16:50:25","created_at_formatted":"2026-10-14 16:50:25"},{"bank_name":"Wema Bank","account_number":"9818268754","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v1unazeewizard@v6.datagifting.com.ng","created_at":"2026-10-14 12:16:26","created_at_formatted":"2026-10-14 12:16:26"},{"bank_name":"We
+================================================
+================================================
+[2026-10-16 04:20:09] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uustadgdata@v6.datagifting.com.ng","name":"Isiaku Peter","phone":"09114065364","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ustadgdata\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-16 04:20:10] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uustadgdata@v6.datagifting.com.ng","amount":100,"name":"Isiaku Peter","phone":"09114065364","reference":"VA_GEN_1_1792120810","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ustadgdata\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_67d465c7c019fdd8&amount=100&email=v1uustadgdata%40v6.datagifting.com.ng","access_code":"PH_67d465c7c019fdd8","reference":"PH_67d465c7c019fdd8","callback_url":"","virtual_account":{"account_number":"9818336570","bank_name":"Wema Bank","account_name":"PAYHUB\/PETER ISIAKU"}}}
+================================================
+================================================
+[2026-10-16 08:20:16] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v18.omotereebenezer%40gmail.com
+VID: 18 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9738855697","account_name":"PHILMORE\/OMOTERE EBENEZER","customer_email":"v18.omotereebenezer@gmail.com","created_at":"2026-04-29 13:03:11","created_at_formatted":"2026-04-29 13:03:11"},"reconciled":[]}
+================================================
+================================================
+[2026-10-16 10:33:52] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1unoruwa%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9739406388","account_name":"PHILMORE\/ASHIA NORUWA","customer_email":"v1unoruwa@v6.datagifting.com.ng","created_at":"2026-05-02 21:21:35","created_at_formatted":"2026-05-02 21:21:35"},"reconciled":[]}
+================================================
+================================================
+[2026-10-16 10:33:53] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1unoruwa%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9739406388","account_name":"PHILMORE\/ASHIA NORUWA","customer_email":"v1unoruwa@v6.datagifting.com.ng","created_at":"2026-05-02 21:21:35","created_at_formatted":"2026-05-02 21:21:35"},"reconciled":[]}
+================================================
+================================================
+[2026-10-16 10:33:53] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818336570","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"2026-10-16 04:20:10","created_at_formatted":"2026-10-16 04:20:10"},{"bank_name":"Wema Bank","account_number":"9818278438","account_name":"PAYHUB\/HARIS ABDULKAREEM","customer_email":"v1uharitz@v6.datagifting.com.ng","created_at":"2026-10-14 16:50:25","created_at_formatted":"2026-10-14 16:50:25"},{"bank_name":"Wema
+================================================
+================================================
+[2026-10-16 10:33:53] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1unoruwa@v6.datagifting.com.ng","name":"Noruwa Ashia","phone":"09076828777","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"noruwa\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-16 10:33:53] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1unoruwa@v6.datagifting.com.ng","amount":100,"name":"Noruwa Ashia","phone":"09076828777","reference":"VA_GEN_1_1792143233","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"noruwa\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_f2602b7a453ed8a9&amount=100&email=v1unoruwa%40v6.datagifting.com.ng","access_code":"PH_f2602b7a453ed8a9","reference":"PH_f2602b7a453ed8a9","callback_url":"","virtual_account":{"id":"55","user_id":"5","account_number":"9739406388","bank_name":"Paystack-Titan","account_name":"PHILMORE\/ASHIA NORUWA","customer_email":"v1unoruwa@v6.datagifting.com.ng","created_at":"20
+================================================
+================================================
+[2026-10-16 10:35:44] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=9076828777&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"9076828777","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"NORUWA JONATHAN AISHA","account_number":"9076828777","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-17 06:21:00] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v18.omotereebenezer%40gmail.com
+VID: 18 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9738855697","account_name":"PHILMORE\/OMOTERE EBENEZER","customer_email":"v18.omotereebenezer@gmail.com","created_at":"2026-04-29 13:03:11","created_at_formatted":"2026-04-29 13:03:11"},"reconciled":[]}
+================================================
+================================================
+[2026-10-17 08:00:37] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v18.omotereebenezer%40gmail.com
+VID: 18 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9738855697","account_name":"PHILMORE\/OMOTERE EBENEZER","customer_email":"v18.omotereebenezer@gmail.com","created_at":"2026-04-29 13:03:11","created_at_formatted":"2026-04-29 13:03:11"},"reconciled":[]}
+================================================
+================================================
+[2026-10-17 08:07:55] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=8119871010&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"8119871010","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"EBENEZER OLANREWAJU OMOTERE","account_number":"8119871010","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-17 08:08:54] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/payout/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"amount":12500,"bank_code":"999992","account_number":"8119871010","account_name":"","narration":"","reference":"PO_1792220934_913"}
+HTTP: 200
+Response: {"status":true,"message":"Payout initiated successfully","processed":true,"data":{"id":"55","amount":12575,"fee":75,"net_amount":12500,"status":"processed","processed":true,"bank":"OPay Digital Services Limited (OPay)","account":"8119871010"}}
+================================================
+================================================
+[2026-10-17 10:43:12] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261017094302802917540085
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11076","status":"success","payment_status":"success","paid":true,"reference":"100033261017094302802917540085","amount":60000,"currency":"NGN","domain":"live","gateway_amount":60000,"fee_amount":960,"settled_amount":59040,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-17 10:43:10","metadata":{"vendor_id":1,"target":"user","username"
+================================================
+================================================
+[2026-10-17 10:43:13] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-17 11:50:57] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261017105048335184321189
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11077","status":"success","payment_status":"success","paid":true,"reference":"100033261017105048335184321189","amount":50000,"currency":"NGN","domain":"live","gateway_amount":50000,"fee_amount":800,"settled_amount":49200,"customer":{"email":"v1ugodaddypro@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-17 11:50:56","metadata":{"vendor_id":1,"target":"user","usernam
+================================================
+================================================
+[2026-10-17 11:50:58] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1ugodaddypro%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9778004204","account_name":"PHILMORE\/OKONKWO EKENE","customer_email":"v1ugodaddypro@v6.datagifting.com.ng","created_at":"2026-06-15 18:03:48","created_at_formatted":"2026-06-15 18:03:48"},"reconciled":[]}
+================================================
+================================================
+[2026-10-17 11:56:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1ugodaddypro%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9778004204","account_name":"PHILMORE\/OKONKWO EKENE","customer_email":"v1ugodaddypro@v6.datagifting.com.ng","created_at":"2026-06-15 18:03:48","created_at_formatted":"2026-06-15 18:03:48"},"reconciled":[]}
+================================================
+================================================
+[2026-10-17 12:35:15] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=8119871010&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"8119871010","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"EBENEZER OLANREWAJU OMOTERE","account_number":"8119871010","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-17 12:36:08] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/payout/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"amount":3100,"bank_code":"999992","account_number":"8119871010","account_name":"","narration":"","reference":"PO_1792236968_397"}
+HTTP: 200
+Response: {"status":true,"message":"Payout initiated successfully","processed":true,"data":{"id":"56","amount":3110,"fee":10,"net_amount":3100,"status":"processed","processed":true,"bank":"OPay Digital Services Limited (OPay)","account":"8119871010"}}
+================================================
+================================================
+[2026-10-18 00:05:21] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uditech%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-18 00:05:22] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uditech%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-18 00:05:22] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818336570","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"2026-10-16 04:20:10","created_at_formatted":"2026-10-16 04:20:10"},{"bank_name":"Wema Bank","account_number":"9818278438","account_name":"PAYHUB\/HARIS ABDULKAREEM","customer_email":"v1uharitz@v6.datagifting.com.ng","created_at":"2026-10-14 16:50:25","created_at_formatted":"2026-10-14 16:50:25"},{"bank_name":"Wema
+================================================
+================================================
+[2026-10-18 00:05:22] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uditech@v6.datagifting.com.ng","name":"Abubakar Abdullahi","phone":"08169301023","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ditech\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-18 00:05:22] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uditech@v6.datagifting.com.ng","amount":100,"name":"Abubakar Abdullahi","phone":"08169301023","reference":"VA_GEN_1_1792278322","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ditech\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_e983acc17b883410&amount=100&email=v1uditech%40v6.datagifting.com.ng","access_code":"PH_e983acc17b883410","reference":"PH_e983acc17b883410","callback_url":"","virtual_account":{"account_number":"9818386214","bank_name":"Wema Bank","account_name":"PAYHUB\/ABDULLAHI ABUBAKAR"}}}
+================================================
+================================================
+[2026-10-18 16:34:25] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=9046713202&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"9046713202","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"MOHAMMAD INUWA JIKA","account_number":"9046713202","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-18 16:35:53] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=9046713202&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"9046713202","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"MOHAMMAD INUWA JIKA","account_number":"9046713202","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-18 18:16:20] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261018171611296540637647
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11087","status":"success","payment_status":"success","paid":true,"reference":"100033261018171611296540637647","amount":150000,"currency":"NGN","domain":"live","gateway_amount":150000,"fee_amount":2400,"settled_amount":147600,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-18 18:16:19","metadata":{"vendor_id":1,"target":"user","usern
+================================================
+================================================
+[2026-10-18 18:16:21] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-19 07:15:10] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v23.nurullahialhaji%40gmail.com
+VID: 23 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9736502162","account_name":"PHILMORE\/NURULLAHI ABDULMALIK","customer_email":"v23.nurullahialhaji@gmail.com","created_at":"2026-04-17 07:30:00","created_at_formatted":"2026-04-17 07:30:00"},"reconciled":[]}
+================================================
+================================================
+[2026-10-19 07:36:41] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40ugwverify_1792391630%40getwellpay.com
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-19 07:36:41] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v40ugwverify_1792391630%40getwellpay.com
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-19 07:36:42] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818330516","account_name":"PAYHUB\/TEST USER","customer_email":"v40unazeewizard@getwellpay.com","created_at":"2026-10-15 19:03:35","created_at_formatted":"2026-10-15 19:03:35"},{"bank_name":"Wema Bank","account_number":"9818326676","account_name":"PAYHUB\/TEST USER","customer_email":"firdausi2me@gmail.com","created_at":"2026-10-15 16:54:45","created_at_formatted":"2026-10-15 16:54:45"}],"reconciled":[]}
+================================================
+================================================
+[2026-10-19 07:36:42] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: {"email":"v40ugwverify_1792391630@getwellpay.com","name":"Test User","phone":"08012345678","metadata":"{\"vendor_id\":40,\"target\":\"user\",\"username\":\"gwverify_1792391630\",\"site_url\":\"getwellpay.com\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-19 07:36:42] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: {"email":"v40ugwverify_1792391630@getwellpay.com","amount":100,"name":"Test User","phone":"08012345678","reference":"VA_GEN_40_1792391802","metadata":"{\"vendor_id\":40,\"target\":\"user\",\"username\":\"gwverify_1792391630\",\"site_url\":\"getwellpay.com\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_c99bd82567db6881&amount=100&email=v40ugwverify_1792391630%40getwellpay.com","access_code":"PH_c99bd82567db6881","reference":"PH_c99bd82567db6881","callback_url":"","virtual_account":{"account_number":"9818413585","bank_name":"Wema Bank","account_name":"PAYHUB\/USER TEST"}}}
+================================================
+================================================
+[2026-10-19 08:17:09] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40ugwverify_1792391630%40getwellpay.com
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818413585","account_name":"PAYHUB\/USER TEST","customer_email":"v40ugwverify_1792391630@getwellpay.com","created_at":"2026-10-19 07:36:42","created_at_formatted":"2026-10-19 07:36:42"},"reconciled":[]}
+================================================
+================================================
+[2026-10-19 08:17:11] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v40ugwverify_1792391630%40getwellpay.com
+VID: 40 | Source: Auto (Vendor 40 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...3ac1 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818413585","account_name":"PAYHUB\/USER TEST","customer_email":"v40ugwverify_1792391630@getwellpay.com","created_at":"2026-10-19 07:36:42","created_at_formatted":"2026-10-19 07:36:42"},"reconciled":[]}
+================================================
+================================================
+[2026-10-19 13:30:24] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=9042332462&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"9042332462","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"anthony chidumebi ogbogu","account_number":"9042332462","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-19 13:30:43] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=9042332462&bank=999992
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"9042332462","bank":"999992"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"anthony chidumebi ogbogu","account_number":"9042332462","bank_id":171,"bank_code":"999992"}}
+================================================
+================================================
+[2026-10-19 17:45:49] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v18.omotereebenezer%40gmail.com
+VID: 18 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9738855697","account_name":"PHILMORE\/OMOTERE EBENEZER","customer_email":"v18.omotereebenezer@gmail.com","created_at":"2026-04-29 13:03:11","created_at_formatted":"2026-04-29 13:03:11"},"reconciled":[]}
+================================================
+================================================
+[2026-10-19 22:05:14] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/payout/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"amount":1000,"bank_code":"999992","account_number":"9046713202","account_name":"MOHAMMAD INUWA JIKA","narration":"Refund","reference":"PO_1792443914_653"}
+HTTP: 200
+Response: {"status":true,"message":"Payout initiated successfully","processed":true,"data":{"id":"58","amount":1010,"fee":10,"net_amount":1000,"status":"processed","processed":true,"bank":"OPay Digital Services Limited (OPay)","account":"9046713202"}}
+================================================
+================================================
+[2026-10-20 17:35:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v23.nurullahialhaji%40gmail.com
+VID: 23 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9736502162","account_name":"PHILMORE\/NURULLAHI ABDULMALIK","customer_email":"v23.nurullahialhaji@gmail.com","created_at":"2026-04-17 07:30:00","created_at_formatted":"2026-04-17 07:30:00"},"reconciled":[]}
+================================================
+================================================
+[2026-10-20 18:59:29] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100004261020175919174875275155
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11095","status":"success","payment_status":"success","paid":true,"reference":"100004261020175919174875275155","amount":150000,"currency":"NGN","domain":"live","gateway_amount":150000,"fee_amount":2400,"settled_amount":147600,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-20 18:59:27","metadata":{"vendor_id":1,"target":"user","usern
+================================================
+================================================
+[2026-10-20 18:59:31] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-20 20:06:14] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261020190603989386399624
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11096","status":"success","payment_status":"success","paid":true,"reference":"100033261020190603989386399624","amount":100000,"currency":"NGN","domain":"live","gateway_amount":100000,"fee_amount":1600,"settled_amount":98400,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-20 20:06:11","metadata":{"vendor_id":1,"target":"user","userna
+================================================
+================================================
+[2026-10-20 20:06:17] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-21 08:16:25] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100004261021071615174910611179
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11097","status":"success","payment_status":"success","paid":true,"reference":"100004261021071615174910611179","amount":200000,"currency":"NGN","domain":"live","gateway_amount":200000,"fee_amount":3200,"settled_amount":196800,"customer":{"email":"v1ubolatito@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-21 08:16:23","metadata":{"vendor_id":1,"target":"user","usern
+================================================
+================================================
+[2026-10-21 08:16:26] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1ubolatito%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9601813661","account_name":"PHILMORE\/MUINAT BADMUS","customer_email":"v1ubolatito@v6.datagifting.com.ng","created_at":"2026-07-08 21:58:42","created_at_formatted":"2026-07-08 21:58:42"},"reconciled":[]}
+================================================
+================================================
+[2026-10-21 09:12:43] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261021081232870187972885
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11098","status":"success","payment_status":"success","paid":true,"reference":"100033261021081232870187972885","amount":80000,"currency":"NGN","domain":"live","gateway_amount":80000,"fee_amount":1280,"settled_amount":78720,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-21 09:12:40","metadata":{"vendor_id":1,"target":"user","username
+================================================
+================================================
+[2026-10-21 09:12:44] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-21 16:49:47] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v41.chiemelaonugha6%40gmail.com
+VID: 41 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-21 16:49:48] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v41.chiemelaonugha6%40gmail.com
+VID: 41 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-21 16:49:48] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 41 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818306122","account_name":"PAYHUB\/ABBA MOHAMMAD","customer_email":"v40.firdausi2me@gmail.com","created_at":"2026-10-15 08:18:53","created_at_formatted":"2026-10-15 08:18:53"},{"bank_name":"Wema Bank","account_number":"9817779897","account_name":"PAYHUB\/OMOTERE INIOLUWA","customer_email":"v39.inioluwaomotere013@gmail.com","created_at":"2026-09-28 19:43:42","created_at_formatted":"2026-09-28 19:43:42"},{"bank_name":"Wema Bank","a
+================================================
+================================================
+[2026-10-21 16:49:48] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 41 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: {"email":"v41.chiemelaonugha6@gmail.com","name":"Chiemela Onugha","phone":"07031448647","metadata":"{\"vendor_id\":41,\"target\":\"vendor\",\"username\":\"\",\"site_url\":\"abadatahub.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-21 16:49:48] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 41 | Source: Platform (Super Admin via sas_payment_gateways)
+Using Key: sk_live_...011d | Isolated Payout Key: NO
+Body: {"email":"v41.chiemelaonugha6@gmail.com","amount":100,"name":"Chiemela Onugha","phone":"07031448647","reference":"VA_GEN_41_1792597788","metadata":"{\"vendor_id\":41,\"target\":\"vendor\",\"username\":\"\",\"site_url\":\"abadatahub.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_eeb6035788d155ba&amount=100&email=v41.chiemelaonugha6%40gmail.com","access_code":"PH_eeb6035788d155ba","reference":"PH_eeb6035788d155ba","callback_url":"","virtual_account":{"account_number":"9818517108","bank_name":"Wema Bank","account_name":"PAYHUB\/ONUGHA CHIEMELA"}}}
+================================================
+================================================
+[2026-10-21 20:02:40] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uchiemela%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-21 20:02:41] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uchiemela%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-21 20:02:41] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818386214","account_name":"PAYHUB\/ABDULLAHI ABUBAKAR","customer_email":"v1uditech@v6.datagifting.com.ng","created_at":"2026-10-18 00:05:24","created_at_formatted":"2026-10-18 00:05:24"},{"bank_name":"Wema Bank","account_number":"9818336570","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"2026-10-16 04:20:10","created_at_formatted":"2026-10-16 04:20:10"},{"bank_name":"Wem
+================================================
+================================================
+[2026-10-21 20:02:41] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uchiemela@v6.datagifting.com.ng","name":"Chiemela Onugha","phone":"07031448647","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"chiemela\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-21 20:02:41] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uchiemela@v6.datagifting.com.ng","amount":100,"name":"Chiemela Onugha","phone":"07031448647","reference":"VA_GEN_1_1792609361","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"chiemela\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_c45207815e1ffe57&amount=100&email=v1uchiemela%40v6.datagifting.com.ng","access_code":"PH_c45207815e1ffe57","reference":"PH_c45207815e1ffe57","callback_url":"","virtual_account":{"account_number":"9818522870","bank_name":"Wema Bank","account_name":"PAYHUB\/ONUGHA CHIEMELA"}}}
+================================================
+================================================
+[2026-10-22 10:48:50] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/resolve-account?account=2021672707&bank=011
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"account":"2021672707","bank":"011"}
+HTTP: 200
+Response: {"status":true,"message":"Account resolved successfully","data":{"account_name":"PHILMORE-ICT LTD","account_number":"2021672707","bank_id":7,"bank_code":"011"}}
+================================================
+================================================
+[2026-10-22 10:49:33] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/payout/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_bank_transfer_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: YES
+Body: {"amount":10000,"bank_code":"011","account_number":"2021672707","account_name":"","narration":"","reference":"PO_1792662573_826"}
+HTTP: 200
+Response: {"status":true,"message":"Payout initiated successfully","processed":true,"data":{"id":"60","amount":10075,"fee":75,"net_amount":10000,"status":"processed","processed":true,"bank":"OPay Digital Services Limited (OPay)","account":"2021672707"}}
+================================================
+================================================
+[2026-10-22 11:11:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:11:52] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:11:52] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818522870","account_name":"PAYHUB\/ONUGHA CHIEMELA","customer_email":"v1uchiemela@v6.datagifting.com.ng","created_at":"2026-10-21 20:02:41","created_at_formatted":"2026-10-21 20:02:41"},{"bank_name":"Wema Bank","account_number":"9818386214","account_name":"PAYHUB\/ABDULLAHI ABUBAKAR","customer_email":"v1uditech@v6.datagifting.com.ng","created_at":"2026-10-18 00:05:24","created_at_formatted":"2026-10-18 00:05:24"},{"bank_name":"We
+================================================
+================================================
+[2026-10-22 11:11:52] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uadunheritage@v6.datagifting.com.ng","name":"Tope Omotere","phone":"08077447220","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"adunheritage\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-22 11:11:53] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uadunheritage@v6.datagifting.com.ng","amount":100,"name":"Tope Omotere","phone":"08077447220","reference":"VA_GEN_1_1792663913","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"adunheritage\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_2076bc19f50d5ae4&amount=100&email=v1uadunheritage%40v6.datagifting.com.ng","access_code":"PH_2076bc19f50d5ae4","reference":"PH_2076bc19f50d5ae4","callback_url":"","virtual_account":{"account_number":"9818535854","bank_name":"Wema Bank","account_name":"PAYHUB\/OMOTERE TOPE"}}}
+================================================
+================================================
+[2026-10-22 11:15:04] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:21:06] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:21:06] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:21:07] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 11:21:07] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uadunheritage%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 16:04:51] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100033261022150442462551047110
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11102","status":"success","payment_status":"success","paid":true,"reference":"100033261022150442462551047110","amount":150000,"currency":"NGN","domain":"live","gateway_amount":150000,"fee_amount":2400,"settled_amount":147600,"customer":{"email":"v1uemmynect@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-22 16:04:49","metadata":{"vendor_id":1,"target":"user","usern
+================================================
+================================================
+[2026-10-22 16:04:54] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uemmynect%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Paystack-Titan","account_number":"9718302991","account_name":"PHILMORE\/OYEWOLA ABIOLA","customer_email":"v1uemmynect@v6.datagifting.com.ng","created_at":"2026-03-28 09:18:45","created_at_formatted":"2026-03-28 09:18:45"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 23:38:02] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uustadgdata%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818336570","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"2026-10-16 04:20:10","created_at_formatted":"2026-10-16 04:20:10"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 23:38:03] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uustadgdata%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818336570","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"2026-10-16 04:20:10","created_at_formatted":"2026-10-16 04:20:10"},"reconciled":[]}
+================================================
+================================================
+[2026-10-22 23:38:03] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},{"bank_name":"Wema Bank","account_number":"9818522870","account_name":"PAYHUB\/ONUGHA CHIEMELA","customer_email":"v1uchiemela@v6.datagifting.com.ng","created_at":"2026-10-21 20:02:41","created_at_formatted":"2026-10-21 20:02:41"},{"bank_name":"We
+================================================
+================================================
+[2026-10-22 23:38:03] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uustadgdata@v6.datagifting.com.ng","name":"Isiaku Peter","phone":"09114065364","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ustadgdata\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-22 23:38:03] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uustadgdata@v6.datagifting.com.ng","amount":100,"name":"Isiaku Peter","phone":"09114065364","reference":"VA_GEN_1_1792708683","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"ustadgdata\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_21cd2ec094680e1c&amount=100&email=v1uustadgdata%40v6.datagifting.com.ng","access_code":"PH_21cd2ec094680e1c","reference":"PH_21cd2ec094680e1c","callback_url":"","virtual_account":{"id":"282","user_id":"5","account_number":"9818336570","bank_name":"Wema Bank","account_name":"PAYHUB\/PETER ISIAKU","customer_email":"v1uustadgdata@v6.datagifting.com.ng","created_at":"
+================================================
+================================================
+[2026-10-23 02:26:44] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1udavidwest%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-23 02:26:45] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1udavidwest%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-23 02:26:45] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},{"bank_name":"Wema Bank","account_number":"9818522870","account_name":"PAYHUB\/ONUGHA CHIEMELA","customer_email":"v1uchiemela@v6.datagifting.com.ng","created_at":"2026-10-21 20:02:41","created_at_formatted":"2026-10-21 20:02:41"},{"bank_name":"We
+================================================
+================================================
+[2026-10-23 02:26:46] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1udavidwest@v6.datagifting.com.ng","name":"Goroth Gbenga","phone":"07044999020","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"davidwest\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-23 02:26:46] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1udavidwest@v6.datagifting.com.ng","amount":100,"name":"Goroth Gbenga","phone":"07044999020","reference":"VA_GEN_1_1792718806","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"davidwest\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_22a8ea4ebd5f6708&amount=100&email=v1udavidwest%40v6.datagifting.com.ng","access_code":"PH_22a8ea4ebd5f6708","reference":"PH_22a8ea4ebd5f6708","callback_url":"","virtual_account":{"account_number":"9818617015","bank_name":"Wema Bank","account_name":"PAYHUB\/GBENGA GOROTH"}}}
+================================================
+================================================
+[2026-10-23 02:27:55] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1udavidwest%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818617015","account_name":"PAYHUB\/GBENGA GOROTH","customer_email":"v1udavidwest@v6.datagifting.com.ng","created_at":"2026-10-23 02:26:47","created_at_formatted":"2026-10-23 02:26:47"},"reconciled":[]}
+================================================
+================================================
+[2026-10-23 02:27:55] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1udavidwest%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818617015","account_name":"PAYHUB\/GBENGA GOROTH","customer_email":"v1udavidwest@v6.datagifting.com.ng","created_at":"2026-10-23 02:26:47","created_at_formatted":"2026-10-23 02:26:47"},"reconciled":[]}
+================================================
+================================================
+[2026-10-23 02:27:56] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818617015","account_name":"PAYHUB\/GBENGA GOROTH","customer_email":"v1udavidwest@v6.datagifting.com.ng","created_at":"2026-10-23 02:26:47","created_at_formatted":"2026-10-23 02:26:47"},{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},{"bank_name":"Wem
+================================================
+================================================
+[2026-10-23 02:27:56] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1udavidwest@v6.datagifting.com.ng","name":"Goroth Gbenga","phone":"07044999020","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"davidwest\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-23 02:27:56] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1udavidwest@v6.datagifting.com.ng","amount":100,"name":"Goroth Gbenga","phone":"07044999020","reference":"VA_GEN_1_1792718876","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"davidwest\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_400724af05d02e0a&amount=100&email=v1udavidwest%40v6.datagifting.com.ng","access_code":"PH_400724af05d02e0a","reference":"PH_400724af05d02e0a","callback_url":"","virtual_account":{"id":"291","user_id":"5","account_number":"9818617015","bank_name":"Wema Bank","account_name":"PAYHUB\/GBENGA GOROTH","customer_email":"v1udavidwest@v6.datagifting.com.ng","created_at":"2
+================================================
+================================================
+[2026-10-23 08:17:20] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uoluwanbe%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-23 08:17:20] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts?email=v1uoluwanbe%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":null,"reconciled":[]}
+================================================
+================================================
+[2026-10-23 08:17:20] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/virtual-accounts
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":[{"bank_name":"Wema Bank","account_number":"9818617015","account_name":"PAYHUB\/GBENGA GOROTH","customer_email":"v1udavidwest@v6.datagifting.com.ng","created_at":"2026-10-23 02:26:47","created_at_formatted":"2026-10-23 02:26:47"},{"bank_name":"Wema Bank","account_number":"9818535854","account_name":"PAYHUB\/OMOTERE TOPE","customer_email":"v1uadunheritage@v6.datagifting.com.ng","created_at":"2026-10-22 11:11:53","created_at_formatted":"2026-10-22 11:11:53"},{"bank_name":"Wem
+================================================
+================================================
+[2026-10-23 08:17:21] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/virtual-account/create
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uoluwanbe@v6.datagifting.com.ng","name":"Erinola David","phone":"07026660338","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"oluwanbe\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 404
+Response: <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <html><head> <title>404 Not Found</title> </head><body> <h1>Not Found</h1> <p>The requested URL was not found on this server.</p> <p>Additionally, a 404 Not Found error was encountered while trying to use an ErrorDocument to handle the request.</p> </body></html> 
+================================================
+================================================
+[2026-10-23 08:17:21] PAYHUB REQUEST
+Method: POST | URL: https://merchant.payhub.com.ng/api/transaction/initialize
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: {"email":"v1uoluwanbe@v6.datagifting.com.ng","amount":100,"name":"Erinola David","phone":"07026660338","reference":"VA_GEN_1_1792739841","metadata":"{\"vendor_id\":1,\"target\":\"user\",\"username\":\"oluwanbe\",\"site_url\":\"v6.datagifting.com.ng\"}"}
+HTTP: 200
+Response: {"status":true,"message":"Transaction initialized","data":{"authorization_url":"https:\/\/merchant.payhub.com.ng\/checkout.php?ref=PH_8420340692d19ddb&amount=100&email=v1uoluwanbe%40v6.datagifting.com.ng","access_code":"PH_8420340692d19ddb","reference":"PH_8420340692d19ddb","callback_url":"","virtual_account":{"account_number":"9818619882","bank_name":"Wema Bank","account_name":"PAYHUB\/DAVID ERINOLA"}}}
+================================================
+================================================
+[2026-10-23 08:19:33] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/transaction/verify/100004261023071858175111719258
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"message":"Transaction retrieved","paid":true,"data":{"id":"11107","status":"success","payment_status":"success","paid":true,"reference":"100004261023071858175111719258","amount":100000,"currency":"NGN","domain":"live","gateway_amount":100000,"fee_amount":1600,"settled_amount":98400,"customer":{"email":"v1uoluwanbe@v6.datagifting.com.ng"},"gateway_response":"Successful","channel":"dedicated_nuban","created_at":"2026-10-23 08:19:32","metadata":{"vendor_id":1,"target":"user","userna
+================================================
+================================================
+[2026-10-23 08:19:34] PAYHUB REQUEST
+Method: GET | URL: https://merchant.payhub.com.ng/api/v1uoluwanbe%40v6.datagifting.com.ng
+VID: 1 | Source: Auto (Vendor 1 fallback to Platform via sas_payment_gateways)
+Using Key: sk_live_...cec4 | Isolated Payout Key: NO
+Body: 
+HTTP: 200
+Response: {"status":true,"data":{"bank_name":"Wema Bank","account_number":"9818619882","account_name":"PAYHUB\/DAVID ERINOLA","customer_email":"v1uoluwanbe@v6.datagifting.com.ng","created_at":"2026-10-23 08:17:22","created_at_formatted":"2026-10-23 08:17:22"},"reconciled":[]}
+================================================

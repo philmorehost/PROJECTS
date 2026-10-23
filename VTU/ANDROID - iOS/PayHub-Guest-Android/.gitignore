@@ -1,0 +1,20 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+# Unanchored on purpose. This was `/build`, which matches only the root build dir, so the Gradle
+# output under app/build - 1,127 files and 133 MB of intermediates - was NOT ignored and was swept
+# into a commit. The sibling project this was copied from used the unanchored form, which covers the
+# app module (and any module added later) as well as the root.
+build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keystore files — stored as GitHub Actions secret (GUEST_KEYSTORE_BASE64), not in VCS
+keystore/
+*.jks
+*.keystore
+key.properties

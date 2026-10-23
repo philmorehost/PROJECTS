@@ -1,0 +1,19 @@
+# DGV6.90 — /web/.htaccess
+# Clean URLs for user-facing pages
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /web/
+
+    # 1. Hide .php extension (Transparently serve /web/login as Login.php)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^([^/]+)$ $1.php [L,QSA]
+
+    # 2. Redirect actual .php requests to clean URLs (Optional, but good for SEO)
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /web/([^/.]+)\.php\ [NC]
+    RewriteRule ^([^/.]+)\.php$ %1 [R=301,L]
+</IfModule>

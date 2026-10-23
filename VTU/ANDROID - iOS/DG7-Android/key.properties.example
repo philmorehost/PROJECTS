@@ -1,0 +1,6 @@
+# Copy this file to key.properties (gitignored) and fill in your values.
+# The key.properties file is read by app/build.gradle for release signing.
+storeFile=/path/to/datagifting.v684.jks
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=philmore-datagifting
+keyPassword=YOUR_KEY_PASSWORD
