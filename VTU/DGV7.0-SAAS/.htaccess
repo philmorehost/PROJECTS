@@ -1,97 +1,65 @@
-# DGV7.0 — Root .htaccess
-# Security hardening: protect sensitive files, block directory listing,
-# enforce security headers, and prevent access to configuration files.
+# DGV7.0 — Root .htaccess (shared by SAAS and NON-SAAS)
+#
+# IMPORTANT: only directives valid in a per-directory (.htaccess) context belong here.
+# <Directory>, <DirectoryMatch>, <VirtualHost>, AllowOverride and php_* directives are
+# server/vhost-only. Adding any of them here makes Apache return HTTP 500 before PHP runs.
 
 # ─── Block directory listing ───────────────────────────────────────────────────────────────────────
 Options -Indexes
 
-# ─── Protect sensitive files and directories ──────────────────────────────────────────────────────
-# Block access to config files
-<FilesMatch "^(db-json|db-dtl|app-config|bc-config|bc-connect|bc-admin-config|bc-spadmin-config|bc-admin-config)\.php$">
-    Require all denied
-</FilesMatch>
-
-# Block access to backup/sensitive directories
-RedirectMatch 403 ^/(backups?|logs?|tmp|temp|debug)/
-
-# Block access to common sensitive files
-<FilesMatch "\.(env|ini|log|sh|sql|bak|old|swp|swo|~|lock)$">
-    Require all denied
-</FilesMatch>
-
-# Block access to editor temp files
-<FilesMatch "\.(swp|swo|swn|bak)$">
-    Require all denied
-</FilesMatch>
-
-# Block access to IDE files
-<FilesMatch "(^\.vscode/|^\.idea/|\.vscode/|\.idea/|composer\.(lock|json))$">
-    Require all denied
+# ─── Deny direct HTTP access to configuration, backup and audit files ─────────────────────────────
+# PHP include/require is unaffected; this only blocks a browser from downloading these files.
+<FilesMatch "(?:^(?:db-json|db-dtl|app-config|bc-config|bc-connect|bc-admin-config|bc-spadmin-config)\.php$|\.(?:env|ini|log|sh|sql|bak|old|orig|swp|swo|swn|~|lock|zip|tar|gz|tgz|py|yml|yaml)$|^composer\.(?:lock|json)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
 # ─── Security headers ──────────────────────────────────────────────────────────────────────────────
 <IfModule mod_headers.c>
-    # Prevent MIME sniffing
     Header always set X-Content-Type-Options "nosniff"
-
-    # Prevent clickjacking
     Header always set X-Frame-Options "SAMEORIGIN"
-
-    # XSS Protection (legacy browsers)
     Header always set X-XSS-Protection "1; mode=block"
-
-    # Referrer Policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
-
-    # Content Security Policy (moderate - allows inline styles for Bootstrap)
     Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'"
-
-    # Strict Transport Security (enable HTTPS)
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
-
-    # Permissions Policy
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
 </IfModule>
 
-# ─── Block PHP execution in upload directories ─────────────────────────────────────────────────────
+# ─── URL-level guards (all valid in .htaccess context) ────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Block PHP execution in upload/image directories
-    RewriteRule ^(uploads?|uploaded-image|assets?|asset|images?|img|media)/.*\.php$ - [F,L]
+    # Version-control metadata and hidden IDE folders.
+    RewriteRule (?:^|/)\.(?:git|svn|hg|bzr)(?:/|$) - [F,NC,L]
 
-    # Block PHP execution in any non-PHP directory
-    RewriteCond %{REQUEST_URI} ^/[^/]+/[^/]+/[^/]+/.*\.php$
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ - [F,L]
-</IfModule>
+    # Private working directories. RewriteRule replaces the old RedirectMatch lines, whose
+    # leading-slash patterns are unreliable in per-directory context, and replaces the invalid
+    # <DirectoryMatch> block that caused the post-hardening 500 on both editions.
+    RewriteRule ^(?:backups?|logs?|tmp|temp|debug|cache)(?:/|$) - [F,NC,L]
 
-# ─── Prevent access to install directory after installation ───────────────────────────────────────
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteCond %{REQUEST_URI} ^/install/
+    # Do not execute PHP files uploaded into asset/upload trees, at any depth.
+    RewriteRule (?:^|/)(?:uploads?|uploaded-image|assets?|images?|img|media)/.*\.php$ - [F,NC,L]
+
+    # Keep the SAAS installer closed once installation has finished. Re-enable it temporarily
+    # only when a fresh installation/migration is deliberately being performed.
+    RewriteCond %{REQUEST_URI} (?:^|/)install/
     RewriteCond %{DOCUMENT_ROOT}/install/install.php !-f
     RewriteRule ^ - [F,L]
-</IfModule>
 
-# ─── Block common attack patterns in URLs ────────────────────────────────────────────────────────
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    # Block SQL injection patterns
-    RewriteCond %{QUERY_STRING} (union|select|insert|update|delete|drop|create|alter|exec|script|benchmark|sleep|information_schema) [NC,OR]
-    RewriteCond %{QUERY_STRING} (\.\./|\.\.\\|%2e%2e%2f|%2e%2e%5c|%252e%252e%252f) [NC]
-    RewriteCond %{QUERY_STRING} (base64_decode|eval|assert|preg_replace|create_function) [NC]
+    # Narrow, high-signature request filters. Generic SQL words such as select, update and create
+    # are intentionally NOT blocked: DGV7 uses them in legitimate query strings. Each suspicious
+    # condition below is ORed with the next, and the final condition ends the OR chain.
+    RewriteCond %{QUERY_STRING} (?:%27|')(?:\s|%20|\+)*(?:or|and)(?:\s|%20|\+)+\d+(?:\s|%20|\+)*= [NC,OR]
+    RewriteCond %{QUERY_STRING} union(?:\s|%20|\+)+(?:all(?:\s|%20|\+)+)?select [NC,OR]
+    RewriteCond %{QUERY_STRING} information_schema [NC,OR]
+    RewriteCond %{QUERY_STRING} (?:benchmark|sleep)\s*\( [NC,OR]
+    RewriteCond %{QUERY_STRING} (?:base64_decode|eval|assert|create_function)\s*\( [NC,OR]
+    RewriteCond %{QUERY_STRING} preg_replace\s*\(.*?/[a-z]*e[a-z]* [NC,OR]
+    RewriteCond %{QUERY_STRING} (?:\.\./|\.\.\\|%2e%2e%2f|%2e%2e/|%2e%2e\\|%252e%252e%252f) [NC]
     RewriteRule ^ - [F,L]
 </IfModule>
-
-# ─── Block access to .git and version control directories ─────────────────────────────────────────
-RedirectMatch 403 ^\.git
-RedirectMatch 403 ^\.svn
-RedirectMatch 403 ^\.hg
-RedirectMatch 403 ^\.bzr
-
-# ─── Disable directory listing in specific directories ───────────────────────────────────────────
-<DirectoryMatch "^.*(backups?|logs?|tmp|temp|debug|cache)/">
-    Options -Indexes
-    Require all denied
-</DirectoryMatch>
