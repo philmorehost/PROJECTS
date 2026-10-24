@@ -42,6 +42,12 @@ async function makeRuntime(options) {
 
   if (!options.empty) await copyTree(php, LM, '/lm');
 
+  // Files a test planted must survive a runtime restart, or they vanish the
+  // moment a probe renders a page that calls exit().
+  for (const [file, data] of Object.entries(options.extras || {})) {
+    await php.writeFile(file, data);
+  }
+
   // A stub, but one that lets a probe inject a fake PDO to exercise code
   // paths that touch the database (php-wasm has no MySQL driver).
   await php.writeFile('/lm/db.php', '<?php $pdo = isset($GLOBALS["qa_pdo"]) ? $GLOBALS["qa_pdo"] : null;');
@@ -56,6 +62,7 @@ async function makeRuntime(options) {
 }
 
 async function boot(options = {}) {
+  options.extras = options.extras || {};
   let box = await makeRuntime(options);
   let dirty = false;
   let counter = 0;
@@ -98,12 +105,22 @@ async function boot(options = {}) {
     return out;
   }
 
-  /** Write a file into the runtime that is live right now (statics persist). */
+  /**
+   * Plant a file. It is remembered, so it is still there after the runtime is
+   * restarted (see `dirty` above).
+   */
   async function write(file, data) {
+    options.extras[file] = data;
     await box.php.writeFile(file, data);
   }
 
-  return { run, write, LM, php: () => box.php };
+  /** Remove a planted file from the runtime and from the replay list. */
+  async function unlink(file) {
+    delete options.extras[file];
+    await box.php.run(`<?php @unlink(${JSON.stringify(file)});`);
+  }
+
+  return { run, write, unlink, LM, php: () => box.php };
 }
 
 module.exports = { boot, LM };

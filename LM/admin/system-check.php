@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/lm_config.php'; // lm_verify_csrf(), lm_csrf_token(), lm_log()
 lm_session_start();
 lm_security_headers();
 
@@ -12,42 +13,143 @@ if (!isset($_SESSION['admin_logged_in'])) {
 require_once('../db.php');
 
 /**
- * Look for the file patterns used by PHP web shells.
+ * The signatures of a PHP web shell, split into two confidence levels.
  *
- * 8.9.0 shipped after finding `admin-cron-uvdv.php` in the LM folder: a
- * WordPress-themed remote-access shell with a hard-coded key and handlers for
- * shell, read, write, upload, delete and SQL. It is deleted from the package,
- * but a restored backup or a re-upload can bring it back — so the panel now
- * checks the tree and reports anything that looks like a dropper.
+ * `critical` signatures are strings that only appear in a dropper. One hit is
+ * decisive and the file must go. `review` signatures are functions legitimate
+ * code also uses (a mailer may shell out, a backup script may gzinflate), so a
+ * hit means "a human should look", not "delete this".
  *
- * Deliberately conservative: one match is enough to surface the path, and the
- * scan never executes the file.
+ * The needles are assembled from fragments on purpose: this file must never
+ * match its own list. Before 9.2.0 it did — it reported itself, and it reported
+ * lm_config.php for a php_uname() call inside a random-bytes fallback. Two
+ * false positives in a three-item list is how an operator learns to ignore the
+ * one that matters.
  *
- * @return array{paths:array<int,string>,scanned:int}
+ * @return array{critical:array,review:array,allowed:array}
  */
+if (!function_exists('lm_shell_signatures')) {
+function lm_shell_signatures()
+{
+    $word = function () {
+        return implode('', func_get_args());
+    };
+
+    return array(
+        'critical' => array(
+            // The shell removed from the package in 8.9.0.
+            array('label' => 'WP_Theme_Worker remote-access shell', 'needle' => $word('WP', '_Theme', '_Worker')),
+            array('label' => 'WP_Theme_Worker shell entry point', 'needle' => $word('do_maintenance', '_cron')),
+            array('label' => 'command execution', 'needle' => $word('pcntl', '_exec')),
+            array('label' => 'command execution', 'needle' => $word('shell', '_exec(')),
+            array('label' => 'command execution', 'needle' => $word('passthru', '(')),
+            array('label' => 'obfuscated payload', 'needle' => $word('gzinflate(', 'base64_decode')),
+            array('label' => 'obfuscated payload', 'needle' => $word('str_rot13', '(')),
+            array('label' => 'eval of request data', 'needle' => $word('eval', '($_')),
+            array('label' => 'eval of request data', 'needle' => $word('assert', '($_')),
+            // A key pasted into source, as the 8.9.0 shell did.
+            array('label' => 'hard-coded shell key', 'needle' => $word("hex2bin( '", '19d8d3c5')),
+        ),
+        'review' => array(
+            array('label' => 'popen()', 'needle' => $word('popen', '(')),
+            array('label' => 'proc_open()', 'needle' => $word('proc_open', '(')),
+            array('label' => 'host fingerprinting', 'needle' => $word('php', '_uname(')),
+            array('label' => 'include of a variable', 'needle' => $word('include ', '($_')),
+        ),
+        /*
+         * Reviewed, legitimate uses. A file listed here still gets its critical
+         * scan; only the named review signature is excused.
+         */
+        'allowed' => array(
+            'includes/src/PHPMailer.php' => array('str_rot13('),
+            'includes/src/SMTP.php' => array('str_rot13('),
+        ),
+    );
+}
+}
+
+/**
+ * Files inside LM/ that are not part of the release.
+ *
+ * The strongest signal available, and the one that would have caught the
+ * 8.9.0 shell on sight: build.json lists every shipped file, so anything else
+ * that can be executed is either a leftover or an intruder.
+ *
+ * @return array<int,string> Relative paths
+ */
+if (!function_exists('lm_unexpected_php_files')) {
+function lm_unexpected_php_files()
+{
+    $root = dirname(__DIR__);
+    $manifestFile = $root . '/build.json';
+    if (!is_file($manifestFile)) {
+        return array();
+    }
+
+    $manifest = json_decode((string) @file_get_contents($manifestFile), true);
+    if (!is_array($manifest) || empty($manifest['files']) || !is_array($manifest['files'])) {
+        return array();
+    }
+
+    $known = array();
+    foreach (array_keys($manifest['files']) as $path) {
+        $known[strtolower(str_replace('\\', '/', $path))] = true;
+    }
+
+    $skipDirs = array('storage', 'uploads', 'docs');
+    $out = array();
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($iterator as $file) {
+        if (!$file->isFile() || strtolower($file->getExtension()) !== 'php') {
+            continue;
+        }
+        $path = $file->getPathname();
+        $rel = ltrim(str_replace('\\', '/', substr($path, strlen($root))), '/');
+
+        $first = strtolower(strtok($rel, '/'));
+        if (in_array($first, $skipDirs, true)) {
+            continue;
+        }
+        // Hidden folders (.git, deploy scripts, this project's QA harness) are
+        // not part of the release and are never served. The shell scan above
+        // still reads every file, including these.
+        if ($first !== '' && $first[0] === '.' && $first !== '.well-known') {
+            continue;
+        }
+        if (isset($known[strtolower($rel)])) {
+            continue;
+        }
+
+        $out[] = $rel;
+    }
+
+    sort($out);
+    return $out;
+}
+}
+
+/**
+ * Look for the patterns used by PHP web shells, and for files that do not
+ * belong to this release.
+ *
+ * Never executes the file it reads, skips files larger than 1 MB, and reports
+ * the matching signature so the operator can judge it.
+ *
+ * @return array{paths:array,review:array,unexpected:array,scanned:int}
+ */
+if (!function_exists('lm_scan_for_shells')) {
 function lm_scan_for_shells()
 {
     $root = dirname(__DIR__);
-    $needles = array(
-        'WP_Theme_Worker',
-        'do_maintenance_cron',
-        'php_uname()',
-        'pcntl_exec',
-        'shell_exec(',
-        'passthru(',
-        'assert($_',
-        'eval($_',
-        'gzinflate(base64_decode',
-        'str_rot13(',
-    );
-
-    $allowed = array(
-        // Legitimate, reviewed uses.
-        'includes/src/PHPMailer.php' => array('str_rot13('),
-        'includes/src/SMTP.php' => array('str_rot13('),
-    );
+    $signatures = lm_shell_signatures();
+    $self = basename(__DIR__) . '/system-check.php';
 
     $hits = array();
+    $review = array();
     $scanned = 0;
 
     $iterator = new RecursiveIteratorIterator(
@@ -73,22 +175,115 @@ function lm_scan_for_shells()
         }
 
         $rel = ltrim(str_replace($root, '', $path), DIRECTORY_SEPARATOR);
-        $patterns = $allowed[$rel] ?? array();
+        if (strpos($rel, $self) === 0) {
+            continue; // never judge this file by the list it carries
+        }
 
-        foreach ($needles as $needle) {
-            if (in_array($needle, $patterns, true)) {
+        $excused = isset($signatures['allowed'][$rel]) ? $signatures['allowed'][$rel] : array();
+
+        foreach ($signatures['critical'] as $signature) {
+            if (in_array($signature['needle'], $excused, true)) {
                 continue;
             }
-            if (stripos($body, $needle) !== false) {
-                $hits[] = $rel . ' (' . $needle . ')';
-                break;
+            if (stripos($body, $signature['needle']) !== false) {
+                $hits[] = array('file' => $rel, 'label' => $signature['label']);
+                continue 2;
+            }
+        }
+
+        foreach ($signatures['review'] as $signature) {
+            if (in_array($signature['needle'], $excused, true)) {
+                continue;
+            }
+            if (stripos($body, $signature['needle']) !== false) {
+                $review[$rel][] = $signature['label'];
             }
         }
     }
 
-    sort($hits);
-    return array('paths' => $hits, 'scanned' => $scanned);
+    usort($hits, function ($a, $b) {
+        return strcmp($a['file'], $b['file']);
+    });
+    ksort($review);
+
+    return array(
+        'paths' => $hits,
+        'review' => $review,
+        'unexpected' => lm_unexpected_php_files(),
+        'scanned' => $scanned,
+    );
 }
+}
+
+$scan = lm_scan_for_shells();
+
+$removalNotice = '';
+$removalError = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_file'])) {
+    $target = str_replace('\\', '/', trim((string) $_POST['remove_file']));
+    $confirmName = basename($target);
+    $typed = trim((string) ($_POST['confirm_name'] ?? ''));
+
+    clearstatcache();
+
+    // The list of removable files is rebuilt from the scan, never taken from
+    // the request: a POST can only name something the scanner already found.
+    $removable = array();
+    foreach ($scan['paths'] as $hit) {
+        $removable[$hit['file']] = 'a web-shell signature';
+    }
+    foreach ($scan['unexpected'] as $path) {
+        if (!isset($removable[$path])) {
+            $removable[$path] = 'not part of this release';
+        }
+    }
+
+    $root = dirname(__DIR__);
+    $resolved = strpos($target, '..') === false ? realpath($root . '/' . $target) : false;
+    $rootReal = realpath($root);
+
+    if (!lm_verify_csrf()) {
+        $removalError = 'Your session expired. Refresh the page and try again.';
+    } elseif ($typed !== $confirmName) {
+        $removalError = 'Type the file name exactly (' . $confirmName . ') to confirm.';
+    } elseif (!isset($removable[$target])) {
+        $removalError = 'That file is not on the list of findings. Run the check again.';
+    } elseif ($target === 'admin/system-check.php') {
+        $removalError = 'That is this page. Remove it in cPanel if you want it gone.';
+    } elseif ($resolved === false || $rootReal === false || strpos($resolved, $rootReal . DIRECTORY_SEPARATOR) !== 0 || !is_file($resolved)) {
+        $removalError = 'That path is not a file inside this installation.';
+    } else {
+        $backup = dirname($resolved) . DIRECTORY_SEPARATOR . '.' . basename($resolved) . '.removed-' . gmdate('Ymd-His') . '.bak';
+        $moved = @rename($resolved, $backup);
+
+        if (!$moved) {
+            // Filesystem may refuse the rename across a mount; try a copy+unlink.
+            $moved = @copy($resolved, $backup) && @unlink($resolved);
+            if (!$moved) {
+                @unlink($backup);
+            }
+        }
+
+        if ($moved) {
+            @chmod($backup, 0600);
+            @chmod(dirname($backup), 0755);
+            $removalNotice = $target . ' was moved to ' . basename($backup) . ' in the same folder. '
+                . 'It is no longer executable. Download it for evidence, then delete it.'
+                . ' Rotate every credential it could read.';
+            if (function_exists('lm_log')) {
+                lm_log('security', 'System check quarantined ' . $target . ' ('
+                    . $removable[$target] . ') as ' . basename($backup));
+            }
+            $scan = lm_scan_for_shells();
+        } else {
+            $removalError = 'The server would not let PHP remove ' . $target
+                . '. Delete it in cPanel → File Manager, then run this check again.';
+        }
+    }
+}
+
+$integrityProblems = !empty($scan['paths']) || !empty($scan['unexpected']);
 
 $diagnostics = [
     'curl_enabled' => extension_loaded('curl'),
@@ -98,10 +293,10 @@ $diagnostics = [
     'smtp_configured' => false,
     'licenses_table_ok' => false,
     'transactions_table_ok' => false,
-    'shell_scan' => ['paths' => [], 'scanned' => 0],
+    'shell_scan' => ['paths' => [], 'review' => [], 'unexpected' => [], 'scanned' => 0],
 ];
 
-$diagnostics['shell_scan'] = lm_scan_for_shells();
+$diagnostics['shell_scan'] = $scan;
 
 $settings = [];
 if (file_exists('../settings.json')) {
@@ -110,8 +305,12 @@ if (file_exists('../settings.json')) {
     $diagnostics['smtp_configured'] = !empty($settings['smtp_host']) && !empty($settings['smtp_user']);
 }
 
-// Check database tables
+// Check database tables. This page is a diagnostic: a broken database must
+// produce a red row, not a white page.
 try {
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        throw new RuntimeException('No database connection');
+    }
     $stmt = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field IN ('customer_email', 'license_key', 'domain')");
     $cols = $stmt->fetchAll(PDO::FETCH_COLUMN);
     $diagnostics['licenses_table_ok'] = count($cols) >= 3;
@@ -121,6 +320,8 @@ try {
     $diagnostics['transactions_table_ok'] = count($cols) >= 3;
 } catch (Exception $e) {
     // Database error
+} catch (Throwable $e) {
+    // PHP 7 TypeError from a null $pdo
 }
 
 // Test Paystack connectivity if curl is available
@@ -259,6 +460,27 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
             background: #2563eb;
             transform: translateY(-2px);
         }
+        .notice { padding: 14px 16px; border-radius: 10px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; }
+        .notice.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+        .notice.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .finding { margin-top: 14px; padding: 14px 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 13.5px; line-height: 1.65; }
+        .finding ul.filelist { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+        .finding ul.filelist li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .finding code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+        .bad-text { color: #b91c1c; }
+        .warn-text { color: #b45309; }
+        .tag { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; }
+        .bad-tag { background: #fef2f2; color: #b91c1c; }
+        .warn-tag { background: #fffbeb; color: #92400e; }
+        details.review { margin-top: 14px; font-size: 13px; }
+        details.review summary { cursor: pointer; font-weight: 600; color: #475569; }
+        details.review ul.filelist { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+        details.review li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; }
+        .tiny { font-size: 12px; color: #64748b; margin-top: 6px; }
+        .quarantine { display: flex; gap: 6px; margin-left: auto; }
+        .quarantine input[type="text"] { width: 150px; padding: 6px 9px; border: 1px solid #d7deea; border-radius: 7px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+        .quarantine button { padding: 6px 12px; border-radius: 7px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .quarantine button[disabled] { opacity: .45; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -340,24 +562,83 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                 </div>
             </div>
 
-            <div class="check-item" style="margin-top:14px;">
-                <div class="check-icon <?= empty($diagnostics['shell_scan']['paths']) ? 'pass' : 'fail' ?>">
-                    <?= empty($diagnostics['shell_scan']['paths']) ? '✓' : '✗' ?>
+            <?php if ($removalNotice !== ''): ?>
+                <div class="notice ok"><?= htmlspecialchars($removalNotice, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+            <?php if ($removalError !== ''): ?>
+                <div class="notice bad"><?= htmlspecialchars($removalError, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+
+            <div class="check-item" style="margin-top:14px;align-items:flex-start;">
+                <div class="check-icon <?= $integrityProblems ? 'fail' : 'pass' ?>">
+                    <?= $integrityProblems ? '✗' : '✓' ?>
                 </div>
-                <div>
+                <div style="flex-grow:1;min-width:0;">
                     <h3>File integrity</h3>
                     <small>
-                        <?php if (empty($diagnostics['shell_scan']['paths'])): ?>
-                            <?= (int) $diagnostics['shell_scan']['scanned'] ?> PHP files scanned — no shell patterns found
-                        <?php else: ?>
-                            Suspicious file(s) found — delete them and rotate every credential:
-                            <br><code><?= htmlspecialchars(implode(' · ', $diagnostics['shell_scan']['paths']), ENT_QUOTES, 'UTF-8') ?></code>
-                        <?php endif; ?>
+                        <?= (int) $diagnostics['shell_scan']['scanned'] ?> PHP files scanned
+                        <?php if (!$integrityProblems): ?>— no shell signature and no file outside this release<?php endif; ?>
                     </small>
+
+                    <?php if (!empty($diagnostics['shell_scan']['paths'])): ?>
+                        <div class="finding">
+                            <strong class="bad-text">Web shell found.</strong>
+                            A file here carries a signature that only a remote-access shell uses.
+                            Quarantine it, then rotate every credential it could read.
+                            <ul class="filelist">
+                                <?php foreach ($diagnostics['shell_scan']['paths'] as $hit): ?>
+                                    <li>
+                                        <code><?= htmlspecialchars($hit['file'], ENT_QUOTES, 'UTF-8') ?></code>
+                                        <span class="tag bad-tag"><?= htmlspecialchars($hit['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php require __DIR__ . '/_quarantine_form.php'; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($diagnostics['shell_scan']['unexpected'])): ?>
+                        <div class="finding">
+                            <strong class="warn-text"><?= count($diagnostics['shell_scan']['unexpected']) ?> file(s) are not part of this release.</strong>
+                            build.json lists every file this version ships. Anything else in the
+                            folder that can run is a leftover from an old copy or was uploaded by
+                            someone else — check each one before removing it.
+                            <ul class="filelist">
+                                <?php foreach ($diagnostics['shell_scan']['unexpected'] as $path): ?>
+                                    <li>
+                                        <code><?= htmlspecialchars($path, ENT_QUOTES, 'UTF-8') ?></code>
+                                        <span class="tag warn-tag">not in build.json</span>
+                                        <?php
+                                        $hit = array('file' => $path, 'label' => 'not part of this release');
+                                        require __DIR__ . '/_quarantine_form.php';
+                                        ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($diagnostics['shell_scan']['review'])): ?>
+                        <details class="review">
+                            <summary><?= count($diagnostics['shell_scan']['review']) ?> file(s) use a function a shell might use — review, do not panic</summary>
+                            <p class="tiny">
+                                These are ordinary PHP functions that legitimate code also calls.
+                                Nothing here is a finding on its own; it is a list to skim.
+                            </p>
+                            <ul class="filelist">
+                                <?php foreach ($diagnostics['shell_scan']['review'] as $path => $labels): ?>
+                                    <li>
+                                        <code><?= htmlspecialchars($path, ENT_QUOTES, 'UTF-8') ?></code>
+                                        <span class="tag"><?= htmlspecialchars(implode(', ', $labels), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </details>
+                    <?php endif; ?>
                 </div>
             </div>
 
-            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok'] && empty($diagnostics['shell_scan']['paths'])): ?>
+            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok'] && !$integrityProblems): ?>
                 <div class="next-step" style="background: #d1fae5; border-color: #a7f3d0; color: #065f46;">
                     <h3>✓ All Systems Ready!</h3>
                     <p>Your payment system is fully configured. You're ready to process payments.</p>
@@ -380,7 +661,10 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                             <li><strong>Configure SMTP:</strong> Go to <a href="settings.php" style="color: #3b82f6; font-weight: 500;">Settings</a> and add your SMTP details so customers receive license emails</li>
                         <?php endif; ?>
                         <?php if (!empty($diagnostics['shell_scan']['paths'])): ?>
-                            <li><strong>File integrity:</strong> a file matching a known web-shell pattern is present. Delete it, then change the database password, the admin password, the Paystack keys, the SMTP password and the GitHub token — a shell can read all of them.</li>
+                            <li><strong>Web shell present:</strong> a file carries a signature that only a remote-access shell uses. Quarantine it above, then change the database password, the admin password, the Paystack keys, the SMTP password and the GitHub token — a shell can read all of them.</li>
+                        <?php endif; ?>
+                        <?php if (!empty($diagnostics['shell_scan']['unexpected'])): ?>
+                            <li><strong>Unexpected files:</strong> <?= count($diagnostics['shell_scan']['unexpected']) ?> file(s) in the folder are not in <code>build.json</code>. Remove them above if you did not put them there.</li>
                         <?php endif; ?>
                         <?php if (!$diagnostics['licenses_table_ok'] || !$diagnostics['transactions_table_ok']): ?>
                             <li><strong>Database Schema Issue:</strong> <a href="database-repair.php" style="color: #3b82f6; font-weight: 500;">Run Database Repair</a> to fix missing columns</li>

@@ -162,6 +162,57 @@ foreach ($sessionScan as $path) {
     }
 }
 
+/*
+ * Files on disk that this release does not ship.
+ *
+ * build.json lists every file that runs. A .php file that is not in it is
+ * either a leftover from an older upload or something an intruder put there —
+ * that is how the WordPress-disguised shell was found in 8.9.0.
+ */
+$unexpected = array();
+if ($manifest !== null) {
+    $skipTop = array('storage', 'uploads', 'docs');
+    foreach ((array) @scandir($root) as $entryDir) {
+        if ($entryDir === '.' || $entryDir === '..') {
+            continue;
+        }
+        $fullDir = $root . DIRECTORY_SEPARATOR . $entryDir;
+        if (!is_dir($fullDir)) {
+            continue;
+        }
+        $top = strtolower($entryDir);
+        if (in_array($top, $skipTop, true) || ($top !== '' && $top[0] === '.' && $top !== '.well-known')) {
+            continue;
+        }
+        $walk = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($fullDir, FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($walk as $file) {
+            if (!$file->isFile() || strtolower($file->getExtension()) !== 'php' || $file->getSize() === 0) {
+                continue; // a zero-byte placeholder carries no code
+            }
+            $relPath = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($root) + 1));
+            if (!isset($manifest['files'][$relPath])) {
+                $unexpected[] = $relPath;
+            }
+        }
+    }
+
+    // Root-level PHP files too (a shell likes the document root).
+    foreach ((array) @scandir($root) as $entry) {
+        if (substr($entry, -4) !== '.php' || !is_file($root . DIRECTORY_SEPARATOR . $entry)) {
+            continue;
+        }
+        if ((int) @filesize($root . DIRECTORY_SEPARATOR . $entry) === 0) {
+            continue;
+        }
+        if (!isset($manifest['files'][$entry])) {
+            $unexpected[] = $entry;
+        }
+    }
+    sort($unexpected);
+}
+
 $problems = array();
 if (!$phpOk) {
     $problems[] = 'PHP ' . $php . ' is too old. License Manager needs 7.4 or newer.';
@@ -183,6 +234,11 @@ if (!empty($absent)) {
     $problems[] = count($absent) . ' file(s) from this release are not on the server at all: '
         . implode(', ', array_slice($absent, 0, 8)) . (count($absent) > 8 ? ', …' : '')
         . '. Upload the complete folder, not just the files you changed.';
+}
+if (!empty($unexpected)) {
+    $problems[] = count($unexpected) . ' PHP file(s) here are not part of this release: '
+        . implode(', ', array_slice($unexpected, 0, 8)) . (count($unexpected) > 8 ? ', …' : '')
+        . '. If you did not add them, treat the installation as compromised — open admin/system-check.php.';
 }
 if (!empty($legacySession)) {
     $problems[] = count($legacySession) . ' script(s) still call session_start() instead of '
@@ -273,6 +329,14 @@ $ok = empty($problems);
                 <?= (empty($stale) && empty($absent)) ? 'all ' . $staleChecked . ' match' : count($stale) . ' differ, ' . count($absent) . ' absent, ' . $staleChecked . ' checked' ?>
             </span>
         </div>
+        <div class="row">
+            <span>Files outside this release</span>
+            <span class="<?= empty($unexpected) ? 'yes' : 'no' ?>"><?= empty($unexpected) ? 'none' : count($unexpected) ?></span>
+        </div>
+        <?php if (!empty($unexpected)): ?>
+            <p class="hint" style="margin-top:12px">Not shipped by any release — open <a href="admin/system-check.php">System check</a> to quarantine:</p>
+            <pre><?= htmlspecialchars(implode("\n", array_slice($unexpected, 0, 40)) . (count($unexpected) > 40 ? "\n… " . (count($unexpected) - 40) . ' more' : '')) ?></pre>
+        <?php endif; ?>
         <div class="row">
             <span>Legacy session_start() scripts</span>
             <span class="<?= empty($legacySession) ? 'yes' : 'no' ?>"><?= empty($legacySession) ? 'none' : count($legacySession) ?></span>

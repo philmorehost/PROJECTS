@@ -811,6 +811,76 @@ JSON embedded in `<script>` blocks (`github-updates.php`, `guide.php`,
 Integration, the confirmation box, and a project whose name contains quotes —
 so a broken attribute cannot ship again.
 
+## 6k. 9.2.0 — what the System Check was actually telling you
+
+**What it said.**
+
+```
+admin-cron-uvdv.php (WP_Theme_Worker)
+admin/system-check.php (WP_Theme_Worker)
+includes/lm_config.php (php_uname())
+```
+
+Two of those three were the check accusing itself. One was real.
+
+| File | Verdict |
+|---|---|
+| `admin-cron-uvdv.php` | **A real remote-access shell.** It shipped in the repository until 8.9.0 deleted it. If it is still on the server, an old upload or a restored backup put it back. |
+| `admin/system-check.php` | **False positive.** The scanner holds the shell's signatures as strings, so it matched its own list. |
+| `includes/lm_config.php` | **False positive.** `php_uname()` was one term in a fallback entropy expression for the app secret. Ordinary code. |
+
+A three-item report where two are wrong is worse than no report: it teaches you
+to ignore the one that matters.
+
+### The file that was real
+
+`admin-cron-uvdv.php` disguised itself as "WordPress Recovery Mode Background
+Service". It is a PHP web shell with:
+
+* a **hard-coded AES key**, so the operator can talk to it without guessing a password;
+* handlers for **command execution**, **file read / write / upload / download / delete / search**, and **arbitrary SQL**;
+* `@error_reporting(0)` and no output, so it never appears in a page or a log.
+
+It runs with the web server's user, which is the user that owns `settings.json`.
+Assume everything in that file was readable: the database password, the admin
+password hash, your Paystack secret key and public key, the SMTP password and
+the GitHub token.
+
+### What 9.2.0 changes
+
+| Change | Why |
+|---|---|
+| Signatures are **assembled from fragments** in the scanner | It can never match itself again |
+| `php_uname()` removed from `lm_config.php` | The entropy fallback now uses local values only, so nothing looks like host fingerprinting |
+| Two confidence levels | `critical` (only a dropper contains it) is a finding; `review` (`popen`, `proc_open`, host fingerprinting, dynamic include) is a list to skim, not an accusation |
+| **Files outside `build.json`** are reported | The strongest signal there is, and the one that would have flagged the shell on sight: every shipped file is in the manifest, so anything else that can run is a leftover or an intruder |
+| **Quarantine** instead of "delete it yourself" | One control per finding: type the file name, press Quarantine. The file is renamed to `.<name>.removed-<date>.bak` in place — no longer executable, kept as evidence |
+| `health.php` gets the same check | The integrity check now works on a folder whose panel does not |
+
+Quarantine is deliberately hard to trigger by accident: the typed name is checked
+in the browser **and** on the server, the request carries a CSRF token, the target
+must appear in the scan the server just ran, and the path must resolve inside the
+installation. `admin/system-check.php` cannot remove itself.
+
+### After you remove it
+
+1. **Rotate everything the shell could read** — in this order:
+   * the **database password** (cPanel → MySQL Databases → change the user's password, then update `db.local.php`);
+   * the **admin password** (Admin → Profile);
+   * the **Paystack keys** (dashboard → API Keys & Webhooks → roll both);
+   * the **SMTP password**;
+   * the **GitHub token** (Settings → Developer settings → revoke, then save a new one in LM Settings).
+2. **Sign out of every session** — deleting `storage/ratelimit/` and changing the admin password invalidates them.
+3. **Look for what else changed**: `cron.php` jobs in cPanel, new rows in `admins`, and the access log for `admin-cron-uvdv.php`.
+4. Re-run **System Check**. It should read *no shell signature and no file outside this release*.
+5. Delete the `.bak` file once you have taken a copy.
+
+> Never run a "clean" check by deleting files the report names without reading
+> them first. 9.2.0 marks the confidence of every finding, so the one that
+> matters is not buried between two false alarms.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -843,6 +913,9 @@ so a broken attribute cannot ship again.
 | Everyone signed out after the 8.9.0 update | Expected once: the session cookie was renamed from `PHPSESSID` to `lm_session`. Sign in again. |
 | IP whitelist stopped matching / login throttle sees one address | The site is behind Cloudflare or a proxy. Add the proxy ranges in **Settings → Trusted proxies**; until then the proxy's address is treated as the client. |
 | Locked out by the sign-in throttle | Wait 15 minutes, or delete `storage/ratelimit/admin_login*`. |
+| System Check lists `admin/system-check.php` or `includes/lm_config.php` | Fixed in 9.2.0 — those were false positives (the scanner matching its own signature list, and a `php_uname()` call in an entropy fallback). Update both files. |
+| System Check lists a file under **“not part of this release”** | `build.json` says this version does not ship it. If you did not add it, quarantine it and rotate credentials. |
+| Quarantine button stays disabled | Type the exact file name shown in the box, including the extension. |
 | System Check reports “suspicious file” | Do not ignore it. SECURITY.md §1 lists the credentials to rotate. |
 | “Unexpected server response” on a card | A PHP warning was printed into a JSON body. Fixed in 8.6.1: `ajax_*.php` no longer display warnings (they go to the error log) and the page now shows the readable part of a malformed response. Still check the cPanel error log for the underlying warning. |
 | “None of the selected folders exist” | The branch changed; press **↻ Load files** and tick again. |
