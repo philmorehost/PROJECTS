@@ -8,6 +8,10 @@
 require_once __DIR__ . '/../includes/security.php';
 lm_session_start();
 lm_security_headers();
+
+// A host-level WAF can block a POST before PHP sees it; the console retries
+// with encoded values, and this turns them back into ordinary fields.
+lm_request_decode();
 header('Content-Type: application/json; charset=utf-8');
 
 // A PHP warning printed into the body turns a valid JSON response into

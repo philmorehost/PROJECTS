@@ -85,7 +85,9 @@ const phpArray = obj => 'array('
     lm_admin_page_end();`, '/lm/admin/github-updates.php');
   ok('the console says so on load, before the admin clicks Pull',
     has(banner, 'not from the release') || has(banner, 'Mixed release'), banner.slice(0, 500));
-  ok('the banner names the file and the fix', has(banner, 'admin/ajax_github.php') && has(banner, 'Re-upload'), banner.slice(0, 500));
+  ok('the banner names a file and the fix',
+    (has(banner, 'admin/ajax_github.php') || has(banner, 'security.php')) && has(banner, 'Re-upload'),
+    banner.slice(0, 500));
   ok('the banner links to the installation check', has(banner, 'health.php'), '');
 
   const login = await run("require '/lm/admin/index.php';", '/lm/admin/index.php');
@@ -166,6 +168,49 @@ const phpArray = obj => 'array('
     echo $v['rate_limited'] ? 'yes' : 'no';`, '/lm/probe-github.php');
   ok('the caller can tell a rate limit from a permission problem', rateFlag.trim() === 'yes', rateFlag);
 
+  console.log('\nEncoded retry (WAF workaround)');
+  const decoded = await run("require_once '/lm/includes/security.php';\n" + `
+    $_SERVER['HTTP_X_LM_ENCODING'] = 'base64';
+    $_POST = array(
+        'action' => base64_encode('pull'),
+        'changelog' => base64_encode('[Fixed] ünïcode & <tags>'),
+        'paths' => array(base64_encode('admin/'), base64_encode('includes/')),
+        '_encoding' => 'base64',
+    );
+    $mode = lm_request_decode();
+    echo json_encode(array('mode' => $mode, 'post' => $_POST));`, '/lm/admin/ajax_github.php');
+  let d = null;
+  try { d = JSON.parse(decoded); } catch (e) {}
+  ok('an encoded request is decoded before CSRF is checked', d && d.mode === 'base64' && d.post.action === 'pull', decoded);
+  ok('unicode and HTML survive the round trip', d && d.post.changelog === '[Fixed] ünïcode & <tags>', decoded);
+  ok('repeated fields stay arrays', d && Array.isArray(d.post.paths) && d.post.paths[1] === 'includes/', decoded);
+  ok('the marker field is removed', d && !('_encoding' in d.post), decoded);
+
+  const plain = await run("require_once '/lm/includes/security.php';\n" + `
+    unset($_SERVER['HTTP_X_LM_ENCODING']);
+    $_POST = array('action' => 'pull');
+    echo '[' . lm_request_decode() . ']' . $_POST['action'];`, '/lm/admin/ajax_github.php');
+  ok('a plain request is left untouched', plain.trim() === '[]pull', plain);
+
+  console.log('\nReachability probes');
+  const ping = await run("require '/lm/admin/ping.php';", '/lm/admin/ping.php', { chdir: '/lm/admin' });
+  let p = null;
+  try { p = JSON.parse(ping); } catch (e) {}
+  ok('admin/ping.php answers JSON without any include', p && p.ok === true && p.method === 'GET', ping);
+  ok('admin/ping.php names the version it is running', p && /^\d+\.\d+\.\d+$/.test(p.lm_version), ping);
+
+  const endpointPing = await run(`
+    require_once '/lm/includes/security.php';
+    lm_session_start();
+    $_SESSION['admin_logged_in'] = true;
+    $_SESSION['lm_csrf'] = 'qa-token';
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $_POST = array('action' => 'ping', 'csrf_token' => 'qa-token');
+    require '/lm/admin/ajax_github.php';`, '/lm/admin/ajax_github.php', { fresh: true });
+  let ep = null;
+  try { ep = JSON.parse(endpointPing); } catch (e) {}
+  ok('ajax_github.php answers a signed-in ping', ep && ep.status === 'success' && ep.csrf === 'ok', endpointPing);
+
   console.log('\nHealth check');
   await withEditedFile('/lm/admin/ajax_github.php', '\n// edited after upload\n');
   const health = await run(`require '/lm/health.php';`, '/lm/health.php', { chdir: '/lm' });
@@ -175,6 +220,31 @@ const phpArray = obj => 'array('
   ok('health.php lists the stale file', has(health, 'admin/ajax_github.php'), '');
   ok('health.php shows no PHP diagnostic',
     !/Parse error|Fatal error|Undefined variable|Warning:/.test(health), health.slice(0, 400));
+
+  console.log('\nInline JavaScript');
+  /*
+   * The console's retry and the health page's network test are long inline
+   * scripts. A syntax error in one of them breaks the button silently, so
+   * parse every <script> block with V8 before shipping.
+   */
+  const pages = [
+    ['health.php', "require '/lm/health.php';", '/lm/health.php'],
+    ['admin/index.php', "require '/lm/admin/index.php';", '/lm/admin/index.php'],
+    ['admin/_ui.php', "require_once '/lm/includes/security.php';\n"
+      + "require_once '/lm/admin/_ui.php';\n"
+      + "lm_admin_page_start('QA');\nlm_admin_page_end();", '/lm/admin/dashboard.php'],
+  ];
+
+  for (const [file, code, identity] of pages) {
+    const html = await run(code, identity, { fresh: true, chdir: '/lm' });
+    const blocks = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+    const broken = [];
+    for (const block of blocks) {
+      if (block.trim() === '') continue;
+      try { new Function(block); } catch (e) { broken.push(e.message); }
+    }
+    ok(file + ' has valid inline JavaScript (' + blocks.length + ' block(s))', broken.length === 0, broken.join('; '));
+  }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail === 0 ? 0 : 1);

@@ -12,6 +12,10 @@
 require_once __DIR__ . '/../includes/security.php';
 lm_session_start();
 lm_security_headers();
+
+// A host-level WAF can block a POST before PHP sees it; the console retries
+// with encoded values, and this turns them back into ordinary fields.
+lm_request_decode();
 header('Content-Type: application/json; charset=utf-8');
 
 // A PHP warning printed into the body turns a valid response into
@@ -38,6 +42,20 @@ if (($_POST['action'] ?? '') === 'pull') {
 }
 
 $action = (string) ($_POST['action'] ?? '');
+
+// A probe the console and health.php can send to this exact endpoint: if it
+// answers, the session, the CSRF token and the server rules all allow a POST
+// here, so a failure on a real action is about that action's payload.
+if ($action === 'ping') {
+    lm_json(array(
+        'status' => 'success',
+        'endpoint' => 'ajax_github.php',
+        'server_version' => LM_VERSION,
+        'csrf' => 'ok',
+        'encoding' => isset($_SERVER['HTTP_X_LM_ENCODING']) ? (string) $_SERVER['HTTP_X_LM_ENCODING'] : '',
+        'time' => gmdate('c'),
+    ));
+}
 $tierId = (int) ($_POST['tier_id'] ?? 0);
 $tier = null;
 

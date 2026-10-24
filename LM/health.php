@@ -23,6 +23,7 @@ $root = __DIR__;
 $required = array(
     'index.php'                     => 'Landing page',
     'health.php'                    => 'This page',
+    'admin/ping.php'                => 'Request self-test (9.0.3)',
     'includes/security.php'         => 'Sessions, CSRF, throttles',
     'includes/lm_config.php'        => 'Configuration and helpers',
     'includes/ui.php'               => 'Public header, footer and mobile menu (9.0.0)',
@@ -229,6 +230,15 @@ $ok = empty($problems);
               color:#cbd5e1; padding:14px 16px; border-radius:12px; overflow-x:auto; }
         .hint { color:var(--muted); font-size:13.5px; margin:12px 0 0; }
         a { color:#4338ca; }
+        .net button { font:inherit; font-weight:700; font-size:14px; padding:10px 18px; border-radius:10px;
+                      border:1px solid #c7d2fe; background:#eef2ff; color:#3730a3; cursor:pointer; }
+        .net button[disabled] { opacity:.55; cursor:progress; }
+        .net ol { margin:14px 0 0; padding-left:20px; font-size:13.5px; }
+        .net li { margin-bottom:6px; }
+        .net .ok { color:var(--ok); font-weight:700; }
+        .net .bad { color:var(--bad); font-weight:700; }
+        .net .verdict { margin-top:14px; padding:13px 15px; border-radius:12px; background:#fffbeb;
+                        border:1px solid #fde68a; color:#92400e; font-size:14px; display:none; }
     </style>
 </head>
 <body>
@@ -315,6 +325,124 @@ $ok = empty($problems);
                 <?= is_file($settings) ? (is_readable($settings) ? 'present' : 'unreadable') : 'missing' ?>
             </span>
         </div>
+    </div>
+
+    <div class="card net">
+        <h2>Server rules (browser test)</h2>
+        <p class="hint" style="margin-top:0">
+            A bare <strong>403 Forbidden</strong> can be sent by the web server before PHP ever runs —
+            <code>.htaccess</code>, mod_security, or a proxy. This page cannot see that from PHP, so this
+            test asks the browser to make the same requests the console makes and reports where each one stops.
+            It sends no data and needs no sign-in.
+        </p>
+        <p style="margin:14px 0 0"><button type="button" id="lm-net-run">Run network self-test</button></p>
+        <ol id="lm-net-out" hidden></ol>
+        <div class="verdict" id="lm-net-verdict"></div>
+        <p class="hint">
+            If the test says the server refuses everything in <code>admin/</code>, rename
+            <code>.htaccess</code> to <code>.htaccess.off</code> in the License Manager folder, reload this page,
+            and run the test again. That separates the rules file from a host-level rule.
+        </p>
+        <script>
+        (function () {
+            var run = document.getElementById('lm-net-run');
+            var out = document.getElementById('lm-net-out');
+            var verdict = document.getElementById('lm-net-verdict');
+            if (!run) return;
+
+            function json(text) { try { return JSON.parse(text); } catch (e) { return null; } }
+
+            function step(label, promise) {
+                return promise.then(function (response) {
+                    return response.text().then(function (text) {
+                        var parsed = json(text);
+                        return { label: label, status: response.status, json: parsed, text: text };
+                    });
+                }).catch(function (error) {
+                    return { label: label, status: 0, json: null, text: error.message };
+                });
+            }
+
+            function line(result) {
+                var li = document.createElement('li');
+                var good = result.status >= 200 && result.status < 300 && result.json;
+                li.innerHTML = '<span class="' + (good ? 'ok' : 'bad') + '">'
+                    + (result.status === 0 ? 'blocked' : 'HTTP ' + result.status) + '</span> — '
+                    + result.label
+                    + (result.json ? ' <span class="hint" style="display:inline;margin:0">(PHP answered)</span>' : '');
+                return li;
+            }
+
+            run.addEventListener('click', function () {
+                run.disabled = true;
+                out.hidden = false;
+                out.innerHTML = '';
+                verdict.style.display = 'none';
+
+                var big = new FormData();
+                big.append('filler', new Array(64 * 1024).join('x'));
+
+                var checks = [
+                    ['GET admin/ping.php', 'admin/ping.php', { method: 'GET' }],
+                    ['POST admin/ping.php (empty body)', 'admin/ping.php', { method: 'POST', body: new FormData() }],
+                    ['POST admin/ping.php (64 KB body)', 'admin/ping.php', { method: 'POST', body: big }],
+                    ['POST admin/ajax_github.php (action=ping)', 'admin/ajax_github.php', { method: 'POST', body: (function () {
+                        var fd = new FormData(); fd.append('action', 'ping'); return fd;
+                    })() }]
+                ];
+
+                var results = [];
+                var chain = Promise.resolve();
+                checks.forEach(function (check) {
+                    chain = chain.then(function () {
+                        return step(check[0], fetch(check[1], Object.assign({
+                            credentials: 'same-origin', cache: 'no-store'
+                        }, check[2]))).then(function (result) {
+                            results.push(result);
+                            out.appendChild(line(result));
+                        });
+                    });
+                });
+
+                chain.then(function () {
+                    var get = results[0];
+                    var post = results[1];
+                    var large = results[2];
+                    var endpoint = results[3];
+                    var text = '';
+
+                    if (!get.json) {
+                        if (get.status === 404) {
+                            text = 'admin/ping.php is not on the server — upload this release\'s admin/ folder.';
+                        } else {
+                            text = 'The web server refuses files in admin/ before PHP runs. That is .htaccess or a host rule. '
+                                + 'Rename .htaccess to .htaccess.off in the License Manager folder and run the test again. '
+                                + 'If it passes then, ask the host which rule in the old file they reject.';
+                        }
+                    } else if (!post.json) {
+                        text = 'PHP answers a GET but the server blocks POST requests. This is a mod_security rule on the host: '
+                            + 'ask them to whitelist the admin folder, or set the account to DetectionOnly in cPanel → ModSecurity.';
+                    } else if (!large.json) {
+                        text = 'Small POSTs arrive, a 64 KB body does not. The host caps the request body — tick fewer folders, '
+                            + 'or ask for a higher SecRequestBodyLimit.';
+                    } else if (!endpoint.json) {
+                        text = 'Other files in admin/ answer but ajax_github.php is refused: a rule is matching that file name. '
+                            + 'Ask the host to whitelist it.';
+                    } else if (endpoint.json.status !== 'success' && endpoint.json.code) {
+                        text = 'PHP answered ajax_github.php but refused the request (code ' + endpoint.json.code + '): '
+                            + (endpoint.json.message || '') + ' — this is the panel, not the web server.';
+                    } else {
+                        text = 'Every request reached PHP. The web server is not refusing POSTs, so a 403 in the console is '
+                            + 'coming from the panel itself — check the Release card above, then the PHP error log.';
+                    }
+
+                    verdict.textContent = text;
+                    verdict.style.display = 'block';
+                    run.disabled = false;
+                });
+            });
+        })();
+        </script>
     </div>
 
     <div class="card">

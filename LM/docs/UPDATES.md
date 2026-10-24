@@ -679,6 +679,62 @@ so the saved GitHub token is untouched.
 
 ---
 
+## 6i. 9.0.3 — the 403 that came from the web server, not the panel
+
+**Symptom (after the 9.0.2 upload).** The console showed **v9.0.2** in the
+sidebar, the page loaded, *Load files* worked, and then **Pull & publish**
+answered:
+
+> 403 Forbidden — The server refused this before the panel could answer…
+
+That wording is the clue. When PHP refuses a request the panel explains itself
+(JSON with a `code`, or a sentence naming the stale file). A body that starts
+with **`403 Forbidden`** is the **web server's own error page** — LiteSpeed,
+`mod_security`, or a proxy answering before `ajax_github.php` is executed.
+
+So the release was no longer mixed (9.0.2 fixed that); a host rule was refusing
+that particular `POST`.
+
+### Why a POST gets refused when the page loads fine
+
+`mod_security` rule sets on shared cPanel hosts inspect form bodies. A body
+containing file paths (`admin/…`, `includes/…`), the word "changelog", an HTML
+payload, or a long field can match a generic rule and produce a bare 403. The
+same host will happily serve the page for `GET`, which is why the console looks
+half-working.
+
+### What 9.0.3 does about it
+
+| Piece | What it does |
+|---|---|
+| **Automatic retry** | When a POST comes back as a non-JSON 403/406/413/400, `lmPost()` repeats it with every value base64-encoded (`X-LM-Encoding: base64`). A content rule has nothing left to match, so the request goes through and the admin sees a small “sent encoded” notice instead of an error. `lm_request_decode()` in `includes/security.php` turns it back into ordinary fields — including repeated fields such as `paths[]` — before CSRF is checked. |
+| **`admin/ping.php`** | A dependency-free endpoint that answers “did this request reach PHP?”. It needs no login, no database and no includes, so it works on a half-uploaded folder. |
+| **`ajax_github.php?action=ping`** | Proves that *that endpoint*, with a real session and CSRF token, accepts a POST. |
+| **Console diagnosis** | When even the encoded retry is refused, the toast no longer guesses. It probes and names the layer: the whole `admin/` folder is refused / POSTs are blocked / the body is too large / this one endpoint is blocked. |
+| **health.php → Server rules** | *Run network self-test* makes four requests from your browser — GET, empty POST, 64 KB POST, and a signed ping to `ajax_github.php` — and prints the status of each. This is the only test that can see a web-server block, because it does not run inside PHP. |
+
+### How to fix it on your host
+
+1. Open `health.php`, press **Run network self-test**.
+2. **Everything refused, including the GET** → it is `.htaccess`. Rename the
+   file in the License Manager folder to `.htaccess.off`, reload, test again.
+   If it passes, send the `.htaccess` text to the host and ask which rule they
+   reject.
+3. **GET passes, POSTs fail** → it is `mod_security`. Either
+   cPanel → **ModSecurity** → *DetectionOnly* for this domain, or ask the host to
+   whitelist `admin/ajax_github.php` (their support will want the request id from
+   `/usr/local/apache/logs/modsec_audit.log`).
+4. **Small POST passes, 64 KB fails** → a body-size limit. Tick one folder
+   instead of the whole repository, or ask for a higher `SecRequestBodyLimit`.
+5. **All four pass** → the block is not the web server. Reload the console and
+   try again: the retry is automatic, and if it still fails the toast will name
+   the panel's own reason.
+
+> The encoded retry is not a security change: the payload is base64, not
+> encrypted, it is the same data, and CSRF is still verified after decoding.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -694,6 +750,8 @@ so the saved GitHub token is untouched.
 | Pull card stuck on “Queued” | No worker could be started (host disables `exec()` and blocks loopback HTTP). `cron.php` picks the job up on its next run; check **Settings → Automation** that cron is alive. |
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
+| `403 Forbidden` whose text is just “403 Forbidden” | The **web server** refused the request before PHP ran: `.htaccess`, mod_security or a proxy. Open `health.php` → **Server rules** → *Run network self-test*. 9.0.3 retries the request base64-encoded automatically, which gets past content-based rules. |
+| Pull fails but *Load files* works | The preview is a small GET-like POST; the pull body is larger and carries the changelog and paths, which is what a WAF rule matches. The retry handles it; if not, `health.php` says which layer refused. |
 | `403 Forbidden` on every button, but sign-in works | The folder is two releases at once. A page from an old release opens `PHPSESSID` while the endpoints expect `lm_session`, so every AJAX looks like a stranger. Open `health.php` → **Release** and re-upload the files it lists. Fixed as a class of bug in 9.0.2: the console now says so on load. |
 | Console toast “This page is from version X but the server runs Y” | Mixed upload. Re-upload the whole `admin/` folder. |
 | `health.php` says “N file(s) are from an older release” | Upload those exact files from the ZIP, or upload the whole folder again. |
@@ -721,7 +779,9 @@ so the saved GitHub token is untouched.
 ## 8. Files of interest
 
 ```
-includes/lm_config.php        settings, crypto, CSRF, site URL, logging
+includes/lm_config.php        settings, crypto, CSRF, site URL, logging, release check
+admin/ping.php                request self-test: did this POST reach PHP?
+build.json                    release manifest (SHA-1 per shipped file)
 includes/mailer.php           SMTP plan, retries, queue
 includes/updates.php          versioning, publish/delete/cleanup, ZIP rewrite
 includes/zip.php              pure-PHP ZIP reader/writer (no ZipArchive needed)

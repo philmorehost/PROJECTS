@@ -408,6 +408,67 @@ if (!function_exists('lm_rate_limit_ip')) {
     }
 }
 
+if (!function_exists('lm_request_decode')) {
+    /**
+     * Accept a request body the host's web server would otherwise block.
+     *
+     * Some shared hosts run mod_security rule sets that answer a POST with a
+     * bare "403 Forbidden" before PHP is reached — usually because the body
+     * contains a string a generic rule dislikes (paths, "select", an HTML
+     * changelog, a very long field). The console detects that and repeats the
+     * request with every value encoded, which no content rule can match any
+     * more. This is the other half of that handshake.
+     *
+     * Encoding is opt-in per request: X-LM-Encoding header or the _encoding
+     * field. Values are decoded recursively, so array fields survive.
+     *
+     * @return string 'base64' or '' when the request was plain.
+     */
+    function lm_request_decode()
+    {
+        $marker = '';
+        if (isset($_SERVER['HTTP_X_LM_ENCODING'])) {
+            $marker = strtolower(trim((string) $_SERVER['HTTP_X_LM_ENCODING']));
+        }
+        if ($marker === '' && isset($_POST['_encoding'])) {
+            $marker = strtolower(trim((string) $_POST['_encoding']));
+        }
+
+        if ($marker !== 'base64') {
+            return '';
+        }
+
+        unset($_POST['_encoding']);
+
+        $decode = function ($value) use (&$decode) {
+            if (is_array($value)) {
+                $out = array();
+                foreach ($value as $key => $item) {
+                    $out[$key] = $decode($item);
+                }
+                return $out;
+            }
+
+            if (!is_string($value) || $value === '') {
+                return $value;
+            }
+
+            $raw = base64_decode($value, true);
+            if ($raw === false) {
+                return $value; // not encoded after all: keep what arrived
+            }
+
+            return $raw;
+        };
+
+        foreach ($_POST as $key => $value) {
+            $_POST[$key] = $decode($value);
+        }
+
+        return $marker;
+    }
+}
+
 if (!function_exists('lm_safe_redirect')) {
     /**
      * Redirect only to a local path — never to an attacker-supplied absolute URL.

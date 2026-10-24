@@ -12,7 +12,7 @@ npm install php-wasm php-parser jsdom
 | Script | What it checks |
 |---|---|
 | `node lint74.cjs` | Every `.php` file parses **as PHP 7.4** (the host runs `ea-php74`). The php-wasm linter is PHP 8 and misses 8-only syntax, so this uses `php-parser` instead. |
-| `node contracts.cjs` | The release-integrity contract: `build.json` matches the tree, a mixed folder is detected (console banner, sign-in banner, `lm_release_state()`), a legacy `session_start()` file is explained instead of 403'd, `lm_json()` carries `server_version`, and every GitHub 403 class (rate limit, SSO, fine-grained, scopes) produces the sentence that fixes it. |
+| `node contracts.cjs` | The 403 contract: `build.json` matches the tree, a mixed folder is detected (console banner, sign-in banner, `lm_release_state()`), a legacy `session_start()` file is explained instead of 403'd, `lm_json()` carries `server_version`, every GitHub 403 class (rate limit, SSO, fine-grained, scopes) produces the sentence that fixes it, encoded retry bodies decode correctly, `admin/ping.php` answers, and every inline `<script>` parses. |
 | `node render.cjs <page.php>` | Renders a page in PHP-wasm and prints any PHP diagnostic it produced. Flags: `--no-ui` (delete `includes/ui.php` first, to test a partial upload), `--session` (seed a signed-in admin), `--stale <file>` / `--absent <file>` (simulate a partial upload), `--out <file>`. |
 | `node buildjson.cjs` | Regenerates `LM/build.json`. Run it as the last step before committing a release; `--check` verifies the manifest on disk still matches the tree. |
 

@@ -244,7 +244,36 @@ if (!function_exists('lm_admin_page_start')) {
             window.__toastTimer = setTimeout(() => { el.className = 'toast'; }, 7000);
         }
 
-        async function lmPost(url, data) {
+        /*
+         * Some shared hosts run mod_security rules that answer a POST with a
+         * bare "403 Forbidden" before PHP is reached. Nothing in the panel can
+         * see why from inside, so lmPost() does two things: it repeats the
+         * request with every value base64-encoded (which no content rule can
+         * match any more), and when even that is refused it probes admin/ping.php
+         * to say which layer is refusing — the folder, POST requests, the body
+         * size, or this one endpoint.
+         */
+        function lmB64(value) {
+            const bytes = new TextEncoder().encode(String(value));
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
+        }
+
+        function lmTryParse(text) {
+            try { return JSON.parse(text); } catch (e) { return null; }
+        }
+
+        function lmReadable(text) {
+            return String(text)
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]*>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
+        function lmFields(data) {
             const fd = new FormData();
             Object.keys(data || {}).forEach(key => {
                 const value = data[key];
@@ -257,55 +286,163 @@ if (!function_exists('lm_admin_page_start')) {
                 }
             });
             fd.append('csrf_token', LM_CSRF);
-            try {
-                const response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
-                const text = await response.text();
+            return fd;
+        }
+
+        async function lmPostEncoded(url, fd) {
+            const out = new FormData();
+            fd.forEach((value, key) => out.append(key, lmB64(value)));
+            out.append('_encoding', 'base64');
+            return fetch(url, {
+                method: 'POST',
+                body: out,
+                headers: { 'X-LM-Encoding': 'base64' },
+                credentials: 'same-origin'
+            });
+        }
+
+        /** Which layer refused the request? Returns a sentence and the probes. */
+        async function lmDiagnose(url) {
+            const steps = [];
+            const probe = async (label, target, init) => {
                 try {
-                    const parsed = JSON.parse(text);
-                    lmVersionMismatch(parsed);
-                    return parsed;
+                    const response = await fetch(target, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, init || {}));
+                    const text = await response.text();
+                    const ok = !!lmTryParse(text);
+                    steps.push(label + ': HTTP ' + response.status + (ok ? ' (JSON)' : ' (not JSON)'));
+                    return { ok: !!ok && response.ok, status: response.status, text: text };
+                } catch (e) {
+                    steps.push(label + ': network error — ' + e.message);
+                    return { ok: false, status: 0, text: '' };
                 }
-                catch (e) {
-                    // A PHP warning printed into the body used to surface as raw
-                    // HTML. Show the readable part and keep the rest for support.
-                    const clean = text
-                        .replace(/<br\s*\/?>/gi, '\n')
-                        .replace(/<[^>]*>/g, '')
-                        .replace(/&nbsp;/g, ' ')
-                        .replace(/\n{3,}/g, '\n\n')
-                        .trim();
+            };
 
-                    const first = clean.split('\n').filter(function (line) { return line.trim() !== ''; }).slice(0, 2).join(' ');
+            const big = new FormData();
+            big.append('filler', 'x'.repeat(64 * 1024));
 
-                    // Name the layer that answered. A bare "403 Forbidden" gave
-                    // the operator nothing to act on.
-                    let why = '';
-                    if (response.status === 403) {
-                        why = first && /Not authorised|session|sign in|stale|older release/i.test(clean)
-                            ? ''
-                            : ' The server refused this before the panel could answer — that is .htaccess, '
-                              + 'a hosting security rule (mod_security), or a file from an older release. '
-                              + 'Open Installation check.';
-                    } else if (response.status === 401 || response.status === 419) {
-                        why = ' Your sign-in has expired: reload this page and sign in again.';
-                    } else if (response.status === 404) {
-                        why = ' That endpoint is not on the server — a file from the release is missing.';
-                    } else if (response.status >= 500) {
-                        why = ' The server errored (HTTP ' + response.status + ') — check the PHP error log.';
-                    } else if (/Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)) {
-                        why = ' (server error — check the PHP error log)';
-                    }
-
-                    return {
-                        status: 'error',
-                        http_status: response.status,
-                        message: (first || ('The server returned HTTP ' + response.status + ' with no explanation.')) + why,
-                        raw: clean.slice(0, 600)
-                    };
+            const get = await probe('GET admin/ping.php', 'ping.php');
+            if (!get.ok) {
+                if (get.status === 404) {
+                    return { steps: steps, message: 'admin/ping.php is not on the server, so this cannot be tested yet. Upload the 9.0.3 admin/ folder (or at least admin/ping.php) and try again.' };
                 }
+                return {
+                    steps: steps,
+                    message: 'The web server refuses files in admin/ before PHP runs — that is .htaccess or a hosting security rule, not the panel. '
+                        + 'Rename .htaccess to .htaccess.off in the License Manager folder, reload, and try again. If it then works, send the .htaccess text to your host and ask which rule they reject.'
+                };
+            }
+
+            const post = await probe('POST admin/ping.php (empty)', 'ping.php', { method: 'POST', body: new FormData() });
+            if (!post.ok) {
+                return {
+                    steps: steps,
+                    message: 'PHP answers a GET but not a POST: the host blocks POST requests (mod_security). '
+                        + 'Ask the host to whitelist POST for the admin folder in ModSecurity, or switch this account to DetectionOnly in cPanel → ModSecurity.'
+                };
+            }
+
+            const large = await probe('POST admin/ping.php (64 KB)', 'ping.php', { method: 'POST', body: big });
+            if (!large.ok) {
+                return {
+                    steps: steps,
+                    message: 'Small POSTs arrive but a 64 KB body does not: the host caps the request body. Tick one folder instead of the whole repository, or ask the host to raise SecRequestBodyLimit.'
+                };
+            }
+
+            const endpoint = await probe('POST ' + url + ' (action=ping)', url, { method: 'POST', body: lmFields({ action: 'ping' }) });
+            if (!endpoint.ok) {
+                return {
+                    steps: steps,
+                    message: 'Other files in admin/ answer, but ' + url + ' is refused — a security rule is matching that file name or its parameters. '
+                        + 'Ask the host to whitelist ' + url + ' in ModSecurity, and meanwhile open health.php → Server rules to confirm.'
+                };
+            }
+
+            const endpointJson = lmTryParse(endpoint.text) || {};
+            if (endpointJson.status !== 'success') {
+                return {
+                    steps: steps,
+                    message: 'PHP answered ' + url + ' but refused the request: '
+                        + (endpointJson.message || 'no reason given') + ' (code ' + (endpointJson.code || 'unknown') + ').'
+                };
+            }
+
+            return {
+                steps: steps,
+                message: 'Every probe answered, so the refusal came from the request body itself. The panel retried with encoded values and did not get through either; '
+                    + 'clear the changelog box and publish again with a short note to confirm.'
+            };
+        }
+
+        async function lmPost(url, data) {
+            const fd = lmFields(data);
+            let response;
+            try {
+                response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
             } catch (e) {
                 return { status: 'error', message: 'Network error: ' + e.message };
             }
+
+            const text = await response.text();
+            let parsed = lmTryParse(text);
+            if (parsed) {
+                lmVersionMismatch(parsed);
+                return parsed;
+            }
+
+            // Not JSON: either PHP died, or the web server refused the request.
+            let status = response.status;
+            let body = text;
+
+            if (status === 403 || status === 406 || status === 413 || status === 400 || status === 501) {
+                try {
+                    const retry = await lmPostEncoded(url, fd);
+                    const retryText = await retry.text();
+                    const retryParsed = lmTryParse(retryText);
+                    if (retryParsed) {
+                        toast('Your host blocked the plain request; it went through encoded.', 'info');
+                        lmVersionMismatch(retryParsed);
+                        return retryParsed;
+                    }
+                    status = retry.status || status;
+                    body = retryText || body;
+                } catch (e) {
+                    // keep the original refusal
+                }
+            }
+
+            const clean = lmReadable(body);
+            const first = clean.split('\n').filter(function (line) { return line.trim() !== ''; }).slice(0, 2).join(' ');
+
+            let why = '';
+            if (status === 403) {
+                const diag = await lmDiagnose(url);
+                why = ' ' + diag.message;
+                return {
+                    status: 'error',
+                    http_status: status,
+                    message: (first || 'HTTP 403.') + why,
+                    diagnostic: diag.steps,
+                    raw: clean.slice(0, 600)
+                };
+            }
+
+            if (status === 401 || status === 419) {
+                why = ' Your sign-in has expired: reload this page and sign in again.';
+            } else if (status === 404) {
+                why = ' That endpoint is not on the server — a file from the release is missing.';
+            } else if (status >= 500) {
+                why = ' The server errored (HTTP ' + status + ') — check the PHP error log.';
+            } else if (/Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)) {
+                why = ' (server error — check the PHP error log)';
+            }
+
+            return {
+                status: 'error',
+                http_status: status,
+                message: (first || ('The server returned HTTP ' + status + ' with no explanation.')) + why,
+                raw: clean.slice(0, 600)
+            };
         }
 
         function openModal(id) { document.getElementById(id).classList.add('open'); }
