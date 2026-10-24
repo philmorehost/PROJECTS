@@ -40,29 +40,29 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android API 36 platform
         run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build debug APK
         working-directory: ${{ matrix.app.project }}
         run: bash ./gradlew --no-daemon --stacktrace :app:assembleDebug
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app.name }}-android-debug-apk
           path: ${{ matrix.app.project }}/app/build/outputs/apk/debug/*.apk
@@ -89,7 +89,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -100,8 +100,11 @@ jobs:
 
       - name: Build iOS Simulator app
         working-directory: ${{ matrix.app.project }}
+        shell: bash
         run: |
-          xcodebuild \
+          set -uo pipefail
+          log_file="$RUNNER_TEMP/${{ matrix.app.scheme }}-xcodebuild.log"
+          if ! xcodebuild \
             -project "${{ matrix.app.scheme }}.xcodeproj" \
             -scheme "${{ matrix.app.scheme }}" \
             -sdk iphonesimulator \
@@ -109,7 +112,19 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData/${{ matrix.app.scheme }}" \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build >"$log_file" 2>&1; then
+              {
+                echo "## ${{ matrix.app.name }} iOS build diagnostics"
+                echo '```text'
+                grep -E 'error:|warning:|fatal error:|BUILD FAILED|SwiftCompile failed' "$log_file" | tail -80 || tail -80 "$log_file"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              grep -E 'error:|fatal error:|BUILD FAILED|SwiftCompile failed' "$log_file" | tail -30 | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+              tail -80 "$log_file"
+              exit 1
+          fi
 
       - name: Package iOS Simulator app
         shell: bash
@@ -121,7 +136,7 @@ jobs:
             "$app_path" "$RUNNER_TEMP/${{ matrix.app.name }}-ios-simulator.zip"
 
       - name: Upload iOS Simulator app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app.name }}-ios-simulator-app
           path: ${{ runner.temp }}/${{ matrix.app.name }}-ios-simulator.zip
