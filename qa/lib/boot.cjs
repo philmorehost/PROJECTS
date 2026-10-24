@@ -42,7 +42,9 @@ async function makeRuntime(options) {
 
   if (!options.empty) await copyTree(php, LM, '/lm');
 
-  await php.writeFile('/lm/db.php', '<?php $pdo = null;');
+  // A stub, but one that lets a probe inject a fake PDO to exercise code
+  // paths that touch the database (php-wasm has no MySQL driver).
+  await php.writeFile('/lm/db.php', '<?php $pdo = isset($GLOBALS["qa_pdo"]) ? $GLOBALS["qa_pdo"] : null;');
   await php.writeFile('/lm/settings.json', JSON.stringify({
     site_name: 'Philmore Licence Manager',
     site_url: 'https://manager.pmhserver.name.ng',

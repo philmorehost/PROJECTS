@@ -292,6 +292,50 @@ lm_admin_page_start('Script projects', 'projects');
     </div>
 </div>
 
+<!-- Delete confirmation: the impact is fetched first, never guessed -->
+<div class="modal" id="deleteModal">
+    <div class="modal-card" style="max-width:560px;">
+        <div class="modal-head">
+            <div>
+                <h3 id="deleteTitle">Delete project</h3>
+                <p class="tiny muted" style="margin-top:5px;">This removes the project, its published versions and its packages from cPanel. It cannot be undone.</p>
+            </div>
+            <button class="modal-close" type="button" onclick="closeModal('deleteModal')">✕</button>
+        </div>
+
+        <div id="deleteImpact" style="display:grid;gap:9px;margin-bottom:18px;"></div>
+
+        <div id="deleteLicenceChoice" style="margin-bottom:16px;">
+            <label style="display:block;font-size:12.5px;font-weight:700;color:#334155;margin-bottom:8px;">What happens to the licences?</label>
+            <label class="switch" style="margin-bottom:9px;">
+                <input type="radio" name="deleteLicenceMode" value="detach" checked>
+                <span class="txt">
+                    <strong>Keep them</strong>
+                    <small>Customer keys keep working and stay in Licences. They stop receiving updates from this project.</small>
+                    <small style="margin-top:9px;">
+                        <span style="display:block;font-weight:700;color:#334155;margin-bottom:5px;">Move them to</span>
+                        <select class="select" id="deleteMoveTo"><option value="0">— No project (unassigned) —</option></select>
+                    </small>
+                </span>
+            </label>
+            <label class="switch">
+                <input type="radio" name="deleteLicenceMode" value="delete">
+                <span class="txt"><strong>Delete them too</strong><small>The keys stop validating immediately and the customer cannot recover them. Payment history is kept.</small></span>
+            </label>
+        </div>
+
+        <label class="switch" style="margin-bottom:18px;">
+            <input type="checkbox" id="deleteUnderstand">
+            <span class="txt"><strong>I understand this cannot be undone</strong><small id="deleteUnderstandHint">Tick to enable the delete button.</small></span>
+        </label>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="btn btn-ghost" type="button" onclick="closeModal('deleteModal')">Cancel</button>
+            <button class="btn btn-danger" type="button" id="deleteConfirmBtn" disabled onclick="confirmDeleteProject()">Delete project</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let editingId = 0;
 
@@ -356,11 +400,123 @@ lm_admin_page_start('Script projects', 'projects');
         if (result.status !== 'error') setTimeout(() => window.location.reload(), 900);
     }
 
+    let deleteProjectId = 0;
+    let deleteProjectName = '';
+
+    function impactRow(label, value, tone) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;gap:14px;padding:10px 13px;border-radius:10px;background:#f8fafc;font-size:13px;';
+        const left = document.createElement('span');
+        left.style.color = '#475569';
+        left.textContent = label;
+        const right = document.createElement('strong');
+        right.style.color = tone === 'bad' ? '#b91c1c' : (tone === 'muted' ? '#94a3b8' : '#0f172a');
+        right.textContent = value;
+        row.appendChild(left);
+        row.appendChild(right);
+        return row;
+    }
+
+    /**
+     * Ask the server what deleting this project would destroy, then show it.
+     * The confirmation is a second request that carries the licence decision —
+     * the panel never deletes a customer key without that being chosen.
+     */
     async function deleteProject(id, name) {
-        if (!confirm('Delete "' + name + '"? Its packages will be removed from cPanel. This cannot be undone.')) return;
+        deleteProjectId = id;
+        deleteProjectName = name;
+
         const result = await lmPost('ajax_projects.php', { action: 'delete', id: id });
+        if (result.status === 'error') {
+            toast(result.message, 'err');
+            return;
+        }
+
+        const impact = result.impact || {};
+        const list = document.getElementById('deleteImpact');
+        list.innerHTML = '';
+
+        document.getElementById('deleteTitle').textContent = 'Delete ' + name + '?';
+        list.appendChild(impactRow('Licences', String(impact.licences || 0), impact.licences ? 'bad' : 'muted'));
+        list.appendChild(impactRow('Published versions', String(impact.updates || 0), impact.updates ? 'bad' : 'muted'));
+        list.appendChild(impactRow('Packages on disk', (impact.package_files || 0) + ' file(s) · ' + (impact.package_size || '0 B'), impact.package_files ? 'bad' : 'muted'));
+        list.appendChild(impactRow('Queued customer notices', String(impact.notifications || 0), impact.notifications ? 'bad' : 'muted'));
+        list.appendChild(impactRow('Pull history / jobs', (impact.pulls || 0) + ' / ' + (impact.jobs || 0), 'muted'));
+        if (impact.jobs_running) {
+            list.appendChild(impactRow('Pull running right now', String(impact.jobs_running) + ' — it will be cancelled', 'bad'));
+        }
+
+        const choice = document.getElementById('deleteLicenceChoice');
+        choice.style.display = (impact.licences || 0) > 0 ? 'block' : 'none';
+        const radios = choice.querySelectorAll('input[name="deleteLicenceMode"]');
+        if (radios.length) radios[0].checked = true;
+
+        // Licences can be handed to another project instead of left unassigned.
+        const moveTo = document.getElementById('deleteMoveTo');
+        moveTo.innerHTML = '';
+        const none = document.createElement('option');
+        none.value = '0';
+        none.textContent = '— No project (unassigned) —';
+        moveTo.appendChild(none);
+        (result.targets || []).forEach(function (target) {
+            const option = document.createElement('option');
+            option.value = String(target.id);
+            option.textContent = target.name + ' (' + target.code + ')';
+            moveTo.appendChild(option);
+        });
+        moveTo.disabled = false;
+
+        const understand = document.getElementById('deleteUnderstand');
+        understand.checked = false;
+        const button = document.getElementById('deleteConfirmBtn');
+        button.disabled = true;
+        button.textContent = 'Delete project';
+
+        openModal('deleteModal');
+    }
+
+    document.querySelectorAll('input[name="deleteLicenceMode"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            const moveTo = document.getElementById('deleteMoveTo');
+            moveTo.disabled = this.value !== 'detach';
+        });
+    });
+
+    document.getElementById('deleteUnderstand').addEventListener('change', function () {
+        const button = document.getElementById('deleteConfirmBtn');
+        button.disabled = !this.checked;
+        document.getElementById('deleteUnderstandHint').textContent = this.checked
+            ? 'Deleting ' + deleteProjectName + '.'
+            : 'Tick to enable the delete button.';
+    });
+
+    async function confirmDeleteProject() {
+        const button = document.getElementById('deleteConfirmBtn');
+        const chosen = document.querySelector('input[name="deleteLicenceMode"]:checked');
+        const licenceMode = chosen ? chosen.value : 'detach';
+        const moveTo = document.getElementById('deleteMoveTo');
+
+        button.disabled = true;
+        button.textContent = 'Deleting…';
+
+        const result = await lmPost('ajax_projects.php', {
+            action: 'delete',
+            id: deleteProjectId,
+            confirm: '1',
+            licence_mode: licenceMode,
+            move_to: licenceMode === 'detach' && moveTo ? moveTo.value : '0'
+        });
+
         toast(result.message, result.status === 'error' ? 'err' : 'ok');
-        if (result.status !== 'error') setTimeout(() => window.location.reload(), 900);
+
+        if (result.status === 'error') {
+            button.disabled = false;
+            button.textContent = 'Delete project';
+            return;
+        }
+
+        closeModal('deleteModal');
+        setTimeout(() => window.location.reload(), 1100);
     }
 
     function openGuide(project) {

@@ -59,7 +59,7 @@ async function copyTree(php, src, dest) {
   }
 
   // php-wasm has no MySQL driver: a stub keeps GET pages working.
-  await php.writeFile('/lm/db.php', '<?php $pdo = null;');
+  await php.writeFile('/lm/db.php', '<?php $pdo = isset($GLOBALS["qa_pdo"]) ? $GLOBALS["qa_pdo"] : null;');
   await php.writeFile('/lm/.htaccess', fs.readFileSync(path.join(LM, '.htaccess')));
   await php.writeFile('/lm/settings.json', JSON.stringify({
     site_name: 'Philmore Licence Manager',

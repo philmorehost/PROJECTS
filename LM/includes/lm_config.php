@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '9.0.3');
+    define('LM_VERSION', '9.1.0');
 }
 
 require_once __DIR__ . '/security.php';

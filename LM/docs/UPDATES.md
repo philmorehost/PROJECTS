@@ -735,6 +735,56 @@ half-working.
 
 ---
 
+## 6j. 9.1.0 — deleting a project, whatever is attached to it
+
+**Before.** *Delete* on a project card only worked for a project with no
+licences and no updates. Everything else answered:
+
+> This project still has 14 licence(s) and 3 update(s). Archive it instead…
+
+That protected customer keys, but it also meant a project could not be removed
+once it had been used — the only way out was to archive it forever or hand-edit
+the database.
+
+**Now.** Delete always works, because the panel asks first and shows the cost.
+
+1. Press **Delete**. Nothing is removed yet: `ajax_projects.php` answers with a
+   **plan** — licences, published versions, packages on disk, queued customer
+   notices, pull history and jobs.
+2. The modal lists that plan and asks the one question that matters:
+   **what happens to the licences?**
+   * **Keep them** (default) — the keys keep validating and stay in *Licences*.
+     Use **Move them to** to hand them to another project in the same step, or
+     leave them unassigned.
+   * **Delete them too** — the keys stop validating immediately. Payment history
+     is kept (`transactions.license_id` is cleared rather than deleted), and so
+     are the request notes.
+3. Tick *I understand this cannot be undone*, then **Delete project**.
+
+**Always removed with the project:** every row in `script_updates`, every ZIP
+package in its `secure_updates/<code>/` folder (and the folder itself), queued
+`update_notifications`, `github_pulls` history and `github_pull_jobs` (a queued
+or running pull is cancelled), plus `download_tokens` for those updates.
+
+**Never removed:** the `script_tiers` row is the last thing deleted, after
+everything that points at it. The whole sequence runs in one transaction, so a
+database error leaves the project untouched — the message says so and points at
+the repair tool.
+
+| Safety | Detail |
+|---|---|
+| Two-step | The first call can only describe; deletion requires `confirm=1`. |
+| Explicit licence decision | With licences attached, a confirmed delete without `licence_mode` is refused (`licence_mode_required`). |
+| Detach, not orphan | `UPDATE licenses SET tier_id = NULL` (or the target project) — customer keys are never silently destroyed. |
+| Foreign keys | Hosts where `database-repair.php` added `ON DELETE SET NULL` behave identically; the explicit UPDATE runs first. |
+| Audit | One `lm_log('projects', …)` line with the counts. |
+
+**How to use it.** Archive when you only want to stop publishing. Delete when
+the project is genuinely finished; move its licences to the project that
+replaces it so customers keep getting updates.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -751,6 +801,8 @@ half-working.
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
 | `403 Forbidden` whose text is just “403 Forbidden” | The **web server** refused the request before PHP ran: `.htaccess`, mod_security or a proxy. Open `health.php` → **Server rules** → *Run network self-test*. 9.0.3 retries the request base64-encoded automatically, which gets past content-based rules. |
+| *Delete* on a project does nothing, or says it needs a choice | The first click only fetches the plan. Choose *Keep them* or *Delete them too*, tick the confirmation box, then press **Delete project**. |
+| A deleted project's licences vanished from *Licences* | They were deleted with the project because *Delete them too* was chosen. Payment history is still there; the keys are not recoverable. Re-issue them from *Licences*. |
 | Pull fails but *Load files* works | The preview is a small GET-like POST; the pull body is larger and carries the changelog and paths, which is what a WAF rule matches. The retry handles it; if not, `health.php` says which layer refused. |
 | `403 Forbidden` on every button, but sign-in works | The folder is two releases at once. A page from an old release opens `PHPSESSID` while the endpoints expect `lm_session`, so every AJAX looks like a stranger. Open `health.php` → **Release** and re-upload the files it lists. Fixed as a class of bug in 9.0.2: the console now says so on load. |
 | Console toast “This page is from version X but the server runs Y” | Mixed upload. Re-upload the whole `admin/` folder. |

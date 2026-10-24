@@ -221,6 +221,148 @@ const phpArray = obj => 'array('
   ok('health.php shows no PHP diagnostic',
     !/Parse error|Fatal error|Undefined variable|Warning:/.test(health), health.slice(0, 400));
 
+  console.log('\nDeleting a project');
+
+  /*
+   * project delete touches five tables and unlinks files, so it is worth
+   * driving with a fake PDO: php-wasm has no MySQL. The fake answers by table
+   * name, and the endpoint's own response tells us which statements ran —
+   * "licences_detached" means the UPDATE path, "licences_deleted" the DELETE.
+   */
+  const phpMap = obj => 'array(' + Object.entries(obj)
+    .map(([k, v]) => JSON.stringify(String(k)) + ' => ' + JSON.stringify(String(v))).join(', ') + ')';
+
+  const FAKE_DB = `
+    require_once '/lm/includes/updates.php';
+    if (!class_exists('QAStmt')) {
+        class QAStmt implements IteratorAggregate {
+            public $sql; public $rows = array(); public $affected = 0;
+            public function __construct($sql) { $this->sql = $sql; }
+            // PDOStatement is iterable, and projects.php loops over the statement.
+            public function getIterator(): Traversable { return new ArrayIterator($this->rows); }
+            public function execute(array $args = array()) {
+                $q = strtolower(preg_replace('/\\s+/', ' ', $this->sql));
+                $c = $GLOBALS['qa_counts'];
+                if (strpos($q, 'select * from script_tiers') !== false) { $this->rows = array($GLOBALS['qa_tier']); return true; }
+                if (strpos($q, 'select id from licenses') !== false) {
+                    $this->rows = array();
+                    for ($i = 1; $i <= (int) $c['licenses']; $i++) { $this->rows[] = array($i); }
+                    return true;
+                }
+                foreach (array('licenses', 'script_updates', 'github_pulls', 'github_pull_jobs', 'update_notifications') as $table) {
+                    if (strpos($q, 'count(*) from ' . $table) !== false) {
+                        $n = isset($c[$table]) ? (int) $c[$table] : 0;
+                        if ($table === 'github_pull_jobs' && strpos($q, 'queued') !== false) {
+                            $n = isset($c['jobs_running']) ? (int) $c['jobs_running'] : 0;
+                        }
+                        $this->rows = array(array($n));
+                        return true;
+                    }
+                }
+                if (strpos($q, 'update licenses set tier_id') !== false) {
+                    $this->affected = (int) $c['licenses'];
+                    $this->rows = array(array((int) $args[0]));
+                    return true;
+                }
+                if (strpos($q, 'select id, tier_name from script_tiers') !== false) {
+                    $this->rows = array(array('id' => '9', 'tier_name' => 'DGV7.0 NON-SAAS'));
+                    return true;
+                }
+                if (strpos($q, 'select id, tier_name, tier_code from script_tiers') !== false) {
+                    $this->rows = array(array('id' => '9', 'tier_name' => 'DGV7.0 NON-SAAS', 'tier_code' => 'NON-SAAS'));
+                    return true;
+                }
+                if (strpos($q, 'delete from licenses') !== false) { $this->affected = (int) $c['licenses']; return true; }
+                if (strpos($q, 'delete from script_updates') !== false) { $this->affected = (int) $c['script_updates']; return true; }
+                if (strpos($q, 'delete from update_notifications') !== false) { $this->affected = (int) $c['update_notifications']; return true; }
+                if (strpos($q, 'delete from github_pulls') !== false) { $this->affected = (int) $c['github_pulls']; return true; }
+                if (strpos($q, 'delete from github_pull_jobs') !== false) { $this->affected = (int) $c['github_pull_jobs']; return true; }
+                if (strpos($q, 'delete from script_tiers') !== false) { $this->affected = 1; return true; }
+                return true;
+            }
+            public function fetch($mode = 0) { return $this->rows ? $this->rows[0] : false; }
+            public function fetchColumn() { return $this->rows ? (int) $this->rows[0][0] : 0; }
+            public function fetchAll($mode = 0) {
+                if ($mode === PDO::FETCH_COLUMN) { return array_map(function ($r) { return $r[0]; }, $this->rows); }
+                return $this->rows;
+            }
+            public function rowCount() { return $this->affected; }
+        }
+    }
+    if (!class_exists('QAPdo')) {
+        class QAPdo {
+            public $inTx = false;
+            public function prepare($sql) { return new QAStmt($sql); }
+            public function query($sql) { return new QAStmt($sql); }
+            public function exec($sql) { return 0; }
+            public function beginTransaction() { $this->inTx = true; return true; }
+            public function commit() { $this->inTx = false; return true; }
+            public function rollBack() { $this->inTx = false; return true; }
+            public function inTransaction() { return $this->inTx; }
+        }
+    }
+    $GLOBALS['qa_pdo'] = new QAPdo();
+  `;
+
+  async function deleteCall(counts, post, extra = '') {
+    const raw = await run(`
+      ${FAKE_DB}
+      $GLOBALS['qa_counts'] = ${phpMap(counts)};
+      $GLOBALS['qa_tier'] = array('id' => '7', 'tier_name' => 'QA Project', 'tier_code' => 'QA', 'project_key' => 'PRJ-QA');
+      ${extra}
+      require_once '/lm/includes/security.php';
+      lm_session_start();
+      $_SESSION['admin_logged_in'] = true;
+      $_SESSION['lm_csrf'] = 'qa-token';
+      $_SERVER['REQUEST_METHOD'] = 'POST';
+      $_POST = ${phpMap(Object.assign({ action: 'delete', id: '7', csrf_token: 'qa-token' }, post))};
+      require '/lm/admin/ajax_projects.php';`, '/lm/admin/ajax_projects.php', { fresh: true });
+    try { return JSON.parse(raw); } catch (e) { return { status: 'unparsed', raw: raw }; }
+  }
+
+  const busy = { licenses: '14', script_updates: '3', github_pulls: '2', github_pull_jobs: '1', jobs_running: '1', update_notifications: '5' };
+
+  const plan = await deleteCall(busy, {});
+  ok('the first call returns a plan instead of deleting', plan.status === 'confirm', JSON.stringify(plan).slice(0, 300));
+  ok('the plan counts what is attached',
+    plan.impact && plan.impact.licences === 14 && plan.impact.updates === 3 && plan.impact.notifications === 5,
+    JSON.stringify(plan.impact));
+
+  const noChoice = await deleteCall(busy, { confirm: '1' });
+  ok('a confirmed delete without a licence decision is refused',
+    noChoice.status === 'error' && noChoice.code === 'licence_mode_required', JSON.stringify(noChoice).slice(0, 300));
+
+  const detach = await deleteCall(busy, { confirm: '1', licence_mode: 'detach' });
+  ok('detach deletes the project', detach.status === 'success', JSON.stringify(detach).slice(0, 300));
+  ok('detach keeps every licence', detach.deleted && detach.deleted.licences_detached === 14 && detach.deleted.licences_deleted === 0,
+    JSON.stringify(detach.deleted));
+  ok('detach says the licences were kept', has(detach.message || '', 'kept'), detach.message);
+  ok('detach removes the versions', detach.deleted.updates === 3 && has(detach.message || '', '3 versions'), detach.message);
+
+  const moved = await deleteCall(busy, { confirm: '1', licence_mode: 'detach', move_to: '9' });
+  ok('licences can be handed to another project',
+    moved.status === 'success' && moved.deleted.licences_moved === 14 && moved.deleted.licences_detached === 0,
+    JSON.stringify(moved.deleted));
+  ok('the operator is told where they went', has(moved.message || '', 'moved to DGV7.0 NON-SAAS'), moved.message);
+
+  const planTargets = await deleteCall(busy, {});
+  ok('the plan offers the other projects as destinations',
+    Array.isArray(planTargets.targets) && planTargets.targets.length === 1 && planTargets.targets[0].id === 9,
+    JSON.stringify(planTargets.targets));
+
+  const purge = await deleteCall(busy, { confirm: '1', licence_mode: 'delete' });
+  ok('the delete mode is honoured when chosen', purge.status === 'success' && purge.deleted.licences_deleted === 14 && purge.deleted.licences_detached === 0,
+    JSON.stringify(purge.deleted));
+
+  const empty = await deleteCall(
+    { licenses: '0', script_updates: '0', github_pulls: '0', github_pull_jobs: '0', jobs_running: '0', update_notifications: '0' },
+    { confirm: '1' },
+    `$dir = lm_tier_storage_dir(array('tier_code' => 'QA'), true);
+     file_put_contents($dir . '/v1.zip', str_repeat('x', 2048));`
+  );
+  ok('a project with nothing attached deletes without a licence question', empty.status === 'success', JSON.stringify(empty).slice(0, 300));
+  ok('its package files are removed from disk', empty.deleted && empty.deleted.files === 1, JSON.stringify(empty.deleted));
+
   console.log('\nInline JavaScript');
   /*
    * The console's retry and the health page's network test are long inline
@@ -230,6 +372,13 @@ const phpArray = obj => 'array('
   const pages = [
     ['health.php', "require '/lm/health.php';", '/lm/health.php'],
     ['admin/index.php', "require '/lm/admin/index.php';", '/lm/admin/index.php'],
+    ['admin/projects.php', "require_once '/lm/includes/security.php';\n"
+      + "require_once '/lm/admin/_ui.php';\n"
+      + FAKE_DB + "\n"
+      + "$GLOBALS['qa_counts'] = array('licenses' => '0', 'script_updates' => '0', 'github_pulls' => '0', 'github_pull_jobs' => '0', 'jobs_running' => '0', 'update_notifications' => '0');\n"
+      + "lm_session_start();\n"
+      + "$_SESSION['admin_logged_in'] = true;\n"
+      + "require '/lm/admin/projects.php';", '/lm/admin/projects.php'],
     ['admin/_ui.php', "require_once '/lm/includes/security.php';\n"
       + "require_once '/lm/admin/_ui.php';\n"
       + "lm_admin_page_start('QA');\nlm_admin_page_end();", '/lm/admin/dashboard.php'],

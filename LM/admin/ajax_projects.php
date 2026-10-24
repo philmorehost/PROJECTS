@@ -220,20 +220,196 @@ if ($action === 'delete') {
         lm_json(array('status' => 'error', 'message' => 'Project not found.'));
     }
 
-    $licenseCount = (int) $pdo->query("SELECT COUNT(*) FROM licenses WHERE tier_id = " . (int) $id)->fetchColumn();
-    $updateCount = (int) $pdo->query("SELECT COUNT(*) FROM script_updates WHERE tier_id = " . (int) $id)->fetchColumn();
+    /*
+     * Deleting a project is allowed even when it has licences and packages —
+     * it is the admin's panel. What it must never do is destroy customer keys
+     * silently, so the first call returns a plan and the second one carries an
+     * explicit decision about the licences.
+     */
+    $count = function ($sql, array $params) use ($pdo) {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return (int) $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return 0; // older schema: the table is not there yet
+        }
+    };
 
-    if ($licenseCount > 0 || $updateCount > 0) {
+    $licences = $count("SELECT COUNT(*) FROM licenses WHERE tier_id = ?", array($id));
+    $updates = $count("SELECT COUNT(*) FROM script_updates WHERE tier_id = ?", array($id));
+    $pulls = $count("SELECT COUNT(*) FROM github_pulls WHERE tier_id = ?", array($id));
+    $jobs = $count("SELECT COUNT(*) FROM github_pull_jobs WHERE tier_id = ?", array($id));
+    $jobsRunning = $count("SELECT COUNT(*) FROM github_pull_jobs WHERE tier_id = ? AND status IN ('queued','running')", array($id));
+    $notifications = $count("SELECT COUNT(*) FROM update_notifications WHERE tier_id = ?", array($id));
+
+    $dir = lm_tier_storage_dir($tier, false);
+    $packageFiles = 0;
+    $packageBytes = 0;
+    if (is_dir($dir)) {
+        foreach ((array) glob($dir . DIRECTORY_SEPARATOR . '*') as $file) {
+            if (is_file($file) && basename($file) !== 'index.php') {
+                $packageFiles++;
+                $packageBytes += (int) @filesize($file);
+            }
+        }
+    }
+
+    $confirm = (string) ($_POST['confirm'] ?? '') === '1';
+    $licenceMode = (string) ($_POST['licence_mode'] ?? '');
+
+    // Where could the licences go instead? Any other project.
+    $targets = array();
+    try {
+        $stmt = $pdo->prepare("SELECT id, tier_name, tier_code FROM script_tiers WHERE id <> ? ORDER BY sort_order ASC, id ASC");
+        $stmt->execute(array($id));
+        foreach ((array) $stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $targets[] = array(
+                'id' => (int) $row['id'],
+                'name' => (string) $row['tier_name'],
+                'code' => (string) $row['tier_code'],
+            );
+        }
+    } catch (PDOException $e) {
+        // sort_order may not exist on a very old schema; the select above is optional
+    }
+
+    if (!$confirm) {
         lm_json(array(
-            'status' => 'error',
-            'message' => 'This project still has ' . $licenseCount . ' licence(s) and ' . $updateCount
-                . ' update(s). Archive it instead, or move/delete those records first.',
+            'status' => 'confirm',
+            'code' => 'delete_needs_confirmation',
+            'project' => array(
+                'id' => $id,
+                'name' => (string) $tier['tier_name'],
+                'code' => (string) $tier['tier_code'],
+            ),
+            'targets' => $targets,
+            'impact' => array(
+                'licences' => $licences,
+                'updates' => $updates,
+                'package_files' => $packageFiles,
+                'package_bytes' => $packageBytes,
+                'package_size' => lm_format_bytes($packageBytes),
+                'pulls' => $pulls,
+                'jobs' => $jobs,
+                'jobs_running' => $jobsRunning,
+                'notifications' => $notifications,
+            ),
+            'message' => ($licences > 0
+                ? 'This project has ' . $licences . ' licence' . ($licences === 1 ? '' : 's') . '. Decide whether they go with it.'
+                : 'Ready to delete.')
+                . ($jobsRunning > 0 ? ' A GitHub pull is running for it and will be cancelled.' : ''),
         ));
     }
 
-    $dir = lm_tier_storage_dir($tier, false);
-    $removedFiles = 0;
+    if ($licences > 0 && $licenceMode !== 'detach' && $licenceMode !== 'delete') {
+        lm_json(array(
+            'status' => 'error',
+            'message' => 'Choose what happens to the ' . $licences . ' licence(s): keep them (detach) or delete them.',
+            'code' => 'licence_mode_required',
+        ));
+    }
 
+    // A licence can move to another project instead of being left unassigned.
+    $moveTo = (int) ($_POST['move_to'] ?? 0);
+    $moveTarget = null;
+    if ($moveTo > 0 && $moveTo !== $id) {
+        try {
+            $stmt = $pdo->prepare("SELECT id, tier_name FROM script_tiers WHERE id = ?");
+            $stmt->execute(array($moveTo));
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $moveTarget = $row;
+            }
+        } catch (PDOException $e) {
+            $moveTarget = null;
+        }
+    }
+
+    $detached = 0;
+    $moved = 0;
+    $licencesRemoved = 0;
+
+    try {
+        $pdo->beginTransaction();
+
+        if ($licences > 0) {
+            if ($licenceMode === 'delete') {
+                /*
+                 * Deleting the keys is a real loss for the customer, so the
+                 * history that explains them stays: transactions keep their
+                 * row with license_id cleared, and requests keep their note.
+                 */
+                $stmt = $pdo->prepare("SELECT id FROM licenses WHERE tier_id = ?");
+                $stmt->execute(array($id));
+                $licenceIds = array_map('intval', (array) $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+                if (!empty($licenceIds)) {
+                    $in = implode(',', $licenceIds);
+                    $pdo->exec("DELETE FROM licensed_domains WHERE license_id IN (" . $in . ")");
+                    $pdo->exec("UPDATE transactions SET license_id = NULL WHERE license_id IN (" . $in . ")");
+                    $pdo->exec("UPDATE license_requests SET license_id = NULL WHERE license_id IN (" . $in . ")");
+                    $pdo->exec("DELETE FROM download_tokens WHERE license_id IN (" . $in . ")");
+                    $pdo->exec("DELETE FROM licenses WHERE id IN (" . $in . ")");
+                    $licencesRemoved = count($licenceIds);
+                }
+            } elseif ($moveTarget !== null) {
+                $stmt = $pdo->prepare("UPDATE licenses SET tier_id = ? WHERE tier_id = ?");
+                $stmt->execute(array((int) $moveTarget['id'], $id));
+                $moved = $stmt->rowCount();
+            } else {
+                $stmt = $pdo->prepare("UPDATE licenses SET tier_id = NULL WHERE tier_id = ?");
+                $stmt->execute(array($id));
+                $detached = $stmt->rowCount();
+            }
+        }
+
+        // Packages that will never be served again.
+        try {
+            $pdo->prepare("DELETE FROM download_tokens WHERE update_id IN (SELECT id FROM script_updates WHERE tier_id = ?)")
+                ->execute(array($id));
+        } catch (PDOException $e) {
+            // download_tokens may not exist on a very old install
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM update_notifications WHERE tier_id = ?");
+        $stmt->execute(array($id));
+        $notificationsRemoved = $stmt->rowCount();
+
+        $stmt = $pdo->prepare("DELETE FROM script_updates WHERE tier_id = ?");
+        $stmt->execute(array($id));
+        $updatesRemoved = $stmt->rowCount();
+
+        try {
+            $pdo->prepare("DELETE FROM github_pulls WHERE tier_id = ?")->execute(array($id));
+        } catch (PDOException $e) {
+            // ignore
+        }
+        try {
+            $pdo->prepare("DELETE FROM github_pull_jobs WHERE tier_id = ?")->execute(array($id));
+        } catch (PDOException $e) {
+            // ignore
+        }
+
+        $pdo->prepare("DELETE FROM script_tiers WHERE id = ?")->execute(array($id));
+
+        $pdo->commit();
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        lm_log('projects', 'Delete failed for tier ' . $id . ': ' . $e->getMessage());
+        lm_json(array(
+            'status' => 'error',
+            'message' => 'The database refused the delete: ' . $e->getMessage()
+                . ' Nothing was removed. Run the database repair tool, then try again.',
+        ));
+    }
+
+    // Files after the row is gone: a failed unlink is a warning, not a failure.
+    $removedFiles = 0;
+    $removedBytes = 0;
+    $keptFiles = array();
     if (is_dir($dir)) {
         foreach ((array) glob($dir . DIRECTORY_SEPARATOR . '*') as $file) {
             if (basename($file) === 'index.php') {
@@ -241,17 +417,57 @@ if ($action === 'delete') {
             }
             if (is_file($file) && @unlink($file)) {
                 $removedFiles++;
+                $removedBytes += (int) @filesize($file);
+            } elseif (is_file($file)) {
+                $keptFiles[] = basename($file);
             }
         }
         @rmdir($dir);
     }
 
-    $pdo->prepare("DELETE FROM script_tiers WHERE id = ?")->execute(array($id));
-    lm_log('projects', 'Deleted project ' . $tier['tier_code'] . ' (id=' . $id . '), removed ' . $removedFiles . ' file(s).');
+    $summary = array();
+    if ($moved > 0) {
+        $summary[] = $moved . ' licence' . ($moved === 1 ? '' : 's') . ' moved to '
+            . (string) ($moveTarget['tier_name'] ?? 'another project');
+    }
+    if ($detached > 0) {
+        $summary[] = $detached . ' licence' . ($detached === 1 ? '' : 's') . ' kept and detached from the project';
+    }
+    if ($licencesRemoved > 0) {
+        $summary[] = $licencesRemoved . ' licence' . ($licencesRemoved === 1 ? '' : 's') . ' deleted';
+    }
+    if ($updatesRemoved > 0) {
+        $summary[] = $updatesRemoved . ' version' . ($updatesRemoved === 1 ? '' : 's') . ' removed';
+    }
+    if ($removedFiles > 0) {
+        $summary[] = $removedFiles . ' package file' . ($removedFiles === 1 ? '' : 's') . ' (' . lm_format_bytes($removedBytes) . ') deleted from cPanel';
+    }
+    if ($notificationsRemoved > 0) {
+        $summary[] = $notificationsRemoved . ' queued notice' . ($notificationsRemoved === 1 ? '' : 's') . ' cancelled';
+    }
+    if ($jobs > 0) {
+        $summary[] = $jobs . ' pull job' . ($jobs === 1 ? '' : 's') . ' cleared';
+    }
+
+    lm_log('projects', 'Deleted project ' . $tier['tier_code'] . ' (id=' . $id . '): '
+        . ($summary ? implode('; ', $summary) : 'no records to remove') . '.');
 
     lm_json(array(
         'status' => 'success',
-        'message' => 'Project deleted.' . ($removedFiles > 0 ? ' ' . $removedFiles . ' stored package(s) removed from cPanel.' : ''),
+        'message' => 'Project ' . $tier['tier_name'] . ' deleted.'
+            . ($summary ? ' ' . implode('. ', $summary) . '.' : '')
+            . ($keptFiles ? ' ' . count($keptFiles) . ' file(s) could not be removed — delete them in cPanel file manager.' : ''),
+        'deleted' => array(
+            'licences_moved' => $moved,
+            'moved_to' => $moveTarget !== null ? (string) $moveTarget['tier_name'] : '',
+            'licences_detached' => $detached,
+            'licences_deleted' => $licencesRemoved,
+            'updates' => $updatesRemoved,
+            'files' => $removedFiles,
+            'notifications' => $notificationsRemoved,
+            'jobs' => $jobs,
+        ),
+        'kept_files' => $keptFiles,
     ));
 }
 

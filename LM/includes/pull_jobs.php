@@ -786,6 +786,31 @@ if (!function_exists('lm_pull_job_run')) {
             lm_pull_job_progress($pdo, $id, $stage, $progress, $message);
         };
 
+        /*
+         * The project may have been deleted between queueing and starting —
+         * deleting a project removes its jobs, but a worker can already be
+         * inside this function. Publishing into a tier that no longer exists
+         * would leave an orphan update and a recreated storage folder.
+         */
+        $tierExists = true;
+        try {
+            $tierCheck = $pdo->prepare("SELECT id FROM script_tiers WHERE id = ?");
+            $tierCheck->execute(array((int) $job['tier_id']));
+            $tierExists = (bool) $tierCheck->fetchColumn();
+        } catch (PDOException $e) {
+            $tierExists = true; // cannot tell: let the pull try, as before
+        }
+        if (!$tierExists) {
+            $result = array(
+                'ok' => false,
+                'status' => 'error',
+                'message' => 'This project was deleted before the pull started, so nothing was published.',
+            );
+            lm_pull_job_finish($pdo, (int) $id, $result);
+            $out['error'] = $result['message'];
+            return $out;
+        }
+
         lm_log('pull', 'Job ' . (int) $id . ' started for tier ' . (int) $job['tier_id']);
 
         try {

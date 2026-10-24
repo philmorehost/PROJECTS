@@ -104,7 +104,7 @@ HTML
             'projects' => array(
                 'title' => 'Script Projects',
                 'icon' => '🧩',
-                'summary' => 'Add a new script to the manager, archive it, rotate its key.',
+                'summary' => 'Add a new script to the manager, archive it, rotate its key, delete it.',
                 'sections' => array(
                     array(
                         'id' => 'create',
@@ -139,8 +139,18 @@ HTML
 <ul>
   <li><strong>Archive</strong> — hides the project from the publish dropdowns. Existing licences keep validating and existing downloads keep working, but no new release can be published.</li>
   <li><strong>Restore</strong> — brings it back exactly as it was.</li>
-  <li><strong>Delete</strong> — only allowed when the project has no licences and no updates. Deleting also removes its ZIP files from cPanel.</li>
+  <li><strong>Delete</strong> — always available. The panel first counts what is attached (licences, versions, packages, queued notices, pull jobs) and shows the list before anything happens.</li>
 </ul>
+<p><strong>Tell it what to do with the licences.</strong> This is the only choice that matters:</p>
+<table class="lm-guide-table">
+  <thead><tr><th>Choice</th><th>What happens</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Keep them</strong> (default)</td><td>The keys stay in <em>Licences</em> and keep validating for the customer. Use <em>Move them to</em> to hand them to another project in the same step, or leave them unassigned — they then receive no updates until you assign them somewhere.</td></tr>
+    <tr><td><strong>Delete them too</strong></td><td>The keys stop validating immediately and cannot be restored. Payment history is kept, but the customer's installation will start failing its checks.</td></tr>
+  </tbody>
+</table>
+<p><strong>Always removed with the project:</strong> every published version, every ZIP package in its cPanel folder, queued update notices, and its pull history. A running GitHub pull for that project is cancelled.</p>
+<p class="lm-guide-note">Prefer <em>Archive</em> when you only want to stop publishing: it is reversible and changes nothing for customers. Delete is permanent.</p>
 HTML
                     ),
                     array(
