@@ -1,92 +1,129 @@
-name: Build and validate apps
+name: Build Android and iOS apps
 
 on:
   push:
     branches:
       - "**"
+    paths:
+      - ".github/workflows/build-apps.yml"
+      - "VTU/ANDROID - iOS/**"
   pull_request:
     branches:
       - main
+    paths:
+      - ".github/workflows/build-apps.yml"
+      - "VTU/ANDROID - iOS/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-apps-${{ github.ref }}
+  group: mobile-app-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  php-apps:
-    name: PHP checks — ${{ matrix.edition }}
+  android:
+    name: Android — ${{ matrix.app.name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        edition:
-          - DGV7.0-SAAS
-          - DGV7.0-NON-SAAS
+        app:
+          - name: DG7
+            project: VTU/ANDROID - iOS/DG7-Android
+          - name: JIKABIZ
+            project: VTU/ANDROID - iOS/JIKABIZ-Android
+          - name: MZEEVTU
+            project: VTU/ANDROID - iOS/MZEEVTU-Android
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
-          php-version: "8.3"
-          coverage: none
+          distribution: temurin
+          java-version: "17"
 
-      - name: Lint PHP source
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36 platform
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: ${{ matrix.app.project }}
+        run: bash ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app.name }}-android-debug-apk
+          path: ${{ matrix.app.project }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    name: iOS Simulator — ${{ matrix.app.name }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - name: DG7
+            project: VTU/ANDROID - iOS/DG7-iOS
+            scheme: DG7-iOS
+          - name: JIKABIZ
+            project: VTU/ANDROID - iOS/JIKABIZ-iOS
+            scheme: JIKABIZ-iOS
+          - name: MZEEVTU
+            project: VTU/ANDROID - iOS/MZEEVTU-iOS
+            scheme: MZEEVTU-iOS
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ${{ matrix.app.project }}
+        run: xcodegen generate --spec project.yml
+
+      - name: Build iOS Simulator app
+        working-directory: ${{ matrix.app.project }}
+        run: |
+          xcodebuild \
+            -project "${{ matrix.app.scheme }}.xcodeproj" \
+            -scheme "${{ matrix.app.scheme }}" \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData/${{ matrix.app.scheme }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package iOS Simulator app
         shell: bash
         run: |
-          set -uo pipefail
-          root="VTU/${{ matrix.edition }}"
-          # The repo's scratch/, tests/, and test*.php files are standalone local probes,
-          # not runtime application entry points; lint production PHP source only.
-          failures=0
-          while IFS= read -r -d '' file; do
-            if ! output="$(php -l "$file" 2>&1)"; then
-              printf '%s\n' "$output"
-              printf '::error file=%s::php -l reported a syntax error\n' "$file"
-              failures=$((failures + 1))
-            fi
-          done < <(find "$root" -type f -name '*.php' \
-            ! -path '*/scratch/*' \
-            ! -path '*/tests/*' \
-            ! -name 'test*.php' \
-            ! -name '*_test.php' \
-            -print0)
+          set -euo pipefail
+          app_path="$RUNNER_TEMP/DerivedData/${{ matrix.app.scheme }}/Build/Products/Debug-iphonesimulator/${{ matrix.app.scheme }}.app"
+          test -d "$app_path"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$app_path" "$RUNNER_TEMP/${{ matrix.app.name }}-ios-simulator.zip"
 
-          if (( failures > 0 )); then
-            echo "::error::$failures PHP file(s) failed lint"
-            exit 1
-          fi
-
-      - name: Check .htaccess configuration and security regressions
-        if: matrix.edition == 'DGV7.0-SAAS'
-        run: python3 VTU/tests/htaccess_context_test.py
-
-  whatsapp-bridge:
-    name: WhatsApp bridge dependency and syntax check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: VTU/DGV7.0-SAAS/vtu_whatsapp_ai
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Upload iOS Simulator app
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: VTU/DGV7.0-SAAS/vtu_whatsapp_ai/package-lock.json
-
-      - name: Install locked dependencies
-        run: npm ci
-
-      - name: Check bridge JavaScript syntax
-        run: node --check index.js
+          name: ${{ matrix.app.name }}-ios-simulator-app
+          path: ${{ runner.temp }}/${{ matrix.app.name }}-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
