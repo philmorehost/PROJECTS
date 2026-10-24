@@ -956,6 +956,82 @@ the error log will show it — send that line and it gets fixed.
 
 ---
 
+## 6m. 9.3.1 — “Class 'PDO' not found”
+
+**The log line.**
+
+```
+PHP Fatal error: Uncaught Error: Class 'PDO' not found in /home/…/public_html/db.php:50
+Stack trace:
+#0 /home/…/public_html/admin/index.php(20): require_once()
+```
+
+**What it means.** `PDO` is the PHP extension every page in the panel uses to
+talk to MySQL. On this PHP version it is not loaded. Nothing in the panel is
+broken: the extension is missing from the PHP build the domain is running.
+
+**Why the whole panel vanished.** Two things had to go wrong at once:
+
+1. `PDO` is a **class**, so its absence is an `Error`, not a `PDOException`. The
+   `catch (PDOException $e)` around the connection could not catch it — the
+   request died at line 50 with a 500 and the only trace was this log line.
+2. The message was unreadable to anyone who does not know what PDO is, and it
+   pointed at `db.php` rather than at the PHP version, which is where the fault
+   actually is.
+
+**What 9.3.1 changes.** Before the connection is attempted, `db.php` now asks
+two questions and answers both:
+
+| The check | The page you get |
+|---|---|
+| Is the `PDO` class there at all? | *PHP on this account does not have PDO.* — with the cPanel steps, the extension names, and the note that **mysqli being present means the extension is switched off, not missing** from the server |
+| Does PDO have the `mysql` driver? | *PDO is loaded, but its MySQL driver is not.* — lists the drivers it does have, so `pgsql` instead of `mysql` is obvious |
+| Neither, yet the connection failed | *The panel could not finish connecting to its database.* — the server's own line, and no extension advice, because the extension is fine |
+
+The page states the PHP version, the loaded `php.ini`, and how many extensions
+are loaded — the three facts a host's support desk asks for first. It prints no
+database name, user or password, and it links to `health.php`.
+
+An AJAX caller (`admin/ajax_*.php`, `X-Requested-With`, or `Accept:
+application/json`) gets JSON instead of HTML:
+
+```json
+{
+  "status": "error",
+  "code": "database_unavailable",
+  "message": "This server cannot reach MySQL, so nothing was saved: the PDO extension is not enabled for PHP 8.3. …"
+}
+```
+
+so a button shows that sentence instead of the useless *“Unexpected server
+response”*. Any other `Throwable` in the bootstrap is caught the same way — a
+TypeError used to escape as an uncaught fatal too.
+
+`health.php` gained the rows that answer this without the panel: **PDO
+(database access)**, **PDO MySQL driver** (listing what is available), and
+**mysqli**. And when a driver is missing it is now a headline problem, not a
+detail three cards down.
+
+### Fixing it on the host
+
+The upload stops the white page. It cannot install an extension — that is a
+host setting:
+
+1. **cPanel → MultiPHP Manager** (CloudLinux: **Select PHP Version**). Note the
+   version — the page reports it.
+2. Open **Extensions** for that version and tick **`pdo`** and **`pdo_mysql`**
+   (and `mysqli`). Save. Reload the panel; nothing to upload.
+3. If those entries are not in the list, the package is not installed. Ask the
+   host for `ea-phpXX-php-pdo` on that version.
+4. **In the meantime**, switch the domain back to **PHP 7.4** in MultiPHP
+   Manager. PDO works there on this account, so the panel is usable in one
+   click — which is also the fastest way to confirm the diagnosis.
+
+> One trap: the 9.3.0 session fallback does **not** help here, and neither does
+> any file upload. A missing extension cannot be worked around in PHP code.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -989,6 +1065,9 @@ the error log will show it — send that line and it gets fixed.
 | IP whitelist stopped matching / login throttle sees one address | The site is behind Cloudflare or a proxy. Add the proxy ranges in **Settings → Trusted proxies**; until then the proxy's address is treated as the client. |
 | Locked out by the sign-in throttle | Wait 15 minutes, or delete `storage/ratelimit/admin_login*`. |
 | System Check lists `admin/system-check.php` or `includes/lm_config.php` | Fixed in 9.2.0 — those were false positives (the scanner matching its own signature list, and a `php_uname()` call in an entropy fallback). Update both files. |
+| `PHP Fatal error: … Class 'PDO' not found in …/db.php` | The PHP version the domain runs has no **pdo** extension, so no page can reach MySQL. Upload `db.php` and `health.php` from 9.3.1 and the panel explains it instead of returning 500. Fix: cPanel → MultiPHP Manager → Extensions → tick `pdo` + `pdo_mysql`; or switch back to PHP 7.4 until the host installs the package. No upload can add an extension. |
+| Every page is a 500 and the log says `Class 'PDO' not found` | Same thing. Confirm with `health.php` → **PDO (database access)**: it reads *MISSING* and names the driver it does have. |
+| A button says “This server cannot reach MySQL, so nothing was saved” | 9.3.1 answering an AJAX call while the driver is missing. Nothing was written; the sentence names the extension to enable. |
 | “Your session expired. Refresh the page and try again.” after switching PHP version | 9.3.0. The session folder that belonged to the old PHP version is missing or read-only, so every request starts an empty session and the sign-in token is never recognised. Upload `includes/security.php`, `admin/index.php`, `admin/dashboard.php`, `admin/settings.php`, `admin/system-check.php`, `health.php` and `build.json`; the panel then falls back to `storage/sessions` and signs you in. To fix the setting itself: cPanel → MultiPHP INI Editor → `session.save_path` → a folder the account owns. |
 | “Your session expired” on 7.4 as well | Also 9.3.0, but a different branch of the same message: it now says whether the browser sent no cookie (open the panel on the exact `https://` address in Settings → Site URL), the form had no token (reload the page), or PHP is not saving sessions (the `save_path` row above). The old text hid all three. |
 | Everyone is signed out after the 9.3.0 upload | Expected once: session ids are no longer forced to a 6-bit alphabet, so old cookies are not reused. Sign in again. |
@@ -1020,7 +1099,7 @@ includes/zip.php              pure-PHP ZIP reader/writer (no ZipArchive needed)
 includes/notifications.php    e-mail rendering, recipients, reminders
 includes/github.php           GitHub API client and pull pipeline
 includes/migrations.php       one-time schema migrations + deadlock retries
-db.php                        PDO bootstrap (no DDL on every request)
+db.php                        PDO bootstrap, driver check before connecting (no DDL on every request)
 cron.php                      queue + notifications + cleanup + auto-pull + pull jobs
 pull-worker.php               background pull worker (CLI or tokenised HTTP)
 includes/pull_jobs.php        background pull queue, claim, reaper, admin e-mail

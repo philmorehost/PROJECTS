@@ -89,6 +89,15 @@ if ($sessionPath !== '' && strpos($sessionPath, ';') !== false) {
     $sessionPath = (string) end($sessionBits);
 }
 $sessionDir = $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'sessions';
+/*
+ * Database driver. "Class 'PDO' not found" is a fatal that no page can catch,
+ * so the panel cannot report it — this file can, because it loads nothing.
+ */
+$pdoLoaded = class_exists('PDO');
+$pdoDrivers = $pdoLoaded ? PDO::getAvailableDrivers() : array();
+$pdoMysql = in_array('mysql', $pdoDrivers, true);
+$mysqliLoaded = class_exists('mysqli');
+
 $sessionConfigured = $sessionPath !== '' && is_dir($sessionPath) && is_writable($sessionPath);
 $sessionFallbackOk = (is_dir($sessionDir) && is_writable($sessionDir))
     || (!is_dir($sessionDir) && is_dir($storage) && is_writable($storage));
@@ -281,6 +290,17 @@ if (!is_file($settings)) {
 }
 if (is_file($settings) && !is_readable($settings)) {
     $problems[] = 'settings.json exists but PHP cannot read it (permissions should be 0600–0644).';
+
+if (!$pdoLoaded) {
+    $problems[] = 'PHP ' . $php . ' does not load the PDO extension, so no page can reach MySQL. '
+        . ($mysqliLoaded
+            ? 'mysqli is loaded, which means the extension is switched off for this version rather than missing from the server. '
+            : '')
+        . 'Enable pdo + pdo_mysql in cPanel → MultiPHP Manager → Extensions, or switch the domain back to PHP 7.4.';
+} elseif (!$pdoMysql) {
+    $problems[] = 'PDO is loaded but has no mysql driver (available: ' . (empty($pdoDrivers) ? 'none' : implode(', ', $pdoDrivers)) . '). '
+        . 'Enable pdo_mysql in cPanel → MultiPHP Manager → Extensions, or switch the domain back to PHP 7.4.';
+}
 }
 
 $ok = empty($problems);
@@ -391,6 +411,9 @@ $ok = empty($problems);
         <div class="row"><span>PHP version</span><span class="<?= $phpOk ? 'yes' : 'no' ?>"><?= htmlspecialchars($php) ?><?= $phpOk ? ($phpTested ? '' : ' — newer than the tested range (7.4 – 8.5)') : ' — too old, needs 7.4+' ?></span></div>
         <div class="row"><span>Session storage</span><span class="<?= $sessionClass ?>"><?= htmlspecialchars($sessionLabel) ?></span></div>
         <div class="row"><span>Interface</span><span><?= htmlspecialchars(PHP_SAPI) ?></span></div>
+        <div class="row"><span>PDO (database access)</span><span class="<?= $pdoLoaded ? 'yes' : 'no' ?>"><?= $pdoLoaded ? 'loaded' : 'MISSING' ?></span></div>
+        <div class="row"><span>PDO MySQL driver</span><span class="<?= $pdoMysql ? 'yes' : 'no' ?>"><?= $pdoMysql ? 'available' : ($pdoLoaded ? 'MISSING — available: ' . htmlspecialchars(empty($pdoDrivers) ? 'none' : implode(', ', $pdoDrivers)) : 'n/a (PDO missing)') ?></span></div>
+        <div class="row"><span>mysqli</span><span class="yes"><?= $mysqliLoaded ? 'available' : 'missing' ?></span></div>
         <div class="row"><span>ZIP support (zlib)</span><span class="<?= function_exists('gzinflate') ? 'yes' : 'no' ?>"><?= function_exists('gzinflate') ? 'available' : 'missing' ?></span></div>
         <div class="row"><span>cURL</span><span class="<?= function_exists('curl_init') ? 'yes' : 'no' ?>"><?= function_exists('curl_init') ? 'available' : 'missing' ?></span></div>
         <div class="row"><span>Multibyte strings</span><span class="<?= function_exists('mb_strlen') ? 'yes' : 'no' ?>"><?= function_exists('mb_strlen') ? 'available' : 'missing' ?></span></div>
