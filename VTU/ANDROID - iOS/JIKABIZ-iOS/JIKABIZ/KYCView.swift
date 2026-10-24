@@ -260,7 +260,7 @@ struct AIInterviewSection: View {
     }
 }
 
-struct KYCViewModel: ObservableObject {
+final class KYCViewModel: ObservableObject {
     @Published var kycStatus: Int = 0
     @Published var kycStatusName: String = "Unverified"
     @Published var bvnValue: String = ""
