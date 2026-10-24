@@ -165,6 +165,13 @@ customers out.
    `settings.json`, `db.local.php`, `storage/`, `*.log`, `*.sql`, `*.key`, and
    `includes/`, then disable PHP in `uploads/`.
 
+   **Use LiteSpeed?** It reads `.htaccess`, but only the Apache subset it
+   implements. `<If>` / `<ElseIf>` / `<Else>` expression blocks are not in that
+   subset and make the server reject *every* request in the folder with a bare
+   500 — that is what broke 9.0.0 on this host. Keep the file to `<IfModule>`,
+   `<FilesMatch>`, `RewriteRule` and `Header`; never `Options`, `DirectoryIndex`
+   or expression containers.
+
 4. **Serve the whole site over HTTPS** and redirect HTTP to it. HSTS and the
    `Secure` cookie flag only switch on when the request is already TLS.
 

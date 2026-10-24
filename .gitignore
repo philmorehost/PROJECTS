@@ -16,7 +16,9 @@ LM/storage/tmp/*
 !LM/storage/logs/
 LM/storage/logs/*
 !LM/storage/logs/index.php
-LM/uploads/
+# Uploaded logos live here; only the deny-exec rule is shipped.
+LM/uploads/*
+!LM/uploads/.htaccess
 LM/*.log
 LM/*_debug.log
 LM/check_update_log.txt

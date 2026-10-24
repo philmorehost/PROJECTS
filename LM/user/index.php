@@ -11,7 +11,7 @@ if (!$user_email) {
 }
 
 require_once('../db.php');
-require_once __DIR__ . '/../includes/ui.php';
+lm_ui_boot();
 
 // Fetch user's active/inactive licenses
 $stmt = $pdo->prepare("SELECT * FROM licenses WHERE customer_email = ? ORDER BY created_at DESC");

@@ -463,3 +463,290 @@ if (!function_exists('lm_password_problem')) {
         return '';
     }
 }
+
+/* -------------------------------------------------------------------------
+ * Failure handling
+ *
+ * Two guards that exist because a deploy can go wrong on a host nobody can
+ * debug from here:
+ *
+ *   lm_fatal_boot()  — a fatal error must leave a readable page and a log
+ *                      entry instead of Apache's blank 500.
+ *   lm_ui_boot()     — the public shell (includes/ui.php, 9.0.0) must not be
+ *                      a hard dependency of the sign-in forms. If it is
+ *                      missing after a partial upload, the pages fall back to
+ *                      a minimal built-in header instead of dying.
+ * ---------------------------------------------------------------------- */
+
+if (!function_exists('lm_fatal_log')) {
+    /**
+     * Append a fatal error to storage/logs/php.log, without needing lm_config.
+     *
+     * @param array $error error_get_last()
+     * @return void
+     */
+    function lm_fatal_log(array $error)
+    {
+        $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        if (!is_dir($dir) || !is_writable($dir)) {
+            @error_log('LM fatal: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line']);
+            return;
+        }
+
+        $line = '[' . gmdate('Y-m-d H:i:s') . ' UTC] '
+            . 'type=' . (int) $error['type'] . ' '
+            . str_replace(array("\r", "\n"), ' ', (string) $error['message'])
+            . ' in ' . $error['file'] . ':' . (int) $error['line']
+            . ' | ' . ($_SERVER['REQUEST_URI'] ?? 'cli') . ' | ' . ($_SERVER['REMOTE_ADDR'] ?? '-')
+            . PHP_EOL;
+
+        @file_put_contents($dir . DIRECTORY_SEPARATOR . 'php.log', $line, FILE_APPEND | LOCK_EX);
+    }
+}
+
+if (!function_exists('lm_fatal_page')) {
+    /**
+     * The page a visitor gets when PHP dies.
+     *
+     * Deliberately says nothing about paths, queries or configuration: it is
+     * shown to the public. The detail is in storage/logs/php.log.
+     *
+     * @return string
+     */
+    function lm_fatal_page()
+    {
+        return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<meta name="robots" content="noindex"><title>Service unavailable</title>'
+            . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
+            . 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+            . 'background:#f6f8fc;color:#0b1220;padding:24px}'
+            . '.c{max-width:520px;background:#fff;border:1px solid #e4e9f2;border-radius:18px;'
+            . 'padding:32px;box-shadow:0 24px 60px -40px rgba(11,18,32,.5);text-align:center}'
+            . 'h1{font-size:22px;margin:0 0 10px}p{color:#5f6b83;font-size:15px;line-height:1.7;margin:0 0 10px}'
+            . 'code{background:#eef2f7;padding:1px 5px;border-radius:5px;font-size:13px}'
+            . '</style></head><body><div class="c">'
+            . '<h1>Something went wrong</h1>'
+            . '<p>The License Manager could not finish loading this page.</p>'
+            . '<p>The details were written to <code>storage/logs/php.log</code>. '
+            . 'If every page looks like this, open <code>health.php</code> in the License Manager '
+            . 'folder — it checks for files a partial upload leaves behind.</p>'
+            . '</div></body></html>';
+    }
+}
+
+if (!function_exists('lm_fatal_boot')) {
+    /**
+     * Turn a fatal error into a readable page and a log line.
+     *
+     * register_shutdown_function() is the only hook that still runs after
+     * E_ERROR / a failed require, which is exactly the class of failure that
+     * produced a blank 500 on the live site.
+     *
+     * @return void
+     */
+    function lm_fatal_boot()
+    {
+        static $registered = false;
+        if ($registered) {
+            return;
+        }
+        $registered = true;
+
+        register_shutdown_function(function () {
+            $error = error_get_last();
+            if (!is_array($error)) {
+                return;
+            }
+
+            $fatal = E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR;
+            if (((int) $error['type'] & $fatal) === 0) {
+                return;
+            }
+
+            lm_fatal_log($error);
+
+            if (PHP_SAPI === 'cli' || headers_sent()) {
+                return;
+            }
+
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: text/html; charset=utf-8');
+                header('Cache-Control: no-store');
+            }
+
+            echo lm_fatal_page();
+        });
+    }
+}
+
+if (!function_exists('lm_ui_boot')) {
+    /**
+     * Load the public shell, or stand in for it.
+     *
+     * @return bool True when includes/ui.php was available.
+     */
+    function lm_ui_boot()
+    {
+        static $loaded = null;
+        if ($loaded !== null) {
+            return $loaded;
+        }
+
+        $config = __DIR__ . '/lm_config.php';
+        if (is_file($config) && !function_exists('lm_site_name')) {
+            require_once $config;
+        }
+
+        $ui = __DIR__ . '/ui.php';
+        if (is_file($ui)) {
+            require_once $ui;
+            $loaded = true;
+            return true;
+        }
+
+        /*
+         * Minimal shell. Enough to keep the sign-in and request forms usable
+         * and readable; the real design returns as soon as ui.php is uploaded.
+         */
+        if (!function_exists('lm_public_depth')) {
+            function lm_public_depth()
+            {
+                $file = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_FILENAME'] ?? ''));
+                $root = function_exists('lm_lm_dir') ? rtrim(str_replace('\\', '/', lm_lm_dir()), '/') : '';
+                if ($root !== '' && strpos($file, $root) === 0) {
+                    $sub = trim(str_replace('\\', '/', dirname(substr($file, strlen($root)))), '/');
+                    if ($sub !== '' && $sub !== '.') {
+                        return substr_count($sub, '/') + 1;
+                    }
+                    return 0;
+                }
+                $dir = trim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))), '/');
+                return ($dir !== '' && strpos($dir, '/') === false) ? 1 : 0;
+            }
+        }
+
+        if (!function_exists('lm_public_url')) {
+            function lm_public_url($path = '')
+            {
+                return str_repeat('../', lm_public_depth()) . ltrim((string) $path, '/');
+            }
+        }
+
+        if (!function_exists('lm_asset')) {
+            function lm_asset($file)
+            {
+                return lm_public_url('assets/' . ltrim((string) $file, '/'));
+            }
+        }
+
+        if (!function_exists('lm_icon')) {
+            function lm_icon($name, $class = '')
+            {
+                return '';
+            }
+        }
+
+        if (!function_exists('lm_public_user')) {
+            function lm_public_user()
+            {
+                return isset($_SESSION['user_email']) ? (string) $_SESSION['user_email'] : '';
+            }
+        }
+
+        if (!function_exists('lm_public_nav')) {
+            function lm_public_nav()
+            {
+                $signedIn = lm_public_user() !== '';
+                return array(
+                    'home'    => array('label' => 'Home', 'href' => 'index.php'),
+                    'order'   => array('label' => 'Licences', 'href' => 'order.php'),
+                    'docs'    => array('label' => 'API docs', 'href' => 'api-docs.php'),
+                    'account' => array('label' => $signedIn ? 'My account' : 'Sign in', 'href' => $signedIn ? 'user/index.php' : 'user/login.php'),
+                    'admin'   => array('label' => 'Admin', 'href' => 'admin/index.php'),
+                );
+            }
+        }
+
+        if (!function_exists('lm_public_assets')) {
+            function lm_public_assets()
+            {
+                echo '<style>'
+                    . 'body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+                    . 'background:#f6f8fc;color:#0b1220;line-height:1.6}'
+                    . '.lm-wrap{max-width:1100px;margin:0 auto;padding:0 20px}'
+                    . '.lm-header{border-bottom:1px solid #e4e9f2;background:#fff;padding:14px 0}'
+                    . '.lm-header a{margin-right:14px;color:#334155;text-decoration:none;font-weight:600;font-size:14px}'
+                    . '.lm-brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;color:#0b1220}'
+                    . '.lm-page{padding:40px 0 70px}'
+                    . '.lm-card{background:#fff;border:1px solid #e4e9f2;border-radius:16px;box-shadow:0 12px 30px -24px rgba(11,18,32,.5)}'
+                    . '.lm-card__body{padding:26px}'
+                    . '.lm-auth{max-width:460px;margin:0 auto}'
+                    . '.lm-form{display:grid;gap:14px}'
+                    . '.lm-field{display:grid;gap:6px}'
+                    . '.lm-field label{font-size:13px;font-weight:700;color:#1e293b}'
+                    . '.lm-input{min-height:44px;padding:10px 13px;border:1px solid #d3dbe8;border-radius:10px;font:inherit;font-size:15px;width:100%;box-sizing:border-box}'
+                    . '.lm-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;'
+                    . 'padding:10px 18px;border:0;border-radius:11px;background:#4f46e5;color:#fff;font:inherit;'
+                    . 'font-weight:700;text-decoration:none;cursor:pointer}'
+                    . '.lm-btn--block{width:100%}.lm-btn--ghost{background:#fff;color:#0b1220;border:1px solid #d3dbe8}'
+                    . '.lm-alert{padding:12px 14px;border-radius:10px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;font-size:14px;margin-bottom:16px}'
+                    . '.lm-page__head{text-align:center;margin-bottom:22px}.lm-page__head h1{margin:0 0 6px;font-size:28px}'
+                    . '.lm-page__head p{color:#5f6b83;margin:0}'
+                    . '.lm-help{font-size:12.5px;color:#8590a6;margin:0}'
+                    . '.lm-divider{border:0;border-top:1px solid #e4e9f2;margin:20px 0}'
+                    . '.lm-between{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}'
+                    . '.lm-meta{color:#5f6b83;font-size:13.5px}.lm-key{display:block;padding:12px 14px;border:1px dashed #c7d2fe;'
+                    . 'border-radius:10px;background:#f5f7ff;font-family:ui-monospace,monospace;font-weight:700;word-break:break-all}'
+                    . '.lm-footer{padding:26px 0;color:#8590a6;font-size:12.5px;border-top:1px solid #e4e9f2;margin-top:40px}'
+                    . '</style>';
+            }
+        }
+
+        if (!function_exists('lm_public_header')) {
+            function lm_public_header($active = '', array $options = array())
+            {
+                $site = function_exists('lm_site_name') ? lm_site_name() : 'License Manager';
+                echo '<header class="lm-header"><div class="lm-wrap lm-header__inner">';
+                echo '<a class="lm-brand" href="' . htmlspecialchars(lm_public_url('index.php')) . '">'
+                    . htmlspecialchars($site) . '</a> &nbsp; ';
+                foreach (lm_public_nav() as $key => $item) {
+                    echo '<a href="' . htmlspecialchars(lm_public_url($item['href'])) . '"'
+                        . ($key === $active ? ' aria-current="page"' : '') . '>'
+                        . htmlspecialchars($item['label']) . '</a>';
+                }
+                echo '</div></header>';
+            }
+        }
+
+        if (!function_exists('lm_public_footer')) {
+            function lm_public_footer()
+            {
+                $site = function_exists('lm_site_name') ? lm_site_name() : 'License Manager';
+                echo '<footer class="lm-footer"><div class="lm-wrap">&copy; ' . gmdate('Y') . ' '
+                    . htmlspecialchars($site) . '. All rights reserved.</div></footer>';
+            }
+        }
+
+        if (!function_exists('lm_public_tabbar')) {
+            function lm_public_tabbar($active = '')
+            {
+                // The fixed bottom bar is part of the full shell only.
+            }
+        }
+
+        $loaded = false;
+        return false;
+    }
+}
+
+// Registered on every request: a fatal must never be a blank page again.
+lm_fatal_boot();

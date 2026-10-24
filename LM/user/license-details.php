@@ -10,7 +10,7 @@ if (!$user_email) {
 }
 
 require_once('../db.php');
-require_once __DIR__ . '/../includes/ui.php';
+lm_ui_boot();
 
 $license_id = $_GET['id'] ?? null;
 

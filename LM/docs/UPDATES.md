@@ -564,6 +564,49 @@ stale stylesheet.
 
 ---
 
+## 6g. Hotfix 9.0.1 — the 500 that took the site down
+
+**Symptom.** Every page under the License Manager returned
+`HTTP ERROR 500` — including `user/login.php` — right after the 9.0.0 upload.
+
+**Cause.** `LM/.htaccess` shipped an Apache 2.4 expression block:
+
+```apache
+<If "%{HTTPS} == 'on'">
+    Header always set Strict-Transport-Security "max-age=31536000"
+</If>
+```
+
+The host runs **LiteSpeed** (the cPanel handler in the same file says
+`ea-php74___lsphp`). LiteSpeed parses `.htaccess` with its own Apache-compatible
+engine and rejects `<If>` / `ap_expr` containers outright, so the web server
+refused **every** request in the folder before PHP ever ran. That is why the
+error page was the browser's own 500 with no PHP message.
+
+| Fix | Detail |
+|---|---|
+| `<If>` block removed | HSTS is sent by `lm_security_headers()` whenever the request is HTTPS, so nothing was lost |
+| `Options -Indexes` removed | Another directive that 500s when `AllowOverride` does not permit it; `index.php` files already cover the folders |
+| `DirectoryIndex` removed | cPanel already sets it globally |
+| Rules kept | `Require all denied` for `settings.json` / logs / keys (inside `<IfModule>`), the dot-file and backup rewrites, the security headers |
+
+**Two safety nets added so this class of failure cannot lock anyone out again**
+
+1. `lm_fatal_boot()` — every request registers a shutdown handler. A fatal
+   error now writes the file, line and URI to `storage/logs/php.log` and renders
+   a readable “Something went wrong” page instead of a blank 500.
+2. `lm_ui_boot()` — the public shell (`includes/ui.php`, new in 9.0.0) is no
+   longer a hard dependency. If a partial upload leaves it out, the sign-in and
+   request forms fall back to a minimal built-in header and keep working.
+
+**`health.php`** (new, safe to keep) opens with **no includes at all**, so it
+answers even when every other page is dead. It lists every required file as
+present or missing, the PHP version, which folders are writable, and the last
+fatal error. Open it first whenever a deploy goes wrong; delete it when the
+installation is healthy.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -580,6 +623,8 @@ stale stylesheet.
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
 | `settings.json` reset after uploading a folder | The upload replaced it with the copy from the repository. Restore a snapshot; from 8.7.0 the file is untracked and stripped from packages. |
+| Every page returns a bare `HTTP ERROR 500` (no PHP message) | The web server rejected `.htaccess`, not the app. LiteSpeed does not implement `<If>` blocks. 9.0.1 removes them; on an older copy, rename `LM/.htaccess` to `.htaccess.off` and reload. |
+| A page is blank with a 500 and nothing in the cPanel log | Open `LM/health.php`. It runs without any include and lists missing files, the PHP version, unwritable folders and the last fatal from `storage/logs/php.log`. |
 | `curl -I …/lm/settings.json` returns the file | The server is nginx, or `.htaccess` support is off (`AllowOverride None`). Copy the rules into the server block; see SECURITY.md §3. |
 | Everyone signed out after the 8.9.0 update | Expected once: the session cookie was renamed from `PHPSESSID` to `lm_session`. Sign in again. |
 | IP whitelist stopped matching / login throttle sees one address | The site is behind Cloudflare or a proxy. Add the proxy ranges in **Settings → Trusted proxies**; until then the proxy's address is treated as the client. |

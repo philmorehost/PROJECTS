@@ -1,15 +1,18 @@
 
 # ---------------------------------------------------------------------------
-# License Manager — Apache hardening
+# License Manager — hardening for shared hosts
 #
-# Keep this file in step with the security notes in docs/SECURITY.md.
-# If the site runs behind nginx, the same rules belong in the server block:
-# nothing in settings.json, storage/ or logs/ may ever be reachable.
+# Deliberately conservative. cPanel commonly runs LiteSpeed (the handler below
+# is `ea-php74___lsphp`), which parses .htaccess with its own Apache-compatible
+# engine and rejects Apache 2.4-only syntax such as `<If "%{HTTPS} == 'on'">`
+# with "500 Internal Server Error" for the whole folder. Nothing in this file
+# may use an expression block, `Options` or `DirectoryIndex`: a 500 here takes
+# the entire panel offline, which is exactly what happened in 9.0.0.
+#
+# Rules that are not strictly needed to keep secrets unreachable are left to
+# PHP: the HSTS, frame, referrer and permission headers are all sent by
+# lm_security_headers() on every page.
 # ---------------------------------------------------------------------------
-
-# No directory listings, and a predictable index.
-Options -Indexes
-DirectoryIndex index.php index.html
 
 # ---------------------------------------------------------------------------
 # Never serve configuration or runtime files over HTTP.
@@ -47,21 +50,18 @@ DirectoryIndex index.php index.html
 </IfModule>
 
 # ---------------------------------------------------------------------------
-# Baseline response headers (PHP sets these too; this covers static files).
+# Baseline response headers for static files (PHP sets the same ones).
+# No <If> block: LiteSpeed rejects Apache expression containers.
 # ---------------------------------------------------------------------------
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
-    # HSTS is only meaningful over TLS; the PHP layer adds it when HTTPS is detected.
-    <If "%{HTTPS} == 'on'">
-        Header always set Strict-Transport-Security "max-age=31536000"
-    </If>
 </IfModule>
 
 # ---------------------------------------------------------------------------
-# PHP settings that reduce the damage of a bad upload.
+# PHP settings that reduce the damage of a bad upload (ignored on lsphp).
 # ---------------------------------------------------------------------------
 <IfModule mod_php.c>
     php_flag display_errors Off

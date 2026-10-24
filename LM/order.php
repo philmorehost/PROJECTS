@@ -9,7 +9,7 @@
 require_once __DIR__ . '/includes/security.php';
 lm_session_start();
 lm_security_headers();
-require_once __DIR__ . '/includes/ui.php';
+lm_ui_boot();
 
 $settings = lm_settings();
 $error = isset($_SESSION['error']) ? (string) $_SESSION['error'] : '';

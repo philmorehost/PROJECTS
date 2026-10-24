@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 
-<?php require_once __DIR__ . '/../includes/ui.php'; ?>
+<?php lm_ui_boot(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

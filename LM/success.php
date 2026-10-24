@@ -10,7 +10,7 @@
 require_once __DIR__ . '/includes/security.php';
 lm_session_start();
 lm_security_headers();
-require_once __DIR__ . '/includes/ui.php';
+lm_ui_boot();
 ?>
 <!DOCTYPE html>
 <html lang="en">

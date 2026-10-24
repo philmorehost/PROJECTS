@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_email'])) {
 }
 
 require_once('../db.php');
-require_once __DIR__ . '/../includes/ui.php';
+lm_ui_boot();
 
 $user_email = $_SESSION['user_email'];
 $license_id = $_GET['id'] ?? $_SESSION['user_license_id'] ?? null;
