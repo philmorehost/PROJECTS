@@ -96,6 +96,24 @@ function whmp_get_pricing() {
 }
 
 /**
+ * Read the super-admin's saved USD-to-NGN conversion rate.
+ * Zero means no conversion rate has been configured yet.
+ */
+function whmp_get_usd_to_ngn_rate() {
+    if (!function_exists('getSuperAdminOption')) return 0.0;
+    $rate = (float)getSuperAdminOption('whmp_usd_to_ngn_rate', '0');
+    return is_finite($rate) && $rate > 0 ? $rate : 0.0;
+}
+
+/** Convert a WHMP USD price to the configured Naira price, rounded to kobo. */
+function whmp_convert_usd_to_ngn($usd_amount, $rate = null) {
+    $rate = ($rate === null) ? whmp_get_usd_to_ngn_rate() : (float)$rate;
+    $usd_amount = (float)$usd_amount;
+    if (!is_finite($rate) || $rate <= 0 || !is_finite($usd_amount) || $usd_amount < 0) return 0.0;
+    return round($usd_amount * $rate, 2);
+}
+
+/**
  * Get the reseller price for a specific domain extension
  *
  * @param string $extension e.g. ".com", ".ng", ".com.ng"

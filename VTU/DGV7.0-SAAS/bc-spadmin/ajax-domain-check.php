@@ -31,14 +31,36 @@ if (whmp_is_configured()) {
     $availability = whmp_check_domain_availability($domain);
 
     if ($availability['status'] === 'available') {
-        // Get WHMP reseller price for this extension
-        $whmp_price = whmp_get_domain_price($ext);
-        $price = ($whmp_price !== null && $whmp_price > 0) ? $whmp_price : 0;
+        // WHMP returns USD prices; never expose those as if they were already Naira.
+        $whmp_usd_price = whmp_get_domain_price($ext);
+        $usd_to_ngn_rate = whmp_get_usd_to_ngn_rate();
+        if ($whmp_usd_price !== null && $whmp_usd_price > 0 && $usd_to_ngn_rate > 0) {
+            $price = whmp_convert_usd_to_ngn($whmp_usd_price, $usd_to_ngn_rate);
+            $price_source = 'whmp';
+            $price_message = '';
+        } elseif ($whmp_usd_price !== null && $whmp_usd_price > 0) {
+            // Never present a USD quote as Naira when the admin has not configured a rate.
+            $price = 0;
+            $price_source = 'whmp_unconverted';
+            $price_message = 'Save a USD to NGN rate in Super Admin Domain Settings to convert WHMP prices.';
+        } else {
+            // WHMP returned no reseller quote; retain the existing local NGN fallback price.
+            $local_price_query = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$ext_esc' LIMIT 1");
+            $local_price_row = $local_price_query ? mysqli_fetch_assoc($local_price_query) : null;
+            $price = $local_price_row
+                ? ((float)$local_price_row['promo_price'] > 0 ? (float)$local_price_row['promo_price'] : (float)$local_price_row['price'])
+                : 0;
+            $price_source = 'local';
+            $price_message = 'WHMP returned no reseller price for this extension; showing the local price if available.';
+        }
 
         echo json_encode([
             'status' => 'available',
             'domain' => $domain,
             'price' => $price,
+            'currency' => 'NGN',
+            'price_source' => $price_source,
+            'message' => $price_message,
             'source' => 'whmp',
         ]);
         exit();
