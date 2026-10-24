@@ -5,6 +5,73 @@
         $_SESSION["bc_admin_transactions_csrf"] = bin2hex(random_bytes(24));
     }
 
+    // Admin-reviewed cancellation for an individual provider transaction. This path deliberately
+    // has no age threshold: the admin has opened the transaction details and confirmed the provider
+    // failed, so the customer can be refunded without waiting for the automated one-day minimum.
+    if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["bulk_action"] ?? "") === "cancel_provider_pending") {
+        $csrf = (string)($_POST["csrf_token"] ?? "");
+        $ref = trim(strip_tags($_POST["transaction_ref"] ?? ""));
+        $ref_sql = mysqli_real_escape_string($connection_server, $ref);
+        if (!hash_equals((string)$_SESSION["bc_admin_transactions_csrf"], $csrf)) {
+            $_SESSION["product_purchase_response"] = "Invalid security token. Please refresh and try again.";
+        } elseif ($ref === "") {
+            $_SESSION["product_purchase_response"] = "Transaction reference is missing.";
+        } else {
+            $vendor_id = (int)$get_logged_admin_details["id"];
+            $tx_query = mysqli_query($connection_server,
+                "SELECT * FROM sas_transactions
+                 WHERE vendor_id='$vendor_id' AND reference='$ref_sql' AND status='2' AND api_id > 0
+                   AND product_unique_id NOT IN ('wallet_funding', 'manual_funding')
+                   AND COALESCE(type_alternative, '') NOT LIKE '%Wallet Funding%'
+                   AND COALESCE(type_alternative, '') NOT LIKE '%Wallet Credit%'
+                 LIMIT 1"
+            );
+            $tx_row = $tx_query ? mysqli_fetch_assoc($tx_query) : null;
+            if (!$tx_row) {
+                $_SESSION["product_purchase_response"] = "Pending provider transaction not found or already processed.";
+            } else {
+                $tx_id = (int)$tx_row["id"];
+                $old_description = (string)$tx_row["description"];
+                $cancel_description = mysqli_real_escape_string(
+                    $connection_server,
+                    "Cancelled by admin after confirming provider failure. Previous provider response: " . $old_description
+                );
+                $claimed = mysqli_query($connection_server,
+                    "UPDATE sas_transactions SET status='3', description='$cancel_description'
+                     WHERE id='$tx_id' AND vendor_id='$vendor_id' AND status='2' AND api_id > 0"
+                );
+
+                if (!$claimed || mysqli_affected_rows($connection_server) !== 1) {
+                    $_SESSION["product_purchase_response"] = "This transaction changed while you were reviewing it. Refresh and check its current status.";
+                } else {
+                    $_SESSION['tmp_vendor_override'] = $vendor_id;
+                    $refund_ref = substr(str_shuffle("12345678901234567890"), 0, 15);
+                    $refund = chargeOtherUser(
+                        $tx_row["username"], "credit", $tx_row["product_unique_id"], "Refund",
+                        $refund_ref, "", $tx_row["amount"], $tx_row["discounted_amount"],
+                        "Refund after admin-confirmed provider failure for Ref: " . $tx_row["reference"],
+                        $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1"
+                    );
+                    unset($_SESSION['tmp_vendor_override']);
+
+                    if ($refund === "success") {
+                        $_SESSION["product_purchase_response"] = "Transaction cancelled and the customer was refunded. Their funds are available again.";
+                    } else {
+                        $old_description_sql = mysqli_real_escape_string($connection_server, $old_description);
+                        mysqli_query($connection_server,
+                            "UPDATE sas_transactions SET status='2', description='$old_description_sql'
+                             WHERE id='$tx_id' AND vendor_id='$vendor_id' AND status='3'"
+                        );
+                        error_log("Admin-reviewed cancel refund failed for vendor=$vendor_id transaction=" . $tx_row["reference"]);
+                        $_SESSION["product_purchase_response"] = "The refund failed, so the transaction was left pending and the customer was not marked as refunded.";
+                    }
+                }
+            }
+        }
+        header("Location: /bc-admin/Transactions.php");
+        exit();
+    }
+
     // Cancel old provider transactions in bulk. The customer is refunded only after the row is
     // atomically claimed, and a failed refund puts the transaction back into pending status.
     if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["bulk_action"] ?? "") === "cancel_old_pending") {
@@ -326,7 +393,7 @@
                     <div class="row align-items-center g-3">
                         <div class="col-md-6">
                             <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-list-check me-2"></i>Transaction History</h5>
-                            <p class="text-muted small mb-0">Search, recover, and safely manage customer transactions</p>
+                            <p class="text-muted small mb-0">Review provider responses, confirm delivery, or cancel and refund a failed pending purchase immediately.</p>
                         </div>
                         <div class="col-12 mt-4">
                             <form method="get" action="Transactions.php" class="row g-3 align-items-end tx-filter-bar">
