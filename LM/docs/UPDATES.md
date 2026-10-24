@@ -785,6 +785,32 @@ replaces it so customers keep getting updates.
 
 ---
 
+### Why the Delete button did nothing (fixed in 9.1.1)
+
+9.1.0 made the server-side delete permissive, but the button in the page could
+never reach it. The card rendered:
+
+```php
+onclick="deleteProject(1, <?= json_encode($name) ?>)"
+```
+
+`json_encode()` emits **double quotes**. Inside a **double-quoted** attribute the
+first one ends the attribute, so the browser received a handler that read
+`deleteProject(1, ` — a syntax error on every click, with nothing in the console
+because inline handlers fail silently.
+
+The fix escapes the encoded JSON for the attribute
+(`htmlspecialchars(…, ENT_QUOTES)`), so the handler arrives intact even when a
+project is called `O'Brien "Pro"`. The same escaping is now used on the *Edit*
+and *Integration* buttons, which had the matching problem in waiting, and the
+JSON embedded in `<script>` blocks (`github-updates.php`, `guide.php`,
+`projects.php`) also sets `JSON_HEX_TAG | JSON_HEX_AMP` so a name containing
+`</script>` cannot break the page.
+
+`qa/projects-ui.cjs` now clicks the real buttons in jsdom — Delete, Edit,
+Integration, the confirmation box, and a project whose name contains quotes —
+so a broken attribute cannot ship again.
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -801,6 +827,7 @@ replaces it so customers keep getting updates.
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
 | `403 Forbidden` whose text is just “403 Forbidden” | The **web server** refused the request before PHP ran: `.htaccess`, mod_security or a proxy. Open `health.php` → **Server rules** → *Run network self-test*. 9.0.3 retries the request base64-encoded automatically, which gets past content-based rules. |
+| *Delete* does nothing at all — no error, no modal | Fixed in 9.1.1: the click handler was truncated by an unescaped quote in the attribute. Upload `admin/projects.php`. |
 | *Delete* on a project does nothing, or says it needs a choice | The first click only fetches the plan. Choose *Keep them* or *Delete them too*, tick the confirmation box, then press **Delete project**. |
 | A deleted project's licences vanished from *Licences* | They were deleted with the project because *Delete them too* was chosen. Payment history is still there; the keys are not recoverable. Re-issue them from *Licences*. |
 | Pull fails but *Load files* works | The preview is a small GET-like POST; the pull body is larger and carries the changelog and paths, which is what a WAF rule matches. The retry handles it; if not, `health.php` says which layer refused. |

@@ -207,8 +207,8 @@ lm_guide_assets();
     });
 
     /* ---------- cron tester ---------- */
-    var CRON_URL = <?= json_encode($cron['web'], JSON_UNESCAPED_SLASHES) ?>;
-    var CRON_URL_TASKS = <?= json_encode($cron['tasks_web'], JSON_UNESCAPED_SLASHES) ?>;
+    var CRON_URL = <?= json_encode($cron['web'], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+    var CRON_URL_TASKS = <?= json_encode($cron['tasks_web'], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
     var cronOut = document.getElementById('cronOut');
 
     async function runCron(url, button) {

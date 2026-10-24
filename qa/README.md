@@ -13,6 +13,7 @@ npm install php-wasm php-parser jsdom
 |---|---|
 | `node lint74.cjs` | Every `.php` file parses **as PHP 7.4** (the host runs `ea-php74`). The php-wasm linter is PHP 8 and misses 8-only syntax, so this uses `php-parser` instead. |
 | `node contracts.cjs` | The 403 contract: `build.json` matches the tree, a mixed folder is detected (console banner, sign-in banner, `lm_release_state()`), a legacy `session_start()` file is explained instead of 403'd, `lm_json()` carries `server_version`, every GitHub 403 class (rate limit, SSO, fine-grained, scopes) produces the sentence that fixes it, encoded retry bodies decode correctly, `admin/ping.php` answers, and every inline `<script>` parses. |
+| `node projects-ui.cjs` | Clicks the real buttons in a jsdom page: Delete (plan → modal → confirmation → request), Edit, Integration, and a project whose name contains quotes. Catches broken inline handlers, which fail silently in a browser. |
 | `node render.cjs <page.php>` | Renders a page in PHP-wasm and prints any PHP diagnostic it produced. Flags: `--no-ui` (delete `includes/ui.php` first, to test a partial upload), `--session` (seed a signed-in admin), `--stale <file>` / `--absent <file>` (simulate a partial upload), `--out <file>`. |
 | `node buildjson.cjs` | Regenerates `LM/build.json`. Run it as the last step before committing a release; `--check` verifies the manifest on disk still matches the tree. |
 
@@ -26,6 +27,9 @@ quirks are handled there and are easy to trip over when adding tests:
 * PHP statics persist between probes in the same runtime, so a test that needs
   a fresh look at the disk calls `run(..., { fresh: true })` **before** it edits
   a file, not after.
+* `lib/fakedb.php` is a real `PDO`/`PDOStatement` subclass with no driver behind
+  it, because the app type-hints `PDO`. Tests seed `$GLOBALS['qa_tiers']`,
+  `qa_counts`, `qa_updates` and set `$GLOBALS['qa_pdo']`; `db.php` picks it up.
 
 None of this is shipped to the server: `LM/build.json` is the only file under
 `LM/` these scripts produce, and it is part of the release on purpose.

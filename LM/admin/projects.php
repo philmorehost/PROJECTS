@@ -170,7 +170,7 @@ lm_admin_page_start('Script projects', 'projects');
                     </div>
 
                     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:18px;">
-                        <button class="btn btn-ghost btn-sm" type="button" onclick='openEdit(<?= json_encode(array(
+                        <button class="btn btn-ghost btn-sm" type="button" onclick="openEdit(<?= htmlspecialchars(json_encode(array(
                             'id' => $tierId,
                             'tier_name' => $tier['tier_name'],
                             'tier_code' => $tier['tier_code'],
@@ -178,18 +178,31 @@ lm_admin_page_start('Script projects', 'projects');
                             'license_price' => (string) ($tier['license_price'] ?? ''),
                             'max_domains' => (string) ($tier['max_domains'] ?? ''),
                             'sort_order' => (string) ($tier['sort_order'] ?? '0'),
-                        ), JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>Edit</button>
-                        <button class="btn btn-ghost btn-sm" type="button" onclick='openGuide(<?= json_encode(array(
+                        ), JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>)">Edit</button>
+                        <button class="btn btn-ghost btn-sm" type="button" onclick="openGuide(<?= htmlspecialchars(json_encode(array(
                             'id' => $tierId,
                             'name' => $tier['tier_name'],
                             'code' => $tier['tier_code'],
                             'key' => (string) ($tier['project_key'] ?? ''),
                             'dir' => $tierDir,
                             'next' => lm_next_version($pdo, $tierId, 'patch'),
-                        ), JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>Integration</button>
+                        ), JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>)">Integration</button>
                         <button class="btn btn-ghost btn-sm" type="button" onclick="toggleProject(<?= $tierId ?>, <?= $isActive ? 0 : 1 ?>)"><?= $isActive ? 'Archive' : 'Restore' ?></button>
                         <button class="btn btn-ghost btn-sm" type="button" onclick="rotateKey(<?= $tierId ?>)">Rotate key</button>
-                        <button class="btn btn-danger btn-sm" type="button" onclick="deleteProject(<?= $tierId ?>, <?= json_encode($tier['tier_name'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)">Delete</button>
+                        <?php
+                        /*
+                         * json_encode() emits double quotes. Inside a double-quoted
+                         * attribute that ends the attribute: the handler became
+                         * `deleteProject(1, ` and every click was a syntax error.
+                         * Escape the whole JSON for the attribute instead.
+                         */
+                        $deleteArg = htmlspecialchars(
+                            json_encode((string) $tier['tier_name'], JSON_HEX_APOS | JSON_HEX_QUOT),
+                            ENT_QUOTES,
+                            'UTF-8'
+                        );
+                        ?>
+                        <button class="btn btn-danger btn-sm" type="button" onclick="deleteProject(<?= $tierId ?>, <?= $deleteArg ?>)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -522,7 +535,7 @@ lm_admin_page_start('Script projects', 'projects');
     function openGuide(project) {
         document.getElementById('guideName').textContent = project.name;
 
-        const base = <?= json_encode($siteUrl, JSON_UNESCAPED_SLASHES) ?>;
+        const base = <?= json_encode($siteUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
         const endpoint = base + '/check-update.php?license_key=YOUR_LICENSE_KEY&domain=example.com&current_version=CURRENT&project=' + encodeURIComponent(project.code);
         document.getElementById('guideEndpoint').textContent = 'GET ' + endpoint;
 
