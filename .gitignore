@@ -29,3 +29,7 @@ secure_updates/
 .DS_Store
 Thumbs.db
 *.swp
+
+# QA harness dependencies (scripts are tracked; node_modules is not)
+qa/node_modules/
+qa/package-lock.json

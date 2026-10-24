@@ -607,6 +607,78 @@ installation is healthy.
 
 ---
 
+## 6h. 9.0.2 — "403 Forbidden" from every button, and the folder that was two releases
+
+**Symptom.** *Pull update* answered `403 Forbidden`. Trying to create a new
+project answered `403 Forbidden` too. Signing in had worked.
+
+**What the log said.**
+
+```
+PHP Warning:  Undefined variable $config in .../admin/ajax_github.php on line 321
+PHP Warning:  Trying to access array offset on value of type null in ... same line
+```
+
+That trace is a fingerprint. Line 321 of the file **shipped before 8.6.1** is
+`'repo' => array(`; 8.6.1 moved it to line 340 and defined `$config` at 309. So
+the file on the server was from 8.6.0 while the rest of the folder was newer —
+an upload that replaced some files and missed others.
+
+Why that shows up as `403`: 8.9.0 renamed the session cookie to `lm_session`. A
+page from an older release still opens `PHPSESSID`, which is empty, so the
+endpoint that receives its AJAX sees a stranger and refuses it. **Both** the
+GitHub pull and *create project* failed because neither had anything to do with
+GitHub — the guard in front of them did. `ajax_projects.php` never calls the
+GitHub API.
+
+**The fix is one upload, not a new token.** Replace the whole folder; the token
+was never the problem.
+
+### What 9.0.2 adds so this can be seen instead of guessed
+
+| Piece | What it does |
+|---|---|
+| `LM/build.json` | The release manifest: every file that runs, with its SHA-1 (134 files, ~10 KB). Written by `node qa/buildjson.cjs` when a release is cut. |
+| `lm_release_state()` | Hashes the six files that decide whether a signed-in admin is recognised — `lm_config.php`, `security.php`, `github.php`, `_ui.php`, `ajax_github.php`, `ajax_projects.php` — plus the page being opened. |
+| Console banner | A console page from a mixed folder says so **on load**, before you click. The sign-in page warns too. |
+| `health.php` → **Release** card | Lists *every* file that differs from the manifest, every file in the manifest that is absent, and any script still calling `session_start()` instead of `lm_session_start()`. |
+| `server_version` in every JSON reply | If the page and the endpoint are different releases, the console toasts “This page is from version X but the server runs Y. Re-upload the whole admin/ folder.” |
+| `lm_require_admin()` codes | `stale_release` (403) when the calling file uses the old session, `not_signed_in` (401) when the session simply ended. No more bare 403 without a reason. |
+| GitHub 403, classified | A 403 from GitHub is one of four different problems; it now says which: the hourly rate limit (with reset time in UTC, and whether a token was actually sent), SAML SSO authorisation, a fine-grained token missing Repository access / Contents: Read, or the scopes the token carries. |
+| `lmPost()` HTTP status | When the reply is not JSON, the message names what answered: 403 (`.htaccess`, `mod_security`, or an old file), 401/419 (sign-in expired), 404 (a file is missing), 5xx (PHP error). |
+
+### Fix a folder that is two releases
+
+1. Upload these files, overwriting what is there:
+
+```
+build.json                     (new — the manifest)
+health.php
+includes/lm_config.php
+includes/security.php
+includes/github.php
+admin/_ui.php
+admin/_mobile_nav.php
+admin/index.php
+admin/ajax_github.php
+admin/ajax_projects.php
+admin/github-updates.php
+```
+
+2. Open `https://your-site/…/health.php`. The **Release** card must say
+   *all 134 match*. Anything under “From an older release — re-upload these”
+   is still the old copy.
+3. Reload the console and press **Pull update** again.
+
+`settings.json` is not part of the manifest and is never replaced by an upload,
+so the saved GitHub token is untouched.
+
+> **If you would rather upload once:** always upload the complete folder from
+> the ZIP, not just the files you think changed. A partial upload is what
+> produced this error in the first place.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -622,6 +694,11 @@ installation is healthy.
 | Pull card stuck on “Queued” | No worker could be started (host disables `exec()` and blocks loopback HTTP). `cron.php` picks the job up on its next run; check **Settings → Automation** that cron is alive. |
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
+| `403 Forbidden` on every button, but sign-in works | The folder is two releases at once. A page from an old release opens `PHPSESSID` while the endpoints expect `lm_session`, so every AJAX looks like a stranger. Open `health.php` → **Release** and re-upload the files it lists. Fixed as a class of bug in 9.0.2: the console now says so on load. |
+| Console toast “This page is from version X but the server runs Y” | Mixed upload. Re-upload the whole `admin/` folder. |
+| `health.php` says “N file(s) are from an older release” | Upload those exact files from the ZIP, or upload the whole folder again. |
+| GitHub `403` that mentions *rate limit* | No token (60 requests an hour per address) or a token GitHub is ignoring. The message gives the reset time in UTC. Save the token again in **Settings → GitHub token**. |
+| GitHub `403` that mentions *SSO* or *not accessible* | The token is valid but not authorised for that repository: fine-grained tokens need Repository access → the repo and Permissions → Contents: Read; organisation repos may need SSO authorisation from the token page on GitHub. |
 | `settings.json` reset after uploading a folder | The upload replaced it with the copy from the repository. Restore a snapshot; from 8.7.0 the file is untracked and stripped from packages. |
 | Every page returns a bare `HTTP ERROR 500` (no PHP message) | The web server rejected `.htaccess`, not the app. LiteSpeed does not implement `<If>` blocks. 9.0.1 removes them; on an older copy, rename `LM/.htaccess` to `.htaccess.off` and reload. |
 | A page is blank with a 500 and nothing in the cPanel log | Open `LM/health.php`. It runs without any include and lists missing files, the PHP version, unwritable folders and the last fatal from `storage/logs/php.log`. |

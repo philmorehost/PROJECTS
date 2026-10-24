@@ -72,6 +72,95 @@ if (is_file($fatalFile) && is_readable($fatalFile)) {
 $php = PHP_VERSION;
 $phpOk = version_compare($php, '7.4.0', '>=');
 
+/* Which release is actually on disk. */
+$version = 'unknown';
+$configFile = $root . '/includes/lm_config.php';
+if (is_file($configFile) && is_readable($configFile)) {
+    $head = (string) @file_get_contents($configFile, false, null, 0, 2048);
+    if (preg_match("/define\('LM_VERSION',\s*'([^']+)'\)/", $head, $m)) {
+        $version = $m[1];
+    }
+}
+
+/*
+ * Release manifest. build.json lists every file in the release with its SHA-1,
+ * so a partial upload (one stale folder next to fresh files) is visible here
+ * instead of surfacing later as an unexplained 403.
+ */
+$manifestFile = $root . '/build.json';
+$manifest = null;
+if (is_file($manifestFile)) {
+    $decoded = json_decode((string) @file_get_contents($manifestFile), true);
+    if (is_array($decoded) && !empty($decoded['files']) && is_array($decoded['files'])) {
+        $manifest = $decoded;
+    }
+}
+
+$stale = array();
+$absent = array();
+$staleChecked = 0;
+if ($manifest !== null) {
+    foreach ($manifest['files'] as $path => $hash) {
+        $full = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
+        if (!is_file($full)) {
+            // Never uploaded at all. Already named above when it is required,
+            // but a page nobody linked to yet would otherwise stay invisible.
+            if (!isset($missing[$path])) {
+                $absent[] = $path;
+            }
+            continue;
+        }
+        $staleChecked++;
+        $actual = @sha1_file($full);
+        /* local edits are legitimate: only flag a file the release would break */
+        if ($actual !== false && !hash_equals((string) $hash, $actual)) {
+            $stale[] = $path;
+        }
+    }
+}
+
+/*
+ * Files that still open the legacy session. 8.9.0 renamed the cookie, so any
+ * script calling session_start() directly sees an empty session and answers
+ * "403 Forbidden" to an admin who is signed in.
+ */
+$legacySession = array();
+$sessionScan = array();
+if ($manifest !== null) {
+    /* Only files this release ships; a helper left behind by an old ZIP or a
+       deployment script of your own is not ours to judge. */
+    foreach (array_keys($manifest['files']) as $path) {
+        if (substr($path, -4) === '.php') {
+            $sessionScan[] = $path;
+        }
+    }
+} else {
+    foreach (array('', 'admin/', 'user/') as $dir) {
+        $full = $root . DIRECTORY_SEPARATOR . rtrim($dir, '/');
+        if (!is_dir($full)) {
+            continue;
+        }
+        foreach ((array) @scandir($full) as $entry) {
+            if ($entry === '.' || $entry === '..' || substr($entry, -4) !== '.php') {
+                continue;
+            }
+            $sessionScan[] = $dir . $entry;
+        }
+    }
+}
+foreach ($sessionScan as $path) {
+    $file = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
+    if (!is_file($file)) {
+        continue;
+    }
+    $src = (string) @file_get_contents($file, false, null, 0, 8192);
+    // Only a statement that starts a line counts; a mention inside a string
+    // or in the instructions below does not open a session.
+    if (preg_match('/^[ \t]*@?session_start[ \t]*\(/im', $src)) {
+        $legacySession[] = $path;
+    }
+}
+
 $problems = array();
 if (!$phpOk) {
     $problems[] = 'PHP ' . $php . ' is too old. License Manager needs 7.4 or newer.';
@@ -83,6 +172,21 @@ foreach ($writable as $label => $ok) {
     if (!$ok) {
         $problems[] = $label . ' is not writable by PHP (0755 on folders, 0644 on files).';
     }
+}
+if (!empty($stale)) {
+    $problems[] = count($stale) . ' file(s) are from an older release than build.json '
+        . '(listed below). Re-upload those files from the ' . $version . ' ZIP — a mixed folder '
+        . 'is what makes an admin who is signed in get 403 Forbidden.';
+}
+if (!empty($absent)) {
+    $problems[] = count($absent) . ' file(s) from this release are not on the server at all: '
+        . implode(', ', array_slice($absent, 0, 8)) . (count($absent) > 8 ? ', …' : '')
+        . '. Upload the complete folder, not just the files you changed.';
+}
+if (!empty($legacySession)) {
+    $problems[] = count($legacySession) . ' script(s) still call session_start() instead of '
+        . 'lm_session_start(), so they see an empty session: ' . implode(', ', array_slice($legacySession, 0, 8))
+        . (count($legacySession) > 8 ? ', …' : '') . '. Re-upload the admin/ and user/ folders.';
 }
 if (!is_file($settings)) {
     $problems[] = 'settings.json is missing. Upload the copy from your backup, or open Settings once the panel loads.';
@@ -141,6 +245,39 @@ $ok = empty($problems);
                     <li><?= htmlspecialchars($problem) ?></li>
                 <?php endforeach; ?>
             </ul>
+        <?php endif; ?>
+    </div>
+
+    <div class="card">
+        <h2>Release</h2>
+        <div class="row"><span>Installed version</span><span class="<?= $version === 'unknown' ? 'no' : 'yes' ?>"><?= htmlspecialchars($version) ?></span></div>
+        <div class="row">
+            <span>Release manifest (build.json)</span>
+            <span class="<?= $manifest === null ? 'no' : 'yes' ?>">
+                <?= $manifest === null ? 'not found' : htmlspecialchars((string) ($manifest['version'] ?? '')) . ' · ' . count($manifest['files']) . ' files' ?>
+            </span>
+        </div>
+        <div class="row">
+            <span>Files matching the manifest</span>
+            <span class="<?= (empty($stale) && empty($absent)) ? 'yes' : 'no' ?>">
+                <?= (empty($stale) && empty($absent)) ? 'all ' . $staleChecked . ' match' : count($stale) . ' differ, ' . count($absent) . ' absent, ' . $staleChecked . ' checked' ?>
+            </span>
+        </div>
+        <div class="row">
+            <span>Legacy session_start() scripts</span>
+            <span class="<?= empty($legacySession) ? 'yes' : 'no' ?>"><?= empty($legacySession) ? 'none' : count($legacySession) ?></span>
+        </div>
+        <?php if (!empty($absent)): ?>
+            <p class="hint" style="margin-top:12px">In build.json but missing on the server:</p>
+            <pre><?= htmlspecialchars(implode("\n", array_slice($absent, 0, 40)) . (count($absent) > 40 ? "\n… " . (count($absent) - 40) . ' more' : '')) ?></pre>
+        <?php endif; ?>
+        <?php if (!empty($stale)): ?>
+            <p class="hint" style="margin-top:12px">From an older release — re-upload these:</p>
+            <pre><?= htmlspecialchars(implode("\n", array_slice($stale, 0, 40)) . (count($stale) > 40 ? "\n… " . (count($stale) - 40) . ' more' : '')) ?></pre>
+        <?php endif; ?>
+        <?php if (!empty($legacySession)): ?>
+            <p class="hint" style="margin-top:12px">Still opening the old session (this is what answers 403 to a signed-in admin):</p>
+            <pre><?= htmlspecialchars(implode("\n", $legacySession)) ?></pre>
         <?php endif; ?>
     </div>
 

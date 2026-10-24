@@ -471,7 +471,7 @@ $lmMobileTabs = array(
         <span class="lm-m-bar__mark">🔐</span>
         <span class="lm-m-bar__text">
             <strong><?= htmlspecialchars($lmMobileTitle) ?></strong>
-            <span><?= htmlspecialchars($lmMobileSite) ?></span>
+            <span><?= htmlspecialchars($lmMobileSite) ?> · v<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?></span>
         </span>
     </a>
     <span class="lm-m-bar__spacer"></span>

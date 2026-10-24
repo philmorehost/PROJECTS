@@ -57,6 +57,7 @@ if (!function_exists('lm_admin_page_start')) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>">
+    <meta name="lm-version" content="<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?>">
     <title><?= htmlspecialchars($title) ?> — <?= htmlspecialchars($siteName) ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -147,6 +148,7 @@ if (!function_exists('lm_admin_page_start')) {
         .banner-err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
         .banner-info { background: #eff6ff; border: 1px solid #dbeafe; color: #1e40af; }
         .banner a { color: inherit; font-weight: 800; }
+        .banner code { background: rgba(15,23,42,.07); padding: 1.5px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
         .field { margin-bottom: 18px; }
         .field label { display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 7px; }
@@ -215,6 +217,17 @@ if (!function_exists('lm_admin_page_start')) {
     <script>
         /* Shared helpers — defined in <head> so page scripts can use them. */
         const LM_CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        // Release baked into this page. If an AJAX answer names a different
+        // one, the folder on the server is a mix of two uploads.
+        const LM_PAGE_VERSION = (document.querySelector('meta[name="lm-version"]') || {}).content || '';
+
+        function lmVersionMismatch(result) {
+            if (!result || !result.server_version || !LM_PAGE_VERSION) { return false; }
+            if (result.server_version === LM_PAGE_VERSION) { return false; }
+            toast('This page is from version ' + LM_PAGE_VERSION + ' but the server runs '
+                + result.server_version + '. Re-upload the whole admin/ folder.', 'error');
+            return true;
+        }
 
         function escapeHtml(value) {
             return String(value === undefined || value === null ? '' : value)
@@ -247,7 +260,11 @@ if (!function_exists('lm_admin_page_start')) {
             try {
                 const response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
                 const text = await response.text();
-                try { return JSON.parse(text); }
+                try {
+                    const parsed = JSON.parse(text);
+                    lmVersionMismatch(parsed);
+                    return parsed;
+                }
                 catch (e) {
                     // A PHP warning printed into the body used to surface as raw
                     // HTML. Show the readable part and keep the rest for support.
@@ -259,13 +276,30 @@ if (!function_exists('lm_admin_page_start')) {
                         .trim();
 
                     const first = clean.split('\n').filter(function (line) { return line.trim() !== ''; }).slice(0, 2).join(' ');
-                    const hinted = /Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)
-                        ? ' (server error — check the PHP error log)'
-                        : '';
+
+                    // Name the layer that answered. A bare "403 Forbidden" gave
+                    // the operator nothing to act on.
+                    let why = '';
+                    if (response.status === 403) {
+                        why = first && /Not authorised|session|sign in|stale|older release/i.test(clean)
+                            ? ''
+                            : ' The server refused this before the panel could answer — that is .htaccess, '
+                              + 'a hosting security rule (mod_security), or a file from an older release. '
+                              + 'Open Installation check.';
+                    } else if (response.status === 401 || response.status === 419) {
+                        why = ' Your sign-in has expired: reload this page and sign in again.';
+                    } else if (response.status === 404) {
+                        why = ' That endpoint is not on the server — a file from the release is missing.';
+                    } else if (response.status >= 500) {
+                        why = ' The server errored (HTTP ' + response.status + ') — check the PHP error log.';
+                    } else if (/Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)) {
+                        why = ' (server error — check the PHP error log)';
+                    }
 
                     return {
                         status: 'error',
-                        message: (first || 'The server returned an unreadable response.') + hinted,
+                        http_status: response.status,
+                        message: (first || ('The server returned HTTP ' + response.status + ' with no explanation.')) + why,
                         raw: clean.slice(0, 600)
                     };
                 }
@@ -289,11 +323,45 @@ if (!function_exists('lm_admin_page_start')) {
             <a class="nav<?= $key === $active ? ' active' : '' ?>" href="<?= htmlspecialchars($item['href']) ?>"><?= $item['icon'] ?> <?= htmlspecialchars($item['label']) ?></a>
         <?php endforeach; ?>
         <div class="grow"></div>
-        <div class="hint">Signed in as <strong>admin</strong><br>Manager v<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?></div>
+        <div class="hint">Signed in as <strong>admin</strong><br>Manager v<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?>
+            · <a href="../health.php" style="color:inherit;text-decoration:underline">Installation check</a></div>
     </aside>
 
     <main class="main">
         <?php
+        $release = function_exists('lm_release_state') ? lm_release_state() : array('ok' => true, 'reason' => '', 'file' => '');
+
+        if (!$release['ok'] && $release['reason'] === 'version') {
+            $manifestVersion = function_exists('lm_release_manifest') ? (string) ((lm_release_manifest()['version'] ?? '')) : '';
+            ?>
+            <div class="banner banner-err">
+                <strong>Mixed release.</strong> The files on the server are from version
+                <?= htmlspecialchars($manifestVersion !== '' ? $manifestVersion : 'unknown') ?> but the running code
+                is <?= htmlspecialchars(LM_VERSION) ?>. Until the whole folder is replaced, sign-in and every AJAX
+                action can be refused with <code>403 Forbidden</code>.
+                <a href="../health.php">Installation check</a> lists each file.
+            </div>
+            <?php
+        } elseif (!$release['ok']) {
+            ?>
+            <div class="banner banner-err">
+                <strong>This page is not from the release on the server.</strong>
+                <code><?= htmlspecialchars($release['file']) ?></code> differs from
+                <code>build.json</code>, so it may ask for a different session or security token than the
+                endpoints it calls — that is what produces a bare <code>403 Forbidden</code>.
+                Re-upload the whole <code>admin/</code> folder from version <?= htmlspecialchars(LM_VERSION) ?>.
+                <a href="../health.php">See every stale file</a>.
+            </div>
+            <?php
+        } elseif ($release['reason'] === 'no_manifest') {
+            ?>
+            <div class="banner banner-info">
+                No <code>build.json</code> on the server, so this page cannot tell whether every file is from
+                the same release. Upload <code>build.json</code> with the next update to switch the check on.
+            </div>
+            <?php
+        }
+
     }
 }
 

@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '9.0.1');
+    define('LM_VERSION', '9.0.2');
 }
 
 require_once __DIR__ . '/security.php';
@@ -1108,6 +1108,14 @@ if (!function_exists('lm_json')) {
             header('X-Content-Type-Options: nosniff');
             header('Cache-Control: no-store');
         }
+        // Every JSON response names the release that produced it. The console
+        // compares this with the version baked into the page it is running:
+        // a partial upload (old admin/*.php next to new includes/) then shows
+        // up as a mismatch instead of an unexplained failure.
+        if (!array_key_exists('server_version', $payload)) {
+            $payload['server_version'] = LM_VERSION;
+        }
+
         echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -1133,6 +1141,173 @@ if (!function_exists('lm_admin_password_change_required')) {
     }
 }
 
+if (!function_exists('lm_release_manifest')) {
+    /**
+     * The release manifest written by the build (build.json).
+     *
+     * Every file that runs is listed with its SHA-1, so a folder assembled from
+     * two different ZIPs can be detected without opening every file.
+     *
+     * @return array|null
+     */
+    function lm_release_manifest()
+    {
+        static $manifest = false;
+
+        if ($manifest !== false) {
+            return $manifest;
+        }
+
+        $manifest = null;
+        $file = dirname(__DIR__) . '/build.json';
+        if (is_file($file) && is_readable($file)) {
+            $decoded = json_decode((string) @file_get_contents($file), true);
+            if (is_array($decoded) && isset($decoded['files']) && is_array($decoded['files'])) {
+                $manifest = $decoded;
+            }
+        }
+
+        return $manifest;
+    }
+}
+
+if (!function_exists('lm_release_state')) {
+    /**
+     * Is the file serving this request from the release on disk?
+     *
+     * Mixed releases are the classic cause of "403 Forbidden" from the console:
+     * a page from 9.0.1 talks to an endpoint from 8.6, the session name and the
+     * CSRF token do not line up, and every AJAX call is refused. Checking the
+     * running script against build.json lets the console say that on load.
+     *
+     * @return array{checked:bool,ok:bool,reason:string,file:string,files:array}
+     */
+    function lm_release_state()
+    {
+        static $state = null;
+
+        if ($state !== null) {
+            return $state;
+        }
+
+        $state = array('checked' => false, 'ok' => true, 'reason' => '', 'file' => '', 'files' => array());
+        $manifest = lm_release_manifest();
+
+        if ($manifest === null) {
+            $state['reason'] = 'no_manifest';
+            return $state;
+        }
+
+        $state['checked'] = true;
+
+        $manifestVersion = isset($manifest['version']) ? (string) $manifest['version'] : '';
+        if ($manifestVersion !== '' && $manifestVersion !== LM_VERSION) {
+            $state['ok'] = false;
+            $state['reason'] = 'version';
+            return $state;
+        }
+
+        $root = realpath(dirname(__DIR__));
+        if ($root === false) {
+            return $state;
+        }
+
+        /*
+         * Check the files that decide whether a signed-in admin is recognised:
+         * the session/CSRF bootstrap, the console shell, and the two endpoints
+         * the console calls most. Hashing a handful of small files per request
+         * is cheaper than a support ticket about a bare 403.
+         */
+        $watch = array(
+            'includes/lm_config.php',
+            'includes/security.php',
+            'includes/github.php',
+            'admin/_ui.php',
+            'admin/ajax_github.php',
+            'admin/ajax_projects.php',
+        );
+
+        $script = isset($_SERVER['SCRIPT_FILENAME']) ? (string) $_SERVER['SCRIPT_FILENAME'] : '';
+        if ($script !== '' && is_file($script)) {
+            $real = realpath($script);
+            if ($real !== false && strpos($real, $root . DIRECTORY_SEPARATOR) === 0) {
+                $scriptRelative = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($root) + 1));
+                if (!in_array($scriptRelative, $watch, true)) {
+                    $watch[] = $scriptRelative;
+                }
+            }
+        }
+
+        $mismatch = array();
+        foreach ($watch as $relative) {
+            if (!isset($manifest['files'][$relative])) {
+                continue; // not part of this release: nothing to compare
+            }
+            $file = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            if (!is_file($file)) {
+                continue; // already reported as absent by health.php
+            }
+            $actual = @sha1_file($file);
+            if ($actual !== false && !hash_equals((string) $manifest['files'][$relative], $actual)) {
+                $mismatch[] = $relative;
+            }
+        }
+
+        if (!empty($mismatch)) {
+            $state['ok'] = false;
+            $state['reason'] = 'stale_file';
+            $state['file'] = $mismatch[0];
+            $state['files'] = $mismatch;
+        }
+
+        return $state;
+    }
+}
+
+if (!function_exists('lm_stale_release_hint')) {
+    /**
+     * Explain a session that was started outside the hardened bootstrap.
+     *
+     * 8.9.0 renamed the session cookie to lm_session. A console file left over
+     * from an earlier release still calls session_start(), which opens the
+     * default PHPSESSID session: it is empty, so every admin check sees a
+     * stranger and answers 403/401. That is a deploy problem, not a login
+     * problem, and it must say so.
+     *
+     * @return string Empty when the calling file uses the hardened bootstrap.
+     */
+    function lm_stale_release_hint()
+    {
+        $legacy = false;
+
+        if (session_status() === PHP_SESSION_ACTIVE && function_exists('lm_session_name')) {
+            $legacy = session_name() !== lm_session_name();
+        }
+
+        if (!$legacy) {
+            $file = isset($_SERVER['SCRIPT_FILENAME']) ? (string) $_SERVER['SCRIPT_FILENAME'] : '';
+            if ($file !== '' && is_file($file) && is_readable($file)) {
+                $src = (string) @file_get_contents($file, false, null, 0, 8192);
+                // A statement that starts a line, so a mention in a comment or
+                // a string does not count.
+                if (preg_match('/^[ \t]*@?session_start[ \t]*\(/im', $src)) {
+                    $legacy = true;
+                }
+            }
+        }
+
+        if (!$legacy) {
+            return '';
+        }
+
+        $name = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'this file'));
+
+        return $name . ' is from an older release: it opens a plain PHP session instead of '
+            . 'the hardened one, so it cannot see that you are signed in. Re-upload the whole '
+            . 'admin/ folder from version ' . LM_VERSION . ' (Health check lists every stale file).';
+    }
+}
+
 if (!function_exists('lm_require_admin')) {
     /**
      * Guard an endpoint. Sends JSON 401/403 for AJAX, redirect for pages.
@@ -1146,9 +1321,26 @@ if (!function_exists('lm_require_admin')) {
     function lm_require_admin($json = true)
     {
         if (!lm_is_admin()) {
+            $stale = lm_stale_release_hint();
+
             if ($json) {
-                lm_json(array('status' => 'error', 'message' => 'Unauthorized. Please sign in again.'), 401);
+                lm_json(array(
+                    'status' => 'error',
+                    'code' => $stale !== '' ? 'stale_release' : 'not_signed_in',
+                    'message' => $stale !== ''
+                        ? $stale
+                        : 'Your session has ended. Sign in again in another tab, then retry.',
+                    'server_version' => LM_VERSION,
+                ), $stale !== '' ? 403 : 401);
             }
+
+            if ($stale !== '') {
+                http_response_code(403);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo $stale;
+                exit;
+            }
+
             header('Location: index.php');
             exit;
         }

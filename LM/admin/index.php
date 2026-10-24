@@ -174,6 +174,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     <?php endif; ?>
 
+                    <?php
+                    /*
+                     * You can sign in and still get "403 Forbidden" from every
+                     * button if the folder holds two different releases: the
+                     * page and the endpoint disagree about the session and the
+                     * CSRF token. Say it here, on the way in.
+                     */
+                    $release = function_exists('lm_release_state') ? lm_release_state() : array('ok' => true, 'reason' => '', 'files' => array());
+                    if (!$release['ok']):
+                    ?>
+                        <div class="lm-alert" role="alert">
+                            <?= lm_icon('shield') ?>
+                            <span>
+                                <strong>This installation is a mix of two releases.</strong>
+                                <?php if ($release['reason'] === 'version'): ?>
+                                    The files are not all from <?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : 'this') ?>.
+                                <?php else: ?>
+                                    <code><?= htmlspecialchars((string) $release['file']) ?></code> is from a different version.
+                                <?php endif; ?>
+                                Signing in may work while every action is refused with <code>403 Forbidden</code>.
+                                Upload the whole folder from the release ZIP, then
+                                <a href="../health.php">run the installation check</a>.
+                            </span>
+                        </div>
+                    <?php endif; ?>
+
                     <form class="lm-form" method="POST" autocomplete="on">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(lm_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 

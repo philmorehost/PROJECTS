@@ -508,6 +508,80 @@ if (!function_exists('lm_github_list_branches')) {
     }
 }
 
+if (!function_exists('lm_github_forbidden_error')) {
+    /**
+     * Turn a GitHub 403 into the one sentence that fixes it.
+     *
+     * A 403 from GitHub is four unrelated problems wearing the same coat:
+     * the hourly rate limit (no token, or a shared IP), a token that cannot
+     * see the repository, an organisation that enforces SAML SSO, or a
+     * fine-grained token missing Contents: Read. The response headers say
+     * which one it is, so read them instead of reporting "denied".
+     *
+     * Kept separate from lm_github_request() so it can be tested without
+     * calling api.github.com.
+     *
+     * @param array  $headers   Lower-cased response headers.
+     * @param string $message   The "message" field of GitHub's error body.
+     * @param bool   $tokenUsed Whether a token was sent with the request.
+     * @return array{error:string,hints:array,rate_limited:bool,remaining:int|null,reset:int}
+     */
+    function lm_github_forbidden_error(array $headers, $message = '', $tokenUsed = false)
+    {
+        $message = (string) $message;
+        $remaining = isset($headers['x-ratelimit-remaining']) ? (int) $headers['x-ratelimit-remaining'] : null;
+        $reset = isset($headers['x-ratelimit-reset']) ? (int) $headers['x-ratelimit-reset'] : 0;
+
+        $rateLimited = ($remaining === 0)
+            || stripos($message, 'rate limit') !== false
+            || stripos($message, 'abuse') !== false;
+
+        if ($rateLimited) {
+            $when = $reset > time()
+                ? ' It resets at ' . gmdate('H:i', $reset) . ' UTC (' . max(1, (int) ceil(($reset - time()) / 60)) . ' min from now).'
+                : '';
+
+            return array(
+                'error' => 'GitHub rate limit reached (403)'
+                    . ($message !== '' ? ': ' . $message : '') . '.' . $when
+                    . ($tokenUsed
+                        ? ' A token is saved but GitHub is counting an anonymous request — clear it in Settings and save it again.'
+                        : ' No token is saved. Add one in Settings → GitHub token: GitHub allows 60 anonymous requests an hour per address.'),
+                'hints' => array(),
+                'rate_limited' => true,
+                'remaining' => $remaining,
+                'reset' => $reset,
+            );
+        }
+
+        $scopes = isset($headers['x-oauth-scopes']) ? trim((string) $headers['x-oauth-scopes']) : '';
+        $sso = isset($headers['x-github-sso']) ? trim((string) $headers['x-github-sso']) : '';
+        $hints = array();
+
+        if (stripos($message, 'sso') !== false || $sso !== '') {
+            $hints[] = 'the organisation enforces SAML SSO — open the token on GitHub and authorise it for that organisation';
+        }
+        if (stripos($message, 'not accessible') !== false) {
+            $hints[] = 'a fine-grained token needs Repository access → this repository, and Permissions → Contents: Read';
+        }
+        if ($scopes !== '') {
+            $hints[] = 'the token carries the scopes: ' . $scopes
+                . (strpos($scopes, 'repo') === false ? ' (a classic token needs "repo" for a private repository)' : '');
+        } else {
+            $hints[] = 'check the token may read this repository (a classic token needs "repo" for a private one)';
+        }
+
+        return array(
+            'error' => 'GitHub refused the request (403)'
+                . ($message !== '' ? ': ' . $message : '') . '. Fix: ' . implode('; ', $hints) . '.',
+            'hints' => $hints,
+            'rate_limited' => false,
+            'remaining' => $remaining,
+            'reset' => $reset,
+        );
+    }
+}
+
 if (!function_exists('lm_github_request')) {
     /**
      * Perform a GitHub REST API request.
@@ -611,15 +685,18 @@ if (!function_exists('lm_github_request')) {
 
         switch ($out['status']) {
             case 401:
-                $out['error'] = 'GitHub rejected the token (401). Create a new personal access token and paste it again.';
+                $out['error'] = 'GitHub rejected the token (401). '
+                    . ($message !== '' ? $message . '. ' : '')
+                    . 'The token is expired, revoked, or was pasted with a character missing. Save a new token in Settings.';
                 break;
+
             case 403:
-                $out['error'] = 'GitHub denied access (403)'
-                    . ($message !== '' ? ': ' . $message : '')
-                    . '. Check the token scopes (Contents: Read) and organisation SSO authorisation.'
-                    . (isset($responseHeaders['x-ratelimit-remaining']) && (int) $responseHeaders['x-ratelimit-remaining'] === 0
-                        ? ' API rate limit exhausted — wait a few minutes or add a token.'
-                        : '');
+                $verdict = lm_github_forbidden_error($responseHeaders, $message, trim((string) $token) !== '');
+                $out['error'] = $verdict['error'];
+                $out['hints'] = $verdict['hints'];
+                $out['rate_limited'] = $verdict['rate_limited'];
+                $out['rate_limit']['remaining'] = $verdict['remaining'];
+                $out['rate_limit']['reset'] = $verdict['reset'];
                 break;
             case 404:
                 $out['error'] = 'Repository or branch not found (404). For private repositories the token must have access to that repository.';
@@ -955,7 +1032,9 @@ if (!function_exists('lm_github_download_zipball')) {
             } elseif ($status === 401) {
                 $out['error'] = 'GitHub rejected the token (401).';
             } elseif ($status === 403) {
-                $out['error'] = 'GitHub refused the download (403). Check token scopes / rate limit.';
+                $out['error'] = 'GitHub refused the archive download (403). The API could read the repository '
+                    . 'but the ZIP endpoint would not serve it: re-check the token scopes (Contents: Read), '
+                    . 'or wait if the rate limit is exhausted.';
             } else {
                 $out['error'] = 'GitHub download failed with HTTP ' . $status . '.';
             }
