@@ -21,6 +21,23 @@
  * never run the same job twice.
  */
 
+if (!class_exists('LmPullCancelled')) {
+    /**
+     * Thrown from inside a pull the admin has stopped.
+     *
+     * A pull is several long steps (download, re-pack, publish) and PHP cannot
+     * be interrupted from outside on a shared host, so stopping one is
+     * cooperative: the worker asks the database between steps whether it still
+     * has a job, and this exception is how it unwinds. It is a distinct class
+     * so the pull code can tell "the admin stopped me" from "something broke",
+     * and so the catch-all handlers let it through instead of turning it into
+     * a failure message.
+     */
+    class LmPullCancelled extends RuntimeException
+    {
+    }
+}
+
 if (!function_exists('lm_pull_job_ensure_table')) {
     /**
      * Make sure the jobs table exists (migrations create it; this covers an
@@ -66,6 +83,173 @@ if (!function_exists('lm_pull_job_stale_seconds')) {
     function lm_pull_job_stale_seconds()
     {
         return 2700; // 45 minutes — a large archive on a slow link still beats it
+    }
+}
+
+if (!function_exists('lm_pull_job_is_active_status')) {
+    /**
+     * Is this job still someone's work? `cancelled` is terminal, like success.
+     *
+     * @param string $status
+     * @return bool
+     */
+    function lm_pull_job_is_active_status($status)
+    {
+        return in_array((string) $status, array('queued', 'running'), true);
+    }
+}
+
+if (!function_exists('lm_pull_job_cancelled')) {
+    /**
+     * Has this job been stopped? Called from inside a running pull.
+     *
+     * A missing row counts as stopped: the project was deleted underneath the
+     * worker, and continuing would publish into a tier that no longer exists.
+     *
+     * @param PDO $pdo
+     * @param int $id
+     * @return bool
+     */
+    function lm_pull_job_cancelled(PDO $pdo, $id)
+    {
+        try {
+            $stmt = $pdo->prepare('SELECT status FROM github_pull_jobs WHERE id = ?');
+            $stmt->execute(array((int) $id));
+            $status = $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return false; // cannot tell — let the pull carry on rather than fail it
+        }
+
+        if ($status === false || $status === null) {
+            return true;
+        }
+
+        return !lm_pull_job_is_active_status((string) $status);
+    }
+}
+
+if (!function_exists('lm_pull_job_guard')) {
+    /**
+     * Stop the pull here if it has been cancelled. Throws, so every caller
+     * unwinds without having to return a special value.
+     *
+     * @param PDO $pdo
+     * @param int $id
+     * @return void
+     * @throws LmPullCancelled
+     */
+    function lm_pull_job_guard(PDO $pdo, $id)
+    {
+        if (lm_pull_job_cancelled($pdo, $id)) {
+            throw new LmPullCancelled('Stopped by the administrator.');
+        }
+    }
+}
+
+if (!function_exists('lm_pull_job_cancel')) {
+    /**
+     * Stop a queued or running pull.
+     *
+     * The row is moved to `cancelled` immediately, which does three things:
+     *   - the project is free to pull again right away (a new row is queued);
+     *   - the worker's next checkpoint throws LmPullCancelled and it exits;
+     *   - nothing the old worker writes afterwards can land, because every
+     *     update it makes is conditional on the row still being queued/running.
+     *
+     * @param PDO    $pdo
+     * @param int    $id
+     * @param string $actor
+     * @return array{ok:bool,message:string,job:array|null,was:string}
+     */
+    function lm_pull_job_cancel(PDO $pdo, $id, $actor = 'admin')
+    {
+        $out = array('ok' => false, 'message' => '', 'job' => null, 'was' => '');
+
+        if (!lm_pull_job_ensure_table($pdo)) {
+            $out['message'] = 'The pull jobs table is unavailable. Run the database repair tool.';
+            return $out;
+        }
+
+        $job = lm_pull_job_get($pdo, (int) $id);
+        if (!$job) {
+            $out['message'] = 'That pull no longer exists — it may have been cleared out already.';
+            return $out;
+        }
+
+        $status = (string) $job['status'];
+        $out['was'] = $status;
+        $out['job'] = lm_pull_job_public($job);
+
+        if (!lm_pull_job_is_active_status($status)) {
+            $out['message'] = $status === 'cancelled'
+                ? 'That pull is already stopped.'
+                : 'That pull already finished, so there is nothing to stop.';
+            return $out;
+        }
+
+        $actor = trim((string) $actor) !== '' ? trim((string) $actor) : 'admin';
+        $message = $status === 'queued'
+            ? 'Stopped by ' . $actor . ' before it started. Nothing was downloaded or published.'
+            : 'Stopped by ' . $actor . ' while ' . strtolower(lm_pull_job_stage_label((string) ($job['stage'] ?? '')))
+                . '. The worker exits at its next checkpoint; the archive already downloaded is kept for the next attempt.';
+
+        try {
+            $stmt = $pdo->prepare(
+                "UPDATE github_pull_jobs
+                    SET status = 'cancelled', stage = 'done', message = ?,
+                        finished_at = UTC_TIMESTAMP(), heartbeat_at = UTC_TIMESTAMP()
+                  WHERE id = ? AND status IN ('queued', 'running')"
+            );
+            $stmt->execute(array(substr($message, 0, 500), (int) $id));
+
+            if ($stmt->rowCount() < 1) {
+                // The worker finished between the read and the write.
+                $fresh = lm_pull_job_get($pdo, (int) $id);
+                $out['job'] = $fresh ? lm_pull_job_public($fresh) : $out['job'];
+                $out['message'] = 'That pull finished a moment before the stop arrived. Reload to see the result.';
+                return $out;
+            }
+        } catch (PDOException $e) {
+            lm_log('pull', 'Cancel failed for job ' . (int) $id . ' — ' . $e->getMessage());
+            $out['message'] = 'Could not stop the pull: ' . $e->getMessage();
+            return $out;
+        }
+
+        lm_log('pull', 'Job ' . (int) $id . ' stopped by ' . $actor . ' (was ' . $status . ')');
+
+        $fresh = lm_pull_job_get($pdo, (int) $id);
+        $out['ok'] = true;
+        $out['job'] = $fresh ? lm_pull_job_public($fresh) : $out['job'];
+        $out['message'] = $status === 'queued'
+            ? 'Stopped before it started. You can start a new pull now.'
+            : 'Stopping. The worker exits at its next checkpoint — a few seconds normally, up to a minute if it is re-packing the archive. Start a new pull whenever you are ready.';
+
+        return $out;
+    }
+}
+
+if (!function_exists('lm_pull_job_stage_label')) {
+    /**
+     * Human label for a stored stage key.
+     *
+     * @param string $stage
+     * @return string
+     */
+    function lm_pull_job_stage_label($stage)
+    {
+        $labels = array(
+            'queued' => 'Queued',
+            'starting' => 'Reading the repository',
+            'downloading' => 'Downloading the archive',
+            'packaging' => 'Packaging files',
+            'publishing' => 'Publishing the release',
+            'notifying' => 'E-mailing customers',
+            'done' => 'Finished',
+        );
+
+        $stage = (string) $stage;
+
+        return isset($labels[$stage]) ? $labels[$stage] : ucfirst($stage !== '' ? $stage : 'working');
     }
 }
 
@@ -162,8 +346,9 @@ if (!function_exists('lm_pull_job_enqueue')) {
             $token = hash('sha256', uniqid('pull', true) . mt_rand());
         }
 
-        // Callables (on_stage) cannot be serialised — the worker installs its own.
-        unset($options['on_stage']);
+        // Callables (on_stage, cancel) cannot be serialised — the worker
+        // installs its own in lm_pull_job_run().
+        unset($options['on_stage'], $options['cancel']);
 
         try {
             $stmt = $pdo->prepare(
@@ -278,9 +463,20 @@ if (!function_exists('lm_pull_job_claim')) {
             return false;
         }
 
-        // Already running: another worker got there first. If it is stale the
-        // reaper will free it, so this is not an error the admin needs to see.
-        $error = 'This pull is already running.';
+        // Lost the race. Say which race: a stopped pull is not "already
+        // running", and telling the operator that would send them looking for
+        // a job that is not there.
+        $fresh = lm_pull_job_get($pdo, (int) $id);
+        if ($fresh && (string) $fresh['status'] === 'cancelled') {
+            $error = 'This pull was stopped before it started.';
+            return false;
+        }
+        if ($fresh && lm_pull_job_is_active_status((string) $fresh['status'])) {
+            $error = 'This pull is already running.';
+            return false;
+        }
+
+        $error = 'This pull has already finished.';
         return false;
     }
 }
@@ -310,6 +506,7 @@ if (!function_exists('lm_pull_job_progress')) {
                 substr((string) $message, 0, 500),
                 (int) $id,
             ));
+
         } catch (PDOException $e) {
             lm_log('pull', 'Progress update failed — ' . $e->getMessage());
         }
@@ -323,12 +520,15 @@ if (!function_exists('lm_pull_job_finish')) {
      * @param PDO   $pdo
      * @param int   $id
      * @param array $result Result from lm_github_pull()
-     * @return void
+     * @return bool True when this call settled the row
      */
     function lm_pull_job_finish(PDO $pdo, $id, array $result)
     {
         $ok = !empty($result['ok']);
-        $status = $ok ? (($result['status'] ?? '') === 'up_to_date' ? 'skipped' : 'success') : 'error';
+        $explicit = (string) ($result['status'] ?? '');
+        $status = $ok
+            ? ($explicit === 'up_to_date' ? 'skipped' : 'success')
+            : ($explicit === 'cancelled' ? 'cancelled' : 'error');
 
         $message = (string) ($result['message'] ?? '');
         if ($message === '') {
@@ -344,7 +544,7 @@ if (!function_exists('lm_pull_job_finish')) {
                     SET status = ?, stage = 'done', progress = 100, message = ?,
                         result = ?, update_id = ?, version = ?, commit_sha = ?,
                         finished_at = UTC_TIMESTAMP(), heartbeat_at = UTC_TIMESTAMP()
-                  WHERE id = ?"
+                  WHERE id = ? AND status = 'running'"
             );
             $stmt->execute(array(
                 $status,
@@ -355,8 +555,13 @@ if (!function_exists('lm_pull_job_finish')) {
                 (string) ($result['commit'] ?? ''),
                 (int) $id,
             ));
+
+            // Zero rows means the operator stopped the job while this ran: the
+            // result must not overwrite the stop they asked for.
+            return $stmt->rowCount() > 0;
         } catch (PDOException $e) {
             lm_log('pull', 'Finish failed — ' . $e->getMessage());
+            return false;
         }
     }
 }
@@ -382,32 +587,40 @@ if (!function_exists('lm_pull_job_public')) {
             }
         }
 
-        $stageLabels = array(
-            'queued' => 'Queued',
-            'starting' => 'Reading the repository…',
-            'downloading' => 'Downloading the archive…',
-            'packaging' => 'Packaging files…',
-            'publishing' => 'Publishing the release…',
-            'notifying' => 'E-mailing customers…',
-            'done' => 'Finished',
-        );
         $stage = (string) ($row['stage'] ?? 'queued');
+        $status = (string) $row['status'];
+
+        // Seconds since the worker picked the job up (or since it was queued,
+        // for a job still waiting). The console shows it next to the stop
+        // button, so "it has been running for 20 minutes" is visible.
+        $startedAt = (string) ($row['started_at'] ?? '');
+        $since = $startedAt !== '' ? $startedAt : (string) ($row['created_at'] ?? '');
+        $elapsed = 0;
+        if ($since !== '') {
+            $ts = strtotime($since . ' UTC');
+            if ($ts !== false) {
+                $elapsed = max(0, time() - $ts);
+            }
+        }
 
         return array(
             'id' => (int) $row['id'],
             'tier_id' => (int) $row['tier_id'],
-            'status' => (string) $row['status'],
+            'status' => $status,
             'stage' => $stage,
-            'stage_label' => isset($stageLabels[$stage]) ? $stageLabels[$stage] : ucfirst($stage),
+            'stage_label' => lm_pull_job_stage_label($stage),
             'progress' => (int) $row['progress'],
             'message' => (string) ($row['message'] ?? ''),
             'version' => (string) ($row['version'] ?? ''),
             'commit' => (string) ($row['commit_sha'] ?? ''),
             'update_id' => (int) ($row['update_id'] ?? 0),
             'created_at' => (string) ($row['created_at'] ?? ''),
-            'started_at' => (string) ($row['started_at'] ?? ''),
+            'started_at' => $startedAt,
             'finished_at' => (string) ($row['finished_at'] ?? ''),
-            'finished' => in_array((string) $row['status'], array('success', 'error', 'skipped'), true),
+            'finished' => !lm_pull_job_is_active_status($status),
+            'cancelled' => $status === 'cancelled',
+            'can_cancel' => lm_pull_job_is_active_status($status),
+            'elapsed' => $elapsed,
             'result' => $result,
         );
     }
@@ -455,6 +668,10 @@ if (!function_exists('lm_pull_job_summary')) {
             }
 
             return $head;
+        }
+
+        if ($status === 'cancelled') {
+            return $message !== '' ? $message : 'Stopped. No release was published.';
         }
 
         if ($status === 'error') {
@@ -763,6 +980,7 @@ if (!function_exists('lm_pull_job_run')) {
         $error = '';
         if (!lm_pull_job_claim($pdo, (int) $id, (string) $token, $error)) {
             $out['error'] = $error;
+            $out['status'] = stripos($error, 'stopped') !== false ? 'cancelled' : '';
             return $out;
         }
 
@@ -782,8 +1000,24 @@ if (!function_exists('lm_pull_job_run')) {
             $options['paths'] = array_values($options['paths']);
         }
 
+        /*
+         * Two hooks, both of which throw when the operator has stopped the job:
+         *   on_stage  a checkpoint at every stage change
+         *   cancel    the same, for the steps long enough to need their own
+         *             checks (re-packing a large archive, the download ticker)
+         * Throwing is what unwinds a pull that is 15 minutes into a download:
+         * every caller between here and lm_github_pull() lets LmPullCancelled
+         * through untouched.
+         */
         $options['on_stage'] = function ($stage, $progress, $message) use ($pdo, $id) {
+            // Ask the database, not rowCount(): MySQL reports 0 changed rows for
+            // an update that writes the same values, which would look like a
+            // cancellation every time a stage repeats itself.
+            lm_pull_job_guard($pdo, $id);
             lm_pull_job_progress($pdo, $id, $stage, $progress, $message);
+        };
+        $options['cancel'] = function () use ($pdo, $id) {
+            lm_pull_job_guard($pdo, $id);
         };
 
         /*
@@ -815,6 +1049,14 @@ if (!function_exists('lm_pull_job_run')) {
 
         try {
             $result = lm_github_pull($pdo, (int) $job['tier_id'], $options);
+        } catch (LmPullCancelled $e) {
+            // The operator pressed Stop. This is not a failure, and it must not
+            // be reported as one.
+            $result = array(
+                'ok' => false,
+                'status' => 'cancelled',
+                'message' => 'Stopped by the administrator. Nothing was published.',
+            );
         } catch (Exception $e) {
             $result = array('ok' => false, 'status' => 'error', 'message' => 'Pull failed: ' . $e->getMessage());
         } catch (Throwable $e) {
@@ -824,6 +1066,17 @@ if (!function_exists('lm_pull_job_run')) {
         lm_pull_job_finish($pdo, (int) $id, is_array($result) ? $result : array('ok' => false, 'message' => 'Pull failed.'));
 
         $job = lm_pull_job_get($pdo, (int) $id) ?: $job;
+
+        // A stopped job has nothing to report: the operator already knows, and
+        // an e-mail saying "your pull failed" would be wrong. Skip customer
+        // e-mails too — nothing was published.
+        if ((string) ($job['status'] ?? '') === 'cancelled' || (string) ($result['status'] ?? '') === 'cancelled') {
+            $out['ok'] = false;
+            $out['status'] = 'cancelled';
+            $out['error'] = 'Stopped by the administrator.';
+            lm_log('pull', 'Job ' . (int) $id . ' stopped — worker exited without publishing');
+            return $out;
+        }
 
         // Tell the admin, but not for cron's own auto-pulls (that would be noise).
         if (($job['actor'] ?? '') !== 'cron') {

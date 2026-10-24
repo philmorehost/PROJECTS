@@ -443,7 +443,7 @@ browser ── POST action=pull_status ──▶ stage, progress, message
 
 | Piece | File | Notes |
 |---|---|---|
-| Queue | `includes/pull_jobs.php` | enqueue, claim, progress, finish, reaper, cron drain |
+| Queue | `includes/pull_jobs.php` | enqueue, claim, progress, stop, finish, reaper, cron drain |
 | Table | `github_pull_jobs` | one row per pull; `run_token` authorises the worker |
 | Worker | `pull-worker.php` | CLI `php pull-worker.php <id> <token>` or `?job=<id>&token=…` |
 | Console | `admin/github-updates.php` | progress card, resume after reload, completion banner |
@@ -1032,6 +1032,74 @@ host setting:
 
 ---
 
+## 6n. 9.4.0 — stopping a pull that will not finish
+
+**What you hit.** A pull for DGV7.0-SAAS had been running for over twenty
+minutes. There was no way to end it: no button, and pressing *Pull* again
+answered *“A pull is already running for this project.”* The only exit was to
+wait for the reaper, which frees a job after **45 minutes without a heartbeat**.
+
+### Why it could take that long
+
+A pull is three steps, and the console only had one progress bar for all of
+them:
+
+| Step | What it does | Why it is slow |
+|---|---|---|
+| Download | GitHub sends one ZIP of the whole commit | hundreds of MB on a shared link; the archive is cached per commit so a retry skips it |
+| Package | Re-copies that ZIP file by file, strips the wrapper, applies your folder selection, injects `manifest.json` | pure PHP, one pass over every entry |
+| Publish | Writes the update row, queues the customer e-mails | seconds |
+
+Nothing capped the packaging step, and the only thing that ended a stuck job
+was the 45-minute reaper.
+
+### What 9.4.0 does
+
+**A Stop button on the running card.** It is on the progress card, next to the
+elapsed time — which is now counted from the job's `started_at`, not from when
+the page was opened, so a tab opened a minute ago still says *24 min*.
+
+Pressing it does four things:
+
+1. The job is marked **`cancelled` immediately**. That is the part that matters:
+   the project is free again at once, so *Pull* works and a new job is queued
+   without waiting for anything.
+2. The worker's next **checkpoint throws** and the pull unwinds. Checkpoints are
+   at every stage change, every ~5 seconds during the download, every 200 files
+   while re-packing, and immediately **before publishing**.
+3. **Nothing the old worker writes can land.** Every update it makes is
+   conditional on the row still being queued or running, so a late “finished”,
+   a progress tick, or a shutdown handler cannot overwrite the stop or mark the
+   job failed behind your back.
+4. **No e-mail.** A stopped pull is not a failure, so the admin gets no “your
+   pull failed” mail and no customer is notified.
+
+**The card afterwards** says *Pull stopped* with what it was doing at the time,
+and offers **Start again** — which re-runs the pull with the form exactly as it
+is. The downloaded archive is kept per commit, so the second attempt usually
+skips the slowest step entirely.
+
+**The honest limit.** PHP on a shared host cannot be interrupted from outside:
+there is no signal to send, and killing php-fpm to stop one request is not
+acceptable. So the stop is *cooperative* — it is a flag the worker reads, and it
+reads it often. If the worker is wedged inside a single blocking call (a stalled
+socket, a hung filesystem), it will not notice until that call returns; the job
+is still cancelled on your side, so you can queue the new pull either way, and
+the old process cannot publish after the stop because of point 3.
+
+### Where the check lives
+
+| File | Change |
+|---|---|
+| `includes/pull_jobs.php` | `lm_pull_job_cancel()`, `lm_pull_job_cancelled()`, `lm_pull_job_guard()`, the `LmPullCancelled` exception, `cancelled` as a terminal status, `can_cancel`/`elapsed` in the console payload, `finish()` and `progress()` no longer able to touch a stopped row |
+| `includes/github.php` | `lm_github_pull_stage()` lets the cancellation through instead of swallowing it; `lm_github_pull_cancelled()` checkpoints before the download and immediately before publishing; the cancel hook is passed into the re-pack |
+| `includes/zip.php`, `includes/updates.php` | `lm_zip_copy()` asks the hook every 200 entries, closes both file handles and deletes the half-written package before unwinding |
+| `admin/ajax_github.php` | new `pull_cancel` action (CSRF-checked, admin-only); `job_id` with `tier_id` as fallback so a reloaded console can still stop its own project |
+| `admin/github-updates.php` | Stop button, elapsed counter from `started_at`, *Pull stopped* card with *Start again*, “already running” now points at the Stop button |
+| `includes/guide.php` | *Pulls run in the background* explains stopping, and what happens to a worker that dies |
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -1044,6 +1112,10 @@ host setting:
 | “Maximum package size” reverts to 128 | 8.7.0 shipped a nested `<form>` on the settings page; the browser closed the settings form early. Fixed in 8.7.1 — use **Save storage settings**. |
 | Email says “your website” instead of the domain | The licence has no usable domain and no site has checked in yet. The domain appears as soon as the installation calls `check-update.php`; the licence value is used only when it is a real hostname (not `N/A` or `yourdomain.com`). |
 | Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
+| A pull has been running for ages and will not finish | 9.4.0: press **Stop this pull** on the progress card. The project is free to pull again immediately, and the worker exits at its next checkpoint. The card shows the elapsed time, counted from when the job actually started. |
+| *Stop this pull* was pressed, the card says *Pull stopped*, but the server is still busy | The worker is inside one blocking call (a stalled download, a hung filesystem) and has not reached a checkpoint yet. It cannot publish anything now: every database write it makes is conditional on the job still running. Queue the new pull with **Start again**; if the old process is still alive when it reaches a checkpoint it exits by itself. |
+| “A pull is already running for this project” and I want to start over | Press **Stop this pull** on the card above, then **Start again**. Before 9.4.0 there was no way out except waiting 45 minutes for the reaper. |
+| A stopped pull still turned up in *Push Updates* | The stop arrived while the release was already being written — the last checkpoint is immediately before publishing. Delete that version in **Push Updates** if you did not want it; no customer e-mail is sent for a stopped job. |
 | Pull card stuck on “Queued” | No worker could be started (host disables `exec()` and blocks loopback HTTP). `cron.php` picks the job up on its next run; check **Settings → Automation** that cron is alive. |
 | “The worker stopped responding” | The job produced no heartbeat for 45 minutes — usually a PHP timeout or a killed process. Run the pull again; the downloaded archive is reused. |
 | No e-mail after a background pull | *Settings → Admin email* is empty. The in-app card still shows the result. Cron auto-pulls never e-mail. |
@@ -1102,7 +1174,7 @@ includes/migrations.php       one-time schema migrations + deadlock retries
 db.php                        PDO bootstrap, driver check before connecting (no DDL on every request)
 cron.php                      queue + notifications + cleanup + auto-pull + pull jobs
 pull-worker.php               background pull worker (CLI or tokenised HTTP)
-includes/pull_jobs.php        background pull queue, claim, reaper, admin e-mail
+includes/pull_jobs.php        background pull queue, claim, stop, reaper, admin e-mail
 check-update.php              OTA endpoint
 download.php                  token download
 unsubscribe.php               signed unsubscribe / resubscribe

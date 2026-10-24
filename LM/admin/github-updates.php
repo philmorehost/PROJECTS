@@ -1273,15 +1273,27 @@ lm_admin_page_start('GitHub Pull', 'github');
      */
 
     let POLL = { timer: null, ticker: null };
+    let LAST_JOB = null;
+    let STOPPING = false;
 
     function stopPolling() {
         if (POLL.timer) { clearTimeout(POLL.timer); POLL.timer = null; }
         if (POLL.ticker) { clearInterval(POLL.ticker); POLL.ticker = null; }
     }
 
+    function jobElapsed(job) {
+        const secs = Math.max(0, Number(job && job.elapsed) || 0);
+        if (secs < 60) return secs + ' s';
+        const mins = Math.floor(secs / 60);
+        if (mins < 60) return mins + ' min ' + (secs % 60) + ' s';
+        return Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min';
+    }
+
     function renderJobCard(job) {
         const box = el('pullJobCard');
         if (!box) return;
+
+        LAST_JOB = job || null;
 
         if (!job) { box.innerHTML = ''; return; }
 
@@ -1292,22 +1304,36 @@ lm_admin_page_start('GitHub Pull', 'github');
         const summary = job.message_text || job.message || '';
 
         if (running) {
+            const elapsed = jobElapsed(job);
             box.innerHTML = '<div class="card" style="margin:0 0 20px;">'
                 + '<div class="card-head"><div><h2>Pulling ' + escapeHtml(currentProject ? currentProject.name : 'project') + '</h2>'
-                + '<p id="jobStageLabel">' + escapeHtml(job.stage_label || 'Working…') + '</p></div>'
+                + '<p id="jobStageLabel">' + escapeHtml(job.stage_label || 'Working…')
+                + '<span id="jobElapsed" class="tiny muted"> · ' + escapeHtml(elapsed) + '</span></p></div>'
                 + '<span class="badge badge-info">Running in the background</span></div>'
                 + '<div class="card-body">'
                 + '<div class="progress-track"><div class="progress-fill" id="jobFill" style="width:' + pct + '%;"></div></div>'
                 + '<div class="tiny muted" style="margin-top:10px;" id="jobHint">This keeps running if you close the page — you will get an e-mail when it finishes.</div>'
+                + '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+                + '<button class="btn btn-danger btn-sm" type="button" id="jobStopBtn"' + (STOPPING ? ' disabled' : '') + '>'
+                + (STOPPING ? 'Stopping…' : 'Stop this pull') + '</button>'
+                + '<span class="tiny muted">The release is only published at the end, so stopping now publishes nothing.</span>'
+                + '</div>'
                 + '</div></div>';
+
+            const stop = el('jobStopBtn');
+            if (stop) {
+                stop.addEventListener('click', () => stopPull(job.id));
+            }
             return;
         }
 
-        const tone = job.status === 'error' ? 'banner-err' : (skipped ? 'banner-info' : 'banner-ok');
-        const title = job.status === 'error'
-            ? 'Pull failed'
-            : (skipped ? 'Already up to date' : 'Background pull finished');
-        const icon = job.status === 'error' ? '⚠️' : (skipped ? '✓' : '✅');
+        const cancelled = job.status === 'cancelled' || job.cancelled === true;
+        const failed = job.status === 'error';
+        const tone = failed ? 'banner-err' : ((skipped || cancelled) ? 'banner-info' : 'banner-ok');
+        const title = cancelled
+            ? 'Pull stopped'
+            : (failed ? 'Pull failed' : (skipped ? 'Already up to date' : 'Background pull finished'));
+        const icon = cancelled ? '⏹' : (failed ? '⚠️' : (skipped ? '✓' : '✅'));
         const time = job.finished_at ? ' · ' + formatDate(job.finished_at) : '';
         const dismissKey = 'lmPullSeen' + (currentProject ? currentProject.id : '');
 
@@ -1323,8 +1349,16 @@ lm_admin_page_start('GitHub Pull', 'github');
                 + (job.commit ? ' from <code>' + escapeHtml(String(job.commit).slice(0, 7)) + '</code>' : '')
                 + (job.update_id ? ' · update #' + escapeHtml(String(job.update_id)) : '') + '</div>' : '')
             + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'
+            + ((cancelled || failed)
+                ? '<button class="btn btn-primary btn-sm" type="button" id="jobRestartBtn">Start again</button>'
+                : '')
             + '<button class="btn btn-ghost btn-sm" type="button" id="jobDismissBtn">Dismiss</button>'
             + '</div></div></div>';
+
+        const restart = el('jobRestartBtn');
+        if (restart) {
+            restart.addEventListener('click', () => doPull(false));
+        }
 
         const dismiss = el('jobDismissBtn');
         if (dismiss) {
@@ -1360,10 +1394,60 @@ lm_admin_page_start('GitHub Pull', 'github');
         // Tell the admin it finished while they were away (once per job).
         if (announce) {
             const ok = job.status === 'success';
-            toast((job.status === 'error' ? 'Background pull failed: ' : 'Background pull finished: ')
-                + (job.message_text || job.message || ''), ok ? 'ok' : (job.status === 'error' ? 'err' : 'ok'));
+            const prefix = job.status === 'error'
+                ? 'Background pull failed: '
+                : (job.status === 'cancelled' ? 'Pull stopped: ' : 'Background pull finished: ');
+            toast(prefix + (job.message_text || job.message || ''), ok ? 'ok' : (job.status === 'error' ? 'err' : 'ok'));
             try { localStorage.setItem('lmPullSeen' + currentProject.id, String(job.id)); } catch (e) {}
         }
+    }
+
+    /**
+     * Stop a running background pull.
+     *
+     * The server marks the job cancelled at once, which frees the project for a
+     * new pull and makes the worker exit at its next checkpoint. Nothing is
+     * published by a stopped pull, so this is safe to press at any time.
+     */
+    async function stopPull(jobId) {
+        if (!jobId || STOPPING) return;
+
+        const agreed = confirm(
+            'Stop this pull?\n\n' +
+            'Nothing has been published yet — a release only appears at the very end.\n' +
+            'The worker stops at its next checkpoint (a few seconds, or up to a minute while it is re-packing the archive).\n' +
+            'The archive already downloaded is kept, so starting again skips the slow part.'
+        );
+        if (!agreed) return;
+
+        STOPPING = true;
+        if (LAST_JOB) renderJobCard(LAST_JOB);
+
+        const result = await lmPost('ajax_github.php', {
+            action: 'pull_cancel',
+            job_id: jobId,
+            tier_id: currentProject ? currentProject.id : 0
+        });
+
+        STOPPING = false;
+
+        if (!result || result.status === 'error') {
+            toast((result && result.message) || 'Could not stop the pull.', 'err');
+            if (LAST_JOB) renderJobCard(LAST_JOB);
+            return;
+        }
+
+        toast(result.message || 'Pull stopped.', 'ok');
+        stopPolling();
+
+        if (result.job) {
+            renderJobCard(result.job);
+            try { localStorage.setItem('lmPullSeen' + (currentProject ? currentProject.id : ''), String(result.job.id)); } catch (e) {}
+        }
+
+        // If the stop landed while the worker was already publishing, a release
+        // can still appear a moment later. Say so by refreshing quietly.
+        setTimeout(() => { loadPulls(); loadPreview(); }, 8000);
     }
 
     function pollJob(jobId) {
@@ -1373,10 +1457,22 @@ lm_admin_page_start('GitHub Pull', 'github');
         let attempts = 0;
 
         const ticker = setInterval(() => {
+            // Count from the job's own start time, not from when this page was
+            // opened: the whole point is to see "this has been going for 20
+            // minutes", which a page opened a minute ago cannot tell you.
+            const serverElapsed = Math.max(0, Number(LAST_JOB && LAST_JOB.elapsed) || 0);
+            const since = LAST_JOB && (LAST_JOB.started_at || LAST_JOB.created_at);
+            const startedAt = since ? Date.parse(String(since).replace(' ', 'T') + 'Z') : NaN;
+            const secs = isNaN(startedAt) ? serverElapsed : Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+
+            const elapsed = el('jobElapsed');
+            if (elapsed) elapsed.textContent = ' · ' + jobElapsed({ elapsed: secs });
+
             const hint = el('jobHint');
-            if (!hint) return;
-            const secs = Math.round((Date.now() - started) / 1000);
-            hint.textContent = 'Running for ' + secs + ' s. You can close this page — the pull continues and you will get an e-mail when it finishes.';
+            if (hint) {
+                hint.textContent = 'Running for ' + jobElapsed({ elapsed: secs })
+                    + '. You can close this page — or press Stop this pull to end it now.';
+            }
         }, 1000);
 
         const step = async () => {
@@ -1400,6 +1496,11 @@ lm_admin_page_start('GitHub Pull', 'github');
             }
 
             stopPolling();
+
+            // A stop pressed in another tab (or a cron reap) also ends here.
+            if (job.status === 'cancelled') {
+                STOPPING = false;
+            }
             renderJobCard(job);
 
             const ok = job.status === 'success';

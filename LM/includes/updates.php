@@ -671,6 +671,8 @@ if (!function_exists('lm_zip_rewrite')) {
             'root' => $root,
             'add' => $add,
             'remove' => $remove,
+            // Throws LmPullCancelled when the admin has stopped the pull.
+            'cancel' => isset($options['cancel']) ? $options['cancel'] : null,
         ));
 
         if (!$result) {

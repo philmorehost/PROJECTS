@@ -350,12 +350,18 @@ HTML
   <li><strong>You get an email</strong> at <em>Settings → Admin email</em> with the version, commit, file count, archive size and duration — or the exact error if it failed.</li>
   <li><strong>Customers get the update email</strong> immediately. <code>lm_publish_update()</code> queues one email per licence and this job sends the batch right away instead of waiting for the next cron run. The next-day reminder still runs from cron.</li>
 </ul>
+<p><strong>Stopping one.</strong> The card has a <em>Stop this pull</em> button. Pressing it marks the job
+stopped immediately, so the project is free to pull again straight away, and the worker exits at its next
+checkpoint — every few seconds while downloading, within a minute while re-packing the archive. A release is
+only created at the very end, so stopping publishes nothing; the archive already downloaded is reused by the
+next attempt. After a stop the card offers <em>Start again</em>.</p>
 <table class="lm-guide-table">
   <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
   <tbody>
     <tr><td>You press pull twice</td><td>The second press returns the job that is already running — never two pulls for one project.</td></tr>
+    <tr><td>You stop a pull</td><td>The job is marked stopped at once: the project is unlocked and a new pull can be queued. The worker notices at its next checkpoint and exits without publishing. Nothing it writes afterwards can overwrite the stop.</td></tr>
     <tr><td>Worker cannot start (no <code>exec()</code>, blocked loopback)</td><td>The job stays queued and <code>cron.php</code> runs it on its next pass (within 10 minutes). The progress card says so.</td></tr>
-    <tr><td>The worker dies mid-pull</td><td>No heartbeat for 45 minutes → the job is marked failed with a readable reason, so the project is never locked.</td></tr>
+    <tr><td>The worker dies mid-pull</td><td>No heartbeat for 45 minutes → the job is marked failed with a readable reason, so the project is never locked. You do not have to wait: press <em>Stop this pull</em> and start again.</td></tr>
     <tr><td>Pull fails</td><td>You get the failure email; no customer email is sent and no update row is created.</td></tr>
   </tbody>
 </table>

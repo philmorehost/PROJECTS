@@ -1729,11 +1729,37 @@ if (!function_exists('lm_github_pull_stage')) {
 
         try {
             call_user_func($options['on_stage'], $stage, (int) $progress, (string) $message);
+        } catch (LmPullCancelled $e) {
+            // The admin stopped the job — this one must NOT be swallowed.
+            throw $e;
         } catch (Exception $e) {
             // Progress reporting must never break a pull.
         } catch (Throwable $e) {
             // PHP 7+ errors.
         }
+    }
+}
+
+if (!function_exists('lm_github_pull_cancelled')) {
+    /**
+     * Is this pull still wanted? Throws LmPullCancelled when it is not.
+     *
+     * Separate from lm_github_pull_stage() because a stage call also writes
+     * progress: this one is for the middle of a long step (re-packing, the
+     * tail of a download), where there is nothing new to report but the
+     * operator may already have pressed Stop.
+     *
+     * @param array $options
+     * @return void
+     * @throws LmPullCancelled
+     */
+    function lm_github_pull_cancelled(array $options)
+    {
+        if (empty($options['cancel']) || !is_callable($options['cancel'])) {
+            return;
+        }
+
+        call_user_func($options['cancel']);
     }
 }
 
@@ -1989,6 +2015,8 @@ if (!function_exists('lm_github_pull')) {
             }
         }
 
+        lm_github_pull_cancelled($options);
+
         if (!$download['ok']) {
             lm_github_pull_stage($options, 'downloading', 18, 'Downloading the archive from GitHub…');
 
@@ -2052,6 +2080,9 @@ if (!function_exists('lm_github_pull')) {
             'files' => $filesToPackage,
             'root' => $packageRoot,
             'manifest' => $manifest,
+            // Re-packing a big archive is the second-longest step: let a Stop
+            // press land in the middle of it instead of after it.
+            'cancel' => isset($options['cancel']) ? $options['cancel'] : null,
         ));
 
         if (!$rewrite['ok']) {
@@ -2074,6 +2105,9 @@ if (!function_exists('lm_github_pull')) {
         }
         @chmod($targetFile, 0644);
 
+        // Last checkpoint before the point of no return: after this the release
+        // exists, and undoing it would mean deleting a published version.
+        lm_github_pull_cancelled($options);
         lm_github_pull_stage($options, 'publishing', 80, 'Publishing v' . $version . '…');
 
         $publish = lm_publish_update($pdo, $tier, $version, $targetFile, $changelogHtml, array(

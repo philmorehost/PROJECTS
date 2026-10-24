@@ -3,7 +3,8 @@
  * admin/ajax_github.php
  *
  * GitHub update source for a script project:
- *   save_config | test | preview | pull | pull_status | pull_last | clear_token | pulls
+ *   save_config | test | preview | pull | pull_status | pull_cancel | pull_last
+ *   | clear_token | pulls
  *
  * `pull` queues a background job and returns at once; the page then polls
  * `pull_status` and restores `pull_last` when it is reopened.
@@ -403,7 +404,7 @@ if ($action === 'pull') {
     lm_json(array(
         'status' => 'success',
         'message' => $already
-            ? 'A pull is already running for this project.'
+            ? 'A pull is already running for this project. Press Stop this pull on the card above if you want to start over.'
             : ($started === ''
                 ? 'Pull queued. Waiting for a worker — cron picks it up within 10 minutes if nothing starts it sooner.'
                 : 'Pull started in the background. You can close this page.'),
@@ -412,6 +413,41 @@ if ($action === 'pull') {
         'job' => $payload,
         'dispatch' => $started,
         'already_running' => $already,
+    ));
+}
+
+if ($action === 'pull_cancel') {
+    require_once __DIR__ . '/../includes/pull_jobs.php';
+
+    // job_id is what the card is showing; tier_id is the fallback so a console
+    // that lost the id (a reload mid-poll) can still stop its own project.
+    $jobId = (int) ($_POST['job_id'] ?? 0);
+    if ($jobId <= 0 && $tierId > 0) {
+        $active = lm_pull_job_active($pdo, $tierId);
+        $jobId = $active ? (int) $active['id'] : 0;
+    }
+
+    if ($jobId <= 0) {
+        lm_json(array('status' => 'error', 'message' => 'No pull is running for this project.'));
+    }
+
+    $actor = (isset($_SESSION['admin_username']) && $_SESSION['admin_username'] !== '')
+        ? (string) $_SESSION['admin_username']
+        : 'admin';
+
+    $cancel = lm_pull_job_cancel($pdo, $jobId, $actor);
+    $job = $cancel['job'];
+    if (is_array($job) && $job) {
+        $job['message_text'] = lm_pull_job_summary($job);
+    }
+
+    lm_json(array(
+        'status' => $cancel['ok'] ? 'success' : 'error',
+        'message' => $cancel['message'],
+        'job' => $job ?: null,
+        'job_id' => $jobId,
+        'was' => (string) $cancel['was'],
+        'server_version' => LM_VERSION,
     ));
 }
 

@@ -435,6 +435,11 @@ function lm_zip_copy($source, $destination, array $options = array())
     }
     $add = isset($options['add']) && is_array($options['add']) ? $options['add'] : array();
     $remove = isset($options['remove']) && is_array($options['remove']) ? $options['remove'] : array();
+    // Optional check, called every few hundred entries: a pull the admin has
+    // stopped should not have to finish re-packing a 200 MB archive first.
+    // The callback throws; the handles are closed before it unwinds.
+    $cancel = isset($options['cancel']) && is_callable($options['cancel']) ? $options['cancel'] : null;
+    $seen = 0;
     // A package is code, never configuration: keep the customer's settings.json.
     $stripRuntime = !isset($options['runtime']) || $options['runtime'];
     $removeNames = array();
@@ -463,6 +468,17 @@ function lm_zip_copy($source, $destination, array $options = array())
     $addedNames = array();
 
     foreach ($entries as $entry) {
+        if ($cancel !== null && (++$seen % 200) === 0) {
+            try {
+                call_user_func($cancel);
+            } catch (Throwable $e) {
+                fclose($in);
+                fclose($out);
+                @unlink($destination);
+                throw $e;
+            }
+        }
+
         $name = lm_zip_clean_name($entry['name']);
         if ($name === '' || substr($name, -1) === '/') {
             continue;
