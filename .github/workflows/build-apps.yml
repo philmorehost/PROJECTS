@@ -1,0 +1,74 @@
+name: Build and validate apps
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-apps:
+    name: PHP checks — ${{ matrix.edition }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        edition:
+          - DGV7.0-SAAS
+          - DGV7.0-NON-SAAS
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+
+      - name: Lint PHP source
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="VTU/${{ matrix.edition }}"
+          find "$root" -type f -name '*.php' -print0 \
+            | xargs -0 -r -n1 php -l
+
+      - name: Check .htaccess configuration and security regressions
+        if: matrix.edition == 'DGV7.0-SAAS'
+        run: python3 VTU/tests/htaccess_context_test.py
+
+  whatsapp-bridge:
+    name: WhatsApp bridge dependency and syntax check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: VTU/DGV7.0-SAAS/vtu_whatsapp_ai
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: VTU/DGV7.0-SAAS/vtu_whatsapp_ai/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check bridge JavaScript syntax
+        run: node --check index.js
