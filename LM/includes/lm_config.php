@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '9.2.0');
+    define('LM_VERSION', '9.3.0');
 }
 
 require_once __DIR__ . '/security.php';
@@ -1391,8 +1391,15 @@ if (!function_exists('lm_csrf_token')) {
      */
     function lm_csrf_token()
     {
+        // Never a bare session_start(): that opens a session under PHP's
+        // default cookie name, which is a different session from the hardened
+        // one — the token written here would never be seen by lm_verify_csrf().
         if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
+            if (function_exists('lm_session_start')) {
+                lm_session_start();
+            } else {
+                @session_start();
+            }
         }
         if (empty($_SESSION['lm_csrf'])) {
             try {
@@ -1415,7 +1422,11 @@ if (!function_exists('lm_verify_csrf')) {
     function lm_verify_csrf($required = true)
     {
         if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
+            if (function_exists('lm_session_start')) {
+                lm_session_start();
+            } else {
+                @session_start();
+            }
         }
         $sent = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         $stored = $_SESSION['lm_csrf'] ?? '';
@@ -1425,6 +1436,51 @@ if (!function_exists('lm_verify_csrf')) {
         }
 
         return !$required;
+    }
+}
+
+if (!function_exists('lm_csrf_failure')) {
+    /**
+     * Why a CSRF check failed, as a sentence an admin can act on.
+     *
+     * "Your session expired" is the wrong message nine times out of ten: the
+     * session did not expire, it never existed — because PHP could not write
+     * session files, because output was sent before the cookie, or because the
+     * browser never sent the cookie back. Name which one.
+     *
+     * @return string Empty when the token simply expired.
+     */
+    function lm_csrf_failure()
+    {
+        if (function_exists('lm_session_failure')) {
+            $problem = lm_session_failure();
+            if ($problem !== '') {
+                return $problem;
+            }
+        }
+
+        $sent = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        $stored = $_SESSION['lm_csrf'] ?? '';
+
+        if (is_string($sent) && $sent !== '' && is_string($stored) && $stored !== '') {
+            return ''; // both present but different: a real expiry or a stale tab
+        }
+
+        if (!is_string($sent) || $sent === '') {
+            $cookie = isset($_COOKIE[function_exists('lm_session_name') ? lm_session_name() : session_name()]);
+            if (!$cookie) {
+                return 'This browser did not send the session cookie back, so the form could not be verified. '
+                    . 'That happens when the site is opened over http:// while it runs on https:// (a Secure cookie is dropped), '
+                    . 'when a proxy strips cookies, or when cookies are blocked for this site. '
+                    . 'Open the panel on the exact https:// address in Settings → Site URL and try again.';
+            }
+            return 'The sign-in form arrived without its security token — a cached page, or a form posted from another tab. '
+                . 'Reload the page and try again.';
+        }
+
+        return 'The session held no security token, so it was created freshly for this request. '
+            . 'PHP is not saving session data between requests: check session.save_path in cPanel → MultiPHP INI Editor, '
+            . 'or open health.php → PHP and sessions.';
     }
 }
 

@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm_password = (string) ($_POST['password_confirm'] ?? '');
 
     if (!lm_verify_csrf()) {
-        $error = 'Your session expired. Refresh the page and try again.';
+        $error = 'Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.';
     } elseif (empty($new_username)) {
         $error = "Username cannot be empty.";
     } elseif ($forcePasswordChange && $new_password === '') {

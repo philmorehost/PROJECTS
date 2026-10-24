@@ -15,7 +15,7 @@ $test_message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_webhook'])) {
     if (!lm_verify_csrf()) {
-        die('Your session expired. Go back, refresh the page and try again.');
+        die('Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.');
     }
 
     // Create a test webhook payload

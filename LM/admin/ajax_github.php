@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     lm_json(array('status' => 'error', 'message' => 'Invalid request method.'), 405);
 }
 if (!lm_verify_csrf()) {
-    lm_json(array('status' => 'error', 'message' => 'Your session expired. Refresh the page and try again.'), 419);
+    lm_json(array('status' => 'error', 'message' => 'Session not saved — reload and try again. If it repeats, open System Check → PHP & sessions.'), 419);
 }
 
 // A pull downloads and packages an archive that can be hundreds of MB.

@@ -99,7 +99,7 @@ const text = html => String(html)
   const noCsrf = await page(run, `
     $_SERVER['REQUEST_METHOD'] = 'POST';
     $_POST = array('remove_file' => 'admin-cron-uvdv.php', 'confirm_name' => 'admin-cron-uvdv.php');`);
-  ok('a request without a CSRF token is refused', /session expired/i.test(text(noCsrf)), text(noCsrf).slice(0, 200));
+  ok('a request without a CSRF token is refused', /session was not saved/i.test(text(noCsrf)), text(noCsrf).slice(0, 200));
 
   const traversal = await page(run, `
     $_SERVER['REQUEST_METHOD'] = 'POST';

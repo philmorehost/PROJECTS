@@ -66,9 +66,145 @@ if (!function_exists('lm_session_name')) {
     }
 }
 
+if (!function_exists('lm_php_version_supported')) {
+    /**
+     * The PHP versions this build is tested against.
+     *
+     * cPanel's MultiPHP lets an account be switched at any time, so the panel
+     * has to survive 7.4 as well as 8.0–8.5. Returns:
+     *   'ok'      tested range (7.4 – 8.5)
+     *   'newer'   newer than anything tested (not a reason to refuse)
+     *   'old'     too old to run safely
+     *
+     * @return string
+     */
+    function lm_php_version_supported()
+    {
+        if (PHP_VERSION_ID < 70400) {
+            return 'old';
+        }
+        if (PHP_VERSION_ID > 80599) {
+            return 'newer';
+        }
+        return 'ok';
+    }
+}
+
+if (!function_exists('lm_session_save_dir')) {
+    /**
+     * A writable session directory, falling back to one inside LM/storage.
+     *
+     * On a cPanel account the session path is per PHP version
+     * (/var/cpanel/php/sessions/ea-php83). After switching versions that
+     * directory can be missing or unwritable, and then every session silently
+     * fails: the login form renders, the POST arrives without a session, and
+     * the panel reports "your session expired" with no clue why. Falling back
+     * to a directory we own turns that into a working login.
+     *
+     * @return array{path:string,configured:string,fallback:bool,writable:bool}
+     */
+    function lm_session_save_dir()
+    {
+        static $state = null;
+        if ($state !== null) {
+            return $state;
+        }
+
+        $configured = trim((string) ini_get('session.save_path'));
+        // "2;/path" and "N;MODE;/path" are valid ini values.
+        if ($configured !== '' && strpos($configured, ';') !== false) {
+            $parts = explode(';', $configured);
+            $configured = (string) end($parts);
+        }
+
+        if ($configured !== '' && is_dir($configured) && is_writable($configured)) {
+            return $state = array('path' => $configured, 'configured' => $configured, 'fallback' => false, 'writable' => true);
+        }
+
+        $fallback = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'sessions';
+        if (!is_dir($fallback)) {
+            @mkdir($fallback, 0700, true);
+        }
+
+        $writable = is_dir($fallback) && is_writable($fallback);
+        if ($writable) {
+            foreach (array('.htaccess', 'index.php') as $guard) {
+                if (!file_exists($fallback . DIRECTORY_SEPARATOR . $guard) && is_file(dirname(__DIR__) . '/storage/' . $guard)) {
+                    @copy(dirname(__DIR__) . '/storage/' . $guard, $fallback . DIRECTORY_SEPARATOR . $guard);
+                }
+            }
+            @ini_set('session.save_path', $fallback);
+        }
+
+        return $state = array(
+            'path' => $writable ? $fallback : $configured,
+            'configured' => $configured,
+            'fallback' => true,
+            'writable' => $writable,
+        );
+    }
+}
+
+if (!function_exists('lm_session_failure')) {
+    /**
+     * Why the hardened session could not start, as a sentence.
+     *
+     * Empty when the session is healthy. The text is meant for an admin, so it
+     * names the component (PHP, the folder, the browser) and what to change —
+     * never a bare "session expired".
+     *
+     * @return string
+     */
+    function lm_session_failure()
+    {
+        $error = trim((string) ($GLOBALS['lm_session_error'] ?? ''));
+
+        if ($error !== '') {
+            $dir = lm_session_save_dir();
+            $hint = $dir['writable']
+                ? ''
+                : ' PHP cannot write session files to "' . ($dir['path'] !== '' ? $dir['path'] : '(no path)')
+                    . '". Set session.save_path in cPanel → MultiPHP INI Editor to a writable folder,'
+                    . ' or make storage/sessions writable (0755).';
+
+            return 'PHP could not start a session: ' . $error . '.' . $hint;
+        }
+
+        // Only a problem when this request also had to hand out the cookie: with
+        // an existing cookie the session carries on, it just cannot be renewed.
+        if (headers_sent($file, $line) && empty($_COOKIE[lm_session_name()])) {
+            return 'Something printed output before the session started (' . basename($file) . ':' . $line . '),'
+                . ' so PHP could not send the session cookie. Turn off display_errors in cPanel → MultiPHP INI Editor,'
+                . ' or fix the warning named in that file.';
+        }
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            $dir = lm_session_save_dir();
+            return 'The PHP session did not start on PHP ' . PHP_VERSION
+                . '. session.save_path is "' . ($dir['path'] !== '' ? $dir['path'] : '(empty)')
+                . '"' . ($dir['writable'] ? '' : ' and is not writable') . '.';
+        }
+
+        return '';
+    }
+}
+
 if (!function_exists('lm_session_start')) {
     /**
      * Start (or continue) the hardened session.
+     *
+     * Version notes, because this is the code that broke when the host moved
+     * from 7.4 to 8.3 and the symptom ("session expired") pointed at the wrong
+     * thing entirely:
+     *
+     *   - `session.sid_length` / `session.sid_bits_per_character` are no longer
+     *     forced. 6 bits per character produces ids containing "," which is not
+     *     a legal cookie character (RFC 6265), and PHP 8.4 deprecated both
+     *     directives. PHP's own defaults are strong; leave them alone.
+     *   - A missing or unwritable session.save_path is detected and replaced
+     *     with LM/storage/sessions instead of failing silently.
+     *   - The warning from session_start() is captured, so the caller can say
+     *     what actually went wrong.
      *
      * @param bool $regenerate Rotate the session id — call this right after a
      *                         privilege change (login) so a pre-set id is useless.
@@ -86,6 +222,9 @@ if (!function_exists('lm_session_start')) {
         if (!headers_sent()) {
             $secure = lm_request_is_https();
 
+            // PHP 7.3+ takes an options array; older versions only accept the
+            // positional form. Both are supported because a host may still be
+            // on 7.2 when a release lands.
             if (PHP_VERSION_ID >= 70300) {
                 @session_set_cookie_params(array(
                     'lifetime' => 0,
@@ -96,7 +235,6 @@ if (!function_exists('lm_session_start')) {
                     'samesite' => 'Lax',
                 ));
             } else {
-                // PHP 7.2 and older have no samesite key; the path trick works.
                 @session_set_cookie_params(0, '/; samesite=Lax', '', $secure, true);
             }
 
@@ -104,25 +242,49 @@ if (!function_exists('lm_session_start')) {
             @ini_set('session.use_only_cookies', '1');
             @ini_set('session.use_trans_sid', '0');
             @ini_set('session.cookie_httponly', '1');
-            @ini_set('session.sid_length', '48');
-            @ini_set('session.sid_bits_per_character', '6');
+
+            // Only if the directive exists (it is gone in some builds).
+            if (ini_get('session.cookie_samesite') !== false) {
+                @ini_set('session.cookie_samesite', 'Lax');
+            }
+
+            lm_session_save_dir();
 
             if (session_name() !== lm_session_name()) {
                 @session_name(lm_session_name());
             }
         }
 
-        $ok = @session_start();
+        $GLOBALS['lm_session_error'] = '';
+
+        // Catch the warning instead of suppressing it: the message is the only
+        // thing that can explain a failure to the admin.
+        $capture = function ($errno, $errstr) {
+            if ($GLOBALS['lm_session_error'] === '') {
+                $GLOBALS['lm_session_error'] = (string) $errstr;
+            }
+            return true;
+        };
+
+        set_error_handler($capture);
+        $ok = session_start();
+        restore_error_handler();
 
         if ($ok && $regenerate && !headers_sent()) {
             @session_regenerate_id(true);
+        }
+
+        // A session that "started" but cannot be written is a session that will
+        // be empty on the next request: treat it as a failure now.
+        if ($ok && !isset($_SESSION)) {
+            $_SESSION = array();
         }
 
         if ($ok && PHP_SAPI !== 'cli') {
             lm_admin_gate();
         }
 
-        return $ok;
+        return (bool) $ok;
     }
 }
 

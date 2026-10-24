@@ -244,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_file'])) {
     $rootReal = realpath($root);
 
     if (!lm_verify_csrf()) {
-        $removalError = 'Your session expired. Refresh the page and try again.';
+        $removalError = 'Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.';
     } elseif ($typed !== $confirmName) {
         $removalError = 'Type the file name exactly (' . $confirmName . ') to confirm.';
     } elseif (!isset($removable[$target])) {
@@ -294,9 +294,29 @@ $diagnostics = [
     'licenses_table_ok' => false,
     'transactions_table_ok' => false,
     'shell_scan' => ['paths' => [], 'review' => [], 'unexpected' => [], 'scanned' => 0],
+    'php_ok' => true,
+    'session_path' => '',
+    'session_writable' => false,
+    'session_fallback' => false,
+    'session_problem' => '',
 ];
 
 $diagnostics['shell_scan'] = $scan;
+
+// PHP version + session storage. This is the row that explains "the panel
+// says my session expired" after a MultiPHP version switch: the version is
+// fine, the session folder is not.
+if (function_exists('lm_session_save_dir')) {
+    $sessionInfo = lm_session_save_dir();
+    $diagnostics['php_ok'] = function_exists('lm_php_version_supported') ? lm_php_version_supported() !== 'old' : true;
+    $diagnostics['session_path'] = $sessionInfo['path'];
+    $diagnostics['session_writable'] = $sessionInfo['writable'];
+    $diagnostics['session_fallback'] = $sessionInfo['fallback'];
+    if (function_exists('lm_session_failure')) {
+        $diagnostics['session_problem'] = lm_session_failure();
+    }
+}
+$sessionOk = $diagnostics['php_ok'] && $diagnostics['session_writable'] && $diagnostics['session_problem'] === '';
 
 $settings = [];
 if (file_exists('../settings.json')) {
@@ -570,6 +590,46 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
             <?php endif; ?>
 
             <div class="check-item" style="margin-top:14px;align-items:flex-start;">
+                <div class="check-icon <?= $sessionOk ? 'pass' : 'fail' ?>">
+                    <?= $sessionOk ? '✓' : '✗' ?>
+                </div>
+                <div style="flex-grow:1;min-width:0;">
+                    <h3>PHP &amp; sessions</h3>
+                    <small>
+                        PHP <?= htmlspecialchars(PHP_VERSION, ENT_QUOTES, 'UTF-8') ?>
+                        <?php if (function_exists('lm_php_version_supported') && lm_php_version_supported() === 'newer'): ?>
+                            — newer than the tested range (7.4 – 8.5); working, but unsupported
+                        <?php elseif ($diagnostics['php_ok']): ?>
+                            — supported (7.4 – 8.5)
+                        <?php else: ?>
+                            — too old, upgrade in cPanel → MultiPHP Manager
+                        <?php endif; ?>
+                    </small>
+                    <div class="detail" style="margin-top:8px;font-size:13px;color:#475569;line-height:1.7;">
+                        <div>
+                            <code>session.save_path</code>:
+                            <?= htmlspecialchars($diagnostics['session_path'] !== '' ? $diagnostics['session_path'] : '(not set)', ENT_QUOTES, 'UTF-8') ?>
+                            — <?= $diagnostics['session_writable'] ? 'writable' : 'NOT WRITABLE' ?>
+                        </div>
+                        <?php if ($diagnostics['session_fallback']): ?>
+                            <div style="color:#92400e;">
+                                ⚠ The path PHP is configured to use is missing or read-only, so sessions are being
+                                stored in <code>storage/sessions</code> instead. That works — but set
+                                <code>session.save_path</code> in cPanel → MultiPHP INI Editor to a writable folder to
+                                go back to the default.
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($diagnostics['session_problem'] !== ''): ?>
+                            <div style="color:#991b1b;"><?= htmlspecialchars($diagnostics['session_problem'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <?php endif; ?>
+                        <?php if ($sessionOk && !$diagnostics['session_fallback']): ?>
+                            <div>Sessions start and persist normally, and the sign-in form's security token survives between requests.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="check-item" style="margin-top:14px;align-items:flex-start;">
                 <div class="check-icon <?= $integrityProblems ? 'fail' : 'pass' ?>">
                     <?= $integrityProblems ? '✗' : '✓' ?>
                 </div>
@@ -638,7 +698,7 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                 </div>
             </div>
 
-            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok'] && !$integrityProblems): ?>
+            <?php if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured'] && $diagnostics['paystack_reachable'] && $diagnostics['smtp_configured'] && $diagnostics['licenses_table_ok'] && $diagnostics['transactions_table_ok'] && !$integrityProblems && $sessionOk): ?>
                 <div class="next-step" style="background: #d1fae5; border-color: #a7f3d0; color: #065f46;">
                     <h3>✓ All Systems Ready!</h3>
                     <p>Your payment system is fully configured. You're ready to process payments.</p>
@@ -648,6 +708,15 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                 <div class="next-step">
                     <h3>⚠️ Issues Found</h3>
                     <ol>
+                        <?php if (!$diagnostics['php_ok']): ?>
+                            <li><strong>PHP is too old:</strong> this build needs PHP 7.4 or newer. Switch it in cPanel → MultiPHP Manager, then reload this page.</li>
+                        <?php endif; ?>
+                        <?php if (!$diagnostics['session_writable']): ?>
+                            <li><strong>Sessions cannot be written:</strong> PHP has nowhere to store session files, so every request starts with an empty session and the panel reports “your session expired”. In cPanel → MultiPHP INI Editor set <code>session.save_path</code> to a writable folder (for example the account's <code>tmp</code> directory), or make <code>storage/sessions</code> writable (chmod 0755).</li>
+                        <?php endif; ?>
+                        <?php if ($diagnostics['session_problem'] !== ''): ?>
+                            <li><strong>Session start failed:</strong> <?= htmlspecialchars($diagnostics['session_problem'], ENT_QUOTES, 'UTF-8') ?></li>
+                        <?php endif; ?>
                         <?php if (!$diagnostics['curl_enabled']): ?>
                             <li><strong>Enable cURL:</strong> Contact your hosting provider - cURL is required for Paystack API integration</li>
                         <?php endif; ?>

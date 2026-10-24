@@ -37,7 +37,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $retryAfter = max($userState['retry_after'], $ipState['retry_after']);
 
     if (!lm_verify_csrf()) {
-        $error = 'Your session expired. Refresh the page and try again.';
+        // Say what actually failed. On a freshly switched PHP version the
+        // session never starts (unwritable session.save_path), and "session
+        // expired" sent the operator looking in the wrong place entirely.
+        $reason = function_exists('lm_csrf_failure') ? lm_csrf_failure() : '';
+        $error = $reason !== '' ? $reason : 'Your session expired. Refresh the page and try again.';
     } elseif ($blocked) {
         $minutes = max(1, (int) ceil($retryAfter / 60));
         $error = 'Too many failed attempts. Try again in ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . '.';
@@ -220,6 +224,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </form>
                 </div>
             </div>
+
+            <?php if (function_exists('lm_php_version_supported') && lm_php_version_supported() !== 'ok'): ?>
+                <div class="lm-alert lm-alert--info" role="status">
+                    <?= lm_icon('shield') ?>
+                    <span>
+                        This server runs PHP <?= htmlspecialchars(PHP_VERSION) ?>, which is
+                        <?= lm_php_version_supported() === 'old' ? 'older than 7.4 — the panel needs 7.4 or newer.' : 'newer than the versions this build was tested on (7.4 – 8.5). It should still work; health.php lists anything PHP objects to.' ?>
+                    </span>
+                </div>
+            <?php endif; ?>
 
             <p class="lm-help lm-center" style="margin-top:16px">
                 <a href="<?= htmlspecialchars(lm_public_url('index.php')) ?>">&larr; Back to the site</a>

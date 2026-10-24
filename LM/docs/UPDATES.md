@@ -881,6 +881,81 @@ installation. `admin/system-check.php` cannot remove itself.
 
 ---
 
+## 6l. 9.3.0 — “Your session expired” after switching to PHP 8.3
+
+**What you saw.** You changed the account to PHP 8.3 in cPanel → MultiPHP
+Manager. The public site was fine, the admin sign-in page loaded, and every
+password produced the same red line:
+
+> Your session expired. Refresh the page and try again.
+
+Switch back to 7.4 and it worked. That last sentence is the clue: a *code*
+break would not care which PHP version is selected, so what broke was something
+the version switch changes underneath the code.
+
+### Two faults, one message
+
+| Fault | What it did |
+|---|---|
+| **Session ids could contain a comma** | The hardened session set `session.sid_bits_per_character = 6`. That encodes the id with a base-64 alphabet which includes `,` — and RFC 6265 does not allow a comma in a cookie value. Some browsers and proxies file such a cookie under a mangled name, or drop it. It also became **deprecated in PHP 8.4**. |
+| **`session.save_path` belonged to the old version** | cPanel gives each PHP version its own session folder (`/var/cpanel/php/sessions/ea-php83`). After a switch that folder can be missing or read-only for the account. PHP then does not report a failure — it **starts an empty session on every request**, so the sign-in form's token is never recognised. |
+
+PHP 7.4 hid both: its default `sid_bits_per_character` was lower, and its
+`save_path` was the one the account had been using all along.
+
+The message made it worse. The token check failed, so the page said "session
+expired" — but nothing had expired. There was never a session to expire.
+
+### What 9.3.0 changes
+
+| Change | Why |
+|---|---|
+| `session.sid_length` and `session.sid_bits_per_character` are **no longer forced** | PHP's own defaults are strong, legal in a cookie, and are not deprecated. The panel no longer overrides the host. |
+| The session folder is **checked before starting** | `lm_session_save_dir()` tests `session.save_path`; if it is missing or unwritable the panel points PHP at `storage/sessions` (created with an `.htaccess` and an `index.php` that refuses direct reads) and the session starts anyway. Sign-in works on a freshly switched PHP version with no cPanel edit. |
+| A failed start is **captured, not suppressed** | `@session_start()` threw the reason away. The warning is caught and kept, so the page can print it. |
+| Errors **name the cause** | `lm_csrf_failure()` distinguishes: no session cookie came back (wrong scheme, cookie blocked, proxy), the form carried no token (cached page), or the session holds no token because PHP is not saving sessions (unwritable folder). |
+| **PHP 7.4 – 8.5 is supported** and stated in the UI | The sign-in page says when the runtime is outside the tested range; System Check and `health.php` show the version and the session state. |
+| Two PHP 8 warnings fixed | `admin/dashboard.php` read `['count']` from a failed `fetch()`, and `admin/settings.php` read `$_SERVER['HTTP_HOST']` unguarded. Both are warnings on 7.4, printed output on 8.x — and printed output before `header()` is exactly what breaks a login redirect. |
+| `session.cookie_samesite` is only set when it exists | Some builds have removed the directive; `ini_set` on it is harmless but pointless. |
+
+The same wrong sentence was printed by thirteen other screens (Settings, Profile,
+the AJAX endpoints, the quarantine form, the repair tools). They now say the
+request was refused because the session was not saved, and point at System Check
+— so the misleading diagnosis cannot reappear on a different page.
+
+### If you still see a session message
+
+The message now says which of the three it is. For the folder case:
+
+1. **cPanel → MultiPHP INI Editor → Editor mode**, choose the domain.
+2. Find `session.save_path`. If it is empty or points into
+   `/var/cpanel/php/sessions/ea-phpXX`, set it to a folder the account owns —
+   for example `/home/<cpanel-user>/tmp` — and save.
+3. Or do nothing: 9.3.0 falls back to `storage/sessions` and keeps working. The
+   fallback is reported, not hidden, in **System Check → PHP & sessions** and in
+   `health.php`.
+
+To confirm the state: **Admin → System Check → PHP & sessions** shows the PHP
+version, the effective `session.save_path`, whether it is writable, and whether
+the fallback is in use. `health.php` shows the same two facts without loading
+any include, which is what you want when the panel itself will not load.
+
+### What was actually tested
+
+| Range | How |
+|---|---|
+| PHP 7.4 | every PHP file is parsed under 7.4 rules (`qa/lint74.cjs`, 1,415 files) |
+| PHP 8.4 | all 25 pages rendered with `error_reporting(E_ALL)` and `display_errors=1` (`qa/php8.cjs`) — zero notices, warnings or deprecations |
+| 8.0 – 8.5 | source audited for the changes that break code across that range: null-to-scalar coercion, implicit nullable parameters, `${}` string interpolation, removed `utf8_encode()` / `strftime()` / `each()` / `create_function()` / `FILTER_SANITIZE_STRING`. None are used. |
+| Sessions | `qa/session.cjs`: the cookie name and flags, the id contains no illegal character, a missing `save_path` falls back and still starts, and each failure message says the right thing |
+
+Honest limit: the only runtime available while building this was PHP 8.4, so
+8.0–8.5 is a static audit plus a 7.4 parse gate, not a run of each minor
+version. If a host prints a notice on 8.0 that 8.4 does not, `health.php` and
+the error log will show it — send that line and it gets fixed.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -914,6 +989,10 @@ installation. `admin/system-check.php` cannot remove itself.
 | IP whitelist stopped matching / login throttle sees one address | The site is behind Cloudflare or a proxy. Add the proxy ranges in **Settings → Trusted proxies**; until then the proxy's address is treated as the client. |
 | Locked out by the sign-in throttle | Wait 15 minutes, or delete `storage/ratelimit/admin_login*`. |
 | System Check lists `admin/system-check.php` or `includes/lm_config.php` | Fixed in 9.2.0 — those were false positives (the scanner matching its own signature list, and a `php_uname()` call in an entropy fallback). Update both files. |
+| “Your session expired. Refresh the page and try again.” after switching PHP version | 9.3.0. The session folder that belonged to the old PHP version is missing or read-only, so every request starts an empty session and the sign-in token is never recognised. Upload `includes/security.php`, `admin/index.php`, `admin/dashboard.php`, `admin/settings.php`, `admin/system-check.php`, `health.php` and `build.json`; the panel then falls back to `storage/sessions` and signs you in. To fix the setting itself: cPanel → MultiPHP INI Editor → `session.save_path` → a folder the account owns. |
+| “Your session expired” on 7.4 as well | Also 9.3.0, but a different branch of the same message: it now says whether the browser sent no cookie (open the panel on the exact `https://` address in Settings → Site URL), the form had no token (reload the page), or PHP is not saving sessions (the `save_path` row above). The old text hid all three. |
+| Everyone is signed out after the 9.3.0 upload | Expected once: session ids are no longer forced to a 6-bit alphabet, so old cookies are not reused. Sign in again. |
+| System Check → **PHP & sessions** says *NOT WRITABLE* | PHP cannot write session files, so nothing that depends on a session can work — sign-in included. Set `session.save_path` to a writable folder or make `storage/sessions` writable (0755). |
 | System Check lists a file under **“not part of this release”** | `build.json` says this version does not ship it. If you did not add it, quarantine it and rotate credentials. |
 | Quarantine button stays disabled | Type the exact file name shown in the box, including the extension. |
 | System Check reports “suspicious file” | Do not ignore it. SECURITY.md §1 lists the credentials to rotate. |
@@ -932,6 +1011,7 @@ installation. `admin/system-check.php` cannot remove itself.
 
 ```
 includes/lm_config.php        settings, crypto, CSRF, site URL, logging, release check
+includes/security.php         session start (7.4 – 8.5), CSRF failure reasons, throttles
 admin/ping.php                request self-test: did this POST reach PHP?
 build.json                    release manifest (SHA-1 per shipped file)
 includes/mailer.php           SMTP plan, retries, queue

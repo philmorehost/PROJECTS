@@ -20,7 +20,9 @@ $inactive_licenses = count(array_filter($licenses, fn($l) => $l['status'] === 'i
 
 // Get transaction count
 $stmt = $pdo->query("SELECT COUNT(*) as count FROM transactions");
-$transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+$transactionRow = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+// fetch() returns false when the query fails; PHP 8 turns that into a warning.
+$transaction_count = is_array($transactionRow) ? (int) ($transactionRow['count'] ?? 0) : 0;
 
 // Most recent background GitHub pull (the in-app side of the completion
 // notice — the e-mail version goes to the admin address).

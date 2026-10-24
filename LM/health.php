@@ -72,6 +72,37 @@ if (is_file($fatalFile) && is_readable($fatalFile)) {
 
 $php = PHP_VERSION;
 $phpOk = version_compare($php, '7.4.0', '>=');
+$phpTested = version_compare($php, '8.5.99', '<=');
+
+/*
+ * Session storage, checked without loading includes/security.php — this page
+ * has to work when that file is the broken one.
+ *
+ * A cPanel MultiPHP switch changes session.save_path to a per-version folder
+ * (/var/cpanel/php/sessions/ea-php83). If that folder is missing or read-only
+ * every request starts an empty session, the login form's token never comes
+ * back, and the panel says "your session expired" — with nothing pointing here.
+ */
+$sessionPath = trim((string) ini_get('session.save_path'));
+if ($sessionPath !== '' && strpos($sessionPath, ';') !== false) {
+    $sessionBits = explode(';', $sessionPath);
+    $sessionPath = (string) end($sessionBits);
+}
+$sessionDir = $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'sessions';
+$sessionConfigured = $sessionPath !== '' && is_dir($sessionPath) && is_writable($sessionPath);
+$sessionFallbackOk = (is_dir($sessionDir) && is_writable($sessionDir))
+    || (!is_dir($sessionDir) && is_dir($storage) && is_writable($storage));
+
+if ($sessionConfigured) {
+    $sessionLabel = 'Writable';
+    $sessionClass = 'yes';
+} elseif ($sessionFallbackOk) {
+    $sessionLabel = 'Configured path unusable — storage/sessions is used instead';
+    $sessionClass = 'yes';
+} else {
+    $sessionLabel = 'NOT WRITABLE — sign-in cannot keep a session';
+    $sessionClass = 'no';
+}
 
 /* Which release is actually on disk. */
 $version = 'unknown';
@@ -357,7 +388,8 @@ $ok = empty($problems);
 
     <div class="card">
         <h2>Runtime</h2>
-        <div class="row"><span>PHP version</span><span class="<?= $phpOk ? 'yes' : 'no' ?>"><?= htmlspecialchars($php) ?></span></div>
+        <div class="row"><span>PHP version</span><span class="<?= $phpOk ? 'yes' : 'no' ?>"><?= htmlspecialchars($php) ?><?= $phpOk ? ($phpTested ? '' : ' — newer than the tested range (7.4 – 8.5)') : ' — too old, needs 7.4+' ?></span></div>
+        <div class="row"><span>Session storage</span><span class="<?= $sessionClass ?>"><?= htmlspecialchars($sessionLabel) ?></span></div>
         <div class="row"><span>Interface</span><span><?= htmlspecialchars(PHP_SAPI) ?></span></div>
         <div class="row"><span>ZIP support (zlib)</span><span class="<?= function_exists('gzinflate') ? 'yes' : 'no' ?>"><?= function_exists('gzinflate') ? 'available' : 'missing' ?></span></div>
         <div class="row"><span>cURL</span><span class="<?= function_exists('curl_init') ? 'yes' : 'no' ?>"><?= function_exists('curl_init') ? 'available' : 'missing' ?></span></div>

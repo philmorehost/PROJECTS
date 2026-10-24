@@ -23,7 +23,7 @@ $restoreNotice = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
     if (!lm_verify_csrf()) {
-        $restoreNotice = 'error:Your session expired. Refresh the page and try again.';
+        $restoreNotice = 'error:Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.';
     } else {
         $restored = lm_settings_restore((string) $_POST['restore_backup']);
         if ($restored['ok']) {
@@ -38,7 +38,7 @@ $saveScope = isset($_POST['save_scope']) ? preg_replace('/[^a-z_]/', '', (string
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!lm_verify_csrf()) {
-        $saveError = 'Your session expired. Refresh the page and try again.';
+        $saveError = 'Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.';
     } elseif ($saveScope === 'email_help') {
         // Wording of the "how to update" block inside the customer e-mail.
         // Blank falls back to the built-in text, which follows the project.
@@ -259,7 +259,7 @@ $cronSecret = lm_get_cron_secret();
 $cronUrl = lm_site_url('cron.php?key=' . rawurlencode($cronSecret));
 $smtpDescription = lm_smtp_describe($settings);
 $detectedUrl = lm_site_url();
-$webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]/webhook.php";
+$webhook_url = lm_site_url('webhook.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">

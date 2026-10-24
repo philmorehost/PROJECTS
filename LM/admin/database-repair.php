@@ -12,7 +12,7 @@ if (!isset($_SESSION['admin_logged_in'])) {
 require_once('../db.php');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !lm_verify_csrf()) {
-    die('Your session expired. Go back, refresh the page and try again.');
+    die('Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.');
 }
 
 $messages = [];
