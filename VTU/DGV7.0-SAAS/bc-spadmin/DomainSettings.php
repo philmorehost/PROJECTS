@@ -27,6 +27,36 @@
         exit();
     }
 
+    if (isset($_POST['delete_selected_extensions'])) {
+        $posted_ids = $_POST['extension_ids'] ?? [];
+        if (!is_array($posted_ids)) $posted_ids = [];
+        $selected_ids = [];
+        foreach ($posted_ids as $posted_id) {
+            if (!is_scalar($posted_id)) continue;
+            $valid_id = filter_var($posted_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($valid_id !== false) $selected_ids[] = $valid_id;
+        }
+        $selected_ids = array_values(array_unique($selected_ids));
+
+        if (empty($selected_ids)) {
+            $_SESSION['page_alert'] = "Please select at least one domain extension to delete.";
+        } else {
+            // The values are reduced to positive integers before interpolation, so this IN list
+            // cannot carry user-supplied SQL; avoiding an upsert/schema dependency here as well.
+            $id_list = implode(',', $selected_ids);
+            if (mysqli_query($connection_server, "DELETE FROM sas_domain_extensions WHERE id IN ($id_list)")) {
+                $deleted_count = mysqli_affected_rows($connection_server);
+                $_SESSION['page_alert'] = $deleted_count > 0
+                    ? "$deleted_count domain extension(s) deleted successfully."
+                    : "No matching domain extensions were found to delete.";
+            } else {
+                $_SESSION['page_alert'] = "Could not delete the selected extensions: " . mysqli_error($connection_server);
+            }
+        }
+        header("Location: DomainSettings.php");
+        exit();
+    }
+
     if(isset($_GET['delete_ext'])) {
         $del_id = mysqli_real_escape_string($connection_server, $_GET['delete_ext']);
         mysqli_query($connection_server, "DELETE FROM sas_domain_extensions WHERE id='$del_id'");
@@ -241,44 +271,59 @@
                             </div>
                         </form>
 
-                        <div class="table-responsive mt-2">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Extension</th>
-                                        <th>1st Year Promo</th>
-                                        <th>Renewal Price</th>
-                                        <th class="text-end">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php
-                                    $ext_res = mysqli_query($connection_server, "SELECT * FROM sas_domain_extensions ORDER BY extension ASC");
-                                    if(mysqli_num_rows($ext_res) > 0):
-                                        while($ext = mysqli_fetch_assoc($ext_res)):
-                                    ?>
-                                    <tr>
-                                        <td class="fw-bold fs-6"><?php echo htmlspecialchars($ext['extension']); ?></td>
-                                        <td>
-                                            <?php if($ext['promo_price'] > 0): ?>
-                                                <span class="promo-badge">₦<?php echo number_format($ext['promo_price'], 2); ?></span>
-                                            <?php else: ?>
-                                                <span class="text-muted small">None</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><span class="price-badge">₦<?php echo number_format($ext['price'], 2); ?></span></td>
-                                        <td class="text-end">
-                                            <a href="?delete_ext=<?php echo $ext['id']; ?>" class="action-icon text-muted" onclick="return confirm('Delete this extension?')">
-                                                <i class="bi bi-trash3-fill"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    <?php endwhile; else: ?>
-                                        <tr><td colspan="4" class="text-center py-5 text-muted">No extensions added yet.</td></tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                        <form method="POST" action="" id="bulk-delete-extensions-form">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2 mb-3">
+                                <label class="form-check mb-0">
+                                    <input type="checkbox" class="form-check-input" id="select-all-extensions" aria-label="Select all domain extensions">
+                                    <span class="form-check-label small">Select all</span>
+                                </label>
+                                <button type="submit" name="delete_selected_extensions" id="delete-selected-extensions" class="btn btn-outline-danger btn-sm" disabled>
+                                    <i class="bi bi-trash3 me-1"></i>Delete selected (<span id="selected-extension-count">0</span>)
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" style="width:42px"><span class="visually-hidden">Select</span></th>
+                                            <th>Extension</th>
+                                            <th>1st Year Promo</th>
+                                            <th>Renewal Price</th>
+                                            <th class="text-end">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php
+                                        $ext_res = mysqli_query($connection_server, "SELECT * FROM sas_domain_extensions ORDER BY extension ASC");
+                                        if(mysqli_num_rows($ext_res) > 0):
+                                            while($ext = mysqli_fetch_assoc($ext_res)):
+                                        ?>
+                                        <tr>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input extension-select" name="extension_ids[]" value="<?php echo (int)$ext['id']; ?>" aria-label="Select <?php echo htmlspecialchars($ext['extension'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            </td>
+                                            <td class="fw-bold fs-6"><?php echo htmlspecialchars($ext['extension']); ?></td>
+                                            <td>
+                                                <?php if($ext['promo_price'] > 0): ?>
+                                                    <span class="promo-badge">₦<?php echo number_format($ext['promo_price'], 2); ?></span>
+                                                <?php else: ?>
+                                                    <span class="text-muted small">None</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><span class="price-badge">₦<?php echo number_format($ext['price'], 2); ?></span></td>
+                                            <td class="text-end">
+                                                <a href="?delete_ext=<?php echo (int)$ext['id']; ?>" class="action-icon text-muted" onclick="return confirm('Delete this extension?')" aria-label="Delete <?php echo htmlspecialchars($ext['extension'], ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <i class="bi bi-trash3-fill"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <?php endwhile; else: ?>
+                                            <tr><td colspan="5" class="text-center py-5 text-muted">No extensions added yet.</td></tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -294,7 +339,7 @@
                             $alert_message = $_SESSION['page_alert'];
                             $alert_class = preg_match('/failed|error|could not|invalid|enter a valid|not configured|no usable|before syncing/i', $alert_message)
                                 ? 'alert-danger'
-                                : (preg_match('/partial/i', $alert_message) ? 'alert-warning' : 'alert-success');
+                                : (preg_match('/partial|select at least one|no matching/i', $alert_message) ? 'alert-warning' : 'alert-success');
                         ?>
                             <div class="alert <?php echo $alert_class; ?> alert-dismissible fade show border-0 rounded-3 small mb-4" role="alert">
                                 <i class="bi <?php echo $alert_class === 'alert-success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'; ?> me-2"></i><?php echo htmlspecialchars($alert_message, ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
@@ -416,6 +461,41 @@
 
     <?php include("../func/bc-spadmin-footer.php"); ?>
     <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script>
+    (() => {
+        const form = document.getElementById('bulk-delete-extensions-form');
+        const selectAll = document.getElementById('select-all-extensions');
+        const checkboxes = Array.from(document.querySelectorAll('.extension-select'));
+        const deleteButton = document.getElementById('delete-selected-extensions');
+        const selectedCount = document.getElementById('selected-extension-count');
+        if (!form || !selectAll || !deleteButton || !selectedCount) return;
+
+        const updateSelection = () => {
+            const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
+            selectedCount.textContent = selected;
+            deleteButton.disabled = selected === 0;
+            selectAll.checked = checkboxes.length > 0 && selected === checkboxes.length;
+            selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+        };
+
+        selectAll.addEventListener('change', () => {
+            checkboxes.forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+            updateSelection();
+        });
+        checkboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSelection));
+        form.addEventListener('submit', (event) => {
+            const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
+            if (selected === 0) {
+                event.preventDefault();
+                return;
+            }
+            if (!window.confirm(`Delete ${selected} selected domain extension${selected === 1 ? '' : 's'}? This cannot be undone.`)) {
+                event.preventDefault();
+            }
+        });
+        updateSelection();
+    })();
+    </script>
     <?php if ($whmp_status['configured']): ?>
     <script>
     (() => {
