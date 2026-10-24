@@ -295,6 +295,12 @@ $diagnostics = [
     'transactions_table_ok' => false,
     'shell_scan' => ['paths' => [], 'review' => [], 'unexpected' => [], 'scanned' => 0],
     'php_ok' => true,
+    'worker_exec' => false,
+    'worker_cli' => '',
+    'worker_loopback' => array('ok' => false, 'detail' => ''),
+    'worker_verdict' => '',
+    'cron_at' => null,
+    'cron_age' => -1,
     'session_path' => '',
     'session_writable' => false,
     'session_fallback' => false,
@@ -317,6 +323,25 @@ if (function_exists('lm_session_save_dir')) {
     }
 }
 $sessionOk = $diagnostics['php_ok'] && $diagnostics['session_writable'] && $diagnostics['session_problem'] === '';
+
+/*
+ * Can a GitHub pull start a worker without a browser? Every closed door here is
+ * a pull that sits at "Queued" until someone opens the console — which is
+ * exactly the symptom that produced this row.
+ */
+if (function_exists('lm_pull_worker_self_test')) {
+    $workerTest = lm_pull_worker_self_test();
+    $diagnostics['worker_exec'] = $workerTest['exec'];
+    $diagnostics['worker_cli'] = $workerTest['cli'];
+    $diagnostics['worker_loopback'] = $workerTest['loopback'];
+    $diagnostics['worker_verdict'] = $workerTest['verdict'];
+    $heartbeat = lm_cron_heartbeat();
+    if ($heartbeat !== null) {
+        $diagnostics['cron_at'] = $heartbeat['at'];
+        $diagnostics['cron_age'] = $heartbeat['age'];
+    }
+}
+$workerOk = $diagnostics['worker_loopback']['ok'] || ($diagnostics['worker_exec'] && $diagnostics['worker_cli'] !== '');
 
 $settings = [];
 if (file_exists('../settings.json')) {
@@ -433,6 +458,9 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
         }
         .check-icon.fail {
             background: #ef4444;
+        }
+        .check-icon.warn {
+            background: #f59e0b;
         }
         .check-label {
             flex-grow: 1;
@@ -624,6 +652,41 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
                         <?php endif; ?>
                         <?php if ($sessionOk && !$diagnostics['session_fallback']): ?>
                             <div>Sessions start and persist normally, and the sign-in form's security token survives between requests.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="check-item" style="margin-top:14px;align-items:flex-start;">
+                <div class="check-icon <?= $workerOk ? 'pass' : 'warn' ?>">
+                    <?= $workerOk ? '✓' : '!' ?>
+                </div>
+                <div style="flex-grow:1;min-width:0;">
+                    <h3>Background pulls</h3>
+                    <small><?= htmlspecialchars($diagnostics['worker_verdict'], ENT_QUOTES, 'UTF-8') ?></small>
+                    <div style="margin-top:8px;font-size:13px;color:#475569;line-height:1.7;">
+                        <div>CLI process (<code>exec()</code>): <strong><?= $diagnostics['worker_exec'] ? 'available' : 'disabled' ?></strong>
+                            <?php if ($diagnostics['worker_cli'] !== ''): ?>· <code><?= htmlspecialchars(basename($diagnostics['worker_cli']), ENT_QUOTES, 'UTF-8') ?></code><?php endif; ?>
+                        </div>
+                        <div>Loopback request: <strong><?= $diagnostics['worker_loopback']['ok'] ? 'works' : 'blocked' ?></strong>
+                            — <?= htmlspecialchars($diagnostics['worker_loopback']['detail'], ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                        <div>Cron: <?php if ($diagnostics['cron_at'] === null): ?>
+                                <strong>has never run</strong> — a pull that waits for cron will wait for ever.
+                                Set it up in <a href="settings.php">Settings → Automation</a>.
+                            <?php else: ?>
+                                last ran <?= (int) floor($diagnostics['cron_age'] / 60) ?> min ago
+                                <?php if ($diagnostics['cron_age'] > 3600): ?>
+                                    — <strong style="color:#92400e">that is over an hour; check the cron job</strong>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!$workerOk): ?>
+                            <div style="color:#92400e;margin-top:6px;">
+                                A pull started from GitHub Pull will run inside the admin page that starts it. The
+                                page must stay open, and PHP's execution limit applies — set a generous
+                                <code>max_execution_time</code>, or ask the host to enable <code>exec()</code>.
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

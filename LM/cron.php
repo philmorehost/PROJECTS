@@ -209,6 +209,12 @@ if (in_array('github', $tasks, true)) {
 $lmReport['duration_ms'] = (int) round((microtime(true) - $lmStarted) * 1000);
 $lmReport['finished_at'] = gmdate('c');
 
+// A timestamp the panel can read later: "cron ran 4 minutes ago" and "cron has
+// never run" need opposite advice, and only one of them is a misconfiguration.
+if (function_exists('lm_cron_heartbeat_write')) {
+    lm_cron_heartbeat_write($lmReport);
+}
+
 lm_log('cron: completed in ' . $lmReport['duration_ms'] . ' ms — ' . json_encode(array(
     'mail' => isset($lmReport['tasks']['mail']['processed']) ? $lmReport['tasks']['mail']['processed'] : null,
     'notifications' => isset($lmReport['tasks']['notifications']['processed']) ? $lmReport['tasks']['notifications']['processed'] : null,

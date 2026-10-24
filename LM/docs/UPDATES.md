@@ -1100,6 +1100,82 @@ the old process cannot publish after the stop because of point 3.
 
 ---
 
+## 6o. 9.5.0 — the pull that stayed at “Queued”
+
+**What the card said.**
+
+> Pulling DGV7.0-SAAS · Queued · 21 min 29 s
+
+Nothing was slow. **No worker had ever picked the job up.** 9.4.0 could stop a
+pull, but it still assumed the server could *start* one, and when it could not,
+the job waited for ever with a progress bar at 0%.
+
+### Why the panel said “started in the background”
+
+Three ways exist to start a worker, and on this account all three were closed:
+
+| Method | What it needs | What happened |
+|---|---|---|
+| Detached CLI | `exec()` not in `disable_functions`, and `PHP_BINARY` to be a real `php` (not `php-fpm`/`php-cgi`) | shared hosts usually disable `exec()`, or PHP runs under FPM and there is no CLI binary to call |
+| Loopback HTTP | the server to reach its own URL | a WAF or a redirect answers **403**, and that was the bug: 9.4.0 returned the string `'http'` the moment cURL was called, so a 403 looked exactly like a worker that started |
+| Cron | a cron job actually configured | if cron was never set up, nothing ever drains the queue |
+
+Because the loopback attempt was counted as success, the panel said *“started in
+the background”*, every retry was a minute apart, and the job sat at `Queued`
+until it was stopped by hand. The reaper only looked at `running` jobs, so a
+queued one was never reaped either — it just sat there.
+
+### What 9.5.0 does
+
+**1. Dispatch tells the truth.** `lm_pull_job_dispatch()` now returns
+`{ok, method, detail}` and *checks* what happened: the loopback call must come
+back `200` with `"accepted":true`, the CLI branch must exit `0`, and the
+raw-socket branch re-reads the job to see whether it actually moved to
+`running`. If none of that happened, the reason is recorded — *“exec() is
+disabled by disable_functions”*, *“a loopback request was answered with HTTP
+403”* — instead of a cheerful lie.
+
+**2. The browser runs the pull when the server cannot.** A queued job now
+carries a `worker_url`: `pull-worker.php?job=…&ticket=…`, where the ticket is an
+HMAC over the job id and a 20-minute expiry. The console fetches it **once**,
+15 seconds after the job was queued and nothing started it. `pull-worker.php`
+answers immediately (`fastcgi_finish_request`) and keeps running, so the normal
+2-second poll starts showing *Downloading → Packaging → Publishing*. The run
+token never appears in a URL.
+
+This is the path that always works: no `exec()`, no loopback, no cron.
+
+**3. A queued job is never left for ever.** The reaper now also fails a job that
+has sat `queued` for ten minutes without being claimed, with a message that says
+so and points at *Start again*. Ten minutes is far past the point where the
+browser fallback (15 seconds) would have fired.
+
+**4. System Check answers it before you start.** A new **Background pulls** row
+tests all three doors — `exec()`, a real loopback request, and when cron last
+ran (cron now writes `storage/cron-last.json`) — and says what will happen:
+*"This server cannot start a background worker, so a pull runs from the admin
+page that started it."*
+
+### Faster, too
+
+| Change | Effect |
+|---|---|
+| The central directory is parsed once per archive instead of three times | one pull parsed the same 155 MB ZIP three times: cache check, rewrite, copy |
+| Copy chunks raised from 1 MB to 4 MB | ~40 reads/writes for a 150 MB package instead of ~150 |
+| Packaging reports *“Packaging 1,400 of 2,482 files…”* with real progress | the bar used to sit at 55% for the entire re-pack |
+| A browser-run worker that hits `max_execution_time` says so | it names the limit and what to change, instead of “the worker stopped unexpectedly” |
+
+### The honest limit
+
+A browser-started worker lives inside one PHP request. If the host has
+`set_time_limit()` disabled **and** a low `max_execution_time`, PHP can kill it
+part-way. The job is marked failed with that reason and the downloaded archive
+is kept, so *Start again* resumes from the re-pack instead of the download. The
+permanent fix is a cron job (**Settings → Automation**) — cron drains the queue
+with no browser involved and no execution limit worth worrying about.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -1112,6 +1188,9 @@ the old process cannot publish after the stop because of point 3.
 | “Maximum package size” reverts to 128 | 8.7.0 shipped a nested `<form>` on the settings page; the browser closed the settings form early. Fixed in 8.7.1 — use **Save storage settings**. |
 | Email says “your website” instead of the domain | The licence has no usable domain and no site has checked in yet. The domain appears as soon as the installation calls `check-update.php`; the licence value is used only when it is a real hostname (not `N/A` or `yourdomain.com`). |
 | Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
+| The card says **Queued** and the bar does not move | Nothing is slow — no worker has claimed the job. 9.5.0 shows why and, after 15 seconds, starts the pull from the admin page itself. If it still sits there, open **System Check → Background pulls**: it names which of the three doors (exec, loopback, cron) is closed. |
+| “This server cannot start a background worker” | `exec()` is disabled and the site cannot reach its own `pull-worker.php` URL (usually a WAF). The pull still runs — inside the page that started it, so keep the tab open. Set up cron to remove that dependency. |
+| A pull started from the console died at the execution limit | The host's `max_execution_time` ended the request. Raise it in cPanel → MultiPHP INI Editor, or let cron run the pull. The downloaded archive is reused, so *Start again* skips the download. |
 | A pull has been running for ages and will not finish | 9.4.0: press **Stop this pull** on the progress card. The project is free to pull again immediately, and the worker exits at its next checkpoint. The card shows the elapsed time, counted from when the job actually started. |
 | *Stop this pull* was pressed, the card says *Pull stopped*, but the server is still busy | The worker is inside one blocking call (a stalled download, a hung filesystem) and has not reached a checkpoint yet. It cannot publish anything now: every database write it makes is conditional on the job still running. Queue the new pull with **Start again**; if the old process is still alive when it reaches a checkpoint it exits by itself. |
 | “A pull is already running for this project” and I want to start over | Press **Stop this pull** on the card above, then **Start again**. Before 9.4.0 there was no way out except waiting 45 minutes for the reaper. |
@@ -1173,7 +1252,7 @@ includes/github.php           GitHub API client and pull pipeline
 includes/migrations.php       one-time schema migrations + deadlock retries
 db.php                        PDO bootstrap, driver check before connecting (no DDL on every request)
 cron.php                      queue + notifications + cleanup + auto-pull + pull jobs
-pull-worker.php               background pull worker (CLI or tokenised HTTP)
+pull-worker.php               background pull worker (CLI, token header, or signed browser ticket)
 includes/pull_jobs.php        background pull queue, claim, stop, reaper, admin e-mail
 check-update.php              OTA endpoint
 download.php                  token download

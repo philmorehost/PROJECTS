@@ -341,6 +341,7 @@ HTML
 <p>Downloading and repacking a monorepo takes longer than a browser request should stay open, so the console no longer waits for it:</p>
 <ol class="lm-guide-steps">
   <li><strong>Queue</strong> — pressing <em>Pull &amp; publish</em> stores the job and answers straight away. A worker starts on the server (a detached CLI process, or a loopback request when <code>exec()</code> is disabled).</li>
+  <li><strong>If no worker can start</strong> — <code>exec()</code> disabled <em>and</em> the loopback request blocked — the panel does not leave the job at <em>Queued</em>. After 15 seconds this page starts the pull itself through a signed one-use link, and the card says so. Keep the tab open in that case; <strong>System Check → Background pulls</strong> tells you which door is closed.</li>
   <li><strong>Close the tab</strong> — the job keeps running. Nothing depends on the page staying open.</li>
   <li><strong>Watch the stage</strong> — the card shows <em>Reading the repository → Downloading → Packaging → Publishing</em> with real progress from the server, not a guess.</li>
   <li><strong>Come back later</strong> — reopening <em>GitHub Pull</em> restores the running job, or shows the finished result if it completed while you were away.</li>

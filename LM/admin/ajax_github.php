@@ -388,10 +388,10 @@ if ($action === 'pull') {
         lm_json(array('status' => 'error', 'message' => 'Could not queue the pull. Run the database repair tool, then try again.'));
     }
 
-    $started = '';
+    $started = array('ok' => false, 'method' => 'none', 'detail' => '');
     if (lm_pull_job_should_dispatch($job, 0)) {
-        $started = lm_pull_job_dispatch($job);
-        if ($started !== '') {
+        $started = lm_pull_job_dispatch($job, $pdo);
+        if (!empty($started['ok'])) {
             lm_pull_job_mark_dispatched($pdo, (int) $job['id']);
         }
     }
@@ -405,9 +405,9 @@ if ($action === 'pull') {
         'status' => 'success',
         'message' => $already
             ? 'A pull is already running for this project. Press Stop this pull on the card above if you want to start over.'
-            : ($started === ''
-                ? 'Pull queued. Waiting for a worker — cron picks it up within 10 minutes if nothing starts it sooner.'
-                : 'Pull started in the background. You can close this page.'),
+            : (!empty($started['ok'])
+                ? 'Pull started in the background. You can close this page.'
+                : 'Pull queued — this server could not start a background worker, so the console is starting it in this page instead.'),
         'background' => true,
         'job_id' => (int) $job['id'],
         'job' => $payload,
@@ -465,21 +465,26 @@ if ($action === 'pull_status') {
         lm_json(array('status' => 'success', 'job' => null));
     }
 
-    // A queued job whose worker never started is picked up on the next poll so
-    // the admin is not left waiting for cron. One attempt per minute: a
-    // successful start must not be repeated on every 2-second poll.
+    // A queued job whose worker never started is retried on the poll, so the
+    // admin is not left waiting for cron. One attempt per minute: a successful
+    // start must not be repeated on every 2-second poll.
     if ($job['status'] === 'queued') {
         lm_pull_job_reap($pdo);
         $fresh = lm_pull_job_get($pdo, (int) $job['id']) ?: $job;
 
         if (lm_pull_job_should_dispatch($fresh)) {
-            if (lm_pull_job_dispatch($fresh) !== '') {
+            $attempt = lm_pull_job_dispatch($fresh, $pdo);
+            if (!empty($attempt['ok'])) {
                 lm_pull_job_mark_dispatched($pdo, (int) $fresh['id']);
                 $fresh['dispatched_at'] = gmdate('Y-m-d H:i:s');
+            } else {
+                // Record the attempt anyway, so the retry is once a minute and
+                // not once per poll. The console carries the fallback.
+                lm_pull_job_mark_dispatched($pdo, (int) $fresh['id']);
             }
         }
 
-        $job = $fresh;
+        $job = lm_pull_job_get($pdo, (int) $fresh['id']) ?: $fresh;
     }
 
     $payload = lm_pull_job_public($job);

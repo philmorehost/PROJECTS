@@ -279,7 +279,29 @@ if (!function_exists('lm_pull_job_reap')) {
                     AND (heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? SECOND))"
             );
             $stmt->execute(array(lm_pull_job_stale_seconds()));
-            return (int) $stmt->rowCount();
+            $reaped = (int) $stmt->rowCount();
+
+            /*
+             * A job nobody ever claimed is the other half of the same problem.
+             * It used to sit at "Queued" for ever: no heartbeat to go stale, so
+             * the reaper never looked at it, and the project stayed locked out.
+             * Ten minutes is well past the point where a worker was going to
+             * appear — the console hands the job to the browser after ~20
+             * seconds if the server could not start one.
+             */
+            $stmt = $pdo->prepare(
+                "UPDATE github_pull_jobs
+                    SET status = 'error',
+                        stage = 'done',
+                        message = 'No worker picked this pull up. Nothing was downloaded and nothing was published. Press Start again — the console now runs the pull from the browser when the server cannot start a worker.',
+                        finished_at = UTC_TIMESTAMP()
+                  WHERE status = 'queued'
+                    AND started_at IS NULL
+                    AND created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 600 SECOND)"
+            );
+            $stmt->execute();
+
+            return $reaped + (int) $stmt->rowCount();
         } catch (PDOException $e) {
             lm_log('pull', 'Reap failed — ' . $e->getMessage());
             return 0;
@@ -621,6 +643,10 @@ if (!function_exists('lm_pull_job_public')) {
             'cancelled' => $status === 'cancelled',
             'can_cancel' => lm_pull_job_is_active_status($status),
             'elapsed' => $elapsed,
+            'queued_seconds' => $status === 'queued' ? $elapsed : 0,
+            'queue_note' => lm_pull_job_queue_note($row),
+            // A queued job nobody can start: the console runs this itself.
+            'worker_url' => $status === 'queued' ? lm_pull_job_worker_url($row) : '',
             'result' => $result,
         );
     }
@@ -863,22 +889,260 @@ if (!function_exists('lm_pull_job_should_dispatch')) {
     }
 }
 
-if (!function_exists('lm_pull_job_dispatch')) {
+if (!function_exists('lm_pull_worker_ticket')) {
     /**
-     * Start a worker without making the current request wait for it.
+     * A short-lived, signed pass for one worker request.
      *
-     * @param array $job Job row (needs id + run_token)
-     * @return string 'exec' | 'http' | '' when nothing could be started
+     * The run token must never appear in a URL that a browser requests or that
+     * a proxy logs, so the console gets this instead: an expiry and a signature
+     * over the job id and that expiry. It is worth one worker start, for one
+     * job, for twenty minutes.
+     *
+     * @param int    $jobId
+     * @param string $token The job's run token (never exposed)
+     * @param int    $ttl
+     * @return string "<expiry>.<signature>"
      */
-    function lm_pull_job_dispatch(array $job)
+    function lm_pull_worker_ticket($jobId, $token, $ttl = 1200)
     {
+        $expiry = time() + max(60, (int) $ttl);
+        $signature = hash_hmac('sha256', 'pull-worker|' . (int) $jobId . '|' . $expiry, (string) $token);
+
+        return $expiry . '.' . substr($signature, 0, 40);
+    }
+}
+
+if (!function_exists('lm_pull_worker_verify_ticket')) {
+    /**
+     * @param int    $jobId
+     * @param string $token
+     * @param string $ticket
+     * @return bool
+     */
+    function lm_pull_worker_verify_ticket($jobId, $token, $ticket)
+    {
+        $ticket = (string) $ticket;
+        if (strpos($ticket, '.') === false) {
+            return false;
+        }
+
+        list($expiry, $signature) = explode('.', $ticket, 2);
+        if (!ctype_digit((string) $expiry) || (int) $expiry < time()) {
+            return false;
+        }
+
+        $expected = substr(hash_hmac('sha256', 'pull-worker|' . (int) $jobId . '|' . (int) $expiry, (string) $token), 0, 40);
+
+        return hash_equals($expected, (string) $signature);
+    }
+}
+
+if (!function_exists('lm_cron_heartbeat_file')) {
+    /**
+     * Where cron records that it ran.
+     *
+     * Without this the panel cannot tell "no pull has needed cron yet" from
+     * "cron has never run", and those two need opposite answers.
+     *
+     * @return string
+     */
+    function lm_cron_heartbeat_file()
+    {
+        return lm_storage_dir() . DIRECTORY_SEPARATOR . 'cron-last.json';
+    }
+}
+
+if (!function_exists('lm_cron_heartbeat_write')) {
+    /**
+     * @param array $report The cron report
+     * @return void
+     */
+    function lm_cron_heartbeat_write(array $report)
+    {
+        $note = array(
+            'at' => gmdate('c'),
+            'ok' => !empty($report['ok']),
+            'duration_ms' => isset($report['duration_ms']) ? (int) $report['duration_ms'] : 0,
+            'pull_jobs' => isset($report['tasks']['pull_jobs']['done']) ? (int) $report['tasks']['pull_jobs']['done'] : 0,
+        );
+
+        lm_ensure_dir(lm_storage_dir(), 0755);
+        @file_put_contents(lm_cron_heartbeat_file(), json_encode($note), LOCK_EX);
+    }
+}
+
+if (!function_exists('lm_cron_heartbeat')) {
+    /**
+     * @return array{at:string,age:int,ok:bool}|null Null when cron has never run
+     */
+    function lm_cron_heartbeat()
+    {
+        $file = lm_cron_heartbeat_file();
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $data = json_decode((string) @file_get_contents($file), true);
+        if (!is_array($data) || empty($data['at'])) {
+            return null;
+        }
+
+        $ts = strtotime((string) $data['at']);
+
+        return array(
+            'at' => (string) $data['at'],
+            'age' => $ts === false ? -1 : max(0, time() - $ts),
+            'ok' => !empty($data['ok']),
+        );
+    }
+}
+
+if (!function_exists('lm_pull_worker_self_test')) {
+    /**
+     * Can this server start a background pull at all?
+     *
+     * The three ways a worker normally starts are all host settings, and when
+     * every one of them is closed the job sits at "Queued" with no explanation.
+     * This answers the question up front instead of after twenty minutes.
+     *
+     * @return array{exec:bool,cli:string,loopback:array,verdict:string}
+     */
+    function lm_pull_worker_self_test()
+    {
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+        $exec = function_exists('exec') && !in_array('exec', $disabled, true);
+
+        $php = (defined('PHP_BINARY') && PHP_BINARY !== '') ? PHP_BINARY : '';
+        $cli = ($php !== '' && @is_file($php) && !preg_match('/(fpm|cgi)/i', basename($php))) ? $php : '';
+
+        // Ask our own URL for the worker with no credentials: a 400 means PHP
+        // answered, which is all this needs to know. It starts nothing.
+        $loopback = array('ok' => false, 'status' => 0, 'detail' => '');
+        $url = lm_site_url('pull-worker.php');
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, array(
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT_MS => 2500,
+                CURLOPT_CONNECTTIMEOUT_MS => 1500,
+                CURLOPT_NOSIGNAL => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_USERAGENT => 'Philmore-LM/' . LM_VERSION . ' self-test',
+            ));
+            $body = (string) @curl_exec($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = (string) curl_error($ch);
+            curl_close($ch);
+
+            $loopback['status'] = $status;
+            if ($status === 400) {
+                $loopback['ok'] = true;
+                $loopback['detail'] = 'The site answered its own request (HTTP 400, as expected without a token).';
+            } elseif ($status > 0) {
+                $loopback['detail'] = 'Answering with HTTP ' . $status . ' instead of 400 — a proxy or security rule is intercepting the request.';
+            } else {
+                $loopback['detail'] = 'No answer' . ($error !== '' ? ': ' . $error : '') . '.';
+            }
+        } else {
+            $loopback['detail'] = 'cURL is not available, so the worker cannot be started over HTTP.';
+        }
+
+        if ($exec && $cli !== '') {
+            $verdict = 'Background pulls can start a worker on their own.';
+        } elseif ($loopback['ok']) {
+            $verdict = 'No CLI process (exec() is disabled or PHP runs under FPM), but the loopback request works, so pulls start there.';
+        } else {
+            $verdict = 'This server cannot start a background worker, so a pull runs from the admin page that started it. '
+                . 'Keep that tab open until it finishes, and set up cron (Settings → Automation) as a safety net.';
+        }
+
+        return array(
+            'exec' => $exec,
+            'cli' => $cli,
+            'loopback' => $loopback,
+            'verdict' => $verdict,
+        );
+    }
+}
+
+if (!function_exists('lm_pull_job_worker_url')) {
+    /**
+     * The URL a browser can call to run this job when nothing else can.
+     *
+     * This is the fallback that always works: no exec(), no loopback request,
+     * no cron. The console fetches this once; pull-worker.php answers
+     * immediately (fastcgi_finish_request) and keeps running.
+     *
+     * @param array $job Job row
+     * @return string Empty when the job is not queued
+     */
+    function lm_pull_job_worker_url(array $job)
+    {
+        if ((string) ($job['status'] ?? '') !== 'queued') {
+            return '';
+        }
+
         $id = (int) ($job['id'] ?? 0);
         $token = (string) ($job['run_token'] ?? '');
         if ($id <= 0 || $token === '') {
             return '';
         }
 
+        return lm_site_url('pull-worker.php?job=' . $id . '&ticket=' . rawurlencode(lm_pull_worker_ticket($id, $token)));
+    }
+}
+
+if (!function_exists('lm_pull_job_queue_seconds')) {
+    /**
+     * How long a job has been waiting for a worker (0 once it has started).
+     *
+     * @param array|null $job
+     * @return int
+     */
+    function lm_pull_job_queue_seconds($job)
+    {
+        if (!is_array($job) || (string) ($job['status'] ?? '') !== 'queued') {
+            return 0;
+        }
+
+        $since = (string) ($job['created_at'] ?? '');
+        $ts = $since !== '' ? strtotime($since . ' UTC') : false;
+
+        return $ts === false ? 0 : max(0, time() - $ts);
+    }
+}
+
+if (!function_exists('lm_pull_job_dispatch')) {
+    /**
+     * Start a worker without making the current request wait for it.
+     *
+     * Returns what was *achieved*, not what was attempted. 9.4.0 returned the
+     * string 'http' the moment cURL was called, so a 403 from a WAF looked
+     * exactly like a started worker: the job stayed queued, the console said
+     * "started in the background", and every retry was a minute apart. A queued
+     * job that nobody was ever going to pick up is what a "20 minute pull" that
+     * never moves actually is.
+     *
+     * @param array     $job Job row (needs id + run_token)
+     * @param PDO|null  $pdo Used to confirm a raw-socket start really claimed it
+     * @return array{ok:bool,method:string,detail:string}
+     */
+    function lm_pull_job_dispatch(array $job, $pdo = null)
+    {
+        $id = (int) ($job['id'] ?? 0);
+        $token = (string) ($job['run_token'] ?? '');
+        $out = array('ok' => false, 'method' => '', 'detail' => '');
+
+        if ($id <= 0 || $token === '') {
+            $out['detail'] = 'The job row has no id or token.';
+            return $out;
+        }
+
         $worker = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'pull-worker.php';
+        $reasons = array();
 
         try {
             // 1. Detached CLI process — fastest and never blocked by a proxy.
@@ -891,43 +1155,70 @@ if (!function_exists('lm_pull_job_dispatch')) {
                 && @is_file($php)
                 && !preg_match('/(fpm|cgi)/i', basename($php));
 
-            if (is_file($worker) && $phpLooksCli && function_exists('exec') && !in_array('exec', $disabled, true)) {
+            if (!is_file($worker)) {
+                $reasons[] = 'pull-worker.php is missing from the installation';
+            } elseif (!$phpLooksCli) {
+                $reasons[] = 'this PHP ran under ' . PHP_SAPI . ', so there is no CLI binary to start';
+            } elseif (!function_exists('exec')) {
+                $reasons[] = 'exec() is disabled';
+            } elseif (in_array('exec', $disabled, true)) {
+                $reasons[] = 'exec() is disabled by disable_functions';
+            } else {
                 $cmd = escapeshellarg($php) . ' ' . escapeshellarg($worker)
                     . ' ' . $id . ' ' . escapeshellarg($token)
                     . ' > /dev/null 2>&1 &';
-                $out = array();
+                $lines = array();
                 $code = 1;
-                @exec($cmd, $out, $code);
+                @exec($cmd, $lines, $code);
                 if ($code === 0) {
-                    return 'exec';
+                    return array('ok' => true, 'method' => 'exec', 'detail' => 'Started a detached PHP CLI worker.');
                 }
+                $reasons[] = 'exec() returned exit code ' . $code;
             }
 
             // 2. Fire-and-forget HTTP request to the same worker. The worker
             //    calls ignore_user_abort(true), so dropping the connection does
             //    not stop it. The token travels in a header, never in the URL.
+            //    The answer is checked: "no error from cURL" is not the same as
+            //    "the worker accepted the job".
             $url = lm_site_url('pull-worker.php?job=' . $id);
+            $body = '';
+            $status = 0;
 
             if (function_exists('curl_init')) {
                 $ch = curl_init($url);
                 curl_setopt_array($ch, array(
                     CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT_MS => 800,
-                    CURLOPT_CONNECTTIMEOUT_MS => 600,
+                    CURLOPT_TIMEOUT_MS => 3000,
+                    CURLOPT_CONNECTTIMEOUT_MS => 1500,
                     CURLOPT_NOSIGNAL => true,
                     CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 3,
                     CURLOPT_SSL_VERIFYPEER => true,
                     CURLOPT_USERAGENT => 'Philmore-LM/' . LM_VERSION . ' pull-worker',
                     CURLOPT_HTTPHEADER => array('X-LM-Pull-Token: ' . $token),
                 ));
-                @curl_exec($ch);
+                $body = (string) @curl_exec($ch);
+                $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string) curl_error($ch);
                 curl_close($ch);
-                return 'http';
+
+                if ($status >= 200 && $status < 300 && strpos($body, '"accepted":true') !== false) {
+                    return array('ok' => true, 'method' => 'http', 'detail' => 'The server started a worker through its own URL.');
+                }
+
+                $reasons[] = $status > 0
+                    ? 'a loopback request was answered with HTTP ' . $status
+                    : ('a loopback request failed' . ($error !== '' ? ' (' . $error . ')' : ''));
+            } else {
+                $reasons[] = 'cURL is not available';
             }
 
-            // 3. Last resort: a raw socket. No custom headers here, so the
-            //    token has to go in the query string.
-            $parts = parse_url($url . '&token=' . rawurlencode($token));
+            // 3. Last resort: a raw socket. No custom headers here, so a
+            //    worker ticket has to go in the query string. A socket that
+            //    opens proves nothing, so the job is re-read afterwards: if it
+            //    moved to running, this worked.
+            $parts = parse_url($url . '&ticket=' . rawurlencode(lm_pull_worker_ticket($id, $token)));
             if (!empty($parts['host'])) {
                 $scheme = isset($parts['scheme']) ? $parts['scheme'] : 'http';
                 $transports = function_exists('stream_get_transports') ? stream_get_transports() : array('tcp');
@@ -937,21 +1228,64 @@ if (!function_exists('lm_pull_job_dispatch')) {
                     $host = $parts['host'] . (($scheme === 'https' && $port !== 443) || ($scheme === 'http' && $port !== 80) ? ':' . $port : '');
                     $path = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
 
-                    $fp = @fsockopen(($scheme === 'https' ? 'ssl://' : '') . $parts['host'], $port, $errno, $errstr, 1);
+                    $fp = @fsockopen(($scheme === 'https' ? 'ssl://' : '') . $parts['host'], $port, $errno, $errstr, 2);
                     if ($fp) {
                         @fwrite($fp, "GET " . $path . " HTTP/1.1\r\nHost: " . $host . "\r\nConnection: close\r\n\r\n");
                         @fclose($fp);
-                        return 'http';
+                        // Give the worker a moment to claim the row.
+                        usleep(600000);
+                        $check = ($pdo instanceof PDO) ? lm_pull_job_get($pdo, $id) : null;
+                        if (is_array($check) && (string) $check['status'] === 'running') {
+                            return array('ok' => true, 'method' => 'socket', 'detail' => 'The server started a worker through a raw HTTP request.');
+                        }
+                        $out['detail'] = 'A raw HTTP request was sent but no worker claimed the job.';
+                    } else {
+                        $reasons[] = 'a raw connection to ' . $parts['host'] . ':' . $port . ' failed';
                     }
                 }
             }
         } catch (Exception $e) {
-            lm_log('pull', 'Dispatch failed — ' . $e->getMessage());
+            $reasons[] = $e->getMessage();
         } catch (Throwable $e) {
-            lm_log('pull', 'Dispatch failed — ' . $e->getMessage());
+            $reasons[] = $e->getMessage();
         }
 
-        return '';
+        $out['method'] = 'none';
+        $out['detail'] = $out['detail'] !== ''
+            ? $out['detail']
+            : 'No worker could be started: ' . implode('; ', array_unique($reasons)) . '.';
+
+        lm_log('pull', 'Dispatch failed for job ' . $id . ' — ' . $out['detail']);
+
+        return $out;
+    }
+}
+
+if (!function_exists('lm_pull_job_queue_note')) {
+    /**
+     * What to tell the operator about a job that is still queued.
+     *
+     * Empty once the job is running. The point is that "Queued" on its own is
+     * indistinguishable from "the worker died" — the operator needs to know
+     * whether to wait, or whether the pull needs a nudge.
+     *
+     * @param array|null $job
+     * @return string
+     */
+    function lm_pull_job_queue_note($job)
+    {
+        if (!is_array($job) || (string) ($job['status'] ?? '') !== 'queued') {
+            return '';
+        }
+
+        $queued = lm_pull_job_queue_seconds($job);
+        if ($queued < 20) {
+            return 'Waiting for a worker…';
+        }
+
+        return 'No worker has picked this up in ' . (int) floor($queued / 60) . ' min '
+            . ($queued % 60) . ' s. This server cannot start a background worker (exec() disabled, '
+            . 'loopback blocked, or cron not running), so the console is starting it in this page instead.';
     }
 }
 

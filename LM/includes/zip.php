@@ -46,6 +46,23 @@ function lm_zip_entries($file)
         return false;
     }
 
+    /*
+     * One pull parses the same archive three times — once to check the cache,
+     * once to rewrite, once in lm_zip_copy. The parse reads the whole central
+     * directory, so remember it per path+size+mtime. A handful of entries is
+     * held in memory either way; a pull replaces the file, which changes the
+     * key.
+     */
+    static $cache = array();
+    $key = $file . '|' . $size . '|' . (int) @filemtime($file);
+    if (isset($cache[$key])) {
+        return $cache[$key];
+    }
+
+    if (count($cache) > 8) {
+        $cache = array();
+    }
+
     $fp = @fopen($file, 'rb');
     if (!$fp) {
         return false;
@@ -115,6 +132,8 @@ function lm_zip_entries($file)
 
         $p += 46 + $h['namelen'] + $h['extralen'] + $h['commentlen'];
     }
+
+    $cache[$key] = $entries;
 
     return $entries;
 }
@@ -332,8 +351,12 @@ function lm_zip_stream_copy($in, $out, $bytes)
 {
     $copied = 0;
     $remaining = (int) $bytes;
+
+    // 4 MB per read: a 150 MB package is then ~40 reads and writes instead of
+    // 150, and each write lands as a full filesystem block.
+    $chunkSize = 4194304;
     while ($remaining > 0 && !feof($in)) {
-        $chunk = fread($in, min(1048576, $remaining));
+        $chunk = fread($in, min($chunkSize, $remaining));
         if ($chunk === false || $chunk === '') {
             break;
         }
@@ -470,7 +493,9 @@ function lm_zip_copy($source, $destination, array $options = array())
     foreach ($entries as $entry) {
         if ($cancel !== null && (++$seen % 200) === 0) {
             try {
-                call_user_func($cancel);
+                // The counts let a caller show "1,400 of 2,482 files" instead of
+                // a progress bar that has not moved for ten minutes.
+                call_user_func($cancel, $count, count($entries));
             } catch (Throwable $e) {
                 fclose($in);
                 fclose($out);

@@ -1275,10 +1275,53 @@ lm_admin_page_start('GitHub Pull', 'github');
     let POLL = { timer: null, ticker: null };
     let LAST_JOB = null;
     let STOPPING = false;
+    // Job ids this page has already tried to run itself. A browser-started
+    // worker must not be retried on every 2-second poll.
+    const WORKER_TRIED = new Set();
 
     function stopPolling() {
         if (POLL.timer) { clearTimeout(POLL.timer); POLL.timer = null; }
         if (POLL.ticker) { clearInterval(POLL.ticker); POLL.ticker = null; }
+    }
+
+    /**
+     * Run the pull from this page when the server could not start a worker.
+     *
+     * That is the case behind a job that sits at "Queued" for twenty minutes:
+     * exec() is disabled on the account, a WAF answers the loopback request
+     * with 403, and cron was never set up — so nothing ever picks the job up.
+     *
+     * pull-worker.php answers immediately (it calls fastcgi_finish_request and
+     * ignore_user_abort), so this costs the page one request; the work carries
+     * on server-side and the normal 2-second poll starts showing the stages.
+     * The URL carries a signed, 20-minute ticket, never the run token.
+     */
+    function startWorkerHere(job) {
+        if (!job || !job.worker_url || WORKER_TRIED.has(job.id)) return;
+
+        WORKER_TRIED.add(job.id);
+
+        toast('Starting the pull from this page — this server cannot start a background worker.', 'ok');
+
+        // The worker URL is normally on this origin. If the panel is reached
+        // through a different host than Site URL records, asking for CORS
+        // headers would fail a request that worked, so stay opaque instead.
+        let sameOrigin = true;
+        try { sameOrigin = new URL(job.worker_url, window.location.href).origin === window.location.origin; } catch (e) {}
+
+        // keepalive: the request must survive if the admin navigates away.
+        fetch(job.worker_url, {
+            method: 'GET',
+            mode: sameOrigin ? 'cors' : 'no-cors',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            keepalive: true
+        }).catch(() => {
+            // Only reachable when the request never left the browser. The pull
+            // is not running, and the poll will show it still queued — say so
+            // once rather than leaving a bar that never moves.
+            toast('This page could not reach the pull worker. Open System Check → Background pulls, or let cron run the job.', 'err');
+        });
     }
 
     function jobElapsed(job) {
@@ -1304,15 +1347,23 @@ lm_admin_page_start('GitHub Pull', 'github');
         const summary = job.message_text || job.message || '';
 
         if (running) {
+            // A queued job with a worker URL means the server could not start
+            // one: hand it to the browser before drawing the card.
+            if (job.status === 'queued' && job.worker_url && (job.queued_seconds || 0) >= 15) {
+                startWorkerHere(job);
+            }
+
             const elapsed = jobElapsed(job);
             box.innerHTML = '<div class="card" style="margin:0 0 20px;">'
                 + '<div class="card-head"><div><h2>Pulling ' + escapeHtml(currentProject ? currentProject.name : 'project') + '</h2>'
-                + '<p id="jobStageLabel">' + escapeHtml(job.stage_label || 'Working…')
+                + '<p id="jobStageLabel">' + escapeHtml(job.status === 'queued' ? 'Queued' : (job.stage_label || 'Working…'))
                 + '<span id="jobElapsed" class="tiny muted"> · ' + escapeHtml(elapsed) + '</span></p></div>'
                 + '<span class="badge badge-info">Running in the background</span></div>'
                 + '<div class="card-body">'
                 + '<div class="progress-track"><div class="progress-fill" id="jobFill" style="width:' + pct + '%;"></div></div>'
-                + '<div class="tiny muted" style="margin-top:10px;" id="jobHint">This keeps running if you close the page — you will get an e-mail when it finishes.</div>'
+                + '<div class="tiny muted" style="margin-top:10px;" id="jobHint">'
+                + escapeHtml(job.queue_note || 'This keeps running if you close the page — you will get an e-mail when it finishes.')
+                + '</div>'
                 + '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
                 + '<button class="btn btn-danger btn-sm" type="button" id="jobStopBtn"' + (STOPPING ? ' disabled' : '') + '>'
                 + (STOPPING ? 'Stopping…' : 'Stop this pull') + '</button>'

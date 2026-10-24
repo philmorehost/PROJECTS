@@ -227,6 +227,17 @@ if (!class_exists('JobStmt')) {
                         continue;
                     }
                 }
+                if (strpos($where, 'created_at <') !== false) {
+                    preg_match('/interval (\d+) second/', $where, $iv);
+                    $seconds = isset($iv[1]) ? (int) $iv[1] : 600;
+                    $created = $row['created_at'] ?? null;
+                    if ($created === null || strtotime($created . ' UTC') >= time() - $seconds) {
+                        continue;
+                    }
+                }
+                if (strpos($where, 'started_at is null') !== false && !empty($row['started_at'])) {
+                    continue;
+                }
                 if (strpos($where, 'heartbeat_at <') !== false) {
                     preg_match('/interval (\d+) second/', $where, $iv);
                     $seconds = isset($iv[1]) ? (int) $iv[1] : 2700;

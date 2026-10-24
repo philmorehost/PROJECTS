@@ -2081,8 +2081,17 @@ if (!function_exists('lm_github_pull')) {
             'root' => $packageRoot,
             'manifest' => $manifest,
             // Re-packing a big archive is the second-longest step: let a Stop
-            // press land in the middle of it instead of after it.
-            'cancel' => isset($options['cancel']) ? $options['cancel'] : null,
+            // press land in the middle of it instead of after it, and turn the
+            // same ticks into real progress. "Packaging 1,400 of 2,482 files"
+            // is the difference between a stuck bar and a slow one.
+            'cancel' => function ($done = 0, $total = 0) use ($options) {
+                lm_github_pull_cancelled($options);
+                if ($total > 0) {
+                    $pct = 55 + (int) floor(23 * min(1, $done / max(1, $total)));
+                    lm_github_pull_stage($options, 'packaging', $pct,
+                        'Packaging ' . (int) $done . ' of ' . (int) $total . ' files…');
+                }
+            },
         ));
 
         if (!$rewrite['ok']) {
