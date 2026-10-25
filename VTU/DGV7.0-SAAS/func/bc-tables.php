@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.23-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.25-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -261,11 +261,10 @@ if (!in_array('total_order_amount', $vendor_existing)) {
 if (!in_array('access_hash', $vendor_existing)) {
     mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN access_hash VARCHAR(100) UNIQUE DEFAULT NULL AFTER email");
 }
-// DGV6.90 Migration: Populate missing access_hash for existing vendors.
-        // Mint a random 64-hex token per vendor rather than MD5(CONCAT(id, email, NOW())): the
-        // access_hash is a bearer credential for the vendor order portal (it can start a vendor
-        // session), and the MD5 form is guessable from a known id/email plus an approximate timestamp.
-        $q_access_hash_missing = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE access_hash IS NULL OR access_hash = ''");
+// DGV6.90 Migration: Mint or rotate missing/legacy weak portal hashes.
+        // Old 32-character hashes are rejected by the portal URL validator. Replace them with
+        // random 64-hex bearer tokens so existing vendors get secure, usable portal links too.
+        $q_access_hash_missing = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE access_hash IS NULL OR access_hash = '' OR access_hash NOT REGEXP '^[a-fA-F0-9]{48,100}$'");
         if ($q_access_hash_missing) {
             while ($r_access_hash_missing = mysqli_fetch_assoc($q_access_hash_missing)) {
                 $new_access_hash = bin2hex(random_bytes(32));

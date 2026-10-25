@@ -94,14 +94,14 @@ if ($connection_server) {
                 $get_logged_admin_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
                 if (mysqli_num_rows($get_logged_admin_query) == 1) {
                     $get_logged_admin_details = mysqli_fetch_array($get_logged_admin_query);
-                    // DGV6.90: Ensure access_hash is never empty for the portal link
-                    if (empty($get_logged_admin_details['access_hash'])) {
-                        // A random 64-hex token, NOT md5(id.email.time()): the portal link is a bearer
-                        // credential that can start a vendor session, and the MD5 form is guessable
-                        // from a known id/email plus an approximate timestamp.
+                    // Repair missing and legacy short portal hashes. Existing 32-character MD5
+                    // values are intentionally rotated: portal links are bearer credentials and
+                    // only high-entropy random tokens are safe to expose.
+                    if (!bc_is_valid_vendor_access_hash((string)($get_logged_admin_details['access_hash'] ?? ''))) {
                         $new_hash = bin2hex(random_bytes(32));
-                        mysqli_query($connection_server, "UPDATE sas_vendors SET access_hash='$new_hash' WHERE id='".$get_logged_admin_details['id']."'");
-                        $get_logged_admin_details['access_hash'] = $new_hash;
+                        $vendor_id_for_hash = (int)$get_logged_admin_details['id'];
+                        $hash_saved = mysqli_query($connection_server, "UPDATE sas_vendors SET access_hash='$new_hash' WHERE id='$vendor_id_for_hash'");
+                        $get_logged_admin_details['access_hash'] = $hash_saved ? $new_hash : '';
                     }
                     if (($get_logged_admin_details["status"] == 1 && $get_logged_admin_details["is_blocked"] == 0) || (isset($_SESSION["spadmin_vendor_auth"]))) {
                         // Check for vendor expiry

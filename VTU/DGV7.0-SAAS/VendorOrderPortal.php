@@ -21,7 +21,7 @@ if (empty($hash)) {
 // This link is a bearer credential that can start a vendor session, so only a full-length random
 // token is accepted. The older MD5(id.email.time()) values were guessable and a short token could
 // be brute-forced; bc-admin-config.php / bc-tables.php now mint 64-hex (random_bytes) tokens.
-if (!preg_match('/^[a-f0-9]{48,100}$/i', $hash)) {
+if (!bc_is_valid_vendor_access_hash($hash)) {
     die("Access denied. Invalid or missing secure key.");
 }
 

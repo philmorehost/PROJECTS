@@ -287,6 +287,10 @@ function bc_normalize_vendor_host($value) {
     return preg_replace('/^www\./i', '', $host);
 }
 
+function bc_is_valid_vendor_access_hash($access_hash) {
+    return is_string($access_hash) && preg_match('/^[a-f0-9]{48,100}$/i', $access_hash) === 1;
+}
+
 function bc_temporary_vendor_domain() {
     if (!function_exists('getSuperAdminOption')) return '';
     $domain = bc_clean_vendor_domain(getSuperAdminOption('temporary_vendor_domain', ''));
@@ -303,7 +307,7 @@ function bc_is_temporary_vendor_host($host = null) {
 
 function bc_temporary_vendor_portal_url($access_hash) {
     $domain = bc_temporary_vendor_domain();
-    if ($domain === '' || !preg_match('/^[a-f0-9]{48,100}$/i', (string)$access_hash)) return '';
+    if ($domain === '' || !bc_is_valid_vendor_access_hash($access_hash)) return '';
     return 'https://' . $domain . '/VendorOrderPortal.php?hash=' . rawurlencode($access_hash);
 }
 
@@ -6960,11 +6964,14 @@ function setVendorOption($vid, $name, $value) {
 function getSuperAdminOption($name, $default = '') {
     global $connection_server;
     static $admin_options_cache = [];
+    // Temporary portal host changes in bc-spadmin must reach existing vendor sessions
+    // immediately, so do not reuse this value from request or session cache.
+    $always_fresh = ($name === 'temporary_vendor_domain');
 
-    if (isset($admin_options_cache[$name])) return $admin_options_cache[$name];
+    if (!$always_fresh && isset($admin_options_cache[$name])) return $admin_options_cache[$name];
 
     // Branch DG6.7 Optimization: Session Caching for platform-wide options
-    if (isset($_SESSION['super_admin_options_cache'][$name])) {
+    if (!$always_fresh && isset($_SESSION['super_admin_options_cache'][$name])) {
         $admin_options_cache[$name] = $_SESSION['super_admin_options_cache'][$name];
         return $admin_options_cache[$name];
     }
@@ -7002,8 +7009,10 @@ function getSuperAdminOption($name, $default = '') {
 
     $q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='".mysqli_real_escape_string($connection_server, $name)."' LIMIT 1");
     if ($q && $r = mysqli_fetch_assoc($q)) {
-        $admin_options_cache[$name] = $r['option_value'];
-        if (isset($_SESSION)) $_SESSION['super_admin_options_cache'][$name] = $r['option_value'];
+        if (!$always_fresh) {
+            $admin_options_cache[$name] = $r['option_value'];
+            if (isset($_SESSION)) $_SESSION['super_admin_options_cache'][$name] = $r['option_value'];
+        }
         return $r['option_value'];
     }
     return $default;
