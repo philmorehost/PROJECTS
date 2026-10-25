@@ -1,7 +1,8 @@
 <?php session_start();
 include("func/bc-connect.php");
+include_once("func/bc-tables.php");
 include_once("func/bc-func.php");
-include_once("func/whmcs-func.php");
+include_once("func/whmp-func.php");
 
 $temporary_domain = bc_temporary_vendor_domain();
 if ($temporary_domain === '') {
@@ -45,7 +46,7 @@ if (isset($_POST['tmp_login'])) {
     $reg_time = strtotime($vendor['reg_date']);
     $current_time = time();
     if (($current_time - $reg_time) > ($expiry_days * 86400)) {
-        $renewal_response = "<div class='alert alert-danger fw-bold'>Temporary Access has expired.</div>";
+        $renewal_response = ['status' => 'error', 'message' => 'Temporary access has expired.'];
     } else {
         session_regenerate_id(true);
         $_SESSION['tmp_vendor_override'] = $vendor['id'];
@@ -58,50 +59,74 @@ if (isset($_POST['tmp_login'])) {
 
 if (isset($_POST['domain_action'])) {
     $action = $_POST['domain_action'];
-    $v_id = $vendor['id'];
+    $v_id = (int)$vendor['id'];
     $current_balance = (float)$vendor['balance'];
-    
-    if ($action == 'register_new') {
-        $domain_name = mysqli_real_escape_string($connection_server, $_POST['target_domain']);
-        $extension = mysqli_real_escape_string($connection_server, $_POST['domain_extension']);
-        $full_domain = strtolower($domain_name . $extension);
-        if (bc_is_temporary_vendor_host($full_domain)) {
+    $csrf_valid = isset($_POST['domain_csrf'], $_SESSION['domain_csrf']) && hash_equals($_SESSION['domain_csrf'], (string)$_POST['domain_csrf']);
+
+    if (!$csrf_valid) {
+        $renewal_response = ['status' => 'error', 'message' => 'Your form session expired. Reload the portal and try again.'];
+    } elseif ($action === 'submit_registration' || $action === 'submit_change') {
+        $requested_raw = trim((string)($_POST['requested_domain'] ?? ''));
+        $requested_domain = bc_normalize_vendor_host($requested_raw);
+        $current_domain = bc_normalize_vendor_host($vendor['app_base_url'] ?: $vendor['website_url']);
+        $request_type = $action === 'submit_registration' ? 'registration' : 'change';
+        $quoted_price = 0.0;
+        $vendor_note = trim(substr(strip_tags((string)($_POST['vendor_note'] ?? '')), 0, 500));
+
+        if (!bc_is_valid_domain_name($requested_domain)) {
+            $renewal_response = ['status' => 'error', 'message' => 'Enter a valid domain name, such as example.com or example.com.ng.'];
+        } elseif (bc_is_temporary_vendor_host($requested_domain)) {
             $renewal_response = ['status' => 'error', 'message' => 'This domain is reserved for temporary vendor access. Please choose a different website domain.'];
+        } elseif ($request_type === 'change' && hash_equals($current_domain, $requested_domain)) {
+            $renewal_response = ['status' => 'error', 'message' => 'The requested domain is already assigned to your platform.'];
         } else {
-            $q_ext = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$extension' LIMIT 1");
-            $price_row = mysqli_fetch_assoc($q_ext);
-            $domain_price = ($price_row['promo_price'] > 0) ? (float)$price_row['promo_price'] : (float)$price_row['price'];
-
-            if ($current_balance >= $domain_price) {
-                $whmcs_client_id = getSuperAdminOption('whmcs_default_client_id', '1');
-                $whmcs_res = whmcsCreateOrder($whmcs_client_id, $full_domain);
-
-                if ($whmcs_res['result'] == 'success') {
-                    $expiry_date = date('Y-m-d', strtotime("+1 year"));
-                    mysqli_query($connection_server, "UPDATE sas_vendors SET balance = balance - $domain_price, app_base_url = '$full_domain', website_url = '$full_domain', domain_expiry_date = '$expiry_date' WHERE id = '$v_id'");
-                    $renewal_response = ['status' => 'success', 'message' => "Domain $full_domain successfully registered and assigned!"];
-                    // Refresh
-                    $v_q = mysqli_query($connection_server, "SELECT v.*, bp.name as package_name, bp.price as package_price, bp.duration_days, bp.download_url as package_dl FROM sas_vendors v LEFT JOIN sas_billing_packages bp ON v.current_billing_id = bp.id WHERE v.id='$v_id'");
-                    $vendor = mysqli_fetch_assoc($v_q);
-                    $platform_url = !empty($vendor['app_base_url']) ? $vendor['app_base_url'] : $vendor['website_url'];
-                } else {
-                    $renewal_response = ['status' => 'error', 'message' => "WHMCS API Error: " . ($whmcs_res['message'] ?? 'Registration failed.')];
-                }
+            $escaped_domain = mysqli_real_escape_string($connection_server, $requested_domain);
+            $pending_q = mysqli_query($connection_server, "SELECT id FROM sas_vendor_domain_requests WHERE vendor_id='$v_id' AND status IN ('pending','processing') LIMIT 1");
+            if ($pending_q && mysqli_num_rows($pending_q) > 0) {
+                $renewal_response = ['status' => 'pending', 'message' => 'You already have a domain request awaiting super-admin review. You can submit another request after it is reviewed.'];
             } else {
-                $renewal_response = ['status' => 'error', 'message' => "Insufficient balance to register domain (₦".number_format($domain_price, 2).")."];
+                $available = ['status' => 'available'];
+                if ($request_type === 'registration') {
+                    if (!whmp_is_configured()) {
+                        $available = ['status' => 'error', 'message' => 'WHMP is not configured. Please contact the administrator.'];
+                    } else {
+                        $available = whmp_check_domain_availability($requested_domain);
+                    }
+                }
+                if (($available['status'] ?? '') !== 'available') {
+                    $message = ($available['status'] ?? '') === 'registered' ? 'That domain is not available. Search for another domain.' : ($available['message'] ?? 'WHMP could not verify availability. Please try again later.');
+                    $renewal_response = ['status' => 'error', 'message' => $message];
+                } else {
+                    if ($request_type === 'registration') {
+                        $extension = '';
+                        $ext_q = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY LENGTH(extension) DESC");
+                        while ($ext_row = $ext_q ? mysqli_fetch_assoc($ext_q) : null) {
+                            if ($ext_row && substr($requested_domain, -strlen($ext_row['extension'])) === strtolower($ext_row['extension'])) { $extension = strtolower($ext_row['extension']); break; }
+                        }
+                        $usd_price = $extension !== '' ? whmp_get_domain_price($extension) : null;
+                        $rate = whmp_get_usd_to_ngn_rate();
+                        if ($extension === '' || $usd_price === null || $usd_price <= 0 || $rate <= 0) {
+                            $renewal_response = ['status' => 'error', 'message' => 'WHMP pricing is unavailable for this extension. Please contact the administrator; no request or charge was made.'];
+                        } else {
+                            $quoted_price = whmp_convert_usd_to_ngn($usd_price, $rate);
+                            if ($quoted_price <= 0) {
+                                $renewal_response = ['status' => 'error', 'message' => 'WHMP returned a quote that cannot be converted to a payable Naira amount. No request or charge was made.'];
+                            } elseif ($current_balance < $quoted_price) {
+                                $renewal_response = ['status' => 'error', 'message' => 'Insufficient wallet balance for the quoted WHMP registration fee of ₦' . number_format($quoted_price, 2) . '. No amount is charged until approval.'];
+                            }
+                        }
+                    }
+                    if ($renewal_response === null) {
+                        $escaped_current = mysqli_real_escape_string($connection_server, $current_domain);
+                        $escaped_note = mysqli_real_escape_string($connection_server, $vendor_note);
+                        $type_sql = mysqli_real_escape_string($connection_server, $request_type);
+                        $insert = mysqli_query($connection_server, "INSERT INTO sas_vendor_domain_requests (vendor_id, request_type, current_domain, requested_domain, quoted_price, status, vendor_note) VALUES ('$v_id', '$type_sql', '$escaped_current', '$escaped_domain', '$quoted_price', 'pending', '$escaped_note')");
+                        $renewal_response = $insert
+                            ? ['status' => 'pending', 'message' => $request_type === 'registration' ? 'Your WHMP domain registration request has been submitted for super-admin approval. The displayed fee is only charged if the request is approved.' : 'Your domain change request has been submitted for super-admin approval. Your current platform domain remains active until approval.']
+                            : ['status' => 'error', 'message' => 'Could not save your domain request. Please try again or contact support.'];
+                    }
+                }
             }
-        }
-    } elseif ($action == 'update_existing') {
-        $domain = mysqli_real_escape_string($connection_server, trim(strtolower($_POST['existing_domain'])));
-        if (bc_is_temporary_vendor_host($domain)) {
-            $renewal_response = ['status' => 'error', 'message' => 'This domain is reserved for temporary vendor access. Please choose a different website domain.'];
-        } else {
-            mysqli_query($connection_server, "UPDATE sas_vendors SET app_base_url = '$domain', website_url = '$domain' WHERE id = '$v_id'");
-            $renewal_response = ['status' => 'success', 'message' => "Platform URL updated to $domain!"];
-            // Refresh
-            $v_q = mysqli_query($connection_server, "SELECT v.*, bp.name as package_name, bp.price as package_price, bp.duration_days, bp.download_url as package_dl FROM sas_vendors v LEFT JOIN sas_billing_packages bp ON v.current_billing_id = bp.id WHERE v.id='$v_id'");
-            $vendor = mysqli_fetch_assoc($v_q);
-            $platform_url = !empty($vendor['app_base_url']) ? $vendor['app_base_url'] : $vendor['website_url'];
         }
     }
 }
@@ -128,9 +153,14 @@ if (isset($_POST['renew_action'])) {
         }
     } elseif ($action == 'renew_domain') {
         // Find domain price
-        $ext = "." . pathinfo($vendor['app_base_url'], PATHINFO_EXTENSION);
-        $q_ext = mysqli_query($connection_server, "SELECT price FROM sas_domain_extensions WHERE extension='$ext' LIMIT 1");
-        $domain_price = ($r_ext = mysqli_fetch_assoc($q_ext)) ? (float)$r_ext['price'] : 0;
+        $renew_domain = strtolower(bc_normalize_vendor_host($vendor['app_base_url'] ?: $vendor['website_url']));
+        $ext = '';
+        $ext_q = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY LENGTH(extension) DESC");
+        while ($ext_row = $ext_q ? mysqli_fetch_assoc($ext_q) : null) {
+            if ($ext_row && substr($renew_domain, -strlen($ext_row['extension'])) === strtolower($ext_row['extension'])) { $ext = strtolower($ext_row['extension']); break; }
+        }
+        $q_ext = mysqli_query($connection_server, "SELECT price FROM sas_domain_extensions WHERE extension='" . mysqli_real_escape_string($connection_server, $ext) . "' LIMIT 1");
+        $domain_price = ($r_ext = ($q_ext ? mysqli_fetch_assoc($q_ext) : null)) ? (float)$r_ext['price'] : 0;
         
         if ($domain_price <= 0) $domain_price = 10000; // Fallback default
 
@@ -155,6 +185,10 @@ if (!empty($platform_url) && !preg_match("~^(?:f|ht)tps?://~i", $platform_url)) 
 $ext_res = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY extension ASC");
 $domain_extensions = [];
 while($ext = mysqli_fetch_assoc($ext_res)) $domain_extensions[] = $ext['extension'];
+if (empty($_SESSION['domain_csrf'])) $_SESSION['domain_csrf'] = bin2hex(random_bytes(32));
+$domain_csrf = $_SESSION['domain_csrf'];
+$domain_request_q = mysqli_query($connection_server, "SELECT * FROM sas_vendor_domain_requests WHERE vendor_id='" . (int)$vendor['id'] . "' ORDER BY id DESC LIMIT 1");
+$latest_domain_request = $domain_request_q ? mysqli_fetch_assoc($domain_request_q) : null;
 
 // Fetch domain settings for instructions
 $nameservers = ''; $ip_address = '';
@@ -402,6 +436,17 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
             color: var(--primary-light);
         }
 
+        .domain-search-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(110px, 150px) auto; width: 100%; }
+        .domain-search-row .form-control, .domain-search-row .form-select { min-width: 0; }
+        @media (max-width: 575.98px) {
+            .domain-search-row { grid-template-columns: auto minmax(0, 1fr); }
+            .domain-search-row .input-group-text { grid-column: 1; grid-row: 1; padding-inline: .65rem; border-radius: .5rem 0 0 0; }
+            .domain-search-row #target_domain { grid-column: 2; grid-row: 1; min-height: 54px; }
+            .domain-search-row #domain_extension { grid-column: 1; grid-row: 2; width: 100%; min-height: 52px; border-radius: 0 0 0 .5rem; }
+            .domain-search-row #search-btn { grid-column: 2; grid-row: 2; width: 100%; border-radius: 0 0 .5rem 0; padding-inline: .8rem !important; }
+            .modal-body { padding: 1rem !important; }
+        }
+
         /* Modal Overrides */
         .modal-content {
             background: #1e293b;
@@ -431,10 +476,11 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                 </div>
 
                 <?php if ($renewal_response): ?>
-                <div class="alert glass-card border-0 p-4 mb-4 animate__animated animate__zoomIn <?php echo $renewal_response['status'] == 'success' ? 'text-success' : 'text-danger'; ?>">
+                <?php $response_status = $renewal_response['status'] ?? 'error'; $response_class = $response_status === 'success' ? 'text-success' : ($response_status === 'pending' ? 'text-warning' : 'text-danger'); $response_icon = $response_status === 'success' ? 'bi-check-circle' : ($response_status === 'pending' ? 'bi-hourglass-split' : 'bi-x-circle'); ?>
+                <div class="alert glass-card border-0 p-4 mb-4 animate__animated animate__zoomIn <?php echo $response_class; ?>">
                     <div class="d-flex align-items-center">
-                        <i class="bi <?php echo $renewal_response['status'] == 'success' ? 'bi-check-circle' : 'bi-x-circle'; ?> fs-3 me-3"></i>
-                        <div class="fw-medium"><?php echo $renewal_response['message']; ?></div>
+                        <i class="bi <?php echo $response_icon; ?> fs-3 me-3"></i>
+                        <div class="fw-medium"><?php echo htmlspecialchars($renewal_response['message'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -661,6 +707,9 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
 
+                    <div class="alert alert-info py-2 small mb-3">Current platform domain: <strong><?php echo htmlspecialchars(bc_normalize_vendor_host($vendor['app_base_url'] ?: $vendor['website_url']), ENT_QUOTES, 'UTF-8'); ?></strong>
+                        <?php if ($latest_domain_request): ?> <span class="ms-2">Latest request: #<?php echo (int)$latest_domain_request['id']; ?> — <?php echo htmlspecialchars(ucfirst($latest_domain_request['status']), ENT_QUOTES, 'UTF-8'); ?> (<?php echo htmlspecialchars($latest_domain_request['requested_domain'], ENT_QUOTES, 'UTF-8'); ?>)<?php if ($latest_domain_request['request_type'] === 'registration'): ?> — quoted fee ₦<?php echo number_format((float)$latest_domain_request['quoted_price'], 2); ?>, charged only on approval<?php endif; ?><?php if (!empty($latest_domain_request['decision_note'])): ?> — <?php echo htmlspecialchars($latest_domain_request['decision_note'], ENT_QUOTES, 'UTF-8'); ?><?php endif; ?></span><?php endif; ?>
+                    </div>
                     <ul class="nav nav-pills nav-pill-custom mb-4" id="domainTab" role="tablist">
                         <li class="nav-item flex-fill" role="presentation">
                             <button class="nav-link active w-100 text-white border-0" id="register-tab" data-bs-toggle="pill" data-bs-target="#register-view" type="button" role="tab">Register New Domain</button>
@@ -673,14 +722,16 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                     <div class="tab-content" id="domainTabContent">
                         <!-- Register New Domain -->
                         <div class="tab-pane fade show active" id="register-view" role="tabpanel">
-                            <p class="text-muted small mb-4">Search for a new domain to register for your platform. Registration fees will be deducted from your wallet balance.</p>
-                            
-                            <div class="input-group input-group-lg mb-3">
+                            <p class="text-muted small mb-4">Search WHMP for a new domain. Registration is submitted for super-admin approval; the quoted fee is charged only if approved.</p>
+                            <?php if ($latest_domain_request && in_array($latest_domain_request['status'], ['pending', 'processing'], true)): ?>
+                                <div class="alert alert-warning py-2 small">Request #<?php echo (int)$latest_domain_request['id']; ?> is <?php echo htmlspecialchars($latest_domain_request['status']); ?>: <?php echo htmlspecialchars($latest_domain_request['requested_domain']); ?></div>
+                            <?php endif; ?>
+                            <div class="domain-search-row mb-3">
                                 <span class="input-group-text bg-black bg-opacity-20 border-white border-opacity-10 text-muted">www.</span>
-                                <input type="text" id="target_domain" class="form-control bg-black bg-opacity-20 border-white border-opacity-10 text-white" placeholder="mybrandname">
-                                <select id="domain_extension" class="form-select bg-black bg-opacity-30 border-white border-opacity-10 text-white" style="max-width: 130px;">
+                                <input type="text" id="target_domain" class="form-control bg-black bg-opacity-20 border-white border-opacity-10 text-white" placeholder="mybrandname" aria-label="Domain name">
+                                <select id="domain_extension" class="form-select bg-black bg-opacity-30 border-white border-opacity-10 text-white">
                                     <?php foreach($domain_extensions as $ext): ?>
-                                        <option value="<?php echo $ext; ?>"><?php echo $ext; ?></option>
+                                        <option value="<?php echo htmlspecialchars($ext, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ext, ENT_QUOTES, 'UTF-8'); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 <button class="btn btn-premium px-4" type="button" id="search-btn" onclick="lookupDomain()">
@@ -692,14 +743,14 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                             <div id="domain_feedback" class="mb-4"></div>
 
                             <form method="post" id="reg-domain-form" class="d-none">
-                                <input type="hidden" name="domain_action" value="register_new">
-                                <input type="hidden" name="target_domain" id="final_target_domain">
-                                <input type="hidden" name="domain_extension" id="final_domain_extension">
+                                <input type="hidden" name="domain_action" value="submit_registration">
+                                <input type="hidden" name="domain_csrf" value="<?php echo htmlspecialchars($domain_csrf, ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="hidden" name="requested_domain" id="final_target_domain">
                                 <div class="bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-20 text-center">
-                                    <div class="small text-muted text-uppercase mb-2">Registration Cost</div>
+                                    <div class="small text-muted text-uppercase mb-2">WHMP registration quote (NGN)</div>
                                     <div class="h3 fw-bold text-primary-light mb-4" id="domain_price_display">₦0.00</div>
-                                    <button type="submit" class="btn btn-premium w-100 py-3" onclick="return confirm('Register this domain? The price will be deducted from your wallet balance.');">
-                                        <i class="bi bi-credit-card me-2"></i> Register & Pay Now
+                                    <button type="submit" class="btn btn-premium w-100 py-3" onclick="return confirm('Submit this domain registration for super-admin approval? Your wallet is charged only if approved.');">
+                                        <i class="bi bi-send me-2"></i> Submit for Approval
                                     </button>
                                 </div>
                             </form>
@@ -707,16 +758,21 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
 
                         <!-- Use Existing Domain -->
                         <div class="tab-pane fade" id="existing-view" role="tabpanel">
-                            <p class="text-muted small mb-4">Update your platform URL to a domain you already own. You'll need to point your domain to our servers.</p>
+                            <p class="text-muted small mb-4">Request a change to a domain you already own. A super-admin must approve it; your current domain stays active until approval. This change has no WHMP registration fee.</p>
                             
                             <form method="post">
-                                <input type="hidden" name="domain_action" value="update_existing">
+                                <input type="hidden" name="domain_action" value="submit_change">
+                                <input type="hidden" name="domain_csrf" value="<?php echo htmlspecialchars($domain_csrf, ENT_QUOTES, 'UTF-8'); ?>">
                                 <div class="mb-4">
                                     <label class="label-modern">Enter Domain Name</label>
                                     <div class="input-group input-group-lg">
                                         <span class="input-group-text bg-black bg-opacity-20 border-white border-opacity-10 text-muted">https://</span>
-                                        <input type="text" name="existing_domain" class="form-control bg-black bg-opacity-20 border-white border-opacity-10 text-white" placeholder="mywebsite.com" required>
+                                        <input type="text" name="requested_domain" class="form-control bg-black bg-opacity-20 border-white border-opacity-10 text-white" placeholder="mywebsite.com or mywebsite.com.ng" required>
                                     </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="label-modern">Note for the super-admin (optional)</label>
+                                    <textarea name="vendor_note" class="form-control bg-black bg-opacity-20 border-white border-opacity-10 text-white" maxlength="500" rows="2" placeholder="Add context about your domain request"></textarea>
                                 </div>
 
                                 <div class="bg-black bg-opacity-20 p-4 rounded-4 border border-white border-opacity-5 mb-4">
@@ -738,7 +794,7 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                                 </div>
 
                                 <button type="submit" class="btn btn-premium w-100 py-3">
-                                    <i class="bi bi-arrow-repeat me-2"></i> Update Platform URL
+                                    <i class="bi bi-send me-2"></i> Submit Change for Approval
                                 </button>
                             </form>
                         </div>
@@ -750,9 +806,15 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
 
     <script src="assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
+        function escapeDomainHtml(value) {
+            return String(value).replace(/[&<>\"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[char]));
+        }
+
         function lookupDomain() {
-            const domain = document.getElementById('target_domain').value.trim();
-            const extension = document.getElementById('domain_extension').value;
+            let domain = document.getElementById('target_domain').value.trim().toLowerCase();
+            const extension = document.getElementById('domain_extension').value.toLowerCase();
+            domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+            if (domain.endsWith(extension)) domain = domain.slice(0, -extension.length);
             const feedback = document.getElementById('domain_feedback');
             const spinner = document.getElementById('btn-spinner');
             const btnText = document.getElementById('btn-text');
@@ -768,7 +830,7 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
             feedback.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><div class="mt-2 small text-muted">Checking Availability...</div></div>';
             regForm.classList.add('d-none');
 
-            fetch('bc-spadmin/ajax-domain-check.php?domain=' + encodeURIComponent(domain + extension))
+            fetch('bc-spadmin/ajax-domain-check.php?provider=whmp&domain=' + encodeURIComponent(domain + extension))
                 .then(r => r.json())
                 .then(data => {
                     spinner.classList.add('d-none');
@@ -776,26 +838,26 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
 
                     if (data.status === 'available') {
                         feedback.innerHTML = `<div class="alert bg-success bg-opacity-10 border-success border-opacity-20 text-success rounded-4 p-3 mb-0">
-                            <i class="bi bi-check-circle-fill me-2"></i> <strong>${domain}${extension}</strong> is available for registration!
+                            <i class="bi bi-check-circle-fill me-2"></i> <strong>${escapeDomainHtml(domain + extension)}</strong> is available for registration!
                         </div>`;
                         document.getElementById('domain_price_display').innerText = '₦' + parseFloat(data.price).toLocaleString();
-                        document.getElementById('final_target_domain').value = domain;
-                        document.getElementById('final_domain_extension').value = extension;
+                        document.getElementById('final_target_domain').value = domain + extension;
                         regForm.classList.remove('d-none');
                     } else if (data.status === 'registered' || data.status === 'unavailable') {
                         let html = `<div class="alert bg-danger bg-opacity-10 border-danger border-opacity-20 text-danger rounded-4 p-3 mb-3">
-                            <i class="bi bi-x-circle-fill me-2"></i> <strong>${domain}${extension}</strong> is already taken.
+                            <i class="bi bi-x-circle-fill me-2"></i> <strong>${escapeDomainHtml(domain + extension)}</strong> is already taken.
                         </div>`;
                         if (data.suggestions && data.suggestions.length > 0) {
                             html += `<div class="small text-muted mb-2 text-uppercase fw-bold">Try these alternatives:</div><div class="d-flex flex-wrap gap-2">`;
                             data.suggestions.forEach(s => {
-                                html += `<button type="button" class="btn btn-outline-premium btn-sm rounded-pill py-1 px-3" onclick="useSuggested('${s}')">${s}</button>`;
+                                html += `<button type="button" class="btn btn-outline-premium btn-sm rounded-pill py-1 px-3" data-suggested-domain="${escapeDomainHtml(s)}">${escapeDomainHtml(s)}</button>`;
                             });
                             html += `</div>`;
                         }
                         feedback.innerHTML = html;
+                        feedback.querySelectorAll('[data-suggested-domain]').forEach(button => button.addEventListener('click', () => useSuggested(button.dataset.suggestedDomain)));
                     } else {
-                        feedback.innerHTML = `<div class="alert bg-warning bg-opacity-10 border-warning border-opacity-20 text-warning rounded-4 p-3">${data.message}</div>`;
+                        feedback.innerHTML = `<div class="alert bg-warning bg-opacity-10 border-warning border-opacity-20 text-warning rounded-4 p-3">${escapeDomainHtml(data.message || 'WHMP lookup could not complete.')}</div>`;
                     }
                 })
                 .catch(err => {
@@ -807,16 +869,12 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
         }
 
         function useSuggested(fullDomain) {
-            const parts = fullDomain.split('.');
-            document.getElementById('target_domain').value = parts[0];
-            const ext = '.' + parts.slice(1).join('.');
             const select = document.getElementById('domain_extension');
-            for(let i=0; i<select.options.length; i++){
-                if(select.options[i].value === ext){
-                    select.selectedIndex = i;
-                    break;
-                }
-            }
+            const sortedExtensions = Array.from(select.options).map(option => option.value).sort((a, b) => b.length - a.length);
+            const ext = sortedExtensions.find(candidate => fullDomain.toLowerCase().endsWith(candidate.toLowerCase()));
+            if (!ext) return;
+            document.getElementById('target_domain').value = fullDomain.slice(0, -ext.length);
+            select.value = ext;
             lookupDomain();
         }
     </script>

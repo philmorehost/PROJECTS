@@ -287,6 +287,12 @@ function bc_normalize_vendor_host($value) {
     return preg_replace('/^www\./i', '', $host);
 }
 
+function bc_is_valid_domain_name($domain) {
+    $domain = strtolower(trim((string)$domain));
+    if ($domain === '' || strlen($domain) > 253 || strpos($domain, '.') === false) return false;
+    return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $domain) === 1;
+}
+
 function bc_is_valid_vendor_access_hash($access_hash) {
     return is_string($access_hash) && preg_match('/^[a-f0-9]{48,100}$/i', $access_hash) === 1;
 }

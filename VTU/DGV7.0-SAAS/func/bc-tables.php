@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.25-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.25-2');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -307,6 +307,7 @@ $create_vendor_paid_bills_table = mysqli_query($connection_server, "CREATE TABLE
 
 //Create Domain Extensions Table
 $create_domain_extensions_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_domain_extensions (id INT NOT NULL AUTO_INCREMENT, extension VARCHAR(20) NOT NULL, price DECIMAL(10,2) NOT NULL, PRIMARY KEY (id), UNIQUE(extension))");
+$create_vendor_domain_requests_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_vendor_domain_requests (id INT NOT NULL AUTO_INCREMENT, vendor_id INT UNSIGNED NOT NULL, request_type ENUM('registration','change') NOT NULL, current_domain VARCHAR(253) NOT NULL DEFAULT '', requested_domain VARCHAR(253) NOT NULL, quoted_price DECIMAL(12,2) NOT NULL DEFAULT 0.00, status ENUM('pending','processing','approved','rejected') NOT NULL DEFAULT 'pending', vendor_note VARCHAR(500) DEFAULT NULL, decision_note VARCHAR(500) DEFAULT NULL, reviewed_by INT UNSIGNED DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, reviewed_at TIMESTAMP NULL DEFAULT NULL, PRIMARY KEY (id), KEY vendor_status (vendor_id,status), KEY status_created (status,created_at))");
 
 if ($create_domain_extensions_table) {
     $check_promo_col = mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_domain_extensions` LIKE 'promo_price'");

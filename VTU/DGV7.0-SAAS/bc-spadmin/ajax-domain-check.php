@@ -1,13 +1,14 @@
 <?php
 session_start();
 include("../func/bc-connect.php");
+include_once("../func/bc-tables.php");
 include_once("../func/bc-func.php");
-include("../func/whmcs-func.php");
 include_once("../func/whmp-func.php");
 
 header('Content-Type: application/json');
 
-$domain = mysqli_real_escape_string($connection_server, trim($_GET['domain'] ?? ''));
+$domain_raw = strtolower(trim($_GET['domain'] ?? ''));
+$domain = mysqli_real_escape_string($connection_server, $domain_raw);
 
 if (empty($domain)) {
     echo json_encode(['status' => 'error', 'message' => 'Domain name is required']);
@@ -15,18 +16,42 @@ if (empty($domain)) {
 }
 
 // Basic validation
-if (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/', $domain)) {
+if (!bc_is_valid_domain_name($domain_raw)) {
     echo json_encode(['status' => 'error', 'message' => 'Invalid domain format']);
     exit();
 }
 
-// Determine extension (handle multi-part TLDs like .com.ng)
+// Match the longest configured full extension (including multi-label suffixes such as .com.ng).
+$ext = '';
+$extension_query = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY LENGTH(extension) DESC");
+while ($extension_row = $extension_query ? mysqli_fetch_assoc($extension_query) : null) {
+    if ($extension_row && substr($domain_raw, -strlen($extension_row['extension'])) === strtolower($extension_row['extension'])) {
+        $ext = strtolower($extension_row['extension']);
+        break;
+    }
+}
+if ($ext === '') {
+    foreach (whmp_get_domain_extensions() as $whmp_extension) {
+        $candidate_extension = strtolower((string)($whmp_extension['extension'] ?? ''));
+        if ($candidate_extension !== '' && substr($domain_raw, -strlen($candidate_extension)) === $candidate_extension && strlen($candidate_extension) > strlen($ext)) {
+            $ext = $candidate_extension;
+        }
+    }
+}
+if ($ext === '') {
+    echo json_encode(['status' => 'unsupported', 'message' => 'This domain extension is not available in the WHMP extension catalog.']);
+    exit();
+}
 $first_dot = strpos($domain, '.');
-$ext = ($first_dot !== false) ? substr($domain, $first_dot) : '';
-$ext_esc = mysqli_real_escape_string($connection_server, $ext);
+
+// Domain search and registration are WHMP-only; never silently fall back to another registrar.
+if (!whmp_is_configured()) {
+    echo json_encode(['status' => 'error', 'message' => 'WHMP is not configured. Please contact the administrator.']);
+    exit();
+}
 
 // ─── WHMP Integration: Use RDAP for availability + WHMP reseller pricing ───────────────────────────
-if (whmp_is_configured()) {
+{
     // Check domain availability via RDAP
     $availability = whmp_check_domain_availability($domain);
 
@@ -40,18 +65,11 @@ if (whmp_is_configured()) {
             $price_message = '';
         } elseif ($whmp_usd_price !== null && $whmp_usd_price > 0) {
             // Never present a USD quote as Naira when the admin has not configured a rate.
-            $price = 0;
-            $price_source = 'whmp_unconverted';
-            $price_message = 'Save a USD to NGN rate in Super Admin Domain Settings to convert WHMP prices.';
+            echo json_encode(['status' => 'unsupported', 'message' => 'Save a USD to NGN rate in Super Admin Domain Settings before requesting registration.']);
+            exit();
         } else {
-            // WHMP returned no reseller quote; retain the existing local NGN fallback price.
-            $local_price_query = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$ext_esc' LIMIT 1");
-            $local_price_row = $local_price_query ? mysqli_fetch_assoc($local_price_query) : null;
-            $price = $local_price_row
-                ? ((float)$local_price_row['promo_price'] > 0 ? (float)$local_price_row['promo_price'] : (float)$local_price_row['price'])
-                : 0;
-            $price_source = 'local';
-            $price_message = 'WHMP returned no reseller price for this extension; showing the local price if available.';
+            echo json_encode(['status' => 'unsupported', 'message' => 'WHMP has no usable price for this extension. Ask the administrator to sync the WHMP extension catalog and set the USD-to-NGN rate.']);
+            exit();
         }
 
         echo json_encode([
@@ -66,8 +84,7 @@ if (whmp_is_configured()) {
         exit();
     } elseif ($availability['status'] === 'registered') {
         // Generate Suggestions
-        $parts = explode('.', $domain);
-        $name_only = $parts[0];
+        $name_only = substr($domain, 0, -strlen($ext));
 
         $suggestions = [];
         $variants = ['hub', 'pay', 'vtu', 'app', 'online', 'digital', 'store'];
@@ -106,53 +123,8 @@ if (whmp_is_configured()) {
             'source' => 'whmp',
         ]);
         exit();
-    } elseif ($availability['status'] === 'error') {
-        // RDAP failed - fall through to WHMCS fallback
-        $rdap_error = $availability['message'];
-    }
-}
-
-// ─── WHMCS Fallback ────────────────────────────────────────────────────────────────────────────────
-$result = whmcsDomainLookup($domain);
-
-if (($result['status'] ?? '') == 'available') {
-    $q_price = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$ext_esc' LIMIT 1");
-    if ($r_price = mysqli_fetch_assoc($q_price)) {
-        $result['price'] = ($r_price['promo_price'] > 0) ? (float)$r_price['promo_price'] : (float)$r_price['price'];
     } else {
-        $result['status'] = 'unsupported';
-        $result['message'] = "The extension $ext is not supported for automated registration. Please choose another or contact support.";
+        echo json_encode(['status' => 'error', 'message' => $availability['message'] ?? 'WHMP availability lookup failed. Please try again later.']);
+        exit();
     }
-} else {
-    // Generate Suggestions
-    $parts = explode('.', $domain);
-    $name_only = $parts[0];
-
-    $suggestions = [];
-    $variants = ['hub', 'pay', 'vtu', 'app', 'online', 'digital', 'store'];
-
-    // Fetch all supported extensions
-    $all_exts = [];
-    $ext_q = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions");
-    while ($er = mysqli_fetch_assoc($ext_q)) $all_exts[] = $er['extension'];
-    if (empty($all_exts)) $all_exts = ['.com', '.ng', '.com.ng'];
-
-    // 1. Try other extensions
-    foreach ($all_exts as $e) {
-        if (count($suggestions) >= 5) break;
-        $candidate = $name_only . $e;
-        if ($candidate !== $domain) $suggestions[] = $candidate;
-    }
-
-    // 2. Try prefix/suffix variants with primary extension
-    $primary_ext = ($first_dot !== false) ? $ext : '.com';
-    foreach ($variants as $v) {
-        if (count($suggestions) >= 5) break;
-        $suggestions[] = $name_only . $v . $primary_ext;
-    }
-
-    $result['suggestions'] = array_slice($suggestions, 0, 6);
 }
-
-$result['source'] = 'whmcs';
-echo json_encode($result);
