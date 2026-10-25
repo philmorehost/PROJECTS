@@ -4,7 +4,6 @@
     include("../func/bc-tables.php");
     include("../func/bc-email-templates.php");
     include_once("../func/bc-func.php");
-    include("../func/whmcs-func.php");
     include_once("../func/whmp-func.php");
     // The password-hashing helpers (bc_hash_password / bc_verify_password / bc_password_is_legacy)
     // live in bc-security.php, which only the full configs load (bc-config, bc-admin-config,
@@ -61,7 +60,8 @@
         $billing_package_id = mysqli_real_escape_string($connection_server, $_POST['billing_package_id']);
         $payment_method = mysqli_real_escape_string($connection_server, $_POST['payment_method']);
         
-        $app_base_url = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['app_base_url'] ?? '')));
+        $app_base_url_raw = trim(strip_tags((string)($_POST['app_base_url'] ?? '')));
+        $app_base_url = mysqli_real_escape_string($connection_server, bc_normalize_vendor_host($app_base_url_raw));
         $order_apk = isset($_POST['order_apk']) ? 1 : 0;
         $order_ios = isset($_POST['order_ios']) ? 1 : 0;
         $order_playstore = isset($_POST['order_playstore']) ? 1 : 0;
@@ -76,7 +76,8 @@
 
         $unrefined_website_url = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["website-url"]))));
         $refined_website_url = trim(str_replace(["https","http",":/","/","www."," "],"",$unrefined_website_url));
-        $website_url = !empty($app_base_url) ? $app_base_url : $refined_website_url;
+        $website_candidate = !empty($app_base_url) ? $app_base_url : $refined_website_url;
+        $website_url = mysqli_real_escape_string($connection_server, bc_normalize_vendor_host($website_candidate));
 
         if (bc_is_temporary_vendor_host($website_url)) {
             $_SESSION["product_purchase_response"] = "This domain is reserved for temporary vendor access. Please choose a different website domain.";
@@ -99,8 +100,58 @@
             header("Location: ".$_SERVER["REQUEST_URI"]);
             exit();
         }
-        
-        if($domain_option == 'existing') $domain_fee = 0;
+
+        if ($domain_option === 'register') {
+            if (!bc_is_valid_domain_name($website_url)) {
+                $_SESSION["product_purchase_response"] = "Enter a complete, valid domain name such as brand.com.ng.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            if (!whmp_is_configured()) {
+                $_SESSION["product_purchase_response"] = "WHMP is not configured. Domain registration cannot be checked right now; no order was placed.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            $domain_availability = whmp_check_domain_availability($website_url);
+            if (($domain_availability['status'] ?? '') !== 'available') {
+                $_SESSION["product_purchase_response"] = ($domain_availability['status'] ?? '') === 'registered'
+                    ? "That domain is already registered. Choose another domain."
+                    : "Could not verify domain availability: " . ($domain_availability['message'] ?? 'Please try again later.');
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+
+            $registration_extension = '';
+            $extension_candidates = $valid_exts;
+            usort($extension_candidates, function($a, $b) { return strlen($b) <=> strlen($a); });
+            foreach ($extension_candidates as $candidate_extension) {
+                $candidate_extension = strtolower($candidate_extension);
+                if (substr(strtolower($website_url), -strlen($candidate_extension)) === $candidate_extension) {
+                    $registration_extension = $candidate_extension;
+                    break;
+                }
+            }
+            $usd_registration_price = $registration_extension !== '' ? whmp_get_domain_price($registration_extension) : null;
+            $usd_to_ngn_rate = whmp_get_usd_to_ngn_rate();
+            if ($usd_registration_price === null || $usd_registration_price <= 0 || $usd_to_ngn_rate <= 0) {
+                $_SESSION["product_purchase_response"] = "WHMP has no valid price for this domain extension. Ask the administrator to sync the catalog and set the USD-to-NGN rate.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            $domain_fee = whmp_convert_usd_to_ngn($usd_registration_price, $usd_to_ngn_rate);
+            if ($domain_fee <= 0) {
+                $_SESSION["product_purchase_response"] = "WHMP returned an invalid Naira price for this extension; no order was placed.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+        } else {
+            $domain_fee = 0;
+            if (!bc_is_valid_domain_name($website_url)) {
+                $_SESSION["product_purchase_response"] = "Enter a complete, valid domain name such as brand.com.ng.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+        }
 
         if(!empty($first) && !empty($last) && !empty($address) && !empty($email) && !empty($pass) && !empty($phone) && !empty($website_url) && !empty($billing_package_id) && !empty($payment_method)){
             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
@@ -156,18 +207,10 @@
                                     $calculated_total += (float)($addon_price_row['total_addon_price'] ?? 0);
                                 }
 
-                                if ($domain_option == 'register') {
-                                    $actual_domain_fee = 0;
-                                    if (!empty($app_base_url)) {
-                                        $first_dot = strpos($app_base_url, '.');
-                                        $ext = ($first_dot !== false) ? substr($app_base_url, $first_dot) : '';
-                                        $ext_esc = mysqli_real_escape_string($connection_server, $ext);
-                                        $q_ext = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$ext_esc' LIMIT 1");
-                                        if($r_ext = mysqli_fetch_assoc($q_ext)) {
-                                            $actual_domain_fee = ($r_ext['promo_price'] > 0) ? (float)$r_ext['promo_price'] : (float)$r_ext['price'];
-                                        }
-                                    }
-                                    $calculated_total += $actual_domain_fee;
+                                if ($domain_option === 'register') {
+                                    // The domain quote was verified server-side from WHMP above and
+                                    // converted using the super-admin's configured USD-to-NGN rate.
+                                    $calculated_total += $domain_fee;
                                 }
 
                                 $amount_in_kobo = $calculated_total * 100;
@@ -850,8 +893,13 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         lookupDomain();
     }
 
+    function escapeDomainHtml(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+
     function lookupDomain() {
-        let domain = document.getElementById('target_domain').value.trim();
+        let domain = document.getElementById('target_domain').value.trim().toLowerCase();
         const extension = document.getElementById('domain_extension').value;
         const feedback = document.getElementById('domain_feedback');
         const spinner = document.getElementById('btn-spinner');
@@ -896,25 +944,32 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                         </div>
                     </div>`;
                     submitBtn.disabled = false;
-                } else {
+                } else if (data.status === 'registered' || data.status === 'unavailable') {
                     domainFee = 0;
                     document.getElementById('domain_fee_input').value = 0;
                     document.getElementById('app_base_url_input').value = "";
                     let html = `<div class="alert alert-danger border-0 rounded-4 p-3 shadow-sm mb-3">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-x-circle-fill me-2 fs-4" style="color:#dc3545;"></i>
-                            <strong class="fs-5" style="color:#dc3545;" class="text-danger">${fullDomain.toUpperCase()}</strong> IS TAKEN.
+                            <strong class="fs-5" style="color:#dc3545;">${escapeDomainHtml(fullDomain.toUpperCase())}</strong> IS TAKEN.
                         </div>
                     </div>`;
 
                     if(data.suggestions && data.suggestions.length > 0) {
                         html += `<div class="p-3 bg-white border rounded-4 shadow-sm"><div class="x-small fw-black text-muted mb-3 text-uppercase letter-spacing-1">Try available alternatives:</div><div class="d-flex flex-wrap gap-2">`;
                         data.suggestions.forEach(s => {
-                            html += `<button type="button" class="suggestion-btn" onclick="useSuggestedDomain('${s}')"><i class="bi bi-plus me-1"></i>${s}</button>`;
+                            html += `<button type="button" class="suggestion-btn" data-domain-suggestion="${escapeDomainHtml(s)}"><i class="bi bi-plus me-1"></i>${escapeDomainHtml(s)}</button>`;
                         });
                         html += `</div></div>`;
                     }
                     feedback.innerHTML = html;
+                    feedback.querySelectorAll('[data-domain-suggestion]').forEach(button => button.addEventListener('click', () => useSuggestedDomain(button.dataset.domainSuggestion)));
+                    submitBtn.disabled = true;
+                } else {
+                    domainFee = 0;
+                    document.getElementById('domain_fee_input').value = 0;
+                    document.getElementById('app_base_url_input').value = '';
+                    feedback.innerHTML = `<div class="alert alert-warning py-3 rounded-4 small">${escapeDomainHtml(data.message || 'The registry could not confirm availability. Please try again in a moment.')}</div>`;
                     submitBtn.disabled = true;
                 }
                 updateCheckoutTotal();

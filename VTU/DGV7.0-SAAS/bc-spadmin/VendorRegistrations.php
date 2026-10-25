@@ -64,25 +64,24 @@
 
                         if(mysqli_query($connection_server, $insert_sql)) {
                         $new_vendor_id = mysqli_insert_id($connection_server);
+                        $domain_registration_warning = '';
 
-                            // ─── WHMP Domain Registration ────────────────────────────────────────
-                            if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
-                                if (whmp_is_configured()) {
-                                    // Try WHMP first
-                                    $whmp_result = whmp_register_domain($pending_vendor['app_base_url']);
-                                    if ($whmp_result['status'] === 'success') {
-                                        error_log('[WHMP] Domain registered on approval: ' . $pending_vendor['app_base_url']);
-                                    } else {
-                                        error_log('[WHMP] Domain registration failed on approval for ' . $pending_vendor['app_base_url'] . ': ' . ($whmp_result['message'] ?? 'Unknown error'));
-                                    }
+                        // Vendor registration uses WHMP exclusively. Never route a failed or
+                        // unconfigured WHMP registration through the legacy WHMCS integration.
+                        if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
+                            if (whmp_is_configured()) {
+                                $whmp_result = whmp_register_domain($pending_vendor['app_base_url']);
+                                if (($whmp_result['status'] ?? '') === 'success') {
+                                    error_log('[WHMP] Domain registered on approval: ' . $pending_vendor['app_base_url']);
                                 } else {
-                                    // Fallback to WHMCS
-                                    include_once("../func/bc-func.php");
-                                    include_once("../func/whmcs-func.php");
-                                    $whmcs_client_id = getSuperAdminOption('whmcs_default_client_id', '1');
-                                    whmcsCreateOrder($whmcs_client_id, $pending_vendor['app_base_url']);
+                                    $domain_registration_warning = 'WHMP could not register ' . $pending_vendor['app_base_url'] . ': ' . ($whmp_result['message'] ?? 'Unknown error');
+                                    error_log('[WHMP] ' . $domain_registration_warning);
                                 }
+                            } else {
+                                $domain_registration_warning = 'WHMP is not configured, so ' . $pending_vendor['app_base_url'] . ' was not registered.';
+                                error_log('[WHMP] ' . $domain_registration_warning);
                             }
+                        }
 
                         // 3. Set subscription dates
                         $start_date = date("Y-m-d");
@@ -161,10 +160,19 @@
                            $email_body .= "<br><br><strong>Portal Link:</strong> <a href=\"{$portal_link}\">{$portal_link}</a>";
                         }
                         $email_body .= $tmp_instructions;
+                        if ($domain_registration_warning !== '') {
+                            $email_body .= '<br><br><strong>Domain registration needs attention:</strong> ' . htmlspecialchars($domain_registration_warning, ENT_QUOTES, 'UTF-8') . ' Please contact support before using the requested custom domain.';
+                        }
 
                         sendVendorEmail($email, $email_subject, $email_body);
 
-                        $_SESSION['page_alert'] = "Vendor approved and account activated.";
+                        if ($domain_registration_warning !== '') {
+                            $_SESSION['page_alert'] = "Vendor account activated, but domain registration needs attention: " . $domain_registration_warning;
+                        } elseif ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
+                            $_SESSION['page_alert'] = "Vendor approved and account activated. WHMP domain registration completed successfully.";
+                        } else {
+                            $_SESSION['page_alert'] = "Vendor approved and account activated.";
+                        }
                     } else {
                         $_SESSION['page_alert'] = "Error approving vendor: " . mysqli_error($connection_server);
                     }

@@ -156,6 +156,54 @@ function whmp_get_domain_extensions() {
     return $extensions;
 }
 
+/** Resolve an RDAP server from IANA's DNS bootstrap registry and cache it for a day. */
+function whmp_rdap_bootstrap_url($tld) {
+    static $bootstrap = null;
+    static $loaded = false;
+    $tld = strtolower(trim((string)$tld, " .\t\n\r\0\x0B"));
+
+    if (!$loaded) {
+        $loaded = true;
+        $cache_file = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/whmp-rdap-dns-' . substr(hash('sha256', __DIR__), 0, 16) . '.json';
+        if (is_file($cache_file) && (filemtime($cache_file) ?: 0) > (time() - 86400)) {
+            $cached_json = @file_get_contents($cache_file);
+            $bootstrap = is_string($cached_json) ? json_decode($cached_json, true) : null;
+        }
+        if (!is_array($bootstrap) || empty($bootstrap['services'])) {
+            $ch = curl_init('https://data.iana.org/rdap/dns.json');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 4,
+                CURLOPT_TIMEOUT => 8,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_HTTPHEADER => ['Accept: application/json'],
+            ]);
+            $response = curl_exec($ch);
+            $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            $fresh = ($response !== false && $http_code === 200) ? json_decode($response, true) : null;
+            if (is_array($fresh) && !empty($fresh['services'])) {
+                $bootstrap = $fresh;
+                @file_put_contents($cache_file, $response, LOCK_EX);
+            }
+        }
+    }
+
+    if (!is_array($bootstrap['services'] ?? null)) return null;
+    foreach ($bootstrap['services'] as $service) {
+        $service_tlds = $service[0] ?? [];
+        $service_urls = $service[1] ?? [];
+        if (!is_array($service_tlds) || !in_array($tld, array_map('strtolower', $service_tlds), true)) continue;
+        foreach ($service_urls as $base_url) {
+            if (is_string($base_url) && preg_match('~^https://~i', $base_url)) {
+                return rtrim($base_url, '/') . '/domain/';
+            }
+        }
+    }
+    return null;
+}
+
 /**
  * Check domain availability via RDAP (Registration Data Access Protocol)
  * RDAP is the modern HTTP-based replacement for WHOIS port 43.
@@ -168,8 +216,28 @@ function whmp_check_domain_availability($domain) {
     $rdap_servers = [
         '.com'    => 'https://rdap.verisign.com/com/v1/domain/',
         '.net'    => 'https://rdap.verisign.com/net/v1/domain/',
-        '.ng'     => 'https://rdap.nic.ng/domain/',
-        '.com.ng' => 'https://rdap.nic.ng/domain/',
+        // NiRA's published RDAP host is rdap.nic.net.ng. The legacy rdap.nic.ng
+        // hostname is not configured for TLS SNI and fails with "unrecognized name".
+        '.ng'     => 'https://rdap.nic.net.ng/domain/',
+        '.com.ng' => 'https://rdap.nic.net.ng/domain/',
+        '.org.ng' => 'https://rdap.nic.net.ng/domain/',
+        '.net.ng' => 'https://rdap.nic.net.ng/domain/',
+        '.gov.ng' => 'https://rdap.nic.net.ng/domain/',
+        '.edu.ng' => 'https://rdap.nic.net.ng/domain/',
+        '.uk'     => 'https://rdap.nominet.uk/uk/domain/',
+        '.co.uk'  => 'https://rdap.nominet.uk/uk/domain/',
+        '.org.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.me.uk'  => 'https://rdap.nominet.uk/uk/domain/',
+        '.ltd.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.plc.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.net.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.sch.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.ac.uk'  => 'https://rdap.nominet.uk/uk/domain/',
+        '.gov.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.nhs.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.police.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.mod.uk' => 'https://rdap.nominet.uk/uk/domain/',
+        '.mil.uk' => 'https://rdap.nominet.uk/uk/domain/',
         '.org'    => 'https://rdap.publicinterestregistry.org/rdap/domain/',
         '.io'     => 'https://rdap.identitydigital.services/rdap/domain/',
         '.co'     => 'https://rdap.nic.co/domain/',
@@ -209,13 +277,17 @@ function whmp_check_domain_availability($domain) {
     $rdap_url = $rdap_servers[$tld] ?? null;
 
     if (!$rdap_url) {
-        // Try to find a matching RDAP server by checking the last part
-        $parts = explode('.', $tld);
-        $last_part = '.' . end($parts);
+        // First try the final label against the known registry map (e.g. any .ng category).
+        $parts = explode('.', trim($tld, '.'));
+        $last_label = strtolower((string)end($parts));
+        $last_part = '.' . $last_label;
         $rdap_url = $rdap_servers[$last_part] ?? null;
 
+        // For TLDs not in the curated map, discover the authoritative RDAP server via IANA.
+        // This handles new TLDs and multi-label names such as .co.uk without hardcoding every suffix.
+        if (!$rdap_url) $rdap_url = whmp_rdap_bootstrap_url($last_label);
         if (!$rdap_url) {
-            return ['status' => 'error', 'message' => 'No RDAP server for TLD ' . $tld, 'domain' => $domain];
+            return ['status' => 'error', 'message' => 'No RDAP server is published for TLD ' . $tld . ' (IANA bootstrap lookup failed or has no entry).', 'domain' => $domain];
         }
     }
 
