@@ -746,24 +746,6 @@
         exit();
     }
 
-    if(isset($_POST["update-whmcs-settings"])){
-        $api_url = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["whmcs_api_url"])));
-        $api_ident = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["whmcs_api_ident"])));
-        $api_secret = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["whmcs_api_secret"])));
-        $dom_price = mysqli_real_escape_string($connection_server, $_POST['whmcs_domain_price']);
-        $client_id = mysqli_real_escape_string($connection_server, $_POST['whmcs_client_id']);
-
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('whmcs_api_url', '$api_url') ON DUPLICATE KEY UPDATE option_value='$api_url'");
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('whmcs_api_ident', '$api_ident') ON DUPLICATE KEY UPDATE option_value='$api_ident'");
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('whmcs_api_secret', '$api_secret') ON DUPLICATE KEY UPDATE option_value='$api_secret'");
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('default_domain_registration_price', '$dom_price') ON DUPLICATE KEY UPDATE option_value='$dom_price'");
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('whmcs_default_client_id', '$client_id') ON DUPLICATE KEY UPDATE option_value='$client_id'");
-
-        $_SESSION["product_purchase_response"] = "WHMCS API settings updated successfully";
-        header("Location: ".$_SERVER["REQUEST_URI"]);
-        exit();
-    }
-
 
     if(isset($_POST["update-cpanel-settings"])){
         $cp_host = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["cpanel_host"])));
@@ -975,7 +957,6 @@
                         <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-shield-lock me-2"></i> Security</button>
                         <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-site"><i class="bi bi-globe me-2"></i> Site Details</button>
                         <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-system"><i class="bi bi-cpu me-2"></i> System Tools</button>
-                        <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-whmcs"><i class="bi bi-globe2 me-2"></i> WHMCS API</button>
                         <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-cpanel"><i class="bi bi-hdd-network me-2"></i> cPanel API</button>
                         <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-printhub"><i class="bi bi-printer me-2"></i> Print Hub / API</button>
                         <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-key-fill me-2"></i> License Info</button>
@@ -1348,47 +1329,7 @@
                     </div>
                 </div>
 
-                <!-- WHMCS API Tab -->
-                <div class="tab-pane fade" id="tab-whmcs">
-                    <div class="card shadow-sm border-0 rounded-4">
-                        <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">WHMCS API Configuration</h5></div>
-                        <div class="card-body p-4">
-                            <form method="post">
-                                <?php
-                                $whmcs_url = getSuperAdminOption('whmcs_api_url');
-                                $whmcs_ident = getSuperAdminOption('whmcs_api_ident');
-                                $whmcs_secret = getSuperAdminOption('whmcs_api_secret');
-                                ?>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted">WHMCS API URL</label>
-                                    <input name="whmcs_api_url" type="url" value="<?php echo $whmcs_url; ?>" class="form-control rounded-3" placeholder="https://client.philmorehost.com/includes/api.php" required />
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted">API IDENTIFIER</label>
-                                    <input name="whmcs_api_ident" type="text" value="<?php echo $whmcs_ident; ?>" class="form-control rounded-3" placeholder="API Access Identifier" required />
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted">API SECRET</label>
-                                    <input name="whmcs_api_secret" type="password" value="<?php echo $whmcs_secret; ?>" class="form-control rounded-3" placeholder="API Access Secret" required />
-                                </div>
-                                <div class="row g-3 mb-4">
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-muted">DEFAULT DOMAIN PRICE (₦)</label>
-                                        <input name="whmcs_domain_price" type="number" value="<?php echo getSuperAdminOption('default_domain_registration_price', '5000'); ?>" class="form-control rounded-3" required />
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold text-muted">DEFAULT WHMCS CLIENT ID</label>
-                                        <input name="whmcs_client_id" type="number" value="<?php echo getSuperAdminOption('whmcs_default_client_id', '1'); ?>" class="form-control rounded-3" required />
-                                    </div>
-                                </div>
-                                <button name="update-whmcs-settings" class="btn btn-primary px-5 rounded-pill fw-bold">Save WHMCS Settings</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-
-<!-- cPanel API Tab -->
+                <!-- cPanel API Tab -->
                 <div class="tab-pane fade" id="tab-cpanel">
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">cPanel API Configuration</h5></div>

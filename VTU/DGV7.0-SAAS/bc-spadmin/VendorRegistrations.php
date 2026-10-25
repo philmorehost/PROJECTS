@@ -66,8 +66,8 @@
                         $new_vendor_id = mysqli_insert_id($connection_server);
                         $domain_registration_warning = '';
 
-                        // Vendor registration uses WHMP exclusively. Never route a failed or
-                        // unconfigured WHMP registration through the legacy WHMCS integration.
+                        // Vendor registration uses WHMP exclusively. A failed or unconfigured
+                        // provider registration is reported for follow-up; no alternate registrar is called.
                         if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
                             if (whmp_is_configured()) {
                                 $whmp_result = whmp_register_domain($pending_vendor['app_base_url']);

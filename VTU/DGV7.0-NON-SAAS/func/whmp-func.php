@@ -2,7 +2,7 @@
 /**
  * WHMP Billing Portal API Integration
  *
- * WHMP (Philmore Host Unlimited) is our in-house billing platform that replaces WHMCS.
+ * WHMP (Philmore Host Unlimited) is our in-house billing portal and domain-reseller platform.
  * This file provides API client functions for domain pricing, availability checking,
  * and domain registration through the WHMP reseller API.
  *
