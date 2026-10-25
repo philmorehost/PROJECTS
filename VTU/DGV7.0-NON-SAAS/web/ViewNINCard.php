@@ -22,6 +22,38 @@ if (!empty($record['birthdate'])) {
     $ts = strtotime($record['birthdate']);
     $dob_formatted = $ts ? date('d-M-Y', $ts) : $record['birthdate'];
 }
+
+// Provider photos may be raw base64, a data URI, or an HTTPS image URL.
+// Normalize image data so it is always rendered with its real MIME type.
+function nin_card_image_src($value) {
+    $value = trim((string)$value);
+    if ($value === '') return '';
+    if (preg_match('~^https://[^\\s"<>]+$~i', $value)) return $value;
+
+    $payload = $value;
+    if (preg_match('~^data:image/(?:jpeg|jpg|png|gif|webp);base64,(.*)$~is', $value, $matches)) {
+        $payload = $matches[1];
+    }
+    $payload = preg_replace('/\\s+/', '', $payload);
+    $image_bytes = base64_decode($payload, true);
+    if ($image_bytes === false || $image_bytes === '') return '';
+
+    if (strncmp($image_bytes, hex2bin('89504e470d0a1a0a'), 8) === 0) {
+        $mime = 'image/png';
+    } elseif (strncmp($image_bytes, hex2bin('ffd8ff'), 3) === 0) {
+        $mime = 'image/jpeg';
+    } elseif (strncmp($image_bytes, 'GIF8', 4) === 0) {
+        $mime = 'image/gif';
+    } elseif (substr($image_bytes, 0, 4) === 'RIFF' && substr($image_bytes, 8, 4) === 'WEBP') {
+        $mime = 'image/webp';
+    } else {
+        return '';
+    }
+
+    return 'data:' . $mime . ';base64,' . base64_encode($image_bytes);
+}
+
+$display_photo = nin_card_image_src(!empty($record['user_portrait']) ? $record['user_portrait'] : ($record['photo_data'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,11 +79,15 @@ if (!empty($record['birthdate'])) {
             background-repeat: no-repeat;
             color: #000;
         }
-        .nin-card.front { background-image: url('../asset/NIN-front.png'); background-color: #fff; }
-        .nin-card.back { background-image: url('../asset/NIN-back.png'); background-color: #e8f5e9; }
+        .nin-card.front { background-color: #fff; }
+        .nin-card.back { background-color: #e8f5e9; }
+        /* Use real image elements for card artwork so browser print settings cannot
+           silently suppress the card design as they often do with CSS backgrounds. */
+        .card-background { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: fill; }
 
         .card-overlay {
             position: absolute;
+            z-index: 1;
             top: 0; left: 0; width: 100%; height: 100%;
             padding: 10px 14px;
             box-sizing: border-box;
@@ -106,6 +142,7 @@ if (!empty($record['birthdate'])) {
         /* Back styling - The background image has text, so we might not need much overlay unless we want to enhance it */
         .back-overlay {
             position: absolute;
+            z-index: 1;
             top: 0; left: 0; width: 100%; height: 100%;
             display: flex;
             align-items: center;
@@ -131,8 +168,6 @@ if (!empty($record['birthdate'])) {
             .no-print { display: none !important; }
             .print-wrapper { box-shadow: none; margin: 0; padding: 0; width: 100%; max-width: none; }
             .nin-card { box-shadow: none; margin: 5mm auto; break-inside: avoid; border: 0.2px solid #eee; }
-            .nin-card.front { background-image: url('../asset/NIN-front.png') !important; }
-            .nin-card.back { background-image: url('../asset/NIN-back.png') !important; }
         }
     </style>
 </head>
@@ -157,6 +192,7 @@ if (!empty($record['birthdate'])) {
 
         <!-- FRONT OF CARD -->
         <div class="nin-card front">
+            <img class="card-background" src="../asset/NIN-front.png" alt="" aria-hidden="true">
             <div class="card-overlay">
                 <div class="header-section">
                     <img src="../asset/nigeria-coa.svg" class="coa-logo">
@@ -209,12 +245,9 @@ if (!empty($record['birthdate'])) {
                         <?php endif; ?>
                     </div>
                     <div class="photo-col">
-                        <?php
-                        $display_photo = !empty($record['user_portrait']) ? $record['user_portrait'] : ($record['photo_data'] ?? '');
-                        if (!empty($display_photo)):
-                        ?>
+                        <?php if ($display_photo !== ''): ?>
                             <img class="id-photo"
-                                 src="data:image/jpeg;base64,<?php echo htmlspecialchars($display_photo); ?>"
+                                 src="<?php echo htmlspecialchars($display_photo, ENT_QUOTES, 'UTF-8'); ?>"
                                  alt="Photo">
                         <?php else: ?>
                             <div class="photo-placeholder">&#128100;</div>
@@ -231,6 +264,7 @@ if (!empty($record['birthdate'])) {
 
         <!-- BACK OF CARD -->
         <div class="nin-card back">
+            <img class="card-background" src="../asset/NIN-back.png" alt="" aria-hidden="true">
             <div class="back-overlay">
                 <!-- The text is already on the background image asset/NIN-back.png -->
             </div>
