@@ -205,13 +205,95 @@ function whmp_rdap_bootstrap_url($tld) {
 }
 
 /**
- * Check domain availability via RDAP (Registration Data Access Protocol)
- * RDAP is the modern HTTP-based replacement for WHOIS port 43.
+ * Query NiRA's authoritative WHOIS service for .ng domain availability.
+ * Only an explicit registry "no match" response is treated as available;
+ * connection errors, empty replies, and unrecognized responses fail closed.
+ *
+ * @param string $domain Full .ng domain name
+ * @return array {status: 'available'|'registered'|'error', domain, message}
+ */
+function whmp_check_ng_whois_availability($domain) {
+    $domain = strtolower(trim((string)$domain));
+    if (!preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $domain) || substr($domain, -3) !== '.ng') {
+        return ['status' => 'error', 'message' => 'Invalid .ng domain format', 'domain' => $domain];
+    }
+    if (!function_exists('fsockopen')) {
+        return ['status' => 'error', 'message' => 'WHOIS lookup is unavailable on this server', 'domain' => $domain];
+    }
+
+    $errno = 0;
+    $errstr = '';
+    $socket = @fsockopen('whois.nic.net.ng', 43, $errno, $errstr, 4);
+    if (!$socket) {
+        $reason = $errstr !== '' ? $errstr : 'connection failed (' . $errno . ')';
+        return ['status' => 'error', 'message' => 'NiRA WHOIS lookup failed: ' . $reason, 'domain' => $domain];
+    }
+
+    stream_set_timeout($socket, 4);
+    $written = @fwrite($socket, $domain . "\r\n");
+    if ($written === false || $written === 0) {
+        fclose($socket);
+        return ['status' => 'error', 'message' => 'NiRA WHOIS query could not be sent', 'domain' => $domain];
+    }
+
+    $response = '';
+    $read_deadline = microtime(true) + 4;
+    while (!feof($socket) && strlen($response) < 65536) {
+        $remaining = $read_deadline - microtime(true);
+        if ($remaining <= 0) break;
+        $seconds = (int)$remaining;
+        $microseconds = (int)(($remaining - $seconds) * 1000000);
+        stream_set_timeout($socket, $seconds, $microseconds);
+        $chunk = @fread($socket, 4096);
+        if ($chunk === false || $chunk === '') break;
+        $response .= $chunk;
+    }
+    $meta = stream_get_meta_data($socket);
+    fclose($socket);
+
+    if (!empty($meta['timed_out'])) {
+        return ['status' => 'error', 'message' => 'NiRA WHOIS lookup timed out', 'domain' => $domain];
+    }
+    if (trim($response) === '') {
+        return ['status' => 'error', 'message' => 'NiRA WHOIS returned an empty response', 'domain' => $domain];
+    }
+
+    // NiRA's CoCCA-style WHOIS response uses an explicit no-match line for absent records.
+    // Do not infer availability from DNS or from an empty/unrecognized WHOIS response.
+    $quoted_domain = preg_quote($domain, '/');
+    if (preg_match('/^\s*%?\s*No match for\s+"?' . $quoted_domain . '(?:"|[.\s]|$)/im', $response)
+        || preg_match('/^\s*(?:No object found|The queried object does not exist)\s*\.?\s*$/im', $response)) {
+        return ['status' => 'available', 'domain' => $domain];
+    }
+
+    if (preg_match('/^\s*(?:Domain Name|Domain):\s*' . $quoted_domain . '\s*$/im', $response)
+        || preg_match('/^\s*(?:Registry Domain ID|Registrar|Creation Date|Registry Expiry Date|Name Server):\s*\S/im', $response)) {
+        return ['status' => 'registered', 'domain' => $domain];
+    }
+
+    return ['status' => 'error', 'message' => 'NiRA WHOIS returned an unrecognized response; availability could not be verified', 'domain' => $domain];
+}
+
+/**
+ * Check domain availability via RDAP (Registration Data Access Protocol),
+ * with NiRA WHOIS fallback for .ng domains when RDAP is unavailable.
  *
  * @param string $domain Full domain name (e.g. "example.com")
  * @return array {status: 'available'|'registered'|'error', domain, message}
  */
 function whmp_check_domain_availability($domain) {
+    $domain = strtolower(trim((string)$domain));
+    $is_ng_domain = (bool)preg_match('/\.ng$/i', $domain);
+    $whois_fallback_error = null;
+
+    // NiRA WHOIS is the registry-published fallback and avoids waiting for the
+    // known-unresponsive RDAP endpoint on every .ng search.
+    if ($is_ng_domain) {
+        $whois_result = whmp_check_ng_whois_availability($domain);
+        if ($whois_result['status'] !== 'error') return $whois_result;
+        $whois_fallback_error = $whois_result['message'] ?? 'NiRA WHOIS lookup failed';
+    }
+
     // Determine RDAP server based on TLD
     $rdap_servers = [
         '.com'    => 'https://rdap.verisign.com/com/v1/domain/',
@@ -296,8 +378,8 @@ function whmp_check_domain_availability($domain) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $full_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $is_ng_domain ? 3 : 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $is_ng_domain ? 5 : 15);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/rdap+json']);
@@ -310,7 +392,11 @@ function whmp_check_domain_availability($domain) {
     curl_close($ch);
 
     if ($curl_err) {
-        return ['status' => 'error', 'message' => 'RDAP lookup failed: ' . $curl_err, 'domain' => $domain];
+        $message = 'RDAP lookup failed: ' . $curl_err;
+        if ($is_ng_domain && $whois_fallback_error !== null) {
+            $message = $whois_fallback_error . '; ' . $message;
+        }
+        return ['status' => 'error', 'message' => $message, 'domain' => $domain];
     }
 
     if ($http_code === 404) {
@@ -321,7 +407,11 @@ function whmp_check_domain_availability($domain) {
         return ['status' => 'registered', 'domain' => $domain];
     }
 
-    return ['status' => 'error', 'message' => 'RDAP returned HTTP ' . $http_code, 'domain' => $domain];
+    $message = 'RDAP returned HTTP ' . $http_code;
+    if ($is_ng_domain && $whois_fallback_error !== null) {
+        $message = $whois_fallback_error . '; ' . $message;
+    }
+    return ['status' => 'error', 'message' => $message, 'domain' => $domain];
 }
 
 /**
