@@ -284,7 +284,7 @@ if (!isset($get_all_super_admin_site_details) || empty($get_all_super_admin_site
       <li class="nav-heading">Management</li>
 
       <li class="nav-item">
-        <?php $manage_vendor_active = in_array($current_page, ['VendorReg.php', 'Vendors.php', 'VendorRegistrations.php', 'DomainSettings.php', 'UnblockRequests.php']); ?>
+        <?php $manage_vendor_active = in_array($current_page, ['VendorReg.php', 'Vendors.php', 'VendorRegistrations.php', 'DomainSettings.php', 'DomainChangeRequests.php', 'UnblockRequests.php']); ?>
         <a class="nav-link <?php echo $manage_vendor_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#manage-vendor-nav" data-bs-toggle="collapse" href="#">
           <i class="bi bi-menu-button-wide"></i><span>Manage Vendors</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
@@ -312,6 +312,11 @@ if (!isset($get_all_super_admin_site_details) || empty($get_all_super_admin_site
           <li>
             <a href="<?php echo $web_http_host; ?>/bc-spadmin/DomainSettings.php" class="<?php echo ($current_page == 'DomainSettings.php') ? 'active' : ''; ?>">
               <i class="bi bi-circle"></i><span>Domain Settings</span>
+            </a>
+          </li>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/bc-spadmin/DomainChangeRequests.php" class="<?php echo ($current_page == 'DomainChangeRequests.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Domain Requests</span>
             </a>
           </li>
         </ul>

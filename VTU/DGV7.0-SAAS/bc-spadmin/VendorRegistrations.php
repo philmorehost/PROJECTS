@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
+    include_once("../func/whmp-func.php");
 
     // Handle actions
     if(isset($_GET['action']) && isset($_GET['id'])) {
@@ -8,13 +9,22 @@
 
         // Mark as Paid for manual deposit
         if($action == 'mark_paid') {
-            mysqli_query($connection_server, "UPDATE sas_pending_vendors SET payment_status='paid' WHERE id='$pending_id'") or die("Error marking as paid: " . mysqli_error($connection_server));
+            if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET payment_status='paid' WHERE id='$pending_id'")) {
+                error_log("[VendorReg] Error marking as paid: " . mysqli_error($connection_server));
+                $_SESSION["page_alert"] = "An error occurred. Please try again.";
+                header("Location: VendorRegistrations.php"); exit;
+            }
             $_SESSION['page_alert'] = "Vendor marked as paid.";
             header("Location: VendorRegistrations.php");
             exit();
         }
 
-        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error fetching pending vendor: " . mysqli_error($connection_server));
+        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'");
+        if (!$result) {
+            error_log("[VendorReg] Error fetching pending vendor: " . mysqli_error($connection_server));
+            $_SESSION["page_alert"] = "An error occurred. Please try again.";
+            header("Location: VendorRegistrations.php"); exit;
+        }
         if(mysqli_num_rows($result) > 0) {
             $pending_vendor = mysqli_fetch_assoc($result);
 
@@ -22,7 +32,8 @@
                 if(trim($pending_vendor['payment_status']) == 'paid') {
                     // 1. Get package details
                     $package_id = $pending_vendor['billing_package_id'];
-                    $package_result = mysqli_query($connection_server, "SELECT * FROM sas_billing_packages WHERE id='$package_id'") or die("Error fetching package details: " . mysqli_error($connection_server));
+                    $package_result = mysqli_query($connection_server, "SELECT * FROM sas_billing_packages WHERE id='$package_id'");
+                    if (!$package_result) { error_log("[VendorReg] Error fetching package: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
                     $package = mysqli_fetch_assoc($package_result);
                     $duration_days = $package['duration_days'];
 
@@ -53,16 +64,24 @@
 
                         if(mysqli_query($connection_server, $insert_sql)) {
                         $new_vendor_id = mysqli_insert_id($connection_server);
+                        $domain_registration_warning = '';
 
-                            // Trigger WHMCS Domain Registration if domain fee was paid
-                            if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
-                                include_once("../func/bc-func.php");
-                                include_once("../func/whmcs-func.php");
-                                // We need a WHMCS Client ID. For now, we use a placeholder or logic to find/create one.
-                                // In a real scenario, you might have already created the client or have a dedicated account for automation.
-                                $whmcs_client_id = getSuperAdminOption('whmcs_default_client_id', '1');
-                                whmcsCreateOrder($whmcs_client_id, $pending_vendor['app_base_url']);
+                        // Vendor registration uses WHMP exclusively. A failed or unconfigured
+                        // provider registration is reported for follow-up; no alternate registrar is called.
+                        if ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
+                            if (whmp_is_configured()) {
+                                $whmp_result = whmp_register_domain($pending_vendor['app_base_url']);
+                                if (($whmp_result['status'] ?? '') === 'success') {
+                                    error_log('[WHMP] Domain registered on approval: ' . $pending_vendor['app_base_url']);
+                                } else {
+                                    $domain_registration_warning = 'WHMP could not register ' . $pending_vendor['app_base_url'] . ': ' . ($whmp_result['message'] ?? 'Unknown error');
+                                    error_log('[WHMP] ' . $domain_registration_warning);
+                                }
+                            } else {
+                                $domain_registration_warning = 'WHMP is not configured, so ' . $pending_vendor['app_base_url'] . ' was not registered.';
+                                error_log('[WHMP] ' . $domain_registration_warning);
                             }
+                        }
 
                         // 3. Set subscription dates
                         $start_date = date("Y-m-d");
@@ -70,16 +89,16 @@
 
                         // 4. Update vendor with subscription info
                         $update_sql = "UPDATE sas_vendors SET start_date='$start_date', expiry_date='$expiry_date', current_billing_id='$package_id' WHERE id='$new_vendor_id'";
-                        mysqli_query($connection_server, $update_sql) or die("Error updating vendor subscription: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, $update_sql)) { error_log("[VendorReg] Error updating subscription: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                         // 5. Log this initial subscription to the history table
                         $price = $package['price'];
                         $purchase_date = date('Y-m-d H:i:s');
                         $log_sql = "INSERT INTO sas_vendor_subscriptions (vendor_id, package_id, purchase_date, expiry_date, amount_paid) VALUES ('$new_vendor_id', '$package_id', '$purchase_date', '$expiry_date', '$price')";
-                        mysqli_query($connection_server, $log_sql) or die("Error logging subscription: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, $log_sql)) { error_log("[VendorReg] Error logging subscription: " . mysqli_error($connection_server)); }
 
                         // 6. Delete from pending vendors
-                        mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error deleting from pending vendors: " . mysqli_error($connection_server));
+                        if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
 
                         // 6b. Add addon domain via cPanel API
                         include_once(__DIR__ . "/../func/cpanel-func.php");
@@ -141,10 +160,19 @@
                            $email_body .= "<br><br><strong>Portal Link:</strong> <a href=\"{$portal_link}\">{$portal_link}</a>";
                         }
                         $email_body .= $tmp_instructions;
+                        if ($domain_registration_warning !== '') {
+                            $email_body .= '<br><br><strong>Domain registration needs attention:</strong> ' . htmlspecialchars($domain_registration_warning, ENT_QUOTES, 'UTF-8') . ' Please contact support before using the requested custom domain.';
+                        }
 
                         sendVendorEmail($email, $email_subject, $email_body);
 
-                        $_SESSION['page_alert'] = "Vendor approved and account activated.";
+                        if ($domain_registration_warning !== '') {
+                            $_SESSION['page_alert'] = "Vendor account activated, but domain registration needs attention: " . $domain_registration_warning;
+                        } elseif ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
+                            $_SESSION['page_alert'] = "Vendor approved and account activated. WHMP domain registration completed successfully.";
+                        } else {
+                            $_SESSION['page_alert'] = "Vendor approved and account activated.";
+                        }
                     } else {
                         $_SESSION['page_alert'] = "Error approving vendor: " . mysqli_error($connection_server);
                     }
@@ -157,7 +185,7 @@
                 $firstname = $pending_vendor['firstname'];
                 $lastname = $pending_vendor['lastname'];
 
-                mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'") or die("Error declining vendor: " . mysqli_error($connection_server));
+                if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                 // Send rejection email
                 $email_placeholders = array(
@@ -216,7 +244,7 @@
                         <?php if(isset($_SESSION['page_alert'])): ?>
                             <div class="px-4 pt-3">
                                 <div class="alert alert-info alert-dismissible fade show rounded-3 border-0 shadow-sm" role="alert">
-                                    <i class="bi bi-info-circle me-2"></i><?php echo $_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
+                                    <i class="bi bi-info-circle me-2"></i><?php echo htmlspecialchars($_SESSION['page_alert'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
                                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
                             </div>
@@ -241,7 +269,8 @@
                                                 FROM sas_pending_vendors pv
                                                 JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
                                                 ORDER BY pv.reg_date DESC";
-                                        $result = mysqli_query($connection_server, $sql) or die("Error fetching registration list: " . mysqli_error($connection_server));
+                                        $result = mysqli_query($connection_server, $sql);
+                                        if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
                                         $count = 1;
                                         if(mysqli_num_rows($result) > 0):
                                             while($row = mysqli_fetch_assoc($result)):

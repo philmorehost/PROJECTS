@@ -1,10 +1,10 @@
 <?php session_start();
     // Use basic configs to allow optional login
     include("../func/bc-connect.php");
-	include("../func/bc-tables.php");
+    include("../func/bc-tables.php");
     include("../func/bc-email-templates.php");
     include_once("../func/bc-func.php");
-    include("../func/whmcs-func.php");
+    include_once("../func/whmp-func.php");
     // The password-hashing helpers (bc_hash_password / bc_verify_password / bc_password_is_legacy)
     // live in bc-security.php, which only the full configs load (bc-config, bc-admin-config,
     // bc-spadmin-config). This page deliberately bootstraps with the "basic configs" so it can run
@@ -28,6 +28,28 @@
         }
     }
 
+    // Load the synced extension list and its current Naira/promo prices once for the selector,
+    // client-side validation and display. The server still recalculates the final fee at checkout.
+    $domain_extension_options = [];
+    $domain_extensions_query = mysqli_query($connection_server, "SELECT extension, price, promo_price FROM sas_domain_extensions ORDER BY extension ASC");
+    if ($domain_extensions_query) {
+        while ($extension_row = mysqli_fetch_assoc($domain_extensions_query)) {
+            $extension_name = strtolower(trim((string)($extension_row['extension'] ?? '')));
+            if ($extension_name === '') continue;
+            $domain_extension_options[] = [
+                'extension' => $extension_name,
+                'price' => (float)($extension_row['price'] ?? 0),
+                'promo_price' => (float)($extension_row['promo_price'] ?? 0),
+            ];
+        }
+    }
+    if (empty($domain_extension_options)) {
+        foreach (['.com', '.ng', '.com.ng', '.org', '.net'] as $fallback_extension) {
+            $domain_extension_options[] = ['extension' => $fallback_extension, 'price' => 0.0, 'promo_price' => 0.0];
+        }
+    }
+    $valid_exts = array_column($domain_extension_options, 'extension');
+
     if(isset($_POST["create-profile"])){
         $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
         $last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
@@ -38,7 +60,8 @@
         $billing_package_id = mysqli_real_escape_string($connection_server, $_POST['billing_package_id']);
         $payment_method = mysqli_real_escape_string($connection_server, $_POST['payment_method']);
         
-        $app_base_url = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['app_base_url'] ?? '')));
+        $app_base_url_raw = trim(strip_tags((string)($_POST['app_base_url'] ?? '')));
+        $app_base_url = mysqli_real_escape_string($connection_server, bc_normalize_vendor_host($app_base_url_raw));
         $order_apk = isset($_POST['order_apk']) ? 1 : 0;
         $order_ios = isset($_POST['order_ios']) ? 1 : 0;
         $order_playstore = isset($_POST['order_playstore']) ? 1 : 0;
@@ -53,7 +76,8 @@
 
         $unrefined_website_url = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["website-url"]))));
         $refined_website_url = trim(str_replace(["https","http",":/","/","www."," "],"",$unrefined_website_url));
-        $website_url = !empty($app_base_url) ? $app_base_url : $refined_website_url;
+        $website_candidate = !empty($app_base_url) ? $app_base_url : $refined_website_url;
+        $website_url = mysqli_real_escape_string($connection_server, bc_normalize_vendor_host($website_candidate));
 
         if (bc_is_temporary_vendor_host($website_url)) {
             $_SESSION["product_purchase_response"] = "This domain is reserved for temporary vendor access. Please choose a different website domain.";
@@ -61,16 +85,7 @@
             exit();
         }
 
-        // Server-side Domain extension validation
-        $ext_q = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY extension ASC");
-        $valid_exts = [];
-        while ($row = mysqli_fetch_assoc($ext_q)) {
-            $valid_exts[] = strtolower(trim($row['extension']));
-        }
-        if (empty($valid_exts)) {
-            $valid_exts = ['.com', '.ng', '.com.ng', '.org', '.net'];
-        }
-
+        // Validate against the same live extension list displayed in the selector.
         $has_extension = false;
         foreach ($valid_exts as $ext) {
             if (substr($website_url, -strlen($ext)) === $ext) {
@@ -85,8 +100,58 @@
             header("Location: ".$_SERVER["REQUEST_URI"]);
             exit();
         }
-        
-        if($domain_option == 'existing') $domain_fee = 0;
+
+        if ($domain_option === 'register') {
+            if (!bc_is_valid_domain_name($website_url)) {
+                $_SESSION["product_purchase_response"] = "Enter a complete, valid domain name such as brand.com.ng.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            if (!whmp_is_configured()) {
+                $_SESSION["product_purchase_response"] = "WHMP is not configured. Domain registration cannot be checked right now; no order was placed.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            $domain_availability = whmp_check_domain_availability($website_url);
+            if (($domain_availability['status'] ?? '') !== 'available') {
+                $_SESSION["product_purchase_response"] = ($domain_availability['status'] ?? '') === 'registered'
+                    ? "That domain is already registered. Choose another domain."
+                    : "Could not verify domain availability: " . ($domain_availability['message'] ?? 'Please try again later.');
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+
+            $registration_extension = '';
+            $extension_candidates = $valid_exts;
+            usort($extension_candidates, function($a, $b) { return strlen($b) <=> strlen($a); });
+            foreach ($extension_candidates as $candidate_extension) {
+                $candidate_extension = strtolower($candidate_extension);
+                if (substr(strtolower($website_url), -strlen($candidate_extension)) === $candidate_extension) {
+                    $registration_extension = $candidate_extension;
+                    break;
+                }
+            }
+            $usd_registration_price = $registration_extension !== '' ? whmp_get_domain_price($registration_extension) : null;
+            $usd_to_ngn_rate = whmp_get_usd_to_ngn_rate();
+            if ($usd_registration_price === null || $usd_registration_price <= 0 || $usd_to_ngn_rate <= 0) {
+                $_SESSION["product_purchase_response"] = "WHMP has no valid price for this domain extension. Ask the administrator to sync the catalog and set the USD-to-NGN rate.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+            $domain_fee = whmp_convert_usd_to_ngn($usd_registration_price, $usd_to_ngn_rate);
+            if ($domain_fee <= 0) {
+                $_SESSION["product_purchase_response"] = "WHMP returned an invalid Naira price for this extension; no order was placed.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+        } else {
+            $domain_fee = 0;
+            if (!bc_is_valid_domain_name($website_url)) {
+                $_SESSION["product_purchase_response"] = "Enter a complete, valid domain name such as brand.com.ng.";
+                header("Location: ".$_SERVER["REQUEST_URI"]);
+                exit();
+            }
+        }
 
         if(!empty($first) && !empty($last) && !empty($address) && !empty($email) && !empty($pass) && !empty($phone) && !empty($website_url) && !empty($billing_package_id) && !empty($payment_method)){
             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
@@ -142,18 +207,10 @@
                                     $calculated_total += (float)($addon_price_row['total_addon_price'] ?? 0);
                                 }
 
-                                if ($domain_option == 'register') {
-                                    $actual_domain_fee = 0;
-                                    if (!empty($app_base_url)) {
-                                        $first_dot = strpos($app_base_url, '.');
-                                        $ext = ($first_dot !== false) ? substr($app_base_url, $first_dot) : '';
-                                        $ext_esc = mysqli_real_escape_string($connection_server, $ext);
-                                        $q_ext = mysqli_query($connection_server, "SELECT price, promo_price FROM sas_domain_extensions WHERE extension='$ext_esc' LIMIT 1");
-                                        if($r_ext = mysqli_fetch_assoc($q_ext)) {
-                                            $actual_domain_fee = ($r_ext['promo_price'] > 0) ? (float)$r_ext['promo_price'] : (float)$r_ext['price'];
-                                        }
-                                    }
-                                    $calculated_total += $actual_domain_fee;
+                                if ($domain_option === 'register') {
+                                    // The domain quote was verified server-side from WHMP above and
+                                    // converted using the super-admin's configured USD-to-NGN rate.
+                                    $calculated_total += $domain_fee;
                                 }
 
                                 $amount_in_kobo = $calculated_total * 100;
@@ -344,6 +401,22 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         }
         .domain-option-card i { font-size: 2rem; color: #666; margin-bottom: 0.5rem; display: block; }
         .domain-option-trigger:checked + .domain-option-card i { color: var(--bs-primary); }
+        .extension-catalog-wrap { border: 1px solid #e8edf5; border-radius: 14px; padding: 1rem; background: linear-gradient(180deg, #fbfdff, #f7f9fd); }
+        .extension-search-box { width: min(100%, 230px); }
+        .extension-catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: .55rem; max-height: 235px; overflow-y: auto; padding: 2px 4px 5px 2px; }
+        .extension-tile { min-width: 0; border: 1px solid #e2e8f0; border-radius: 11px; padding: .65rem .7rem; background: #fff; text-align: left; font: inherit; cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .extension-tile:hover { border-color: rgba(var(--bs-primary-rgb), .55); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(30, 64, 120, .08); }
+        .extension-tile.is-selected { border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .12); background: #f5f9ff; }
+        .extension-tile-tld { display: block; color: #173b79; font-weight: 800; font-size: .9rem; }
+        .extension-tile-price { display: block; margin-top: .25rem; color: #15803d; font-size: .79rem; font-weight: 800; white-space: nowrap; }
+        .extension-tile-price .badge { font-size: .58rem; vertical-align: 1px; }
+        .extension-tile-was { display: block; margin-top: .15rem; color: #7a8597; font-size: .68rem; }
+        .extension-catalog-meta { min-height: 1.2rem; }
+        @media (max-width: 576px) {
+            .extension-catalog-wrap { padding: .75rem; }
+            .extension-search-box { width: 100%; }
+            .extension-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 210px; }
+        }
 
         .checkout-summary {
             background: #fff;
@@ -545,13 +618,22 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                                     </div>
                                     <div class="col-sm-4">
                                         <div class="input-group input-group-lg h-100">
-                                            <select id="domain_extension" class="form-select fw-bold" onchange="updateCheckoutTotal()" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                                                <?php
-                                                $ext_res = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY extension ASC");
-                                                while($ext = mysqli_fetch_assoc($ext_res)) {
-                                                    echo "<option value='{$ext['extension']}'>{$ext['extension']}</option>";
-                                                }
+                                            <select id="domain_extension" class="form-select fw-bold" onchange="handleDomainExtensionChange()" style="border-top-right-radius: 0; border-bottom-right-radius: 0;" aria-label="Choose a domain extension">
+                                                <?php foreach ($domain_extension_options as $extension_option):
+                                                    $extension_name = $extension_option['extension'];
+                                                    $normal_price = (float)$extension_option['price'];
+                                                    $promo_price = (float)$extension_option['promo_price'];
+                                                    $payable_price = $promo_price > 0 ? $promo_price : $normal_price;
+                                                    $option_label = strtoupper($extension_name);
+                                                    if ($payable_price > 0) {
+                                                        $option_label .= ' — ₦' . number_format($payable_price, 2);
+                                                        if ($promo_price > 0 && $normal_price > 0) $option_label .= ' promo (was ₦' . number_format($normal_price, 2) . ')';
+                                                    } else {
+                                                        $option_label .= ' — price on availability check';
+                                                    }
                                                 ?>
+                                                <option value="<?php echo htmlspecialchars($extension_name, ENT_QUOTES, 'UTF-8'); ?>" data-price="<?php echo htmlspecialchars((string)$normal_price, ENT_QUOTES, 'UTF-8'); ?>" data-promo-price="<?php echo htmlspecialchars((string)$promo_price, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($option_label, ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
                                             </select>
                                             <button class="btn btn-primary px-4 fw-bold" type="button" onclick="lookupDomain()" id="search-btn" style="border-top-left-radius: 0; border-bottom-left-radius: 0;">
                                                 <span id="btn-text">SEARCH</span>
@@ -559,6 +641,45 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+
+                                <div class="extension-catalog-wrap mt-3">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                        <div>
+                                            <div class="fw-bold small text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-1"></i>Available domain extensions</div>
+                                            <div class="text-muted" style="font-size:.75rem;">Choose a TLD to update the selector. Promo prices are shown where available.</div>
+                                        </div>
+                                        <div class="input-group input-group-sm extension-search-box">
+                                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                            <input type="search" class="form-control" id="extension-search" placeholder="Filter extensions" aria-label="Filter domain extensions">
+                                        </div>
+                                    </div>
+                                    <div class="extension-catalog-meta small text-muted mb-2">
+                                        <span id="extension-count"><?php echo count($domain_extension_options); ?></span> extensions
+                                        <span class="mx-1">·</span><span id="selected-extension-summary" aria-live="polite">Choose an extension</span>
+                                    </div>
+                                    <div class="extension-catalog-grid" id="extension-catalog-grid">
+                                        <?php foreach ($domain_extension_options as $extension_option):
+                                            $extension_name = $extension_option['extension'];
+                                            $normal_price = (float)$extension_option['price'];
+                                            $promo_price = (float)$extension_option['promo_price'];
+                                            $payable_price = $promo_price > 0 ? $promo_price : $normal_price;
+                                            $tile_aria_label = strtoupper($extension_name) . ($payable_price > 0 ? ', ₦' . number_format($payable_price, 2) : ', price shown after availability check');
+                                        ?>
+                                        <button type="button" class="extension-tile" data-extension="<?php echo htmlspecialchars($extension_name, ENT_QUOTES, 'UTF-8'); ?>" aria-pressed="false" aria-label="Select <?php echo htmlspecialchars($tile_aria_label, ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="extension-tile-tld"><?php echo htmlspecialchars(strtoupper($extension_name), ENT_QUOTES, 'UTF-8'); ?></span>
+                                            <?php if ($promo_price > 0): ?>
+                                                <span class="extension-tile-price">₦<?php echo number_format($promo_price, 2); ?> <span class="badge rounded-pill text-bg-success">Promo</span></span>
+                                                <?php if ($normal_price > 0): ?><span class="extension-tile-was">Was ₦<?php echo number_format($normal_price, 2); ?></span><?php endif; ?>
+                                            <?php elseif ($normal_price > 0): ?>
+                                                <span class="extension-tile-price">₦<?php echo number_format($normal_price, 2); ?></span>
+                                            <?php else: ?>
+                                                <span class="extension-tile-was">Price on lookup</span>
+                                            <?php endif; ?>
+                                        </button>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div id="extension-empty-state" class="small text-muted text-center py-3 d-none">No extensions match your search.</div>
                                 </div>
                                 <div id="domain_feedback" class="mt-3"></div>
                             </div>
@@ -732,20 +853,63 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         document.getElementById('app_base_url_input').value = val.trim();
     }
 
+    function updateDomainExtensionCatalog() {
+        const select = document.getElementById('domain_extension');
+        const summary = document.getElementById('selected-extension-summary');
+        if (!select || !summary) return;
+        const selectedOption = select.options[select.selectedIndex];
+        summary.textContent = selectedOption ? `Selected ${selectedOption.textContent}` : 'Choose an extension';
+        document.querySelectorAll('.extension-tile').forEach(tile => {
+            const isSelected = tile.dataset.extension === select.value;
+            tile.classList.toggle('is-selected', isSelected);
+            tile.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+    }
+
+    function handleDomainExtensionChange() {
+        domainFee = 0;
+        document.getElementById('domain_fee_input').value = 0;
+        document.getElementById('app_base_url_input').value = '';
+        const submitBtn = document.getElementById('btn-submit');
+        if (submitBtn) submitBtn.disabled = true;
+        const domainInput = document.getElementById('target_domain');
+        const feedback = document.getElementById('domain_feedback');
+        if (domainInput && domainInput.value.trim() !== '') {
+            feedback.innerHTML = '<div class="alert alert-info py-2 rounded-3 small mb-0">Extension changed. Search again to confirm availability and refresh the price.</div>';
+        }
+        updateDomainExtensionCatalog();
+        updateCheckoutTotal();
+    }
+
     function useSuggestedDomain(domain) {
         const parts = domain.split('.');
         document.getElementById('target_domain').value = parts[0];
         document.getElementById('domain_extension').value = "." + parts.slice(1).join('.');
+        domainFee = 0;
+        document.getElementById('domain_fee_input').value = 0;
+        document.getElementById('app_base_url_input').value = '';
+        updateDomainExtensionCatalog();
+        updateCheckoutTotal();
         lookupDomain();
     }
 
+    function escapeDomainHtml(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+
     function lookupDomain() {
-        let domain = document.getElementById('target_domain').value.trim();
+        let domain = document.getElementById('target_domain').value.trim().toLowerCase();
         const extension = document.getElementById('domain_extension').value;
         const feedback = document.getElementById('domain_feedback');
         const spinner = document.getElementById('btn-spinner');
         const btnText = document.getElementById('btn-text');
         const submitBtn = document.getElementById('btn-submit');
+        domainFee = 0;
+        document.getElementById('domain_fee_input').value = 0;
+        document.getElementById('app_base_url_input').value = '';
+        submitBtn.disabled = true;
+        updateCheckoutTotal();
 
         if (domain === '') {
             feedback.innerHTML = '<div class="alert alert-danger py-2 rounded-3 small fw-bold">Error: Enter a name first</div>';
@@ -780,25 +944,32 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                         </div>
                     </div>`;
                     submitBtn.disabled = false;
-                } else {
+                } else if (data.status === 'registered' || data.status === 'unavailable') {
                     domainFee = 0;
                     document.getElementById('domain_fee_input').value = 0;
                     document.getElementById('app_base_url_input').value = "";
                     let html = `<div class="alert alert-danger border-0 rounded-4 p-3 shadow-sm mb-3">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-x-circle-fill me-2 fs-4" style="color:#dc3545;"></i>
-                            <strong class="fs-5" style="color:#dc3545;" class="text-danger">${fullDomain.toUpperCase()}</strong> IS TAKEN.
+                            <strong class="fs-5" style="color:#dc3545;">${escapeDomainHtml(fullDomain.toUpperCase())}</strong> IS TAKEN.
                         </div>
                     </div>`;
 
                     if(data.suggestions && data.suggestions.length > 0) {
                         html += `<div class="p-3 bg-white border rounded-4 shadow-sm"><div class="x-small fw-black text-muted mb-3 text-uppercase letter-spacing-1">Try available alternatives:</div><div class="d-flex flex-wrap gap-2">`;
                         data.suggestions.forEach(s => {
-                            html += `<button type="button" class="suggestion-btn" onclick="useSuggestedDomain('${s}')"><i class="bi bi-plus me-1"></i>${s}</button>`;
+                            html += `<button type="button" class="suggestion-btn" data-domain-suggestion="${escapeDomainHtml(s)}"><i class="bi bi-plus me-1"></i>${escapeDomainHtml(s)}</button>`;
                         });
                         html += `</div></div>`;
                     }
                     feedback.innerHTML = html;
+                    feedback.querySelectorAll('[data-domain-suggestion]').forEach(button => button.addEventListener('click', () => useSuggestedDomain(button.dataset.domainSuggestion)));
+                    submitBtn.disabled = true;
+                } else {
+                    domainFee = 0;
+                    document.getElementById('domain_fee_input').value = 0;
+                    document.getElementById('app_base_url_input').value = '';
+                    feedback.innerHTML = `<div class="alert alert-warning py-3 rounded-4 small">${escapeDomainHtml(data.message || 'The registry could not confirm availability. Please try again in a moment.')}</div>`;
                     submitBtn.disabled = true;
                 }
                 updateCheckoutTotal();
@@ -833,18 +1004,8 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         const option = document.querySelector('input[name="domain_option"]:checked').value;
         let domainVal = '';
         
-        // Fetch active extensions array from PHP
-        const availableExtensions = <?php
-            $ext_res = mysqli_query($connection_server, "SELECT extension FROM sas_domain_extensions ORDER BY extension ASC");
-            $exts = [];
-            while($ext = mysqli_fetch_assoc($ext_res)) {
-                $exts[] = strtolower(trim($ext['extension']));
-            }
-            if (empty($exts)) {
-                $exts = ['.com', '.ng', '.com.ng', '.org', '.net'];
-            }
-            echo json_encode($exts);
-        ?>;
+        // Use the same live extension list shown in the TLD catalog.
+        const availableExtensions = <?php echo json_encode($valid_exts, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
         if (option === 'register') {
             const domainInput = document.getElementById('target_domain').value.trim();
@@ -855,6 +1016,9 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                 return;
             }
             domainVal = (domainInput + extension).toLowerCase();
+            // Set app_base_url so the server receives the full domain even if SEARCH wasn't clicked
+            document.getElementById('app_base_url_input').value = domainVal;
+            document.getElementById('domain_fee_input').value = domainFee || 0;
         } else {
             domainVal = document.getElementById('existing_domain').value.trim().toLowerCase();
             if (domainVal === '') {
@@ -880,6 +1044,33 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
             alert('Please enter your domain name along with its extension (e.g., ' + friendlyExample + availableExtensions[0] + ').\n\nAvailable extensions:\n' + availableExtensions.join(', '));
         }
     });
+
+    const extensionSearch = document.getElementById('extension-search');
+    const extensionTiles = Array.from(document.querySelectorAll('.extension-tile'));
+    const extensionCount = document.getElementById('extension-count');
+    const extensionEmptyState = document.getElementById('extension-empty-state');
+    const extensionSelect = document.getElementById('domain_extension');
+
+    if (extensionSearch) {
+        extensionSearch.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            let visibleCount = 0;
+            extensionTiles.forEach(tile => {
+                const matches = tile.dataset.extension.toLowerCase().includes(query);
+                tile.hidden = !matches;
+                if (matches) visibleCount++;
+            });
+            if (extensionCount) extensionCount.textContent = visibleCount;
+            if (extensionEmptyState) extensionEmptyState.classList.toggle('d-none', visibleCount > 0);
+        });
+    }
+
+    extensionTiles.forEach(tile => tile.addEventListener('click', function() {
+        if (!extensionSelect) return;
+        extensionSelect.value = this.dataset.extension;
+        extensionSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }));
+    updateDomainExtensionCatalog();
     </script>
 </body>
 </html>

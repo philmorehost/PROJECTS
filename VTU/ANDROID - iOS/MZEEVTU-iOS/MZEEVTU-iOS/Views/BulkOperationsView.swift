@@ -224,10 +224,10 @@ struct BulkOperationsView: View {
 
         let endpoint = serviceType == "sms" ? "sms.php" : (serviceType == "data" ? "data.php" : "airtime.php")
 
-        AppNetworkService.shared.request(endpoint, params: params) { (result: Result<[String: AnyCodableValue], Error>) in
+        AppNetworkService.shared.requestObject(endpoint, params: params) { result in
             switch result {
             case .success(let dict):
-                if dict["status"]?.stringValue == "success" {
+                if (dict["status"] as? String) == "success" {
                     self.successCount += 1
                 }
             case .failure:

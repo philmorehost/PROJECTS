@@ -59,7 +59,28 @@ if (isset($_POST['save_post'])) {
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0755, true);
         }
-        $filename = time() . '_' . basename($_FILES['featured_image']['name']);
+
+        // Security: Validate file type and size
+        $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $max_size = 5 * 1024 * 1024; // 5MB max
+        $file_type = mime_content_type($_FILES['featured_image']['tmp_name']) ?: $_FILES['featured_image']['type'];
+
+        if (!in_array($file_type, $allowed_types)) {
+            $_SESSION['page_alert'] = "Error: Only JPG, PNG, GIF, and WebP images are allowed.";
+            header("Location: BlogPostEdit.php" . ($post_id ? "?edit_id=$post_id" : ""));
+            exit();
+        }
+
+        if ($_FILES['featured_image']['size'] > $max_size) {
+            $_SESSION['page_alert'] = "Error: Image must be less than 5MB.";
+            header("Location: BlogPostEdit.php" . ($post_id ? "?edit_id=$post_id" : ""));
+            exit();
+        }
+
+        // Use a safe filename - strip all non-alphanumeric chars except dot and underscore
+        $ext = pathinfo($_FILES['featured_image']['name'], PATHINFO_EXTENSION);
+        $ext = preg_replace('/[^a-zA-Z0-9]/', '', $ext);
+        $filename = time() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
         $target_file = $upload_dir . $filename;
 
         // Before uploading new, delete old if it exists and is different

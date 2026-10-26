@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.09.29-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.25-2');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -229,6 +229,7 @@ if ($check_pending_cols) {
         mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_sms_bridge TINYINT(1) DEFAULT 0");
         mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN domain_registration_fee DECIMAL(10,2) DEFAULT 0");
         mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN total_amount DECIMAL(10,2) DEFAULT 0");
+        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN whmp_domain_id VARCHAR(255) DEFAULT NULL");
     }
 
     if (!in_array('order_sms_bridge', $pending_existing) && in_array('app_base_url', $pending_existing)) {
@@ -260,11 +261,10 @@ if (!in_array('total_order_amount', $vendor_existing)) {
 if (!in_array('access_hash', $vendor_existing)) {
     mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN access_hash VARCHAR(100) UNIQUE DEFAULT NULL AFTER email");
 }
-// DGV6.90 Migration: Populate missing access_hash for existing vendors.
-        // Mint a random 64-hex token per vendor rather than MD5(CONCAT(id, email, NOW())): the
-        // access_hash is a bearer credential for the vendor order portal (it can start a vendor
-        // session), and the MD5 form is guessable from a known id/email plus an approximate timestamp.
-        $q_access_hash_missing = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE access_hash IS NULL OR access_hash = ''");
+// DGV6.90 Migration: Mint or rotate missing/legacy weak portal hashes.
+        // Old 32-character hashes are rejected by the portal URL validator. Replace them with
+        // random 64-hex bearer tokens so existing vendors get secure, usable portal links too.
+        $q_access_hash_missing = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE access_hash IS NULL OR access_hash = '' OR access_hash NOT REGEXP '^[a-fA-F0-9]{48,100}$'");
         if ($q_access_hash_missing) {
             while ($r_access_hash_missing = mysqli_fetch_assoc($q_access_hash_missing)) {
                 $new_access_hash = bin2hex(random_bytes(32));
@@ -307,6 +307,7 @@ $create_vendor_paid_bills_table = mysqli_query($connection_server, "CREATE TABLE
 
 //Create Domain Extensions Table
 $create_domain_extensions_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_domain_extensions (id INT NOT NULL AUTO_INCREMENT, extension VARCHAR(20) NOT NULL, price DECIMAL(10,2) NOT NULL, PRIMARY KEY (id), UNIQUE(extension))");
+$create_vendor_domain_requests_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_vendor_domain_requests (id INT NOT NULL AUTO_INCREMENT, vendor_id INT UNSIGNED NOT NULL, request_type ENUM('registration','change') NOT NULL, current_domain VARCHAR(253) NOT NULL DEFAULT '', requested_domain VARCHAR(253) NOT NULL, quoted_price DECIMAL(12,2) NOT NULL DEFAULT 0.00, status ENUM('pending','processing','approved','rejected') NOT NULL DEFAULT 'pending', vendor_note VARCHAR(500) DEFAULT NULL, decision_note VARCHAR(500) DEFAULT NULL, reviewed_by INT UNSIGNED DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, reviewed_at TIMESTAMP NULL DEFAULT NULL, PRIMARY KEY (id), KEY vendor_status (vendor_id,status), KEY status_created (status,created_at))");
 
 if ($create_domain_extensions_table) {
     $check_promo_col = mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_domain_extensions` LIKE 'promo_price'");
@@ -2264,88 +2265,6 @@ if (mysqli_num_rows($check_upc_idx) == 0) {
     mysqli_query($connection_server, "ALTER TABLE sas_user_payment_checkouts ADD INDEX (reference), ADD INDEX (vendor_id)");
 }
 
-// Create VoveID Webhooks Table
-mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_voveid_webhooks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    vendor_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NOT NULL,
-    ref_id VARCHAR(100) NOT NULL,
-    session_id VARCHAR(100),
-    status VARCHAR(50),
-    payload JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX (vendor_id),
-    INDEX (user_id),
-    INDEX (ref_id),
-    INDEX (session_id)
-)");
-
-// Create VoveID Sessions Table (for tracking session tokens)
-mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_voveid_sessions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    vendor_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NOT NULL,
-    ref_id VARCHAR(100) NOT NULL,
-    session_token TEXT,
-    session_id VARCHAR(100),
-    flow_id VARCHAR(100),
-    status VARCHAR(50) DEFAULT 'created',
-    expires_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX (vendor_id),
-    INDEX (user_id),
-    INDEX (ref_id),
-    INDEX (session_id)
-)");
-
-// Add VoveID columns to sas_users if not exist
-$voveid_cols = [
-    'voveid_ref_id' => "VARCHAR(100) DEFAULT NULL",
-    'voveid_session_id' => "VARCHAR(100) DEFAULT NULL",
-    'voveid_verification_data' => "LONGTEXT DEFAULT NULL",
-    'voveid_last_webhook' => "TIMESTAMP NULL DEFAULT NULL",
-    'voveid_status' => "VARCHAR(50) DEFAULT 'unverified'",
-];
-
-foreach ($voveid_cols as $col => $def) {
-    $check_col = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users LIKE '$col'");
-    if ($check_col && mysqli_num_rows($check_col) == 0) {
-        mysqli_query($connection_server, "ALTER TABLE sas_users ADD COLUMN $col $def");
-    }
-}
-
-// Add VoveID settings to sas_vendor_settings.
-// NOTE: bc-tables.php is a migration file that also runs (first load after an
-// update) BEFORE the calling config resolves a single vendor, so $vendor_id is
-// undefined here. Seed the default rows for every vendor instead, mirroring the
-// "default KYC config for all vendors" migration in bc-config.php.
-$voveid_settings = [
-    'voveid_api_key' => '',
-    'voveid_environment' => 'production',
-    'voveid_flow_id' => '',
-    'voveid_webhook_secret' => '',
-    'voveid_enabled' => '0',
-];
-
-$voveid_table_ok = mysqli_query($connection_server, "SHOW TABLES LIKE 'sas_vendor_settings'");
-if ($voveid_table_ok && mysqli_num_rows($voveid_table_ok) > 0) {
-    $voveid_vendor_ids = mysqli_query($connection_server, "SELECT id FROM sas_vendors");
-    if ($voveid_vendor_ids) {
-        while ($vv_row = mysqli_fetch_assoc($voveid_vendor_ids)) {
-            $vv_id = (int)$vv_row['id'];
-            if ($vv_id <= 0) continue;
-            foreach ($voveid_settings as $setting => $default) {
-                $setting_esc = mysqli_real_escape_string($connection_server, $setting);
-                $default_esc = mysqli_real_escape_string($connection_server, $default);
-                $check_setting = mysqli_query($connection_server, "SELECT id FROM sas_vendor_settings WHERE vendor_id='$vv_id' AND option_name='$setting_esc' LIMIT 1");
-                if ($check_setting && mysqli_num_rows($check_setting) == 0) {
-                    mysqli_query($connection_server, "INSERT INTO sas_vendor_settings (vendor_id, option_name, option_value) VALUES ('$vv_id', '$setting_esc', '$default_esc')");
-                }
-            }
-        }
-    }
-}
 
 $check_upc_idx = mysqli_query($connection_server, "SHOW INDEX FROM sas_user_payment_checkouts WHERE Key_name = 'reference'");
 if (mysqli_num_rows($check_upc_idx) == 0) {

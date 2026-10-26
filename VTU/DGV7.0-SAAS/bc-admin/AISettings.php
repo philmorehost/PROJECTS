@@ -244,7 +244,7 @@ $v_blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $ro
     <section class="section dashboard">
         <?php if (isset($_SESSION["product_purchase_response"])): ?>
             <div class="alert alert-info border-0 rounded-4 shadow-sm animate__animated animate__fadeInDown">
-                <i class="bi bi-info-circle me-2"></i> <?php echo $_SESSION["product_purchase_response"]; unset($_SESSION["product_purchase_response"]); ?>
+                <i class="bi bi-info-circle me-2"></i> <?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); unset($_SESSION["product_purchase_response"]); ?>
             </div>
         <?php endif; ?>
 

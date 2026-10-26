@@ -90,6 +90,8 @@ $_SESSION = [
 check_temporary_access('normalizes port and www aliases', bc_normalize_vendor_host('www.temporary.example.com:8443'), 'temporary.example.com');
 check_temporary_access('recognizes configured temporary host', bc_is_temporary_vendor_host(), true);
 check_temporary_access('builds portal link on configured HTTPS host', bc_temporary_vendor_portal_url(str_repeat('a', 64)), 'https://temporary.example.com/VendorOrderPortal.php?hash=' . str_repeat('a', 64));
+check_temporary_access('accepts the full-length random token format', bc_is_valid_vendor_access_hash(str_repeat('a', 64)), true);
+check_temporary_access('rejects legacy 32-character portal hashes', bc_temporary_vendor_portal_url(str_repeat('a', 32)), '');
 check_temporary_access('rejects malformed portal token', bc_temporary_vendor_portal_url('short'), '');
 check_temporary_access('accepts matching, active vendor session', bc_temporary_vendor_admin_session_is_valid(), true);
 

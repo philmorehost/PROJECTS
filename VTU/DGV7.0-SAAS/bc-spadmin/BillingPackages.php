@@ -281,7 +281,7 @@
                         <?php if(isset($_SESSION['page_alert'])): ?>
                             <div class="px-4 pt-3">
                                 <div class="alert alert-success alert-dismissible fade show rounded-3 border-0 shadow-sm" role="alert">
-                                    <i class="bi bi-check-circle me-2"></i><?php echo $_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
+                                    <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($_SESSION['page_alert'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
                                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
                             </div>

@@ -42,7 +42,7 @@ $res = mysqli_query($connection_server, $sql);
             <div class="card-header bg-white py-3">
                 <form class="row g-2">
                     <div class="col-md-4">
-                        <input type="text" name="username" class="form-control" placeholder="Search Username" value="<?php echo $_GET['username'] ?? ''; ?>">
+                        <input type="text" name="username" class="form-control" placeholder="Search Username" value="<?php echo htmlspecialchars($_GET['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     <div class="col-md-3">
                         <select name="status" class="form-select">

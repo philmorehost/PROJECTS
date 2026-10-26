@@ -87,10 +87,18 @@
                     <label class="form-label small fw-bold text-uppercase">Data Type</label>
                     <select style="text-align: center;" id="internet-data-type" name="type" onchange="tickDataCarrier(); resetDataQuantity();" class="form-select form-control-lg" required>
                         <option value="" default hidden selected>Select Type</option>
-                        <option value="shared-data">Shared Data</option>
-                        <option value="sme-data">SME Data</option>
-                        <option value="cg-data">Corporate Gifting Data</option>
-                        <option value="dd-data">Direct Data</option>
+                        <?php
+                        $data_type_labels = [
+                            'shared-data' => 'Shared Data',
+                            'sme-data' => 'SME Data',
+                            'cg-data' => 'Corporate Gifting Data',
+                            'dd-data' => 'Direct Data',
+                        ];
+                        foreach ($data_type_labels as $data_type_key => $data_type_label):
+                            if (!isServiceEnabled($data_type_key, $get_logged_user_details['vendor_id'])) continue;
+                        ?>
+                        <option value="<?php echo htmlspecialchars($data_type_key, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($data_type_label, ENT_QUOTES, 'UTF-8'); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
@@ -116,6 +124,7 @@
                         );
                         $plans_sql_parts = array();
                         foreach ($data_type_status_tables as $dtype => $status_table) {
+                            if (!isServiceEnabled($dtype, $vid)) continue;
                             $plans_sql_parts[] = "SELECT v.*, p.product_name, a.api_type
                                 FROM $acc_level_table_name v
                                 JOIN sas_products p ON v.product_id = p.id AND v.vendor_id = p.vendor_id
@@ -125,8 +134,9 @@
                         }
                         $plans_sql = implode(" UNION ALL ", $plans_sql_parts);
 
-                        $plans_query = mysqli_query($connection_server, $plans_sql);
-                        while($row = mysqli_fetch_assoc($plans_query)){
+                        $plans_query = !empty($plans_sql_parts) ? mysqli_query($connection_server, $plans_sql) : false;
+                        if ($plans_query) {
+                            while($row = mysqli_fetch_assoc($plans_query)){
                             if($row["val_2"] > 0){
                                 $pname = $row['product_name'];
                                 $dtype = $row['api_type'];
@@ -134,6 +144,7 @@
                                 $descriptive_name = !empty($row["val_4"]) ? $row["val_4"] : str_replace("_", " ", $row["val_1"]);
                                 $label = strtoupper($pname) . " " . strtoupper(str_replace("-", " ", $dtype)) . " " . $descriptive_name . " @ ₦" . number_format($row["val_2"], 2) . " (" . $row["val_3"] . " days)";
                                 echo '<option product-category="'.$cat.'" value="'.$row["val_1"].'" hidden>'.$label.'</option>';
+                            }
                             }
                         }
                     ?>

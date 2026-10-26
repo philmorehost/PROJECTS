@@ -291,10 +291,10 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 	if($connection_server){
     // Branch DG6.7 Optimization: Only run migrations if not already done in current session
     // This significantly improves site-wide page load speeds by skipping redundant DB structural checks.
-    if (!isset($_SESSION['migrations_completed_version']) || $_SESSION['migrations_completed_version'] !== '6.9.6') {
+    if (!isset($_SESSION['migrations_completed_version']) || $_SESSION['migrations_completed_version'] !== '2026.10.25-2') {
         include_once(__DIR__ . "/bc-tables.php");
         include_once(__DIR__ . "/bc-email-templates.php");
-        $_SESSION['migrations_completed_version'] = '6.9.6';
+        $_SESSION['migrations_completed_version'] = '2026.10.25-2';
     }
 	$checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");
 	if($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1){
