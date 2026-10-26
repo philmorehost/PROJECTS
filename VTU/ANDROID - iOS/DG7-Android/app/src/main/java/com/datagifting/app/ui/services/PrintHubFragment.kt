@@ -57,12 +57,14 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
     // All providers discovered from API for non-network types
     private val providersByType = mutableMapOf<String, MutableList<String>>()
 
-    private val dataTypes = listOf(
+    private val allDataTypes = listOf(
         "sme-data" to "SME Data",
         "cg-data" to "Corporate Gifting",
         "dd-data" to "Direct Data",
         "shared-data" to "Shared Data"
     )
+    private var dataTypes: List<Pair<String, String>> = emptyList()
+    private var selectedDataType = ""
 
     private val networkServices = setOf(SERVICE_TYPE_DATA, SERVICE_TYPE_AIRTIME)
 
@@ -194,17 +196,32 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
     }
 
     private fun setupDataTypeDropdown() {
-        val labels = dataTypes.map { it.second }
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, labels)
-        binding.spinnerDataType.setAdapter(adapter)
+        binding.spinnerDataType.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, emptyList<String>()))
         binding.spinnerDataType.threshold = 0
-        binding.spinnerDataType.setText(labels[0], false)
+        binding.spinnerDataType.isEnabled = false
 
-        binding.spinnerDataType.setOnItemClickListener { _, _, _, _ ->
+        binding.spinnerDataType.setOnItemClickListener { _, _, position, _ ->
+            dataTypes.getOrNull(position)?.let { selectedDataType = it.first }
             selectedPlan = null
             updatePlanDropdown()
             updateTotalPrice()
         }
+    }
+
+    private fun refreshDataTypeDropdown() {
+        val availableCodes = allPlans.values.flatten()
+            .filter { it.serviceType == SERVICE_TYPE_DATA }
+            .map { it.dataType.lowercase() }
+            .toSet()
+        dataTypes = allDataTypes.filter { it.first in availableCodes }
+        if (dataTypes.none { it.first == selectedDataType }) {
+            selectedDataType = dataTypes.firstOrNull()?.first ?: ""
+        }
+
+        val labels = dataTypes.map { it.second }
+        binding.spinnerDataType.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, labels))
+        binding.spinnerDataType.isEnabled = dataTypes.isNotEmpty()
+        binding.spinnerDataType.setText(dataTypes.firstOrNull { it.first == selectedDataType }?.second ?: "", false)
     }
 
     private fun setupProviderDropdown() {
@@ -220,8 +237,7 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
 
     private fun getCurrentDataType(): String {
         if (selectedServiceType != SERVICE_TYPE_DATA) return ""
-        val label = binding.spinnerDataType.text?.toString() ?: dataTypes[0].second
-        return dataTypes.firstOrNull { it.second == label }?.first ?: dataTypes[0].first
+        return selectedDataType
     }
 
     private fun getCurrentProviderOrNetwork(): String {
@@ -295,6 +311,7 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
                     activity?.runOnUiThread {
                         if (_binding == null) return@runOnUiThread
                         binding.progressBar.visibility = View.GONE
+                        refreshDataTypeDropdown()
                         // Refresh provider lists for current type
                         if (selectedServiceType !in networkServices) {
                             val providers = providersByType[selectedServiceType] ?: emptyList()

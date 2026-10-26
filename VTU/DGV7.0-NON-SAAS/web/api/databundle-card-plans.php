@@ -22,6 +22,7 @@ $response_data = [];
 while($plan = mysqli_fetch_assoc($bundle_plans_query)){
     $stype = $plan['service_type'] ?? 'data';
     $dtype = $plan['data_type'];
+    if ($stype === 'data' && !isServiceEnabled($dtype, $vid)) continue;
     $pname = $plan['product_name'];
     $pcode = $plan['plan_code'];
     $price = (float)($plan['price'] ?? 0);

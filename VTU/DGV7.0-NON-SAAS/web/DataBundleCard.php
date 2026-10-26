@@ -52,6 +52,11 @@
         $get_plan = mysqli_fetch_array(mysqli_query($connection_server, "SELECT p.*, prod.product_name FROM sas_databundle_plans p JOIN sas_products prod ON p.product_id = prod.id WHERE p.vendor_id='".$get_logged_user_details["vendor_id"]."' && p.id='$plan_id'"));
 
         if($get_plan){
+            if ($get_plan['service_type'] === 'data' && !isServiceEnabled($get_plan['data_type'], $get_logged_user_details['vendor_id'])) {
+                $_SESSION["product_purchase_response"] = "This data type is currently unavailable.";
+                header("Location: DataBundleCard.php?type=$service_type");
+                exit();
+            }
             $account_level_table_name_arrays = array(1 => "sas_smart_parameter_values", 2 => "sas_agent_parameter_values", 3 => "sas_api_parameter_values");
             $acc_level_table_name = $account_level_table_name_arrays[$get_logged_user_details["account_level"]];
 
@@ -227,10 +232,18 @@
                     <select name="data_type" id="data-type" class="form-select form-control-lg" onchange="filterPlans()">
                         <?php if($service_type == 'data'): ?>
                             <option value="">Select Type</option>
-                            <option value="sme-data" selected>SME Data</option>
-                            <option value="shared-data">Shared Data</option>
-                            <option value="cg-data">Corporate Data</option>
-                            <option value="dd-data">Direct Data</option>
+                            <?php
+                            $data_type_labels = [
+                                'sme-data' => 'SME Data',
+                                'shared-data' => 'Shared Data',
+                                'cg-data' => 'Corporate Data',
+                                'dd-data' => 'Direct Data',
+                            ];
+                            foreach ($data_type_labels as $data_type_key => $data_type_label):
+                                if (!isServiceEnabled($data_type_key, $get_logged_user_details['vendor_id'])) continue;
+                            ?>
+                            <option value="<?php echo htmlspecialchars($data_type_key, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $data_type_key === 'sme-data' ? 'selected' : ''; ?>><?php echo htmlspecialchars($data_type_label, ENT_QUOTES, 'UTF-8'); ?></option>
+                            <?php endforeach; ?>
                         <?php else: ?>
                             <option value="<?php echo $service_type; ?>" selected><?php echo ucwords($service_type); ?></option>
                         <?php endif; ?>
@@ -254,6 +267,7 @@
                                 $types = ["sme-data", "shared-data", "cg-data", "dd-data"];
                                 $type_tables = ["sme-data" => "sas_sme_data_status", "shared-data" => "sas_shared_data_status", "cg-data" => "sas_cg_data_status", "dd-data" => "sas_dd_data_status"];
                                 foreach($types as $t){
+                                    if (!isServiceEnabled($t, $vid)) continue;
                                     $st_res = mysqli_query($connection_server, "SELECT product_name, api_id FROM ".$type_tables[$t]." WHERE vendor_id='$vid'");
                                     while($st_row = mysqli_fetch_assoc($st_res)){
                                         $status_map[$t][$st_row['product_name']] = $st_row['api_id'];
@@ -276,6 +290,7 @@
 
                             while($plan = mysqli_fetch_assoc($bundle_plans_query)){
                                 $dtype = $plan['data_type'];
+                                if ($service_type === 'data' && !isServiceEnabled($dtype, $vid)) continue;
                                 $pname = $plan['product_name'];
                                 $pid = $plan['product_id'];
                                 $pcode = $plan['plan_code'];
