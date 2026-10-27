@@ -65,6 +65,7 @@
                         if(mysqli_query($connection_server, $insert_sql)) {
                         $new_vendor_id = mysqli_insert_id($connection_server);
                         $domain_registration_warning = '';
+                        $addon_domain_warning = '';
 
                         // Vendor registration uses WHMP exclusively. A failed or unconfigured
                         // provider registration is reported for follow-up; no alternate registrar is called.
@@ -100,9 +101,15 @@
                         // 6. Delete from pending vendors
                         if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
 
-                        // 6b. Add addon domain via cPanel API
+                        // 6b. Add the platform's actual host (app_base_url), falling back to the
+                        // legacy website_url only for older pending-vendor records.
                         include_once(__DIR__ . "/../func/cpanel-func.php");
-                        cpanel_add_addon_domain($website_url);
+                        $addon_domain = !empty($app_base_url) ? $app_base_url : $website_url;
+                        $cpanel_add_result = cpanel_add_addon_domain($addon_domain);
+                        if (empty($cpanel_add_result['success'])) {
+                            $addon_domain_warning = 'cPanel could not add ' . $addon_domain . ': ' . ($cpanel_add_result['message'] ?? 'unknown cPanel error');
+                            error_log('[VendorReg] ' . $addon_domain_warning);
+                        }
 
                         // Fetch domain settings to include in the welcome email
                         $nameservers = '';
@@ -160,18 +167,19 @@
                            $email_body .= "<br><br><strong>Portal Link:</strong> <a href=\"{$portal_link}\">{$portal_link}</a>";
                         }
                         $email_body .= $tmp_instructions;
-                        if ($domain_registration_warning !== '') {
-                            $email_body .= '<br><br><strong>Domain registration needs attention:</strong> ' . htmlspecialchars($domain_registration_warning, ENT_QUOTES, 'UTF-8') . ' Please contact support before using the requested custom domain.';
+                        $domain_setup_warnings = array_filter([$domain_registration_warning, $addon_domain_warning]);
+                        if (!empty($domain_setup_warnings)) {
+                            $email_body .= '<br><br><strong>Domain setup needs attention:</strong> ' . htmlspecialchars(implode(' ', $domain_setup_warnings), ENT_QUOTES, 'UTF-8') . ' Please resolve this before relying on the requested custom domain.';
                         }
 
                         sendVendorEmail($email, $email_subject, $email_body);
 
-                        if ($domain_registration_warning !== '') {
-                            $_SESSION['page_alert'] = "Vendor account activated, but domain registration needs attention: " . $domain_registration_warning;
+                        if (!empty($domain_setup_warnings)) {
+                            $_SESSION['page_alert'] = "Vendor account activated, but domain setup needs attention: " . implode(' ', $domain_setup_warnings);
                         } elseif ((float)$pending_vendor['domain_registration_fee'] > 0 && !empty($pending_vendor['app_base_url'])) {
-                            $_SESSION['page_alert'] = "Vendor approved and account activated. WHMP domain registration completed successfully.";
+                            $_SESSION['page_alert'] = "Vendor approved and account activated. WHMP registration and cPanel addon-domain setup completed successfully.";
                         } else {
-                            $_SESSION['page_alert'] = "Vendor approved and account activated.";
+                            $_SESSION['page_alert'] = "Vendor approved and account activated. cPanel addon-domain setup completed successfully.";
                         }
                     } else {
                         $_SESSION['page_alert'] = "Error approving vendor: " . mysqli_error($connection_server);

@@ -82,21 +82,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'])) {
     }
 
     if ($request['request_type'] === 'change') {
-        $update = mysqli_query($connection_server, "UPDATE sas_vendors SET website_url='$domain_esc', app_base_url='$domain_esc' WHERE id='$vendor_id'");
-        if (!$update) {
-            mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='pending' WHERE id='$request_id_sql' AND status='processing'");
-            $_SESSION['page_alert'] = 'Could not update the vendor domain. Request restored to pending; please retry.';
+        include_once(__DIR__ . '/../func/cpanel-func.php');
+        $cpanel_add_result = cpanel_add_addon_domain($requested_domain);
+        if (empty($cpanel_add_result['success'])) {
+            $decision_note = 'cPanel addon-domain setup failed: ' . ($cpanel_add_result['message'] ?? 'unknown cPanel error');
+            $decision_esc = mysqli_real_escape_string($connection_server, substr($decision_note, 0, 500));
+            mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='pending', decision_note='$decision_esc' WHERE id='$request_id_sql' AND status='processing'");
+            $_SESSION['page_alert'] = $decision_note . ' The vendor domain was not changed and the request remains pending.';
+            error_log('[DomainChangeRequests] ' . $decision_note . ' Request #' . $request_id_sql . '.');
             header('Location: DomainChangeRequests.php');
             exit;
         }
-        // Keep cPanel addon-domain configuration aligned with the approved host where it is configured.
-        include_once(__DIR__ . '/../func/cpanel-func.php');
-        if ($live_current !== '' && !bc_is_temporary_vendor_host($live_current)) cpanel_remove_addon_domain($live_current);
-        cpanel_add_addon_domain($requested_domain);
-        $decision_note = $note !== '' ? $note : 'Existing-domain change approved.';
-        $decision_esc = mysqli_real_escape_string($connection_server, $decision_note);
-        mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='approved', decision_note='$decision_esc', reviewed_by='$admin_id', reviewed_at=NOW() WHERE id='$request_id_sql' AND status='processing'");
-        $_SESSION['page_alert'] = 'Domain change approved and applied to the vendor account.';
+
+        $update = mysqli_query($connection_server, "UPDATE sas_vendors SET website_url='$domain_esc', app_base_url='$domain_esc' WHERE id='$vendor_id'");
+        if (!$update) {
+            $rollback_add = cpanel_remove_addon_domain($requested_domain);
+            if (empty($rollback_add['success'])) error_log('[DomainChangeRequests] Failed to remove newly-added cPanel domain after vendor DB update failure: ' . ($rollback_add['message'] ?? 'unknown error'));
+            mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='pending' WHERE id='$request_id_sql' AND status='processing'");
+            $_SESSION['page_alert'] = 'Could not update the vendor domain. The new cPanel addon domain was rolled back where possible; the request remains pending.';
+            header('Location: DomainChangeRequests.php');
+            exit;
+        }
+
+        $old_domain_warning = '';
+        if ($live_current !== '' && !bc_is_temporary_vendor_host($live_current) && $live_current !== $requested_domain) {
+            $cpanel_remove_result = cpanel_remove_addon_domain($live_current);
+            if (empty($cpanel_remove_result['success'])) {
+                $old_domain_warning = ' The old cPanel addon domain could not be removed: ' . ($cpanel_remove_result['message'] ?? 'unknown cPanel error');
+                error_log('[DomainChangeRequests] ' . trim($old_domain_warning) . ' Vendor #' . $vendor_id . '.');
+            }
+        }
+        $decision_note = trim(($note !== '' ? $note : 'Existing-domain change approved.') . $old_domain_warning);
+        $decision_esc = mysqli_real_escape_string($connection_server, substr($decision_note, 0, 500));
+        $review_saved = mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='approved', decision_note='$decision_esc', reviewed_by='$admin_id', reviewed_at=NOW() WHERE id='$request_id_sql' AND status='processing'");
+        $_SESSION['page_alert'] = 'Domain change approved, cPanel addon domain created, and vendor account updated.' . $old_domain_warning;
+        if (!$review_saved) error_log('[DomainChangeRequests] Vendor domain updated, but request #' . $request_id_sql . ' could not be marked approved.');
         header('Location: DomainChangeRequests.php');
         exit;
     }
@@ -151,13 +171,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'])) {
 
     $expiry = date('Y-m-d', strtotime('+1 year'));
     $vendor_update = mysqli_query($connection_server, "UPDATE sas_vendors SET website_url='$domain_esc', app_base_url='$domain_esc', domain_expiry_date='$expiry' WHERE id='$vendor_id'");
-    $decision_note = $vendor_update ? ($note !== '' ? $note : 'WHMP domain registration approved and assigned.') : 'WHMP registered the domain and charged the quoted fee, but the vendor account update failed. Manual account repair is required; do not retry registration.';
-    $decision_esc = mysqli_real_escape_string($connection_server, $decision_note);
-    mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='approved', decision_note='$decision_esc', reviewed_by='$admin_id', reviewed_at=NOW() WHERE id='$request_id_sql' AND status='processing'");
+    $cpanel_warning = '';
     if ($vendor_update) {
         include_once(__DIR__ . '/../func/cpanel-func.php');
-        cpanel_add_addon_domain($requested_domain);
-        $_SESSION['page_alert'] = 'WHMP registered and assigned ' . $requested_domain . '; ₦' . number_format($quote, 2) . ' was charged to the vendor wallet.';
+        $cpanel_add_result = cpanel_add_addon_domain($requested_domain);
+        if (empty($cpanel_add_result['success'])) {
+            $cpanel_warning = ' cPanel addon-domain creation failed: ' . ($cpanel_add_result['message'] ?? 'unknown cPanel error');
+            error_log('[DomainChangeRequests] ' . trim($cpanel_warning) . ' Domain: ' . $requested_domain . ', vendor #' . $vendor_id . '.');
+        }
+    }
+    $decision_note = $vendor_update
+        ? (($note !== '' ? $note : 'WHMP domain registration approved and assigned.') . $cpanel_warning)
+        : 'WHMP registered the domain and charged the quoted fee, but the vendor account update failed. Manual account repair is required; do not retry registration.';
+    $decision_esc = mysqli_real_escape_string($connection_server, substr($decision_note, 0, 500));
+    mysqli_query($connection_server, "UPDATE sas_vendor_domain_requests SET status='approved', decision_note='$decision_esc', reviewed_by='$admin_id', reviewed_at=NOW() WHERE id='$request_id_sql' AND status='processing'");
+    if ($vendor_update) {
+        $_SESSION['page_alert'] = 'WHMP registered and assigned ' . $requested_domain . '; ₦' . number_format($quote, 2) . ' was charged to the vendor wallet.' . $cpanel_warning;
     } else {
         error_log('[DomainChangeRequests] WHMP registered ' . $requested_domain . ' for vendor ' . $vendor_id . ' but the vendor update failed.');
         $_SESSION['page_alert'] = $decision_note;
