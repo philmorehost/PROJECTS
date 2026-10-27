@@ -1,14 +1,16 @@
-<?php session_start();
+<?php
+session_start();
 include("../func/bc-config.php");
 
 $ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["ref"] ?? "")));
 
-if (empty($ref)) {
+if ($ref === '') {
     header("Location: NINCardHistory.php");
     exit();
 }
 
-$record = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_nin_card_requests WHERE reference='$ref' AND vendor_id='".$get_logged_user_details["vendor_id"]."' AND user_id='".$get_logged_user_details["id"]."' LIMIT 1"));
+$record_query = mysqli_query($connection_server, "SELECT * FROM sas_nin_card_requests WHERE reference='$ref' AND vendor_id='".(int)$get_logged_user_details["vendor_id"]."' AND user_id='".(int)$get_logged_user_details["id"]."' LIMIT 1");
+$record = $record_query ? mysqli_fetch_assoc($record_query) : null;
 
 if (!$record) {
     $_SESSION["product_purchase_response"] = "Record not found.";
@@ -16,25 +18,42 @@ if (!$record) {
     exit();
 }
 
-$fullname = trim($record['firstname'] . ' ' . $record['middlename'] . ' ' . $record['lastname']);
+$name_parts = array_filter([
+    trim((string)($record['firstname'] ?? '')),
+    trim((string)($record['middlename'] ?? '')),
+    trim((string)($record['lastname'] ?? '')),
+], function ($part) { return $part !== ''; });
+$fullname = trim(implode(' ', $name_parts));
 $dob_formatted = '';
 if (!empty($record['birthdate'])) {
     $ts = strtotime($record['birthdate']);
-    $dob_formatted = $ts ? date('d-M-Y', $ts) : $record['birthdate'];
+    $dob_formatted = $ts ? date('d-M-Y', $ts) : (string)$record['birthdate'];
 }
+$nin_number = preg_replace('/\D+/', '', (string)($record['nin_input'] ?? ''));
 
-// Provider photos may be raw base64, a data URI, or an HTTPS image URL.
-// Normalize image data so it is always rendered with its real MIME type.
+/** Normalize the supported provider photo formats to a safe browser image source. */
 function nin_card_image_src($value) {
     $value = trim((string)$value);
     if ($value === '') return '';
-    if (preg_match('~^https://[^\\s"<>]+$~i', $value)) return $value;
+
+    $url = parse_url($value);
+    if (is_array($url) && strtolower($url['scheme'] ?? '') === 'https' && !empty($url['host'])) {
+        return $value;
+    }
 
     $payload = $value;
-    if (preg_match('~^data:image/(?:jpeg|jpg|png|gif|webp);base64,(.*)$~is', $value, $matches)) {
+    if (preg_match('~^data:image/(?:jpeg|jpg|png|gif|webp)(?:;[^,]*)?;base64,(.*)$~is', $value, $matches)) {
         $payload = $matches[1];
+    } elseif (stripos($value, 'base64,') === 0) {
+        $payload = substr($value, 7);
     }
-    $payload = preg_replace('/\\s+/', '', $payload);
+
+    $payload = preg_replace('/\s+/', '', $payload);
+    $payload = strtr($payload, '-_', '+/');
+    if ($payload === '' || strlen($payload) > 8000000) return '';
+    $padding = strlen($payload) % 4;
+    if ($padding) $payload .= str_repeat('=', 4 - $padding);
+
     $image_bytes = base64_decode($payload, true);
     if ($image_bytes === false || $image_bytes === '') return '';
 
@@ -53,226 +72,304 @@ function nin_card_image_src($value) {
     return 'data:' . $mime . ';base64,' . base64_encode($image_bytes);
 }
 
-$display_photo = nin_card_image_src(!empty($record['user_portrait']) ? $record['user_portrait'] : ($record['photo_data'] ?? ''));
+// Prefer a valid user-uploaded portrait, then fall back to the selected provider's photo.
+$display_photo = nin_card_image_src($record['user_portrait'] ?? '');
+if ($display_photo === '') $display_photo = nin_card_image_src($record['photo_data'] ?? '');
+
+// These high-resolution artwork files are shipped in both editions.
+$front_art = '../asset/nin-premium-bg.png';
+$back_art = '../asset/nin-disclaimer-back.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>NIN Slip — <?php echo htmlspecialchars($fullname ?: $record['nin_input']); ?></title>
+    <title>NIN Slip — <?php echo htmlspecialchars($fullname ?: $nin_number, ENT_QUOTES, 'UTF-8'); ?></title>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
-
-        body { background: #f0f4f8; font-family: 'Roboto', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-        .nin-card {
-            width: 85.6mm;
-            height: 53.98mm;
-            position: relative;
-            border-radius: 12px;
-            overflow: hidden;
-            margin: 20px auto;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            background-size: 100% 100%;
-            background-repeat: no-repeat;
-            color: #000;
+        * { box-sizing: border-box; }
+        html, body { min-width: 0; width: 100%; margin: 0; }
+        body {
+            background: #f0f4f8;
+            color: #17251b;
+            font-family: Arial, Helvetica, sans-serif;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            overflow-x: hidden;
         }
-        .nin-card.front { background-color: #fff; }
-        .nin-card.back { background-color: #e8f5e9; }
-        /* Use real image elements for card artwork so browser print settings cannot
-           silently suppress the card design as they often do with CSS backgrounds. */
-        .card-background { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: fill; }
-
+        .print-wrapper {
+            width: 100%;
+            max-width: 920px;
+            margin: clamp(12px, 4vh, 32px) auto;
+            padding: clamp(12px, 4vw, 40px);
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,.08);
+        }
+        .action-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .reference-line { text-align: center; overflow-wrap: anywhere; }
+        .nin-card {
+            position: relative;
+            width: 85.6mm;
+            max-width: 100%;
+            height: auto;
+            aspect-ratio: 85.6 / 53.98;
+            margin: 22px auto;
+            overflow: hidden;
+            border: 1px solid rgba(24, 84, 43, .28);
+            border-radius: 3mm;
+            background: #eaf5ed;
+            box-shadow: 0 8px 24px rgba(0,0,0,.15);
+            color: #102a18;
+            isolation: isolate;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .card-background {
+            position: absolute;
+            z-index: 0;
+            inset: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
         .card-overlay {
             position: absolute;
             z-index: 1;
-            top: 0; left: 0; width: 100%; height: 100%;
-            padding: 10px 14px;
-            box-sizing: border-box;
+            inset: 0;
+            padding: 4.5% 5%;
+            overflow: hidden;
         }
-
         .header-section {
+            position: relative;
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 8px;
+            align-items: flex-start;
+            justify-content: center;
+            min-height: 23%;
         }
-        .coa-logo { width: 32px; height: auto; }
-        .nimc-logo { width: 32px; height: auto; }
-        .header-titles { text-align: center; line-height: 1.1; flex: 1; }
-        .header-titles h1 { font-size: 8.5px; font-weight: 900; margin: 0; color: #1e4d2b; text-transform: uppercase; }
-        .header-titles p { font-size: 6.5px; margin: 0; color: #333; font-weight: 700; }
-        .header-titles .slip-type { font-size: 7.5px; color: #2e7d32; font-weight: 900; margin-top: 1px; letter-spacing: 0.5px; }
-
-        .body-section { display: flex; margin-top: 6px; }
-        .details-col { flex: 1; padding-right: 5px; }
-        .photo-col { width: 62px; text-align: right; }
-
-        .full-name { font-size: 10.5px; font-weight: 900; color: #000; margin-bottom: 6px; text-transform: uppercase; line-height: 1.2; }
-        .info-row { font-size: 7.5px; margin-bottom: 2.5px; color: #444; font-weight: 600; display: flex; }
-        .info-row .label { width: 55px; }
-        .info-row .val { color: #000; font-weight: 800; text-transform: uppercase; }
-
-        .id-photo {
-            width: 60px; height: 72px;
-            border-radius: 4px;
-            border: 1px solid #1e4d2b;
+        .header-titles {
+            width: 100%;
+            padding: 0 13% 0 1%;
+            text-align: center;
+            line-height: 1.12;
+        }
+        .header-titles h1 {
+            margin: 0;
+            color: #184c2a;
+            font-size: clamp(7px, 2.4vw, 9px);
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .header-titles p {
+            margin: 1px 0 0;
+            color: #243b2a;
+            font-size: clamp(6px, 1.9vw, 7px);
+            font-weight: 700;
+        }
+        .header-titles .slip-type {
+            margin-top: 2px;
+            color: #27683c;
+            font-size: clamp(6px, 2vw, 7.5px);
+            font-weight: 900;
+            letter-spacing: .35px;
+        }
+        .nimc-logo {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 11%;
+            max-width: 30px;
+            max-height: 95%;
+            object-fit: contain;
+        }
+        .body-section {
+            display: flex;
+            align-items: flex-start;
+            gap: 3%;
+            height: 58%;
+            margin-top: 1%;
+        }
+        .details-col { flex: 1 1 auto; min-width: 0; }
+        .photo-col { flex: 0 0 21%; min-width: 0; text-align: right; }
+        .full-name {
+            max-height: 2.4em;
+            overflow: hidden;
+            margin: 0 0 4px;
+            color: #0c2112;
+            font-size: clamp(9px, 2.8vw, 11px);
+            font-weight: 900;
+            line-height: 1.15;
+            text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+        .info-row {
+            display: grid;
+            grid-template-columns: minmax(48px, 27%) minmax(0, 1fr);
+            gap: 3px;
+            margin-bottom: 2px;
+            color: #314137;
+            font-size: clamp(6px, 1.9vw, 7.5px);
+            font-weight: 600;
+            line-height: 1.16;
+        }
+        .info-row .label { min-width: 0; }
+        .info-row .val {
+            min-width: 0;
+            color: #0c2112;
+            font-weight: 800;
+            text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+        .id-photo, .photo-placeholder {
+            display: block;
+            width: 100%;
+            max-height: 76px;
+            aspect-ratio: 5 / 6;
+            border: 1px solid #255a35;
+            border-radius: 3px;
             object-fit: cover;
             background: #fff;
         }
         .photo-placeholder {
-            width: 60px; height: 72px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            background: #eee;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 30px; color: #ccc;
-        }
-
-        .nin-section {
-            position: absolute;
-            bottom: 10px;
-            left: 14px;
-        }
-        .nin-label { font-size: 8.5px; font-weight: 900; color: #1e4d2b; margin-bottom: -1px; }
-        .nin-number { font-size: 17px; font-weight: 900; color: #1e4d2b; letter-spacing: 2.5px; font-family: 'Courier New', Courier, monospace; }
-
-        /* Back styling - The background image has text, so we might not need much overlay unless we want to enhance it */
-        .back-overlay {
-            position: absolute;
-            z-index: 1;
-            top: 0; left: 0; width: 100%; height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 15px;
-            box-sizing: border-box;
-            background-color: rgba(232, 245, 233, 0.4); /* Light green tint as requested */
+            border-color: rgba(37,90,53,.35);
+            color: rgba(37,90,53,.45);
+            font-size: clamp(18px, 6vw, 28px);
         }
-
-        /* Print area */
-        .print-wrapper {
-            max-width: 800px;
-            margin: 30px auto;
-            background: #fff;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        .nin-section {
+            position: absolute;
+            bottom: 4%;
+            left: 5%;
+            max-width: 90%;
         }
-        .action-bar { text-align: center; margin-bottom: 30px; }
+        .nin-label {
+            margin: 0 0 1px;
+            color: #174d2a;
+            font-size: clamp(7px, 2.2vw, 8.5px);
+            font-weight: 900;
+            line-height: 1;
+        }
+        .nin-number {
+            color: #153f24;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(12px, 4.2vw, 17px);
+            font-weight: 900;
+            letter-spacing: clamp(1px, .6vw, 2.3px);
+            line-height: 1.05;
+            white-space: nowrap;
+        }
+        .back-overlay { display: none; }
+        .slip-note { margin: 20px 0 0; text-align: center; }
 
+        @media (max-width: 420px) {
+            .print-wrapper { border-radius: 10px; }
+            .action-bar .btn { padding-left: 14px !important; padding-right: 14px !important; }
+        }
+        @page { size: A4 portrait; margin: 10mm; }
         @media print {
-            body { background: none; margin: 0; padding: 0; }
+            html, body { width: auto; min-width: 0; background: #fff !important; margin: 0; padding: 0; overflow: visible; }
             .no-print { display: none !important; }
-            .print-wrapper { box-shadow: none; margin: 0; padding: 0; width: 100%; max-width: none; }
-            .nin-card { box-shadow: none; margin: 5mm auto; break-inside: avoid; border: 0.2px solid #eee; }
+            .print-wrapper { width: auto; max-width: none; margin: 0; padding: 0; border-radius: 0; box-shadow: none; }
+            .nin-card {
+                width: 85.6mm !important;
+                max-width: none !important;
+                height: 53.98mm !important;
+                aspect-ratio: auto !important;
+                margin: 5mm auto;
+                border: .25mm solid rgba(24,84,43,.25);
+                border-radius: 2mm;
+                box-shadow: none;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .card-background { display: block !important; }
+            .slip-note { display: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="print-wrapper">
+    <main class="print-wrapper">
         <div class="action-bar no-print">
-            <a href="NINCardHistory.php" class="btn btn-light border me-2 rounded-pill px-4">
-                <i class="bi bi-arrow-left me-1"></i> Back
+            <a href="NINCardHistory.php" class="btn btn-light border rounded-pill px-4">
+                <i class="bi bi-arrow-left me-1"></i>Back
             </a>
-            <button onclick="window.print()" class="btn btn-success me-2 rounded-pill px-4">
-                <i class="bi bi-printer me-1"></i> Print Slip
+            <button onclick="window.print()" class="btn btn-success rounded-pill px-4" type="button">
+                <i class="bi bi-printer me-1"></i>Print Slip
             </button>
-            <a href="NINCard.php" class="btn btn-outline-secondary rounded-pill px-4">
-                New Request
-            </a>
+            <a href="NINCard.php" class="btn btn-outline-secondary rounded-pill px-4">New Request</a>
         </div>
 
-        <h6 class="text-center text-muted small mb-4 no-print">
-            Reference: <strong><?php echo htmlspecialchars($record['reference']); ?></strong>
-            &nbsp;|&nbsp; Generated: <?php echo date('d M Y, H:i', strtotime($record['date_created'])); ?>
-        </h6>
+        <p class="reference-line text-center text-muted small mb-3 no-print">
+            Reference: <strong><?php echo htmlspecialchars((string)$record['reference'], ENT_QUOTES, 'UTF-8'); ?></strong>
+            &nbsp;|&nbsp; Generated: <?php echo !empty($record['date_created']) ? htmlspecialchars(date('d M Y, H:i', strtotime($record['date_created'])), ENT_QUOTES, 'UTF-8') : '—'; ?>
+        </p>
 
-        <!-- FRONT OF CARD -->
-        <div class="nin-card front">
-            <img class="card-background" src="../asset/NIN-front.png" alt="" aria-hidden="true">
+        <section class="nin-card front" aria-label="Front of NIN identity slip">
+            <img class="card-background" src="<?php echo htmlspecialchars($front_art, ENT_QUOTES, 'UTF-8'); ?>" alt="" aria-hidden="true">
             <div class="card-overlay">
                 <div class="header-section">
-                    <img src="../asset/nigeria-coa.svg" class="coa-logo">
                     <div class="header-titles">
                         <h1>Federal Republic of Nigeria</h1>
                         <p>National Identity Management Commission</p>
                         <div class="slip-type">NATIONAL IDENTITY SLIP</div>
                     </div>
-                    <img src="../asset/nimc-logo.png" class="nimc-logo">
+                    <img src="../asset/nimc-logo.png" class="nimc-logo" alt="NIMC" onerror="this.style.display='none'">
                 </div>
 
                 <div class="body-section">
                     <div class="details-col">
-                        <div class="full-name"><?php echo htmlspecialchars($fullname ?: '—'); ?></div>
-
-                        <?php if (!empty($dob_formatted)): ?>
-                        <div class="info-row">
-                            <span class="label">Date of Birth:</span>
-                            <span class="val"><?php echo htmlspecialchars($dob_formatted); ?></span>
-                        </div>
+                        <div class="full-name"><?php echo htmlspecialchars($fullname ?: 'NAME NOT PROVIDED', ENT_QUOTES, 'UTF-8'); ?></div>
+                        <?php if ($dob_formatted !== ''): ?>
+                            <div class="info-row"><span class="label">Date of Birth</span><span class="val"><?php echo htmlspecialchars($dob_formatted, ENT_QUOTES, 'UTF-8'); ?></span></div>
                         <?php endif; ?>
-
                         <?php if (!empty($record['gender'])): ?>
-                        <div class="info-row">
-                            <span class="label">Gender:</span>
-                            <span class="val"><?php echo htmlspecialchars(strtoupper($record['gender'])); ?></span>
-                        </div>
+                            <div class="info-row"><span class="label">Gender</span><span class="val"><?php echo htmlspecialchars(strtoupper((string)$record['gender']), ENT_QUOTES, 'UTF-8'); ?></span></div>
                         <?php endif; ?>
-
-                        <div class="info-row">
-                            <span class="label">Nationality:</span>
-                            <span class="val">NIGERIAN</span>
-                        </div>
-
+                        <div class="info-row"><span class="label">Nationality</span><span class="val">NIGERIAN</span></div>
                         <?php
-                        $address = $record['address'] ?? '';
-                        if (!empty($address) && stripos($address, 'not provided') === false):
+                        $address = trim((string)($record['address'] ?? ''));
+                        if ($address !== '' && stripos($address, 'not provided') === false):
+                            $address = function_exists('mb_substr') ? mb_substr($address, 0, 72) : substr($address, 0, 72);
                         ?>
-                        <div class="info-row">
-                            <span class="label">Address:</span>
-                            <span class="val" style="font-size: 6.5px;"><?php echo htmlspecialchars(mb_substr($address, 0, 80)); ?></span>
-                        </div>
+                            <div class="info-row"><span class="label">Address</span><span class="val"><?php echo htmlspecialchars($address, ENT_QUOTES, 'UTF-8'); ?></span></div>
                         <?php endif; ?>
-
                         <?php if (!empty($record['phone'])): ?>
-                        <div class="info-row">
-                            <span class="label">Mobile No:</span>
-                            <span class="val"><?php echo htmlspecialchars($record['phone']); ?></span>
-                        </div>
+                            <div class="info-row"><span class="label">Mobile No.</span><span class="val"><?php echo htmlspecialchars((string)$record['phone'], ENT_QUOTES, 'UTF-8'); ?></span></div>
                         <?php endif; ?>
                     </div>
                     <div class="photo-col">
                         <?php if ($display_photo !== ''): ?>
-                            <img class="id-photo"
-                                 src="<?php echo htmlspecialchars($display_photo, ENT_QUOTES, 'UTF-8'); ?>"
-                                 alt="Photo">
+                            <img class="id-photo" src="<?php echo htmlspecialchars($display_photo, ENT_QUOTES, 'UTF-8'); ?>" alt="Identity portrait" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'photo-placeholder', innerHTML:'&#128100;'}))">
                         <?php else: ?>
-                            <div class="photo-placeholder">&#128100;</div>
+                            <div class="photo-placeholder" aria-label="No portrait available"><i class="bi bi-person-fill"></i></div>
                         <?php endif; ?>
                     </div>
                 </div>
 
                 <div class="nin-section">
-                    <div class="nin-label">NIN:</div>
-                    <div class="nin-number"><?php echo chunk_split($record['nin_input'], 4, ' '); ?></div>
+                    <div class="nin-label">NIN</div>
+                    <div class="nin-number"><?php echo htmlspecialchars($nin_number !== '' ? trim(chunk_split($nin_number, 4, ' ')) : '—', ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- BACK OF CARD -->
-        <div class="nin-card back">
-            <img class="card-background" src="../asset/NIN-back.png" alt="" aria-hidden="true">
-            <div class="back-overlay">
-                <!-- The text is already on the background image asset/NIN-back.png -->
-            </div>
-        </div>
+        <section class="nin-card back" aria-label="Back of NIN identity slip">
+            <img class="card-background" src="<?php echo htmlspecialchars($back_art, ENT_QUOTES, 'UTF-8'); ?>" alt="NIN slip verification disclaimer">
+        </section>
 
-        <div class="text-center text-muted small mt-5 no-print">
-            <p><i class="bi bi-info-circle"></i> This is a premium digital NIN slip. You can print it on a PVC card for better durability.</p>
-        </div>
-    </div>
+        <p class="slip-note text-center text-muted small no-print"><i class="bi bi-info-circle"></i> Print at 100% scale for PVC-card dimensions. If printing on paper, choose “Actual size” in your print settings.</p>
+    </main>
 </body>
 </html>

@@ -3346,12 +3346,13 @@ function fetchNINProfileWithPrembly($nin, $vid) {
     if ($res['status'] !== 'success') return $res;
 
     $body = $res['body'];
-    $d = $body['data'] ?? ($body['nin_data'] ?? []);
+    $d = $body['data'] ?? ($body['nin_data'] ?? ($body['result'] ?? []));
+    if (is_array($d['nin_data'] ?? null)) $d = $d['nin_data'];
     if (!is_array($d) || empty($d)) {
         return ["status" => "failed", "message" => "Prembly returned no NIN profile"];
     }
 
-    $gender_raw = strtolower((string)($d['gender'] ?? ''));
+    $gender_raw = strtolower(bc_nin_profile_value($d, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male'
         : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
@@ -3365,13 +3366,13 @@ function fetchNINProfileWithPrembly($nin, $vid) {
     return [
         "status"          => "success",
         "provider"        => "prembly",
-        "firstname"       => strtoupper(trim((string)($d['firstname'] ?? ''))),
-        "middlename"      => strtoupper(trim((string)($d['middlename'] ?? ''))),
-        "lastname"        => strtoupper(trim((string)($d['surname'] ?? $d['lastname'] ?? ''))),
-        "birthdate"       => (string)($d['birthdate'] ?? ''),
+        "firstname"       => strtoupper(bc_nin_profile_value($d, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($d, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($d, ['surname', 'lastname', 'last_name', 'lastName', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($d, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
         "gender"          => $gender,
-        "photo_data"      => (string)($d['photo'] ?? ''),
-        "phone"           => (string)($d['telephoneno'] ?? ''),
+        "photo_data"      => bc_nin_profile_value($d, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($d, ['telephoneno', 'phone', 'phone_number', 'phoneNumber', 'mobileNumber']),
         "address"         => $address,
         "residence_state" => (string)($d['residence_state'] ?? ''),
         "state_of_origin" => (string)($d['self_origin_state'] ?? ''),
@@ -3618,6 +3619,18 @@ if (!function_exists('bc_identity_local_charge_vendor')) {
     }
 }
 
+if (!function_exists('bc_nin_profile_value')) {
+    /** Return the first non-empty scalar from a provider response's possible field names. */
+    function bc_nin_profile_value(array $source, array $keys, $default = '') {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $source) || !is_scalar($source[$key])) continue;
+            $value = trim((string)$source[$key]);
+            if ($value !== '') return $value;
+        }
+        return $default;
+    }
+}
+
 function fetchNINProfile($nin, $vid) {
     global $connection_server;
     $provider = getIdentityProvider($vid);
@@ -3680,20 +3693,27 @@ function fetchNINProfileWithLocalhost($nin, $vid) {
         return ["status" => "failed", "message" => $body['desc'] ?? "Failed to connect to local API"];
     }
 
-    // Map the standard DGV API response back to our internal profile format
+    // The platform NIN API returns the normalized profile under `data`; older
+    // marketplace servers returned the same fields at the top level.
+    $profile_data = $body['data'] ?? ($body['profile'] ?? $body);
+    if (is_array($profile_data['data'] ?? null)) $profile_data = $profile_data['data'];
+    if (!is_array($profile_data)) {
+        return ["status" => "failed", "message" => "Local API returned an invalid NIN profile"];
+    }
+
     return [
         "status"          => "success",
         "provider"        => "localhost:" . $api_details['api_base_url'],
-        "firstname"       => $body['firstname'] ?? '',
-        "middlename"      => $body['middlename'] ?? '',
-        "lastname"        => $body['lastname'] ?? '',
-        "birthdate"       => $body['birthdate'] ?? '',
-        "gender"          => $body['gender'] ?? '',
-        "photo_data"      => $body['photo_data'] ?? '',
-        "phone"           => $body['phone'] ?? '',
-        "address"         => $body['address'] ?? '',
-        "residence_state" => $body['residence_state'] ?? '',
-        "state_of_origin" => $body['state_of_origin'] ?? '',
+        "firstname"       => bc_nin_profile_value($profile_data, ['firstname', 'first_name', 'firstName', 'given_name']),
+        "middlename"      => bc_nin_profile_value($profile_data, ['middlename', 'middle_name', 'middleName']),
+        "lastname"        => bc_nin_profile_value($profile_data, ['lastname', 'last_name', 'lastName', 'surname']),
+        "birthdate"       => bc_nin_profile_value($profile_data, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
+        "gender"          => bc_nin_profile_value($profile_data, ['gender', 'sex']),
+        "photo_data"      => bc_nin_profile_value($profile_data, ['photo_data', 'photo', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($profile_data, ['phone', 'telephone', 'phone_number', 'phoneNumber', 'mobileNumber']),
+        "address"         => bc_nin_profile_value($profile_data, ['address', 'residence_address', 'residenceAddress']),
+        "residence_state" => bc_nin_profile_value($profile_data, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($profile_data, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 
@@ -3723,36 +3743,39 @@ function fetchNINProfileWithDojah($nin, $vid) {
     $body = $res ? json_decode($res, true) : null;
     curl_close($ch);
 
-    if (!$body || empty($body['entity'])) {
+    $e = $body['entity'] ?? ($body['data']['entity'] ?? ($body['data'] ?? []));
+    if (!$body || !is_array($e) || empty($e)) {
         $err = isset($body['error']) ? $body['error'] : "No response from Dojah";
         return ["status" => "failed", "message" => $err];
     }
-    $e = $body['entity'];
 
-    $gender_raw = strtolower($e['gender'] ?? '');
+    $gender_raw = strtolower(bc_nin_profile_value($e, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male' : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
-    $address_parts = array_filter([
-        $e['residence_address'] ?? '',
-        $e['residence_town'] ?? '',
-        $e['residence_lga'] ?? '',
-        $e['residence_state'] ?? '',
-    ]);
-    $address = implode(', ', $address_parts);
+    $address = bc_nin_profile_value($e, ['address', 'residence_address', 'residenceAddress']);
+    if ($address === '') {
+        $address_parts = array_filter([
+            bc_nin_profile_value($e, ['residence_address', 'residenceAddress']),
+            bc_nin_profile_value($e, ['residence_town', 'residenceTown', 'town']),
+            bc_nin_profile_value($e, ['residence_lga', 'residenceLga', 'lga']),
+            bc_nin_profile_value($e, ['residence_state', 'residenceState', 'state']),
+        ]);
+        $address = implode(', ', $address_parts);
+    }
 
     return [
         "status"          => "success",
         "provider"        => "dojah",
-        "firstname"       => strtoupper($e['firstname'] ?? ''),
-        "middlename"      => strtoupper($e['middlename'] ?? ''),
-        "lastname"        => strtoupper($e['surname'] ?? $e['lastName'] ?? ''),
-        "birthdate"       => $e['birthdate'] ?? '',
+        "firstname"       => strtoupper(bc_nin_profile_value($e, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($e, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($e, ['surname', 'lastname', 'last_name', 'lastName', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($e, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
         "gender"          => $gender,
-        "photo_data"      => $e['photo'] ?? '',
-        "phone"           => $e['telephone'] ?? $e['phone'] ?? '',
+        "photo_data"      => bc_nin_profile_value($e, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($e, ['telephone', 'phone', 'phone_number', 'phoneNumber', 'mobileNumber']),
         "address"         => $address,
-        "residence_state" => $e['residence_state'] ?? '',
-        "state_of_origin" => $e['state_of_origin'] ?? '',
+        "residence_state" => bc_nin_profile_value($e, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($e, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 
@@ -3802,28 +3825,28 @@ function fetchNINProfileWithQoreID($nin, $vid) {
     $body = $res ? json_decode($res, true) : null;
     curl_close($ch2);
 
-    if (!$body || empty($body['applicant'])) {
+    $a = $body['applicant'] ?? ($body['data']['applicant'] ?? ($body['data'] ?? []));
+    if (!$body || !is_array($a) || empty($a)) {
         $err = isset($body['message']) ? $body['message'] : "No response from QoreID";
         return ["status" => "failed", "message" => $err];
     }
-    $a = $body['applicant'];
 
-    $gender_raw = strtolower($a['gender'] ?? '');
+    $gender_raw = strtolower(bc_nin_profile_value($a, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male' : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
     return [
         "status"          => "success",
         "provider"        => "qoreid",
-        "firstname"       => strtoupper($a['firstname'] ?? ''),
-        "middlename"      => strtoupper($a['middlename'] ?? ''),
-        "lastname"        => strtoupper($a['lastname'] ?? ''),
-        "birthdate"       => $a['dob'] ?? $a['birthdate'] ?? '',
+        "firstname"       => strtoupper(bc_nin_profile_value($a, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($a, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($a, ['lastname', 'last_name', 'lastName', 'surname', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($a, ['dob', 'birthdate', 'date_of_birth', 'dateOfBirth']),
         "gender"          => $gender,
-        "photo_data"      => $a['photo'] ?? '',
-        "phone"           => $a['phone'] ?? '',
-        "address"         => $a['address'] ?? '',
-        "residence_state" => $a['residence_state'] ?? $a['state'] ?? '',
-        "state_of_origin" => $a['state_of_origin'] ?? '',
+        "photo_data"      => bc_nin_profile_value($a, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($a, ['phone', 'telephone', 'phone_number', 'phoneNumber', 'mobileNumber']),
+        "address"         => bc_nin_profile_value($a, ['address', 'residence_address', 'residenceAddress']),
+        "residence_state" => bc_nin_profile_value($a, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($a, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 

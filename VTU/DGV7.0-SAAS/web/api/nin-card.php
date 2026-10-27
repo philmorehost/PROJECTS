@@ -79,6 +79,20 @@ if ($profile['status'] !== 'success') {
     exit;
 }
 
+$profile_name = trim(implode(' ', array_filter([
+    trim((string)($profile['firstname'] ?? '')),
+    trim((string)($profile['middlename'] ?? '')),
+    trim((string)($profile['lastname'] ?? '')),
+], function ($part) { return $part !== ''; })));
+if ($profile_name === '') {
+    $_SESSION["user_session"] = $get_logged_user_details["username"];
+    chargeUser("credit", $reference . "_RF", "NIN Slip Refund", $reference . "_RF", "", $service_fee, $service_fee,
+        "Refund: NIN provider returned no name", "API", $_SERVER["HTTP_HOST"], 1);
+    unset($_SESSION["user_session"]);
+    echo json_encode(["status" => "failed", "desc" => "NIN provider returned an incomplete profile. The charge was refunded."]);
+    exit;
+}
+
 // Store
 $nin_esc       = mysqli_real_escape_string($connection_server, $nin_input);
 $firstname_esc = mysqli_real_escape_string($connection_server, $profile['firstname'] ?? '');
@@ -94,12 +108,21 @@ $soo_esc       = mysqli_real_escape_string($connection_server, $profile['state_o
 $provider_esc  = mysqli_real_escape_string($connection_server, $profile['provider'] ?? '');
 $ref_esc       = mysqli_real_escape_string($connection_server, $reference);
 
-mysqli_query($connection_server, "INSERT INTO sas_nin_card_requests
+$insert_result = mysqli_query($connection_server, "INSERT INTO sas_nin_card_requests
     (vendor_id, user_id, reference, nin_input, firstname, middlename, lastname, birthdate, gender, photo_data, phone, address, residence_state, state_of_origin, price, provider, status)
     VALUES
     ('".$get_vendor_details["id"]."', '".$get_logged_user_details["id"]."', '$ref_esc', '$nin_esc',
      '$firstname_esc', '$middlename_esc', '$lastname_esc', '$birthdate_esc', '$gender_esc', '$photo_esc', '$phone_esc', '$address_esc', '$res_state_esc', '$soo_esc',
      '$service_fee', '$provider_esc', 'success')");
+if (!$insert_result) {
+    $_SESSION["user_session"] = $get_logged_user_details["username"];
+    chargeUser("credit", $reference . "_RF", "NIN Slip Refund", $reference . "_RF", "", $service_fee, $service_fee,
+        "Refund: Could not save NIN slip", "API", $_SERVER["HTTP_HOST"], 1);
+    unset($_SESSION["user_session"]);
+    error_log('[NINCard API] Could not save slip request for reference ' . $reference . ': ' . mysqli_error($connection_server));
+    echo json_encode(["status" => "failed", "desc" => "We could not save your NIN slip. The charge was refunded."]);
+    exit;
+}
 
 alterUser($get_logged_user_details["username"], "last_login", date('Y-m-d H:i:s.u'));
 
