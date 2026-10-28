@@ -138,10 +138,14 @@ try {
                     $classification_text .= ' ' . (string)$provider_plan[$category_field];
                 }
             }
-            // Preserve DGV's plan taxonomy: SME labels route to SME Data, Gifting/Corporate/CG
-            // labels to CG Data, and other plans to Direct Data.
-            $is_sme_plan = stripos($classification_text, 'sme') !== false;
-            $is_cg_plan = preg_match('/gifting|corporate|(^|[^a-z])cg([^a-z]|$)/i', $classification_text) === 1;
+            // DGV's service taxonomy routes SME to SME Data, explicit CG/Corporate plans
+            // to CG Data, and Gifting (plus other unclassified Direct plans) to Direct Data.
+            // SME Plug labels its MTN SME/SME-share catalogue as "Share" rather than "SME".
+            $is_sme_plan = stripos($classification_text, 'sme') !== false
+                || preg_match('/(^|[^a-z])share([^a-z]|$)/i', $classification_text) === 1;
+            $is_gifting_plan = stripos($classification_text, 'gifting') !== false;
+            $is_cg_plan = !$is_gifting_plan
+                && preg_match('/corporate|(^|[^a-z])cg([^a-z]|$)/i', $classification_text) === 1;
             if (($type === 'sme' && !$is_sme_plan)
                 || ($type === 'cg' && !$is_cg_plan)
                 || ($type === 'dd' && ($is_sme_plan || $is_cg_plan))) continue;
@@ -166,7 +170,7 @@ try {
             );
         }
     } elseif ($gateway_host === 'smeplug.ng') {
-        throw new Error('SME Plug plan fetching supports Airtime, SME Data, CG/Gifting Data, and Direct Data. Shared Data is not offered by this catalogue.');
+        throw new Error('SME Plug plan fetching supports Airtime, SME Data, CG Data, and Direct Data (including Gifting plans). Shared Data is not offered by this catalogue.');
     } elseif ($gateway === 'vtpass') {
         if ($type === 'airtime') {
             $plans[] = [
