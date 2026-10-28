@@ -1,34 +1,44 @@
 <?php
-// Paystack webhook handler
+/**
+ * Paystack webhook.
+ *
+ * 8.9.0 hardening:
+ *  - logs go to storage/logs (outside the web root) through lm_log(), not to
+ *    webhook.log next to the source, and never contain licence keys;
+ *  - the payload is size-capped before the signature check reads it.
+ */
 
-// Get the POST data.
-$event = file_get_contents('php://input');
+require_once __DIR__ . '/includes/security.php';
+lm_security_headers();
 
-// Load settings to get the secret key
-$settings_file = 'settings.json';
-$settings = [];
-if (file_exists($settings_file)) {
-    $settings = json_decode(file_get_contents($settings_file), true);
+// Get the POST data (capped: a webhook body is a few kilobytes).
+$event = file_get_contents('php://input', false, null, 0, 262144);
+
+if (!is_string($event) || $event === '') {
+    http_response_code(400);
+    echo 'Bad request';
+    exit;
 }
 
-// Log the webhook initiation
-$log_file = 'webhook.log';
-$error_log_file = 'error.log';
+$settings = lm_settings();
 
+/**
+ * @param string $message
+ * @return void
+ */
 function log_message($message) {
-    global $log_file;
-    file_put_contents($log_file, date('[Y-m-d H:i:s] ') . $message . "\n", FILE_APPEND);
+    lm_log('webhook', preg_replace('/\b([A-Z]{2,10}-)[A-Z0-9]{6,}\b/', '$1…', (string) $message));
 }
 
-log_message("=== Webhook received ===");
-log_message("Raw event data: " . substr($event, 0, 200));
+log_message('=== Webhook received ===');
+log_message('Bytes: ' . strlen($event));
 
 // For security, you should verify the webhook signature.
     $paystack_secret_key = $settings['paystack_secret_key'] ?? '';
     $signature = $_SERVER['HTTP_X_PAYSTACK_SIGNATURE'] ?? '';
 
-log_message("Signature present: " . ($signature ? 'yes' : 'no'));
-log_message("Secret key set: " . ($paystack_secret_key ? 'yes' : 'no'));
+log_message('Signature present: ' . ($signature !== '' ? 'yes' : 'no'));
+log_message('Secret key set: ' . ($paystack_secret_key !== '' ? 'yes' : 'no'));
 
 if (!$signature || !$paystack_secret_key) {
     log_message("ERROR: Webhook missing signature or secret key. Rejecting request.");
@@ -93,62 +103,56 @@ if ($event_data['event'] === 'charge.success') {
         
         // Send email notification
         send_webhook_license_email($customer_email, $new_license_key, $domain, $settings);
-        log_message("Auto-login token generated: {$auto_login_token}");
+        log_message('Auto-login token generated for transaction #' . $transaction_id);
         
     } catch (PDOException $e) {
-        $pdo->rollBack();
-        $error_msg = "Database error: " . $e->getMessage();
-        log_message($error_msg);
-        file_put_contents($error_log_file, $error_msg . "\n", FILE_APPEND);
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        log_message('Database error: ' . $e->getMessage());
         http_response_code(500);
         exit();
     }
 }
 
 function send_webhook_license_email($email, $license_key, $domain, $settings) {
-    try {
-        require 'includes/src/Exception.php';
-        require 'includes/src/PHPMailer.php';
-        require 'includes/src/SMTP.php';
-        
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        
-        $mail->isSMTP();
-        $mail->Host = $settings['smtp_host'] ?? 'smtp.example.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = $settings['smtp_user'] ?? 'user@example.com';
-        $mail->Password = $settings['smtp_pass'] ?? 'password';
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = $settings['smtp_port'] ?? 587;
-        
-        $mail->setFrom($settings['admin_email'] ?? 'from@example.com', $settings['site_name'] ?? 'License Manager');
-        $mail->addAddress($email);
-        $mail->addBCC($settings['admin_email'] ?? 'admin@example.com');
-        
-        $mail->isHTML(true);
-        $mail->Subject = 'Your License Key - ' . ($settings['site_name'] ?? 'License Manager');
-        
-        $template_file = 'email_template.html';
-        if (file_exists($template_file)) {
-            $template = file_get_contents($template_file);
-        } else {
-            $template = get_webhook_default_email_template();
-        }
-        
-        $body = str_replace(
-            ['{license_key}', '{domain}', '{site_name}'],
-            [$license_key, $domain, $settings['site_name'] ?? 'License Manager'],
-            $template
-        );
-        
-        $mail->Body = $body;
-        $mail->AltBody = "Thank you for your purchase!\n\nYour License Key: {$license_key}\nDomain: {$domain}";
-        
-        $mail->send();
-        log_message("License email sent to: " . $email);
-        
-    } catch (Exception $e) {
-        log_message("Failed to send license email: " . $e->getMessage());
+    require_once __DIR__ . '/includes/mailer.php';
+
+    $template_file = __DIR__ . '/email_template.html';
+    $template = is_file($template_file)
+        ? (string) file_get_contents($template_file)
+        : get_webhook_default_email_template();
+
+    $site_name = $settings['site_name'] ?? 'License Manager';
+    $body = str_replace(
+        array('{license_key}', '{domain}', '{site_name}', '{year}', '{site_url}'),
+        array($license_key, $domain, $site_name, gmdate('Y'), lm_site_url()),
+        $template
+    );
+
+    $alt = "Thank you for your purchase!\n\n"
+        . "Your license key: {$license_key}\n"
+        . "Domain: {$domain}\n\n"
+        . "Paste the key into your script's licence settings to activate it.\n\n"
+        . $site_name;
+
+    $subject = 'Your License Key - ' . $site_name;
+
+    $result = lm_send_mail($email, $subject, $body, $alt, array(
+        'bcc' => $settings['admin_email'] ?? '',
+    ));
+
+    if ($result['ok']) {
+        log_message('License email sent to ' . $email . ' via ' . $result['transport']);
+        return;
+    }
+
+    log_message('Failed to send license email: ' . $result['error']);
+
+    // Never lose a licence key because of a temporary SMTP outage.
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        $queued = lm_queue_email($GLOBALS['pdo'], $email, $subject, $body, $alt, array('priority' => 1));
+        log_message($queued ? 'Licence email queued for retry (queue #' . $queued . ')' : 'Could not queue the licence email.');
     }
 }
 

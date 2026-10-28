@@ -3,12 +3,19 @@
 // Diagnostic & repair tool for license tier assignments
 // DELETE THIS FILE after use.
 
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     die('Unauthorized. Log in to the License Manager admin first.');
 }
 
 require_once('../db.php');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !lm_verify_csrf()) {
+    die('Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.');
+}
 
 $action = $_POST['action'] ?? '';
 $messages = [];
@@ -77,6 +84,7 @@ if (file_exists($log_file)) {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
 <h1>🔧 License Tier Diagnostic & Repair</h1>
 <p class="subtitle">Use this tool to inspect and correct license tier assignments. <strong>Delete this file after use.</strong></p>
 
@@ -140,12 +148,13 @@ if (file_exists($log_file)) {
                 <?php endif; ?>
             </td>
             <td>
-                <strong style="color:<?= str_contains($effective, 'fallback') ? '#a16207' : '#166534' ?>">
+                <strong style="color:<?= (strpos($effective, 'fallback') !== false) ? '#a16207' : '#166534' ?>">
                     <?= htmlspecialchars($effective) ?>
                 </strong>
             </td>
             <td>
                 <form method="POST" style="display:flex;gap:0.4rem;align-items:center;">
+    <?= lm_csrf_field() ?>
                     <input type="hidden" name="action" value="assign_tier">
                     <input type="hidden" name="license_id" value="<?= $lic['id'] ?>">
                     <select name="tier_id">
@@ -170,7 +179,7 @@ if (file_exists($log_file)) {
         <p style="color:#94a3b8">No log file found at: <code><?= htmlspecialchars($log_file) ?></code></p>
     <?php else: ?>
         <div class="log-box"><?php foreach ($log_lines as $line): 
-            $cls = str_contains($line, 'WARNING') ? 'log-warn' : (str_contains($line, 'INFO') ? 'log-info' : '');
+            $cls = (strpos($line, 'WARNING') !== false) ? 'log-warn' : ((strpos($line, 'INFO') !== false) ? 'log-info' : '');
         ?><span class="<?= $cls ?>"><?= htmlspecialchars($line) ?></span>
 <?php endforeach; ?></div>
     <?php endif; ?>

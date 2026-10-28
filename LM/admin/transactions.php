@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -166,13 +168,18 @@ try {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <div class="sidebar">
         <h1>🔐 License Manager</h1>
         <nav>
             <a href="dashboard.php">📊 Dashboard</a>
             <a href="licenses.php">📜 Licenses</a>
             <a href="updates.php">🚀 Push Updates</a>
+            <a href="github-updates.php">🐙 GitHub Pull</a>
+            <a href="update-notifications.php">🔔 Notifications</a>
+            <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php" class="active">💳 Transactions</a>
+            <a href="guide.php">📖 Admin Guide</a>
             <a href="settings.php">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>
             <a href="logout.php">🚪 Logout</a>
@@ -219,6 +226,7 @@ try {
                                                 <td>
                                                     <?php if (!empty($tx['auto_login_token'])): ?>
                                                         <form method="POST" action="invalidate_token.php" style="display:inline">
+    <?= lm_csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= htmlspecialchars($tx['id']) ?>">
                                                             <button type="submit" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer;">Revoke</button>
                                                         </form>

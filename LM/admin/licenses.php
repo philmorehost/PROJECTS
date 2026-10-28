@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -9,6 +11,11 @@ require_once('../db.php');
 
 // Handle POST requests for license management
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!lm_verify_csrf()) {
+        header('Location: licenses.php?error=csrf');
+        exit();
+    }
+
     if (isset($_POST['add_license'])) {
         $stmt = $pdo->prepare("INSERT INTO licenses (license_key, domain, customer_email, status, license_type) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $_POST['license_type'] ?? 'standard']);
@@ -257,13 +264,18 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <div class="sidebar">
         <h1>🔐 License Manager</h1>
         <nav>
             <a href="dashboard.php">📊 Dashboard</a>
             <a href="licenses.php" class="active">📜 Licenses</a>
             <a href="updates.php">🚀 Push Updates</a>
+            <a href="github-updates.php">🐙 GitHub Pull</a>
+            <a href="update-notifications.php">🔔 Notifications</a>
+            <a href="projects.php">🧩 Script Projects</a>
             <a href="transactions.php">💳 Transactions</a>
+            <a href="guide.php">📖 Admin Guide</a>
             <a href="settings.php">⚙️ Settings</a>
             <a href="profile.php">👤 Profile</a>
             <a href="logout.php">🚪 Logout</a>
@@ -280,6 +292,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="card-header"><h3>Add New License</h3></div>
             <div class="card-body">
                 <form method="POST">
+    <?= lm_csrf_field() ?>
                     <input type="hidden" name="add_license" value="1">
                     <div class="input-group"><label>License Key</label><input type="text" name="license_key" required></div>
                     <div class="input-group"><label>Domain</label><input type="text" name="domain" required></div>
@@ -305,6 +318,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="card-header"><h3>Edit License</h3></div>
             <div class="card-body">
                 <form method="POST">
+    <?= lm_csrf_field() ?>
                     <input type="hidden" name="edit_license" value="1">
                     <input type="hidden" name="id" value="<?= $license['id'] ?>">
                     <div class="input-group"><label>License Key</label><input type="text" name="license_key" value="<?= htmlspecialchars($license['license_key']) ?>" required></div>
@@ -354,6 +368,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                                 <td class="action-links">
                                     <a href="licenses.php?action=edit&id=<?= $license['id'] ?>">Edit</a>
                                     <form method="POST" style="display:inline;">
+    <?= lm_csrf_field() ?>
                                         <input type="hidden" name="toggle_status" value="1">
                                         <input type="hidden" name="id" value="<?= $license['id'] ?>">
                                         <input type="hidden" name="current_status" value="<?= $license['status'] ?>">
@@ -392,10 +407,12 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?= htmlspecialchars($r['created_at']) ?></td>
                                     <td class="action-links">
                                         <form method="POST" action="approve_request.php" style="display:inline">
+    <?= lm_csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= $r['id'] ?>">
                                             <button type="submit" name="action" value="approve" class="link-button">Approve</button>
                                         </form>
                                         <form method="POST" action="approve_request.php" style="display:inline">
+    <?= lm_csrf_field() ?>
                                             <input type="hidden" name="id" value="<?= $r['id'] ?>">
                                             <button type="submit" name="action" value="decline" class="link-button">Decline</button>
                                         </form>

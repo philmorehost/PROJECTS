@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 // Check if user is logged in
 if (!isset($_SESSION['user_email'])) {
     header('Location: login.php');
@@ -8,6 +9,7 @@ if (!isset($_SESSION['user_email'])) {
 }
 
 require_once('../db.php');
+lm_ui_boot();
 
 $user_email = $_SESSION['user_email'];
 $license_id = $_GET['id'] ?? $_SESSION['user_license_id'] ?? null;
@@ -34,10 +36,22 @@ if ($license) {
 
 // Handle domain change request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_domain'])) {
+    if (!lm_verify_csrf()) {
+        $error = 'Your session expired. Refresh the page and try again.';
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_domain'])) {
     $new_domain = trim($_POST['new_domain']);
-    
+
     // Validation
-    if (empty($new_domain)) {
+    if (!$license) {
+        // Without this, the branch below would reach the UPDATE with a null
+        // $license — and that statement was not scoped to the logged-in
+        // customer, so a guessed ?id= could target someone else's row.
+        $error = 'License not found.';
+    } elseif (empty($new_domain)) {
         $error = 'Domain name is required';
     } elseif (!preg_match('/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i', $new_domain)) {
         $error = 'Please enter a valid domain name (e.g., example.com)';
@@ -50,13 +64,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_domain'])) {
         try {
             $pdo->beginTransaction();
             
-            $stmt = $pdo->prepare("UPDATE licenses SET domain = ?, domain_change_count = domain_change_count + 1 WHERE id = ?");
-            $stmt->execute([$new_domain, $license_id]);
-            
-            // Log the change
-            $change_log = date('Y-m-d H:i:s') . " - Domain changed from '{$license['domain']}' to '{$new_domain}'\n";
-            file_put_contents('../domain-change.log', $change_log, FILE_APPEND);
-            
+            // The customer e-mail is part of the WHERE clause: even if a
+            // stale session or a crafted ?id= pointed at another row, the
+            // update matches nothing.
+            $stmt = $pdo->prepare("UPDATE licenses SET domain = ?, domain_change_count = domain_change_count + 1 WHERE id = ? AND customer_email = ?");
+            $stmt->execute([$new_domain, $license_id, $user_email]);
+            if ($stmt->rowCount() < 1) {
+                throw new RuntimeException('That license does not belong to this account.');
+            }
+
+            // Log through the private logger, not a .log file in the web root.
+            lm_log('domain', 'Domain changed from ' . $license['domain'] . ' to ' . $new_domain . ' for ' . $user_email);
+
             $pdo->commit();
             
             $message = '✓ Domain updated successfully to ' . htmlspecialchars($new_domain);
@@ -67,8 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_domain'])) {
             $license = $stmt->fetch(PDO::FETCH_ASSOC);
             
         } catch (Exception $e) {
-            $pdo->rollBack();
-            $error = 'Failed to update domain: ' . $e->getMessage();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            lm_log('domain', 'Domain change failed: ' . $e->getMessage());
+            $error = 'The domain could not be updated. Please try again.';
         }
     }
 }
@@ -81,14 +103,15 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Change Domain - License Manager</title>
+    <?php lm_public_assets(); ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg);
             min-height: 100vh;
-            padding: 2rem;
+            padding: 0;
         }
         .container {
             max-width: 800px;
@@ -244,6 +267,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
     </style>
 </head>
 <body>
+<?php lm_public_header('account'); ?>
     <div class="container">
         <a href="index.php" class="back-link">← Back to Dashboard</a>
         <h1>🌐 Change License Domain</h1>
@@ -289,6 +313,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
 
                 <?php if ($changes_remaining > 0): ?>
                     <form method="POST">
+    <?= lm_csrf_field() ?>
                         <div class="form-group">
                             <label for="new_domain">New Domain Name</label>
                             <input 
@@ -331,5 +356,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
             <?php endif; ?>
         </div>
     </div>
+<?php lm_public_footer(); ?>
+<?php lm_public_tabbar('account'); ?>
 </body>
 </html>

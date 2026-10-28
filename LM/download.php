@@ -1,114 +1,126 @@
 <?php
-// download.php
-// API endpoint to download update packages securely using one-time tokens
+/**
+ * download.php — stream an update package against a one-time token.
+ *
+ * Tokens are issued by check-update.php and by update notification emails.
+ */
 
-header('Content-Type: application/json');
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/includes/updates.php';
 
-require_once('db.php');
+lm_security_headers();
 
-// Helper to log actions
-function download_log($message) {
-    file_put_contents('api_download.log', date('[Y-m-d H:i:s] ') . $message . "\n", FILE_APPEND);
-}
+// Tokens are 64 hex characters; anything else is not worth a database query.
+$token = trim((string) ($_GET['token'] ?? ''));
 
-$token = trim($_GET['token'] ?? '');
-
-if (empty($token)) {
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Download token is missing.']);
+// Guessing tokens or hammering the endpoint is rate limited per address.
+$dlLimit = lm_rate_limit(lm_rate_limit_ip('download'), 60, 600, true);
+if (!$dlLimit['allowed']) {
+    http_response_code(429);
+    header('Retry-After: ' . (int) $dlLimit['retry_after']);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('status' => 'error', 'message' => 'Too many download attempts. Try again later.'));
     exit;
 }
 
-download_log("Download attempt with token: {$token}");
+if ($token === '') {
+    http_response_code(400);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('status' => 'error', 'message' => 'Download token is missing.'));
+    exit;
+}
+
+lm_log('ota', 'Download attempt with token ' . substr($token, 0, 12) . '… from ' . lm_client_ip());
 
 try {
-    // Clean up expired tokens silently
-    $pdo->exec("DELETE FROM download_tokens WHERE expires_at < NOW()");
+    // Housekeeping: only remove tokens that expired more than a day ago so a
+    // just-expired token can still return the correct "expired" message.
+    try {
+        $pdo->exec("DELETE FROM download_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    } catch (PDOException $e) {
+        // ignore
+    }
 
-    // Query token details and script update zip path
-    $stmt = $pdo->prepare("
-        SELECT dt.id, dt.is_used, dt.expires_at, su.zip_path, su.version_number
-        FROM download_tokens dt
-        JOIN script_updates su ON dt.update_id = su.id
-        WHERE dt.token = ?
-    ");
-    $stmt->execute([$token]);
-    $token_record = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare(
+        "SELECT dt.id, dt.is_used, dt.expires_at, dt.license_id, su.*, t.tier_code
+         FROM download_tokens dt
+         JOIN script_updates su ON dt.update_id = su.id
+         LEFT JOIN script_tiers t ON su.tier_id = t.id
+         WHERE dt.token = ?
+         LIMIT 1"
+    );
+    $stmt->execute(array($token));
+    $record = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$token_record) {
-        download_log("Download failed: Token not found or expired.");
+    if (!$record) {
         http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'Invalid or expired download token.']);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('status' => 'error', 'message' => 'Invalid or expired download token.'));
         exit;
     }
 
-    if ($token_record['is_used'] == 1) {
-        download_log("Download failed: Token already used.");
+    if ((int) $record['is_used'] === 1) {
         http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'This download link has already been used.']);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('status' => 'error', 'message' => 'This download link has already been used. Sign in to your dashboard to download again.'));
         exit;
     }
 
-    // Check if the token has expired
-    if (strtotime($token_record['expires_at']) < time()) {
-        download_log("Download failed: Token expired.");
+    if (strtotime($record['expires_at']) < time()) {
         http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'This download link has expired.']);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('status' => 'error', 'message' => 'This download link has expired.'));
         exit;
     }
 
-    $file_path = $token_record['zip_path'];
+    $resolved = lm_resolve_update_path($record['zip_path'], $record['tier_code'] ?? null);
+    $filePath = $resolved['path'];
 
-    // Security check: Verify file exists and is within limits
-    if (!file_exists($file_path)) {
-        // Fallback: Check relative path in case it was stored relative to the project root
-        $relative_path = dirname(__DIR__) . '/' . ltrim($file_path, '/\\');
-        if (file_exists($relative_path)) {
-            $file_path = $relative_path;
-        } else {
-            download_log("Download failed: File not found at '{$file_path}' or '{$relative_path}'");
-            http_response_code(404);
-            echo json_encode(['status' => 'error', 'message' => 'Update file not found on the server. Please contact support.']);
-            exit;
-        }
+    if ($filePath === null) {
+        lm_log('ota', 'Download failed: package missing for update ' . $record['id'] . ' (stored: ' . $record['zip_path'] . ')');
+        http_response_code(404);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('status' => 'error', 'message' => 'Update file not found on the server. Please contact support.'));
+        exit;
     }
 
-    // Mark token as used immediately before streaming to prevent parallel download exploits
-    $update_stmt = $pdo->prepare("UPDATE download_tokens SET is_used = 1 WHERE id = ?");
-    $update_stmt->execute([$token_record['id']]);
+    // Mark as used before streaming (prevents parallel reuse).
+    try {
+        $pdo->prepare("UPDATE download_tokens SET is_used = 1, used_at = NOW() WHERE id = ?")->execute(array((int) $record['id']));
+    } catch (PDOException $e) {
+        // Older schema without used_at — still burn the token.
+        $pdo->prepare("UPDATE download_tokens SET is_used = 1 WHERE id = ?")->execute(array((int) $record['id']));
+    }
 
-    download_log("Starting stream for file: {$file_path}");
+    lm_log('ota', 'Streaming ' . $filePath . ' (v' . $record['version_number'] . ')');
 
-    // Clear buffer to prevent memory exhaustion and output pollution
-    if (ob_get_level()) {
+    while (ob_get_level()) {
         ob_end_clean();
     }
 
-    // Stream the file with hidden paths
     header('Content-Description: File Transfer');
     header('Content-Type: application/zip');
-    header('Content-Disposition: attachment; filename="update_v' . $token_record['version_number'] . '.zip"');
+    header('Content-Disposition: attachment; filename="update_v' . preg_replace('/[^A-Za-z0-9._-]/', '_', $record['version_number']) . '.zip"');
+    header('Content-Length: ' . filesize($filePath));
+    header('X-Content-Type-Options: nosniff');
     header('Expires: 0');
-    header('Cache-Control: must-revalidate');
+    header('Cache-Control: must-revalidate, no-store');
     header('Pragma: public');
-    header('Content-Length: ' . filesize($file_path));
-    
-    // Output file chunks to avoid memory limit issues on large updates
-    $file = fopen($file_path, 'rb');
-    if ($file) {
-        while (!feof($file)) {
-            echo fread($file, 1024 * 8); // 8KB chunks
+
+    $handle = fopen($filePath, 'rb');
+    if ($handle) {
+        while (!feof($handle)) {
+            echo fread($handle, 8192);
             flush();
         }
-        fclose($file);
+        fclose($handle);
     }
-    
-    download_log("Download successfully streamed.");
     exit;
 
-} catch (Exception $e) {
-    download_log("Download exception: " . $e->getMessage());
+} catch (PDOException $e) {
+    lm_log('ota', 'Download database error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Internal server error during download.']);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('status' => 'error', 'message' => 'Internal server error during download.'));
     exit;
 }

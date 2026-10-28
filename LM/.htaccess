@@ -1,4 +1,72 @@
 
+# ---------------------------------------------------------------------------
+# License Manager — hardening for shared hosts
+#
+# Deliberately conservative. cPanel commonly runs LiteSpeed (the handler below
+# is `ea-php74___lsphp`), which parses .htaccess with its own Apache-compatible
+# engine and rejects Apache 2.4-only syntax such as `<If "%{HTTPS} == 'on'">`
+# with "500 Internal Server Error" for the whole folder. Nothing in this file
+# may use an expression block, `Options` or `DirectoryIndex`: a 500 here takes
+# the entire panel offline, which is exactly what happened in 9.0.0.
+#
+# Rules that are not strictly needed to keep secrets unreachable are left to
+# PHP: the HSTS, frame, referrer and permission headers are all sent by
+# lm_security_headers() on every page.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Never serve configuration or runtime files over HTTP.
+# settings.json holds the GitHub token, SMTP password and Paystack secret key.
+# ---------------------------------------------------------------------------
+<IfModule mod_authz_core.c>
+    <FilesMatch "^(settings\.json|settings\.json\..*|settings\.sample\.json|.*\.(log|sql|ini|key|bak|old|orig|swp|lock|sh|env)|app_secret\.key|db\.local\.php|composer\.(json|lock))$">
+        Require all denied
+    </FilesMatch>
+
+    # Removed in 8.9.0: a WordPress-disguised remote-access shell shipped in LM/.
+    # Deny the name outright so a restored backup cannot revive it.
+    <FilesMatch "^(admin-cron|wp-config|xmlrpc).*">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^(settings\.json|settings\.json\..*|settings\.sample\.json|.*\.(log|sql|ini|key|bak|old|orig|swp|lock|sh|env)|app_secret\.key|db\.local\.php|composer\.(json|lock))$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+    <FilesMatch "^(admin-cron|wp-config|xmlrpc).*">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# Do not let a dot-file or a backup copy be downloaded.
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+    RewriteRule \.(bak|old|orig|swp|save|tmp)$ - [F,L]
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# Baseline response headers for static files (PHP sets the same ones).
+# No <If> block: LiteSpeed rejects Apache expression containers.
+# ---------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# PHP settings that reduce the damage of a bad upload (ignored on lsphp).
+# ---------------------------------------------------------------------------
+<IfModule mod_php.c>
+    php_flag display_errors Off
+    php_flag expose_php Off
+</IfModule>
 
 # php -- BEGIN cPanel-generated handler, do not edit
 # Set the “ea-php74” package as the default “PHP” programming language.

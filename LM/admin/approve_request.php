@@ -1,5 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -7,10 +10,16 @@ if (!isset($_SESSION['admin_logged_in'])) {
 
 require_once('../db.php');
 
-$id = $_POST['id'] ?? null;
-action:
-$action = $_POST['action'] ?? null;
-if (!$id || !$action) {
+// Approving or declining a licence is a state change: it must carry the token.
+if (!lm_verify_csrf()) {
+    header('Location: licenses.php?error=csrf');
+    exit();
+}
+
+$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+$action = (string) ($_POST['action'] ?? '');
+
+if (!$id || $action === '') {
     header('Location: licenses.php');
     exit();
 }

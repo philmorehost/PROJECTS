@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 // Check if user is admin
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
@@ -175,6 +176,7 @@ try {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <div class="container">
         <a href="dashboard.php" class="back-link">← Back to Dashboard</a>
         <h1>🔍 Diagnostic Center</h1>

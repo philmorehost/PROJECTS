@@ -1,18 +1,29 @@
 <?php
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'yourdomain.com';
-if (strpos($host, ',') !== false) {
-    $host = trim(explode(',', $host)[0]);
-}
-$host = trim($host);
-$baseUrl = $scheme . '://' . $host . '/api.php';
+/**
+ * API reference.
+ *
+ * The base URL is derived from the configured site_url (or a validated host),
+ * never from an unvalidated Host header: this page prints a URL that is copied
+ * into customers' code.
+ */
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+lm_ui_boot();
+
+$base = rtrim(lm_site_url(), '/');
+$parsed = parse_url($base);
+$host = isset($parsed['host']) ? (string) $parsed['host'] : 'yourdomain.com';
+$baseUrl = $base . '/api.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>License Manager API Documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#070b16">
+    <title>API reference — <?= htmlspecialchars(lm_site_name()) ?></title>
+    <?php lm_public_assets(); ?>
     <style>
         * {
             margin: 0;
@@ -283,15 +294,29 @@ $baseUrl = $scheme . '://' . $host . '/api.php';
         .error-code {
             color: #f56565;
         }
-    </style>
+    
+        /* --- 9.0 shell: the shared header/footer own the page chrome --- */
+        body { background: var(--bg); padding: 0; min-height: 0; }
+        .container { max-width: none; margin: 0; background: transparent; border-radius: 0; box-shadow: none; overflow: visible; }
+        .header { display: none; }
+        .footer { display: none; }
+        .content { background: #fff; border: 1px solid var(--line); border-radius: 20px;
+            max-width: 980px; margin: 0 auto; padding: 34px 34px 42px; box-shadow: var(--shadow-sm); }
+        .content section { scroll-margin-top: 90px; }
+        @media (max-width: 720px) { .content { padding: 22px 18px 30px; border-radius: 16px; } }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📋 License Manager API</h1>
-            <p>Integrate license validation into your website</p>
+<?php lm_public_header('docs'); ?>
+<main id="main" class="lm-docs">
+    <div class="lm-wrap">
+        <div class="lm-page__head" style="text-align:left;max-width:none;margin-bottom:22px">
+            <span class="lm-eyebrow lm-eyebrow--light">Developer reference</span>
+            <h1 style="font-size:clamp(28px,4vw,38px);margin-bottom:8px">API reference</h1>
+            <p class="lm-sub" style="font-size:16px">Validate a key, register a domain and read the update manifest from any PHP, Node or cURL client.</p>
         </div>
-        
+
+        <div class="container">
         <div class="content">
             <!-- Overview Section -->
             <section>
@@ -633,12 +658,15 @@ if ($cached) {
             </section>
         </div>
         
-        <div class="footer">
-            <p>&copy; License Manager. API Documentation. Last updated: <?php echo date('Y-m-d'); ?></p>
         </div>
     </div>
-    
-    <script>
+    </div>
+</main>
+
+<?php lm_public_footer(); ?>
+<?php lm_public_tabbar('docs'); ?>
+
+<script>
         function switchTab(event, tabName) {
             // Hide all tabs
             const tabs = document.querySelectorAll('.example-tab');

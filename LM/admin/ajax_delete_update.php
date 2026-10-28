@@ -1,126 +1,248 @@
 <?php
-// ajax_delete_update.php
-session_start();
-header('Content-Type: application/json');
+/**
+ * admin/ajax_delete_update.php
+ *
+ * Delete one update / clean up old updates — and physically remove the
+ * matching packages from the cPanel file manager (secure_updates/<TIER>/).
+ *
+ * Also exposes a storage inspector so the admin can see exactly which files
+ * exist on disk, which are orphaned, and which records have lost their file.
+ */
 
-// 1. Admin Authentication Check
-if (!isset($_SESSION['admin_logged_in'])) {
-    http_response_code(403);
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized access.']);
-    exit();
-}
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 
-require_once('../db.php');
+// A host-level WAF can block a POST before PHP sees it; the console retries
+// with encoded values, and this turns them back into ordinary fields.
+lm_request_decode();
+header('Content-Type: application/json; charset=utf-8');
 
-// 2. Validate Request Method
+// A PHP warning printed into the body turns a valid JSON response into
+// "Unexpected server response". Keep warnings in the error log instead.
+@ini_set('display_errors', '0');
+
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../includes/updates.php';
+require_once __DIR__ . '/../includes/notifications.php';
+
+lm_require_admin(true);
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid request method.']);
-    exit();
+    lm_json(array('status' => 'error', 'message' => 'Invalid request method.'), 405);
 }
 
-$update_id = intval($_POST['update_id'] ?? 0);
-$action = $_POST['action'] ?? 'delete_single';
+if (!lm_verify_csrf()) {
+    lm_json(array('status' => 'error', 'message' => 'Session not saved — reload and try again. If it repeats, open System Check → PHP & sessions.'), 419);
+}
 
-// 3. Process Action
+$action = (string) ($_POST['action'] ?? 'delete_single');
+$updateId = (int) ($_POST['update_id'] ?? 0);
+$tierId = isset($_POST['tier_id']) && $_POST['tier_id'] !== '' ? (int) $_POST['tier_id'] : null;
+
 if ($action === 'delete_single') {
-    if ($update_id <= 0) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid update ID.']);
-        exit();
+    if ($updateId <= 0) {
+        lm_json(array('status' => 'error', 'message' => 'Invalid update ID.'));
     }
 
-    try {
-        // Fetch update details to get the physical file path
-        $stmt = $pdo->prepare("SELECT zip_path, version_number FROM script_updates WHERE id = ?");
-        $stmt->execute([$update_id]);
-        $update = $stmt->fetch(PDO::FETCH_ASSOC);
+    $report = lm_delete_update($pdo, $updateId);
 
-        if (!$update) {
-            echo json_encode(['status' => 'error', 'message' => 'Update record not found in the database.']);
-            exit();
+    if (!$report['ok']) {
+        lm_json(array('status' => 'error', 'message' => $report['error']));
+    }
+
+    $removed = count($report['removed']);
+    $message = 'Update v' . $report['version'] . ' deleted.';
+    $message .= $removed > 0
+        ? ' ' . $removed . ' file/folder(s) removed from cPanel storage.'
+        : ' No physical files were found (already removed).';
+    if (!empty($report['notifications_deleted'])) {
+        $message .= ' ' . $report['notifications_deleted'] . ' queued notification(s) cancelled.';
+    }
+
+    lm_json(array(
+        'status' => 'success',
+        'message' => $message,
+        'removed' => $report['removed'],
+        'missing' => $report['missing'],
+        'version' => $report['version'],
+    ));
+}
+
+if ($action === 'cleanup_old') {
+    $report = lm_cleanup_old_updates($pdo, $tierId);
+
+    if (!$report['ok'] && $report['deleted'] === 0) {
+        lm_json(array('status' => 'error', 'message' => 'Cleanup failed: ' . implode(' | ', $report['errors'])));
+    }
+
+    if ($report['deleted'] === 0) {
+        lm_json(array('status' => 'success', 'message' => 'Nothing to clean up — only the latest version of each project is stored.', 'deleted' => 0, 'removed' => array()));
+    }
+
+    $message = 'Cleanup complete: ' . $report['deleted'] . ' old update(s) deleted and '
+        . count($report['removed']) . ' file/folder(s) physically removed from cPanel.';
+
+    if (!empty($report['errors'])) {
+        $message .= ' Warnings: ' . implode(' | ', $report['errors']);
+    }
+
+    lm_json(array(
+        'status' => 'success',
+        'message' => $message,
+        'deleted' => $report['deleted'],
+        'removed' => $report['removed'],
+        'errors' => $report['errors'],
+    ));
+}
+
+if ($action === 'inspect') {
+    if ($updateId <= 0) {
+        lm_json(array('status' => 'error', 'message' => 'Invalid update ID.'));
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT u.*, t.tier_code, t.tier_name FROM script_updates u
+         LEFT JOIN script_tiers t ON u.tier_id = t.id WHERE u.id = ?"
+    );
+    $stmt->execute(array($updateId));
+    $update = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$update) {
+        lm_json(array('status' => 'error', 'message' => 'Update not found.'));
+    }
+
+    $resolved = lm_resolve_update_path($update['zip_path'], $update['tier_code'] ?? null);
+    $path = $resolved['path'];
+
+    lm_json(array(
+        'status' => 'success',
+        'update' => array(
+            'id' => (int) $update['id'],
+            'version' => $update['version_number'],
+            'tier' => $update['tier_code'],
+            'source' => $update['source'] ?? 'manual',
+            'commit' => $update['commit_sha'] ?? '',
+            'changelog' => $update['changelog'],
+            'release_date' => $update['release_date'],
+        ),
+        'stored_path' => $update['zip_path'],
+        'absolute_path' => $path !== null ? $path : $update['zip_path'],
+        'exists' => $resolved['exists'],
+        'size' => $path !== null ? filesize($path) : 0,
+        'size_human' => $path !== null ? lm_format_bytes(filesize($path)) : '—',
+        'checksum' => $update['checksum'],
+        'candidates' => $resolved['candidates'],
+        'notifications' => lm_notification_summary($pdo, (int) $update['id']),
+    ));
+}
+
+if ($action === 'storage_report') {
+    $root = lm_updates_root();
+    $files = array();
+    $total = 0;
+
+    if (is_dir($root)) {
+        $tierDirs = glob($root . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+        if (!is_array($tierDirs)) {
+            $tierDirs = array();
         }
-
-        // Delete the update file from disk if it exists
-        $file_deleted = false;
-        if (!empty($update['zip_path']) && file_exists($update['zip_path'])) {
-            if (@unlink($update['zip_path'])) {
-                $file_deleted = true;
+        foreach ($tierDirs as $dir) {
+            $items = glob($dir . DIRECTORY_SEPARATOR . '*.zip');
+            if (!is_array($items)) {
+                continue;
+            }
+            foreach ($items as $item) {
+                $size = (int) @filesize($item);
+                $total += $size;
+                $files[] = array(
+                    'path' => $item,
+                    'name' => basename($item),
+                    'tier' => basename($dir),
+                    'size' => $size,
+                    'size_human' => lm_format_bytes($size),
+                    'modified' => gmdate('Y-m-d H:i', (int) @filemtime($item)),
+                    'tracked' => false,
+                );
             }
         }
-
-        // Delete record from database
-        $stmt = $pdo->prepare("DELETE FROM script_updates WHERE id = ?");
-        $stmt->execute([$update_id]);
-
-        $message = "Update v{$update['version_number']} successfully deleted.";
-        if ($file_deleted) {
-            $message .= " Physical update archive file removed.";
-        } else {
-            $message .= " (Physical archive file was not found or already deleted)";
-        }
-
-        echo json_encode([
-            'status' => 'success',
-            'message' => $message
-        ]);
-        exit();
-
-    } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
-        exit();
     }
-} elseif ($action === 'cleanup_old') {
-    try {
-        // Keep ONLY the latest update for each tier_id
-        // Group by tier_id and get the max ID
-        $stmt = $pdo->query("SELECT MAX(id) as latest_id, tier_id FROM script_updates GROUP BY tier_id");
-        $latest_updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $latest_ids = array_column($latest_updates, 'latest_id');
-        
-        if (empty($latest_ids)) {
-            echo json_encode(['status' => 'success', 'message' => 'No updates found to clean up.', 'deleted_count' => 0]);
-            exit();
-        }
 
-        // Find all updates that are NOT the latest for their respective script tiers
-        $in_placeholder = implode(',', array_fill(0, count($latest_ids), '?'));
-        $stmt = $pdo->prepare("SELECT id, zip_path, version_number FROM script_updates WHERE id NOT IN ($in_placeholder)");
-        $stmt->execute($latest_ids);
-        $old_updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Match physical files to DB records.
+    $stmt = $pdo->query("SELECT u.id, u.version_number, u.zip_path, t.tier_code FROM script_updates u LEFT JOIN script_tiers t ON u.tier_id = t.id");
+    $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $missing = array();
+    $orphans = array();
 
-        if (empty($old_updates)) {
-            echo json_encode(['status' => 'success', 'message' => 'Only the latest updates exist. No archives to clean up.', 'deleted_count' => 0]);
-            exit();
-        }
-
-        $deleted_files_count = 0;
-        $deleted_records_count = 0;
-
-        foreach ($old_updates as $old) {
-            // Delete ZIP file from storage
-            if (!empty($old['zip_path']) && file_exists($old['zip_path'])) {
-                if (@unlink($old['zip_path'])) {
-                    $deleted_files_count++;
+    foreach ($records as $record) {
+        $resolved = lm_resolve_update_path($record['zip_path'], $record['tier_code'] ?? null);
+        if ($resolved['exists']) {
+            foreach ($files as &$file) {
+                if ($file['path'] === $resolved['path']) {
+                    $file['tracked'] = true;
+                    $file['version'] = $record['version_number'];
+                    $file['update_id'] = (int) $record['id'];
+                    break;
                 }
             }
-            // Delete from database
-            $del_stmt = $pdo->prepare("DELETE FROM script_updates WHERE id = ?");
-            $del_stmt->execute([$old['id']]);
-            $deleted_records_count++;
+            unset($file);
+        } else {
+            $missing[] = array(
+                'update_id' => (int) $record['id'],
+                'version' => $record['version_number'],
+                'tier' => $record['tier_code'],
+                'stored_path' => $record['zip_path'],
+            );
         }
-
-        echo json_encode([
-            'status' => 'success',
-            'message' => "Clean up completed: Deleted {$deleted_files_count} physical update ZIP file(s) and {$deleted_records_count} older update database record(s).",
-            'deleted_count' => $deleted_records_count
-        ]);
-        exit();
-
-    } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Database error during cleanup: ' . $e->getMessage()]);
-        exit();
     }
-} else {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid action.']);
-    exit();
+
+    foreach ($files as $file) {
+        if (empty($file['tracked'])) {
+            $orphans[] = $file;
+        }
+    }
+
+    lm_json(array(
+        'status' => 'success',
+        'root' => $root,
+        'writable' => is_writable($root),
+        'total_files' => count($files),
+        'total_size' => lm_format_bytes($total),
+        'files' => $files,
+        'missing' => $missing,
+        'orphans' => $orphans,
+    ));
 }
+
+if ($action === 'preview_email') {
+    if ($updateId <= 0) {
+        lm_json(array('status' => 'error', 'message' => 'Invalid update ID.'));
+    }
+
+    $stmt = $pdo->prepare("SELECT u.*, t.tier_code, t.tier_name FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id WHERE u.id = ?");
+    $stmt->execute(array($updateId));
+    $update = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$update) {
+        lm_json(array('status' => 'error', 'message' => 'Update not found.'));
+    }
+
+    // A real customer on this project — not a placeholder domain.
+    $license = lm_preview_license($pdo, $update, (int) ($_POST['license_id'] ?? 0));
+    $kind = ($_POST['kind'] ?? 'initial') === 'reminder' ? 'reminder' : 'initial';
+
+    $email = lm_render_update_email($update, $update, $license, $kind, array(), $pdo);
+
+    lm_json(array(
+        'status' => 'success',
+        'subject' => $email['subject'],
+        'html' => $email['html'],
+        'alt' => $email['alt'],
+        'domain' => $email['domain'],
+        'license_id' => (int) ($license['id'] ?? 0),
+        'customer_email' => (string) ($license['customer_email'] ?? ''),
+        'sample' => empty($license['id']) || empty($license['domain']),
+    ));
+}
+
+lm_json(array('status' => 'error', 'message' => 'Unknown action.'), 400);

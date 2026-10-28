@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 $user_email = $_SESSION['user_email'] ?? null;
 
 if (!$user_email) {
@@ -9,9 +10,17 @@ if (!$user_email) {
 }
 
 require_once('../db.php');
+lm_ui_boot();
 
 $success_message = '';
 $error_message = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!lm_verify_csrf()) {
+        $error_message = 'Your session expired. Refresh the page and try again.';
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = $_POST['name'] ?? '';
@@ -39,6 +48,7 @@ $user_company = $_SESSION['user_company'] ?? '';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Profile - License Manager</title>
+    <?php lm_public_assets(); ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * {
@@ -48,7 +58,7 @@ $user_company = $_SESSION['user_company'] ?? '';
         }
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg);
             min-height: 100vh;
         }
         .navbar {
@@ -232,14 +242,7 @@ $user_company = $_SESSION['user_company'] ?? '';
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <h1>🔐 License Manager</h1>
-        <div class="navbar-links">
-            <a href="index.php">📜 My Licenses</a>
-            <a href="profile.php">👤 Profile</a>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+<?php lm_public_header('account'); ?>
 
     <div class="container">
         <div class="card">
@@ -260,6 +263,7 @@ $user_company = $_SESSION['user_company'] ?? '';
                 </div>
 
                 <form method="POST">
+    <?= lm_csrf_field() ?>
                     <div class="form-group">
                         <label for="name">Full Name</label>
                         <input type="text" id="name" name="name" value="<?= htmlspecialchars($user_name) ?>" placeholder="Enter your full name">
@@ -283,5 +287,7 @@ $user_company = $_SESSION['user_company'] ?? '';
             </div>
         </div>
     </div>
+<?php lm_public_footer(); ?>
+<?php lm_public_tabbar('account'); ?>
 </body>
 </html>

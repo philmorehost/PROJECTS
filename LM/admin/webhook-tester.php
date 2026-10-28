@@ -1,6 +1,7 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
 // Check if user is admin
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
@@ -13,6 +14,10 @@ $test_result = null;
 $test_message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_webhook'])) {
+    if (!lm_verify_csrf()) {
+        die('Your session was not saved, so this action was refused. Go back and reload; if it repeats, open System Check → PHP & sessions.');
+    }
+
     // Create a test webhook payload
     $test_ref = 'test-' . date('YmdHis');
     
@@ -171,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_webhook'])) {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
     <div class="container">
         <a href="dashboard.php" class="back-link">← Back to Dashboard</a>
         <h1>🔌 Webhook Tester</h1>
@@ -183,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_webhook'])) {
                 </div>
             <?php endif; ?>
             <form method="POST">
+    <?= lm_csrf_field() ?>
                 <p>Click the button below to test if the webhook system is working correctly:</p>
                 <button type="submit" name="test_webhook" class="btn">🧪 Run Test Webhook</button>
             </form>
