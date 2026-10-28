@@ -36,7 +36,116 @@ function extractDays($name) {
 }
 
 try {
-    if ($gateway === 'vtpass') {
+    $gateway_host = strtolower(trim((string)$gateway));
+    $gateway_host = preg_replace('#^https?://#i', '', $gateway_host);
+    $gateway_host = preg_replace('#^www\.#i', '', $gateway_host);
+    $gateway_host = rtrim($gateway_host, '/');
+
+    if ($gateway_host === 'smeplug.ng' && in_array($type, ['sme', 'cg'], true)) {
+        $vendor_id = (int)($get_logged_admin_details['id'] ?? 0);
+        $api_type = ($type === 'sme') ? 'sme-data' : 'cg-data';
+        $api_type_esc = mysqli_real_escape_string($connection_server, $api_type);
+        $api_query = mysqli_query(
+            $connection_server,
+            "SELECT api_key FROM sas_apis WHERE vendor_id='$vendor_id' AND api_type='$api_type_esc' AND api_base_url LIKE '%smeplug.ng%' AND status='1' LIMIT 1"
+        );
+        $api_row = $api_query ? mysqli_fetch_assoc($api_query) : null;
+        $smeplug_api_key = trim((string)($api_row['api_key'] ?? ''));
+        if ($smeplug_api_key === '') {
+            throw new Error("SME Plug API key is not configured for " . strtoupper($api_type) . ".");
+        }
+
+        $smeplug_get_json = function($path) use ($smeplug_api_key) {
+            $ch = curl_init('https://smeplug.ng/api/v1' . $path);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPGET => true,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: Bearer ' . $smeplug_api_key,
+                    'Accept: application/json'
+                ]
+            ]);
+            $body = curl_exec($ch);
+            $errno = curl_errno($ch);
+            $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+            $json = json_decode((string)$body, true);
+            if ($errno !== 0 || $http_code < 200 || $http_code >= 300 || !is_array($json)) {
+                throw new Error('Unable to retrieve the SME Plug plan catalogue' . ($error !== '' ? ': ' . $error : '.'));
+            }
+            $provider_status = $json['status'] ?? false;
+            $provider_ok = in_array($provider_status, [true, 1, '1', 'true', 'success', 'successful'], true);
+            if (!$provider_ok) {
+                $message = $json['message'] ?? $json['msg'] ?? 'Provider rejected the request.';
+                throw new Error('SME Plug catalogue request failed: ' . (is_scalar($message) ? (string)$message : 'unknown provider error'));
+            }
+            return $json;
+        };
+
+        $networks_payload = $smeplug_get_json('/networks');
+        $plans_payload = $smeplug_get_json('/data/plans');
+        $provider_networks = $networks_payload['networks'] ?? null;
+        $provider_plans = $plans_payload['data'] ?? null;
+        if (!is_array($provider_networks) || !is_array($provider_plans)) {
+            throw new Error('SME Plug returned an invalid networks or data-plan response.');
+        }
+
+        $network_aliases = [
+            'mtn' => 'mtn', 'airtel' => 'airtel', '9mobile' => '9mobile',
+            'etisalat' => '9mobile', 't2' => '9mobile', 'glo' => 'glo', 'globacom' => 'glo'
+        ];
+        $target_network = strtolower(trim((string)$network));
+        $target_network = $network_aliases[$target_network] ?? $target_network;
+        $network_id = null;
+        foreach ($provider_networks as $id => $provider_name) {
+            if (!is_scalar($provider_name)) continue;
+            $normalized_name = strtolower(trim((string)$provider_name));
+            $normalized_name = $network_aliases[$normalized_name] ?? $normalized_name;
+            if ($normalized_name === $target_network) {
+                $network_id = (string)$id;
+                break;
+            }
+        }
+        if ($network_id === null || !isset($provider_plans[$network_id]) || !is_array($provider_plans[$network_id])) {
+            throw new Error('SME Plug has no data-plan catalogue for ' . strtoupper($target_network) . '.');
+        }
+
+        $seen_plan_codes = [];
+        foreach ($provider_plans[$network_id] as $provider_plan) {
+            if (!is_array($provider_plan)) continue;
+            $plan_id = trim((string)($provider_plan['id'] ?? ''));
+            $plan_name = trim((string)($provider_plan['name'] ?? ''));
+            $plan_price = $provider_plan['price'] ?? null;
+            if ($plan_id === '' || $plan_name === '' || !is_numeric($plan_price) || (float)$plan_price <= 0) continue;
+
+            // DGV's SME Data and CG Data services share SME Plug's catalogue. Plans marked SME
+            // go to SME Data; the provider's non-SME (including Gifting) rows go to CG Data.
+            $is_sme_plan = stripos($plan_name, 'sme') !== false;
+            if (($type === 'sme' && !$is_sme_plan) || ($type === 'cg' && $is_sme_plan)) continue;
+
+            // DGV normalizes plan codes to lowercase during purchase. Convert back to uppercase
+            // in the gateway adapter so alpha-numeric SME Plug ids such as AIR1000 are preserved.
+            $plan_code = strtolower($plan_id);
+            if (isset($seen_plan_codes[$plan_code])) continue;
+            $seen_plan_codes[$plan_code] = true;
+            $plans[] = [
+                'name' => $plan_name,
+                'code' => $plan_code,
+                'price' => (float)$plan_price,
+                'days' => extractDays($plan_name)
+            ];
+        }
+
+        if (empty($plans)) {
+            throw new Error('No valid ' . strtoupper($type) . ' data plans were returned by SME Plug for ' . strtoupper($target_network) . '.');
+        }
+    } elseif ($gateway === 'vtpass') {
         if ($type === 'airtime') {
             $plans[] = [
                 'name' => strtoupper($network) . " Airtime",
