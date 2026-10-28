@@ -41,9 +41,13 @@ try {
     $gateway_host = preg_replace('#^www\.#i', '', $gateway_host);
     $gateway_host = rtrim($gateway_host, '/');
 
-    if ($gateway_host === 'smeplug.ng' && in_array($type, ['sme', 'cg'], true)) {
+    if ($gateway_host === 'smeplug.ng' && $type === 'airtime') {
+        // SME Plug accepts arbitrary airtime amounts, but the documented API does not expose
+        // network discount/commission rates. Avoid inventing a rate; configure Airtime manually.
+        throw new Error('SME Plug does not expose Airtime discount rates through its API. Configure the Airtime commission manually; data plan prices can be fetched here.');
+    } elseif ($gateway_host === 'smeplug.ng' && in_array($type, ['sme', 'cg', 'dd'], true)) {
         $vendor_id = (int)($get_logged_admin_details['id'] ?? 0);
-        $api_type = ($type === 'sme') ? 'sme-data' : 'cg-data';
+        $api_type = ['sme' => 'sme-data', 'cg' => 'cg-data', 'dd' => 'dd-data'][$type];
         $api_type_esc = mysqli_real_escape_string($connection_server, $api_type);
         $api_query = mysqli_query(
             $connection_server,
@@ -124,10 +128,13 @@ try {
             $plan_price = $provider_plan['price'] ?? null;
             if ($plan_id === '' || $plan_name === '' || !is_numeric($plan_price) || (float)$plan_price <= 0) continue;
 
-            // DGV's SME Data and CG Data services share SME Plug's catalogue. Plans marked SME
-            // go to SME Data; the provider's non-SME (including Gifting) rows go to CG Data.
+            // Preserve DGV's plan taxonomy: SME labels route to SME Data, Gifting/Corporate/CG
+            // labels to CG Data, and other plans to Direct Data.
             $is_sme_plan = stripos($plan_name, 'sme') !== false;
-            if (($type === 'sme' && !$is_sme_plan) || ($type === 'cg' && $is_sme_plan)) continue;
+            $is_cg_plan = preg_match('/gifting|corporate|(^|[^a-z])cg([^a-z]|$)/i', $plan_name) === 1;
+            if (($type === 'sme' && !$is_sme_plan)
+                || ($type === 'cg' && !$is_cg_plan)
+                || ($type === 'dd' && ($is_sme_plan || $is_cg_plan))) continue;
 
             // DGV normalizes plan codes to lowercase during purchase. Convert back to uppercase
             // in the gateway adapter so alpha-numeric SME Plug ids such as AIR1000 are preserved.
@@ -145,6 +152,8 @@ try {
         if (empty($plans)) {
             throw new Error('No valid ' . strtoupper($type) . ' data plans were returned by SME Plug for ' . strtoupper($target_network) . '.');
         }
+    } elseif ($gateway_host === 'smeplug.ng') {
+        throw new Error('SME Plug plan fetching supports Airtime, SME Data, CG/Gifting Data, and Direct Data. Shared Data is not offered by this catalogue.');
     } elseif ($gateway === 'vtpass') {
         if ($type === 'airtime') {
             $plans[] = [
