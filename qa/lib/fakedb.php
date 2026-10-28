@@ -40,6 +40,18 @@ if (!class_exists('QAStmt')) {
                 $GLOBALS['qa_sql'] = array();
             }
             $GLOBALS['qa_sql'][] = $this->sql . ($this->args ? ' -- ' . json_encode($this->args) : '');
+
+            // php-wasm does not run shutdown handlers after exit(), and every
+            // POST handler in the panel ends with `header(Location) + exit`.
+            // Recording to a file as it happens is the only way a test can see
+            // what a request actually wrote.
+            if (!empty($GLOBALS['qa_sql_file'])) {
+                @file_put_contents(
+                    $GLOBALS['qa_sql_file'],
+                    $this->sql . ($this->args ? ' -- ' . json_encode($this->args) : '') . "\n",
+                    FILE_APPEND
+                );
+            }
             return true;
         }
 
@@ -124,6 +136,74 @@ if (!class_exists('QAStmt')) {
                     }
                 }
                 $this->rows = $out;
+                return;
+            }
+
+            // Column probes (lm_db_has_column). Default: the column exists, so a
+            // test can render the real page; $GLOBALS['qa_columns'] narrows it.
+            if (strpos($q, 'information_schema.columns') !== false) {
+                $table = isset($this->args[0]) ? (string) $this->args[0] : '';
+                $column = isset($this->args[1]) ? (string) $this->args[1] : '';
+                $known = isset($GLOBALS['qa_columns']) ? (array) $GLOBALS['qa_columns'] : null;
+                $exists = $known === null || in_array($table . '.' . $column, $known, true);
+                $this->rows = array(array($exists ? '1' : '0'));
+                return;
+            }
+
+            // Licences listed on admin/licenses.php (the per-licence update
+            // switches live here, so a test needs real rows to look at).
+            if (strpos($q, 'select * from licenses') !== false) {
+                if (isset($GLOBALS['qa_licences'])) {
+                    $this->rows = array_values((array) $GLOBALS['qa_licences']);
+                    return;
+                }
+                $out = array();
+                for ($i = 1; $i <= $n('licenses'); $i++) {
+                    $out[] = array(
+                        'id' => (string) $i,
+                        'license_key' => 'QA-' . str_pad((string) $i, 4, '0', STR_PAD_LEFT),
+                        'domain' => 'site' . $i . '.example.com',
+                        'customer_email' => 'owner' . $i . '@example.com',
+                        'status' => 'active',
+                        'license_type' => 'standard',
+                        'tier_id' => '1',
+                        'updates_enabled' => '1',
+                        'created_at' => '2026-10-0' . min(9, $i) . ' 09:00:00',
+                    );
+                }
+                $this->rows = $out;
+                return;
+            }
+
+            if (strpos($q, 'select t.id, t.tier_name, t.tier_code') !== false) {
+                // The project-wide bulk control: one row per project with the
+                // number of licences and how many of them are on hold.
+                $out = array();
+                foreach ($tiers as $tier) {
+                    $total = 0;
+                    $held = 0;
+                    foreach (isset($GLOBALS['qa_licences']) ? (array) $GLOBALS['qa_licences'] : array() as $lic) {
+                        if ((string) ($lic['tier_id'] ?? '') === (string) $tier['id']) {
+                            $total++;
+                            if (isset($lic['updates_enabled']) && (int) $lic['updates_enabled'] === 0) {
+                                $held++;
+                            }
+                        }
+                    }
+                    $out[] = array(
+                        'id' => (string) $tier['id'],
+                        'tier_name' => (string) $tier['tier_name'],
+                        'tier_code' => (string) ($tier['tier_code'] ?? ''),
+                        'licences' => (string) $total,
+                        'on_hold' => (string) $held,
+                    );
+                }
+                $this->rows = $out;
+                return;
+            }
+
+            if (strpos($q, 'from license_requests') !== false) {
+                $this->rows = isset($GLOBALS['qa_requests']) ? array_values((array) $GLOBALS['qa_requests']) : array();
                 return;
             }
 

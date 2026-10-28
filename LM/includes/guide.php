@@ -216,11 +216,12 @@ HTML
                         'html' => <<<'HTML'
 <p>Update access is a switch on the <strong>licence</strong>, not on the release — so you publish normally and decide who may pull it.</p>
 <ol class="lm-guide-steps">
-  <li><strong>Licences → All Licenses</strong>. Each row has an <em>Updates</em> badge: <em>Allowed</em> or <em>On hold</em>.</li>
-  <li>Press <strong>Hold updates</strong> on a row, or pick the project in the <em>Hold all</em> box above the table when a whole batch of vendors still owe for the release.</li>
+  <li><strong>Licences → All Licenses</strong>. Every row has its own <em>Updates</em> switch: <em>Allowed</em> or <em>On hold</em>. The switch only ever changes that one licence.</li>
+  <li>Click the switch on the vendor who has not paid. The filter chips at the top (<em>All / Allowed / On hold</em>) narrow the table to the licences you are looking for.</li>
   <li>Their site keeps running and keeps validating — only <em>Pulling updates</em> is paused. On their update page they still see the new version number and the changelog, but the install button is replaced by a card that says access is on hold, with a <strong>Chat on WhatsApp</strong> button.</li>
-  <li>When the vendor pays, press <strong>Allow updates</strong> for that row. Their next check-in can pull immediately; nothing has to be re-published.</li>
+  <li>When the vendor pays, click the same switch again on that row. Their next check-in can pull immediately; nothing has to be re-published.</li>
 </ol>
+<p>Holding a whole project at once is still possible, but it is a separate action: open <strong>Bulk action — every licence in one project</strong> below the table and confirm. That is the only control that changes more than one licence.</p>
 <p class="lm-guide-note">The package itself never changes hands while it is on hold: the download link is not issued, and a link from an older email or an open tab is refused too. Notification emails are held back for those licences, so nobody receives a link that cannot work.</p>
 <p>The contact card is driven by <strong>Settings → Vendor Contact &amp; Update Access</strong>: a WhatsApp number in international format and, if you want, your own wording. Nothing is pre-filled — with no number and no admin email, the page tells the vendor to ask you for a contact, rather than showing a dead button.</p>
 HTML

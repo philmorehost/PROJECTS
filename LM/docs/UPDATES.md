@@ -1277,7 +1277,7 @@ release". So 9.6.0 adds a switch beside the licence:
 
 | | |
 |---|---|
-| **Where the switch is** | *Licences → All Licenses → Updates* (one row at a time), or the **Hold all / Allow all** box above the table for a whole project |
+| **Where the switch is** | *Licences → All Licenses → Updates*, one switch per row (9.6.1 moved it out of the Actions column so it cannot be missed) |
 | **What it stops** | Pulling the package. Nothing else: the site keeps running, the licence keeps validating, the site keeps checking in |
 | **What the vendor sees** | The new version number and the changelog — and, instead of an install button, a card that says access is on hold, with a **Chat on WhatsApp** button |
 | **What the vendor never sees** | A download link, a checksum, or a changelog that has been edited to carry a payment demand |
@@ -1285,8 +1285,9 @@ release". So 9.6.0 adds a switch beside the licence:
 ### Publish as usual, then hold
 
 1. Publish the release normally (*Push Updates*).
-2. *Licences* → press **Hold updates** on the vendors who have not paid, or
-   *Hold all* for the project, then **Allow updates** on each row as it pays.
+2. *Licences* → click the **Updates** switch on the vendors who have not paid,
+   then click it again on each row as it pays. The switch only ever changes the
+   licence on that row.
 3. Nothing has to be re-published. The next time their site checks in, the
    package is simply offered.
 
@@ -1392,6 +1393,49 @@ the standard build's `bc-admin/UpdateSystem.php` (+ `ajax_download_update.php`).
 
 ---
 
+## 6r. 9.6.1 — one licence at a time
+
+**What was reported.**
+
+> Please allow individual license Updates to be controllable. I see that the
+> function controls all. So, I need a single license to be updatable.
+
+The state was already per licence in 9.6.0, but the page did not look that way.
+The first thing on the screen was a **Hold all / Allow all** panel, and the
+per-licence action was the third text link in an *Actions* column — so the only
+control that looked like a control was the one that changed everything.
+
+### What changed
+
+| | 9.6.0 | 9.6.1 |
+|---|---|---|
+| Per-licence control | a *Hold updates* / *Allow updates* text link in Actions | a **switch in the Updates column**, on its own row, labelled *Allowed* or *On hold* |
+| What it says | no hint | *click to hold this one* / *click to allow this one*, and an accessible name that includes the licence key |
+| Project-wide action | an always-visible panel above the table | a **closed** *Bulk action — every licence in one project* disclosure below the table, which asks for confirmation and says **EVERY licence** |
+| Finding one licence | scroll the whole table | **All / Allowed / On hold** filter chips with counts |
+
+The row switch posts one id. The bulk action posts a project and is the only
+statement in the panel that writes `WHERE tier_id = ?`; `qa/licence-updates.cjs`
+drives a real POST through the page and asserts exactly that.
+
+### Also fixed
+
+If `includes/migrations.php` was not uploaded with the rest of the panel, the
+page used to fail on an unknown column. It now shows *"The update-access columns
+are not in the database yet"* and renders the column read-only, so a partial
+upload is obvious instead of breaking the Licences page.
+
+### Files to upload
+
+| File | Change |
+|---|---|
+| `admin/licenses.php` | per-row switch, filter chips, bulk action moved into a confirmed disclosure, missing-column guard |
+| `includes/guide.php` | the walkthrough describes the switch, not a panel |
+| `includes/lm_config.php` | version 9.6.1 |
+| `build.json` | last |
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -1407,6 +1451,8 @@ the standard build's `bc-admin/UpdateSystem.php` (+ `ajax_download_update.php`).
 | Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
 | The card says **Queued** and the bar does not move | Nothing is slow — no worker has claimed the job. 9.5.0 shows why and, after 15 seconds, starts the pull from the admin page itself. If it still sits there, open **System Check → Background pulls**: it names which of the three doors (exec, loopback, cron) is closed. |
 | “This server cannot start a background worker” | `exec()` is disabled and the site cannot reach its own `pull-worker.php` URL (usually a WAF). The pull still runs — inside the page that started it, so keep the tab open. Set up cron to remove that dependency. |
+| Holding updates changes every licence | You used the *Bulk action — every licence in one project* disclosure below the table. Use the **Updates** switch on the single row instead (9.6.1); each switch carries that row's id and nothing else. |
+| The Updates column shows a badge instead of a switch | `includes/migrations.php` was not uploaded, so the three columns are missing. Upload it and reload — the page says so as well. |
 | A vendor cannot pull an update they can see | Their licence is **on hold**: *Licences → Updates* says *On hold*. Press **Allow updates** on that row once they have paid. The package was never sent to them, so nothing needs re-publishing. |
 | “Update access is on hold” but the vendor paid | The switch is per licence, not per project: check the exact licence key their site reports under *Licensed domains*, then allow that row. |
 | The hold card shows no WhatsApp button | *Settings → Vendor Contact & Update Access* has no number. It is deliberately not seeded — type yours in international format (`2348086697100`). |

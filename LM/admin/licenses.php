@@ -9,6 +9,17 @@ if (!isset($_SESSION['admin_logged_in'])) {
 
 require_once('../db.php');
 
+/*
+ * The switches need three columns. If the panel files were uploaded but
+ * includes/migrations.php was not, say so instead of dying on a SQL error —
+ * and render the column read-only rather than showing a button that cannot
+ * work. Checked on every request, not just on POST: the page itself draws
+ * the switches.
+ */
+$updatesColumnReady = function_exists('lm_db_has_column')
+    ? lm_db_has_column($pdo, 'licenses', 'updates_enabled')
+    : true;
+
 // Handle POST requests for license management
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!lm_verify_csrf()) {
@@ -28,26 +39,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $blockNote = substr($blockNote, 0, 255);
         }
 
-        $stmt = $pdo->prepare(
-            "UPDATE licenses
-             SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ?,
-                 updates_enabled = ?, updates_block_note = ?
-             WHERE id = ?"
-        );
-        $stmt->execute([
-            $_POST['license_key'],
-            $_POST['domain'],
-            $_POST['customer_email'],
-            $_POST['status'],
-            $_POST['license_type'] ?? 'standard',
-            $allowUpdates,
-            $blockNote !== '' ? $blockNote : null,
-            $_POST['id'],
-        ]);
+        if ($updatesColumnReady) {
+            $stmt = $pdo->prepare(
+                "UPDATE licenses
+                 SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ?,
+                     updates_enabled = ?, updates_block_note = ?
+                 WHERE id = ?"
+            );
+            $stmt->execute([
+                $_POST['license_key'],
+                $_POST['domain'],
+                $_POST['customer_email'],
+                $_POST['status'],
+                $_POST['license_type'] ?? 'standard',
+                $allowUpdates,
+                $blockNote !== '' ? $blockNote : null,
+                $_POST['id'],
+            ]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE licenses SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ? WHERE id = ?");
+            $stmt->execute([
+                $_POST['license_key'],
+                $_POST['domain'],
+                $_POST['customer_email'],
+                $_POST['status'],
+                $_POST['license_type'] ?? 'standard',
+                $_POST['id'],
+            ]);
+        }
 
         // Going from "on hold" to "allowed" should not leave a stale date on
         // the customer's update page.
-        if ($allowUpdates === 1) {
+        if ($allowUpdates === 1 && $updatesColumnReady) {
             $pdo->prepare("UPDATE licenses SET updates_blocked_at = NULL WHERE id = ?")->execute([$_POST['id']]);
         }
     } elseif (isset($_POST['toggle_status'])) {
@@ -55,6 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_status = $_POST['current_status'] === 'active' ? 'inactive' : 'active';
         $stmt->execute([$new_status, $_POST['id']]);
     } elseif (isset($_POST['toggle_updates'])) {
+        if (!$updatesColumnReady) {
+            header('Location: licenses.php?error=migration');
+            exit();
+        }
+
         // The switch behind "I do not want them pulling this release yet".
         // Status stays active: the site keeps working and keeps validating —
         // only the update download is held.
@@ -70,6 +98,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif (isset($_POST['bulk_updates'])) {
+        if (!$updatesColumnReady) {
+            header('Location: licenses.php?error=migration');
+            exit();
+        }
+
         // Holding a release for a whole project one licence at a time is the
         // workflow this exists for: block them all, then allow each as it pays.
         $tierId = (int) ($_POST['tier_id'] ?? 0);
@@ -94,6 +127,35 @@ $license_requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
 // Fetch all licenses
 $stmt = $pdo->query("SELECT * FROM licenses ORDER BY created_at DESC");
 $licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/*
+ * Update access is per licence, so the page has to make one licence easy to
+ * find among hundreds. These counts drive the filter chips above the table.
+ */
+$updatesFilter = isset($_GET['updates']) ? (string) $_GET['updates'] : 'all';
+if (!in_array($updatesFilter, array('all', 'allowed', 'hold'), true)) {
+    $updatesFilter = 'all';
+}
+
+$countOnHold = 0;
+foreach ($licenses as $licenseRow) {
+    if (isset($licenseRow['updates_enabled']) && (int) $licenseRow['updates_enabled'] === 0) {
+        $countOnHold++;
+    }
+}
+$countAllowed = count($licenses) - $countOnHold;
+
+$filteredLicenses = array();
+foreach ($licenses as $licenseRow) {
+    $isOn = !isset($licenseRow['updates_enabled']) || (int) $licenseRow['updates_enabled'] !== 0;
+    if ($updatesFilter === 'hold' && $isOn) {
+        continue;
+    }
+    if ($updatesFilter === 'allowed' && !$isOn) {
+        continue;
+    }
+    $filteredLicenses[] = $licenseRow;
+}
 // Projects, with how many of their licences are on hold (for the bulk control).
 $tierCounts = array();
 try {
@@ -322,6 +384,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             font-size: 0.78rem;
             color: #b45309;
             max-width: 220px;
+            white-space: normal;
         }
         .link-danger {
             color: #b45309;
@@ -333,24 +396,149 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 0.85rem 1.2rem;
             font-weight: 600;
         }
-        .hold-panel {
-            display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: flex-start;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 1.2rem 1.4rem;
-            margin-bottom: 1.75rem;
+        .notice-warn {
+            background: #fff7ed;
+            color: #9a3412;
+            border: 1px solid #fed7aa;
+            border-radius: 8px;
+            padding: 0.9rem 1.2rem;
+            font-weight: 600;
         }
-        .hold-panel p {
-            margin: 0.4rem 0 0;
-            font-size: 0.85rem;
+        .filter-chips {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            background: #eef2f7;
+            color: #475569;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .chip:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+        .chip-active,
+        .chip-active:hover {
+            background: #1e293b;
+            color: #fff;
+        }
+        .chip-count {
+            background: #dbe3ec;
+            color: #334155;
+            border-radius: 999px;
+            padding: 0 0.45rem;
+            font-size: 0.75rem;
+        }
+        .chip-active .chip-count {
+            background: rgba(255, 255, 255, 0.25);
+            color: #fff;
+        }
+        .updates-cell {
+            white-space: nowrap;
+        }
+        .switch-form {
+            display: inline-block;
+            margin: 0;
+        }
+        .updates-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.35rem 0.8rem 0.35rem 0.4rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 700;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .updates-switch.is-on {
+            background: #ecfdf5;
+            color: #047857;
+            border-color: #a7f3d0;
+        }
+        .updates-switch.is-off {
+            background: #fff7ed;
+            color: #b45309;
+            border-color: #fed7aa;
+        }
+        .updates-switch:hover {
+            filter: brightness(0.97);
+        }
+        .switch-track {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 18px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            transition: background 0.15s ease;
+        }
+        .updates-switch.is-on .switch-track {
+            background: #10b981;
+        }
+        .updates-switch.is-off .switch-track {
+            background: #f59e0b;
+        }
+        .switch-knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            transition: left 0.15s ease;
+        }
+        .updates-switch.is-on .switch-knob {
+            left: 18px;
+        }
+        .switch-hint {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+        .bulk-box {
+            margin-top: 1.75rem;
+            border-top: 1px dashed #e2e8f0;
+            padding-top: 1.1rem;
+        }
+        .bulk-box summary {
+            cursor: pointer;
+            font-weight: 700;
+            color: #475569;
+            font-size: 0.88rem;
+        }
+        .bulk-box summary:hover {
+            color: #1e293b;
+        }
+        .bulk-intro {
+            margin: 0.7rem 0 0.9rem;
+            font-size: 0.82rem;
             color: #64748b;
             max-width: 620px;
             line-height: 1.5;
+        }
+        .empty-row {
+            padding: 2rem 0;
+            text-align: center;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        .licence-key {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.85rem;
+            color: #1e293b;
         }
         .hold-form {
             display: flex;
@@ -519,40 +707,51 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="notice-ok" style="margin-bottom:1.5rem;">Saved.</div>
         <?php endif; ?>
 
-        <div class="card" style="margin-top: 2rem;">
-            <div class="card-header">
-                <h3>All Licenses</h3>
-                <span style="font-size:0.85rem;color:#64748b;">Update access is separate from licence status</span>
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'migration'): ?>
+            <div class="notice-warn" style="margin-bottom:1.5rem;">
+                The update-access columns are not in the database yet. Upload
+                <code>includes/migrations.php</code> and reload this page once — the migration runs by itself.
+            </div>
+        <?php endif; ?>
+
+        <div class="card" style="margin-top: 2rem;" id="licences">
+            <div class="card-header" style="flex-wrap:wrap;gap:1rem;">
+                <div>
+                    <h3>All Licenses</h3>
+                    <span style="font-size:0.85rem;color:#64748b;">Every licence has its own <strong>Updates</strong> switch — one vendor at a time.</span>
+                </div>
+                <div class="filter-chips">
+                    <?php
+                    $chipBase = 'licenses.php?updates=';
+                    $chips = array(
+                        'all' => array('label' => 'All', 'count' => count($licenses)),
+                        'allowed' => array('label' => 'Allowed', 'count' => $countAllowed),
+                        'hold' => array('label' => 'On hold', 'count' => $countOnHold),
+                    );
+                    foreach ($chips as $key => $chip):
+                    ?>
+                        <a class="chip <?= $updatesFilter === $key ? 'chip-active' : '' ?>"
+                           href="<?= $chipBase . $key ?>"><?= htmlspecialchars($chip['label']) ?>
+                           <span class="chip-count"><?= (int) $chip['count'] ?></span></a>
+                    <?php endforeach; ?>
+                </div>
             </div>
             <div class="card-body">
-                <div class="hold-panel">
-                    <div>
-                        <strong>Holding a release back</strong>
-                        <p>
-                            Publish the update as usual, then hold updates for the vendors who have not paid.
-                            Their sites keep running and keep validating — only <em>Pulling updates</em> is paused,
-                            and their update page shows a WhatsApp button to reach you.
-                            Press <em>Allow updates</em> on each row as they pay.
-                        </p>
+                <?php if (!$updatesColumnReady): ?>
+                    <div class="notice-warn" style="margin-bottom:1.5rem;">
+                        These switches are read-only until the database has the new columns. Upload
+                        <code>includes/migrations.php</code> and reload.
                     </div>
-                    <?php if (!empty($tierCounts)): ?>
-                    <form method="POST" class="hold-form">
-    <?= lm_csrf_field() ?>
-                        <input type="hidden" name="bulk_updates" value="1">
-                        <select name="tier_id" required>
-                            <?php foreach ($tierCounts as $tc): ?>
-                                <option value="<?= (int) $tc['id'] ?>">
-                                    <?= htmlspecialchars($tc['tier_name']) ?>
-                                    (<?= (int) $tc['licences'] ?> licence<?= (int) $tc['licences'] === 1 ? '' : 's' ?><?= (int) $tc['on_hold'] > 0 ? ', ' . (int) $tc['on_hold'] . ' on hold' : '' ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" name="bulk_mode" value="hold" class="btn btn-hold">Hold all</button>
-                        <button type="submit" name="bulk_mode" value="allow" class="btn btn-allow">Allow all</button>
-                    </form>
-                    <?php endif; ?>
-                </div>
+                <?php endif; ?>
 
+                <?php if (empty($filteredLicenses)): ?>
+                    <div class="empty-row">
+                        <?= $updatesFilter === 'all' ? 'No licences yet.' : 'No licence matches this filter.' ?>
+                        <?php if ($updatesFilter !== 'all'): ?>
+                            <a href="licenses.php">Show all</a>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
                 <table>
                     <thead>
                         <tr>
@@ -566,46 +765,78 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($licenses as $license): ?>
+                        <?php foreach ($filteredLicenses as $license): ?>
+                            <?php $updatesOn = !isset($license['updates_enabled']) || (int) $license['updates_enabled'] !== 0; ?>
                             <tr>
-                                <td><?= htmlspecialchars($license['license_key']) ?></td>
+                                <td><span class="licence-key"><?= htmlspecialchars($license['license_key']) ?></span></td>
                                 <td><?= htmlspecialchars($license['domain']) ?></td>
                                 <td><?= htmlspecialchars($license['customer_email'] ?? '') ?></td>
                                 <td><span class="status-badge <?= ($license['license_type'] ?? 'standard') === 'extended' ? 'status-active' : 'status-inactive' ?>"><?= htmlspecialchars(ucfirst($license['license_type'] ?? 'standard')) ?></span></td>
                                 <td><?= htmlspecialchars($license['status']) ?></td>
-                                <td>
-                                    <?php $updatesOn = !isset($license['updates_enabled']) || (int) $license['updates_enabled'] !== 0; ?>
-                                    <span class="status-badge <?= $updatesOn ? 'status-active' : 'status-onhold' ?>">
-                                        <?= $updatesOn ? 'Allowed' : 'On hold' ?>
-                                    </span>
+                                <td class="updates-cell">
+                                    <?php if ($updatesColumnReady): ?>
+                                    <form method="POST" class="switch-form">
+    <?= lm_csrf_field() ?>
+                                        <input type="hidden" name="toggle_updates" value="1">
+                                        <input type="hidden" name="id" value="<?= (int) $license['id'] ?>">
+                                        <input type="hidden" name="current_updates" value="<?= $updatesOn ? 1 : 0 ?>">
+                                        <input type="hidden" name="updates_block_note" value="<?= htmlspecialchars((string) ($license['updates_block_note'] ?? '')) ?>">
+                                        <button type="submit"
+                                                class="updates-switch <?= $updatesOn ? 'is-on' : 'is-off' ?>"
+                                                aria-label="<?= $updatesOn ? 'Updates allowed for' : 'Updates on hold for' ?> <?= htmlspecialchars($license['license_key']) ?>. Click to <?= $updatesOn ? 'hold them' : 'allow them' ?>."
+                                                title="<?= $updatesOn ? 'Only this licence: click to hold its updates' : 'Only this licence: click to allow its updates' ?>">
+                                            <span class="switch-track"><span class="switch-knob"></span></span>
+                                            <span class="switch-label"><?= $updatesOn ? 'Allowed' : 'On hold' ?></span>
+                                        </button>
+                                    </form>
+                                    <div class="switch-hint"><?= $updatesOn ? 'click to hold this one' : 'click to allow this one' ?></div>
+                                    <?php else: ?>
+                                        <span class="status-badge <?= $updatesOn ? 'status-active' : 'status-onhold' ?>"><?= $updatesOn ? 'Allowed' : 'On hold' ?></span>
+                                    <?php endif; ?>
                                     <?php if (!empty($license['updates_block_note'])): ?>
                                         <div class="tiny-note"><?= htmlspecialchars($license['updates_block_note']) ?></div>
                                     <?php endif; ?>
                                 </td>
                                 <td class="action-links">
-                                    <a href="licenses.php?action=edit&id=<?= $license['id'] ?>">Edit</a>
+                                    <a href="licenses.php?action=edit&id=<?= (int) $license['id'] ?>">Edit</a>
                                     <form method="POST" style="display:inline;">
     <?= lm_csrf_field() ?>
                                         <input type="hidden" name="toggle_status" value="1">
-                                        <input type="hidden" name="id" value="<?= $license['id'] ?>">
-                                        <input type="hidden" name="current_status" value="<?= $license['status'] ?>">
+                                        <input type="hidden" name="id" value="<?= (int) $license['id'] ?>">
+                                        <input type="hidden" name="current_status" value="<?= htmlspecialchars($license['status']) ?>">
                                         <button type="submit" class="link-button"><?= $license['status'] === 'active' ? 'Deactivate' : 'Activate' ?></button>
-                                    </form>
-                                    <form method="POST" style="display:inline;">
-    <?= lm_csrf_field() ?>
-                                        <input type="hidden" name="toggle_updates" value="1">
-                                        <input type="hidden" name="id" value="<?= $license['id'] ?>">
-                                        <input type="hidden" name="current_updates" value="<?= $updatesOn ? 1 : 0 ?>">
-                                        <input type="hidden" name="updates_block_note" value="<?= htmlspecialchars((string) ($license['updates_block_note'] ?? '')) ?>">
-                                        <button type="submit" class="link-button <?= $updatesOn ? 'link-danger' : '' ?>">
-                                            <?= $updatesOn ? 'Hold updates' : 'Allow updates' ?>
-                                        </button>
                                     </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php endif; ?>
+
+                <?php if (!empty($tierCounts) && $updatesColumnReady): ?>
+                <details class="bulk-box">
+                    <summary>Bulk action — every licence in one project</summary>
+                    <p class="bulk-intro">
+                        Only needed for the first step of a batch: hold a whole project before releasing a paid
+                        update, then switch each vendor back on individually with the row switch above.
+                    </p>
+                    <form method="POST" class="hold-form"
+                          onsubmit="return confirm('This changes update access for EVERY licence in the selected project, not one of them. Continue?');">
+    <?= lm_csrf_field() ?>
+                        <input type="hidden" name="bulk_updates" value="1">
+                        <select name="tier_id" required>
+                            <?php foreach ($tierCounts as $tc): ?>
+                                <option value="<?= (int) $tc['id'] ?>">
+                                    <?= htmlspecialchars($tc['tier_name']) ?>
+                                    (<?= (int) $tc['licences'] ?> licence<?= (int) $tc['licences'] === 1 ? '' : 's' ?><?= (int) $tc['on_hold'] > 0 ? ', ' . (int) $tc['on_hold'] . ' on hold' : '' ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" name="bulk_mode" value="hold" class="btn btn-hold">Hold every licence</button>
+                        <button type="submit" name="bulk_mode" value="allow" class="btn btn-allow">Allow every licence</button>
+                    </form>
+                </details>
+                <?php endif; ?>
             </div>
         </div>
 
