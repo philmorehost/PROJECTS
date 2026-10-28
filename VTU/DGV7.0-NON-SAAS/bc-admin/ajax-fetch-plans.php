@@ -121,17 +121,27 @@ try {
         }
 
         $seen_plan_codes = [];
+        $valid_catalogue_plan_count = 0;
         foreach ($provider_plans[$network_id] as $provider_plan) {
             if (!is_array($provider_plan)) continue;
-            $plan_id = trim((string)($provider_plan['id'] ?? ''));
-            $plan_name = trim((string)($provider_plan['name'] ?? ''));
-            $plan_price = $provider_plan['price'] ?? null;
+            $plan_id = trim((string)($provider_plan['id'] ?? $provider_plan['plan_id'] ?? $provider_plan['code'] ?? ''));
+            $plan_name = trim((string)($provider_plan['name'] ?? $provider_plan['plan_name'] ?? $provider_plan['title'] ?? ''));
+            $plan_price = $provider_plan['price'] ?? $provider_plan['amount'] ?? $provider_plan['selling_price'] ?? null;
             if ($plan_id === '' || $plan_name === '' || !is_numeric($plan_price) || (float)$plan_price <= 0) continue;
+            $valid_catalogue_plan_count++;
 
+            // SME Plug's documented catalogue labels SME/Gifting in plan names, while some
+            // account/catalogue variants may expose the category in a separate field.
+            $classification_text = $plan_name;
+            foreach (['category', 'plan_type', 'plan_category', 'type', 'product_type', 'service_type'] as $category_field) {
+                if (isset($provider_plan[$category_field]) && is_scalar($provider_plan[$category_field])) {
+                    $classification_text .= ' ' . (string)$provider_plan[$category_field];
+                }
+            }
             // Preserve DGV's plan taxonomy: SME labels route to SME Data, Gifting/Corporate/CG
             // labels to CG Data, and other plans to Direct Data.
-            $is_sme_plan = stripos($plan_name, 'sme') !== false;
-            $is_cg_plan = preg_match('/gifting|corporate|(^|[^a-z])cg([^a-z]|$)/i', $plan_name) === 1;
+            $is_sme_plan = stripos($classification_text, 'sme') !== false;
+            $is_cg_plan = preg_match('/gifting|corporate|(^|[^a-z])cg([^a-z]|$)/i', $classification_text) === 1;
             if (($type === 'sme' && !$is_sme_plan)
                 || ($type === 'cg' && !$is_cg_plan)
                 || ($type === 'dd' && ($is_sme_plan || $is_cg_plan))) continue;
@@ -150,7 +160,10 @@ try {
         }
 
         if (empty($plans)) {
-            throw new Error('No valid ' . strtoupper($type) . ' data plans were returned by SME Plug for ' . strtoupper($target_network) . '.');
+            $catalogue_count = count($provider_plans[$network_id]);
+            throw new Error(
+                'SME Plug returned ' . $catalogue_count . ' ' . strtoupper($target_network) . ' plan records (' . $valid_catalogue_plan_count . ' with valid IDs, names and prices), but none matched the requested ' . strtoupper($type) . ' category. The provider must expose the category in the plan name or category/type field.'
+            );
         }
     } elseif ($gateway_host === 'smeplug.ng') {
         throw new Error('SME Plug plan fetching supports Airtime, SME Data, CG/Gifting Data, and Direct Data. Shared Data is not offered by this catalogue.');
