@@ -337,6 +337,41 @@ try {
         $updateRequired = false;
     }
 
+    /*
+     * Is this licence allowed to pull?
+     *
+     * Checked here — before a token exists — and again in download.php, so a
+     * link already sitting in an inbox or a browser tab stops working the
+     * moment update access is put on hold.
+     */
+    $access = lm_update_access_state($license, (string) $latestUpdate['version_number']);
+    if (empty($access['allowed'])) {
+        check_update_log(
+            'Update access on hold for licence ' . (int) $license['id'] . ' (' . $requestingDomain . '); '
+            . 'offered v' . $latestUpdate['version_number'] . ' without a download link.'
+        );
+
+        echo json_encode(array(
+            'status' => 'payment_required',
+            'message' => $access['message'],
+            'latest_version' => $latestUpdate['version_number'],
+            'installed_version' => $currentVersion,
+            // Never true: an integration that ignores the `access` block must
+            // not try to install what it cannot fetch.
+            'update_required' => false,
+            'update_available' => true,
+            'checksum' => '',
+            'changelog' => $latestUpdate['changelog'],
+            'changelog_format' => $latestUpdate['changelog_format'] ?? 'html',
+            'release_date' => $latestUpdate['release_date'],
+            'download_url' => '',
+            'access' => lm_update_access_json($access),
+            'tier_detected' => $tier['tier_code'],
+            'project' => $tier['tier_name'],
+        ));
+        exit;
+    }
+
     $downloadUrl = lm_ota_issue_download($pdo, $latestUpdate, (int) $license['id']);
 
     check_update_log('Serving v' . $latestUpdate['version_number'] . ' to ' . $requestingDomain . ' (installed: ' . ($currentVersion !== '' ? $currentVersion : 'unknown') . ')');
@@ -351,6 +386,7 @@ try {
         'changelog_format' => $latestUpdate['changelog_format'] ?? 'html',
         'release_date' => $latestUpdate['release_date'],
         'download_url' => $downloadUrl,
+        'access' => lm_update_access_json($access),
         'tier_detected' => $tier['tier_code'],
         'project' => $tier['tier_name'],
     ));

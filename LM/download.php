@@ -73,6 +73,37 @@ try {
         exit;
     }
 
+    /*
+     * The licence gate is checked again here, not only in check-update.php.
+     *
+     * A token lives for 30 minutes (7 days in a notification e-mail), so one
+     * minted before the hold was applied — or sitting in an inbox — would
+     * otherwise still download the package.
+     */
+    if ((int) ($record['license_id'] ?? 0) > 0) {
+        try {
+            $licStmt = $pdo->prepare("SELECT * FROM licenses WHERE id = ? LIMIT 1");
+            $licStmt->execute(array((int) $record['license_id']));
+            $licence = $licStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $licence = null;
+        }
+
+        if ($licence && !lm_license_updates_allowed($licence)) {
+            $access = lm_update_access_state($licence, (string) ($record['version_number'] ?? ''));
+            lm_log('ota', 'Download refused: update access on hold for licence ' . (int) $licence['id']);
+
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array(
+                'status' => 'payment_required',
+                'message' => $access['message'],
+                'access' => lm_update_access_json($access),
+            ));
+            exit;
+        }
+    }
+
     $resolved = lm_resolve_update_path($record['zip_path'], $record['tier_code'] ?? null);
     $filePath = $resolved['path'];
 

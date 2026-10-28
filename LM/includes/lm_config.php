@@ -14,7 +14,7 @@
  */
 
 if (!defined('LM_VERSION')) {
-    define('LM_VERSION', '9.5.1');
+    define('LM_VERSION', '9.6.0');
 }
 
 require_once __DIR__ . '/security.php';
@@ -164,6 +164,11 @@ if (!function_exists('lm_settings')) {
             'update_reminder_max'          => 1,
             'update_skip_if_downloaded'    => true,
             'update_email_batch_size'      => 25,
+            // Vendor contact shown when a licence's update access is on hold.
+            // Empty by default: the WhatsApp button only appears once the admin
+            // has entered a number on the Settings page.
+            'vendor_whatsapp'              => '',
+            'vendor_contact_message'       => '',
             // Wording of the "how to update" block in the customer email.
             // Empty = the built-in text (admin dashboard + control-panel cron).
             'update_instructions_admin'    => '',
@@ -1749,5 +1754,95 @@ if (!function_exists('lm_get_cron_secret')) {
             lm_update_setting(array('cron_secret' => $secret));
         }
         return $secret;
+    }
+}
+
+if (!function_exists('lm_whatsapp_number')) {
+    /**
+     * Reduce a phone number to the digits wa.me expects.
+     *
+     * Accepts anything an admin might paste — "+234 808 669 7100",
+     * "08086697100", "(234) 808-669-7100" — and returns "2348086697100".
+     * A leading 00 international prefix and a local leading 0 are dropped,
+     * because wa.me rejects both.
+     *
+     * @param string $raw
+     * @return string Empty when there is nothing usable.
+     */
+    function lm_whatsapp_number($raw)
+    {
+        $digits = preg_replace('/\D+/', '', (string) $raw);
+        if ($digits === null || $digits === '') {
+            return '';
+        }
+
+        if (strpos($digits, '00') === 0) {
+            $digits = substr($digits, 2);
+        }
+
+        // A local Nigerian number (0 808 …) is written without the country
+        // code. wa.me needs one, and the admin sets the country by typing it
+        // once; only strip a lone leading zero when a full number follows.
+        if (strlen($digits) === 11 && $digits[0] === '0') {
+            $digits = '234' . substr($digits, 1);
+        }
+
+        return strlen($digits) >= 8 ? $digits : '';
+    }
+}
+
+if (!function_exists('lm_whatsapp_url')) {
+    /**
+     * A wa.me link, or '' when no number is configured.
+     *
+     * @param string $number Already-normalised digits (see lm_whatsapp_number)
+     * @param string $text   Pre-filled message
+     * @return string
+     */
+    function lm_whatsapp_url($number, $text = '')
+    {
+        $number = lm_whatsapp_number($number);
+        if ($number === '') {
+            return '';
+        }
+
+        $url = 'https://wa.me/' . $number;
+        $text = trim((string) $text);
+        if ($text !== '') {
+            $url .= '?text=' . rawurlencode($text);
+        }
+
+        return $url;
+    }
+}
+
+if (!function_exists('lm_vendor_contact')) {
+    /**
+     * How a vendor reaches the developer.
+     *
+     * Used when update access is on hold: the customer's update page needs a
+     * button that works, and an empty number must not render a dead link.
+     *
+     * @param string $siteName Optional name used in the pre-filled message
+     * @return array{whatsapp:string,whatsapp_url:string,email:string,message:string}
+     */
+    function lm_vendor_contact($siteName = '')
+    {
+        $settings = lm_settings();
+        $number = lm_whatsapp_number($settings['vendor_whatsapp'] ?? '');
+
+        $name = trim((string) $siteName);
+        if ($name === '') {
+            $name = lm_site_name();
+        }
+
+        $text = 'Hello ' . $name . ', I would like to restore update access for my licence.';
+
+        return array(
+            'whatsapp' => $number,
+            'whatsapp_url' => lm_whatsapp_url($number, $text),
+            'email' => trim((string) ($settings['admin_email'] ?? '')),
+            'message' => trim((string) ($settings['vendor_contact_message'] ?? '')),
+        );
     }
 }

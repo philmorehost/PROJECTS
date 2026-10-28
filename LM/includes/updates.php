@@ -1210,3 +1210,132 @@ if (!function_exists('lm_tier_counts')) {
         }
     }
 }
+
+if (!function_exists('lm_license_updates_allowed')) {
+    /**
+     * May this licence pull updates?
+     *
+     * Separate from `licenses.status`: a vendor who owes money for a release
+     * should still be able to run their site and validate their licence — only
+     * the update download is held. Missing column (files uploaded before the
+     * migration ran) means "allowed", so an upgrade never locks anyone out by
+     * accident.
+     *
+     * @param array $license licenses row
+     * @return bool
+     */
+    function lm_license_updates_allowed(array $license)
+    {
+        if (!array_key_exists('updates_enabled', $license)) {
+            return true;
+        }
+
+        // NULL is a half-applied ALTER, not a decision to block.
+        return $license['updates_enabled'] === null || (int) $license['updates_enabled'] !== 0;
+    }
+}
+
+if (!function_exists('lm_update_access_state')) {
+    /**
+     * Everything the customer's update page needs to explain a hold.
+     *
+     * The wording is deliberately not part of the changelog: the vendor sees
+     * what changed (that is what makes paying worthwhile) and a separate block
+     * tells them how to restore access.
+     *
+     * @param array  $license licenses row
+     * @param string $version Version they are being held from
+     * @return array{allowed:bool,reason:string,title:string,message:string,note:string,blocked_since:string,version:string,whatsapp:string,whatsapp_url:string,email:string}
+     */
+    function lm_update_access_state(array $license, $version = '')
+    {
+        $contact = lm_vendor_contact();
+        $version = trim((string) $version);
+        $allowed = lm_license_updates_allowed($license);
+
+        $state = array(
+            'allowed' => $allowed,
+            'reason' => $allowed ? 'ok' : 'updates_on_hold',
+            'title' => '',
+            'message' => '',
+            'note' => '',
+            'blocked_since' => '',
+            'version' => $version,
+            'whatsapp' => $contact['whatsapp'],
+            'whatsapp_url' => $contact['whatsapp_url'],
+            'email' => $contact['email'],
+        );
+
+        if ($allowed) {
+            return $state;
+        }
+
+        $state['title'] = 'Update access is on hold';
+
+        $custom = trim((string) $contact['message']);
+        if ($custom !== '') {
+            $message = str_replace(
+                array('{version}', '{v}'),
+                array($version !== '' ? 'v' . $version : 'this update', $version),
+                $custom
+            );
+        } elseif ($version !== '') {
+            $message = 'v' . $version . ' is ready, but update access for this licence is on hold. '
+                . 'Contact the developer to restore it, then check for updates again.';
+        } else {
+            $message = 'Update access for this licence is on hold. '
+                . 'Contact the developer to restore it, then check for updates again.';
+        }
+
+        $note = trim((string) ($license['updates_block_note'] ?? ''));
+        if ($note !== '') {
+            $state['note'] = $note;
+        }
+
+        $blockedAt = trim((string) ($license['updates_blocked_at'] ?? ''));
+        if ($blockedAt !== '' && $blockedAt !== '0000-00-00 00:00:00') {
+            $stamp = strtotime($blockedAt);
+            if ($stamp) {
+                $state['blocked_since'] = gmdate('j M Y', $stamp);
+            }
+        }
+
+        if ($contact['whatsapp'] === '' && $contact['email'] === '') {
+            // No button can be drawn: say what to do instead of showing a
+            // dead WhatsApp icon.
+            $message .= ' No contact channel is configured yet — ask the developer for their WhatsApp number or email.';
+        }
+
+        $state['message'] = $message;
+
+        return $state;
+    }
+}
+
+if (!function_exists('lm_update_access_json')) {
+    /**
+     * The `access` block sent to customer installations.
+     *
+     * A separate key on purpose: `changelog` stays what the developer wrote,
+     * and an integration that does not understand this block still sees
+     * `update_required: false` and refuses to install anything.
+     *
+     * @param array $state From lm_update_access_state()
+     * @return array
+     */
+    function lm_update_access_json(array $state)
+    {
+        return array(
+            'allowed' => !empty($state['allowed']),
+            'reason' => (string) ($state['reason'] ?? 'ok'),
+            'title' => (string) ($state['title'] ?? ''),
+            'message' => (string) ($state['message'] ?? ''),
+            'note' => (string) ($state['note'] ?? ''),
+            'blocked_since' => (string) ($state['blocked_since'] ?? ''),
+            'version' => (string) ($state['version'] ?? ''),
+            'whatsapp' => (string) ($state['whatsapp'] ?? ''),
+            'whatsapp_url' => (string) ($state['whatsapp_url'] ?? ''),
+            'email' => (string) ($state['email'] ?? ''),
+        );
+    }
+}

@@ -1020,6 +1020,20 @@ if (!function_exists('lm_dispatch_update_notifications')) {
                 continue;
             }
 
+            /*
+             * Update access on hold: do not send a download link.
+             *
+             * The link would be dead on arrival (download.php refuses it), and
+             * an e-mail that cannot be acted on is worse than no e-mail. The
+             * hold is visible on the customer's own update page, with the
+             * developer's WhatsApp button next to it.
+             */
+            if (!lm_license_updates_allowed($license)) {
+                $pdo->prepare("UPDATE update_notifications SET status = 'skipped', last_error = 'Update access on hold' WHERE id = ?")->execute(array($id));
+                $stats['skipped']++;
+                continue;
+            }
+
             // Already installed? Then no email at all.
             $installed = lm_license_installed_version($pdo, (int) $license['id']);
             if ($installed !== '' && lm_version_compare($installed, $update['version_number']) >= 0) {

@@ -150,6 +150,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new['update_reminder_max'] = max(0, min(5, (int) ($_POST['update_reminder_max'] ?? 1)));
         $new['update_email_batch_size'] = max(5, min(100, (int) ($_POST['update_email_batch_size'] ?? 25)));
 
+        // Vendor contact: how a customer reaches you when update access is held.
+        // Normalised on save so the wa.me link is always valid, and empty when
+        // the admin has not filled it in — nothing is seeded.
+        $new['vendor_whatsapp'] = lm_whatsapp_number($_POST['vendor_whatsapp'] ?? '');
+        $new['vendor_contact_message'] = trim($_POST['vendor_contact_message'] ?? '');
+        if (function_exists('mb_substr')) {
+            $new['vendor_contact_message'] = mb_substr($new['vendor_contact_message'], 0, 400);
+        } else {
+            $new['vendor_contact_message'] = substr($new['vendor_contact_message'], 0, 400);
+        }
+
         $new['updates_storage_dir'] = trim($_POST['updates_storage_dir'] ?? '');
         $new['max_update_size_mb'] = max(1, min(2048, (int) ($_POST['max_update_size_mb'] ?? 128)));
 
@@ -809,6 +820,66 @@ $webhook_url = lm_site_url('webhook.php');
                             </div>
                         </div>
                         <small style="color:#64748b;">Reminders are only sent to customers whose site has not reported the new version. <a href="update-notifications.php" style="color:#4f46e5;font-weight:600;">View the delivery log →</a></small>
+                    </div>
+                </div>
+
+                <div class="card" id="vendor-contact">
+                    <div class="card-header"><h3>Vendor Contact &amp; Update Access</h3></div>
+                    <div class="card-body">
+                        <div class="input-grid">
+                            <div class="input-group wide-input">
+                                <label>WhatsApp number</label>
+                                <input type="text" name="vendor_whatsapp"
+                                       value="<?= htmlspecialchars((string) ($settings['vendor_whatsapp'] ?? '')) ?>"
+                                       placeholder="2348086697100">
+                                <small>
+                                    International format, digits only — <code>2348086697100</code> for Nigeria.
+                                    A pasted <code>+234 808 669 7100</code> or a local <code>0808…</code> is converted
+                                    for you. <strong>Leave empty and no WhatsApp button is shown anywhere.</strong>
+                                </small>
+                            </div>
+                            <div class="input-group wide-input">
+                                <label>Message shown while update access is on hold</label>
+                                <textarea name="vendor_contact_message" rows="3"
+                                          placeholder="Update access for {version} is on hold until payment is confirmed. Tap WhatsApp to reach us."><?= htmlspecialchars((string) ($settings['vendor_contact_message'] ?? '')) ?></textarea>
+                                <small>
+                                    Optional. <code>{version}</code> is replaced with the release they are waiting for.
+                                    Leave empty for the built-in wording. This text appears only on the customer's
+                                    update page — never inside the changelog or an email.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="checkbox-row" style="margin-top:4px;">
+                            <span>
+                                A licence whose <strong>Updates</strong> switch is off still validates and still runs its site —
+                                only pulling the package is paused. Turn it off per licence under
+                                <a href="licenses.php" style="color:#4f46e5;font-weight:600;">Licences → Updates</a>.
+                            </span>
+                        </div>
+
+                        <?php
+                        $vendorContact = lm_vendor_contact();
+                        ?>
+                        <?php if ($vendorContact['whatsapp'] !== ''): ?>
+                            <div style="margin-top:16px;font-size:13px;color:#475569;">
+                                Button preview:
+                                <a href="<?= htmlspecialchars($vendorContact['whatsapp_url']) ?>" target="_blank" rel="noopener"
+                                   style="display:inline-flex;align-items:center;gap:8px;margin-left:8px;padding:8px 14px;border-radius:999px;background:#25d366;color:#fff;font-weight:700;text-decoration:none;">
+                                    WhatsApp <?= htmlspecialchars('+' . $vendorContact['whatsapp']) ?>
+                                </a>
+                            </div>
+                        <?php elseif (!empty($settings['admin_email'])): ?>
+                            <div class="banner banner-warn" style="margin-top:16px;">
+                                No WhatsApp number yet — the customer's update page will offer
+                                <strong><?= htmlspecialchars($settings['admin_email']) ?></strong> instead. Add a number to show the button.
+                            </div>
+                        <?php else: ?>
+                            <div class="banner banner-warn" style="margin-top:16px;">
+                                No WhatsApp number and no admin e-mail: a held vendor gets a message with no way to reach you.
+                                Add one of them above.
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 

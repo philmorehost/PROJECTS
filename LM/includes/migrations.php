@@ -645,7 +645,7 @@ if (!function_exists('lm_schema_version')) {
      */
     function lm_schema_version()
     {
-        return '2026_10_23_pull_jobs';
+        return '2026_10_28_update_access';
     }
 }
 
@@ -714,6 +714,39 @@ if (!function_exists('lm_migration_pull_jobs')) {
     }
 }
 
+if (!function_exists('lm_migration_update_access')) {
+    /**
+     * Per-licence control over pulling updates.
+     *
+     * A vendor who has not paid for a release must not be able to pull it, but
+     * suspending the whole licence would also stop the site from checking in.
+     * So the switch is separate: the licence stays active, the customer's site
+     * still validates, and only the update download is held.
+     *
+     *   updates_enabled     1 = may pull, 0 = on hold
+     *   updates_blocked_at  when it was put on hold (shown to the vendor)
+     *   updates_block_note  an optional reason, e.g. "Balance: NGN 15,000"
+     *
+     * Defaults to 1 so every existing licence keeps working after the update.
+     *
+     * @param PDO $pdo
+     * @return void
+     */
+    function lm_migration_update_access(PDO $pdo)
+    {
+        lm_db_add_column($pdo, 'licenses', 'updates_enabled', "TINYINT(1) NOT NULL DEFAULT 1");
+        lm_db_add_column($pdo, 'licenses', 'updates_blocked_at', "DATETIME NULL");
+        lm_db_add_column($pdo, 'licenses', 'updates_block_note', "VARCHAR(255) NULL");
+
+        // A NULL from a half-applied ALTER must not read as "blocked".
+        try {
+            $pdo->exec("UPDATE licenses SET updates_enabled = 1 WHERE updates_enabled IS NULL");
+        } catch (PDOException $e) {
+            lm_log('migrations', 'updates_enabled backfill skipped: ' . $e->getMessage());
+        }
+    }
+}
+
 if (!function_exists('lm_run_migrations')) {
     /**
      * Run pending migrations once, under an advisory lock.
@@ -769,6 +802,7 @@ if (!function_exists('lm_run_migrations')) {
             '2026_10_23_notifications_github' => 'lm_migration_notifications_github',
             '2026_10_23_github_paths' => 'lm_migration_github_paths',
             '2026_10_23_pull_jobs' => 'lm_migration_pull_jobs',
+            '2026_10_28_update_access' => 'lm_migration_update_access',
         );
 
         foreach ($migrations as $version => $callback) {

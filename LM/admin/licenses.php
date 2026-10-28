@@ -20,14 +20,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("INSERT INTO licenses (license_key, domain, customer_email, status, license_type) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $_POST['license_type'] ?? 'standard']);
     } elseif (isset($_POST['edit_license'])) {
-        $stmt = $pdo->prepare("UPDATE licenses SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ? WHERE id = ?");
-        $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $_POST['license_type'] ?? 'standard', $_POST['id']]);
+        $allowUpdates = !empty($_POST['updates_enabled']) ? 1 : 0;
+        $blockNote = trim((string) ($_POST['updates_block_note'] ?? ''));
+        if (function_exists('mb_substr')) {
+            $blockNote = mb_substr($blockNote, 0, 255);
+        } else {
+            $blockNote = substr($blockNote, 0, 255);
+        }
+
+        $stmt = $pdo->prepare(
+            "UPDATE licenses
+             SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ?,
+                 updates_enabled = ?, updates_block_note = ?
+             WHERE id = ?"
+        );
+        $stmt->execute([
+            $_POST['license_key'],
+            $_POST['domain'],
+            $_POST['customer_email'],
+            $_POST['status'],
+            $_POST['license_type'] ?? 'standard',
+            $allowUpdates,
+            $blockNote !== '' ? $blockNote : null,
+            $_POST['id'],
+        ]);
+
+        // Going from "on hold" to "allowed" should not leave a stale date on
+        // the customer's update page.
+        if ($allowUpdates === 1) {
+            $pdo->prepare("UPDATE licenses SET updates_blocked_at = NULL WHERE id = ?")->execute([$_POST['id']]);
+        }
     } elseif (isset($_POST['toggle_status'])) {
         $stmt = $pdo->prepare("UPDATE licenses SET status = ? WHERE id = ?");
         $new_status = $_POST['current_status'] === 'active' ? 'inactive' : 'active';
         $stmt->execute([$new_status, $_POST['id']]);
+    } elseif (isset($_POST['toggle_updates'])) {
+        // The switch behind "I do not want them pulling this release yet".
+        // Status stays active: the site keeps working and keeps validating —
+        // only the update download is held.
+        $allow = (int) ($_POST['current_updates'] ?? 1) === 0 ? 1 : 0;
+        $note = trim((string) ($_POST['updates_block_note'] ?? ''));
+
+        if ($allow === 1) {
+            $pdo->prepare("UPDATE licenses SET updates_enabled = 1, updates_blocked_at = NULL WHERE id = ?")->execute([$_POST['id']]);
+        } else {
+            $pdo->prepare("UPDATE licenses SET updates_enabled = 0, updates_blocked_at = NOW() WHERE id = ?")->execute([$_POST['id']]);
+            if ($note !== '') {
+                $pdo->prepare("UPDATE licenses SET updates_block_note = ? WHERE id = ?")->execute([$note, $_POST['id']]);
+            }
+        }
+    } elseif (isset($_POST['bulk_updates'])) {
+        // Holding a release for a whole project one licence at a time is the
+        // workflow this exists for: block them all, then allow each as it pays.
+        $tierId = (int) ($_POST['tier_id'] ?? 0);
+        $mode = ($_POST['bulk_mode'] ?? 'hold') === 'allow' ? 'allow' : 'hold';
+
+        if ($tierId > 0) {
+            if ($mode === 'allow') {
+                $pdo->prepare("UPDATE licenses SET updates_enabled = 1, updates_blocked_at = NULL WHERE tier_id = ?")->execute([$tierId]);
+            } else {
+                $pdo->prepare("UPDATE licenses SET updates_enabled = 0, updates_blocked_at = NOW() WHERE tier_id = ?")->execute([$tierId]);
+            }
+        }
     }
-    header('Location: licenses.php');
+    header('Location: licenses.php?saved=1');
     exit();
 }
 
@@ -38,6 +94,23 @@ $license_requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
 // Fetch all licenses
 $stmt = $pdo->query("SELECT * FROM licenses ORDER BY created_at DESC");
 $licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Projects, with how many of their licences are on hold (for the bulk control).
+$tierCounts = array();
+try {
+    $tierStmt = $pdo->query(
+        "SELECT t.id, t.tier_name, t.tier_code,
+                COUNT(l.id) AS licences,
+                SUM(CASE WHEN l.updates_enabled = 0 THEN 1 ELSE 0 END) AS on_hold
+         FROM script_tiers t
+         LEFT JOIN licenses l ON l.tier_id = t.id
+         GROUP BY t.id, t.tier_name, t.tier_code
+         ORDER BY t.tier_name"
+    );
+    $tierCounts = $tierStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $tierCounts = array();
+}
+
 // Fetch pending manual requests
 $reqStmt = $pdo->query("SELECT * FROM license_requests WHERE status = 'pending' ORDER BY created_at DESC");
 $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -240,6 +313,83 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             background: #fee2e2;
             color: #991b1b;
         }
+        .status-onhold {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+        .tiny-note {
+            margin-top: 0.35rem;
+            font-size: 0.78rem;
+            color: #b45309;
+            max-width: 220px;
+        }
+        .link-danger {
+            color: #b45309;
+        }
+        .notice-ok {
+            background: #d1fae5;
+            color: #065f46;
+            border-radius: 8px;
+            padding: 0.85rem 1.2rem;
+            font-weight: 600;
+        }
+        .hold-panel {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 1.2rem 1.4rem;
+            margin-bottom: 1.75rem;
+        }
+        .hold-panel p {
+            margin: 0.4rem 0 0;
+            font-size: 0.85rem;
+            color: #64748b;
+            max-width: 620px;
+            line-height: 1.5;
+        }
+        .hold-form {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .hold-form select {
+            padding: 0.55rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-hold {
+            background: #f59e0b;
+            padding: 0.55rem 1rem;
+        }
+        .btn-hold:hover {
+            box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);
+        }
+        .btn-allow {
+            background: #10b981;
+            padding: 0.55rem 1rem;
+        }
+        .btn-allow:hover {
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+        .checkbox-row {
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+        }
+        .input-group small {
+            display: block;
+            margin-top: 0.4rem;
+            color: #64748b;
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -335,17 +485,74 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                         <option value="active" <?= $license['status'] === 'active' ? 'selected' : '' ?>>Active</option>
                         <option value="inactive" <?= $license['status'] === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                     </select></div>
+
+                    <div class="input-group">
+                        <label>Update downloads</label>
+                        <div class="checkbox-row">
+                            <input type="checkbox" name="updates_enabled" value="1" id="edit-updates-enabled"
+                                <?= (isset($license['updates_enabled']) && (int) $license['updates_enabled'] === 0) ? '' : 'checked' ?>>
+                            <span><strong>Allow this licence to pull updates</strong></span>
+                        </div>
+                        <small>
+                            Unticking this keeps the site and its licence working, but the vendor's update page
+                            stops offering the package and shows a “contact the developer” card instead — with the
+                            WhatsApp button from Settings. Use it after publishing a release they have not paid for,
+                            then tick it again for each vendor as they pay.
+                        </small>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Message shown while on hold (optional)</label>
+                        <input type="text" name="updates_block_note" maxlength="255"
+                               value="<?= htmlspecialchars((string) ($license['updates_block_note'] ?? '')) ?>"
+                               placeholder="e.g. Update access for v7.41 — balance NGN 15,000">
+                        <small>Appears on their update page and nowhere else. Leave empty for the standard wording.</small>
+                    </div>
+
                     <button type="submit" class="btn">Save Changes</button>
                 </form>
             </div>
         </div>
         <?php endif; ?>
 
+        <?php if (isset($_GET['saved'])): ?>
+            <div class="notice-ok" style="margin-bottom:1.5rem;">Saved.</div>
+        <?php endif; ?>
+
         <div class="card" style="margin-top: 2rem;">
             <div class="card-header">
                 <h3>All Licenses</h3>
+                <span style="font-size:0.85rem;color:#64748b;">Update access is separate from licence status</span>
             </div>
             <div class="card-body">
+                <div class="hold-panel">
+                    <div>
+                        <strong>Holding a release back</strong>
+                        <p>
+                            Publish the update as usual, then hold updates for the vendors who have not paid.
+                            Their sites keep running and keep validating — only <em>Pulling updates</em> is paused,
+                            and their update page shows a WhatsApp button to reach you.
+                            Press <em>Allow updates</em> on each row as they pay.
+                        </p>
+                    </div>
+                    <?php if (!empty($tierCounts)): ?>
+                    <form method="POST" class="hold-form">
+    <?= lm_csrf_field() ?>
+                        <input type="hidden" name="bulk_updates" value="1">
+                        <select name="tier_id" required>
+                            <?php foreach ($tierCounts as $tc): ?>
+                                <option value="<?= (int) $tc['id'] ?>">
+                                    <?= htmlspecialchars($tc['tier_name']) ?>
+                                    (<?= (int) $tc['licences'] ?> licence<?= (int) $tc['licences'] === 1 ? '' : 's' ?><?= (int) $tc['on_hold'] > 0 ? ', ' . (int) $tc['on_hold'] . ' on hold' : '' ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" name="bulk_mode" value="hold" class="btn btn-hold">Hold all</button>
+                        <button type="submit" name="bulk_mode" value="allow" class="btn btn-allow">Allow all</button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+
                 <table>
                     <thead>
                         <tr>
@@ -354,6 +561,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                             <th>Email</th>
                             <th>Type</th>
                             <th>Status</th>
+                            <th>Updates</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -365,6 +573,15 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                                 <td><?= htmlspecialchars($license['customer_email'] ?? '') ?></td>
                                 <td><span class="status-badge <?= ($license['license_type'] ?? 'standard') === 'extended' ? 'status-active' : 'status-inactive' ?>"><?= htmlspecialchars(ucfirst($license['license_type'] ?? 'standard')) ?></span></td>
                                 <td><?= htmlspecialchars($license['status']) ?></td>
+                                <td>
+                                    <?php $updatesOn = !isset($license['updates_enabled']) || (int) $license['updates_enabled'] !== 0; ?>
+                                    <span class="status-badge <?= $updatesOn ? 'status-active' : 'status-onhold' ?>">
+                                        <?= $updatesOn ? 'Allowed' : 'On hold' ?>
+                                    </span>
+                                    <?php if (!empty($license['updates_block_note'])): ?>
+                                        <div class="tiny-note"><?= htmlspecialchars($license['updates_block_note']) ?></div>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="action-links">
                                     <a href="licenses.php?action=edit&id=<?= $license['id'] ?>">Edit</a>
                                     <form method="POST" style="display:inline;">
@@ -373,6 +590,16 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                                         <input type="hidden" name="id" value="<?= $license['id'] ?>">
                                         <input type="hidden" name="current_status" value="<?= $license['status'] ?>">
                                         <button type="submit" class="link-button"><?= $license['status'] === 'active' ? 'Deactivate' : 'Activate' ?></button>
+                                    </form>
+                                    <form method="POST" style="display:inline;">
+    <?= lm_csrf_field() ?>
+                                        <input type="hidden" name="toggle_updates" value="1">
+                                        <input type="hidden" name="id" value="<?= $license['id'] ?>">
+                                        <input type="hidden" name="current_updates" value="<?= $updatesOn ? 1 : 0 ?>">
+                                        <input type="hidden" name="updates_block_note" value="<?= htmlspecialchars((string) ($license['updates_block_note'] ?? '')) ?>">
+                                        <button type="submit" class="link-button <?= $updatesOn ? 'link-danger' : '' ?>">
+                                            <?= $updatesOn ? 'Hold updates' : 'Allow updates' ?>
+                                        </button>
                                     </form>
                                 </td>
                             </tr>

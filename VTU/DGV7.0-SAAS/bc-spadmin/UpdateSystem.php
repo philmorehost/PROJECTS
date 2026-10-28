@@ -19,12 +19,16 @@ $changelog = "<li>Checking for updates...</li>";
 $checksum = "";
 $update_available = false;
 $error_msg = "";
+// Set when the License Manager says this licence may not pull the release yet.
+$license_hold = null;
 
 $force_version = trim($_GET['force_version'] ?? '');
 
 $post_fields = [
     'license_key' => $license_key,
-    'domain' => $license_domain
+    'domain' => $license_domain,
+    // Lets the License Manager show "v7.40 → v7.41" instead of guessing.
+    'current_version' => $current_version
 ];
 if (!empty($force_version)) {
     $post_fields['force_version'] = $force_version;
@@ -54,6 +58,20 @@ if ($http_code === 200 && !empty($response)) {
         if (version_compare($clean_latest, $clean_current, '>') || !empty($force_version)) {
             $update_available = true;
         }
+    } elseif ($res_data && $res_data['status'] === 'payment_required') {
+        /*
+         * The release exists and they can see what changed, but the package is
+         * held: the developer has not been paid for it yet. Nothing here can
+         * start an install — there is no download link to start it with.
+         */
+        $license_hold = is_array($res_data['access'] ?? null) ? $res_data['access'] : array();
+        if (empty($license_hold['message'])) {
+            $license_hold['message'] = $res_data['message'] ?? 'Update access for this licence is on hold.';
+        }
+        $latest_version = $res_data['latest_version'] ?? $current_version;
+        $changelog = $res_data['changelog'] ?? '';
+        $checksum = '';
+        $update_available = false;
     } else {
         $error_msg = $res_data['message'] ?? 'Inactive or invalid license.';
     }
@@ -106,6 +124,46 @@ if ($http_code === 200 && !empty($response)) {
             border: 1px solid #e2e8f0;
             padding: 1.5rem;
         }
+        .hold-card {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: left;
+        }
+        .hold-icon { font-size: 2rem; line-height: 1; }
+        .hold-body h5 { font-weight: 800; color: #92400e; margin-bottom: 0.5rem; }
+        .hold-body p { color: #78350f; margin-bottom: 0.75rem; }
+        .hold-note {
+            background: rgba(255, 255, 255, 0.75);
+            border-left: 3px solid #f59e0b;
+            padding: 0.6rem 0.8rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 0.6rem;
+        }
+        .hold-since { font-size: 0.8rem; color: #a16207; }
+        .btn-whatsapp {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.85rem;
+            padding: 0.75rem 1.4rem;
+            border-radius: 999px;
+            background: #25d366;
+            color: #fff;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 8px 18px rgba(37, 211, 102, 0.35);
+            transition: transform 0.15s ease;
+        }
+        .btn-whatsapp:hover { color: #fff; transform: translateY(-2px); }
+        .btn-whatsapp-mail { background: #4f46e5; box-shadow: 0 8px 18px rgba(79, 70, 229, 0.3); }
+        .hold-hint { font-size: 0.82rem; color: #92400e; margin-top: 0.6rem; }
         .changelog-box ul {
             padding-left: 1.2rem;
             margin-bottom: 0;
@@ -194,7 +252,69 @@ if ($http_code === 200 && !empty($response)) {
                 
                 <div class="card-body p-4 p-md-5">
                     
-                    <?php if ($update_available): ?>
+                    <?php if ($license_hold): ?>
+
+                        <!-- The release exists, but this licence may not pull it yet -->
+                        <div class="d-flex justify-content-center align-items-center mb-4">
+                            <div class="text-center">
+                                <span class="d-block small text-muted mb-1">Current Version</span>
+                                <div class="version-badge version-old">v<?= htmlspecialchars(ltrim(strtolower($current_version), 'v')) ?></div>
+                            </div>
+                            <i class="bi bi-arrow-right fs-4 text-muted mx-4"></i>
+                            <div class="text-center">
+                                <span class="d-block small text-muted mb-1">Waiting for you</span>
+                                <div class="version-badge version-new">v<?= htmlspecialchars(ltrim(strtolower($latest_version), 'v')) ?></div>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($changelog)): ?>
+                            <div class="changelog-box mb-4">
+                                <h6 class="fw-bold text-uppercase text-muted mb-3" style="font-size: 0.85rem; letter-spacing: 1px;">What's New in this release</h6>
+                                <ul>
+                                    <?= $changelog ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="hold-card">
+                            <div class="hold-icon">🔒</div>
+                            <div class="hold-body">
+                                <h5><?= htmlspecialchars(!empty($license_hold['title']) ? $license_hold['title'] : 'Update access is on hold') ?></h5>
+                                <p><?= htmlspecialchars($license_hold['message'] ?? '') ?></p>
+                                <?php if (!empty($license_hold['note'])): ?>
+                                    <div class="hold-note"><?= htmlspecialchars($license_hold['note']) ?></div>
+                                <?php endif; ?>
+                                <?php if (!empty($license_hold['blocked_since'])): ?>
+                                    <div class="hold-since">On hold since <?= htmlspecialchars($license_hold['blocked_since']) ?></div>
+                                <?php endif; ?>
+
+                                <?php if (!empty($license_hold['whatsapp_url'])): ?>
+                                    <a class="btn-whatsapp" href="<?= htmlspecialchars($license_hold['whatsapp_url']) ?>" target="_blank" rel="noopener">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                                            <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.47 0 1.46 1.06 2.87 1.21 3.07.15.2 2.09 3.2 5.07 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/>
+                                            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.13c-1.57 0-3.11-.42-4.45-1.21l-.32-.19-3.12.82.83-3.04-.21-.33a8.19 8.19 0 0 1-1.26-4.37c0-4.53 3.69-8.22 8.23-8.22 4.53 0 8.22 3.69 8.22 8.22 0 4.54-3.69 8.32-8.22 8.32z"/>
+                                        </svg>
+                                        Chat on WhatsApp
+                                    </a>
+                                    <div class="hold-hint">Tell the developer your licence key so they can confirm the payment.</div>
+                                <?php elseif (!empty($license_hold['email'])): ?>
+                                    <a class="btn-whatsapp btn-whatsapp-mail" href="mailto:<?= htmlspecialchars($license_hold['email']) ?>?subject=<?= rawurlencode('Update access for my licence') ?>">
+                                        ✉ Email the developer
+                                    </a>
+                                <?php else: ?>
+                                    <div class="hold-hint">Ask the developer for their WhatsApp number or email.</div>
+                                <?php endif; ?>
+
+                                <?php if (!empty($license_hold['email']) && !empty($license_hold['whatsapp_url'])): ?>
+                                    <div class="hold-hint">
+                                        Prefer email? <a href="mailto:<?= htmlspecialchars($license_hold['email']) ?>"><?= htmlspecialchars($license_hold['email']) ?></a>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                    <?php elseif ($update_available): ?>
+
                         
                         <!-- Version comparison -->
                         <div class="d-flex justify-content-center align-items-center mb-5">
@@ -331,6 +451,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let downloadResponse = await fetch('ajax_download_update.php', { method: 'POST', body: formData });
             let downloadData = await downloadResponse.json();
+            if (downloadData.status === 'payment_required') {
+                // The hold was applied while this page was open. Show it where
+                // they are looking, with the way to fix it.
+                const access = downloadData.access || {};
+                alertBox.className = 'alert alert-warning mt-4 rounded-3 shadow-sm border-0 p-4';
+                alertBox.innerHTML = '<h5 class="fw-bold mb-1"><i class="bi bi-lock-fill me-2"></i>' +
+                    ((access.title || 'Update access is on hold')) + '</h5>' +
+                    '<p class="mb-2 small">' + (access.message || downloadData.message || '') + '</p>' +
+                    (access.whatsapp_url
+                        ? '<a class="btn btn-success rounded-pill px-4" target="_blank" rel="noopener" href="' + access.whatsapp_url + '">Chat on WhatsApp</a>'
+                        : '');
+                alertBox.classList.remove('d-none');
+                progressContainer.classList.add('d-none');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Updates on hold';
+                return;
+            }
             if (downloadData.status !== 'success') {
                 throw new Error(downloadData.message || 'Failed to download update package.');
             }

@@ -86,6 +86,20 @@ if ($http_code !== 200 || empty($response)) {
 }
 
 $res_data = json_decode($response, true);
+
+/*
+ * "payment_required" is not a failure to report as an error — the licence is
+ * fine, the package is held. Pass the whole block through so the update page
+ * can draw the developer's contact card.
+ */
+if ($res_data && ($res_data['status'] ?? '') === 'payment_required') {
+    die(json_encode([
+        'status' => 'payment_required',
+        'message' => $res_data['access']['message'] ?? ($res_data['message'] ?? 'Update access for this licence is on hold.'),
+        'access' => $res_data['access'] ?? [],
+    ]));
+}
+
 if (!$res_data || $res_data['status'] !== 'success') {
     die(json_encode(['status' => 'error', 'message' => $res_data['message'] ?? 'Inactive or invalid license.']));
 }
@@ -114,7 +128,20 @@ curl_close($ch);
 fclose($fp);
 
 if (!$res || $http_code !== 200) {
+    // The token may have been minted before the licence was put on hold;
+    // download.php answers 403 with a JSON body. Show that, not "HTTP 403".
+    $errorBody = @file_get_contents(ZIP_FILE);
     @unlink(ZIP_FILE);
+
+    $errorJson = is_string($errorBody) ? json_decode($errorBody, true) : null;
+    if (is_array($errorJson) && !empty($errorJson['message'])) {
+        die(json_encode([
+            'status' => $errorJson['status'] ?? 'error',
+            'message' => $errorJson['message'],
+            'access' => $errorJson['access'] ?? [],
+        ]));
+    }
+
     die(json_encode(['status' => 'error', 'message' => 'Failed to download update package from server. HTTP Code: ' . $http_code]));
 }
 

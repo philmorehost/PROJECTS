@@ -1258,6 +1258,140 @@ an error.
 
 ---
 
+## 6q. 9.6.0 — an update they may see, but not pull
+
+**What was asked for.**
+
+> Disable access to licenses from pulling updates. I have an update that I don't
+> want the vendors to gain access to until the vendors manually pay. This doesn't
+> need to be in the information; another piece of information can be passed to
+> let the vendor know they have to contact the Developer to be able to pull
+> updates. A WhatsApp button should pop up to reach out to 2348086697100 (this
+> will be set by the admin, not seeded).
+
+### The shape of it
+
+A licence is not the same thing as a payment. Suspending a licence stops the
+customer's site from validating — too blunt for "you still owe me for this
+release". So 9.6.0 adds a switch beside the licence:
+
+| | |
+|---|---|
+| **Where the switch is** | *Licences → All Licenses → Updates* (one row at a time), or the **Hold all / Allow all** box above the table for a whole project |
+| **What it stops** | Pulling the package. Nothing else: the site keeps running, the licence keeps validating, the site keeps checking in |
+| **What the vendor sees** | The new version number and the changelog — and, instead of an install button, a card that says access is on hold, with a **Chat on WhatsApp** button |
+| **What the vendor never sees** | A download link, a checksum, or a changelog that has been edited to carry a payment demand |
+
+### Publish as usual, then hold
+
+1. Publish the release normally (*Push Updates*).
+2. *Licences* → press **Hold updates** on the vendors who have not paid, or
+   *Hold all* for the project, then **Allow updates** on each row as it pays.
+3. Nothing has to be re-published. The next time their site checks in, the
+   package is simply offered.
+
+A vendor on hold can still see *what* is waiting for them. That is deliberate:
+a page that hides the release gives them no reason to pay.
+
+### The response the vendor's page receives
+
+`check-update.php` still answers `200`, with a different status and a separate
+`access` block — the changelog is left alone:
+
+```json
+{
+  "status": "payment_required",
+  "message": "v7.41 is ready, but update access for this licence is on hold. …",
+  "latest_version": "7.41",
+  "installed_version": "7.40",
+  "update_required": false,
+  "update_available": true,
+  "changelog": "<li>…</li>",
+  "download_url": "",
+  "access": {
+    "allowed": false,
+    "reason": "updates_on_hold",
+    "title": "Update access is on hold",
+    "message": "…",
+    "note": "Balance NGN 15,000 for v7.41",
+    "blocked_since": "28 Oct 2026",
+    "whatsapp": "2348086697100",
+    "whatsapp_url": "https://wa.me/2348086697100?text=…",
+    "email": "you@example.com"
+  }
+}
+```
+
+`update_required` is `false` on purpose: an updater that does not understand the
+`access` block must not try to install what it cannot fetch.
+
+### Three places enforce it, not one
+
+| Where | Why it matters |
+|---|---|
+| `check-update.php` | No token is minted, so there is nothing to download |
+| `download.php` | A token minted *before* the hold — or a 7-day link sitting in an inbox — is refused with the same explanation |
+| `includes/notifications.php` | The e-mail is not sent at all: a link that cannot work is worse than no e-mail. The delivery log says *Update access on hold* |
+
+### The WhatsApp button
+
+*Settings → Vendor Contact & Update Access*:
+
+- **WhatsApp number** — international format, digits only (`2348086697100`).
+  A pasted `+234 808 669 7100`, `(234) 808-669-7100`, `00234…` or a local
+  `0808…` is converted on save. **Empty by default — nothing is seeded.** With
+  no number, no button is drawn anywhere.
+- **Message shown while on hold** — optional. `{version}` is replaced with the
+  release they are waiting for. Empty means the built-in wording.
+- An **e-mail fallback** uses your *Admin e-mail*, so a held vendor always has
+  some way to reach you. With neither configured, the card tells them to ask you
+  for a contact instead of showing a dead button.
+
+The button opens WhatsApp with the message already typed:
+
+> Hello Philmore Licence Manager, I would like to restore update access for my licence.
+
+### On the vendor's update page
+
+`VTU/DGV7.0-SAAS/bc-spadmin/UpdateSystem.php` and
+`VTU/DGV7.0-NON-SAAS/bc-admin/UpdateSystem.php` now:
+
+- send `current_version`, so the page can show **v7.40 → v7.41** instead of
+  guessing what is installed;
+- understand `payment_required` and draw the hold card — version, changelog, the
+  developer's note, *On hold since …*, and the WhatsApp button;
+- never render the install button while on hold, and refuse to start an install
+  if the hold lands while the page is open;
+- pass the same block through `ajax_download_update.php`, so a refused download
+  says *"Update access is on hold"* instead of *"HTTP Code: 403"*.
+
+An installation still running the **older** update page is not broken by this:
+it does not recognise `payment_required`, so it shows the message as a notice and
+offers no install button. It simply has no WhatsApp button until that page is
+updated.
+
+### Files to upload
+
+| File | Change |
+|---|---|
+| `includes/migrations.php` | `2026_10_28_update_access`: `licenses.updates_enabled` (default **1**), `updates_blocked_at`, `updates_block_note` |
+| `includes/updates.php` | `lm_license_updates_allowed()`, `lm_update_access_state()`, `lm_update_access_json()` |
+| `includes/lm_config.php` | `vendor_whatsapp` / `vendor_contact_message` defaults (empty), `lm_whatsapp_number()`, `lm_whatsapp_url()`, `lm_vendor_contact()` |
+| `check-update.php` | `payment_required` response with the `access` block; no token while on hold |
+| `download.php` | Re-checks the licence behind the token |
+| `includes/notifications.php` | Skips a held licence instead of sending a dead link |
+| `admin/licenses.php` | *Updates* column, **Hold/Allow updates** per row, bulk hold/allow per project, note field |
+| `admin/settings.php` | *Vendor Contact & Update Access* card with a live button preview |
+| `includes/guide.php` | *Holding a release until a vendor pays* |
+| `migrations/03_update_access.sql` | Reference copy of the schema change |
+| `build.json` | Last |
+
+Two files live in the vendor application, not in LM — ship them with the next
+DGV7.0 package: `bc-spadmin/UpdateSystem.php` (+ `ajax_download_update.php`) and
+the standard build's `bc-admin/UpdateSystem.php` (+ `ajax_download_update.php`).
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
@@ -1273,6 +1407,10 @@ an error.
 | Pull is slow on a big repo | The download is the cost. Tick a folder instead of the whole repo, or expect the first pull to take longer than a retry (the archive is reused). Packaging itself is one pass in 8.7.1. |
 | The card says **Queued** and the bar does not move | Nothing is slow — no worker has claimed the job. 9.5.0 shows why and, after 15 seconds, starts the pull from the admin page itself. If it still sits there, open **System Check → Background pulls**: it names which of the three doors (exec, loopback, cron) is closed. |
 | “This server cannot start a background worker” | `exec()` is disabled and the site cannot reach its own `pull-worker.php` URL (usually a WAF). The pull still runs — inside the page that started it, so keep the tab open. Set up cron to remove that dependency. |
+| A vendor cannot pull an update they can see | Their licence is **on hold**: *Licences → Updates* says *On hold*. Press **Allow updates** on that row once they have paid. The package was never sent to them, so nothing needs re-publishing. |
+| “Update access is on hold” but the vendor paid | The switch is per licence, not per project: check the exact licence key their site reports under *Licensed domains*, then allow that row. |
+| The hold card shows no WhatsApp button | *Settings → Vendor Contact & Update Access* has no number. It is deliberately not seeded — type yours in international format (`2348086697100`). |
+| A vendor's update page shows the hold message in a red banner with no button | That installation still runs the older `UpdateSystem.php`. The hold works; only the WhatsApp button needs the updated update page. |
 | A pull started from the console died at the execution limit | The host's `max_execution_time` ended the request. Raise it in cPanel → MultiPHP INI Editor, or let cron run the pull. The downloaded archive is reused, so *Start again* skips the download. |
 | A pull has been running for ages and will not finish | 9.4.0: press **Stop this pull** on the progress card. The project is free to pull again immediately, and the worker exits at its next checkpoint. The card shows the elapsed time, counted from when the job actually started. |
 | *Stop this pull* was pressed, the card says *Pull stopped*, but the server is still busy | The worker is inside one blocking call (a stalled download, a hung filesystem) and has not reached a checkpoint yet. It cannot publish anything now: every database write it makes is conditional on the job still running. Queue the new pull with **Start again**; if the old process is still alive when it reaches a checkpoint it exits by itself. |
