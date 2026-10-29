@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.25-2');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.29-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -971,6 +971,18 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_mail_drafts (
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX (vendor_id),
     INDEX (is_super_admin)
+)");
+
+// Store vendor-specific integration and account settings. The composite unique key supports
+// the upsert operations used by voveid-client.php and the vendor identity settings UI.
+$bc_vendor_settings_schema_ready = (bool)@mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_vendor_settings (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    vendor_id INT UNSIGNED NOT NULL,
+    option_name VARCHAR(150) NOT NULL,
+    option_value LONGTEXT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_vendor_setting (vendor_id, option_name),
+    KEY idx_vendor_settings_vendor (vendor_id)
 )");
 
 //Create Vendor Style Template Table
@@ -2269,6 +2281,13 @@ if (mysqli_num_rows($check_upc_idx) == 0) {
 $check_upc_idx = mysqli_query($connection_server, "SHOW INDEX FROM sas_user_payment_checkouts WHERE Key_name = 'reference'");
 if (mysqli_num_rows($check_upc_idx) == 0) {
     mysqli_query($connection_server, "ALTER TABLE sas_user_payment_checkouts ADD INDEX (reference), ADD INDEX (vendor_id)");
+}
+
+// Do not mark this version applied if the required vendor-settings table could not be created;
+// leave the marker unchanged so the schema migration is retried on the next request.
+if (empty($bc_vendor_settings_schema_ready)) {
+    error_log('[DGV-SCHEMA] Unable to create sas_vendor_settings; schema version was not advanced.');
+    return;
 }
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
