@@ -66,8 +66,13 @@ if os.environ.get("KB_INSTALL") == "1":
             ok("Your community is ready" in html, "installer completion instructions")
     ok(c.get("/install")[0] == 404, "installer locks after completion")
 
+public = Client()
+code, _, html = public.get("/")
+ok(code == 200 and "Build your knowledge" in html and "Active questions" in html, "modern landing page renders")
+
 admin = Client()
 ok(admin.post("/login", {"email": os.environ["KB_ADMIN_EMAIL"], "password": os.environ["KB_ADMIN_PASSWORD"]})[1].endswith("/admin"), "administrator login")
+ok("pass rate" in admin.get("/admin")[2], "admin dashboard insights render")
 for path in ["/admin", "/admin/questions", "/admin/users", "/admin/results", "/admin/settings", "/admin/smtp", "/admin/notifications", "/admin/audit"]:
     code, _, html = admin.get(path)
     ok(code == 200 and "Temporarily unavailable" not in html, "admin page " + path)
@@ -103,6 +108,7 @@ if not os.environ.get("KB_MEMBER_ID"):
 
 member = Client()
 ok(member.post("/login", {"email": os.environ["KB_MEMBER_EMAIL"], "password": os.environ["KB_MEMBER_PASSWORD"]})[1].endswith("/dashboard"), "member login")
+ok("Best score" in member.get("/dashboard")[2], "member dashboard stats render")
 ok(member.post("/quiz/start", {})[1].startswith(BASE + "/quiz?id="), "start/resume quiz")
 # The start POST already follows the redirect; read the active attempt link from the dashboard.
 html = member.get("/dashboard")[2]

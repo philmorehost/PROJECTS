@@ -23,9 +23,10 @@ final class Admin {
         $error=null;
         if(is_post()) Security::check();
         if($route==='admin') {
-            $stats=['members'=>DB::value('SELECT COUNT(*) FROM users WHERE role="member"'),'questions'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1'),'completed'=>DB::value('SELECT COUNT(*) FROM attempts WHERE status<>"active"'),'pending'=>DB::value('SELECT COUNT(*) FROM mail_queue WHERE status IN ("pending","failed")')];
+            $stats=['members'=>DB::value('SELECT COUNT(*) FROM users WHERE role="member"'),'questions'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1'),'completed'=>DB::value('SELECT COUNT(*) FROM attempts WHERE status<>"active"'),'pending'=>DB::value('SELECT COUNT(*) FROM mail_queue WHERE status IN ("pending","failed")'),'active'=>DB::value('SELECT COUNT(*) FROM attempts WHERE status="active"'),'pass_rate'=>DB::value('SELECT COALESCE(ROUND(AVG(CASE WHEN percentage >= CAST(JSON_UNQUOTE(JSON_EXTRACT(settings_snapshot, "$.pass_mark")) AS UNSIGNED) THEN 100 ELSE 0 END)),0) FROM attempts WHERE status<>"active"')];
             $recent=DB::all('SELECT a.*,u.name FROM audit_events a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 8');
-            render('admin/dashboard',['stats'=>$stats,'recent'=>$recent,'admin'=>$admin,'smtp'=>Settings::get('smtp_enabled')]);
+            $weekly=DB::all('SELECT DATE(submitted_at) AS day, COUNT(*) AS total FROM attempts WHERE status<>"active" AND submitted_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 6 DAY) GROUP BY DATE(submitted_at) ORDER BY day');
+            render('admin/dashboard',['stats'=>$stats,'recent'=>$recent,'admin'=>$admin,'smtp'=>Settings::get('smtp_enabled'),'weekly'=>$weekly]);
         }
         if($route==='admin/questions') {
             if(is_post()) {

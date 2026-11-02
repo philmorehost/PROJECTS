@@ -11,7 +11,7 @@
 <?php if($current==='quiz'): ?><script src="<?= e(asset('quiz.js')) ?>" defer></script><?php endif; ?>
 <?php if(str_starts_with($current,'admin/questions') || str_starts_with($current,'admin/users')): ?><script src="<?= e(asset('admin.js')) ?>" defer></script><?php endif; ?>
 </head>
-<body class="<?= str_starts_with($current,'admin')?'admin-body':'' ?>">
+<body class="<?= str_starts_with($current,'admin')?'admin-body':($current===''?'home-body':'') ?>">
 <a class="skip-link" href="#main">Skip to content</a>
 <?php if(!empty($_SESSION['admin_id'])): ?><div class="support-bar"><span>Support session · <?= e($auth['name']??'Member') ?> · Changes are recorded</span><form method="post" action="<?= e(url('support/return')) ?>"><?= Security::csrfField() ?><button>Return to administrator</button></form></div><?php endif; ?>
 <header class="site-header"><div class="shell nav-wrap">

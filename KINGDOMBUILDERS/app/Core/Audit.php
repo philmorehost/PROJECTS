@@ -3,10 +3,12 @@ declare(strict_types=1);
 namespace KB;
 
 final class Audit {
-    public static function log(string $action, string $type, string|int|null $id = null, array $metadata = [], ?int $actor = null): void {
-        $actor ??= Auth::id();
+    public static function log(string $action, string $type, string|int|null $id = null, array $metadata = [], int|string|null $actor = null): void {
+        // Some PDO/MySQL configurations return integer columns as strings.
+        $actor = $actor === null ? Auth::id() : (int)$actor;
+        $adminId = isset($_SESSION['admin_id']) ? (int)$_SESSION['admin_id'] : null;
         DB::run('INSERT INTO audit_events(actor_id,admin_id,action,subject_type,subject_id,metadata,source_hash,created_at) VALUES (?,?,?,?,?,?,?,?)', [
-            $actor, $_SESSION['admin_id'] ?? null, $action, $type, $id === null ? null : (string)$id,
+            $actor, $adminId, $action, $type, $id === null ? null : (string)$id,
             json_encode($metadata, JSON_THROW_ON_ERROR), Security::sourceHash(), now(),
         ]);
     }

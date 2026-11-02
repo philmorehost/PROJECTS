@@ -7,7 +7,12 @@ final class Controllers {
         if (!installed()) redirect('install');
         if (!Activation::allowed() && !str_starts_with(route(), 'admin/authorization')) redirect('admin/authorization');
         if (Auth::user()) redirect(Auth::admin() && empty($_SESSION['admin_id']) ? 'admin' : 'dashboard');
-        render('home');
+        $homeStats = [
+            'questions' => (int)DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1'),
+            'members' => (int)DB::value('SELECT COUNT(*) FROM users WHERE role="member" AND status="active"'),
+            'completed' => (int)DB::value('SELECT COUNT(*) FROM attempts WHERE status<>"active"'),
+        ];
+        render('home',['homeStats'=>$homeStats]);
     }
     public static function auth(string $route): never {
         if (in_array($route,['login','register','forgot-password','reset-password','verify-email'],true) && Auth::user() && !in_array($route,['reset-password','verify-email'],true)) redirect('dashboard');
@@ -122,7 +127,9 @@ final class Controllers {
         }
         $active=DB::one('SELECT id,started_at FROM attempts WHERE active_user_id=?',[$user['id']]);
         $history=DB::all('SELECT id,score,total_questions,percentage,started_at,submitted_at,status,settings_snapshot FROM attempts WHERE user_id=? AND status<>"active" ORDER BY started_at DESC LIMIT 10',[$user['id']]);
-        render('member/dashboard',['user'=>$user,'active'=>$active,'history'=>$history,'count'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1')]);
+        $aggregate=DB::one('SELECT COUNT(*) AS completed, MAX(percentage) AS best, AVG(percentage) AS average FROM attempts WHERE user_id=? AND status<>"active"',[$user['id']]);
+        $memberStats=['completed'=>(int)($aggregate['completed']??0),'best'=>$aggregate['best']!==null?round((float)$aggregate['best'],1):null,'average'=>$aggregate['average']!==null?round((float)$aggregate['average'],1):null];
+        render('member/dashboard',['user'=>$user,'active'=>$active,'history'=>$history,'memberStats'=>$memberStats,'count'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1')]);
     }
     public static function account(): never {
         $user=Auth::requireUser(); $error=null;
