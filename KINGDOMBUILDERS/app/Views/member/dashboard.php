@@ -28,7 +28,7 @@
     <?php else: ?>
       <span class="badge neutral">Assessments are currently closed</span>
     <?php endif; ?>
-    <small>By starting, you agree to complete the quiz honestly. Focus changes may be recorded.</small>
+    <small>Once you choose an answer it is saved and locked — so read carefully. Focus changes may be recorded.</small>
   </section>
   <section class="panel member-note modern-member-note">
     <span class="feature-number">A MOMENT TO REMEMBER</span>

@@ -161,6 +161,13 @@ Behaviour:
   `accounts.google.com`, `oauth2.googleapis.com` and `openidconnect.googleapis.com`.
   If the host blocks those, the page explains that Google could not be reached.
 
+## 7b. Answer locking
+
+Answers are final once saved, by design: the API rejects changes with HTTP 409, and the
+interface disables the options and shows a lock notice. `Settings → "Let members move back to
+review earlier questions"` (stored key `allow_back`) only controls whether the **Previous**
+button is offered; it never permits changing a saved answer. Skipped questions lock too.
+
 ## 8. Backups and recovery
 
 Back up together:
