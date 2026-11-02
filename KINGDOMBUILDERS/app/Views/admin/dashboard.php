@@ -4,7 +4,9 @@
   <a class="button" href="<?= e(url('admin/questions',['new'=>1])) ?>">Add a question <span aria-hidden="true">+</span></a>
 </section>
 
-<?php if(!$smtp): ?><div class="notice warning"><div><strong>Email needs your attention.</strong><p>Notifications are safely queued, but SMTP is not enabled yet. Connect your email provider to deliver them.</p></div><a class="text-link" href="<?= e(url('admin/smtp')) ?>">Set up email →</a></div><?php endif; ?>
+<?php $heartbeat=KB\Cron::heartbeat(); $lastRun=$heartbeat['recorded_at']??null; $lastRunAt=$lastRun?strtotime($lastRun.' UTC'):false; $cronStale=$lastRunAt===false || (time()-$lastRunAt)>600; ?>
+<?php if(!$smtp): ?><div class="notice warning"><div><strong>Email needs your attention.</strong><p>Notifications are safely queued, but SMTP is not enabled yet. Connect your email provider to deliver them.</p></div><a class="text-link" href="<?= e(url('admin/smtp')) ?>">Set up email →</a></div>
+<?php elseif($cronStale): ?><div class="notice warning"><div><strong>Queued email is waiting for the scheduled task.</strong><p>SMTP is on, but no recent background run was recorded. Copy the cron command into your host so confirmations, resets and results are delivered.</p></div><a class="text-link" href="<?= e(url('admin/smtp')) ?>#scheduled-tasks">Copy the cron command →</a></div><?php endif; ?>
 
 <div class="stats-grid admin-stats">
   <?php foreach([

@@ -88,6 +88,7 @@ ok(code == 200 and "Test email failed" in html and "Could not connect" in html, 
 ok("Very-Secret-App-Password-1" not in html, "failed SMTP test does not leak the password")
 ok("mail.example.test" in admin.get("/admin/smtp")[2], "unsaved test values do not replace saved SMTP settings")
 ok("cron-command" in admin.get("/admin/notifications")[2], "notifications page exposes the cron command")
+ok("scheduled task" in admin.get("/admin")[2].lower(), "dashboard warns when the worker has never run")
 ok(admin.post("/admin/settings", {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1"})[0] == 200, "save quiz settings")
 ok(b"K" in urllib.request.urlopen(BASE + "/favicon.svg").read(), "dynamic favicon")
 question = {"action": "save", "id": "0", "category": "Smoke", "question_text": "Smoke question " + RUN, "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "0", "reference": "Test", "explanation": "", "is_active": "1"}

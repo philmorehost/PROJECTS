@@ -104,9 +104,18 @@ final class Admin {
                     if($smtp) { $input=array_merge(Settings::all(),$_POST); $input['smtp_enabled']=isset($_POST['smtp_enabled']); }
                     else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt'] as $key) $input[$key]=isset($_POST[$key]); }
                     $values=Settings::validate($input,$smtp);
-                    if($smtp) { $values['smtp_secret']=Settings::smtpPassword($input); $values['php_cli_path']=$input['php_cli_path']??''; }
+                    if($smtp) {
+                        try { $values['smtp_secret']=Settings::smtpPassword($input); }
+                        catch(\Throwable $sealError) { error_log('KB SMTP seal: '.get_class($sealError)); throw new UserError('The SMTP password could not be encrypted on this server. Ask your host to enable the PHP OpenSSL extension, then try again.'); }
+                        $values['php_cli_path']=trim((string)($input['php_cli_path']??''));
+                    }
                     if(!$smtp || $action!=='test') {
-                        DB::transaction(static function () use($values,$smtp): void { foreach($values as $key=>$value) Settings::put($key,$value); Audit::activity($smtp?'settings.smtp_updated':'settings.updated','site',1); });
+                        try {
+                            DB::transaction(static function () use($values,$smtp): void { foreach($values as $key=>$value) Settings::put($key,$value); Audit::activity($smtp?'settings.smtp_updated':'settings.updated','site',1); });
+                        } catch(\Throwable $saveError) {
+                            error_log('KB settings save: '.get_class($saveError));
+                            throw new UserError('The settings could not be written to the database. Check the server error log, then try again.');
+                        }
                         $saved=true;
                         flash($smtp?'Email settings saved. Send a test message, then make sure the scheduled task is running.':'Settings saved. New settings apply to new assessments.');
                         if(!$smtp) redirect('admin/settings');
