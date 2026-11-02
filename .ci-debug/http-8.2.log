@@ -3,10 +3,10 @@ PASS installer step 1
 PASS installer step 2
 PASS installer step 3
 Traceback (most recent call last):
-  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 65, in <module>
-    ok("Your community is ready" in c.get("/install")[2], "installer completion instructions")
-    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 66, in <module>
+    ok("Your community is ready" in html, f"installer completion instructions (status={code}, url={url}, body={html[:400]!r})")
+    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 51, in ok
     if not condition: raise AssertionError(label)
                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError: installer completion instructions
+AssertionError: installer completion instructions (status=200, url=http://127.0.0.1:8080/install, body='<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<meta name="csrf-token" content="702c27b7f805840823a3bea33820effe3ee070abba16cf6b7adb4638cb30e5e3">\n<meta name="theme-color" content="#142d3a"><meta name="description" content="A welcoming home for Bible learning, thoughtful quizzes and spiritual growth.">\n<title>KINGDO')
