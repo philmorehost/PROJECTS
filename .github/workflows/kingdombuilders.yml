@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: kingdombuilders-${{ github.ref }}
@@ -86,27 +86,14 @@ jobs:
           php -S 127.0.0.1:8080 router.php > "$RUNNER_TEMP/kb-http.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/kb-http.pid"
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && break || sleep 1; done
-          set -o pipefail
-          python3 tests/http_smoke.py 2>&1 | tee "$RUNNER_TEMP/http-smoke.log"
+          python3 tests/http_smoke.py
           KB_MEMBER_ID=$(php tests/seed_member.php "$KB_MEMBER_EMAIL" "$KB_MEMBER_PASSWORD")
           export KB_MEMBER_ID
           unset KB_INSTALL
-          python3 tests/http_smoke.py 2>&1 | tee -a "$RUNNER_TEMP/http-smoke.log"
+          python3 tests/http_smoke.py
       - name: Server log on failure
         if: failure()
         run: cat "$RUNNER_TEMP/kb-http.log" || true
-      - name: Temporary CI debug push
-        if: failure()
-        run: |
-          mkdir -p .ci-debug
-          cp "$RUNNER_TEMP/http-smoke.log" ".ci-debug/http-${{ matrix.php }}.log" 2>/dev/null || true
-          cp "$RUNNER_TEMP/kb-http.log" ".ci-debug/server-${{ matrix.php }}.log" 2>/dev/null || true
-          php -r '$d=getenv("KB_CONFIG_DIR"); echo "config_dir=$d site=".var_export(is_file("$d/site.php"),true)." lock=".var_export(is_file("$d/installed.lock"),true)." runtime=".var_export(is_file("$d/runtime.dat"),true)." sessions=".count(glob(getenv("KB_SESSION_DIR")."/sess_*")).PHP_EOL;' > ".ci-debug/state-${{ matrix.php }}.log" 2>&1 || true
-          git config user.email "actions@github.com"
-          git config user.name "CI diagnostics"
-          git add .ci-debug
-          git commit -m "Temporary CI diagnostics (${{ matrix.php }})" || true
-          git push origin HEAD:${{ github.ref_name }} || true
       - name: Stop test server
         if: always()
         run: if [ -f "$RUNNER_TEMP/kb-http.pid" ]; then kill "$(cat "$RUNNER_TEMP/kb-http.pid")" || true; fi

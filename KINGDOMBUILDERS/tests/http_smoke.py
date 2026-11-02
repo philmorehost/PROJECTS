@@ -61,11 +61,10 @@ if os.environ.get("KB_INSTALL") == "1":
     ]
     for data in steps:
         code, url, html = c.post("/install", data)
-        heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S)
-        ok(code == 200 and "notice error" not in html, f"installer step {data['step']} (status={code}, url={url}, h1={heading.group(1) if heading else None!r})")
-    code, url, html = c.get("/install")
-    heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S)
-    ok("Your community is ready" in html, f"installer completion instructions (status={code}, url={url}, h1={heading.group(1) if heading else None!r})")
+        ok(code == 200 and "notice error" not in html, "installer step " + data["step"])
+        if data["step"] == "3":
+            ok("Your community is ready" in html, "installer completion instructions")
+    ok(c.get("/install")[0] == 404, "installer locks after completion")
 
 admin = Client()
 ok(admin.post("/login", {"email": os.environ["KB_ADMIN_EMAIL"], "password": os.environ["KB_ADMIN_PASSWORD"]})[1].endswith("/admin"), "administrator login")
