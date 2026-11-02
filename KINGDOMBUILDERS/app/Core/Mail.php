@@ -103,18 +103,7 @@ final class Mail {
                 if ($ok !== true) throw new MailError('TLS negotiation failed. Check the port/security mode and server certificate.','tls',null,false);
                 $caps = self::ehlo($stream);
             }
-            if ($user !== '') {
-                $auth = $caps['AUTH'] ?? [];
-                if (in_array('PLAIN',$auth,true)) {
-                    self::command($stream,'AUTH PLAIN '.base64_encode("\0".$user."\0".$secret),[235],'auth');
-                } elseif (in_array('LOGIN',$auth,true)) {
-                    self::command($stream,'AUTH LOGIN',[334],'auth');
-                    self::command($stream,base64_encode($user),[334],'auth');
-                    self::command($stream,base64_encode($secret),[235],'auth');
-                } else {
-                    throw new MailError('The server does not offer a supported AUTH method (PLAIN/LOGIN). Check the port or ask your email provider.','auth',null,false);
-                }
-            }
+            if ($user !== '') self::authenticateUser($stream,$caps,$user,$secret);
             self::command($stream,'MAIL FROM:<'.$from.'>',[250],'sender');
             self::command($stream,'RCPT TO:<'.$to.'>',[250,251],'recipient');
             self::command($stream,'DATA',[354],'data');
@@ -133,13 +122,85 @@ final class Mail {
         self::write($stream,'EHLO '.$name."\r\n");
         [$code,$lines] = self::readResponse($stream,'ehlo');
         if ($code !== 250) throw new MailError('The SMTP server rejected EHLO.','ehlo',$code);
+        return self::parseEhlo($lines);
+    }
+
+    /**
+     * Turn raw EHLO reply lines into capability => mechanism lists.
+     *
+     * Servers send "250-AUTH PLAIN LOGIN" and "250-STARTTLS"; the numeric reply
+     * code is part of the line and must be removed before the capability name is
+     * read, otherwise every capability is stored as "250-AUTH" and authentication
+     * appears to be unsupported. AUTH may also be written "AUTH=PLAIN LOGIN",
+     * spelled in lower case, or split over more than one line.
+     *
+     * @param array<int,string> $lines Raw reply lines, including the reply code.
+     * @return array<string,array<int,string>>
+     */
+    public static function parseEhlo(array $lines): array {
         $caps = [];
-        foreach (array_slice($lines,1) as $line) {
-            $parts = preg_split('/\s+/',trim($line));
+        foreach ($lines as $index => $line) {
+            $line = preg_replace('/^\d{3}[ -]/','',trim((string)$line)) ?? '';
+            if ($line === '') continue;
+            $parts = preg_split('/\s+/',$line) ?: [];
             $key = strtoupper(array_shift($parts) ?? '');
-            if ($key !== '') $caps[$key] = array_map('strtoupper',$parts);
+            if ($key === '') continue;
+            $isAuth = $key === 'AUTH' || str_starts_with($key,'AUTH=');
+            // The first line is the greeting ("mail.example.com ESMTP …"), not a capability.
+            if ($index === 0 && !$isAuth && $key !== 'STARTTLS') continue;
+            if (str_starts_with($key,'AUTH=')) { $parts = array_merge([substr($key,5)],$parts); $isAuth = true; }
+            $values = array_values(array_filter(array_map('strtoupper',$parts),'strlen'));
+            if ($isAuth) $caps['AUTH'] = array_values(array_unique(array_merge($caps['AUTH'] ?? [],$values)));
+            elseif (!isset($caps[$key])) $caps[$key] = $values;
         }
         return $caps;
+    }
+
+    /**
+     * Mechanisms to try, in preference order. PLAIN needs one round trip; LOGIN is
+     * used when PLAIN is unavailable. When a server hides AUTH from its EHLO reply
+     * both are probed, because some providers only accept credentials without
+     * advertising them.
+     *
+     * @param array<int,string> $advertised Mechanisms from the AUTH capability.
+     * @return array<int,string>
+     */
+    public static function authCandidates(array $advertised): array {
+        if ($advertised === []) return ['PLAIN','LOGIN'];
+        $usable = array_values(array_intersect(['PLAIN','LOGIN'],$advertised));
+        if ($usable === []) {
+            throw new MailError('The server offers only '.implode('/',array_slice($advertised,0,4)).' sign-in, which this mailer does not support. Ask your provider for SMTP authentication with PLAIN or LOGIN.','auth',null,false);
+        }
+        return $usable;
+    }
+
+    /** @param array<string,array<int,string>> $caps */
+    private static function authenticateUser($stream,array $caps,string $user,string $secret): void {
+        $candidates = self::authCandidates($caps['AUTH'] ?? []);
+        $last = null;
+        foreach ($candidates as $mechanism) {
+            try { self::authenticate($stream,$mechanism,$user,$secret); return; }
+            catch (MailError $e) {
+                $code = $e->smtpCode;
+                // 530/538: the provider wants TLS before any credentials are accepted.
+                if ($code === 530 || $code === 538) throw new MailError('The server requires an encrypted connection before signing in. Use STARTTLS on port 587 or SSL on port 465.','auth',$code,false);
+                // 500/504: this mechanism or command is not implemented here; try the next one.
+                if ($code === 500 || $code === 504) { $last = $e; continue; }
+                throw $e;
+            }
+        }
+        $code = $last instanceof MailError ? $last->smtpCode : null;
+        throw new MailError('The server did not accept '.implode(' or ',$candidates).' sign-in'.($code ? ' (SMTP '.$code.')' : '').'. Check the username, app password and security mode.','auth',$code,false);
+    }
+
+    private static function authenticate($stream,string $mechanism,string $user,string $secret): void {
+        if ($mechanism === 'PLAIN') {
+            self::command($stream,'AUTH PLAIN '.base64_encode("\0".$user."\0".$secret),[235],'auth');
+            return;
+        }
+        self::command($stream,'AUTH LOGIN',[334],'auth');
+        self::command($stream,base64_encode($user),[334],'auth');
+        self::command($stream,base64_encode($secret),[235],'auth');
     }
 
     private static function encodeHeader(string $value): string {

@@ -7,12 +7,22 @@ if (!KB\installed() || !KB\config('local_preview',false) || !str_ends_with(KB\co
 KB\DB::run('DELETE FROM mail_queue');
 $port=(int)getenv('KB_TEST_SMTP_PORT');
 if ($port<1 || $port>65535) exit(1);
-foreach (['smtp_enabled'=>true,'smtp_host'=>'127.0.0.1','smtp_port'=>$port,'smtp_security'=>'none','smtp_username'=>'','smtp_secret'=>KB\Security::seal(['value'=>'app-password-never-print']),'from_email'=>'notifications@example.test','from_name'=>'KINGDOMBUILDERS Test'] as $key=>$value) Settings::put($key,$value);
-Mail::queue('recipient@example.test','Test notification · ñ',"First line\n.Second line\nUnicode: Ẹ̀kọ́",'smtp-fixture:'.getenv('KB_TEST_RUN'));
-$stats=Mail::process(1);
-// A refused port must produce a safe, actionable error without leaking the password.
-Settings::preview(['smtp_port'=>1,'smtp_username'=>'legacy-no-auth']);
+$user=(string)(getenv('KB_TEST_SMTP_USER') ?: '');
+$secret=(string)(getenv('KB_TEST_SMTP_PASS') ?: 'app-password-never-print');
+$mode=(string)(getenv('KB_TEST_MODE') ?: 'deliver');
+foreach (['smtp_enabled'=>true,'smtp_host'=>'127.0.0.1','smtp_port'=>$port,'smtp_security'=>'none','smtp_username'=>$user,'smtp_secret'=>KB\Security::seal(['value'=>$secret]),'from_email'=>'notifications@example.test','from_name'=>'KINGDOMBUILDERS Test'] as $key=>$value) Settings::put($key,$value);
+$stats=['sent'=>0,'failed'=>0,'processed'=>0,'pending'=>0];
 $failure=null;
-try { Mail::sendTest('recipient@example.test'); }
-catch (KB\MailError $e) { $failure=['stage'=>$e->stage,'message'=>$e->getMessage(),'retryable'=>$e->retryable]; }
+if ($mode==='send-test') {
+    // Used to prove that refused credentials are reported clearly and never echoed.
+    try { Mail::sendTest('recipient@example.test'); }
+    catch (KB\MailError $e) { $failure=['stage'=>$e->stage,'message'=>$e->getMessage(),'retryable'=>$e->retryable,'code'=>$e->smtpCode]; }
+} else {
+    Mail::queue('recipient@example.test','Test notification · ñ',"First line\n.Second line\nUnicode: Ẹ̀kọ́",'smtp-fixture:'.getenv('KB_TEST_RUN'));
+    $stats=Mail::process(1);
+    // A refused port must produce a safe, actionable error without leaking the password.
+    Settings::preview(['smtp_port'=>1,'smtp_username'=>'legacy-no-auth']);
+    try { Mail::sendTest('recipient@example.test'); }
+    catch (KB\MailError $e) { $failure=['stage'=>$e->stage,'message'=>$e->getMessage(),'retryable'=>$e->retryable,'code'=>$e->smtpCode]; }
+}
 echo json_encode(['process'=>$stats,'failure'=>$failure]),PHP_EOL;
