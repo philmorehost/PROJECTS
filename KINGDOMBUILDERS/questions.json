@@ -1,0 +1,494 @@
+[
+    {
+        "q": "In Matthew's genealogy of Jesus, who is named as Joseph's father?",
+        "o": [
+            "Jacob",
+            "Eli",
+            "Heli",
+            "Matthan"
+        ],
+        "a": 0,
+        "r": "Matthew 1",
+        "id": "q_6ae1d9dbaff9b8.02637077"
+    },
+    {
+        "q": "What name did the angel tell Joseph to give Mary's child?",
+        "o": [
+            "John",
+            "Jesus",
+            "Emmanuel",
+            "Joshua"
+        ],
+        "a": 1,
+        "r": "Matthew 1",
+        "id": "q_6ae1d9dbaffb62.32765223"
+    },
+    {
+        "q": "Who came from the East to worship the infant Jesus, guided by a star?",
+        "o": [
+            "Shepherds",
+            "Roman soldiers",
+            "Wise men (Magi)",
+            "Pharisees"
+        ],
+        "a": 2,
+        "r": "Matthew 2",
+        "id": "q_6ae1d9dbaffb95.60232726"
+    },
+    {
+        "q": "What gifts did the visitors bring to the infant Jesus?",
+        "o": [
+            "Bread, wine, oil",
+            "Gold, frankincense, myrrh",
+            "Silver, wheat, honey",
+            "Linen, spices, coins"
+        ],
+        "a": 1,
+        "r": "Matthew 2",
+        "id": "q_6ae1d9dbaffba2.82271926"
+    },
+    {
+        "q": "Which king, troubled by news of a newborn king, ordered the killing of infants in Bethlehem?",
+        "o": [
+            "Herod",
+            "Pilate",
+            "Caesar Augustus",
+            "Archelaus"
+        ],
+        "a": 0,
+        "r": "Matthew 2",
+        "id": "q_6ae1d9dbaffbb7.98433778"
+    },
+    {
+        "q": "Where did Joseph take Mary and the child to escape danger?",
+        "o": [
+            "Egypt",
+            "Babylon",
+            "Rome",
+            "Samaria"
+        ],
+        "a": 0,
+        "r": "Matthew 2",
+        "id": "q_6ae1d9dbaffbc0.72428221"
+    },
+    {
+        "q": "Who baptized Jesus in the Jordan River?",
+        "o": [
+            "Peter",
+            "John the Baptist",
+            "Andrew",
+            "Philip"
+        ],
+        "a": 1,
+        "r": "Matthew 3",
+        "id": "q_6ae1d9dbaffbd4.31140892"
+    },
+    {
+        "q": "How many days did Jesus fast in the wilderness before being tempted?",
+        "o": [
+            "7",
+            "12",
+            "40",
+            "100"
+        ],
+        "a": 2,
+        "r": "Matthew 4",
+        "id": "q_6ae1d9dbaffbe6.21146500"
+    },
+    {
+        "q": "Where did Jesus deliver the famous teaching known as the Beatitudes?",
+        "o": [
+            "In the temple",
+            "On a mountainside",
+            "In a boat",
+            "In a synagogue"
+        ],
+        "a": 1,
+        "r": "Matthew 5",
+        "id": "q_6ae1d9dbaffbf0.30459237"
+    },
+    {
+        "q": "According to the Beatitudes, who did Jesus say are 'blessed' first?",
+        "o": [
+            "The rich",
+            "The poor in spirit",
+            "The powerful",
+            "The wise"
+        ],
+        "a": 1,
+        "r": "Matthew 5",
+        "id": "q_6ae1d9dbaffc19.20897181"
+    },
+    {
+        "q": "In the Sermon on the Mount, Jesus called His followers the salt of the earth and what else?",
+        "o": [
+            "Bread of life",
+            "Light of the world",
+            "Living water",
+            "Vine of heaven"
+        ],
+        "a": 1,
+        "r": "Matthew 5",
+        "id": "q_6ae1d9dbaffc28.55975436"
+    },
+    {
+        "q": "About how many men did Jesus feed with five loaves and two fish?",
+        "o": [
+            "500",
+            "1,000",
+            "5,000",
+            "12,000"
+        ],
+        "a": 2,
+        "r": "Matthew 14",
+        "id": "q_6ae1d9dbaffc33.94979652"
+    },
+    {
+        "q": "Which disciple attempted to walk on water toward Jesus?",
+        "o": [
+            "John",
+            "Peter",
+            "Thomas",
+            "James"
+        ],
+        "a": 1,
+        "r": "Matthew 14",
+        "id": "q_6ae1d9dbaffc48.06936564"
+    },
+    {
+        "q": "According to Jesus, what is the greatest commandment?",
+        "o": [
+            "Honor your parents",
+            "Keep the Sabbath",
+            "Love the Lord your God",
+            "Give to the poor"
+        ],
+        "a": 2,
+        "r": "Matthew 22",
+        "id": "q_6ae1d9dbaffc52.47070275"
+    },
+    {
+        "q": "Which parable describes seed falling on different kinds of soil?",
+        "o": [
+            "Parable of the Sower",
+            "Parable of the Lost Sheep",
+            "Parable of the Vineyard",
+            "Parable of the Wedding Feast"
+        ],
+        "a": 0,
+        "r": "Matthew 13",
+        "id": "q_6ae1d9dbaffc68.11612832"
+    },
+    {
+        "q": "In the Parable of the Hidden Treasure, what does the man do after finding treasure in a field?",
+        "o": [
+            "Reports it to the owner",
+            "Sells all he has to buy the field",
+            "Leaves it where it is",
+            "Shares it with his neighbors"
+        ],
+        "a": 1,
+        "r": "Matthew 13",
+        "id": "q_6ae1d9dbaffc79.43068885"
+    },
+    {
+        "q": "In the Parable of the Talents, how many talents did the unfaithful servant receive before burying it?",
+        "o": [
+            "One",
+            "Two",
+            "Five",
+            "Ten"
+        ],
+        "a": 0,
+        "r": "Matthew 25",
+        "id": "q_6ae1d9dbaffc84.59049956"
+    },
+    {
+        "q": "How did Jesus enter Jerusalem shortly before His crucifixion?",
+        "o": [
+            "On a chariot",
+            "On foot alone",
+            "Riding a donkey",
+            "Carried on a throne"
+        ],
+        "a": 2,
+        "r": "Matthew 21",
+        "id": "q_6ae1d9dbaffc92.41964887"
+    },
+    {
+        "q": "Who betrayed Jesus for thirty pieces of silver?",
+        "o": [
+            "Thomas",
+            "Judas Iscariot",
+            "Peter",
+            "Matthew"
+        ],
+        "a": 1,
+        "r": "Matthew 26",
+        "id": "q_6ae1d9dbaffca5.98881539"
+    },
+    {
+        "q": "What command did Jesus give His disciples at the end of Matthew's Gospel, often called the Great Commission?",
+        "o": [
+            "Return to Galilee and wait",
+            "Go and make disciples of all nations",
+            "Build a temple in Jerusalem",
+            "Fast for forty days"
+        ],
+        "a": 1,
+        "r": "Matthew 28",
+        "id": "q_6ae1d9dbaffcb7.94493919"
+    },
+    {
+        "q": "How does the Gospel of Mark open, unlike Matthew?",
+        "o": [
+            "With a genealogy",
+            "With the birth of Jesus",
+            "With John the Baptist preaching",
+            "With the resurrection"
+        ],
+        "a": 2,
+        "r": "Mark 1",
+        "id": "q_6ae1d9dbaffcc1.32138377"
+    },
+    {
+        "q": "Which two brothers did Jesus call first as He walked by the Sea of Galilee?",
+        "o": [
+            "James and John",
+            "Simon (Peter) and Andrew",
+            "Philip and Bartholomew",
+            "Matthew and Thomas"
+        ],
+        "a": 1,
+        "r": "Mark 1",
+        "id": "q_6ae1d9dbaffcd9.44581995"
+    },
+    {
+        "q": "What illness was Simon Peter's mother-in-law suffering from when Jesus healed her?",
+        "o": [
+            "Blindness",
+            "Fever",
+            "Paralysis",
+            "Leprosy"
+        ],
+        "a": 1,
+        "r": "Mark 1",
+        "id": "q_6ae1d9dbaffce6.15352049"
+    },
+    {
+        "q": "What did Jesus do when a man with leprosy asked to be made clean?",
+        "o": [
+            "Sent him to the priest only",
+            "Touched him and healed him",
+            "Refused to touch him",
+            "Told him to wash seven times"
+        ],
+        "a": 1,
+        "r": "Mark 1",
+        "id": "q_6ae1d9dbaffcf1.16905442"
+    },
+    {
+        "q": "How did the friends of a paralyzed man bring him to Jesus through a crowded house?",
+        "o": [
+            "Through the front door",
+            "Through a window",
+            "Through the roof",
+            "Through the back wall"
+        ],
+        "a": 2,
+        "r": "Mark 2",
+        "id": "q_6ae1d9dbaffd01.77991647"
+    },
+    {
+        "q": "The religious leaders questioned Jesus for doing what with tax collectors and sinners?",
+        "o": [
+            "Teaching them in secret",
+            "Eating with them",
+            "Avoiding them completely",
+            "Arguing with them publicly"
+        ],
+        "a": 1,
+        "r": "Mark 2",
+        "id": "q_6ae1d9dbaffd12.64475939"
+    },
+    {
+        "q": "What did Jesus calm while crossing the Sea of Galilee with His disciples?",
+        "o": [
+            "A famine",
+            "A storm",
+            "An earthquake",
+            "A fire"
+        ],
+        "a": 1,
+        "r": "Mark 4",
+        "id": "q_6ae1d9dbaffd23.07932761"
+    },
+    {
+        "q": "Into what animals did Jesus send the legion of demons from the possessed man?",
+        "o": [
+            "Sheep",
+            "Pigs",
+            "Goats",
+            "Oxen"
+        ],
+        "a": 1,
+        "r": "Mark 5",
+        "id": "q_6ae1d9dbaffd36.15983252"
+    },
+    {
+        "q": "How many years had the woman suffered from bleeding before touching Jesus' garment?",
+        "o": [
+            "Three",
+            "Seven",
+            "Twelve",
+            "Twenty"
+        ],
+        "a": 2,
+        "r": "Mark 5",
+        "id": "q_6ae1d9dbaffd42.33759395"
+    },
+    {
+        "q": "What miracle did Jesus perform for Jairus's daughter?",
+        "o": [
+            "Healed her blindness",
+            "Raised her from the dead",
+            "Cast out a demon",
+            "Cured her fever"
+        ],
+        "a": 1,
+        "r": "Mark 5",
+        "id": "q_6ae1d9dbaffd50.41071626"
+    },
+    {
+        "q": "What tragic request, made through a dance, led to John the Baptist's death?",
+        "o": [
+            "His exile",
+            "His head on a platter",
+            "His imprisonment for life",
+            "His banishment from Galilee"
+        ],
+        "a": 1,
+        "r": "Mark 6",
+        "id": "q_6ae1d9dbaffd60.64177646"
+    },
+    {
+        "q": "On the Mount of Transfiguration, which two Old Testament figures appeared with Jesus?",
+        "o": [
+            "Abraham and Isaac",
+            "Moses and Elijah",
+            "David and Solomon",
+            "Isaiah and Jeremiah"
+        ],
+        "a": 1,
+        "r": "Mark 9",
+        "id": "q_6ae1d9dbaffd73.79933672"
+    },
+    {
+        "q": "Jesus said it is easier for a camel to pass through what than for a rich man to enter the kingdom of God?",
+        "o": [
+            "A narrow gate",
+            "The eye of a needle",
+            "A locked door",
+            "A mountain pass"
+        ],
+        "a": 1,
+        "r": "Mark 10",
+        "id": "q_6ae1d9dbaffd86.95757575"
+    },
+    {
+        "q": "What did the blind man Bartimaeus ask Jesus for?",
+        "o": [
+            "Money",
+            "Food",
+            "His sight",
+            "Forgiveness"
+        ],
+        "a": 2,
+        "r": "Mark 10",
+        "id": "q_6ae1d9dbaffd90.27952422"
+    },
+    {
+        "q": "What happened to the fig tree Jesus cursed for having no fruit?",
+        "o": [
+            "It grew more fruit",
+            "It withered",
+            "It was cut down",
+            "Nothing happened"
+        ],
+        "a": 1,
+        "r": "Mark 11",
+        "id": "q_6ae1d9dbaffda4.98069795"
+    },
+    {
+        "q": "The Pharisees tried to trap Jesus with a question about paying taxes to whom?",
+        "o": [
+            "The high priest",
+            "Caesar",
+            "Herod",
+            "The Sanhedrin"
+        ],
+        "a": 1,
+        "r": "Mark 12",
+        "id": "q_6ae1d9dbaffdb9.86470875"
+    },
+    {
+        "q": "In Mark, what did Jesus say is the second greatest commandment, after loving God?",
+        "o": [
+            "Honor the Sabbath",
+            "Love your neighbor as yourself",
+            "Give generously to the temple",
+            "Fast regularly"
+        ],
+        "a": 1,
+        "r": "Mark 12",
+        "id": "q_6ae1d9dbaffdc8.88860224"
+    },
+    {
+        "q": "What small offering did the poor widow give at the temple that Jesus praised?",
+        "o": [
+            "A loaf of bread",
+            "Two small copper coins",
+            "A gold ring",
+            "A lamb for sacrifice"
+        ],
+        "a": 1,
+        "r": "Mark 12",
+        "id": "q_6ae1d9dbaffdd7.30300121"
+    },
+    {
+        "q": "At the Last Supper, what did Jesus say the bread represented?",
+        "o": [
+            "His teaching",
+            "His body",
+            "His kingdom",
+            "His glory"
+        ],
+        "a": 1,
+        "r": "Mark 14",
+        "id": "q_6ae1d9dbaffde7.71196254"
+    },
+    {
+        "q": "What happened to the temple curtain at the moment Jesus died?",
+        "o": [
+            "It caught fire",
+            "It was torn in two",
+            "It remained unchanged",
+            "It fell to the ground"
+        ],
+        "a": 1,
+        "r": "Mark 15",
+        "id": "q_6ae1d9dbaffdf2.59991245"
+    },
+    {
+        "id": "q_6ae1da2be372b1.93466615",
+        "q": "HOW MANY TIMES DID SATAN TEMPT JESUS IN THE WILDERNESS?",
+        "o": [
+            "2",
+            "3",
+            "4",
+            "5"
+        ],
+        "a": 1,
+        "r": "1"
+    }
+]

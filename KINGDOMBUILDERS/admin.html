@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KBQ — Admin Dashboard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#06101d;color:#f4f7fb;font:15px Segoe UI,Arial,sans-serif}
+button{font:inherit;cursor:pointer}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 4%;background:#071426;border-bottom:1px solid #294b70;flex-wrap:wrap;gap:10px}
+.brand{color:#f4c54e;font-weight:800}
+nav{display:flex;gap:7px}
+.navbtn{background:#0b1d32;border:1px solid #294b70;color:#e8f0f8;border-radius:9px;padding:9px 14px;font-weight:700}
+.navbtn.active{background:linear-gradient(135deg,#ffe06a,#e4a82c);color:#101725;border:0}
+main{max-width:1050px;margin:auto;padding:24px 16px}
+.tab{display:none}
+.tab.active{display:block}
+.panel{background:#081a2d;border:1px solid #294b70;border-radius:18px;padding:24px;margin-bottom:18px}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h2{color:#f4c54e;margin:0}
+.muted{color:#94a9c0}
+.small{background:#0b233d;border:1px solid #315578;color:#fff;border-radius:7px;padding:9px 13px}
+.danger{background:#421622;border:1px solid #743044;color:#ff9aaa;border-radius:7px;padding:9px 13px}
+.primary{background:linear-gradient(135deg,#ffe06a,#e4a82c);color:#101725;border:0;border-radius:9px;padding:11px 18px;font-weight:800}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
+.stat{background:#0b1d32;border:1px solid #294b70;border-radius:12px;padding:16px;text-align:center}
+.stat b{display:block;color:#f4c54e;font-size:26px}
+.table{width:100%;border-collapse:collapse;margin-top:14px}
+.table th,.table td{text-align:left;padding:12px;border-bottom:1px solid #203b58}
+.table th{color:#f4c54e;font-size:13px;letter-spacing:.5px}
+.pill{display:inline-block;padding:3px 10px;border-radius:20px;font-weight:700;font-size:13px}
+.pill.good{background:#073c29;color:#7cf0b2}
+.pill.mid{background:#3a3210;color:#f7df8b}
+.pill.low{background:#4b1522;color:#ff9cac}
+.empty{text-align:center;color:#94a9c0;padding:30px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{margin:12px 0}
+.field label{display:block;color:#b9c9da;font-size:13px;margin-bottom:6px}
+.field input[type=number],.field input[type=text],.field textarea,.field select{width:100%;background:#051222;color:#fff;border:1px solid #2e5074;border-radius:9px;padding:10px}
+.toggle{display:flex;align-items:center;justify-content:space-between;background:#0b1d32;border:1px solid #294b70;border-radius:10px;padding:12px 14px;margin:10px 0}
+.toggle b{font-size:14px;font-weight:600}
+.toggle small{display:block;color:#94a9c0;margin-top:2px}
+.switch{position:relative;width:46px;height:26px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#2e5074;border-radius:20px;cursor:pointer;transition:.2s}
+.slider:before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+input:checked + .slider{background:#e4a82c}
+input:checked + .slider:before{transform:translateX(20px)}
+.qrow{display:grid;grid-template-columns:1fr auto;gap:10px;padding:14px 0;border-top:1px solid #1d3855}
+.qrow small{color:#94a9c0}
+.saveNote{color:#7cf0b2;font-size:13px;min-height:18px}
+@media(max-width:700px){.grid2,.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">KBQ — Admin Dashboard</div>
+  <nav>
+    <button class="navbtn active" data-tab="results">Results</button>
+    <button class="navbtn" data-tab="settings">Settings</button>
+    <button class="navbtn" data-tab="questions">Questions</button>
+    <button class="navbtn" onclick="sessionStorage.removeItem('kbq_admin_pass');window.location.href='index.html'">Log out</button>
+  </nav>
+</header>
+<main>
+
+<!-- RESULTS -->
+<section class="tab active" id="tab-results">
+  <div class="panel">
+    <div class="head">
+      <div><h2>Student Results</h2><p class="muted">Live scores submitted from the quiz.</p></div>
+      <div style="display:flex;gap:10px">
+        <button class="small" id="refreshBtn">Refresh</button>
+        <button class="small" id="csvBtn">Export CSV</button>
+        <button class="danger" id="clearBtn">Clear All</button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="statCount">0</b>Submissions</div>
+      <div class="stat"><b id="statAvg">0%</b>Average score</div>
+      <div class="stat"><b id="statTop">—</b>Top score</div>
+    </div>
+    <div id="tableWrap"></div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section class="tab" id="tab-settings">
+  <div class="panel">
+    <div class="head"><div><h2>Test Controls</h2><p class="muted">Changes apply to every test started after you save.</p></div></div>
+
+    <div class="grid2">
+      <div class="field"><label>Questions per test</label><input type="number" id="sQuestionsPerTest" min="1"></div>
+      <div class="field"><label>Pass mark (%)</label><input type="number" id="sPassMark" min="0" max="100"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Seconds per question</label><input type="number" id="sTimePerQ" min="5"></div>
+      <div class="field"><label>Max tab-switches before auto-submit (0 = off)</label><input type="number" id="sMaxTabSwitches" min="0"></div>
+    </div>
+
+    <div class="toggle"><div><b>Timer enabled</b><small>If off, students get unlimited time per question.</small></div>
+      <label class="switch"><input type="checkbox" id="sTimerEnabled"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>Allow going back</b><small>Lets students revisit and change earlier answers.</small></div>
+      <label class="switch"><input type="checkbox" id="sAllowBack"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>Randomize question order</b><small>Each student gets questions in a different order.</small></div>
+      <label class="switch"><input type="checkbox" id="sRandomizeQuestions"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>Randomize answer order</b><small>Option positions (A/B/C/D) shuffle per student.</small></div>
+      <label class="switch"><input type="checkbox" id="sRandomizeAnswers"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>Show correct/wrong feedback during test</b><small>Anti-cheat: keep this OFF so answers can't be seen or copied by onlookers.</small></div>
+      <label class="switch"><input type="checkbox" id="sShowFeedback"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>One attempt per name</b><small>Blocks a second submission under the same name.</small></div>
+      <label class="switch"><input type="checkbox" id="sOneAttempt"><span class="slider"></span></label></div>
+
+    <div class="toggle"><div><b>Test open</b><small>Turn off to stop new students from starting (in-progress tests still finish).</small></div>
+      <label class="switch"><input type="checkbox" id="sTestOpen"><span class="slider"></span></label></div>
+
+    <button class="primary" id="saveSettingsBtn" style="margin-top:14px">Save Settings</button>
+    <span class="saveNote" id="settingsNote"></span>
+  </div>
+</section>
+
+<!-- QUESTIONS -->
+<section class="tab" id="tab-questions">
+  <div class="panel">
+    <div class="head"><div><h2 id="qFormTitle">Add a Question</h2></div></div>
+    <div class="field"><label>Question text</label><textarea id="qText" rows="2"></textarea></div>
+    <div class="grid2">
+      <div class="field"><label>Option A</label><input type="text" id="qA"></div>
+      <div class="field"><label>Option B</label><input type="text" id="qB"></div>
+      <div class="field"><label>Option C</label><input type="text" id="qC"></div>
+      <div class="field"><label>Option D</label><input type="text" id="qD"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Correct option</label>
+        <select id="qCorrect"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select>
+      </div>
+      <div class="field"><label>Reference (optional)</label><input type="text" id="qRef" placeholder="e.g. Mark 5"></div>
+    </div>
+    <input type="hidden" id="qId">
+    <div style="display:flex;gap:10px">
+      <button class="primary" id="qSaveBtn">Save Question</button>
+      <button class="small" id="qClearBtn">Clear Form</button>
+    </div>
+    <span class="saveNote" id="qNote"></span>
+  </div>
+
+  <div class="panel">
+    <div class="head"><div><h2>Question Bank</h2><p class="muted" id="qCount"></p></div></div>
+    <div id="qList"></div>
+  </div>
+</section>
+
+</main>
+
+<script>
+const pass = sessionStorage.getItem('kbq_admin_pass');
+if (!pass) window.location.href = 'index.html';
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+
+document.querySelectorAll('.navbtn[data-tab]').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.navbtn[data-tab]').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    $('tab-'+b.dataset.tab).classList.add('active');
+    if (b.dataset.tab==='settings') loadSettings();
+    if (b.dataset.tab==='questions') loadQuestions();
+  });
+});
+
+// ---------------- RESULTS ----------------
+let passMarkPercent = 50;
+async function loadResults(){
+  const wrap = $('tableWrap');
+  wrap.innerHTML = '<p class="empty">Loading...</p>';
+  try{
+    const res = await fetch('api.php?action=get_scores&password='+encodeURIComponent(pass));
+    if (res.status===401) { sessionStorage.removeItem('kbq_admin_pass'); window.location.href='index.html'; return; }
+    const data = await res.json();
+    passMarkPercent = data.passMarkPercent || 50;
+    renderResults(data.scores||[]);
+  }catch(e){
+    wrap.innerHTML = '<p class="empty">Could not reach server. Make sure api.php is uploaded to the same folder.</p>';
+  }
+}
+function renderResults(scores){
+  const wrap = $('tableWrap');
+  $('statCount').textContent = scores.length;
+  if (!scores.length){
+    wrap.innerHTML = '<p class="empty">No submissions yet. Scores will appear here as students finish the test.</p>';
+    $('statAvg').textContent='0%'; $('statTop').textContent='—';
+    return;
+  }
+  const sorted = scores.slice().sort((a,b)=>b.ts-a.ts);
+  let totalPct=0, topPct=-1, topName='';
+  sorted.forEach(function(s){
+    const pct = Math.round(s.score/s.total*100);
+    totalPct += pct;
+    if (pct>topPct){ topPct=pct; topName=s.name; }
+  });
+  $('statAvg').textContent = Math.round(totalPct/sorted.length)+'%';
+  $('statTop').textContent = topName+' ('+topPct+'%)';
+
+  let html = '<table class="table"><thead><tr><th>Student</th><th>Score</th><th>Percent</th><th>Result</th><th>Time</th><th>Tab switches</th><th>Submitted</th></tr></thead><tbody>';
+  sorted.forEach(function(s){
+    const pct = Math.round(s.score/s.total*100);
+    const cls = pct>=70?'good':(pct>=40?'mid':'low');
+    const passed = pct >= passMarkPercent;
+    const date = new Date(s.ts*1000).toLocaleString();
+    html += '<tr><td>'+esc(s.name)+'</td><td>'+s.score+' / '+s.total+'</td><td><span class="pill '+cls+'">'+pct+'%</span></td>'+
+      '<td><span class="pill '+(passed?'good':'low')+'">'+(passed?'Pass':'Fail')+'</span></td>'+
+      '<td>'+s.timeSeconds+'s</td><td>'+(s.tabSwitches||0)+'</td><td class="muted">'+date+'</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  window._lastScores = sorted;
+}
+$('refreshBtn').addEventListener('click', loadResults);
+$('clearBtn').addEventListener('click', async function(){
+  if (!confirm('Clear all saved scores? This cannot be undone.')) return;
+  try{
+    const res = await fetch('api.php?action=clear_scores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
+    const data = await res.json();
+    if (data.ok) loadResults(); else alert('Could not clear scores.');
+  }catch(e){ alert('Could not reach server.'); }
+});
+$('csvBtn').addEventListener('click', function(){
+  const scores = window._lastScores || [];
+  if (!scores.length){ alert('No results to export yet.'); return; }
+  let csv = 'Name,Score,Total,Percent,Time (s),Tab Switches,Submitted\n';
+  scores.forEach(function(s){
+    const pct = Math.round(s.score/s.total*100);
+    csv += [s.name, s.score, s.total, pct+'%', s.timeSeconds, s.tabSwitches||0, new Date(s.ts*1000).toLocaleString()]
+      .map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kbq-results.csv';
+  a.click();
+});
+
+// ---------------- SETTINGS ----------------
+async function loadSettings(){
+  $('settingsNote').textContent = '';
+  try{
+    const res = await fetch('api.php?action=get_settings');
+    const data = await res.json();
+    const s = data.settings;
+    $('sQuestionsPerTest').value = s.questionsPerTest;
+    $('sPassMark').value = s.passMarkPercent;
+    $('sTimePerQ').value = s.timePerQuestionSeconds;
+    $('sMaxTabSwitches').value = s.maxTabSwitches;
+    $('sTimerEnabled').checked = !!s.timerEnabled;
+    $('sAllowBack').checked = !!s.allowBack;
+    $('sRandomizeQuestions').checked = !!s.randomizeQuestions;
+    $('sRandomizeAnswers').checked = !!s.randomizeAnswers;
+    $('sShowFeedback').checked = !!s.showAnswerFeedback;
+    $('sOneAttempt').checked = !!s.oneAttemptPerName;
+    $('sTestOpen').checked = !!s.testOpen;
+  }catch(e){ $('settingsNote').textContent = 'Could not load settings.'; }
+}
+$('saveSettingsBtn').addEventListener('click', async function(){
+  const settings = {
+    questionsPerTest: parseInt($('sQuestionsPerTest').value)||40,
+    passMarkPercent: parseInt($('sPassMark').value)||50,
+    timePerQuestionSeconds: parseInt($('sTimePerQ').value)||30,
+    maxTabSwitches: parseInt($('sMaxTabSwitches').value)||0,
+    timerEnabled: $('sTimerEnabled').checked,
+    allowBack: $('sAllowBack').checked,
+    randomizeQuestions: $('sRandomizeQuestions').checked,
+    randomizeAnswers: $('sRandomizeAnswers').checked,
+    showAnswerFeedback: $('sShowFeedback').checked,
+    oneAttemptPerName: $('sOneAttempt').checked,
+    testOpen: $('sTestOpen').checked,
+  };
+  $('settingsNote').textContent = 'Saving...';
+  try{
+    const res = await fetch('api.php?action=save_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass, settings:settings})});
+    const data = await res.json();
+    $('settingsNote').textContent = data.ok ? 'Saved ✓' : 'Could not save settings.';
+  }catch(e){ $('settingsNote').textContent = 'Could not reach server.'; }
+});
+
+// ---------------- QUESTIONS ----------------
+let questionBank = [];
+async function loadQuestions(){
+  $('qList').innerHTML = '<p class="empty">Loading...</p>';
+  try{
+    const res = await fetch('api.php?action=get_questions_admin&password='+encodeURIComponent(pass));
+    const data = await res.json();
+    questionBank = data.questions||[];
+    renderQuestionList();
+  }catch(e){ $('qList').innerHTML = '<p class="empty">Could not load question bank.</p>'; }
+}
+function renderQuestionList(){
+  $('qCount').textContent = questionBank.length + ' question(s) in the bank.';
+  const list = $('qList');
+  list.innerHTML = '';
+  questionBank.forEach(function(q, i){
+    const row = document.createElement('div');
+    row.className = 'qrow';
+    row.innerHTML = '<div><b>'+(i+1)+'. '+esc(q.q)+'</b><br><small>Correct: '+['A','B','C','D'][q.a]+(q.r?' • '+esc(q.r):'')+'</small></div>'+
+      '<div><button class="small editBtn">Edit</button> <button class="danger delBtn">Delete</button></div>';
+    row.querySelector('.editBtn').addEventListener('click', function(){ editQuestion(q); });
+    row.querySelector('.delBtn').addEventListener('click', function(){ deleteQuestion(q.id); });
+    list.appendChild(row);
+  });
+}
+function editQuestion(q){
+  $('qFormTitle').textContent = 'Edit Question';
+  $('qId').value = q.id;
+  $('qText').value = q.q;
+  $('qA').value = q.o[0]; $('qB').value = q.o[1]; $('qC').value = q.o[2]; $('qD').value = q.o[3];
+  $('qCorrect').value = q.a;
+  $('qRef').value = q.r||'';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+$('qClearBtn').addEventListener('click', clearQForm);
+function clearQForm(){
+  $('qFormTitle').textContent = 'Add a Question';
+  $('qId').value=''; $('qText').value=''; $('qA').value=''; $('qB').value=''; $('qC').value=''; $('qD').value=''; $('qCorrect').value='0'; $('qRef').value='';
+  $('qNote').textContent='';
+}
+$('qSaveBtn').addEventListener('click', async function(){
+  const question = {
+    id: $('qId').value || null,
+    q: $('qText').value.trim(),
+    o: [$('qA').value.trim(), $('qB').value.trim(), $('qC').value.trim(), $('qD').value.trim()],
+    a: parseInt($('qCorrect').value),
+    r: $('qRef').value.trim(),
+  };
+  if (!question.q || question.o.some(x=>!x)){ $('qNote').textContent='Fill the question and all four options.'; return; }
+  $('qNote').textContent = 'Saving...';
+  try{
+    const res = await fetch('api.php?action=save_question',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass, question:question})});
+    const data = await res.json();
+    if (data.ok){ questionBank = data.questions; renderQuestionList(); clearQForm(); $('qNote').textContent='Saved ✓'; }
+    else $('qNote').textContent = 'Could not save.';
+  }catch(e){ $('qNote').textContent = 'Could not reach server.'; }
+});
+async function deleteQuestion(id){
+  if (!confirm('Delete this question?')) return;
+  try{
+    const res = await fetch('api.php?action=delete_question',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass, id:id})});
+    const data = await res.json();
+    if (data.ok){ questionBank = data.questions; renderQuestionList(); }
+  }catch(e){ alert('Could not reach server.'); }
+}
+
+loadResults();
+</script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KBQ — Test in progress</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#06101d;color:#f4f7fb;font:15px Segoe UI,Arial,sans-serif;user-select:none;-webkit-user-select:none}
+button{font:inherit;cursor:pointer}
+main{max-width:860px;margin:auto;padding:24px 16px}
+.screen{display:none}
+.screen.active{display:block}
+.panel{background:#081a2d;border:1px solid #294b70;border-radius:18px;padding:30px}
+h1{font:700 28px/1.3 Georgia,serif;color:#f4c54e;margin:0 0 6px}
+h2{color:#f4c54e;margin-top:0}
+.muted{color:#94a9c0;line-height:1.6}
+ul{color:#cfe0f0;line-height:1.8;padding-left:20px}
+.primary{background:linear-gradient(135deg,#ffe06a,#e4a82c);color:#101725;border:0;border-radius:9px;padding:13px 22px;font-weight:800}
+.secondary{background:#0b1d32;border:1px solid #294b70;color:#e8f0f8;border-radius:9px;padding:13px 22px;font-weight:700}
+.secondary:disabled{opacity:.4;cursor:not-allowed}
+.top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:15px;margin-bottom:16px}
+.top small{display:block;color:#94a9c0;margin-top:3px}
+.timer{width:62px;height:62px;border:2px solid #f4c54e;border-radius:50%;display:grid;place-items:center;color:#f4c54e;font-weight:900;font-size:18px;margin:auto}
+.timer.warn{border-color:#e5536d;color:#ff8496}
+.timer.off{border-color:#3a4f66;color:#3a4f66}
+.progress{height:7px;background:#132a44;border-radius:20px;margin:0 0 20px}
+.progress div{height:100%;background:#f4c54e;width:0;border-radius:20px;transition:width .2s}
+.qnum{color:#f4c54e;font-weight:900;letter-spacing:1px;font-size:13px}
+.answers{display:grid;gap:10px;margin:20px 0}
+.answer{background:#0a2037;border:1px solid #315679;color:#f1f6fc;border-radius:11px;padding:15px;text-align:left}
+.answer.picked{background:#0b2e4d;border-color:#f4c54e}
+.answer:disabled{cursor:default;opacity:.55}
+.letter{display:inline-grid;place-items:center;width:28px;height:28px;border:1px solid #47698c;border-radius:50%;margin-right:10px;color:#f4c54e;font-weight:800;font-size:13px}
+.foot{display:flex;justify-content:space-between;margin-top:10px}
+#trophy{font-size:60px;text-align:center}
+.scoreline{text-align:center;font-size:40px;color:#f4c54e;font-weight:900;margin:8px 0}
+.sub{text-align:center;color:#94a9c0}
+.warnbar{background:#4b1522;border:1px solid #e5536d;color:#ffb3c0;border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:13px;display:none}
+.err{color:#ff9aaa}
+</style>
+</head>
+<body oncopy="return false" oncontextmenu="return false">
+<main>
+
+<section id="intro" class="screen active">
+  <div class="panel">
+    <h1>Kingdom Builders Quiz</h1>
+    <p class="muted">Welcome, <b id="introName"></b>. Before you begin, please read the instructions below.</p>
+    <ul id="introList"></ul>
+    <button class="primary" id="beginBtn">Begin Test</button>
+    <p class="err" id="introErr" style="margin-top:14px"></p>
+  </div>
+</section>
+
+<section id="quiz" class="screen">
+  <div class="warnbar" id="warnbar"></div>
+  <div class="top">
+    <div><b id="quizPlayer"></b><small id="progressText"></small></div>
+    <div class="timer" id="timer">30</div>
+    <div style="text-align:right">Score<br><b id="quizScore" style="color:#f4c54e;font-size:20px">—</b></div>
+  </div>
+  <div class="progress"><div id="progressBar"></div></div>
+  <div class="panel">
+    <div class="qnum" id="questionNumber"></div>
+    <h2 id="questionText"></h2>
+    <div class="answers" id="answers"></div>
+    <div class="foot">
+      <button class="secondary" id="backBtn">← Previous</button>
+      <button class="primary" id="nextBtn" disabled>Next →</button>
+    </div>
+  </div>
+</section>
+
+<section id="done" class="screen">
+  <div class="panel" style="text-align:center">
+    <div id="trophy">🏆</div>
+    <h2>Test Submitted!</h2>
+    <p class="scoreline" id="finalScore"></p>
+    <p class="sub" id="finalPct"></p>
+    <p class="muted" id="submitStatus">Sending your result to your administrator...</p>
+    <button class="primary" style="margin-top:14px" onclick="window.location.href='index.html'">Back to Home</button>
+  </div>
+</section>
+
+<section id="blocked" class="screen">
+  <div class="panel" style="text-align:center">
+    <h2 id="blockedTitle">Unable to start</h2>
+    <p class="muted" id="blockedMsg"></p>
+    <button class="primary" style="margin-top:10px" onclick="window.location.href='index.html'">Back to Home</button>
+  </div>
+</section>
+
+</main>
+
+<script>
+function $(id){return document.getElementById(id);}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));$(id).classList.add('active');}
+
+const studentName = sessionStorage.getItem('kbq_student_name');
+if (!studentName) window.location.href = 'index.html';
+$('introName').textContent = studentName;
+$('quizPlayer').textContent = studentName;
+
+let sessionId = null, questions = [], config = {}, total = 0;
+let current = 0, answers = [], timerId = null, timeLeft = 0, startedAt = null, tabSwitchCount = 0, finished = false;
+
+// ---- kick off: ask server for a session so questions/settings come from the admin's config ----
+fetch('api.php?action=start_session', {
+  method:'POST', headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({name: studentName})
+}).then(r=>r.json()).then(data=>{
+  if (!data.ok) {
+    show('blocked');
+    $('blockedMsg').textContent = data.message || 'This test is not available right now.';
+    return;
+  }
+  sessionId = data.sessionId;
+  questions = data.questions;
+  config = data.config;
+  total = data.total;
+  answers = new Array(total).fill(null);
+
+  const list = $('introList');
+  list.innerHTML =
+    '<li>This test has <b>'+total+' questions</b> covering the Gospels of <b>Matthew and Mark</b>.</li>' +
+    '<li>Each question is multiple choice with <b>4 options</b> — select the one you believe is correct.</li>' +
+    (config.timerEnabled ? '<li>You have <b>'+config.timePerQuestionSeconds+' seconds</b> per question. If time runs out, it counts as unanswered and the test moves on.</li>' : '<li>There is no time limit — take the time you need.</li>') +
+    (config.allowBack ? '<li>You may go back and review or change earlier answers before finishing.</li>' : '<li>Once you move to the next question, you cannot go back — choose carefully.</li>') +
+    '<li>Do not refresh or close this page until you see "Test Submitted" — your score is sent automatically at the end.</li>' +
+    '<li>Copying text and right-click are disabled during the test, and switching tabs or windows is monitored.</li>' +
+    '<li>Your administrator will see your name, score and time on their dashboard.</li>';
+}).catch(()=>{
+  show('blocked');
+  $('blockedMsg').textContent = 'Could not reach the server. Please check your connection and try again.';
+});
+
+$('beginBtn').addEventListener('click', function(){
+  if (!sessionId) { $('introErr').textContent = 'Still connecting, please wait a moment and try again.'; return; }
+  startedAt = Date.now();
+  show('quiz');
+  renderQuestion();
+});
+
+function renderQuestion(){
+  clearInterval(timerId);
+  const q = questions[current];
+  $('progressText').textContent = 'Question ' + (current+1) + ' of ' + total;
+  $('progressBar').style.width = (current/total*100) + '%';
+  $('questionNumber').textContent = 'QUESTION ' + (current+1) + ' OF ' + total;
+  $('questionText').textContent = q.q;
+
+  const box = $('answers');
+  box.innerHTML = '';
+  const letters = ['A','B','C','D'];
+  q.o.forEach(function(opt, i){
+    const btn = document.createElement('button');
+    btn.className = 'answer' + (answers[current]===i ? ' picked' : '');
+    btn.innerHTML = '<span class="letter">'+letters[i]+'</span>'+opt;
+    btn.addEventListener('click', function(){ select(i); });
+    box.appendChild(btn);
+  });
+
+  $('backBtn').style.display = config.allowBack ? 'inline-block' : 'none';
+  $('backBtn').disabled = current===0;
+  $('nextBtn').disabled = answers[current]===null;
+  $('nextBtn').textContent = (current === total-1) ? 'Finish Test' : 'Next →';
+
+  if (config.timerEnabled) {
+    $('timer').classList.remove('off');
+    timeLeft = config.timePerQuestionSeconds;
+    $('timer').textContent = timeLeft;
+    $('timer').classList.remove('warn');
+    timerId = setInterval(function(){
+      timeLeft--;
+      $('timer').textContent = timeLeft;
+      if (timeLeft<=10) $('timer').classList.add('warn');
+      if (timeLeft<=0) { clearInterval(timerId); autoAdvance(); }
+    },1000);
+  } else {
+    $('timer').textContent = '∞';
+    $('timer').classList.add('off');
+  }
+}
+
+function select(i){
+  answers[current] = i;
+  document.querySelectorAll('#answers .answer').forEach(function(b,idx){ b.classList.toggle('picked', idx===i); });
+  $('nextBtn').disabled = false;
+  recordAnswer(current, i);
+}
+
+function recordAnswer(index, choice){
+  fetch('api.php?action=answer_question', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sessionId: sessionId, index: index, choice: choice})
+  }).catch(function(){});
+}
+
+function autoAdvance(){
+  if (answers[current] === null) { answers[current] = -1; recordAnswer(current, -1); }
+  goNext();
+}
+
+$('nextBtn').addEventListener('click', goNext);
+$('backBtn').addEventListener('click', function(){
+  if (!config.allowBack || current===0) return;
+  current--;
+  renderQuestion();
+});
+
+function goNext(){
+  clearInterval(timerId);
+  if (current < total-1) { current++; renderQuestion(); }
+  else finishTest();
+}
+
+function finishTest(){
+  if (finished) return;
+  finished = true;
+  clearInterval(timerId);
+  $('progressBar').style.width = '100%';
+  show('done');
+  fetch('api.php?action=finish_session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sessionId: sessionId})
+  }).then(r=>r.json()).then(function(data){
+    if (data.ok) {
+      $('finalScore').textContent = data.score + ' / ' + data.total;
+      $('finalPct').textContent = Math.round(data.score/data.total*100) + '% correct';
+      $('submitStatus').textContent = 'Your result has been sent to your administrator. Thank you!';
+    } else {
+      $('submitStatus').textContent = 'Your result could not be confirmed. Please tell your administrator you have finished.';
+    }
+  }).catch(function(){
+    $('submitStatus').textContent = 'Could not reach the server to confirm your submission. Please tell your administrator you have finished.';
+  });
+  sessionStorage.removeItem('kbq_student_name');
+}
+
+// ---- anti-cheat: tab / window switch detection ----
+function onLeaveView(){
+  if (finished || !sessionId) return;
+  tabSwitchCount++;
+  fetch('api.php?action=flag_tab_switch', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sessionId: sessionId})
+  }).then(r=>r.json()).then(function(data){
+    if (!data.ok) return;
+    const bar = $('warnbar');
+    bar.style.display = 'block';
+    if (data.autoSubmit) {
+      bar.textContent = 'Too many tab switches detected — your test is being submitted automatically.';
+      finishTest();
+    } else {
+      bar.textContent = 'Warning: leaving this tab/window has been recorded (' + data.count + ' time' + (data.count===1?'':'s') + '). Please stay on this page until you finish.';
+    }
+  }).catch(function(){});
+}
+document.addEventListener('visibilitychange', function(){ if (document.hidden) onLeaveView(); });
+window.addEventListener('blur', function(){ if (!document.hidden) onLeaveView(); });
+
+// warn before accidental close/refresh mid-test
+window.addEventListener('beforeunload', function(e){
+  if (!finished && sessionId) { e.preventDefault(); e.returnValue = ''; }
+});
+</script>
+</body>
+</html>
