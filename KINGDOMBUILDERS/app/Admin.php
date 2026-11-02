@@ -20,6 +20,17 @@ final class Admin {
             render('admin/authorization',['error'=>$error,'allowed'=>Activation::allowed()]);
         }
         $admin=Auth::requireAdmin();
+        if($route==='admin/smtp/preview') {
+            // A real rendering of the transactional template, using the signed-in
+            // administrator's own address for the footer. Inline styles are the
+            // design, so the preview route allows them while blocking everything else.
+            $base=rtrim((string)config('site_url'),'/');
+            $sample="Hello ".$admin['name'].",\n\nUse this single-use link to continue:\n".$base."/reset-password?token=PREVIEW-ONLY\n\nThis link expires in 1 hour. If you did not request it, you can ignore this message.\n\nNever share this link with anyone.";
+            header('Content-Type: text/html; charset=utf-8');
+            header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+            echo MailTemplate::html(Settings::get('site_title').' · Choose a new password',$sample,(string)$admin['email']);
+            exit;
+        }
         $error=null;
         if(is_post()) Security::check();
         if($route==='admin') {

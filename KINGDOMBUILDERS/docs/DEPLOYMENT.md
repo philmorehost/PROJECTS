@@ -121,6 +121,11 @@ password, sender address/name and administrator notification address.
   reports the exact stage that failed (connection, STARTTLS, TLS, authentication,
   sender, recipient or message data) with the SMTP reply code. It never changes saved
   settings and never renders the password back.
+- Every notification is **multipart/alternative**: the queued plain text plus a modern
+  HTML rendering with the site monogram, one clear action button, a detail panel and
+  security notes. It is image-free (no tracking pixel), uses inline styles plus a small
+  dark-mode stylesheet, and keeps a plain URL under each button for restricted clients.
+  **Admin → Email & SMTP → Preview email design** opens the live template.
 - **Save & send test** persists first, then sends.
 - The test sends synchronously to the administrator email; queued activity email still
   depends on the cron worker.
