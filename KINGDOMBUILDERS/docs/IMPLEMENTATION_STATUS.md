@@ -72,3 +72,21 @@ Updated: 2026-11-02. This is a working foundation, not a claim of production pen
   the default root size is now 18px (20.5px with the setting on).
 - The footer shows the deployed build number for administrators, so an outdated upload
   is visible at a glance.
+
+### Follow-up 3: verify the deployment, then use the new controls
+
+Diagnosis against the live site on 2026-11-02: `/` serves the redesigned landing page and
+`/assets/app.css` ends with the 18px readability block, so static files from that update
+reached production. The admin-reported behaviour (test stuck at "Pending", no cron card)
+belongs to PHP files from an earlier revision — consistent with a partial upload or a
+stale OPcache. Two safeguards were added:
+
+- `/health` now returns the build number, and `php bin/check.php` prints the build and
+  verifies that the cron/diagnostic files exist on the server.
+- An upload-ready zip (`KINGDOMBUILDERS-<version>-upload.zip`) contains every deployable
+  file so a whole-folder replacement is one action.
+
+New in build 0.4.0: a dedicated **Cron job** admin page (also linked in the admin nav),
+**Send now** per queued message with the real SMTP diagnosis, "Retrying" with the next
+attempt time instead of a bare "Pending", a reader-facing A / A+ / A++ text-size control
+in the footer, and 19px base text.

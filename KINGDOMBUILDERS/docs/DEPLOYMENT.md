@@ -40,6 +40,21 @@ Create an empty database and a dedicated user. The installer needs CREATE/ALTER/
 
 The schema is versioned in `database/schema.sql` (migration 1). The installer refuses databases containing unrelated tables or existing users. A partially created schema with zero users can be retried safely.
 
+## 3a. Verifying an upload (do this first when a change "does not appear")
+
+1. Open `https://your-domain/health` — it returns JSON with the **build** number and PHP
+   version. Compare with the branch: `/health` and the admin footer must agree.
+2. Run `php bin/check.php` on the server (or ask your host to). It prints the build and
+   checks that the files added by recent updates exist.
+3. If the build number is correct but a page still behaves the old way, the host is
+   serving cached PHP. Ask them to flush **OPcache** and restart PHP-FPM
+   (`opcache.validate_timestamps` should be `1` for shared hosting). Static files such
+   as CSS update without OPcache, so a changed stylesheet with unchanged behaviour is a
+   strong sign of a stale opcode cache.
+4. Browser caches are not the cause for HTML (`Cache-Control: private, no-store`), but
+   CSS is versioned: the stylesheet URL carries `?v=<build>`. Hard-refresh once after an
+   update.
+
 ## 4. Web server
 
 - Apache: `.htaccess` blocks private/source directories and non-front-controller PHP execution.
@@ -76,7 +91,8 @@ cron job" guide, the PHP CLI path setting, and the last-run heartbeat.
   substitute — delivery must run as a command-line task.
 - Verify: within two minutes the SMTP page shows a recent heartbeat. Then send a test
   email and confirm the queue row becomes **Sent**.
-- No cron yet? **Admin → Notifications → Deliver queued messages now** sends a small,
+- No cron yet? **Admin → Notifications → Deliver queued messages now**, or **Send now** on
+  an individual row, sends immediately. The batch action is a small,
   time-budgeted batch immediately. It is a stop-gap: it only runs while an administrator
   has the page open, so confirmations and password resets still need the scheduled task.
 - A test message is always sent synchronously and never enters the queue; a queue row
@@ -88,6 +104,13 @@ retries, and prunes expired tokens, old rate limits, audit rows older than 90 da
 sent mail older than 30 days. Overlapping runs are safe (`flock`); a lease older than
 15 minutes is marked failed and requires manual retry. Monitor exit codes, queue age,
 `worker-heartbeat.json` and `worker.log`.
+
+## 6a. Reader text size
+
+The default base text is 19px. Administrators can enable **Settings → Reading comfort →
+extra-large text** (21.5px) for the whole site, and every visitor can pick A / A+ / A++
+in the footer. The visitor choice is stored in a first-party cookie for a year and
+overrides the site setting for that browser.
 
 ## 7. SMTP
 

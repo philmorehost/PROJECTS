@@ -50,6 +50,12 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
 
 Apache rules are in `.htaccess`; an Nginx example is in `deploy/nginx.conf.example`. The development `router.php` is not a production server.
 
+## Checking what is deployed
+
+`/health` returns JSON with the current build, and `php bin/check.php` prints it on the
+server. If a change does not appear after uploading, flush OPcache (see
+`docs/DEPLOYMENT.md`, section 3a) before assuming the files were wrong.
+
 ## Useful commands
 
 ```bash
