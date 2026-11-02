@@ -7,6 +7,16 @@ $current=route();
 // Text size: an individual choice (cookie) wins; otherwise the administrator's site-wide setting applies.
 $textChoice=in_array($_COOKIE['kb_text']??'',['large','xlarge'],true)?$_COOKIE['kb_text']:'';
 $textClass=$textChoice!==''?'text-'.$textChoice:((KB\installed() && KB\Settings::get('large_text'))?'text-large':'');
+// Mobile dock: only for signed-in people, and never during an assessment or
+// on the installer/authorisation gate where it would compete with the task.
+$dockAttempt=null; $dockQuizOpen=false; $dockVerified=true;
+$showDock=$auth && !in_array($current,['install','quiz','admin/authorization'],true);
+if($showDock && !$isAdmin){
+    $dockQuizOpen=(bool)KB\Settings::get('quiz_open');
+    // Unconfirmed accounts cannot open an assessment; send them to the confirmation screen.
+    $dockVerified=!empty($auth['email_verified_at']);
+    try { $dockAttempt=KB\Quiz::activeId((int)$auth['id']); } catch(Throwable $e) { $dockAttempt=null; }
+}
 ?>
 <!doctype html>
 <html lang="en"<?= $textClass!=='' ? ' class="'.e($textClass).'"' : '' ?>>
@@ -20,7 +30,7 @@ $textClass=$textChoice!==''?'text-'.$textChoice:((KB\installed() && KB\Settings:
 <?php if($current==='quiz'): ?><script src="<?= e(asset('quiz.js')) ?>" defer></script><?php endif; ?>
 <?php if(str_starts_with($current,'admin') || str_starts_with($current,'admin/')): ?><script src="<?= e(asset('admin.js')) ?>" defer></script><?php endif; ?>
 </head>
-<body class="<?= str_starts_with($current,'admin')?'admin-body':($current===''?'home-body':'') ?>">
+<body class="<?= str_starts_with($current,'admin')?'admin-body':($current===''?'home-body':'') ?><?= $showDock?' has-dock':'' ?>">
 <a class="skip-link" href="#main">Skip to content</a>
 <?php if(!empty($_SESSION['admin_id'])): ?><div class="support-bar"><span>Support session · <?= e($auth['name']??'Member') ?> · Changes are recorded</span><form method="post" action="<?= e(url('support/return')) ?>"><?= Security::csrfField() ?><button>Return to administrator</button></form></div><?php endif; ?>
 <header class="site-header"><div class="shell nav-wrap">
@@ -48,6 +58,7 @@ $textClass=$textChoice!==''?'text-'.$textChoice:((KB\installed() && KB\Settings:
   <button name="size" value="large" class="<?= $textChoice==='large'?'is-active':'' ?>" aria-pressed="<?= $textChoice==='large'?'true':'false' ?>" title="Larger text">A+</button>
   <button name="size" value="xlarge" class="<?= $textChoice==='xlarge'?'is-active':'' ?>" aria-pressed="<?= $textChoice==='xlarge'?'true':'false' ?>" title="Largest text">A++</button>
 </form>
-<a href="<?= e(url('login')) ?>">Member access</a>
+<a href="<?= e(url($auth ? 'account' : 'login')) ?>"><?= $auth ? 'Your account' : 'Member access' ?></a>
 </div></footer>
+<?php if($showDock): ?><?php require __DIR__.'/_dock.php'; ?><?php endif; ?>
 </body></html>

@@ -50,6 +50,11 @@ final class Quiz {
             return $id;
         });
     }
+    /** The member's unfinished attempt, used by the mobile dock's "Resume quiz" tab. */
+    public static function activeId(int $userId): ?string {
+        $id = DB::value('SELECT id FROM attempts WHERE active_user_id=? AND status="active"', [$userId]);
+        return is_string($id) && $id !== '' ? $id : null;
+    }
     public static function owned(string $id, int $userId, bool $lock=false): array {
         if (!preg_match('/^[a-f0-9-]{36}$/',$id)) throw new UserError('Assessment not found.',404);
         $attempt=DB::one('SELECT * FROM attempts WHERE id=? AND user_id=?'.($lock?' FOR UPDATE':''),[$id,$userId]);

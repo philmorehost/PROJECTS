@@ -64,6 +64,11 @@ def ok(condition, label):
     if not condition: raise AssertionError(label)
     print("PASS", label)
 
+def dock(html):
+    """Return the mobile dock markup, or an empty string when no dock is rendered."""
+    match = re.search(r'<nav class="mobile-dock".*?</nav>', html, re.S)
+    return match.group(0) if match else ""
+
 if os.environ.get("KB_INSTALL") == "1":
     c = Client()
     ok(c.get("/")[1].endswith("/install"), "first access opens installer")
@@ -80,6 +85,7 @@ if os.environ.get("KB_INSTALL") == "1":
     ok(c.get("/install")[0] == 404, "installer locks after completion")
 
 public = Client()
+ok(dock(public.get("/login")[2]) == "", "no mobile dock for signed-out visitors")
 code, _, html = public.get("/")
 ok(code == 200 and "Build your knowledge" in html and "Active questions" in html, "modern landing page renders")
 
@@ -174,6 +180,9 @@ member = Client()
 ok(member.post("/login", {"email": os.environ["KB_MEMBER_EMAIL"], "password": os.environ["KB_MEMBER_PASSWORD"]})[1].endswith("/dashboard"), "member login")
 ok("Best score" in member.get("/dashboard")[2], "member dashboard stats render")
 ok(member.post("/quiz/start", {})[1].startswith(BASE + "/quiz?id="), "start/resume quiz")
+bar = dock(member.get("/dashboard")[2])
+ok("Resume quiz" in bar and "dock-ping" in bar, "dock offers resume while an attempt is open")
+ok('href="/account"' in bar, "dock links to the profile")
 # The start POST already follows the redirect; read the active attempt link from the dashboard.
 html = member.get("/dashboard")[2]
 match = re.search(r'/quiz\?id=([a-f0-9-]+)', html)
@@ -182,6 +191,10 @@ if match:
     p = "/api/quiz?id=" + match.group(1)
     state = member.api(p, {"action": "state"})[1]
     if state["status"] == "active": member.api(p, {"action": "finish"})
+bar = dock(member.get("/dashboard")[2])
+ok("Start quiz" in bar and "Resume quiz" not in bar, "dock returns to Start quiz after finishing")
+ok('method="post"' in bar and "/quiz/start" in bar, "dock starts the quiz over POST")
+ok("Resume quiz" not in dock(member.get("/account")[2]), "finished attempts are not resumable")
 _, url, _ = member.post("/quiz/start", {})
 attempt = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["id"][0]
 p = "/api/quiz?id=" + attempt
@@ -202,6 +215,7 @@ ok(all(q["locked"] for q in state["questions"]), "payload reports every answer a
 ok([q["position"] for q in state["questions"] if q["answer"] is not None] == [q["position"] for q in state["questions"]], "stored choices survive the refused change")
 ok(member.api(p, {"action": "finish"}, token)[1]["status"] == "submitted", "server-side scoring")
 ok(member.get("/result?id=" + attempt)[0] == 200, "member result")
+ok(dock(member.get("/quiz?id=" + attempt)[2]) == "", "dock stays out of the quiz screen")
 ok(admin.api(p, {"action": "state"}, admin.token("/admin"))[0] == 404, "attempt ownership")
 ok(admin.get("/admin/results/export")[0] == 200, "CSV export")
 
@@ -211,4 +225,6 @@ ok("Support session" in admin.get("/dashboard")[2], "support session banner")
 ok(admin.get("/admin")[0] == 403, "support session cannot administer")
 ok(admin.post("/support/return", {})[1].endswith("/admin"), "return to administrator")
 ok(admin.get("/admin")[0] == 200, "administrator access restored")
+bar = dock(admin.get("/admin")[2])
+ok("Overview" in bar and "Members" in bar and "Profile" in bar, "administrator mobile dock")
 print("HTTP smoke tests passed.")

@@ -57,6 +57,9 @@ jobs:
           bash KINGDOMBUILDERS/tests/ci-run.sh bash -c "find KINGDOMBUILDERS -name '*.php' -print0 | xargs -0 -n1 php -l"
           node --check KINGDOMBUILDERS/assets/quiz.js
           node --check KINGDOMBUILDERS/assets/admin.js
+      - name: Mobile dock rendering
+        working-directory: KINGDOMBUILDERS
+        run: bash tests/ci-run.sh php tests/dock_render.php
       - name: Prepare disposable databases
         run: |
           mysql -h127.0.0.1 -uroot -pci-root-only -e 'CREATE DATABASE kingdombuilders_http_test; GRANT ALL ON kingdombuilders_http_test.* TO "root"@"%";'
