@@ -1,0 +1,12 @@
+PASS first access opens installer
+PASS installer step 1 (status=200, url=http://127.0.0.1:8080/install, h1='Your community starts here.')
+PASS installer step 2 (status=200, url=http://127.0.0.1:8080/install, h1='Your community starts here.')
+PASS installer step 3 (status=200, url=http://127.0.0.1:8080/install, h1='Your community is ready.')
+Traceback (most recent call last):
+  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 68, in <module>
+    ok("Your community is ready" in html, f"installer completion instructions (status={code}, url={url}, h1={heading.group(1) if heading else None!r})")
+    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 51, in ok
+    if not condition: raise AssertionError(label)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: installer completion instructions (status=200, url=http://127.0.0.1:8080/install, h1='This page is unavailable')
