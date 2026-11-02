@@ -170,3 +170,26 @@ assertions for the dock on member, administrator and signed-out pages.
 
 Verification: PHP lint, the parsing suite, the five-server socket fixture, and the existing
 integration/HTTP suites in CI.
+
+### Build 0.8.0: modern transactional email
+
+- **Every notification now ships as multipart/alternative** — the queued plain text is
+  unchanged for text-only clients, plus a designed HTML part: branded monogram and wordmark,
+  a single eyebrow and heading, one clear button with the full URL beneath it, a soft detail
+  panel for activity/time rows, and security notes in a gold-edged callout.
+- **Built for mail clients, not browsers:** table layout with inline styles for Outlook,
+  a 600 px card that folds to the screen on phones, bulletproof button, no images, scripts or
+  remote assets (so no tracking pixel and nothing to load), a hidden preheader, `role`
+  semantics, and a dark-mode stylesheet for Gmail/Apple Mail.
+- **Safe by construction:** all dynamic text is escaped, URLs are limited to http(s) with
+  validated hosts, quotes/ampersands survive attribute encoding, and the body is
+  quoted-printable with SMTP dot-stuffing at the wire boundary. `Auto-Submitted` and
+  `X-Auto-Response-Suppress` mark the mail as automated.
+- **Preview:** **Admin → Email & SMTP → Preview email design** renders the real template in
+  a new tab with a locked-down CSP; `docs/email-template-preview.html` shows a sample.
+- Tests: `tests/mail_html.php` covers the document shell, branding, heading, single CTA,
+  merged notes, detail rows, escaping/XSS, MIME structure, encoding and header injection;
+  the socket fixture now asserts both MIME parts and the designed HTML on the wire.
+
+Verification: PHP lint, the HTML/MIME suite, the five-server socket fixture, and the existing
+integration/HTTP suites in CI.

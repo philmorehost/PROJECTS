@@ -66,7 +66,7 @@ final class Mail {
     public static function sendTest(string $to): array {
         if (!Settings::get('smtp_enabled')) throw new MailError('SMTP delivery is disabled. Enable and save SMTP settings first.','configuration',null,false);
         $subject = Settings::get('site_title').' · SMTP test';
-        $body = "This is a test notification from your website.\n\nIf you received this message, SMTP delivery is working.\n\nTime: ".now()." UTC";
+        $body = "This is a test notification from your website.\n\nIf you received this message, SMTP delivery is working and activity email can be delivered.\n\nHost: ".Settings::get('smtp_host')."\nPort: ".(int)Settings::get('smtp_port')."\nSecurity: ".strtoupper((string)Settings::get('smtp_security'))."\nTime: ".now()." UTC";
         $messageId = self::send($to,$subject,$body);
         return ['message_id'=>$messageId];
     }
@@ -108,13 +108,55 @@ final class Mail {
             self::command($stream,'RCPT TO:<'.$to.'>',[250,251],'recipient');
             self::command($stream,'DATA',[354],'data');
             $messageId = bin2hex(random_bytes(16)).'@'.preg_replace('/[^a-z0-9.-]/','',Security::domain());
-            $headers = ['Date: '.date('r'),'From: '.self::encodeHeader((string)Settings::get('from_name')).' <'.$from.'>','To: <'.$to.'>','Subject: '.self::encodeHeader($subject),'Message-ID: <'.$messageId.'>','MIME-Version: 1.0','Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: 8bit'];
-            $body = preg_replace('/^\./m','..',str_replace(["\r\n","\r"],"\n",$body));
-            self::write($stream,implode("\r\n",$headers)."\r\n\r\n".$body."\r\n.\r\n");
+            self::write($stream,self::stuff(self::message($to,$subject,$body,$from,(string)Settings::get('from_name'),$messageId)).".\r\n");
             self::expect($stream,[250],'data');
             @fwrite($stream,"QUIT\r\n");
             return $messageId;
         } finally { fclose($stream); }
+    }
+
+    /**
+     * Build a complete RFC 5322 message: multipart/alternative with the queued
+     * plain text and a modern HTML rendering of the same content.
+     *
+     * Public so the MIME structure can be tested without opening a socket.
+     * Dot-stuffing is applied by send() at the SMTP boundary, not here.
+     */
+    public static function message(string $to,string $subject,string $body,string $from,string $fromName,?string $messageId=null): string {
+        $messageId ??= bin2hex(random_bytes(16)).'@'.preg_replace('/[^a-z0-9.-]/','',Security::domain());
+        $boundary = '=_kb_'.bin2hex(random_bytes(12));
+        $html = MailTemplate::html($subject,$body,$to);
+        $plain = preg_replace('/\r?\n/',"\r\n",str_replace(["\r\n","\r"],"\n",$body)) ?? $body;
+        $quoted = preg_replace('/\r?\n/',"\r\n",quoted_printable_encode($html)) ?? '';
+        $headers = [
+            'Date: '.date('r'),
+            'From: '.self::encodeHeader($fromName).' <'.$from.'>',
+            'To: <'.$to.'>',
+            'Subject: '.self::encodeHeader($subject),
+            'Message-ID: <'.$messageId.'>',
+            'MIME-Version: 1.0',
+            'Content-Type: multipart/alternative; boundary="'.$boundary.'"',
+            'Auto-Submitted: auto-generated',
+            'X-Auto-Response-Suppress: All',
+        ];
+        $payload = "--{$boundary}\r\n"
+            ."Content-Type: text/plain; charset=UTF-8\r\n"
+            ."Content-Transfer-Encoding: 8bit\r\n\r\n"
+            .$plain."\r\n"
+            ."--{$boundary}\r\n"
+            ."Content-Type: text/html; charset=UTF-8\r\n"
+            ."Content-Transfer-Encoding: quoted-printable\r\n\r\n"
+            .$quoted."\r\n"
+            ."--{$boundary}--\r\n";
+        return implode("\r\n",$headers)."\r\n\r\n".$payload;
+    }
+
+    /**
+     * SMTP transparency: a line beginning with a dot is doubled on the wire and
+     * the receiving server removes the extra dot. Public for the unit tests.
+     */
+    public static function stuff(string $message): string {
+        return preg_replace('/^\./m','..',$message) ?? $message;
     }
 
     private static function ehlo($stream): array {

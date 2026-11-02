@@ -15,6 +15,7 @@ import asyncio
 import base64
 import json
 import os
+import quopri
 import socket
 import socketserver
 import subprocess
@@ -115,6 +116,17 @@ class ScriptedHandler(socketserver.StreamRequestHandler):
                 self.reply(b"250 OK\r\n")
 
 
+def html_part(raw: bytes) -> str:
+    """Decode the quoted-printable text/html part from the raw DATA payload."""
+    marker = b"Content-Type: text/html; charset=UTF-8"
+    start = raw.index(marker)
+    body = raw[start:].split(b"\r\n\r\n", 1)[1]
+    end = body.find(b"\r\n--")
+    if end != -1:
+        body = body[:end]
+    return quopri.decodestring(body).decode("utf-8", "replace")
+
+
 def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -172,8 +184,17 @@ async def main():
     check(sender == "notifications@example.test", "envelope sender", sender)
     check(recipients == ["recipient@example.test"], "envelope recipient", recipients)
     check(b"Subject: =?UTF-8?B?" in content, "Unicode subject is encoded", content[:200])
-    check(b"..Second line" in content, "leading dots are stuffed", content[-120:])
+    check(b"\r\n.Second line" in content, "a leading dot reaches the server unaltered", content[-160:])
     check("Ẹ̀kọ́".encode() in content, "Unicode body survives", content[-120:])
+    check(b"Content-Type: multipart/alternative" in content, "message is multipart/alternative", content[:400])
+    check(b"Auto-Submitted: auto-generated" in content, "message is marked automated", content[:400])
+    designed = html_part(content)
+    check("<!doctype html>" in designed.lower(), "HTML part is a full document", designed[:120])
+    check('role="presentation"' in designed, "HTML layout is table-based", designed[:200])
+    check("KINGDOMBUILDERS" in designed, "HTML part carries the site brand", designed[:400])
+    check("prefers-color-scheme:dark" in designed, "HTML part supports dark mode")
+    check("Unicode: Ẹ̀kọ́" in designed, "HTML part carries the message body")
+    check(".kb-h1{" in designed and ".kb-btn-a{" in designed, "HTML styles survive the transfer encoding")
 
     # 2. Authenticated server advertising AUTH LOGIN PLAIN: PLAIN is used.
     authed = Capture()

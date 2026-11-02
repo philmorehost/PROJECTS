@@ -5,7 +5,10 @@ $test = $test ?? null;
 ?>
 <section class="page-heading">
   <div><span class="eyebrow">KEEP EVERYONE IN THE LOOP</span><h1>A reliable connection.</h1><p>Deliver account confirmations, security notices and learning updates through your email provider.</p></div>
-  <a class="button secondary" href="<?= e(url('admin/notifications')) ?>">View notification queue →</a>
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <a class="button secondary" href="<?= e(url('admin/notifications')) ?>">View notification queue →</a>
+    <a class="text-link" href="<?= e(url('admin/smtp/preview')) ?>" target="_blank" rel="noopener">Preview email design ↗</a>
+  </div>
 </section>
 
 <?php if ($error): ?><div class="notice error" role="alert"><p><strong>Settings were not saved.</strong> <?= e($error) ?></p></div><?php endif; ?>
