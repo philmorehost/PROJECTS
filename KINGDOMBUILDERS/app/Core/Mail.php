@@ -43,6 +43,25 @@ final class Mail {
         return $stats;
     }
 
+    /** Attempt one specific queued message immediately and report the real result. */
+    public static function deliver(int $id): array {
+        $mail = DB::one('SELECT * FROM mail_queue WHERE id=?', [$id]);
+        if (!$mail) return ['ok'=>false,'message'=>'That message no longer exists.'];
+        if ($mail['status'] === 'sent') return ['ok'=>true,'message'=>'That message was already delivered.'];
+        if (!Settings::get('smtp_enabled')) return ['ok'=>false,'message'=>'SMTP delivery is disabled. Enable it on Email & SMTP first.'];
+        $token = bin2hex(random_bytes(16));
+        DB::run('UPDATE mail_queue SET status="processing",lease_token=?,leased_at=?,attempts=attempts+1 WHERE id=?', [$token,now(),$id]);
+        try {
+            self::send($mail['recipient'],$mail['subject'],$mail['body']);
+            DB::run('UPDATE mail_queue SET status="sent",deliveries=deliveries+1,sent_at=?,lease_token=NULL,leased_at=NULL,last_error=NULL WHERE id=?', [now(),$id]);
+            return ['ok'=>true,'message'=>'Delivered to '.$mail['recipient'].'.'];
+        } catch (\Throwable $e) {
+            $safe = $e instanceof MailError ? $e->getMessage() : 'Delivery could not be completed. Check the server error log.';
+            DB::run('UPDATE mail_queue SET status=? ,available_at=?,lease_token=NULL,leased_at=NULL,last_error=? WHERE id=?', ['failed',now(),mb_substr($safe,0,240),$id]);
+            return ['ok'=>false,'message'=>$safe];
+        }
+    }
+
     /** Synchronous, administrator-initiated test. Does not depend on cron or the queue. */
     public static function sendTest(string $to): array {
         if (!Settings::get('smtp_enabled')) throw new MailError('SMTP delivery is disabled. Enable and save SMTP settings first.','configuration',null,false);

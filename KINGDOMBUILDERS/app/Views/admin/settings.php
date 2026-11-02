@@ -13,7 +13,6 @@
     </div>
     <label>Tagline<input name="site_tagline" maxlength="200" value="<?= e($settings['site_tagline']) ?>"></label>
     <label class="check-label"><input type="checkbox" name="registration_open" value="1" <?= $settings['registration_open'] ? 'checked' : '' ?>> Allow new member registrations</label>
-    <label class="check-label"><input type="checkbox" name="large_text" value="1" <?= $settings['large_text'] ? 'checked' : '' ?>> Use extra-large text across the whole site <small>Turn this on if members and administrators find text too small. Everything scales up about 12%.</small></label>
     <a class="text-link" href="<?= e(url('admin/authorization')) ?>">Manage site access →</a>
   </section>
 
@@ -33,7 +32,13 @@
     <div class="notice info">Keep practice feedback off for assessments. Focus-change signals are advisory and cannot prevent use of another device.</div>
   </section>
 
-  <div class="form-actions sticky-actions"><button class="button fit">Save settings</button><a class="text-link" href="<?= e(url('admin/smtp')) ?>">Email &amp; SMTP settings →</a></div>
+  <section class="panel">
+    <h2>Reading comfort</h2>
+    <p class="muted">The site already uses large, high-contrast text. Turn this on if your community wants everything even bigger; readers can also choose A / A+ / A++ in the footer.</p>
+    <label class="check-label"><input type="checkbox" name="large_text" value="1" <?= $settings['large_text'] ? 'checked' : '' ?>> Use extra-large text across the whole site <small>Sets the base text to 21.5px instead of 19px. Each reader's own footer choice still takes priority.</small></label>
+  </section>
+
+  <div class="form-actions sticky-actions"><button class="button fit">Save settings</button><a class="text-link" href="<?= e(url('admin/cron')) ?>">Cron job →</a><a class="text-link" href="<?= e(url('admin/smtp')) ?>">Email &amp; SMTP →</a></div>
 </form>
 
 <?php

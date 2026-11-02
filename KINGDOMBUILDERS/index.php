@@ -37,7 +37,15 @@ try {
     }
     if ($route === 'health') {
         if (installed()) \KB\DB::value('SELECT 1');
-        json_response(['status'=>'ok']);
+        json_response(['status'=>'ok','build'=>\KB\VERSION,'php'=>PHP_VERSION]);
+    }
+    if ($route === 'text-size') {
+        Security::check();
+        $size = in_array(post('size'), ['standard','large','xlarge'], true) ? post('size') : 'standard';
+        setcookie('kb_text', $size, ['expires'=>time()+31536000,'path'=>(\KB\base_path()?:'/'),'secure'=>Security::requestHttps(),'httponly'=>true,'samesite'=>'Lax']);
+        $back = post('back');
+        if ($back === '' || !str_starts_with($back,'/') || str_starts_with($back,'//') || preg_match('/[\r\n]/', $back)) $back = url();
+        header('Location: ' . $back, true, 303); exit;
     }
     if (!installed() && $route !== 'install') redirect('install');
     if ($route === 'install') Installer::handle();

@@ -362,3 +362,64 @@ code{font-size:.94em}
 @media(prefers-reduced-motion:reduce){
   .cron-help summary span:last-child{transition:none}
 }
+
+/* ── Readability pass 3 ──────────────────────────────────────────────────────
+   Default text is now 19px (21.5px with the administrator's large-text
+   setting). Readers can also choose A / A+ / A++ in the footer; the choice is
+   stored in a cookie so it applies to every page, including the quiz. */
+html{font-size:19px}
+html.text-large{font-size:21.5px}
+html.text-large.text-xlarge{font-size:24px}
+html.text-xlarge{font-size:24px}
+body{font-size:1rem;line-height:1.75}
+p{font-size:1rem;line-height:1.78}
+small{font-size:.93rem;line-height:1.62}
+label{font-size:1rem}
+label small{font-size:.92rem}
+input:not([type=checkbox]),select,textarea{font-size:1.06rem;min-height:54px}
+.check-label{font-size:1rem}
+.notice{font-size:1.02rem}
+.notice p{font-size:.98rem}
+table{font-size:1.02rem}
+th{font-size:.9rem}
+td small{font-size:.9rem}
+.badge{font-size:.86rem}
+.site-footer{font-size:.94rem}
+.admin-nav a{font-size:1rem}
+.button{font-size:1rem}
+.button.small{font-size:.94rem}
+.text-link{font-size:1rem}
+.eyebrow{font-size:.86rem}
+.muted{font-size:1rem}
+.stat-card>span{font-size:1rem}
+.stat-card>small{font-size:.92rem}
+.activity-list strong{font-size:1.02rem}
+.activity-list small{font-size:.9rem}
+.answer{font-size:1.06rem}
+.quiz-card h1{font-size:2.3rem}
+.review-options>div{font-size:1rem}
+.review-options small{font-size:.86rem}
+.quiz-facts>span{font-size:.92rem}
+.start-card>p,.quiz-start-card>p,.member-note p{font-size:1.02rem}
+.copy-field code{font-size:1.02rem}
+.cron-facts span,.cron-status>div span{font-size:.88rem}
+.cron-status>div strong{font-size:1.1rem}
+.cron-steps li{font-size:1rem}
+.help-panel p{font-size:1rem}
+.help-grid h3{font-size:1.16rem}
+.actions-cell{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.muted-button{color:var(--muted)}
+
+/* Footer text-size control */
+.site-footer .shell{flex-wrap:wrap;row-gap:12px}
+.text-size-form{display:flex;align-items:center;gap:6px;margin:0}
+.text-size-form>span{font-size:.9rem;color:var(--muted);margin-right:4px}
+.text-size-form button{min-width:44px;min-height:38px;border:1px solid var(--line);background:#fff;border-radius:7px;font-weight:700;font-size:.95rem;color:var(--ink);padding:0 10px;line-height:1}
+.text-size-form button:hover{border-color:var(--green);color:var(--green)}
+.text-size-form button.is-active{background:var(--navy);border-color:var(--navy);color:#fff}
+@media(max-width:560px){
+  html{font-size:18.5px}
+  html.text-large{font-size:21px}
+  html.text-xlarge,html.text-large.text-xlarge{font-size:22.5px}
+  .text-size-form>span{display:none}
+}

@@ -27,15 +27,23 @@
 <section class="panel">
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Message</th><th>Status</th><th>Attempts</th><th>Created (UTC)</th><th>Action</th></tr></thead>
+      <thead><tr><th>Message</th><th>Status</th><th>Attempts</th><th>Created (UTC)</th><th>Actions</th></tr></thead>
       <tbody>
-      <?php foreach ($mails as $mail): ?>
+      <?php foreach ($mails as $mail): $pending = in_array($mail['status'], ['pending','processing'], true); $retrying = $pending && (int)$mail['attempts'] > 0; ?>
         <tr>
           <td><strong><?= e($mail['subject']) ?></strong><small><?= e($mail['recipient']) ?></small><?php if ($mail['last_error']): ?><small class="danger-text"><?= e($mail['last_error']) ?></small><?php endif; ?></td>
-          <td><span class="badge <?= $mail['status'] === 'sent' ? 'green' : ($mail['status'] === 'failed' ? 'red' : 'neutral') ?>"><?= e(ucfirst($mail['status'])) ?></span></td>
+          <td>
+            <span class="badge <?= $mail['status'] === 'sent' ? 'green' : ($mail['status'] === 'failed' ? 'red' : 'neutral') ?>"><?= $retrying ? 'Retrying' : e(ucfirst($mail['status'])) ?></span>
+            <?php if ($retrying): ?><small>Next attempt <?= e($mail['available_at']) ?> UTC</small><?php endif; ?>
+          </td>
           <td><?= (int)$mail['attempts'] ?><small><?= (int)$mail['deliveries'] ?> successful</small></td>
           <td><?= e($mail['created_at']) ?></td>
-          <td><?php if ($mail['status'] === 'failed'): ?><form method="post"><?= Security::csrfField() ?><input type="hidden" name="id" value="<?= (int)$mail['id'] ?>"><button name="action" value="retry" class="inline-button">Retry delivery</button></form><?php endif; ?></td>
+          <td class="actions-cell">
+            <?php if ($mail['status'] !== 'sent'): ?>
+              <form method="post"><?= Security::csrfField() ?><input type="hidden" name="id" value="<?= (int)$mail['id'] ?>"><button name="action" value="deliver" class="inline-button">Send now</button></form>
+              <form method="post"><?= Security::csrfField() ?><input type="hidden" name="id" value="<?= (int)$mail['id'] ?>"><button name="action" value="retry" class="inline-button muted-button">Requeue</button></form>
+            <?php endif; ?>
+          </td>
         </tr>
       <?php endforeach; ?>
       </tbody>

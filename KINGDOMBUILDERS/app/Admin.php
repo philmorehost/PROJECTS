@@ -94,6 +94,20 @@ final class Admin {
             $results=DB::all('SELECT a.*,u.name,u.email FROM attempts a JOIN users u ON u.id=a.user_id WHERE a.status<>"active" ORDER BY a.started_at DESC LIMIT 20 OFFSET '.$offset);
             render('admin/results',['results'=>$results,'page'=>$page,'pages'=>$pages]);
         }
+        if($route==='admin/cron') {
+            if(is_post()) {
+                try {
+                    Security::check();
+                    $path=trim((string)post('php_cli_path'));
+                    $values=Settings::validate(array_merge(Settings::all(),['php_cli_path'=>$path]),false);
+                    Settings::put('php_cli_path',$values['php_cli_path']);
+                    Audit::activity('settings.cron_path_updated','site',1);
+                    flash('PHP path saved. Copy the command again to use it.');
+                } catch(UserError $e) { $error=$e->getMessage(); }
+                redirect('admin/cron');
+            }
+            render('admin/cron',['cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'error'=>null]);
+        }
         if($route==='admin/settings' || $route==='admin/smtp') {
             $smtp=$route==='admin/smtp';
             $test=null; $saved=false;
@@ -150,6 +164,15 @@ final class Admin {
                     catch(MailError|UserError $e) { $testError=$e->getMessage(); Audit::activity('settings.smtp_tested','site',1,['ok'=>false]); }
                     catch(\Throwable $e) { error_log('KB SMTP test: '.get_class($e)); $testError='The test could not be completed. Check the server error log and try again.'; }
                 }
+                elseif($action==='deliver') {
+                    Security::throttle('mail.deliver',Security::sourceHash(),20);
+                    @set_time_limit(30);
+                    $id=(int)post('id');
+                    $result=Mail::deliver($id);
+                    flash($result['message'],$result['ok']?'success':'error');
+                    Audit::activity('notification.delivered_now','notification',$id,['ok'=>$result['ok']]);
+                    if(!$result['ok']) { $testError=$result['message']; render('admin/notifications',['mails'=>DB::all('SELECT id,recipient,subject,status,deliveries,attempts,available_at,last_error,sent_at,created_at FROM mail_queue ORDER BY id DESC LIMIT 20'),'page'=>1,'pages'=>1,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'testError'=>$testError,'queued'=>(int)DB::value('SELECT COUNT(*) FROM mail_queue WHERE status IN ("pending","processing")')]); }
+                }
                 elseif($action==='retry') { $id=(int)post('id'); DB::transaction(static function () use($id): void { DB::run('UPDATE mail_queue SET status="pending",attempts=0,available_at=?,last_error=NULL,lease_token=NULL,leased_at=NULL WHERE id=? AND status="failed"',[now(),$id]); Audit::activity('notification.retried','notification',$id); }); flash('Notification queued for retry.'); }
                 elseif($action==='process') {
                     Security::throttle('mail.process',Security::sourceHash(),6);
@@ -159,7 +182,7 @@ final class Admin {
                     flash($summary,$stats['failed']>0?'error':'success');
                 }
                 else throw new UserError('Unknown action.');
-                if($action!=='test' || !$testError) redirect('admin/notifications');
+                if(!in_array($action,['test','deliver'],true) || !$testError) redirect('admin/notifications');
             }
             [$page,$pages,$offset]=paginate((int)DB::value('SELECT COUNT(*) FROM mail_queue'));
             $mails=DB::all('SELECT id,recipient,subject,status,deliveries,attempts,available_at,last_error,sent_at,created_at FROM mail_queue ORDER BY id DESC LIMIT 20 OFFSET '.$offset);

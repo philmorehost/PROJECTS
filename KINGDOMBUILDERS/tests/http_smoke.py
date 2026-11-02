@@ -73,7 +73,7 @@ ok(code == 200 and "Build your knowledge" in html and "Active questions" in html
 admin = Client()
 ok(admin.post("/login", {"email": os.environ["KB_ADMIN_EMAIL"], "password": os.environ["KB_ADMIN_PASSWORD"]})[1].endswith("/admin"), "administrator login")
 ok("pass rate" in admin.get("/admin")[2], "admin dashboard insights render")
-for path in ["/admin", "/admin/questions", "/admin/users", "/admin/results", "/admin/settings", "/admin/smtp", "/admin/notifications", "/admin/audit"]:
+for path in ["/admin", "/admin/questions", "/admin/users", "/admin/results", "/admin/settings", "/admin/smtp", "/admin/cron", "/admin/notifications", "/admin/audit"]:
     code, _, html = admin.get(path)
     ok(code == 200 and "Temporarily unavailable" not in html, "admin page " + path)
 smtp_form = {"smtp_enabled": "1", "smtp_host": "mail.example.test", "smtp_port": "587", "smtp_security": "tls", "smtp_username": "postmaster@example.test", "smtp_password": "Very-Secret-App-Password-1", "from_name": "KINGDOMBUILDERS", "from_email": "notifications@example.test", "php_cli_path": "", "action": "save"}
@@ -95,6 +95,9 @@ site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the W
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "save quiz settings")
 html = admin.get("/admin/settings")[2]
 ok("cron-command" in html and "Copy command" in html, "settings page offers the copyable cron command")
+html = admin.get("/admin/cron")[2]
+ok("Copy command" in html and "How to add this cron job" in html and "KB_CONFIG_DIR" in html, "dedicated cron page gives copyable command and instructions")
+ok('"build"' in public.get("/health")[2], "health reports the deployed build")
 ok(admin.post("/admin/settings", dict(site_settings, large_text="1"))[0] == 200, "enable extra-large text")
 ok('class="text-large"' in public.get("/")[2], "extra-large text applies site-wide")
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "restore standard text")
