@@ -22,7 +22,7 @@ final class Installer {
         register_shutdown_function(static function () use ($lock): void { flock($lock,LOCK_UN); fclose($lock); });
         if (installed()) {
             if (!empty($_SESSION['install_complete'])) { unset($_SESSION['install_complete']); render('install/ready',['title'=>'Your community is ready']); }
-            http_response_code(404); render('errors/message',['heading'=>'This page is unavailable','message'=>'Setup has already been completed. Sign in to continue.']);
+            render('errors/message',['heading'=>'This page is unavailable','message'=>'Setup has already been completed. Sign in to continue.'],404);
         }
         $state = self::state();
         $step = (int)$state['step'];
