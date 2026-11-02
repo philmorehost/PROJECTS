@@ -1,0 +1,4 @@
+# Install for a dedicated non-login service user. Adjust paths and PHP binary.
+# The worker is safe to overlap: a private flock skips duplicate runs, and
+# queue claims are leased. Run every minute; monitor failures and queue age.
+* * * * * /usr/bin/php /var/www/kingdombuilders/bin/worker.php >> /var/log/kingdombuilders/worker.log 2>&1

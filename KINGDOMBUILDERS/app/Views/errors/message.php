@@ -1,0 +1,1 @@
+<?php use function KB\{e,url}; ?><section class="message-panel"><span class="eyebrow">KINGDOMBUILDERS</span><h1><?= e($heading) ?></h1><p><?= e($message) ?></p><a class="button" href="<?= e(url()) ?>">Back to safety <span aria-hidden="true">→</span></a></section>

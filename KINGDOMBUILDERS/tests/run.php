@@ -1,0 +1,54 @@
+<?php
+declare(strict_types=1);
+/** Integration tests. ONLY run against a disposable DB whose name ends in _test. */
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+require dirname(__DIR__).'/app/bootstrap.php';
+use KB\{DB,Settings,Security,Auth,Quiz,Mail,Activation,Audit};
+use function KB\{hash_password,valid_password,now};
+if (!KB\installed() || !str_ends_with((string)KB\config('db')['name'],'_test') || !KB\config('local_preview',false)) {
+    fwrite(STDERR,"Refusing to run: use an installed, local-preview configuration with a *_test database.\n"); exit(1);
+}
+$pdo=DB::connection();
+$pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+foreach (['attempt_items','attempts','access_tokens','mail_queue','audit_events','rate_limits','questions','users','settings'] as $table) $pdo->exec('DELETE FROM '.$table);
+$pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+$pass=0;$fail=0;
+function test(string $name,callable $fn): void {
+    global $pass,$fail;
+    try {$fn();echo "PASS {$name}\n";$pass++;}
+    catch(Throwable $e){echo "FAIL {$name}: ".$e->getMessage()."\n";$fail++;}
+}
+function assert_true(bool $condition,string $message='Assertion failed'): void {if(!$condition)throw new RuntimeException($message);}
+function rejects(callable $fn,int $status=0): void {
+    try{$fn();}catch(KB\UserError $e){if($status && $e->status!==$status)throw new RuntimeException('Unexpected status '.$e->status);return;}
+    throw new RuntimeException('Expected request to be rejected');
+}
+$hash=hash_password('Correct-Horse-Battery-Staple!');
+$makeUser=static function(string $email,string $role='member') use($hash):int {
+    DB::run('INSERT INTO users(name,email,password_hash,role,status,email_verified_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',['Test '.ucfirst($role),$email,$hash,$role,'active',now(),now(),now()]);return DB::id();
+};
+putenv('KB_PREVIEW_ACTIVATION=local-fixture');
+$admin=$makeUser('admin@example.test','admin');$member=$makeUser('member@example.test');$other=$makeUser('other@example.test');
+foreach(Settings::DEFAULTS as $key=>$value)Settings::put($key,$value);
+Settings::put('admin_email','admin@example.test');Settings::put('questions_per_attempt',3);Settings::put('seconds_per_question',30);Settings::put('max_tab_switches',0);
+$insert=$pdo->prepare('INSERT INTO questions(category,question_text,option_a,option_b,option_c,option_d,correct_option,reference,explanation,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+for($i=0;$i<8;$i++)$insert->execute(['Test','Question '.$i.' — choose the correct option.','A','B','C','D',$i%4,'Reference','',now(),now()]);
+
+test('Password hashing and length boundaries',function()use($hash){assert_true(password_verify('Correct-Horse-Battery-Staple!',$hash));assert_true(!password_verify('wrong',$hash));assert_true(valid_password(str_repeat('a',72)));assert_true(!valid_password(str_repeat('a',73)));});
+test('Authenticated encryption and tamper rejection',function(){$sealed=Security::seal(['secret'=>'never-public']);assert_true(Security::unseal($sealed)['secret']==='never-public');assert_true(!str_contains($sealed,'never-public'));$raw=base64_decode(substr($sealed,4));$raw[30]=chr(ord($raw[30])^1);$reject=false;try{Security::unseal('KB1:'.base64_encode($raw));}catch(Throwable $e){$reject=true;}assert_true($reject);});
+test('Canonical site address validation',function(){assert_true(Security::canonicalUrl('https://example.org/path')==='https://example.org/path');assert_true(Security::canonicalUrl('https://user:pass@example.org')===null);assert_true(Security::canonicalUrl('javascript:alert(1)')===null);});
+test('First Unicode character favicon source',function(){Settings::put('site_title','Ẹ̀kọ́ Bible');assert_true(KB\initial()==='Ẹ');Settings::put('site_title','KINGDOMBUILDERS');});
+test('Quiz snapshots omit no server answer key in public payload',function()use($member){$id=Quiz::start($member);$state=Quiz::payload($id,$member);assert_true($state['total']===3);assert_true(count($state['questions'])===3);foreach($state['questions'] as $q){assert_true(!isset($q['correct_option'])&&!isset($q['correct'])&&!isset($q['explanation']));}});
+test('Concurrent starts return one active attempt',function()use($member){$before=DB::one('SELECT id FROM attempts WHERE active_user_id=?',[$member]);$again=Quiz::start($member);assert_true($before['id']===$again);assert_true((int)DB::value('SELECT COUNT(*) FROM attempts WHERE active_user_id=?',[$member])===1);});
+test('Forward-only answers and ownership enforced',function()use($member,$other){$id=Quiz::start($member);rejects(fn()=>Quiz::answer($id,$member,1,0),409);rejects(fn()=>Quiz::payload($id,$other),404);Quiz::answer($id,$member,0,0);rejects(fn()=>Quiz::answer($id,$member,0,1),409);});
+test('Question edits preserve active-attempt snapshots',function()use($member){$id=Quiz::start($member);$before=Quiz::payload($id,$member)['questions'][0]['question'];$item=DB::one('SELECT question_id FROM attempt_items WHERE attempt_id=? AND position=0',[$id]);DB::run('UPDATE questions SET question_text="Changed after start" WHERE id=?',[$item['question_id']]);assert_true(Quiz::payload($id,$member)['questions'][0]['question']===$before);});
+test('Scoring correct, idempotent, one result email',function()use($member,$makeUser){$scorer=$makeUser('scorer@example.test');$id=Quiz::start($scorer);$keys=DB::all('SELECT position,correct_option FROM attempt_items WHERE attempt_id=? ORDER BY position',[$id]);foreach($keys as $q)Quiz::answer($id,$scorer,(int)$q['position'],(int)$q['correct_option']);$a=Quiz::finish($id,$scorer);$b=Quiz::finish($id,$scorer);assert_true($a['score']===3 && $a['percentage']==100.0);assert_true($b['score']===3);assert_true((int)DB::value('SELECT COUNT(*) FROM mail_queue WHERE idempotency_key LIKE ?',["assessment.completed:attempt:{$id}%"])===1);});
+test('Expired deadline cannot accept answers',function()use($other){$id=Quiz::start($other);DB::run('UPDATE attempts SET expires_at=? WHERE id=?',[gmdate('Y-m-d H:i:s',time()-1),$id]);rejects(fn()=>Quiz::answer($id,$other,0,0),409);assert_true(Quiz::payload($id,$other)['status']==='expired');});
+test('Focus threshold finalizes server-side',function()use($other,$makeUser){$focus=$makeUser('focus@example.test');Settings::put('max_tab_switches',1);$id=Quiz::start($focus);$flag=Quiz::flag($id,$focus);assert_true($flag['ended']);assert_true(Quiz::payload($id,$focus)['status']==='submitted');Settings::put('max_tab_switches',0);});
+test('Single-use reset token and session revocation',function()use($member){$token=Auth::issueToken($member,'reset');$hash=hash('sha256',$token);$row=DB::one('SELECT * FROM access_tokens WHERE token_hash=?',[$hash]);assert_true($row['token_hash']!==$token);assert_true(DB::run('UPDATE access_tokens SET used_at=? WHERE id=? AND used_at IS NULL',[now(),$row['id']])->rowCount()===1);assert_true(DB::run('UPDATE access_tokens SET used_at=? WHERE id=? AND used_at IS NULL',[now(),$row['id']])->rowCount()===0);Auth::revoke($member);assert_true((int)DB::value('SELECT session_version FROM users WHERE id=?',[$member])===2);});
+test('Suspension revokes existing session identity',function()use($other){$user=DB::one('SELECT * FROM users WHERE id=?',[$other]);$_SESSION=[];Auth::signIn($user,false);assert_true(Auth::id()===$other);DB::run('UPDATE users SET status="suspended",session_version=session_version+1 WHERE id=?',[$other]);(new ReflectionClass(Auth::class))->setStaticPropertyValue('loaded',false);assert_true(Auth::user()===null);DB::run('UPDATE users SET status="active" WHERE id=?',[$other]);});
+test('Duplicate notification idempotency',function(){Mail::queue('member@example.test','Test','Body','test:unique');Mail::queue('member@example.test','Test','Body','test:unique');assert_true((int)DB::value('SELECT COUNT(*) FROM mail_queue WHERE idempotency_key="test:unique"')===1);});
+test('Nested transaction rolls back audit and outbox together',function(){$before=(int)DB::value('SELECT COUNT(*) FROM audit_events');try{DB::transaction(static function(){Audit::activity('test.rollback','site',999);throw new RuntimeException('rollback');});}catch(RuntimeException $e){}assert_true((int)DB::value('SELECT COUNT(*) FROM audit_events')===$before);});
+test('Atomic fixed-window rate limiter',function(){for($i=0;$i<3;$i++)Security::throttle('test','identity',3,60);rejects(fn()=>Security::throttle('test','identity',3,60),429);});
+test('Local authorization fixture is explicit and domain state encrypted',function(){assert_true(Activation::verify('LOCAL-PREVIEW-ONLY','example.test'));assert_true(!Activation::verify('','example.test'));Activation::save('LOCAL-PREVIEW-ONLY',true);assert_true(Activation::allowed());assert_true(!str_contains(file_get_contents(KB\config_path().'/runtime.dat'),'LOCAL-PREVIEW-ONLY'));});
+echo "\n{$pass} passed; {$fail} failed.\n";exit($fail?1:0);

@@ -1,0 +1,6 @@
+# Runtime state belongs outside the web root, never in source control.
+/kb-private-*/
+*.log
+*.dat.tmp
+/site.php
+/coverage/
