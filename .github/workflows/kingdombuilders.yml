@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: kingdombuilders-${{ github.ref }}
@@ -86,14 +87,22 @@ jobs:
           php -S 127.0.0.1:8080 router.php > "$RUNNER_TEMP/kb-http.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/kb-http.pid"
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && break || sleep 1; done
-          python3 tests/http_smoke.py
+          set -o pipefail
+          python3 tests/http_smoke.py 2>&1 | tee "$RUNNER_TEMP/http-smoke.log"
           KB_MEMBER_ID=$(php tests/seed_member.php "$KB_MEMBER_EMAIL" "$KB_MEMBER_PASSWORD")
           export KB_MEMBER_ID
           unset KB_INSTALL
-          python3 tests/http_smoke.py
+          python3 tests/http_smoke.py 2>&1 | tee -a "$RUNNER_TEMP/http-smoke.log"
       - name: Server log on failure
         if: failure()
         run: cat "$RUNNER_TEMP/kb-http.log" || true
+      - name: Temporary CI debug comment
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "### CI debug (${{ matrix.php }})"; echo '```'; tail -c 60000 "$RUNNER_TEMP/http-smoke.log" 2>/dev/null || true; echo '--- server ---'; tail -c 20000 "$RUNNER_TEMP/kb-http.log" 2>/dev/null || true; echo '```'; } > "$RUNNER_TEMP/comment.md"
+          gh api repos/philmorehost/PROJECTS/issues/5/comments -F body=@"$RUNNER_TEMP/comment.md"
       - name: Stop test server
         if: always()
         run: if [ -f "$RUNNER_TEMP/kb-http.pid" ]; then kill "$(cat "$RUNNER_TEMP/kb-http.pid")" || true; fi
