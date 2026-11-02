@@ -151,3 +151,22 @@ keyboard, finish) and the HTTP smoke suite extended with lock/idempotency/refusa
 Verification: PHP lint, CSS parse, `tests/dock_render.php` (no database: start form + CSRF,
 resume link, closed state, active tab, administrator variant, icon/label counts) and HTTP smoke
 assertions for the dock on member, administrator and signed-out pages.
+
+### Build 0.7.1: SMTP authentication repaired
+
+- **Every authenticated mailbox was rejected** with “The server does not offer a supported
+  AUTH method (PLAIN/LOGIN)”, even with correct credentials. The EHLO reader kept the SMTP
+  reply code in the capability name (`250-AUTH` instead of `AUTH`), so `AUTH` — and
+  `STARTTLS` — were never detected. The code is now stripped before parsing, `AUTH=PLAIN LOGIN`
+  is accepted, and mechanisms split over several lines are merged.
+- **Smarter sign-in:** PLAIN is preferred (one round trip) and LOGIN is the fallback; servers
+  that hide AUTH are probed. `530`/`538` report that TLS is required first, `535` reports bad
+  credentials, and a provider offering only CRAM-MD5/XOAUTH2 names that mechanism instead of
+  a generic message. Passwords are never placed in an error message.
+- Tests: `tests/mail_parse.php` (no database) covers real reply lines, `AUTH=`, multi-line
+  and lower-case replies plus mechanism choice; the socket fixture now requires authentication
+  (PLAIN and LOGIN), checks a refused password yields stage `auth`, code `535` and no secret,
+  and that an XOAUTH2-only server explains itself.
+
+Verification: PHP lint, the parsing suite, the five-server socket fixture, and the existing
+integration/HTTP suites in CI.

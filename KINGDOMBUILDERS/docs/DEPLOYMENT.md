@@ -129,6 +129,11 @@ password, sender address/name and administrator notification address.
 - Notifications are queued transactionally with the activity that produced them.
   Delivery is at-least-once: an ambiguous failure after SMTP acceptance can duplicate a
   message on retry. Idempotency keys prevent duplicate queue rows, not remote duplicates.
+- Capability parsing: the reply code is stripped before EHLO capabilities are read, so
+  `250-AUTH PLAIN LOGIN`, `250-AUTH=LOGIN PLAIN`, lower-case replies and AUTH split over
+  several lines are all understood. PLAIN is preferred, LOGIN is the fallback, and when a
+  server hides AUTH the client probes both. A provider that offers only CRAM-MD5/XOAUTH2
+  is named in the error instead of a generic failure.
 - Common rejection causes: host entered with `https://` or a port; wrong port/security
   pair (587 STARTTLS vs 465 implicit TLS); normal password instead of an app password;
   From address not authorized by the provider; outbound SMTP blocked by the host.

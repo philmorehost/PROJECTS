@@ -60,6 +60,9 @@ jobs:
       - name: Mobile dock rendering
         working-directory: KINGDOMBUILDERS
         run: bash tests/ci-run.sh php tests/dock_render.php
+      - name: SMTP capability parsing
+        working-directory: KINGDOMBUILDERS
+        run: bash tests/ci-run.sh php tests/mail_parse.php
       - name: Prepare disposable databases
         run: |
           mysql -h127.0.0.1 -uroot -pci-root-only -e 'CREATE DATABASE kingdombuilders_http_test; GRANT ALL ON kingdombuilders_http_test.* TO "root"@"%";'
