@@ -105,3 +105,24 @@ in the footer, and 19px base text.
 - Tests cover PKCE/URL construction, state replay and expiry, account linking,
   suspension, closed registration, settings validation, the redirect to Google and a
   forged callback — without contacting Google.
+
+### Build 0.6.0: final answers and a redesigned quiz
+
+- **Answers lock on save.** `Quiz::answer()` refuses any change once an option is stored and
+  returns `409` with a plain explanation; repeating the *same* choice succeeds so a network
+  retry can recover. Payloads now expose `locked` per question and the client renders saved
+  answers as read-only.
+- **`allow_back` now means "review earlier questions"**, not "change answers". The admin label
+  was updated; the stored key is unchanged, so no migration is needed.
+- **Rebuilt question and answer screen:** progress dots, answered counter, timer pill with a
+  thin time rail, category chip, lock badge, lettered answer cards with hover/focus states,
+  a persistent lock note, keyboard shortcuts (`1`–`4`, `Enter`) and a redesigned finish screen
+  with a score ring.
+- **Rebuilt result page:** pass/fail hero, SVG score ring, summary strip and per-question
+  review cards with correct/your-answer markers and references.
+- **Design v2 layer:** new token set, sticky translucent header, gradient buttons, softer
+  layered shadows, pill badges, rounded tables with sticky headers, pill admin navigation,
+  refreshed home hero and cards. Text sizes from the readability work are preserved.
+
+Verification: PHP lint, CSS tree validation, 23 jsdom UI checks (render, lock, revisit,
+keyboard, finish) and the HTTP smoke suite extended with lock/idempotency/refusal checks.

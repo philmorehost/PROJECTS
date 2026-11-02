@@ -59,10 +59,20 @@ final class Quiz {
     public static function payload(string $id,int $userId): array {
         $a=self::owned($id,$userId);
         if ($a['status']==='active' && $a['expires_at'] && strtotime($a['expires_at'].' UTC')<=time()) { self::finish($id,$userId,true); $a=self::owned($id,$userId); }
-        $items=DB::all('SELECT id,position,question_text,options_snapshot,answer,is_skipped,reference FROM attempt_items WHERE attempt_id=? ORDER BY position',[$id]);
+        $items=DB::all('SELECT ai.id,ai.position,ai.question_text,ai.options_snapshot,ai.answer,ai.is_skipped,ai.reference,q.category FROM attempt_items ai LEFT JOIN questions q ON q.id=ai.question_id WHERE ai.attempt_id=? ORDER BY ai.position',[$id]);
         $public=[];
         foreach ($items as $item) {
-            $public[]=['position'=>(int)$item['position'],'question'=>$item['question_text'],'options'=>json_decode($item['options_snapshot'],true),'answer'=>$item['is_skipped']?-1:($item['answer']===null?null:(int)$item['answer']),'reference'=>$item['reference']];
+            $answered=$item['answer']!==null || (int)$item['is_skipped']===1;
+            $public[]=[
+                'position'=>(int)$item['position'],
+                'question'=>$item['question_text'],
+                'options'=>json_decode($item['options_snapshot'],true),
+                'answer'=>(int)$item['is_skipped']?-1:($item['answer']===null?null:(int)$item['answer']),
+                'reference'=>$item['reference'],
+                'category'=>(string)($item['category']??''),
+                // An answer is final once saved: the client renders it as locked and the server refuses changes.
+                'locked'=>$answered,
+            ];
         }
         return ['id'=>$id,'status'=>$a['status'],'settings'=>json_decode($a['settings_snapshot'],true),'questions'=>$public,'server_time'=>time(),'expires_at'=>$a['expires_at']?strtotime($a['expires_at'].' UTC'):null,'score'=>(int)$a['score'],'total'=>(int)$a['total_questions'],'percentage'=>(float)$a['percentage'],'tab_switches'=>(int)$a['tab_switches']];
     }
@@ -75,12 +85,21 @@ final class Quiz {
             $settings=json_decode($a['settings_snapshot'],true);
             $item=DB::one('SELECT * FROM attempt_items WHERE attempt_id=? AND position=?',[$id,$position]);
             if (!$item) throw new UserError('Question not found.',404);
+            $alreadySaved=$item['answer']!==null || (int)$item['is_skipped']===1;
+            if ($alreadySaved) {
+                // Saved answers are final. A repeated identical request (network retry) succeeds
+                // so the client can recover; any different choice is refused.
+                if ($choice>=0 && $item['answer']!==null && (int)$item['answer']===$choice) {
+                    return ['saved'=>true,'locked'=>true,'unchanged'=>true,'feedback'=>$settings['practice_feedback']?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
+                }
+                throw new UserError('That answer is already saved and cannot be changed.',409);
+            }
             if (!$settings['allow_back']) {
                 $next=(int)DB::value('SELECT COALESCE(MIN(position),?) FROM attempt_items WHERE attempt_id=? AND answer IS NULL AND is_skipped=0',[$a['total_questions'],$id]);
                 if ($position!==$next) throw new UserError('Earlier answers cannot be changed in this assessment.',409);
             }
             DB::run('UPDATE attempt_items SET answer=?,is_skipped=?,answered_at=? WHERE id=?',[$choice<0?null:$choice,$choice<0?1:0,now(),$item['id']]);
-            return ['saved'=>true,'feedback'=>$settings['practice_feedback']?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
+            return ['saved'=>true,'locked'=>true,'feedback'=>$settings['practice_feedback']?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
         });
     }
     public static function flag(string $id,int $userId): array {
