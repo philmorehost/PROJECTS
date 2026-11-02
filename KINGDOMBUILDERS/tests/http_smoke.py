@@ -62,7 +62,8 @@ if os.environ.get("KB_INSTALL") == "1":
     for data in steps:
         code, url, html = c.post("/install", data)
         ok(code == 200 and "notice error" not in html, "installer step " + data["step"])
-    ok("Your community is ready" in c.get("/install")[2], "installer completion instructions")
+    code, url, html = c.get("/install")
+    ok("Your community is ready" in html, f"installer completion instructions (status={code}, url={url}, body={html[:400]!r})")
 
 admin = Client()
 ok(admin.post("/login", {"email": os.environ["KB_ADMIN_EMAIL"], "password": os.environ["KB_ADMIN_PASSWORD"]})[1].endswith("/admin"), "administrator login")
