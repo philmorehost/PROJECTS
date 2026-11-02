@@ -1,0 +1,494 @@
+[
+  {
+    "category": "Matthew",
+    "question": "In Matthew's genealogy of Jesus, who is named as Joseph's father?",
+    "options": [
+      "Jacob",
+      "Eli",
+      "Heli",
+      "Matthan"
+    ],
+    "correct": 0,
+    "reference": "Matthew 1"
+  },
+  {
+    "category": "Matthew",
+    "question": "What name did the angel tell Joseph to give Mary's child?",
+    "options": [
+      "John",
+      "Jesus",
+      "Emmanuel",
+      "Joshua"
+    ],
+    "correct": 1,
+    "reference": "Matthew 1"
+  },
+  {
+    "category": "Matthew",
+    "question": "Who came from the East to worship the infant Jesus, guided by a star?",
+    "options": [
+      "Shepherds",
+      "Roman soldiers",
+      "Wise men (Magi)",
+      "Pharisees"
+    ],
+    "correct": 2,
+    "reference": "Matthew 2"
+  },
+  {
+    "category": "Matthew",
+    "question": "What gifts did the visitors bring to the infant Jesus?",
+    "options": [
+      "Bread, wine, oil",
+      "Gold, frankincense, myrrh",
+      "Silver, wheat, honey",
+      "Linen, spices, coins"
+    ],
+    "correct": 1,
+    "reference": "Matthew 2"
+  },
+  {
+    "category": "Matthew",
+    "question": "Which king, troubled by news of a newborn king, ordered the killing of infants in Bethlehem?",
+    "options": [
+      "Herod",
+      "Pilate",
+      "Caesar Augustus",
+      "Archelaus"
+    ],
+    "correct": 0,
+    "reference": "Matthew 2"
+  },
+  {
+    "category": "Matthew",
+    "question": "Where did Joseph take Mary and the child to escape danger?",
+    "options": [
+      "Egypt",
+      "Babylon",
+      "Rome",
+      "Samaria"
+    ],
+    "correct": 0,
+    "reference": "Matthew 2"
+  },
+  {
+    "category": "Matthew",
+    "question": "Who baptized Jesus in the Jordan River?",
+    "options": [
+      "Peter",
+      "John the Baptist",
+      "Andrew",
+      "Philip"
+    ],
+    "correct": 1,
+    "reference": "Matthew 3"
+  },
+  {
+    "category": "Matthew",
+    "question": "How many days did Jesus fast in the wilderness before being tempted?",
+    "options": [
+      "7",
+      "12",
+      "40",
+      "100"
+    ],
+    "correct": 2,
+    "reference": "Matthew 4"
+  },
+  {
+    "category": "Matthew",
+    "question": "Where did Jesus deliver the famous teaching known as the Beatitudes?",
+    "options": [
+      "In the temple",
+      "On a mountainside",
+      "In a boat",
+      "In a synagogue"
+    ],
+    "correct": 1,
+    "reference": "Matthew 5"
+  },
+  {
+    "category": "Matthew",
+    "question": "According to the Beatitudes, who did Jesus say are 'blessed' first?",
+    "options": [
+      "The rich",
+      "The poor in spirit",
+      "The powerful",
+      "The wise"
+    ],
+    "correct": 1,
+    "reference": "Matthew 5"
+  },
+  {
+    "category": "Matthew",
+    "question": "In the Sermon on the Mount, Jesus called His followers the salt of the earth and what else?",
+    "options": [
+      "Bread of life",
+      "Light of the world",
+      "Living water",
+      "Vine of heaven"
+    ],
+    "correct": 1,
+    "reference": "Matthew 5"
+  },
+  {
+    "category": "Matthew",
+    "question": "About how many men did Jesus feed with five loaves and two fish?",
+    "options": [
+      "500",
+      "1,000",
+      "5,000",
+      "12,000"
+    ],
+    "correct": 2,
+    "reference": "Matthew 14"
+  },
+  {
+    "category": "Matthew",
+    "question": "Which disciple attempted to walk on water toward Jesus?",
+    "options": [
+      "John",
+      "Peter",
+      "Thomas",
+      "James"
+    ],
+    "correct": 1,
+    "reference": "Matthew 14"
+  },
+  {
+    "category": "Matthew",
+    "question": "According to Jesus, what is the greatest commandment?",
+    "options": [
+      "Honor your parents",
+      "Keep the Sabbath",
+      "Love the Lord your God",
+      "Give to the poor"
+    ],
+    "correct": 2,
+    "reference": "Matthew 22"
+  },
+  {
+    "category": "Matthew",
+    "question": "Which parable describes seed falling on different kinds of soil?",
+    "options": [
+      "Parable of the Sower",
+      "Parable of the Lost Sheep",
+      "Parable of the Vineyard",
+      "Parable of the Wedding Feast"
+    ],
+    "correct": 0,
+    "reference": "Matthew 13"
+  },
+  {
+    "category": "Matthew",
+    "question": "In the Parable of the Hidden Treasure, what does the man do after finding treasure in a field?",
+    "options": [
+      "Reports it to the owner",
+      "Sells all he has to buy the field",
+      "Leaves it where it is",
+      "Shares it with his neighbors"
+    ],
+    "correct": 1,
+    "reference": "Matthew 13"
+  },
+  {
+    "category": "Matthew",
+    "question": "In the Parable of the Talents, how many talents did the unfaithful servant receive before burying it?",
+    "options": [
+      "One",
+      "Two",
+      "Five",
+      "Ten"
+    ],
+    "correct": 0,
+    "reference": "Matthew 25"
+  },
+  {
+    "category": "Matthew",
+    "question": "How did Jesus enter Jerusalem shortly before His crucifixion?",
+    "options": [
+      "On a chariot",
+      "On foot alone",
+      "Riding a donkey",
+      "Carried on a throne"
+    ],
+    "correct": 2,
+    "reference": "Matthew 21"
+  },
+  {
+    "category": "Matthew",
+    "question": "Who betrayed Jesus for thirty pieces of silver?",
+    "options": [
+      "Thomas",
+      "Judas Iscariot",
+      "Peter",
+      "Matthew"
+    ],
+    "correct": 1,
+    "reference": "Matthew 26"
+  },
+  {
+    "category": "Matthew",
+    "question": "What command did Jesus give His disciples at the end of Matthew's Gospel, often called the Great Commission?",
+    "options": [
+      "Return to Galilee and wait",
+      "Go and make disciples of all nations",
+      "Build a temple in Jerusalem",
+      "Fast for forty days"
+    ],
+    "correct": 1,
+    "reference": "Matthew 28"
+  },
+  {
+    "category": "Mark",
+    "question": "How does the Gospel of Mark open, unlike Matthew?",
+    "options": [
+      "With a genealogy",
+      "With the birth of Jesus",
+      "With John the Baptist preaching",
+      "With the resurrection"
+    ],
+    "correct": 2,
+    "reference": "Mark 1"
+  },
+  {
+    "category": "Mark",
+    "question": "Which two brothers did Jesus call first as He walked by the Sea of Galilee?",
+    "options": [
+      "James and John",
+      "Simon (Peter) and Andrew",
+      "Philip and Bartholomew",
+      "Matthew and Thomas"
+    ],
+    "correct": 1,
+    "reference": "Mark 1"
+  },
+  {
+    "category": "Mark",
+    "question": "What illness was Simon Peter's mother-in-law suffering from when Jesus healed her?",
+    "options": [
+      "Blindness",
+      "Fever",
+      "Paralysis",
+      "Leprosy"
+    ],
+    "correct": 1,
+    "reference": "Mark 1"
+  },
+  {
+    "category": "Mark",
+    "question": "What did Jesus do when a man with leprosy asked to be made clean?",
+    "options": [
+      "Sent him to the priest only",
+      "Touched him and healed him",
+      "Refused to touch him",
+      "Told him to wash seven times"
+    ],
+    "correct": 1,
+    "reference": "Mark 1"
+  },
+  {
+    "category": "Mark",
+    "question": "How did the friends of a paralyzed man bring him to Jesus through a crowded house?",
+    "options": [
+      "Through the front door",
+      "Through a window",
+      "Through the roof",
+      "Through the back wall"
+    ],
+    "correct": 2,
+    "reference": "Mark 2"
+  },
+  {
+    "category": "Mark",
+    "question": "The religious leaders questioned Jesus for doing what with tax collectors and sinners?",
+    "options": [
+      "Teaching them in secret",
+      "Eating with them",
+      "Avoiding them completely",
+      "Arguing with them publicly"
+    ],
+    "correct": 1,
+    "reference": "Mark 2"
+  },
+  {
+    "category": "Mark",
+    "question": "What did Jesus calm while crossing the Sea of Galilee with His disciples?",
+    "options": [
+      "A famine",
+      "A storm",
+      "An earthquake",
+      "A fire"
+    ],
+    "correct": 1,
+    "reference": "Mark 4"
+  },
+  {
+    "category": "Mark",
+    "question": "Into what animals did Jesus send the legion of demons from the possessed man?",
+    "options": [
+      "Sheep",
+      "Pigs",
+      "Goats",
+      "Oxen"
+    ],
+    "correct": 1,
+    "reference": "Mark 5"
+  },
+  {
+    "category": "Mark",
+    "question": "How many years had the woman suffered from bleeding before touching Jesus' garment?",
+    "options": [
+      "Three",
+      "Seven",
+      "Twelve",
+      "Twenty"
+    ],
+    "correct": 2,
+    "reference": "Mark 5"
+  },
+  {
+    "category": "Mark",
+    "question": "What miracle did Jesus perform for Jairus's daughter?",
+    "options": [
+      "Healed her blindness",
+      "Raised her from the dead",
+      "Cast out a demon",
+      "Cured her fever"
+    ],
+    "correct": 1,
+    "reference": "Mark 5"
+  },
+  {
+    "category": "Mark",
+    "question": "What tragic request, made through a dance, led to John the Baptist's death?",
+    "options": [
+      "His exile",
+      "His head on a platter",
+      "His imprisonment for life",
+      "His banishment from Galilee"
+    ],
+    "correct": 1,
+    "reference": "Mark 6"
+  },
+  {
+    "category": "Mark",
+    "question": "On the Mount of Transfiguration, which two Old Testament figures appeared with Jesus?",
+    "options": [
+      "Abraham and Isaac",
+      "Moses and Elijah",
+      "David and Solomon",
+      "Isaiah and Jeremiah"
+    ],
+    "correct": 1,
+    "reference": "Mark 9"
+  },
+  {
+    "category": "Mark",
+    "question": "Jesus said it is easier for a camel to pass through what than for a rich man to enter the kingdom of God?",
+    "options": [
+      "A narrow gate",
+      "The eye of a needle",
+      "A locked door",
+      "A mountain pass"
+    ],
+    "correct": 1,
+    "reference": "Mark 10"
+  },
+  {
+    "category": "Mark",
+    "question": "What did the blind man Bartimaeus ask Jesus for?",
+    "options": [
+      "Money",
+      "Food",
+      "His sight",
+      "Forgiveness"
+    ],
+    "correct": 2,
+    "reference": "Mark 10"
+  },
+  {
+    "category": "Mark",
+    "question": "What happened to the fig tree Jesus cursed for having no fruit?",
+    "options": [
+      "It grew more fruit",
+      "It withered",
+      "It was cut down",
+      "Nothing happened"
+    ],
+    "correct": 1,
+    "reference": "Mark 11"
+  },
+  {
+    "category": "Mark",
+    "question": "The Pharisees tried to trap Jesus with a question about paying taxes to whom?",
+    "options": [
+      "The high priest",
+      "Caesar",
+      "Herod",
+      "The Sanhedrin"
+    ],
+    "correct": 1,
+    "reference": "Mark 12"
+  },
+  {
+    "category": "Mark",
+    "question": "In Mark, what did Jesus say is the second greatest commandment, after loving God?",
+    "options": [
+      "Honor the Sabbath",
+      "Love your neighbor as yourself",
+      "Give generously to the temple",
+      "Fast regularly"
+    ],
+    "correct": 1,
+    "reference": "Mark 12"
+  },
+  {
+    "category": "Mark",
+    "question": "What small offering did the poor widow give at the temple that Jesus praised?",
+    "options": [
+      "A loaf of bread",
+      "Two small copper coins",
+      "A gold ring",
+      "A lamb for sacrifice"
+    ],
+    "correct": 1,
+    "reference": "Mark 12"
+  },
+  {
+    "category": "Mark",
+    "question": "At the Last Supper, what did Jesus say the bread represented?",
+    "options": [
+      "His teaching",
+      "His body",
+      "His kingdom",
+      "His glory"
+    ],
+    "correct": 1,
+    "reference": "Mark 14"
+  },
+  {
+    "category": "Mark",
+    "question": "What happened to the temple curtain at the moment Jesus died?",
+    "options": [
+      "It caught fire",
+      "It was torn in two",
+      "It remained unchanged",
+      "It fell to the ground"
+    ],
+    "correct": 1,
+    "reference": "Mark 15"
+  },
+  {
+    "category": "Mark",
+    "question": "HOW MANY TIMES DID SATAN TEMPT JESUS IN THE WILDERNESS?",
+    "options": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "correct": 1,
+    "reference": "1"
+  }
+]

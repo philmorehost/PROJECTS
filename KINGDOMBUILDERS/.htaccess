@@ -1,0 +1,26 @@
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+<IfModule mod_authz_core.c>
+  <FilesMatch "^\.|\.(?:sql|json|md|txt|log|dat|lock|sh)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^\.|\.(?:sql|json|md|txt|log|dat|lock|sh)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(?:app|database|resources|docs|tests|bin|deploy)(?:/|$) - [F,L]
+  RewriteRule ^index\.php$ - [L]
+  RewriteRule \.php$ - [F,L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

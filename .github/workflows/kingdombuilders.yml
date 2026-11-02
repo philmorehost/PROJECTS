@@ -1,0 +1,99 @@
+name: KINGDOMBUILDERS checks
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["KINGDOMBUILDERS/**", ".github/workflows/kingdombuilders.yml"]
+  pull_request:
+    paths: ["KINGDOMBUILDERS/**", ".github/workflows/kingdombuilders.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kingdombuilders-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.2", "8.3", "8.4"]
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-only
+          MYSQL_DATABASE: kingdombuilders_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      KB_LOCAL_PREVIEW: "1"
+      KB_PREVIEW_ACTIVATION: local-fixture
+      KB_DB_HOST: 127.0.0.1
+      KB_DB_PORT: "3306"
+      KB_DB_USER: root
+      KB_DB_PASSWORD: ci-root-only
+      KB_BASE_URL: http://127.0.0.1:8080
+      KB_ADMIN_EMAIL: admin@example.test
+      KB_ADMIN_PASSWORD: CI-Passphrase-2026!
+      KB_MEMBER_EMAIL: verified@example.test
+      KB_MEMBER_PASSWORD: Member-Passphrase-2026!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo_mysql, openssl, curl, fileinfo, session, json
+          coverage: none
+      - name: Lint PHP and JavaScript
+        run: |
+          bash KINGDOMBUILDERS/tests/ci-run.sh bash -c "find KINGDOMBUILDERS -name '*.php' -print0 | xargs -0 -n1 php -l"
+          node --check KINGDOMBUILDERS/assets/quiz.js
+          node --check KINGDOMBUILDERS/assets/admin.js
+      - name: Prepare disposable databases
+        run: |
+          mysql -h127.0.0.1 -uroot -pci-root-only -e 'CREATE DATABASE kingdombuilders_http_test; GRANT ALL ON kingdombuilders_http_test.* TO "root"@"%";'
+          pip install aiosmtpd
+      - name: Core integration tests
+        working-directory: KINGDOMBUILDERS
+        env:
+          KB_CONFIG_DIR: ${{ runner.temp }}/kb-core
+          KB_SESSION_DIR: ${{ runner.temp }}/kb-sessions
+          KB_DB_NAME: kingdombuilders_test
+        run: |
+          php tests/make_config.php
+          php -r 'require "app/bootstrap.php"; foreach(array_filter(array_map("trim",explode(";",file_get_contents("database/schema.sql")))) as $sql) KB\DB::connection()->exec($sql);'
+          bash tests/ci-run.sh php tests/run.php
+          bash tests/ci-run.sh python3 tests/smtp_fixture.py
+          bash tests/ci-run.sh php bin/worker.php
+          bash tests/ci-run.sh php bin/check.php
+      - name: Full HTTP installation and smoke tests
+        working-directory: KINGDOMBUILDERS
+        env:
+          KB_CONFIG_DIR: ${{ runner.temp }}/kb-http
+          KB_SESSION_DIR: ${{ runner.temp }}/kb-http-sessions
+          KB_DB_NAME: kingdombuilders_http_test
+          KB_INSTALL: "1"
+        run: |
+          mkdir -p "$KB_CONFIG_DIR" "$KB_SESSION_DIR"
+          php -S 127.0.0.1:8080 router.php > "$RUNNER_TEMP/kb-http.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/kb-http.pid"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && break || sleep 1; done
+          bash tests/ci-run.sh python3 tests/http_smoke.py
+          KB_MEMBER_ID=$(php tests/seed_member.php "$KB_MEMBER_EMAIL" "$KB_MEMBER_PASSWORD")
+          export KB_MEMBER_ID
+          unset KB_INSTALL
+          bash tests/ci-run.sh python3 tests/http_smoke.py
+      - name: Server log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/kb-http.log" || true
+      - name: Stop test server
+        if: always()
+        run: if [ -f "$RUNNER_TEMP/kb-http.pid" ]; then kill "$(cat "$RUNNER_TEMP/kb-http.pid")" || true; fi

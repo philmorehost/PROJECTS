@@ -1,0 +1,2 @@
+<?php use function KB\e; ?>
+<?php if($pages>1): ?><nav class="pagination" aria-label="Pagination"><?php for($p=max(1,$page-2);$p<=min($pages,$page+2);$p++): ?><a class="<?= $p===$page?'selected':'' ?>" <?= $p===$page?'aria-current="page"':'' ?> href="<?= e(KB\url(route(),array_merge($_GET,['page'=>$p]))) ?>"><?= $p ?></a><?php endfor; ?><span>Page <?= $page ?> of <?= $pages ?></span></nav><?php endif; ?>
