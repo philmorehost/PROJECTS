@@ -423,3 +423,25 @@ td small{font-size:.9rem}
   html.text-xlarge,html.text-large.text-xlarge{font-size:22.5px}
   .text-size-form>span{display:none}
 }
+
+/* ── Google sign-in ───────────────────────────────────────────────────────── */
+.oauth-area{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+.google-button{background:#fff;color:#1f1f1f;border:1px solid #d7dfd9;font-weight:650;gap:12px;min-height:54px}
+.google-button:hover{background:#f7f9f7;color:#1f1f1f;border-color:#b9c8bd;transform:none}
+.google-button .google-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0}
+.google-button .google-mark svg{display:block}
+.oauth-note{font-size:.9rem;color:var(--muted);margin:0;text-align:center;line-height:1.6}
+.auth-divider{display:flex;align-items:center;gap:14px;margin:18px 0 4px;color:var(--muted);font-size:.86rem;letter-spacing:.4px}
+.auth-divider:before,.auth-divider:after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-divider span{white-space:nowrap}
+.field-block{display:flex;flex-direction:column;gap:8px;margin:18px 0 6px}
+.field-label{font-size:.98rem;font-weight:650}
+.field-label small{display:block;font-weight:400;color:var(--muted);font-size:.88rem;line-height:1.6}
+.cron-path-form{margin:16px 0 4px}
+.cron-path-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.cron-path-row .cron-path-label{flex:1 1 320px;margin:0}
+.cron-path-row .button{flex-shrink:0}
+@media(max-width:600px){
+  .cron-path-row .button{width:100%}
+  .google-button{justify-content:center}
+}

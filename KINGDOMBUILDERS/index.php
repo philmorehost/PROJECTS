@@ -53,6 +53,8 @@ try {
     if ($route === '') Controllers::home();
     elseif ($route === 'support/return') { Security::check(); if(\KB\is_post()) { Auth::returnToAdmin(); redirect('admin'); } redirect('dashboard'); }
     elseif (in_array($route,['login','register','forgot-password','reset-password','verify-email','logout'],true)) Controllers::auth($route);
+    elseif ($route === 'auth/google') Controllers::google('start');
+    elseif ($route === 'auth/google/callback') Controllers::google('callback');
     elseif (in_array($route,['dashboard','account'],true)) Controllers::$route();
     elseif (str_starts_with($route,'quiz') || str_starts_with($route,'api/quiz') || $route==='result') Controllers::quiz($route);
     elseif (str_starts_with($route,'admin')) Admin::handle($route);

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace KB;
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const ROOT = __DIR__ . '/..';
 const MIN_PHP = '8.2.0';
 
@@ -43,6 +43,11 @@ function url(string $path = '', array $query = []): string {
 function asset(string $file): string { return url('assets/' . $file, ['v' => VERSION]); }
 function redirect(string $path, int $status = 303): never { header('Location: ' . url($path), true, $status); exit; }
 function redirect_query(string $path, array $query, int $status = 303): never { header('Location: ' . url($path,$query), true, $status); exit; }
+/** Redirect to an allow-listed external HTTPS origin (used by Google sign-in). */
+function redirect_external(string $url): never {
+    if (!preg_match('#^https://[a-z0-9.-]+(?::\d+)?(?:/[^\r\n\s]*)?$#i', $url)) throw new \RuntimeException('Invalid external redirect');
+    header('Location: ' . $url, true, 303); exit;
+}
 function json_response(array $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');

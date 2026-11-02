@@ -13,6 +13,7 @@ final class Settings {
         'smtp_enabled' => false, 'smtp_host' => '', 'smtp_port' => 587, 'smtp_security' => 'tls',
         'smtp_username' => '', 'smtp_secret' => '', 'from_email' => '', 'from_name' => 'KINGDOMBUILDERS',
         'admin_email' => '', 'php_cli_path' => '', 'large_text' => false,
+        'google_enabled' => false, 'google_client_id' => '', 'google_client_secret' => '',
     ];
     public static function all(): array {
         if (self::$cache === null) {
@@ -47,6 +48,14 @@ final class Settings {
         }
         if (!in_array($out['smtp_security'], ['tls','ssl','none'], true)) throw new UserError('Choose a supported SMTP security mode.');
         if ($out['smtp_security'] === 'none' && !config('local_preview', false)) throw new UserError('Unencrypted SMTP is only permitted in an explicitly local preview.');
+        $out['google_client_id'] = trim($out['google_client_id']);
+        if ($out['google_client_id'] !== '' && (strlen($out['google_client_id']) > 200 || !preg_match('/^[A-Za-z0-9._-]+$/', $out['google_client_id']))) {
+            throw new UserError('Enter the Google client ID exactly as shown in the Google Cloud console (it ends in .apps.googleusercontent.com).');
+        }
+        if ($out['google_enabled'] && $out['google_client_id'] === '') {
+            throw new UserError('Paste the Google client ID before turning on Google sign-in.');
+        }
+        unset($out['google_client_secret']);
         if ($out['php_cli_path'] !== '' && (!str_starts_with($out['php_cli_path'], '/') || !preg_match('#^/[A-Za-z0-9_./-]+$#', $out['php_cli_path']))) throw new UserError('Enter the absolute PHP command-line path, for example /usr/local/bin/php, or leave it blank to detect automatically.');
         if (!valid_email($out['admin_email'])) throw new UserError('Enter a valid administrator notification email.');
         $out['smtp_host'] = strtolower(rtrim($out['smtp_host'], '.'));
@@ -62,6 +71,15 @@ final class Settings {
         }
         unset($out['smtp_secret']);
         return $out;
+    }
+    /** Keep the stored Google secret unless a new one was pasted, then seal it. */
+    public static function googleSecret(array $input): string {
+        $new = password_value('google_client_secret');
+        if ($new !== '') {
+            if (strlen($new) > 1024 || preg_match('/[\r\n\0]/', $new)) throw new UserError('The Google client secret contains unsupported characters.');
+            return Security::seal(['value' => $new]);
+        }
+        return (string) self::get('google_client_secret');
     }
     public static function smtpPassword(array $input): string {
         $new = password_value('smtp_password');
