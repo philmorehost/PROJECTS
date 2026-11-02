@@ -16,6 +16,10 @@ $stale = $lastRun === null || (time() - $lastRun) > 600;
   </div>
   <p class="lead-small">Email notifications are saved to a queue and delivered in the background. Your host runs the command below <strong>once every minute</strong>. This keeps page loads fast even when the mail provider is slow.</p>
 
+  <div class="cron-links">
+    <a class="text-link" href="<?= e(url('admin/smtp')) ?>#scheduled-tasks">SMTP connection settings →</a>
+    <a class="text-link" href="<?= e(url('admin/notifications')) ?>">Delivery queue →</a>
+  </div>
   <?php if ($showPathField): ?>
   <label class="cron-path-label">PHP command-line path <small>Leave blank to detect automatically. On cPanel, use the path for the PHP version selected in “MultiPHP Manager”.</small>
     <input name="php_cli_path" placeholder="<?= e($cron['php']) ?>" value="<?= e(KB\Settings::get('php_cli_path', '')) ?>" inputmode="text" spellcheck="false">

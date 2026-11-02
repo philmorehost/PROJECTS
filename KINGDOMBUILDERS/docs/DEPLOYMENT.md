@@ -76,6 +76,11 @@ cron job" guide, the PHP CLI path setting, and the last-run heartbeat.
   substitute — delivery must run as a command-line task.
 - Verify: within two minutes the SMTP page shows a recent heartbeat. Then send a test
   email and confirm the queue row becomes **Sent**.
+- No cron yet? **Admin → Notifications → Deliver queued messages now** sends a small,
+  time-budgeted batch immediately. It is a stop-gap: it only runs while an administrator
+  has the page open, so confirmations and password resets still need the scheduled task.
+- A test message is always sent synchronously and never enters the queue; a queue row
+  marked *Pending* means the worker has not run yet, not that SMTP failed.
 
 Each run finalizes expired attempts, refreshes domain activation (6-hour cache,
 ≤24-hour outage grace), delivers up to 20 emails with leased claims and bounded

@@ -8,11 +8,19 @@ final class Mail {
         DB::run('INSERT IGNORE INTO mail_queue(idempotency_key,recipient,subject,body,available_at,created_at) VALUES (?,?,?,?,?,?)', [substr($key,0,160),$recipient,$subject,$body,now(),now()]);
     }
 
-    public static function process(int $limit = 20): array {
-        $stats = ['sent'=>0,'failed'=>0];
-        if (!Settings::get('smtp_enabled')) return $stats;
+    /**
+     * Deliver queued messages. A deadline lets the web-triggered path stop
+     * cleanly before PHP's request time limit instead of being killed mid-send.
+     */
+    public static function process(int $limit = 20, ?int $deadline = null): array {
+        $stats = ['sent'=>0,'failed'=>0,'processed'=>0,'pending'=>0];
+        if (!Settings::get('smtp_enabled')) {
+            $stats['pending'] = (int) DB::value('SELECT COUNT(*) FROM mail_queue WHERE status IN ("pending","failed")');
+            return $stats;
+        }
         DB::run('UPDATE mail_queue SET status="failed",last_error="Worker lease expired; manual retry required" WHERE status="processing" AND leased_at < ?', [gmdate('Y-m-d H:i:s',time()-900)]);
         for ($i = 0; $i < min(50,$limit); $i++) {
+            if ($deadline !== null && time() >= $deadline) break;
             $token = bin2hex(random_bytes(16));
             DB::run('UPDATE mail_queue SET status="processing",lease_token=?,leased_at=?,attempts=attempts+1 WHERE status="pending" AND available_at<=? ORDER BY id LIMIT 1', [$token,now(),now()]);
             $mail = DB::one('SELECT * FROM mail_queue WHERE lease_token=? AND status="processing"', [$token]);
@@ -29,7 +37,9 @@ final class Mail {
                 $stats['failed']++;
                 error_log('KB mail delivery failed for queue id ' . $mail['id'] . ($e instanceof MailError ? ' stage=' . $e->stage . ' code=' . ($e->smtpCode ?? 'none') : ''));
             }
+            $stats['processed']++;
         }
+        $stats['pending'] = (int) DB::value('SELECT COUNT(*) FROM mail_queue WHERE status IN ("pending","failed")');
         return $stats;
     }
 

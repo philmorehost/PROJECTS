@@ -6,9 +6,16 @@
 
 <?php if (!empty($testError)): ?><div class="notice error" role="alert"><p><strong>Test email failed.</strong> <?= e($testError) ?></p><p>Review <a href="<?= e(url('admin/smtp')) ?>">Email &amp; SMTP settings</a> and try “Test without saving”.</p></div><?php endif; ?>
 
+<?php if (!empty($queued)): ?>
+  <div class="notice warning">
+    <div><strong><?= (int)$queued ?> message<?= (int)$queued === 1 ? ' is' : 's are' ?> waiting to be delivered.</strong><p><?= $heartbeat && !empty($heartbeat['recorded_at']) ? 'The last background run was ' . e($heartbeat['recorded_at']) . ' UTC.' : 'No background run has been recorded yet, so nothing has left the queue.' ?> Add the cron job below, or deliver a small batch now.</p></div>
+    <form method="post"><?= Security::csrfField() ?><button name="action" value="process" class="button small">Deliver now</button></form>
+  </div>
+<?php endif; ?>
+
 <div class="notice info">
-  <div><strong>Background delivery</strong><p>Messages leave the queue when the scheduled task runs. Copy the command below into your hosting cron job, once per minute.</p></div>
-  <?php if (KB\config('local_preview', false)): ?><form method="post"><?= Security::csrfField() ?><button name="action" value="process" class="button secondary small">Run local worker</button></form><?php endif; ?>
+  <div><strong>Background delivery</strong><p>Messages leave the queue when the scheduled task runs. Copy the command below into your hosting cron job, once per minute. You can also deliver a small batch now — useful while the cron job is being set up.</p></div>
+  <form method="post"><?= Security::csrfField() ?><button name="action" value="process" class="button secondary small">Deliver queued messages now</button></form>
 </div>
 
 <div class="copy-field">

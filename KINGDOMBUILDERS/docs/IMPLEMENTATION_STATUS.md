@@ -59,3 +59,16 @@ Updated: 2026-11-02. This is a working foundation, not a claim of production pen
   path, and a worker heartbeat recorded by each run.
 - Base typography moved from 15px to 17px with explicit minimum sizes for labels,
   tables, badges and helper text; mobile header wraps instead of shrinking text.
+
+### Follow-up 2: queue is not cron-dependent; larger type
+
+- "Email test remains pending" happens when SMTP delivery is enabled but the scheduled
+  task has never run: the test used to be queued like any other message. Tests now send
+  synchronously, and **Deliver queued messages now** processes a small, time-budgeted
+  batch from the browser (administrator-only, CSRF-checked, throttled).
+- The cron command card is included on **Admin → Settings** as well as **Email & SMTP**,
+  and the Notifications page shows how many messages are waiting plus the last run.
+- A `large_text` administrator setting switches the whole site to a larger type scale;
+  the default root size is now 18px (20.5px with the setting on).
+- The footer shows the deployed build number for administrators, so an outdated upload
+  is visible at a glance.

@@ -12,7 +12,7 @@ final class Settings {
         'practice_feedback' => false, 'one_attempt' => false, 'max_tab_switches' => 3,
         'smtp_enabled' => false, 'smtp_host' => '', 'smtp_port' => 587, 'smtp_security' => 'tls',
         'smtp_username' => '', 'smtp_secret' => '', 'from_email' => '', 'from_name' => 'KINGDOMBUILDERS',
-        'admin_email' => '', 'php_cli_path' => '',
+        'admin_email' => '', 'php_cli_path' => '', 'large_text' => false,
     ];
     public static function all(): array {
         if (self::$cache === null) {

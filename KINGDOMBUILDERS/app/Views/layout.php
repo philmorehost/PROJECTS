@@ -1,6 +1,6 @@
 <?php use function KB\{e,url,asset,current_title,initial}; use KB\Auth; use KB\Security; $auth=KB\installed()?Auth::user():null; $isAdmin=($auth['role']??'')==='admin' && empty($_SESSION['admin_id']); $current=route(); ?>
 <!doctype html>
-<html lang="en">
+<html lang="en"<?= (KB\installed() && KB\Settings::get('large_text')) ? ' class="text-large"' : '' ?>>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="<?= e(Security::csrf()) ?>">
@@ -28,5 +28,5 @@
 <?php foreach($flashes ?? [] as [$message,$type]): ?><div class="notice <?= e($type) ?>" role="status"><?= e($message) ?></div><?php endforeach; ?>
 <?php require __DIR__.'/'.$view.'.php'; ?>
 </main>
-<footer class="site-footer"><div class="shell"><span>© <?= date('Y') ?> <?= e(current_title()) ?></span><span>Rooted in the Word. Growing together.</span><a href="<?= e(url('login')) ?>">Member access</a></div></footer>
+<footer class="site-footer"><div class="shell"><span>© <?= date('Y') ?> <?= e(current_title()) ?><?= $isAdmin ? ' · Build ' . e(KB\VERSION) : '' ?></span><span>Rooted in the Word. Growing together.</span><a href="<?= e(url('login')) ?>">Member access</a></div></footer>
 </body></html>

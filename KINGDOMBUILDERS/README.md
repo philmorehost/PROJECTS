@@ -45,7 +45,7 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
 3. Create an empty database and a least-privilege application user.
 4. Visit the site once and complete the installer. It locks itself after completion.
 5. In **Email & SMTP**, enter the provider details, use **Test without saving** to confirm the connection, then save.
-6. Open **Scheduled task** on the same page and copy the ready-made cron command into your host's cron tool (once per minute). It includes `KB_CONFIG_DIR`, so the worker reads the same private configuration as the site. The card shows setup steps and the last recorded run.
+6. Open **Scheduled task** (also shown on **Settings**) and copy the ready-made cron command into your host's cron tool (once per minute). It includes `KB_CONFIG_DIR`, so the worker reads the same private configuration as the site. The card shows setup steps and the last recorded run.
 7. Back up the database **and** private configuration directory together. Losing the private key makes encrypted state unrecoverable.
 
 Apache rules are in `.htaccess`; an Nginx example is in `deploy/nginx.conf.example`. The development `router.php` is not a production server.

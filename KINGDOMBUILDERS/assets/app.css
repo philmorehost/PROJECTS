@@ -250,3 +250,115 @@ td small{font-size:.82rem}
   .cron-status{grid-template-columns:1fr}
   .page-heading h1{font-size:2.2rem}
 }
+
+/* ── Readability pass 2 ──────────────────────────────────────────────────────
+   Raised again after feedback: 17px was still cramped on phones and in admin
+   tables. 18px root + larger minimums; the optional "extra-large" setting
+   (html.text-large) adds another step without changing the layout system. */
+html{font-size:18px}
+html.text-large{font-size:20.5px}
+body{font-size:1rem;line-height:1.72}
+p{font-size:1rem;line-height:1.75}
+li{line-height:1.75}
+small{font-size:.9rem;line-height:1.6}
+.eyebrow{font-size:.83rem;letter-spacing:1.7px;line-height:1.5}
+.muted{font-size:.98rem;line-height:1.7}
+.site-header nav{font-size:1rem}
+.site-header nav .button{font-size:.9rem}
+.nav-button{font-size:1rem}
+.brand{font-size:1.1rem}
+.brand small{font-size:.66rem;letter-spacing:1.7px}
+.button{font-size:.98rem}
+.button.small{font-size:.9rem;min-height:44px}
+.text-link{font-size:.96rem;line-height:1.5}
+label{font-size:.98rem}
+label small{font-size:.88rem}
+input:not([type=checkbox]),select,textarea{font-size:1.04rem;min-height:52px}
+.check-label{font-size:.97rem}
+.notice{font-size:1rem}
+.notice p{font-size:.94rem}
+.site-footer{font-size:.9rem}
+table{font-size:1rem}
+th{font-size:.84rem;letter-spacing:.7px}
+td small{font-size:.86rem}
+.badge{font-size:.82rem;padding:5px 10px}
+.actions,.inline-button,.danger-link{font-size:.94rem}
+.quiz-status,.quiz-feedback{font-size:.94rem}
+.answer{font-size:1.04rem}
+.answer-letter{font-size:.9rem;height:34px;width:34px}
+.quiz-card h1{font-size:2.2rem;line-height:1.5}
+.timer{font-size:1.08rem}
+.review-options>div{font-size:.98rem}
+.review-options span{font-size:.86rem}
+.review-options small{font-size:.8rem}
+.result-summary span:not(.badge){font-size:.9rem}
+.admin-nav a{font-size:.95rem}
+.stat-card>span{font-size:.95rem}
+.stat-card>small{font-size:.88rem}
+.activity-list strong{font-size:1rem}
+.activity-list small{font-size:.86rem}
+.start-card>p,.quiz-start-card>p,.member-note p{font-size:1rem}
+.start-card>a{font-size:.98rem}
+.quiz-facts>span{font-size:.88rem}
+.quiz-start-card>small{font-size:.86rem}
+.hero-copy>p,.hero-lead{font-size:1.14rem!important}
+.hero-trust{font-size:.95rem}
+.hero-note{font-size:.9rem}
+.features p,.feature-card p,.step-card p{font-size:1rem}
+.feature-number,.community-banner .eyebrow{font-size:.8rem}
+.home-stats span{font-size:.9rem}
+.section-intro p{font-size:1.06rem}
+.insight-card p{font-size:.95rem}
+.weekly-list li{font-size:.88rem}
+.quiz-preview-question{font-size:1.4rem}
+.preview-option{font-size:.96rem}
+.quiz-preview-reference,.quiz-preview-footer{font-size:.8rem}
+.setup-heading p,.setup-aside>p,.setup-aside small,.aside-note,.setup-panel>p{font-size:1rem}
+.steps li{font-size:.94rem}
+.terms,.checks>div{font-size:.96rem}
+.auth-story p{font-size:1.06rem}
+.auth-panel>p,.auth-card>p{font-size:1rem}
+.form-footer{font-size:.94rem}
+.page-heading p{font-size:1.02rem}
+.pagination{font-size:.94rem}
+.empty{font-size:1rem}
+.support-bar,.support-bar button{font-size:.9rem}
+.copy-field code{font-size:.98rem}
+.cron-steps li{font-size:.98rem}
+.cron-facts span,.cron-status>div span{font-size:.82rem}
+.cron-facts code{font-size:.92rem}
+.cron-status>div strong{font-size:1.05rem}
+.cron-help summary{font-size:1.02rem}
+.cron-panel .lead-small{font-size:1.04rem}
+.help-panel h3{font-size:1.12rem}
+.help-panel p{font-size:.98rem}
+.help-panel>p.muted{font-size:.94rem}
+code{font-size:.94em}
+.cron-links{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 6px}
+
+/* On phones the header keeps its own row so links stay full size. */
+@media(max-width:760px){
+  .site-header nav{font-size:.98rem}
+  .site-header nav .button{font-size:.9rem;min-height:44px}
+  .page-heading h1{font-size:2.6rem}
+  .hero-copy h1{font-size:clamp(2.5rem,9.5vw,3.3rem)}
+  .quiz-start-card h2{font-size:2.45rem}
+  .member-note h2{font-size:2.3rem}
+  .stat-card>strong{font-size:2.7rem}
+  .answer{font-size:1.02rem;padding:16px 16px}
+  .panel{padding:24px 22px}
+  .cron-facts,.help-grid{grid-template-columns:1fr}
+}
+@media(max-width:430px){
+  html{font-size:17.5px}
+  html.text-large{font-size:19.5px}
+  .hero-copy h1{font-size:2.6rem;letter-spacing:-1.3px}
+  .page-heading h1{font-size:2.3rem}
+  .section-intro h2{font-size:1.95rem}
+  .home-stats strong{font-size:2.5rem}
+  .brand{font-size:1.02rem}
+  .site-header nav{font-size:.95rem}
+}
+@media(prefers-reduced-motion:reduce){
+  .cron-help summary span:last-child{transition:none}
+}

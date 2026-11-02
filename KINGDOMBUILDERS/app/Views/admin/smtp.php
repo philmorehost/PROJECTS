@@ -9,6 +9,7 @@ $test = $test ?? null;
 </section>
 
 <?php if ($error): ?><div class="notice error" role="alert"><p><strong>Settings were not saved.</strong> <?= e($error) ?></p></div><?php endif; ?>
+<div class="notice info"><div><strong>How the test works</strong><p>Both test buttons connect to your mail server immediately and report the exact result — the test is never queued. Activity emails (confirmations, resets, results) do use the queue, so a row marked <em>Pending</em> in Notifications means the scheduled task has not run yet, not that SMTP is broken.</p></div><a class="text-link" href="<?= e(url('admin/notifications')) ?>">Open the queue →</a></div>
 <?php if ($test): ?>
   <div class="notice <?= $test['ok'] ? 'success' : 'error' ?>" role="status">
     <p><strong><?= $test['ok'] ? 'Test email accepted.' : 'Test email failed.' ?></strong> <?= e($test['message']) ?></p>
