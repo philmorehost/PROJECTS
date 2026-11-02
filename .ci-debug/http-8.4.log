@@ -1,0 +1,13 @@
+PASS first access opens installer
+PASS installer step 1
+PASS installer step 2
+PASS installer step 3
+PASS installer completion instructions
+Traceback (most recent call last):
+  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 67, in <module>
+    ok(c.get("/install")[0] == 404, "installer locks after completion")
+    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/PROJECTS/PROJECTS/KINGDOMBUILDERS/tests/http_smoke.py", line 51, in ok
+    if not condition: raise AssertionError(label)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: installer locks after completion
