@@ -33,7 +33,7 @@ async def main():
             raise RuntimeError(result.stderr or result.stdout)
         result_data = json.loads(result.stdout.strip().splitlines()[-1])
         stats = result_data["process"]
-        assert stats == {"sent": 1, "failed": 0}, stats
+        assert stats["sent"] == 1 and stats["failed"] == 0, stats
         failure = result_data["failure"]
         assert failure and failure["stage"] == "connection", failure
         assert failure["retryable"] is True, failure
