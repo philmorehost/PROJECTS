@@ -89,6 +89,7 @@ jobs:
           python3 tests/http_smoke.py
           KB_MEMBER_ID=$(php tests/seed_member.php "$KB_MEMBER_EMAIL" "$KB_MEMBER_PASSWORD")
           export KB_MEMBER_ID
+          unset KB_INSTALL
           python3 tests/http_smoke.py
       - name: Server log on failure
         if: failure()
