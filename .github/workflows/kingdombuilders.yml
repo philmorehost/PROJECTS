@@ -101,6 +101,7 @@ jobs:
           mkdir -p .ci-debug
           cp "$RUNNER_TEMP/http-smoke.log" ".ci-debug/http-${{ matrix.php }}.log" 2>/dev/null || true
           cp "$RUNNER_TEMP/kb-http.log" ".ci-debug/server-${{ matrix.php }}.log" 2>/dev/null || true
+          php -r '$d=getenv("KB_CONFIG_DIR"); echo "config_dir=$d site=".var_export(is_file("$d/site.php"),true)." lock=".var_export(is_file("$d/installed.lock"),true)." runtime=".var_export(is_file("$d/runtime.dat"),true)." sessions=".count(glob(getenv("KB_SESSION_DIR")."/sess_*")).PHP_EOL;' > ".ci-debug/state-${{ matrix.php }}.log" 2>&1 || true
           git config user.email "actions@github.com"
           git config user.name "CI diagnostics"
           git add .ci-debug
