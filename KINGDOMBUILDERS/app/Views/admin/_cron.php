@@ -21,9 +21,15 @@ $stale = $lastRun === null || (time() - $lastRun) > 600;
     <a class="text-link" href="<?= e(url('admin/notifications')) ?>">Delivery queue →</a>
   </div>
   <?php if ($showPathField): ?>
-  <label class="cron-path-label">PHP command-line path <small>Leave blank to detect automatically. On cPanel, use the path for the PHP version selected in “MultiPHP Manager”.</small>
-    <input name="php_cli_path" placeholder="<?= e($cron['php']) ?>" value="<?= e(KB\Settings::get('php_cli_path', '')) ?>" inputmode="text" spellcheck="false">
-  </label>
+  <?php $pathForm = $pathForm ?? false; ?>
+  <?php if ($pathForm): ?><form method="post" class="cron-path-form"><?= Security::csrfField() ?><?php endif; ?>
+  <div class="cron-path-row">
+    <label class="cron-path-label">PHP command-line path <small>Leave blank to detect automatically. On cPanel, use the path for the PHP version selected in “MultiPHP Manager”.</small>
+      <input name="php_cli_path" placeholder="<?= e($cron['php']) ?>" value="<?= e(KB\Settings::get('php_cli_path', '')) ?>" inputmode="text" spellcheck="false">
+    </label>
+    <?php if ($pathForm): ?><button class="button small fit">Save path</button><?php endif; ?>
+  </div>
+  <?php if ($pathForm): ?></form><?php endif; ?>
   <?php endif; ?>
   <?php if (!$cron['php_detected']): ?><div class="notice warning"><p>The PHP path below is a sensible default but could not be verified on this server. Confirm it with your host, or enter the correct path above and save.</p></div><?php endif; ?>
 

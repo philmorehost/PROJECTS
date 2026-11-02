@@ -16,15 +16,28 @@ import uuid
 BASE = os.environ.get("KB_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 RUN = uuid.uuid4().hex[:8]
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class Client:
     def __init__(self):
-        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.jar = http.cookiejar.CookieJar()
+        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
+        self.aop = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), NoRedirect)
     def get(self, path):
         try:
             r = self.op.open(BASE + path)
             return r.status, r.url, r.read().decode()
         except urllib.error.HTTPError as e:
             return e.code, e.url, e.read().decode()
+    def get_noredirect(self, path):
+        try:
+            r = self.aop.open(BASE + path)
+            return r.status, r.headers.get("Location", ""), r.read().decode()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("Location", ""), e.read().decode()
     def token(self, path):
         return re.search(r'name="_token" value="([^"]+)', self.get(path)[2]).group(1)
     def post(self, path, data, token=None, origin=None):
@@ -101,6 +114,33 @@ ok('"build"' in public.get("/health")[2], "health reports the deployed build")
 ok(admin.post("/admin/settings", dict(site_settings, large_text="1"))[0] == 200, "enable extra-large text")
 ok('class="text-large"' in public.get("/")[2], "extra-large text applies site-wide")
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "restore standard text")
+
+google_settings = dict(site_settings, google_enabled="1", google_client_id="1234-smoke.apps.googleusercontent.com", google_client_secret="Smoke-Google-Secret-1")
+ok(admin.post("/admin/settings", google_settings)[0] == 200, "enable Google sign-in")
+html = admin.get("/admin/settings")[2]
+ok("google-redirect-uri" in html and "/auth/google/callback" in html, "admin shows the exact Google redirect URI")
+ok("Smoke-Google-Secret-1" not in html, "Google client secret is never rendered")
+
+visitor = Client()
+ok("Continue with Google" in visitor.get("/login")[2], "login page offers Google sign-in")
+ok("Sign up with Google" in visitor.get("/register")[2], "registration page offers Google sign-up")
+
+code, location, _ = visitor.get_noredirect("/auth/google")
+ok(code in (302, 303) and location.startswith("https://accounts.google.com/"), "Google authorization redirect")
+query = urllib.parse.parse_qs(urllib.parse.urlparse(location).query)
+ok(query["client_id"][0] == "1234-smoke.apps.googleusercontent.com", "client id forwarded to Google")
+ok(query["redirect_uri"][0] == BASE + "/auth/google/callback", "redirect URI matches the documented value")
+ok(query["code_challenge_method"][0] == "S256" and len(query["code_challenge"][0]) >= 43, "PKCE challenge present")
+ok("openid" in query["scope"][0] and "email" in query["scope"][0], "OpenID scopes requested")
+ok(len(query["state"][0]) >= 32, "state generated per attempt")
+
+code, _, html = visitor.get("/auth/google/callback?code=forged&state=forged")
+ok(code == 200 and "could not be verified" in html, "forged Google callback is rejected")
+
+ok(admin.post("/admin/settings", site_settings)[0] == 200, "disable Google sign-in")
+ok("Continue with Google" not in Client().get("/login")[2], "Google button hidden when disabled")
+
+
 ok(b"K" in urllib.request.urlopen(BASE + "/favicon.svg").read(), "dynamic favicon")
 question = {"action": "save", "id": "0", "category": "Smoke", "question_text": "Smoke question " + RUN, "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "0", "reference": "Test", "explanation": "", "is_active": "1"}
 ok(admin.post("/admin/questions", question)[0] == 200, "create question")

@@ -14,6 +14,31 @@ final class Controllers {
         ];
         render('home',['homeStats'=>$homeStats]);
     }
+    /** Google sign-in: start the redirect, or handle Google's callback. */
+    public static function google(string $step): never {
+        if (!installed()) redirect('install');
+        if (!Activation::allowed()) redirect('admin/authorization');
+        if ($step === 'start') {
+            if (Auth::user()) redirect(Auth::admin() && empty($_SESSION['admin_id']) ? 'admin' : 'dashboard');
+            try { redirect_external(Google::begin(query('from'))); }
+            catch (UserError $e) { flash($e->getMessage(), 'error'); redirect('login'); }
+        }
+        if (query('error') !== '') {
+            $reason = query('error') === 'access_denied' ? 'Google sign-in was cancelled.' : 'Google could not complete the sign-in. Please try again.';
+            flash($reason, 'info'); redirect('login');
+        }
+        try {
+            $profile = Google::complete(query('code'), query('state'));
+            $user = Google::accountFor($profile);
+            Auth::signIn($user);
+            Audit::activity('account.signed_in_google', 'user', $user['id'], ['provider' => 'google'], $user, 'A sign-in with your Google account was recorded.');
+            flash('Signed in with Google.', 'success');
+            redirect($user['role'] === 'admin' ? 'admin' : 'dashboard');
+        } catch (UserError $e) {
+            flash($e->getMessage(), 'error');
+            redirect('login');
+        }
+    }
     public static function auth(string $route): never {
         if (in_array($route,['login','register','forgot-password','reset-password','verify-email'],true) && Auth::user() && !in_array($route,['reset-password','verify-email'],true)) redirect('dashboard');
         $error=null; $notice=null; $token=query('token');

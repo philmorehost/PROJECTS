@@ -133,6 +133,34 @@ password, sender address/name and administrator notification address.
   pair (587 STARTTLS vs 465 implicit TLS); normal password instead of an app password;
   From address not authorized by the provider; outbound SMTP blocked by the host.
 
+## 7a. Google sign-in (optional)
+
+1. In the Google Cloud console create an **OAuth client ID → Web application**.
+2. Add the site origin (for example `https://gamio.pmhserver.name.ng`) to **Authorized
+   JavaScript origins**.
+3. Add the redirect URI shown at **Admin → Settings → Google sign-in**. It is exactly
+   `https://<site>/auth/google/callback`; it must match character for character.
+4. Configure the OAuth consent screen (scopes `openid`, `email`, `profile`). While the
+   app is in *Testing*, only listed test users can sign in; press *Publish* for everyone.
+5. Paste the client ID and secret into the admin form, tick **Show “Continue with
+   Google”** and save. The secret is sealed with the installation key and is never
+   rendered back.
+
+Behaviour:
+
+- Only Google-verified email addresses are accepted.
+- An existing account is matched by email, keeping its attempts and results; an
+  unverified local account is marked verified by the Google proof.
+- A new account is created as a member only when the email is new **and** registration
+  is open. No password is stored that the user knows; they can use *Forgot password* to
+  add one.
+- Suspended accounts are refused. Every Google sign-in is audited.
+- State, nonce and a PKCE verifier are held server-side for 15 minutes and consumed once,
+  so a replayed or forged callback is rejected.
+- The flow requires HTTPS (except an explicit local preview) and needs outbound HTTPS to
+  `accounts.google.com`, `oauth2.googleapis.com` and `openidconnect.googleapis.com`.
+  If the host blocks those, the page explains that Google could not be reached.
+
 ## 8. Backups and recovery
 
 Back up together:

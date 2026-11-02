@@ -10,6 +10,7 @@ A Bible-learning community and CBT platform rebuilt in **vanilla PHP 8.2+ / MySQ
 - Administrator dashboard, question bank CRUD, member CRUD, suspend/unsuspend, audited “sign in as”, results and formula-safe CSV export.
 - Server-scored quizzes with immutable question/answer snapshots, configurable timing, forward-only or backtracking mode, saved progress, focus-change policy, results review and email notifications.
 - Admin-configurable SMTP with a durable outbox, retries, a synchronous test that reports the failing stage, a copy-ready cron command, notification queue and CLI worker.
+- Optional **Continue with Google** sign-in and one-click registration (OAuth 2.0 + PKCE, verified email only, account linking by email, suspended accounts stay blocked).
 - Site settings, audit trail, CSRF/origin checks, hashed single-use tokens, session revocation, keyed rate limits, encrypted private runtime state and security headers.
 - Integration, HTTP, SMTP-socket and CI checks under `tests/` and `.github/workflows/kingdombuilders.yml`.
 

@@ -116,12 +116,16 @@ final class Admin {
                 try {
                     $input=$_POST;
                     if($smtp) { $input=array_merge(Settings::all(),$_POST); $input['smtp_enabled']=isset($_POST['smtp_enabled']); }
-                    else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt','large_text'] as $key) $input[$key]=isset($_POST[$key]); }
+                    else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt','large_text','google_enabled'] as $key) $input[$key]=isset($_POST[$key]); }
                     $values=Settings::validate($input,$smtp);
                     if($smtp) {
                         try { $values['smtp_secret']=Settings::smtpPassword($input); }
                         catch(\Throwable $sealError) { error_log('KB SMTP seal: '.get_class($sealError)); throw new UserError('The SMTP password could not be encrypted on this server. Ask your host to enable the PHP OpenSSL extension, then try again.'); }
                         $values['php_cli_path']=trim((string)($input['php_cli_path']??''));
+                    } else {
+                        try { $values['google_client_secret']=Settings::googleSecret($input); }
+                        catch(\Throwable $sealError) { error_log('KB Google seal: '.get_class($sealError)); throw new UserError('The Google client secret could not be encrypted on this server. Ask your host to enable the PHP OpenSSL extension, then try again.'); }
+                        if (!empty($values['google_enabled']) && $values['google_client_secret']==='') throw new UserError('Paste the Google client secret before turning on Google sign-in.');
                     }
                     if(!$smtp || $action!=='test') {
                         try {

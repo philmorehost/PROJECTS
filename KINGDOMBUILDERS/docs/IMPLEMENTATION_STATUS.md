@@ -90,3 +90,18 @@ New in build 0.4.0: a dedicated **Cron job** admin page (also linked in the admi
 **Send now** per queued message with the real SMTP diagnosis, "Retrying" with the next
 attempt time instead of a bare "Pending", a reader-facing A / A+ / A++ text-size control
 in the footer, and 19px base text.
+
+### Build 0.5.0: Google sign-in
+
+- **Continue with Google** on both the sign-in and registration pages, using the OAuth
+  2.0 authorization-code flow with PKCE, a single-use state, a nonce and an ID-token
+  claim check (issuer, audience, expiry, nonce) plus a userinfo cross-check.
+- Accounts are linked by verified email: existing members keep their progress, a new
+  Google identity creates a verified member when registration is open, and suspended
+  accounts are refused. No schema change is required.
+- Client ID and secret live in **Admin → Settings → Google sign-in**; the secret is
+  sealed with the installation key and never rendered. The exact redirect URI is shown
+  with a copy button, alongside Google Cloud console instructions and a readiness badge.
+- Tests cover PKCE/URL construction, state replay and expiry, account linking,
+  suspension, closed registration, settings validation, the redirect to Google and a
+  forged callback — without contacting Google.

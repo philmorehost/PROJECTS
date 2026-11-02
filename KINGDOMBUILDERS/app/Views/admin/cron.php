@@ -13,6 +13,7 @@ use KB\Security;
 
 <?php
 $showPathField = true;
+$pathForm = true;
 require __DIR__ . '/_cron.php';
 ?>
 
