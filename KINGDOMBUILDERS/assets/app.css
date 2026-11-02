@@ -74,3 +74,179 @@
 @media(max-width:1000px){.modern-hero{grid-template-columns:1fr;min-height:auto}.hero-visual{min-height:440px}.features-grid{grid-template-columns:1fr 1fr}.admin-insights{grid-template-columns:1fr}.home-stats{grid-template-columns:1fr 1fr}.home-stats>div:nth-child(2){border-right:0}.home-stats>div:nth-child(-n+2){border-bottom:1px solid var(--line);padding-bottom:18px}.home-stats>div:nth-child(n+3){padding-top:18px}}
 @media(max-width:760px){.steps-grid,.features-grid{grid-template-columns:1fr}.home-section{margin:50px 0}.section-intro h2{font-size:1.9rem}.verse-banner h2{font-size:2rem}.modern-cta{padding:30px}.floating-verse{right:0;bottom:0}.quiz-preview-card{transform:none}.hero-trust{flex-direction:column;gap:8px}}
 @media(max-width:430px){.home-stats{grid-template-columns:1fr}.home-stats>div{border-right:0;border-bottom:1px solid var(--line);padding:14px 0}.home-stats>div:last-child{border-bottom:0}.hero-visual{min-height:400px}.quiz-preview-card{padding:20px}.floating-verse{display:none}}
+
+/* ── Readability pass ─────────────────────────────────────────────────────────
+   The previous base was 15px with plenty of 0.6–0.8rem labels. Everything is
+   rem-based, so a larger root plus explicit minimums lifts body copy, forms,
+   tables and labels together without changing the layout system. */
+:root{font-size:17px}
+body{line-height:1.7}
+p,li,dd,dt{line-height:1.75}
+small{font-size:.88rem;line-height:1.6}
+.eyebrow{font-size:.8rem;letter-spacing:1.8px}
+.site-header nav{font-size:.95rem}
+.site-header nav .button{font-size:.86rem}
+.brand{font-size:1.08rem}
+.brand small{font-size:.62rem;letter-spacing:1.8px}
+.button{font-size:.95rem;padding:14px 24px;min-height:50px}
+.button.small{font-size:.86rem;min-height:42px;padding:10px 18px}
+.button-lg{font-size:1rem!important}
+.text-link{font-size:.92rem}
+.nav-button{font-size:.95rem}
+label{font-size:.95rem}
+label small{font-size:.85rem}
+input:not([type=checkbox]),select,textarea{font-size:1rem;min-height:49px;padding:12px 14px}
+.check-label{font-size:.93rem}
+.notice{font-size:.95rem;line-height:1.7}
+.notice p{font-size:.9rem}
+.site-footer{font-size:.85rem}
+.hero-copy>p,.hero-lead{font-size:1.08rem!important;line-height:1.85}
+.hero-copy .eyebrow{font-size:.78rem}
+.hero-trust{font-size:.9rem}
+.hero-trust li{gap:7px}
+.hero-note{font-size:.85rem}
+.features p{font-size:.98rem}
+.feature-number{font-size:.76rem}
+.verse-card small,.verse-card div>span{font-size:.7rem;letter-spacing:1.5px}
+.verse-card p{font-size:17px}
+.community-banner .eyebrow{font-size:.74rem}
+.community-banner h2{font-size:1.95rem}
+.setup-heading p,.setup-aside>p,.setup-aside small,.aside-note,.setup-panel>p{font-size:.98rem}
+.steps li{font-size:.9rem}
+.steps li>span{font-size:.85rem}
+.checks>div{font-size:.92rem}
+.checks small{font-size:.8rem}
+.checks b{font-size:.8rem}
+.terms{font-size:.92rem}
+.auth-story p{font-size:1.02rem}
+.auth-panel>p,.auth-card>p{font-size:.98rem}
+.auth-card h1{font-size:2.6rem}
+.form-footer{font-size:.9rem}
+.page-heading p{font-size:.98rem}
+.admin-nav a{font-size:.9rem;padding:15px 0}
+.stat-card>span{font-size:.9rem}
+.stat-card>small{font-size:.82rem}
+.activity-list strong{font-size:.94rem}
+.activity-list small{font-size:.82rem}
+.start-card>p,.quiz-start-card>p,.member-note p{font-size:.96rem;line-height:1.85}
+.start-card>a{font-size:.92rem}
+.quiz-facts>span{font-size:.82rem;line-height:1.55}
+.quiz-start-card>small{font-size:.8rem}
+.quiz-facts strong{font-size:1.75rem}
+.member-note .eyebrow{font-size:.7rem}
+table{font-size:.95rem}
+th{font-size:.8rem;letter-spacing:.8px}
+td small{font-size:.82rem}
+.badge{font-size:.78rem;letter-spacing:.4px}
+.actions{font-size:.88rem}
+.inline-button,.danger-link{font-size:.88rem}
+.empty{font-size:.98rem}
+.pagination{font-size:.88rem}
+.support-bar{font-size:.88rem}
+.quiz-card h1{font-size:2.1rem;line-height:1.5}
+.answer{font-size:1rem;padding:17px 19px}
+.answer-letter{font-size:.85rem;height:32px;width:32px}
+.quiz-status{font-size:.85rem}
+.quiz-feedback{font-size:.92rem}
+.result-summary span:not(.badge){font-size:.85rem}
+.review-item h2{font-size:1.5rem}
+.review-options>div{font-size:.94rem;padding:15px}
+.review-options span{font-size:.82rem}
+.review-options small{font-size:.72rem}
+.quiz-preview-question{font-size:1.35rem}
+.quiz-preview-reference{font-size:.72rem;letter-spacing:1.4px}
+.quiz-preview-timer{font-size:.88rem}
+.preview-option{font-size:.92rem;padding:13px 15px}
+.preview-option b{font-size:.78rem}
+.quiz-preview-footer{font-size:.8rem;color:#55696d}
+.home-stats span{font-size:.86rem}
+.section-intro p{font-size:1.02rem;line-height:1.8}
+.step-card p,.feature-card p{font-size:.97rem;line-height:1.8}
+.feature-card p{font-size:.95rem}
+.step-card h3,.feature-card h3{font-size:1.18rem}
+.home-stats strong{font-size:2.6rem}
+.insight-card p{font-size:.9rem}
+.weekly-list li{font-size:.82rem}
+.site-header .nav-wrap{height:auto;min-height:100px;padding:14px 0}
+.admin-nav .shell{flex-wrap:wrap;gap:26px}
+.panel{padding:32px}
+.timer{font-size:1rem}
+::placeholder{font-size:.98rem}
+
+.copy-field{display:flex;gap:12px;align-items:stretch;margin:18px 0 12px;flex-wrap:wrap}
+.copy-field code{flex:1 1 340px;display:block;background:#f3f7f2;border:1px dashed #c6d3c6;border-radius:9px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.94rem;line-height:1.6;color:#1d3c33;word-break:break-word;overflow-wrap:anywhere}
+.copy-field .button{flex-shrink:0;align-self:stretch}
+.copy-field .button.copied{background:var(--green);border-color:var(--green);color:#fff}
+.cron-panel .lead-small{font-size:1rem;color:var(--muted);max-width:75ch}
+.cron-path-label{margin:18px 0 8px;max-width:620px}
+.cron-help{margin:20px 0;border:1px solid var(--line);border-radius:12px;background:#fbfcf9;overflow:hidden}
+.cron-help summary{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:16px 20px;font-weight:700;font-size:.98rem;cursor:pointer;background:#f4f8f2}
+.cron-help summary::-webkit-details-marker{display:none}
+.cron-help summary span:last-child{font-size:1.3rem;color:var(--green);transition:transform .2s}
+.cron-help[open] summary span:last-child{transform:rotate(45deg)}
+.cron-help>div{padding:18px 22px 22px}
+.cron-steps{margin:0 0 18px;padding-left:22px;display:flex;flex-direction:column;gap:12px;font-size:.94rem}
+.cron-steps li{padding-left:4px}
+.cron-steps code{font-size:.9rem}
+.cron-facts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.cron-facts>div{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+.cron-facts span{display:block;font-size:.78rem;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.cron-facts code{background:transparent;padding:0;font-size:.88rem;word-break:break-word}
+.cron-facts em{font-style:normal;color:var(--green)}
+.cron-status{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px;background:#f4f8f2;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.cron-status>div span{display:block;font-size:.78rem;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
+.cron-status>div strong{font-size:1rem;font-weight:650}
+.help-panel h3{font-size:1.05rem;margin-bottom:8px}
+.help-panel p{font-size:.92rem;color:var(--muted);margin-bottom:0}
+.help-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:22px 0}
+.help-grid>div{padding:16px 18px;border:1px solid var(--line);border-radius:10px;background:#fbfcf9}
+.help-panel>p.muted{font-size:.88rem;line-height:1.8}
+.notice.success{background:var(--soft-green);border-color:#dbe7df;color:#305d45}
+.sticky-actions{padding:6px 0 10px}
+.member-stats .stat-card>span b,.admin-stats .stat-card>span b{font-size:1.1rem}
+.dashboard-heading h1{font-size:clamp(2.2rem,3.6vw,3rem)}
+.section-intro h2{font-size:clamp(1.9rem,3vw,2.4rem)}
+
+@media(max-width:1000px){
+  .help-grid{grid-template-columns:1fr 1fr}
+  .cron-status{grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+  .site-header .nav-wrap{min-height:84px;padding:12px 0}
+  .brand{font-size:1rem}
+  .brand small{font-size:.56rem}
+  .site-header nav{font-size:.92rem;gap:14px}
+  .site-header nav .button{font-size:.84rem;padding:9px 12px;min-height:40px}
+  .page-heading h1{font-size:2.5rem}
+  .hero-copy h1{font-size:clamp(2.4rem,9vw,3.2rem)}
+  .button{min-height:50px}
+  .panel{padding:24px}
+  .cron-facts,.help-grid{grid-template-columns:1fr}
+  .cron-help>div{padding:16px 16px 20px}
+  .copy-field code{font-size:.88rem}
+  .copy-field .button{width:100%}
+  .stat-card>strong{font-size:2.6rem}
+  .quiz-start-card h2{font-size:2.3rem}
+  .member-note h2{font-size:2.2rem}
+  .auth-story h1{font-size:2.6rem}
+}
+@media(max-width:560px){
+  .site-header .nav-wrap{flex-wrap:wrap;gap:10px;padding:12px 0}
+  .site-header nav{width:100%;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:11px}
+  .site-header nav .button{font-size:.86rem;min-height:42px;padding:9px 14px}
+  .brand{max-width:none;font-size:1.02rem}
+}
+@media(max-width:430px){
+  .brand{max-width:none;font-size:.98rem}
+  .site-header nav{font-size:.88rem;gap:11px}
+  .site-header nav .button{font-size:.8rem;gap:6px}
+  .hero-copy h1{font-size:2.55rem;letter-spacing:-1.4px}
+  .hero-copy .eyebrow{font-size:.7rem;letter-spacing:1.2px}
+  .hero-actions .text-link{font-size:.88rem}
+  .section-intro h2{font-size:1.85rem}
+  .verse-banner h2{font-size:1.9rem}
+  .home-stats strong{font-size:2.4rem}
+  .floating-verse{display:none}
+  .cron-status{grid-template-columns:1fr}
+  .page-heading h1{font-size:2.2rem}
+}

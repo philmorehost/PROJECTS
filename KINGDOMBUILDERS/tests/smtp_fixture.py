@@ -31,8 +31,13 @@ async def main():
         result = subprocess.run([os.environ.get("PHP_BIN", "php"), str(ROOT / "tests/smtp_send.php")], env=env, capture_output=True, text=True, timeout=30)
         if result.returncode:
             raise RuntimeError(result.stderr or result.stdout)
-        stats = json.loads(result.stdout.strip().splitlines()[-1])
+        result_data = json.loads(result.stdout.strip().splitlines()[-1])
+        stats = result_data["process"]
         assert stats == {"sent": 1, "failed": 0}, stats
+        failure = result_data["failure"]
+        assert failure and failure["stage"] == "connection", failure
+        assert failure["retryable"] is True, failure
+        assert "app-password-never-print" not in failure["message"], failure
         assert len(messages) == 1, messages
         sender, recipients, content = messages[0]
         assert sender == "notifications@example.test"

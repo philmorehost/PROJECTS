@@ -96,31 +96,59 @@ final class Admin {
         }
         if($route==='admin/settings' || $route==='admin/smtp') {
             $smtp=$route==='admin/smtp';
+            $test=null; $saved=false;
             if(is_post()) {
+                $action=post('action');
                 try {
                     $input=$_POST;
                     if($smtp) { $input=array_merge(Settings::all(),$_POST); $input['smtp_enabled']=isset($_POST['smtp_enabled']); }
                     else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt'] as $key) $input[$key]=isset($_POST[$key]); }
                     $values=Settings::validate($input,$smtp);
-                    if($smtp) $values['smtp_secret']=Settings::smtpPassword($input);
-                    DB::transaction(static function () use($values,$smtp): void { foreach($values as $key=>$value) Settings::put($key,$value); Audit::activity($smtp?'settings.smtp_updated':'settings.updated','site',1); });
-                    flash($smtp?'Email settings saved. Send a test message and run the mail worker.':'Settings saved. New settings apply to new assessments.'); redirect($route);
+                    if($smtp) { $values['smtp_secret']=Settings::smtpPassword($input); $values['php_cli_path']=$input['php_cli_path']??''; }
+                    if(!$smtp || $action!=='test') {
+                        DB::transaction(static function () use($values,$smtp): void { foreach($values as $key=>$value) Settings::put($key,$value); Audit::activity($smtp?'settings.smtp_updated':'settings.updated','site',1); });
+                        $saved=true;
+                        flash($smtp?'Email settings saved. Send a test message, then make sure the scheduled task is running.':'Settings saved. New settings apply to new assessments.');
+                        if(!$smtp) redirect('admin/settings');
+                        if($action!=='save_test') redirect('admin/smtp');
+                    }
+                    if(in_array($action,['test','save_test'],true)) {
+                        Security::throttle('smtp.test',Security::sourceHash(),10);
+                        Settings::preview($values);
+                        try {
+                            $result=Mail::sendTest($admin['email']);
+                            $test=['ok'=>true,'message'=>'Delivery succeeded. A test message was accepted for '.$admin['email'].'.','id'=>$result['message_id']];
+                            Audit::activity('settings.smtp_tested','site',1,['ok'=>true]);
+                        } catch(MailError $e) {
+                            $test=['ok'=>false,'message'=>$e->getMessage(),'stage'=>$e->stage,'code'=>$e->smtpCode];
+                            Audit::activity('settings.smtp_tested','site',1,['ok'=>false,'stage'=>$e->stage]);
+                        } catch(\Throwable $e) {
+                            error_log('KB SMTP test: '.get_class($e));
+                            $test=['ok'=>false,'message'=>'The test could not be completed. Check the server error log for the reference and try again.','stage'=>'internal','code'=>null];
+                        }
+                    }
                 } catch(UserError $e) {$error=$e->getMessage();}
             }
-            render($smtp?'admin/smtp':'admin/settings',['settings'=>Settings::all(),'error'=>$error]);
+            if(!$smtp) render('admin/settings',['settings'=>Settings::all(),'error'=>$error]);
+            render('admin/smtp',['settings'=>Settings::all(),'error'=>$error,'test'=>$test,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'saved'=>$saved]);
         }
         if($route==='admin/notifications') {
+            $testError=null;
             if(is_post()) {
                 $action=post('action');
-                if($action==='test') { Mail::queue($admin['email'],Settings::get('site_title').' · SMTP test',"This is a test notification from your website. SMTP is working.",'test:'.bin2hex(random_bytes(16))); flash('Test message queued. The background worker will deliver it.'); }
+                if($action==='test') {
+                    try { Security::throttle('smtp.test',Security::sourceHash(),10); Mail::sendTest($admin['email']); flash('Test message accepted for '.$admin['email'].'. Check the inbox and spam folder.'); }
+                    catch(MailError|UserError $e) { $testError=$e->getMessage(); Audit::activity('settings.smtp_tested','site',1,['ok'=>false]); }
+                    catch(\Throwable $e) { error_log('KB SMTP test: '.get_class($e)); $testError='The test could not be completed. Check the server error log and try again.'; }
+                }
                 elseif($action==='retry') { $id=(int)post('id'); DB::transaction(static function () use($id): void { DB::run('UPDATE mail_queue SET status="pending",attempts=0,available_at=?,last_error=NULL,lease_token=NULL,leased_at=NULL WHERE id=? AND status="failed"',[now(),$id]); Audit::activity('notification.retried','notification',$id); }); flash('Notification queued for retry.'); }
                 elseif($action==='process') { if(!config('local_preview',false)) throw new UserError('Use the scheduled command-line worker in production.',403); $stats=Mail::process(5); flash('Local worker: '.$stats['sent'].' sent; '.$stats['failed'].' unsuccessful.','info'); }
                 else throw new UserError('Unknown action.');
-                redirect('admin/notifications');
+                if($action!=='test' || !$testError) redirect('admin/notifications');
             }
             [$page,$pages,$offset]=paginate((int)DB::value('SELECT COUNT(*) FROM mail_queue'));
             $mails=DB::all('SELECT id,recipient,subject,status,deliveries,attempts,available_at,last_error,sent_at,created_at FROM mail_queue ORDER BY id DESC LIMIT 20 OFFSET '.$offset);
-            render('admin/notifications',['mails'=>$mails,'page'=>$page,'pages'=>$pages]);
+            render('admin/notifications',['mails'=>$mails,'page'=>$page,'pages'=>$pages,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'testError'=>$testError]);
         }
         if($route==='admin/audit') {
             [$page,$pages,$offset]=paginate((int)DB::value('SELECT COUNT(*) FROM audit_events'));

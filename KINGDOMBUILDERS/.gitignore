@@ -4,3 +4,6 @@
 *.dat.tmp
 /site.php
 /coverage/
+
+# Python bytecode from local test runs
+__pycache__/

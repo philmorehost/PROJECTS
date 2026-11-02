@@ -54,7 +54,7 @@ jobs:
           coverage: none
       - name: Lint PHP and JavaScript
         run: |
-          find KINGDOMBUILDERS -name '*.php' -print0 | xargs -0 -n1 php -l
+          bash KINGDOMBUILDERS/tests/ci-run.sh bash -c "find KINGDOMBUILDERS -name '*.php' -print0 | xargs -0 -n1 php -l"
           node --check KINGDOMBUILDERS/assets/quiz.js
           node --check KINGDOMBUILDERS/assets/admin.js
       - name: Prepare disposable databases
@@ -70,10 +70,10 @@ jobs:
         run: |
           php tests/make_config.php
           php -r 'require "app/bootstrap.php"; foreach(array_filter(array_map("trim",explode(";",file_get_contents("database/schema.sql")))) as $sql) KB\DB::connection()->exec($sql);'
-          php tests/run.php
-          python3 tests/smtp_fixture.py
-          php bin/worker.php
-          php bin/check.php
+          bash tests/ci-run.sh php tests/run.php
+          bash tests/ci-run.sh python3 tests/smtp_fixture.py
+          bash tests/ci-run.sh php bin/worker.php
+          bash tests/ci-run.sh php bin/check.php
       - name: Full HTTP installation and smoke tests
         working-directory: KINGDOMBUILDERS
         env:
@@ -86,11 +86,11 @@ jobs:
           php -S 127.0.0.1:8080 router.php > "$RUNNER_TEMP/kb-http.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/kb-http.pid"
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && break || sleep 1; done
-          python3 tests/http_smoke.py
+          bash tests/ci-run.sh python3 tests/http_smoke.py
           KB_MEMBER_ID=$(php tests/seed_member.php "$KB_MEMBER_EMAIL" "$KB_MEMBER_PASSWORD")
           export KB_MEMBER_ID
           unset KB_INSTALL
-          python3 tests/http_smoke.py
+          bash tests/ci-run.sh python3 tests/http_smoke.py
       - name: Server log on failure
         if: failure()
         run: cat "$RUNNER_TEMP/kb-http.log" || true

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 if(PHP_SAPI!=='cli') { http_response_code(404); exit; }
 require dirname(__DIR__).'/app/bootstrap.php';
-use KB\{DB,Mail,Quiz,Activation,Security};
+use KB\{DB,Mail,Quiz,Activation,Security,Cron};
 if(!KB\installed()) { fwrite(STDERR,"Installation required.\n"); exit(1); }
 $lock=fopen(KB\config_path().'/worker.lock','c');
 if(!$lock || !flock($lock,LOCK_EX|LOCK_NB)) { echo "Worker already running.\n"; exit(0); }
@@ -15,6 +15,8 @@ try {
     DB::run('DELETE FROM access_tokens WHERE expires_at<?',[gmdate('Y-m-d H:i:s',time()-86400)]);
     DB::run('DELETE FROM audit_events WHERE created_at<? LIMIT 1000',[gmdate('Y-m-d H:i:s',time()-90*86400)]);
     DB::run('DELETE FROM mail_queue WHERE status="sent" AND sent_at<? LIMIT 1000',[gmdate('Y-m-d H:i:s',time()-30*86400)]);
+    try { Cron::record(['ok'=>true,'sent'=>$stats['sent'],'failed'=>$stats['failed'],'expired'=>$count,'php'=>PHP_BINARY]); }
+    catch(Throwable $heartbeatError) { error_log('KB worker heartbeat: '.get_class($heartbeatError)); }
     echo json_encode(['expired_finalized'=>$count]+$stats).PHP_EOL;
-} catch(Throwable $e) { error_log('KB worker: '.get_class($e)); fwrite(STDERR,"Worker failed; inspect server logs.\n"); exit(1); }
+} catch(Throwable $e) { error_log('KB worker: '.get_class($e)); try { Cron::record(['ok'=>false,'error'=>get_class($e)]); } catch(Throwable) {} fwrite(STDERR,"Worker failed; inspect server logs.\n"); exit(1); }
 finally { flock($lock,LOCK_UN); fclose($lock); }

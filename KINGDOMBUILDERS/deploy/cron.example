@@ -1,4 +1,13 @@
-# Install for a dedicated non-login service user. Adjust paths and PHP binary.
-# The worker is safe to overlap: a private flock skips duplicate runs, and
-# queue claims are leased. Run every minute; monitor failures and queue age.
-* * * * * /usr/bin/php /var/www/kingdombuilders/bin/worker.php >> /var/log/kingdombuilders/worker.log 2>&1
+# Delivery and maintenance worker. Run once per minute.
+# The app shows a ready-to-copy command (with this server's real paths) at
+# Admin -> Email & SMTP -> Scheduled task. The form below is the same thing.
+#
+# KB_CONFIG_DIR must point at the private configuration directory used by the
+# website (site.php, installed.lock, runtime.dat). Without it the worker looks
+# for a sibling "kb-private-<hash>" directory and may not find your install.
+* * * * * KB_CONFIG_DIR=/var/lib/kingdombuilders/private /usr/bin/php /var/www/kingdombuilders/bin/worker.php >> /var/lib/kingdombuilders/private/worker.log 2>&1
+
+# Shared hosting (cPanel/Plesk): paste the single command the admin page gives
+# you into Cron Jobs -> Add New Cron Job, choose "Once Per Minute (* * * * *)".
+# If no cron tool exists, ask the host to schedule it; a web request cannot
+# replace it. Successful runs update worker-heartbeat.json, shown on the page.

@@ -46,3 +46,16 @@ Updated: 2026-11-02. This is a working foundation, not a claim of production pen
 - Mail delivery is at-least-once under ambiguous network failure; remote duplicates are possible even though queue rows are idempotent.
 - Random question selection uses bounded pivot sampling, not `ORDER BY RAND()` over large banks.
 - Focus-change monitoring is advisory and server-enforced by policy; it is not a proctoring guarantee.
+
+## Follow-up: SMTP diagnostics, cron guidance and readability
+
+- `Audit::log()` normalizes string IDs returned by some MySQL/PDO configurations; the
+  `/login` TypeError that surfaced as a generic 500 page is covered by a regression test.
+- SMTP saving and testing now report the exact failure stage instead of a generic
+  "failed" message. Tests can run against unsaved form values, and a successful test
+  no longer implies queued activity mail was delivered — that still needs the worker.
+- The SMTP page and Notifications page show a copy-ready cron command
+  (`KB_CONFIG_DIR` included), cPanel/SSH/no-scheduler instructions, editable PHP CLI
+  path, and a worker heartbeat recorded by each run.
+- Base typography moved from 15px to 17px with explicit minimum sizes for labels,
+  tables, badges and helper text; mobile header wraps instead of shrinking text.

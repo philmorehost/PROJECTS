@@ -76,6 +76,18 @@ ok("pass rate" in admin.get("/admin")[2], "admin dashboard insights render")
 for path in ["/admin", "/admin/questions", "/admin/users", "/admin/results", "/admin/settings", "/admin/smtp", "/admin/notifications", "/admin/audit"]:
     code, _, html = admin.get(path)
     ok(code == 200 and "Temporarily unavailable" not in html, "admin page " + path)
+smtp_form = {"smtp_enabled": "1", "smtp_host": "mail.example.test", "smtp_port": "587", "smtp_security": "tls", "smtp_username": "postmaster@example.test", "smtp_password": "Very-Secret-App-Password-1", "from_name": "KINGDOMBUILDERS", "from_email": "notifications@example.test", "php_cli_path": "", "action": "save"}
+ok(admin.post("/admin/smtp", smtp_form)[0] == 200, "save SMTP settings")
+html = admin.get("/admin/smtp")[2]
+ok("mail.example.test" in html and "Delivery enabled" in html, "SMTP settings persist after reload")
+ok("Very-Secret-App-Password-1" not in html, "SMTP password never rendered")
+ok("cron-command" in html and "Copy command" in html and "bin/worker.php" in html, "cron command is copyable")
+fail_form = dict(smtp_form, smtp_host="127.0.0.1", smtp_port="1", action="test")
+code, _, html = admin.post("/admin/smtp", fail_form)
+ok(code == 200 and "Test email failed" in html and "Could not connect" in html, "SMTP test reports a safe diagnosis")
+ok("Very-Secret-App-Password-1" not in html, "failed SMTP test does not leak the password")
+ok("mail.example.test" in admin.get("/admin/smtp")[2], "unsaved test values do not replace saved SMTP settings")
+ok("cron-command" in admin.get("/admin/notifications")[2], "notifications page exposes the cron command")
 ok(admin.post("/admin/settings", {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1"})[0] == 200, "save quiz settings")
 ok(b"K" in urllib.request.urlopen(BASE + "/favicon.svg").read(), "dynamic favicon")
 question = {"action": "save", "id": "0", "category": "Smoke", "question_text": "Smoke question " + RUN, "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "0", "reference": "Test", "explanation": "", "is_active": "1"}

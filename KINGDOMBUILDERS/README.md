@@ -9,7 +9,7 @@ A Bible-learning community and CBT platform rebuilt in **vanilla PHP 8.2+ / MySQ
 - Member registration, email confirmation, login/logout, password reset, profile and password change.
 - Administrator dashboard, question bank CRUD, member CRUD, suspend/unsuspend, audited “sign in as”, results and formula-safe CSV export.
 - Server-scored quizzes with immutable question/answer snapshots, configurable timing, forward-only or backtracking mode, saved progress, focus-change policy, results review and email notifications.
-- Admin-configurable SMTP with a durable outbox, retries, test message, notification queue and CLI worker.
+- Admin-configurable SMTP with a durable outbox, retries, a synchronous test that reports the failing stage, a copy-ready cron command, notification queue and CLI worker.
 - Site settings, audit trail, CSRF/origin checks, hashed single-use tokens, session revocation, keyed rate limits, encrypted private runtime state and security headers.
 - Integration, HTTP, SMTP-socket and CI checks under `tests/` and `.github/workflows/kingdombuilders.yml`.
 
@@ -44,11 +44,8 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
 2. Keep `KB_CONFIG_DIR` and `KB_SESSION_DIR` outside the web root, owned by the PHP user, mode `0700`.
 3. Create an empty database and a least-privilege application user.
 4. Visit the site once and complete the installer. It locks itself after completion.
-5. Schedule the worker every minute:
-   ```cron
-   * * * * * /usr/bin/php /path/to/KINGDOMBUILDERS/bin/worker.php >> /var/log/kingdombuilders/worker.log 2>&1
-   ```
-6. In **Email & SMTP**, configure the sender, enable SMTP, send a test message and confirm delivery.
+5. In **Email & SMTP**, enter the provider details, use **Test without saving** to confirm the connection, then save.
+6. Open **Scheduled task** on the same page and copy the ready-made cron command into your host's cron tool (once per minute). It includes `KB_CONFIG_DIR`, so the worker reads the same private configuration as the site. The card shows setup steps and the last recorded run.
 7. Back up the database **and** private configuration directory together. Losing the private key makes encrypted state unrecoverable.
 
 Apache rules are in `.htaccess`; an Nginx example is in `deploy/nginx.conf.example`. The development `router.php` is not a production server.

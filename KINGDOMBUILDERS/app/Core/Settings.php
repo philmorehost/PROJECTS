@@ -12,7 +12,7 @@ final class Settings {
         'practice_feedback' => false, 'one_attempt' => false, 'max_tab_switches' => 3,
         'smtp_enabled' => false, 'smtp_host' => '', 'smtp_port' => 587, 'smtp_security' => 'tls',
         'smtp_username' => '', 'smtp_secret' => '', 'from_email' => '', 'from_name' => 'KINGDOMBUILDERS',
-        'admin_email' => '',
+        'admin_email' => '', 'php_cli_path' => '',
     ];
     public static function all(): array {
         if (self::$cache === null) {
@@ -22,6 +22,12 @@ final class Settings {
         return self::$cache;
     }
     public static function flushCache(): void { self::$cache = null; }
+    /** Apply unsaved values for the current request only (used to test SMTP before saving). */
+    public static function preview(array $overrides): void {
+        $all = self::all();
+        foreach ($overrides as $key => $value) $all[$key] = $value;
+        self::$cache = $all;
+    }
     public static function get(string $key, mixed $default = null): mixed { return self::all()[$key] ?? $default ?? self::DEFAULTS[$key] ?? null; }
     public static function put(string $key, mixed $value): void {
         DB::run('INSERT INTO settings(setting_key,setting_value,updated_at) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=VALUES(updated_at)', [$key,json_encode($value,JSON_THROW_ON_ERROR),now()]);
@@ -41,11 +47,18 @@ final class Settings {
         }
         if (!in_array($out['smtp_security'], ['tls','ssl','none'], true)) throw new UserError('Choose a supported SMTP security mode.');
         if ($out['smtp_security'] === 'none' && !config('local_preview', false)) throw new UserError('Unencrypted SMTP is only permitted in an explicitly local preview.');
+        if ($out['php_cli_path'] !== '' && (!str_starts_with($out['php_cli_path'], '/') || !preg_match('#^/[A-Za-z0-9_./-]+$#', $out['php_cli_path']))) throw new UserError('Enter the absolute PHP command-line path, for example /usr/local/bin/php, or leave it blank to detect automatically.');
         if (!valid_email($out['admin_email'])) throw new UserError('Enter a valid administrator notification email.');
+        $out['smtp_host'] = strtolower(rtrim($out['smtp_host'], '.'));
+        if ($out['smtp_host'] !== '' && (strlen($out['smtp_host']) > 253 || !preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/', $out['smtp_host']))) {
+            throw new UserError('Enter a valid SMTP hostname, for example mail.yourdomain.com (without https:// or a port).');
+        }
+        if (strlen($out['smtp_username']) > 190 || preg_match('/[\r\n\0]/', $out['smtp_username'])) throw new UserError('Invalid SMTP username.');
+        if ($out['from_email'] !== '' && !valid_email($out['from_email'])) throw new UserError('Enter a valid sender email address.');
         if ($out['smtp_enabled']) {
-            if (!preg_match('/^[a-zA-Z0-9.-]+:\d+$/', $out['smtp_host'] . ':1') || $out['smtp_host'] === '' || str_contains($out['smtp_host'], '/')) throw new UserError('Enter a valid SMTP hostname.');
-            if (!valid_email($out['from_email'])) throw new UserError('Enter a valid sender email.');
-            if (strlen($out['smtp_username']) > 190 || preg_match('/[\r\n]/', $out['smtp_username'])) throw new UserError('Invalid SMTP username.');
+            if ($out['smtp_host'] === '') throw new UserError('Enter the SMTP host before enabling delivery.');
+            if (!valid_email($out['from_email'])) throw new UserError('Enter a valid sender email address before enabling delivery.');
+            if ($out['from_name'] === '') throw new UserError('Enter a sender name before enabling delivery.');
         }
         unset($out['smtp_secret']);
         return $out;

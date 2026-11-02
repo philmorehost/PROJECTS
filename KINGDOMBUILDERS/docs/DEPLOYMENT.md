@@ -60,27 +60,50 @@ The installer uses an exclusive lock and becomes unavailable after completion. I
 
 ## 6. Background worker (required)
 
+Queued email is delivered by `bin/worker.php`. **Admin → Email & SMTP → Scheduled task**
+shows a copy-ready command built from this server's real paths, plus a "How to add this
+cron job" guide, the PHP CLI path setting, and the last-run heartbeat.
+
 ```cron
-* * * * * /usr/bin/php /var/www/kingdombuilders/bin/worker.php >> /var/log/kingdombuilders/worker.log 2>&1
+* * * * * KB_CONFIG_DIR=/var/lib/kingdombuilders/private /usr/bin/php /var/www/kingdombuilders/bin/worker.php >> /var/lib/kingdombuilders/private/worker.log 2>&1
 ```
 
-Each run:
+- cPanel/Plesk: **Cron Jobs → Add New Cron Job**, schedule `* * * * *`, paste the
+  command from the admin page. Select the PHP version your site uses in MultiPHP
+  Manager; enter that binary's absolute path in the admin form if detection is wrong.
+- SSH: `crontab -e`, add the same line.
+- No scheduler: ask the host to add it. Hitting a URL from a browser is **not** a
+  substitute — delivery must run as a command-line task.
+- Verify: within two minutes the SMTP page shows a recent heartbeat. Then send a test
+  email and confirm the queue row becomes **Sent**.
 
-- finalizes expired attempts in batches;
-- refreshes domain activation (6-hour cache, ≤24-hour outage grace);
-- delivers up to 20 queued emails with leased claims and bounded retries;
-- prunes expired tokens, old rate limits, audit events older than 90 days and sent mail older than 30 days.
-
-Overlapping runs are safe: `flock` skips duplicates and queue claims use random lease tokens. A lease older than 15 minutes is marked failed and requires manual retry to avoid ambiguous duplicate delivery. Monitor worker exit codes, queue age and failed messages.
+Each run finalizes expired attempts, refreshes domain activation (6-hour cache,
+≤24-hour outage grace), delivers up to 20 emails with leased claims and bounded
+retries, and prunes expired tokens, old rate limits, audit rows older than 90 days and
+sent mail older than 30 days. Overlapping runs are safe (`flock`); a lease older than
+15 minutes is marked failed and requires manual retry. Monitor exit codes, queue age,
+`worker-heartbeat.json` and `worker.log`.
 
 ## 7. SMTP
 
-In **Admin → Email & SMTP** set host, port, security (STARTTLS/SSL), username, password, sender address/name and administrator notification address. Enable SMTP, save, send a test message and run/await the worker.
+In **Admin → Email & SMTP** set host, port, security (STARTTLS/SSL), username,
+password, sender address/name and administrator notification address.
 
-- Passwords are encrypted at rest and never rendered back into HTML.
-- Unencrypted SMTP is allowed only when `local_preview` is explicitly true.
+- **Test without saving** validates the current form values against the real server and
+  reports the exact stage that failed (connection, STARTTLS, TLS, authentication,
+  sender, recipient or message data) with the SMTP reply code. It never changes saved
+  settings and never renders the password back.
+- **Save & send test** persists first, then sends.
+- The test sends synchronously to the administrator email; queued activity email still
+  depends on the cron worker.
+- Passwords are encrypted at rest. Unencrypted SMTP is allowed only when
+  `local_preview` is explicitly true.
 - Notifications are queued transactionally with the activity that produced them.
-- Delivery is at-least-once: an ambiguous network failure after SMTP acceptance can produce a duplicate on retry. Idempotency keys prevent duplicate queue rows, not duplicate remote acceptance.
+  Delivery is at-least-once: an ambiguous failure after SMTP acceptance can duplicate a
+  message on retry. Idempotency keys prevent duplicate queue rows, not remote duplicates.
+- Common rejection causes: host entered with `https://` or a port; wrong port/security
+  pair (587 STARTTLS vs 465 implicit TLS); normal password instead of an app password;
+  From address not authorized by the provider; outbound SMTP blocked by the host.
 
 ## 8. Backups and recovery
 
