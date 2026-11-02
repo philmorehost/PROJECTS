@@ -126,3 +126,28 @@ in the footer, and 19px base text.
 
 Verification: PHP lint, CSS tree validation, 23 jsdom UI checks (render, lock, revisit,
 keyboard, finish) and the HTTP smoke suite extended with lock/idempotency/refusal checks.
+
+### Build 0.7.0: mobile quick-navigation dock
+
+- **Thumb-reachable footer dock** for signed-in users below 760 px: Home, the assessment tab
+  and Profile. It replaces hunting through the header menu on a phone.
+- The centre tab is a single call to action. With an open attempt it reads **Resume quiz** and
+  links straight back to the saved position (gold pulse badge); otherwise it submits
+  `POST quiz/start` with a CSRF token and reads **Start quiz**. When the administrator closes
+  assessments it becomes a non-interactive **Quiz closed** label. Members whose email address is
+  still unconfirmed see **Verify email**, which opens the confirmation screen (and its resend
+  button) instead of an authorisation error.
+- Administrators get their own variant — **Overview / Members / Profile** — because they cannot
+  take assessments.
+- The dock is never rendered on the quiz screen (it would cover the answer controls), on the
+  installer, on the authorisation confirmation page, for signed-out visitors, or above 760 px.
+  `Quiz::activeId()` looks up the single active attempt through the `active_user_id` column and
+  the `one_active_attempt` unique key, so the Resume/Start choice always matches the database.
+- Layout safety: frosted bar with `env(safe-area-inset-bottom)` for notched phones, a raised
+  centre button, active-tab underline, landscape compaction under 520 px of height, reduced
+  motion support and print hiding. Page and footer padding grow with a `has-dock` body class so
+  nothing is hidden behind the bar.
+
+Verification: PHP lint, CSS parse, `tests/dock_render.php` (no database: start form + CSRF,
+resume link, closed state, active tab, administrator variant, icon/label counts) and HTTP smoke
+assertions for the dock on member, administrator and signed-out pages.

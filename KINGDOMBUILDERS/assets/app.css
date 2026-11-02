@@ -875,3 +875,130 @@ td strong{color:var(--ink)}
   .quiz-back,.quiz-next{flex:1 1 100%}
   .quiz-finish-actions .button{width:100%}
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE DOCK — thumb-reachable quick navigation for signed-in people.
+   Hidden on tablet/desktop; shown only where the layout renders it (never
+   during an assessment, so it cannot cover the quiz controls).
+   ══════════════════════════════════════════════════════════════════════════ */
+.mobile-dock{display:none}
+
+@media(max-width:760px){
+  .mobile-dock{
+    display:block;
+    position:fixed;
+    left:0;right:0;bottom:0;
+    z-index:60;
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));
+    background:linear-gradient(180deg,rgba(245,248,244,0),rgba(245,248,244,.72) 38%,rgba(245,248,244,.96));
+    pointer-events:none;
+  }
+  .mobile-dock-inner{
+    pointer-events:auto;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    align-items:end;
+    gap:4px;
+    max-width:520px;
+    margin:0 auto;
+    padding:7px 8px;
+    border-radius:24px;
+    background:rgba(255,255,255,.92);
+    -webkit-backdrop-filter:saturate(180%) blur(18px);
+    backdrop-filter:saturate(180%) blur(18px);
+    border:1px solid rgba(18,33,29,.1);
+    box-shadow:0 18px 44px -22px rgba(10,39,34,.55),0 2px 6px rgba(10,39,34,.06),inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  .dock-form{display:flex;margin:0}
+  .dock-item{
+    position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    gap:4px;
+    min-height:56px;
+    padding:7px 4px 5px;
+    border:0;border-radius:18px;
+    background:transparent;
+    color:#5b6f66;
+    font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.01em;
+    text-decoration:none;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .18s var(--ease),background .18s var(--ease),transform .18s var(--ease);
+  }
+  .dock-form .dock-item{width:100%}
+  .dock-icon{
+    position:relative;
+    display:grid;place-items:center;
+    width:34px;height:30px;
+    color:#5b6f66;
+    transition:color .18s var(--ease),transform .18s var(--ease);
+  }
+  .dock-icon svg{width:24px;height:24px}
+  .dock-label{white-space:nowrap;line-height:1.2}
+
+  .dock-item:not(.is-disabled):hover{color:var(--navy);background:#f1f6f0}
+  .dock-item:not(.is-disabled):active{transform:scale(.96)}
+  .dock-item:focus-visible{outline:none;box-shadow:var(--ring);color:var(--navy)}
+  .dock-item.is-active{color:var(--green)}
+  .dock-item.is-active .dock-icon{color:var(--green);transform:translateY(-1px)}
+  .dock-item.is-active::after{
+    content:"";position:absolute;bottom:1px;left:50%;transform:translateX(-50%);
+    width:16px;height:3px;border-radius:3px;
+    background:linear-gradient(90deg,var(--green),var(--gold));
+  }
+
+  /* Centre tab: raised assessment button */
+  .dock-item-quiz{justify-content:flex-end}
+  .dock-item-quiz .dock-icon{
+    width:50px;height:50px;
+    margin-top:-24px;
+    border-radius:18px;
+    background:linear-gradient(165deg,#175247,#0f3730);
+    color:#f4e3bd;
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 14px 26px -14px rgba(10,39,34,.9),inset 0 1px 0 rgba(255,255,255,.16);
+    transition:transform .18s var(--ease),box-shadow .18s var(--ease),background .18s var(--ease);
+  }
+  .dock-item-quiz .dock-icon svg{width:25px;height:25px}
+  .dock-item-quiz .dock-label{color:#2c4a40}
+  .dock-item-quiz.is-accent.is-active .dock-icon{
+    background:linear-gradient(165deg,#f0ca7c,#e3b45c);
+    color:#241a05;
+    box-shadow:0 16px 28px -14px rgba(180,130,40,.85),inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .dock-form .dock-item-quiz:active .dock-icon{transform:translateY(1px) scale(.97)}
+  .dock-form .dock-item-quiz.is-active::after{display:none}
+  .dock-ping{
+    position:absolute;top:-2px;right:-3px;
+    width:11px;height:11px;border-radius:50%;
+    background:#e3b45c;
+    border:2px solid #fff;
+    box-shadow:0 0 0 0 rgba(227,180,92,.55);
+    animation:dockPing 2.4s var(--ease) infinite;
+  }
+  @keyframes dockPing{
+    0%{box-shadow:0 0 0 0 rgba(227,180,92,.5)}
+    70%{box-shadow:0 0 0 8px rgba(227,180,92,0)}
+    100%{box-shadow:0 0 0 0 rgba(227,180,92,0)}
+  }
+  .dock-item.is-disabled{opacity:.45;cursor:not-allowed}
+  .dock-item.is-disabled .dock-icon{background:#eef1ec;color:#7c8b84;box-shadow:none}
+
+  /* Keep page content clear of the dock */
+  body.has-dock .main-content{padding-bottom:40px}
+  body.has-dock .site-footer{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  body.has-dock .site-footer .shell{padding-bottom:8px}
+}
+
+@media(max-width:760px) and (max-height:520px){
+  /* Landscape phones: keep the dock compact */
+  .mobile-dock-inner{padding:5px 6px}
+  .dock-item{min-height:48px;font-size:.68rem}
+  .dock-item-quiz .dock-icon{width:44px;height:44px;margin-top:-18px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .dock-ping{animation:none}
+  .dock-item,.dock-icon{transition:none}
+}
+
+@media print{.mobile-dock{display:none!important}}
