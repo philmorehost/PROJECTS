@@ -844,6 +844,26 @@ td strong{color:var(--ink)}
 }
 .review-note strong{color:var(--green);font-weight:700}
 
+/* Score-only result: shown when the administrator keeps question review off. */
+.scorecard-panel{border-radius:22px;padding:30px 32px}
+.scorecard-panel .section-heading{margin-bottom:14px}
+.scorecard-lead{font-size:1.02rem;line-height:1.8;color:#41585c;max-width:64ch;margin-bottom:22px}
+.scorecard-list{
+  list-style:none;margin:0 0 20px;padding:0;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+}
+.scorecard-list li{
+  background:#f6f9f4;border:1px solid rgba(18,33,29,.07);border-radius:14px;
+  padding:16px 18px;display:flex;flex-direction:column;gap:5px;
+}
+.scorecard-list strong{font-family:Georgia,serif;font-size:1.5rem;line-height:1.15;color:var(--navy)}
+.scorecard-list span{font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.scorecard-note{font-size:.95rem;line-height:1.8;margin-bottom:22px;max-width:70ch}
+@media(max-width:760px){
+  .scorecard-panel{padding:24px 22px}
+  .scorecard-list{grid-template-columns:1fr 1fr}
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────── */
 @media(max-width:1000px){
   .result-hero{grid-template-columns:1fr;padding:36px;gap:28px}

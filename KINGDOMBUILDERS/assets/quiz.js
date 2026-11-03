@@ -89,16 +89,19 @@
     ring.append(svg, caption);
 
     panel.append(ring);
+    const canReview = state.can_review !== false;
     panel.append(node('h1', null, passed ? 'Another step forward.' : 'Keep growing—one question at a time.'));
-    panel.append(node('p', 'quiz-finish-lead', passed
-      ? 'Your answers are saved. Review anything you missed while it is still fresh.'
-      : 'Your answers are saved. The review below shows the correct answers with references.'));
+    panel.append(node('p', 'quiz-finish-lead', canReview
+      ? (passed
+        ? 'Your answers are saved. Review anything you missed while it is still fresh.'
+        : 'Your answers are saved. The review below shows the correct answers with references.')
+      : 'Your answers are saved and scored. Your score is ready on your result page.'));
     if (state.percentage < (state.settings.pass_mark ?? 50)) {
       panel.append(node('p', 'quiz-finish-note', `The pass mark for this community is ${state.settings.pass_mark ?? 50}%.`));
     }
 
     const actions = node('div', 'quiz-finish-actions');
-    const review = node('a', 'button', 'Review your answers →');
+    const review = node('a', 'button', canReview ? 'Review your answers →' : 'View your score →');
     review.href = root.dataset.result;
     const home = node('a', 'button secondary', 'Back to dashboard');
     home.href = root.dataset.dashboard;

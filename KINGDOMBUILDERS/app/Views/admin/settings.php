@@ -25,9 +25,15 @@
     </div>
     <p class="muted">The server sets a single total deadline: question count × seconds per question. Reloading does not reset it.</p>
     <div class="settings-checks">
-      <?php foreach (['timer_enabled'=>'Enable the time limit','randomize_questions'=>'Randomize question order','randomize_answers'=>'Randomize answer order','allow_back'=>'Let members move back to review earlier questions (answers stay locked)','practice_feedback'=>'Show practice feedback after each answer','one_attempt'=>'Allow only one completed attempt per member'] as $key=>$label): ?>
+      <?php foreach (['timer_enabled'=>'Enable the time limit','randomize_questions'=>'Randomize question order','randomize_answers'=>'Randomize answer order','allow_back'=>'Let members move back to review earlier questions (answers stay locked)','practice_feedback'=>'Show practice feedback after each answer','review_questions'=>'Let members review the questions after completing a quiz','one_attempt'=>'Allow only one completed attempt per member'] as $key=>$label): ?>
         <label class="check-label"><input type="checkbox" name="<?= e($key) ?>" value="1" <?= $settings[$key] ? 'checked' : '' ?>><?= e($label) ?></label>
       <?php endforeach; ?>
+    </div>
+    <div class="notice info">
+      <div>
+        <strong>Question access after completion</strong>
+        <p>When <em>Let members review the questions</em> is off (the default), a completed member sees only the score, pass mark and counts on the result page — question text, options, references and explanations are never sent to their browser. Turn it on if you want a full answer review. Practice feedback is separate and shows the correct answer during the quiz.</p>
+      </div>
     </div>
     <div class="notice info">Keep practice feedback off for assessments. Focus-change signals are advisory and cannot prevent use of another device.</div>
   </section>

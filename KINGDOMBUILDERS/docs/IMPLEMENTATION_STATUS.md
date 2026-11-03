@@ -193,3 +193,25 @@ integration/HTTP suites in CI.
 
 Verification: PHP lint, the HTML/MIME suite, the five-server socket fixture, and the existing
 integration/HTTP suites in CI.
+
+### Build 0.9.0: scores only after completion, with an administrator switch
+
+- **Completed members see their score, not the paper.** The result page shows the score ring,
+  pass mark, correct/unanswered/incorrect counts and submission time. Question text, options,
+  references and explanations are no longer fetched for the page, so they cannot be read from
+  the HTML source or the network tab.
+- **New toggle:** `Admin → Settings → Let members review the questions after completing a quiz`,
+  off by default. Switching it on restores the full review cards; switching it off withdraws
+  access immediately, including for attempts finished under the old policy (the live setting is
+  authoritative, not the attempt snapshot).
+- **Every route is gated, not just the view.** `Quiz::payload()` returns an empty question list
+  for a finished attempt unless review is allowed, so reopening `/quiz`, calling
+  `api/quiz?action=state` or finishing an attempt reveals nothing. The payload now carries
+  `can_review` so the end screen can offer “Review your answers” or “View your score”.
+- **Copy follows the policy:** the quiz end screen no longer promises a review that does not
+  exist, and dashboard links read *View score* or *Review answers* accordingly.
+
+Verification: `tests/run.php` covers the default, the gated payload and switching the policy in
+both directions; the HTTP smoke suite completes an attempt as a member, proves the questions are
+absent from the result page, quiz page and API, then enables review from the admin account and
+withdraws it again. PHP lint, CSS parse and the email/dock suites all pass.
