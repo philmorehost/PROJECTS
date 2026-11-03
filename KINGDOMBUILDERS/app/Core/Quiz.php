@@ -4,7 +4,7 @@ namespace KB;
 
 final class Quiz {
     public static function settingsSnapshot(): array {
-        $keys = ['questions_per_attempt','seconds_per_question','timer_enabled','pass_mark','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt','max_tab_switches'];
+        $keys = ['questions_per_attempt','seconds_per_question','timer_enabled','pass_mark','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','max_tab_switches'];
         return array_intersect_key(Settings::all(),array_flip($keys));
     }
     public static function uuid(): string {
@@ -50,6 +50,14 @@ final class Quiz {
             return $id;
         });
     }
+    /**
+     * Whether completed members may see the questions and answers again.
+     * Off by default: a finished attempt exposes its score, not its content.
+     */
+    public static function reviewEnabled(): bool {
+        return (bool) Settings::get('review_questions');
+    }
+
     /** The member's unfinished attempt, used by the mobile dock's "Resume quiz" tab. */
     public static function activeId(int $userId): ?string {
         $id = DB::value('SELECT id FROM attempts WHERE active_user_id=? AND status="active"', [$userId]);
@@ -64,7 +72,10 @@ final class Quiz {
     public static function payload(string $id,int $userId): array {
         $a=self::owned($id,$userId);
         if ($a['status']==='active' && $a['expires_at'] && strtotime($a['expires_at'].' UTC')<=time()) { self::finish($id,$userId,true); $a=self::owned($id,$userId); }
-        $items=DB::all('SELECT ai.id,ai.position,ai.question_text,ai.options_snapshot,ai.answer,ai.is_skipped,ai.reference,q.category FROM attempt_items ai LEFT JOIN questions q ON q.id=ai.question_id WHERE ai.attempt_id=? ORDER BY ai.position',[$id]);
+        $review=self::reviewEnabled();
+        // Once an attempt is finished, question content is only loaded when the
+        // administrator allows review. Otherwise it never reaches the browser.
+        $items=$a['status']!=='active' && !$review ? [] : DB::all('SELECT ai.id,ai.position,ai.question_text,ai.options_snapshot,ai.answer,ai.is_skipped,ai.reference,q.category FROM attempt_items ai LEFT JOIN questions q ON q.id=ai.question_id WHERE ai.attempt_id=? ORDER BY ai.position',[$id]);
         $public=[];
         foreach ($items as $item) {
             $answered=$item['answer']!==null || (int)$item['is_skipped']===1;
@@ -79,7 +90,7 @@ final class Quiz {
                 'locked'=>$answered,
             ];
         }
-        return ['id'=>$id,'status'=>$a['status'],'settings'=>json_decode($a['settings_snapshot'],true),'questions'=>$public,'server_time'=>time(),'expires_at'=>$a['expires_at']?strtotime($a['expires_at'].' UTC'):null,'score'=>(int)$a['score'],'total'=>(int)$a['total_questions'],'percentage'=>(float)$a['percentage'],'tab_switches'=>(int)$a['tab_switches']];
+        return ['id'=>$id,'status'=>$a['status'],'settings'=>json_decode($a['settings_snapshot'],true),'questions'=>$public,'can_review'=>$review,'server_time'=>time(),'expires_at'=>$a['expires_at']?strtotime($a['expires_at'].' UTC'):null,'score'=>(int)$a['score'],'total'=>(int)$a['total_questions'],'percentage'=>(float)$a['percentage'],'tab_switches'=>(int)$a['tab_switches']];
     }
     public static function answer(string $id,int $userId,int $position,int $choice): array {
         if ($choice < -1 || $choice>3) throw new UserError('Invalid answer.');

@@ -46,7 +46,7 @@
   <?php else: ?>
     <div class="table-wrap"><table><thead><tr><th>Completed</th><th>Score</th><th>Progress</th><th></th></tr></thead><tbody>
     <?php foreach($history as $row): $passMark=(int)(json_decode($row['settings_snapshot'],true)['pass_mark']??50); $passed=(float)$row['percentage']>=$passMark; ?>
-      <tr><td><?= e($row['submitted_at']) ?> UTC<small><?= e($row['status']) ?></small></td><td><strong><?= (int)$row['score'] ?> / <?= (int)$row['total_questions'] ?></strong><small><?= e($row['percentage']) ?>%</small></td><td><span class="badge <?= $passed?'green':'neutral' ?>"><?= $passed?'Passed':'Keep growing' ?></span></td><td><a class="text-link" href="<?= e(url('result',['id'=>$row['id']])) ?>">Review answers →</a></td></tr>
+      <tr><td><?= e($row['submitted_at']) ?> UTC<small><?= e($row['status']) ?></small></td><td><strong><?= (int)$row['score'] ?> / <?= (int)$row['total_questions'] ?></strong><small><?= e($row['percentage']) ?>%</small></td><td><span class="badge <?= $passed?'green':'neutral' ?>"><?= $passed?'Passed':'Keep growing' ?></span></td><td><a class="text-link" href="<?= e(url('result',['id'=>$row['id']])) ?>"><?= KB\Quiz::reviewEnabled() ? 'Review answers →' : 'View score →' ?></a></td></tr>
     <?php endforeach; ?>
     </tbody></table></div>
   <?php endif; ?>

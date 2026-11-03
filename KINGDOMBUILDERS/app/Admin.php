@@ -127,7 +127,7 @@ final class Admin {
                 try {
                     $input=$_POST;
                     if($smtp) { $input=array_merge(Settings::all(),$_POST); $input['smtp_enabled']=isset($_POST['smtp_enabled']); }
-                    else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','one_attempt','large_text','google_enabled'] as $key) $input[$key]=isset($_POST[$key]); }
+                    else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','large_text','google_enabled'] as $key) $input[$key]=isset($_POST[$key]); }
                     $values=Settings::validate($input,$smtp);
                     if($smtp) {
                         try { $values['smtp_secret']=Settings::smtpPassword($input); }

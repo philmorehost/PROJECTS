@@ -206,8 +206,12 @@ final class Controllers {
         if($route==='result') {
             $attempt=Quiz::owned($id,(int)$user['id']);
             if($attempt['status']==='active') redirect_query('quiz',['id'=>$id]);
-            $items=DB::all('SELECT question_text,options_snapshot,correct_option,answer,reference,explanation FROM attempt_items WHERE attempt_id=? ORDER BY position',[$id]);
-            render('member/result',['attempt'=>$attempt,'items'=>$items,'user'=>$user]);
+            // Question content is only read when the administrator has allowed review;
+            // otherwise the page is built from score aggregates alone.
+            $review=Quiz::reviewEnabled();
+            $items=$review?DB::all('SELECT question_text,options_snapshot,correct_option,answer,reference,explanation FROM attempt_items WHERE attempt_id=? ORDER BY position',[$id]):[];
+            $summary=DB::one('SELECT COUNT(*) AS total, COALESCE(SUM(answer IS NOT NULL AND is_skipped=0),0) AS answered, COALESCE(SUM(is_skipped=1),0) AS skipped FROM attempt_items WHERE attempt_id=?',[$id]);
+            render('member/result',['attempt'=>$attempt,'items'=>$items,'review'=>$review,'summary'=>$summary,'user'=>$user]);
         }
         throw new UserError('Page not found.',404);
     }

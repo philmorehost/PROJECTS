@@ -143,6 +143,19 @@ password, sender address/name and administrator notification address.
   pair (587 STARTTLS vs 465 implicit TLS); normal password instead of an app password;
   From address not authorized by the provider; outbound SMTP blocked by the host.
 
+### Question access after completion
+
+`Admin → Settings → Assessment settings → Let members review the questions after completing a
+quiz` is **off by default**. A completed member then sees only the score: percentage, correct
+count, pass mark, unanswered/incorrect totals and the submission time. The question text,
+options, references and explanations are not selected from the database and never reach the
+browser — reopening the quiz page or calling the quiz API for a finished attempt returns an
+empty question list. Turn the toggle on for a full answer review; turning it off withdraws
+access immediately, including for attempts completed earlier.
+
+`Show practice feedback after each answer` is a separate setting: it reveals the correct answer
+during an attempt, not after it.
+
 ## 7a. Google sign-in (optional)
 
 1. In the Google Cloud console create an **OAuth client ID → Web application**.
