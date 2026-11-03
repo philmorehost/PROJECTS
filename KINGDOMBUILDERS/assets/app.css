@@ -1003,6 +1003,17 @@ td strong{color:var(--ink)}
   .dock-item.is-disabled{opacity:.45;cursor:not-allowed}
   .dock-item.is-disabled .dock-icon{background:#eef1ec;color:#7c8b84;box-shadow:none}
 
+  /* Connection diagnosis: a dense five-column probe table needs a little air. */
+.diagnosis-panel .table-wrap{border:1px solid var(--line);border-radius:var(--radius);background:#fff;margin-bottom:6px}
+.diagnosis-panel td strong{font-size:.92rem}
+.diagnosis-panel td small{font-size:.72rem;line-height:1.6}
+.diagnosis-panel .form-actions{margin:0 0 20px}
+.diagnosis-panel .form-actions .muted{font-size:.74rem;max-width:420px;line-height:1.7}
+@media(max-width:760px){
+  .diagnosis-panel td,.diagnosis-panel th{padding:12px 10px;font-size:.76rem}
+  .diagnosis-panel .form-actions{align-items:flex-start;flex-direction:column}
+}
+
   /* Keep page content clear of the dock */
   body.has-dock .main-content{padding-bottom:40px}
   body.has-dock .site-footer{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}

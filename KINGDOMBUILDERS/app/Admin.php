@@ -121,7 +121,22 @@ final class Admin {
         }
         if($route==='admin/settings' || $route==='admin/smtp') {
             $smtp=$route==='admin/smtp';
-            $test=null; $saved=false;
+            $test=null; $saved=false; $diagnosis=null;
+            // Connection diagnosis and the one-click transport switch are handled
+            // before the generic save path so a probe never changes settings.
+            if($smtp && is_post() && in_array(post('action'),['diagnose','apply-transport'],true)) {
+                if(post('action')==='apply-transport') {
+                    $port=(int)post('port'); $security=post('security');
+                    if($port<1 || $port>65535 || !in_array($security,['tls','ssl'],true)) throw new UserError('Choose a valid port and security mode.');
+                    Settings::put('smtp_port',$port); Settings::put('smtp_security',$security);
+                    Audit::activity('settings.smtp_updated','site',1,['port'=>$port,'security'=>$security,'source'=>'diagnosis']);
+                    flash('Saved port '.$port.' with '.($security==='ssl'?'implicit TLS':'STARTTLS').'. Send a test message to confirm sign-in and delivery.');
+                    redirect('admin/smtp');
+                }
+                try { Security::throttle('smtp.diagnose',(string)$admin['id'],10,600); @set_time_limit(45); $diagnosis=Mail::diagnose(); }
+                catch(MailError $e) { $error=$e->getMessage(); }
+                render('admin/smtp',['settings'=>Settings::all(),'error'=>$error,'test'=>null,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'saved'=>false,'diagnosis'=>$diagnosis]);
+            }
             if(is_post()) {
                 $action=post('action');
                 try {
@@ -168,7 +183,7 @@ final class Admin {
                 } catch(UserError $e) {$error=$e->getMessage();}
             }
             if(!$smtp) render('admin/settings',['settings'=>Settings::all(),'error'=>$error,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat()]);
-            render('admin/smtp',['settings'=>Settings::all(),'error'=>$error,'test'=>$test,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'saved'=>$saved]);
+            render('admin/smtp',['settings'=>Settings::all(),'error'=>$error,'test'=>$test,'cron'=>Cron::info(),'heartbeat'=>Cron::heartbeat(),'saved'=>$saved,'diagnosis'=>$diagnosis]);
         }
         if($route==='admin/notifications') {
             $testError=null;

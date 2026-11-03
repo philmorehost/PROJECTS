@@ -143,6 +143,30 @@ password, sender address/name and administrator notification address.
   pair (587 STARTTLS vs 465 implicit TLS); normal password instead of an app password;
   From address not authorized by the provider; outbound SMTP blocked by the host.
 
+### Nothing is being delivered on a new domain
+
+Work through these in order — each step removes one possible cause:
+
+1. **Admin → Email & SMTP → Diagnose connection.** This server-side probe tests the saved
+   port and the usual alternatives (465 implicit TLS, 587 STARTTLS, 25), reads the SMTP
+   greeting and reports DNS, timing and failures for each. It never sends credentials and
+   never changes a setting. If a different port answers, the panel offers a one-click
+   switch to that port and security mode.
+2. **“Connection timed out” or “did not answer”** — a firewall is dropping the traffic.
+   Shared hosts and new cloud instances commonly block outbound SMTP. Ask the provider to
+   open outbound 587 or 465, or supply their relay hostname and credentials.
+3. **“Connection refused”** — nothing is listening: wrong hostname, wrong port, or the mail
+   service is not running on that server.
+4. **“answered with something that is not SMTP”** — the port belongs to another service
+   (POP3, IMAP, HTTPS). Use the mail submission port from the provider's documentation.
+5. **Wrong port/security pair** — 465 is TLS from the first byte (*Implicit TLS*); 587 starts
+   plain and upgrades (*STARTTLS*). Mixing them produces a timeout at the greeting.
+6. **Delivery still queued** — the queue drains only when the cron job runs; see §6.
+
+Log lines now keep the failing stage and the message, for example
+`stage=greeting code=none message=The SMTP server did not answer during greeting…`, so the
+error log and the Notifications page both identify where the conversation stopped.
+
 ### Question access after completion
 
 `Admin → Settings → Assessment settings → Let members review the questions after completing a

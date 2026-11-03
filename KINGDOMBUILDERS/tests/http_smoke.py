@@ -110,6 +110,19 @@ code, _, html = admin.post("/admin/smtp", fail_form)
 ok(code == 200 and "Test email failed" in html and "Could not connect" in html, "SMTP test reports a safe diagnosis")
 ok("Very-Secret-App-Password-1" not in html, "failed SMTP test does not leak the password")
 ok("mail.example.test" in admin.get("/admin/smtp")[2], "unsaved test values do not replace saved SMTP settings")
+
+# Connection diagnosis (local port, so it fails fast and never sends credentials).
+ok(admin.post("/admin/smtp", dict(smtp_form, smtp_host="127.0.0.1", smtp_port="1"))[0] == 200, "save a local host for diagnosis")
+code, _, html = admin.post("/admin/smtp", {"action": "diagnose"})
+ok(code == 200 and "What this server can reach" in html and "DIAGNOSIS" in html, "connection diagnosis renders")
+ok("127.0.0.1" in html and "ms" in html and "Saved setting" in html, "diagnosis lists the probes")
+ok("Very-Secret-App-Password-1" not in html, "diagnosis never renders the password")
+ok(admin.post("/admin/smtp", {"action": "diagnose"}, token="wrong")[0] == 419, "diagnosis requires a CSRF token")
+ok("What this server can reach" not in public.get("/admin/smtp")[2], "diagnosis is administrator only")
+ok(admin.post("/admin/smtp", {"action": "apply-transport", "port": "465", "security": "ssl"})[1].endswith("/admin/smtp"), "transport switch saves and returns")
+html = admin.get("/admin/smtp")[2]
+ok('value="465"' in html and 'value="ssl" selected' in html, "transport switch persisted")
+ok(admin.post("/admin/smtp", dict(smtp_form, smtp_port="587", smtp_security="tls"))[0] == 200, "restore SMTP settings")
 html = admin.get("/admin/notifications")[2]
 ok("cron-command" in html, "notifications page exposes the cron command")
 ok("Deliver queued messages now" in html, "notifications page can deliver without cron")

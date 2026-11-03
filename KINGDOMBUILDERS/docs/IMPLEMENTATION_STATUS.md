@@ -215,3 +215,27 @@ Verification: `tests/run.php` covers the default, the gated payload and switchin
 both directions; the HTTP smoke suite completes an attempt as a member, proves the questions are
 absent from the result page, quiz page and API, then enables review from the admin account and
 withdraws it again. PHP lint, CSS parse and the email/dock suites all pass.
+
+### Build 0.10.0: email failures explain themselves
+
+- **Timeouts no longer erase the stage.** `readResponse()` used to throw with stage `timeout`,
+  which is why a production error log only said `stage=timeout code=none`. The real step
+  (`greeting`, `ehlo`, `starttls`, `auth`, `sender`, …) is preserved, the queue log also records
+  the message text, and transport errors are enriched with the host, port and security mode —
+  plus the specific hint for a 465/STARTTLS or 587/implicit-TLS mismatch and for blocked
+  outbound ports.
+- **New `Mail::diagnose()`** probes the saved port and the alternatives (465 implicit TLS,
+  587 STARTTLS, 25), reads the greeting, runs EHLO/STARTTLS, and reports DNS, latency, refusal,
+  silence and non-SMTP replies. It never sends credentials, never modifies settings, and stops
+  as soon as the saved setting works.
+- **“Diagnose connection”** on Email & SMTP renders the probe table, a plain-English
+  recommendation, and a one-click “Use port 465 with implicit TLS” switch that changes only
+  port and security. Notifications links to it when a row failed.
+- **Ports that are not mail servers are identified immediately** — a POP3/HTTP/TLS reply is
+  quoted instead of waiting for a timeout.
+- Tests: the socket fixture gains a silent server (the production symptom), a non-SMTP server
+  and three diagnosis scenarios; the HTTP suite runs the endpoint, proves CSRF and
+  administrator-only access, and switches port/security.
+
+Verification: PHP lint, the SMTP fixture (send, auth, silent, non-SMTP, diagnosis), the HTTP
+smoke suite, and the email/dock/CSS suites.
