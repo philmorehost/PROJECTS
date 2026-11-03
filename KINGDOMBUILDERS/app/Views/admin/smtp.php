@@ -2,10 +2,12 @@
 use function KB\{e,url};
 use KB\Security;
 $test = $test ?? null;
+$diagnosis = $diagnosis ?? null;
 ?>
 <section class="page-heading">
   <div><span class="eyebrow">KEEP EVERYONE IN THE LOOP</span><h1>A reliable connection.</h1><p>Deliver account confirmations, security notices and learning updates through your email provider.</p></div>
   <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <form method="post" style="margin:0"><input type="hidden" name="action" value="diagnose"><?= Security::csrfField() ?><button class="button secondary">Diagnose connection</button></form>
     <a class="button secondary" href="<?= e(url('admin/notifications')) ?>">View notification queue →</a>
     <a class="text-link" href="<?= e(url('admin/smtp/preview')) ?>" target="_blank" rel="noopener">Preview email design ↗</a>
   </div>
@@ -18,6 +20,49 @@ $test = $test ?? null;
     <p><strong><?= $test['ok'] ? 'Test email accepted.' : 'Test email failed.' ?></strong> <?= e($test['message']) ?></p>
     <?php if (!$test['ok']): ?><p>Correct the detail above and test again. Your previously saved settings were not changed.</p><?php elseif (!$saved): ?><p>This test used the values currently in the form. Choose <em>Save email settings</em> to keep them.</p><?php endif; ?>
   </div>
+<?php endif; ?>
+
+<?php if ($diagnosis): ?>
+  <?php
+    $rec = $diagnosis['recommendation'];
+    $tone = $rec['code'] === 'ok' ? 'success' : ($rec['code'] === 'switch' ? 'warning' : 'error');
+    $working = null;
+    foreach ($diagnosis['probes'] as $probe) { if (!empty($probe['ok'])) { $working = $probe; break; } }
+  ?>
+  <section class="panel diagnosis-panel">
+    <div class="section-heading">
+      <div><span class="eyebrow">DIAGNOSIS</span><h2>What this server can reach</h2></div>
+      <span class="badge <?= $rec['code'] === 'ok' ? 'green' : ($rec['code'] === 'switch' ? 'neutral' : 'red') ?>"><?= $rec['code'] === 'ok' ? 'Connection healthy' : ($rec['code'] === 'switch' ? 'Different port works' : 'No working port') ?></span>
+    </div>
+    <div class="notice <?= e($tone) ?>"><p><strong><?= e($diagnosis['host']) ?></strong> — <?= e($rec['text']) ?></p></div>
+    <?php if ($rec['code'] === 'switch'): ?>
+      <form method="post" class="form-actions" style="margin-bottom:20px">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="apply-transport">
+        <input type="hidden" name="port" value="<?= (int) $rec['port'] ?>">
+        <input type="hidden" name="security" value="<?= e($rec['security']) ?>">
+        <button class="button">Use port <?= (int) $rec['port'] ?> with <?= e($working['label'] ?? 'TLS') ?></button>
+        <span class="muted">Changes only the port and security mode. Your host, username and password stay as saved.</span>
+      </form>
+    <?php endif; ?>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Port</th><th>Security</th><th>Result</th><th>Detail</th><th>Time</th></tr></thead>
+        <tbody>
+        <?php foreach ($diagnosis['probes'] as $probe): ?>
+          <tr>
+            <td><strong><?= (int) $probe['port'] ?></strong><?php if ($probe['configured']): ?><small>Saved setting</small><?php endif; ?></td>
+            <td><?= e($probe['label']) ?></td>
+            <td><span class="badge <?= $probe['ok'] ? 'green' : 'red' ?>"><?= $probe['ok'] ? 'Ready' : e($probe['stage']) ?></span></td>
+            <td><small style="font-size:.9rem"><?= e($probe['detail']) ?></small><?php if (!empty($probe['banner'])): ?><small><?= e($probe['banner']) ?></small><?php endif; ?></td>
+            <td><?= (int) $probe['ms'] ?> ms</td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:16px">Host resolves to <?= $diagnosis['ips'] === [] ? 'nothing — check the spelling' : e(implode(', ', array_slice($diagnosis['ips'], 0, 4))) ?>. The diagnosis never sends your username or password, and it does not change any setting unless you press the button above.</p>
+  </section>
 <?php endif; ?>
 
 <form method="post" class="stack" autocomplete="off">
@@ -62,7 +107,7 @@ $test = $test ?? null;
 <section class="panel help-panel">
   <h2>If delivery still fails</h2>
   <div class="help-grid">
-    <div><h3>Connection refused or timed out</h3><p>Your host may block outbound SMTP. Confirm the host and port, and ask your provider to allow outbound connections to that port.</p></div>
+    <div><h3>Connection refused or timed out</h3><p>Press <strong>Diagnose connection</strong> at the top of this page: it tests 465, 587 and the saved port from this server and tells you which one answers. Shared hosts often block outbound SMTP entirely.</p></div>
     <div><h3>Authentication failed</h3><p>Re-enter the password. Gmail, Microsoft 365 and most hosts require an app password or SMTP-specific credential.</p></div>
     <div><h3>STARTTLS rejected</h3><p>Try implicit TLS on port 465, or the other way around. Your provider documents the correct pair.</p></div>
     <div><h3>Sender rejected</h3><p>The From email must belong to the authenticated mailbox or a verified sender identity.</p></div>

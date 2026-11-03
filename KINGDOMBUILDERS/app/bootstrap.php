@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace KB;
 
-const VERSION = '0.9.0';
+const VERSION = '0.10.0';
 const ROOT = __DIR__ . '/..';
 const MIN_PHP = '8.2.0';
 

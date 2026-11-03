@@ -13,6 +13,12 @@ $mode=(string)(getenv('KB_TEST_MODE') ?: 'deliver');
 foreach (['smtp_enabled'=>true,'smtp_host'=>'127.0.0.1','smtp_port'=>$port,'smtp_security'=>'none','smtp_username'=>$user,'smtp_secret'=>KB\Security::seal(['value'=>$secret]),'from_email'=>'notifications@example.test','from_name'=>'KINGDOMBUILDERS Test'] as $key=>$value) Settings::put($key,$value);
 $stats=['sent'=>0,'failed'=>0,'processed'=>0,'pending'=>0];
 $failure=null;
+if ($mode==='diagnose') {
+    // Exercises the email-service diagnosis against a local server.
+    $diagnosis = Mail::diagnose('127.0.0.1', $port, 'none');
+    echo json_encode(['diagnosis' => $diagnosis]), PHP_EOL;
+    exit;
+}
 if ($mode==='send-test') {
     // Used to prove that refused credentials are reported clearly and never echoed.
     try { Mail::sendTest('recipient@example.test'); }

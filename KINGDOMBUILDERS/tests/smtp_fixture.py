@@ -47,6 +47,43 @@ def authenticator(server, session, envelope, mechanism, auth_data):
     return AuthResult(success=auth_data.login == USER.encode() and auth_data.password == PASSWORD.encode())
 
 
+class SilentServer(socketserver.ThreadingTCPServer):
+    """Accepts the TCP connection and never sends a greeting."""
+
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+class SilentHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        self.request.settimeout(20)
+        try:
+            while self.request.recv(1024):
+                pass
+        except OSError:
+            pass
+
+
+class NotSmtpServer(SilentServer):
+    """Answers with something that is not SMTP, like a POP3 or HTTPS port."""
+
+    def __init__(self, address):
+        self.banner = b"+OK POP3 server ready\r\n"
+        super().__init__(address, NotSmtpHandler)
+
+
+class NotSmtpHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        self.server.banner  # documented above; sent immediately
+        self.request.sendall(getattr(self.server, "banner", b"+OK ready\r\n"))
+        self.request.settimeout(20)
+        try:
+            while self.request.recv(1024):
+                pass
+        except OSError:
+            pass
+
+
 class ScriptedServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -274,6 +311,66 @@ async def main():
     check(failure and failure["stage"] == "auth", "unsupported mechanisms fail at authentication", failure)
     check("XOAUTH2" in failure["message"] and "PLAIN or LOGIN" in failure["message"], "the refusal names both sides", failure)
     check(PASSWORD not in failure["message"], "unsupported-mechanism error leaks nothing", failure)
+
+    # 6. A silent server is the production symptom that logged stage=timeout.
+    silent = SilentServer(("127.0.0.1", free_port()), SilentHandler)
+    thread = serve(silent)
+    try:
+        data = run_php(
+            KB_TEST_SMTP_PORT=str(silent.server_address[1]),
+            KB_TEST_SMTP_USER=USER,
+            KB_TEST_SMTP_PASS=PASSWORD,
+            KB_TEST_MODE="send-test",
+        )
+    finally:
+        stop(silent, thread)
+    failure = data["failure"]
+    check(failure is not None, "a silent server produces an error", data)
+    check(failure["stage"] == "greeting", "timeouts keep the failing stage instead of 'timeout'", failure)
+    check("did not answer" in failure["message"], "timeout names the step", failure)
+    check("No reply on 127.0.0.1" in failure["message"], "timeout names the host and port", failure)
+    check("Diagnose connection" in failure["message"], "timeout points at the diagnosis tool", failure)
+    check(secret not in failure["message"] and PASSWORD not in failure["message"], "timeout leaks nothing", failure)
+
+    # 7. Diagnosis reports a working server, a silent one and a non-SMTP port.
+    good = ScriptedServer(
+        ("127.0.0.1", free_port()),
+        b"250-script.local\r\n250-AUTH LOGIN PLAIN\r\n250 HELP\r\n",
+        accept_login=True,
+    )
+    thread = serve(good)
+    try:
+        data = run_php(KB_TEST_SMTP_PORT=str(good.server_address[1]), KB_TEST_MODE="diagnose")
+    finally:
+        stop(good, thread)
+    diagnosis = data["diagnosis"]
+    check(diagnosis["resolved"] is True, "diagnosis reports host resolution", diagnosis)
+    first = diagnosis["probes"][0]
+    check(first["ok"] is True and first["configured"] is True, "diagnosis marks the saved port ready", first)
+    check(diagnosis["recommendation"]["code"] == "ok", "healthy diagnosis recommends nothing", diagnosis["recommendation"])
+    check(len(diagnosis["probes"]) == 1, "a healthy probe stops the search", diagnosis["probes"])
+
+    silent = SilentServer(("127.0.0.1", free_port()), SilentHandler)
+    thread = serve(silent)
+    try:
+        data = run_php(KB_TEST_SMTP_PORT=str(silent.server_address[1]), KB_TEST_MODE="diagnose")
+    finally:
+        stop(silent, thread)
+    diagnosis = data["diagnosis"]
+    first = diagnosis["probes"][0]
+    check(first["ok"] is False and first["stage"] == "greeting", "diagnosis identifies silence", first)
+    check(len(diagnosis["probes"]) > 1, "diagnosis tries alternative ports", [p["port"] for p in diagnosis["probes"]])
+    check(diagnosis["recommendation"]["code"] in {"silent", "blocked", "unknown"}, "silence is summarised", diagnosis["recommendation"])
+
+    other = NotSmtpServer(("127.0.0.1", free_port()))
+    thread = serve(other)
+    try:
+        data = run_php(KB_TEST_SMTP_PORT=str(other.server_address[1]), KB_TEST_MODE="diagnose")
+    finally:
+        stop(other, thread)
+    first = data["diagnosis"]["probes"][0]
+    check(first["ok"] is False, "a non-SMTP port is not ready", first)
+    check("not SMTP" in first["detail"] and "POP3" in first["detail"], "the non-SMTP banner is quoted", first)
 
     print("SMTP socket tests passed.")
 

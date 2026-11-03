@@ -14,6 +14,10 @@
 <?php endif; ?>
 
 <div class="notice info">
+  <div><strong>Deliveries failing with a timeout?</strong><p>“Did not answer” or “timed out” in a failed row means this server could not complete a conversation with your mail host — usually a blocked port or the wrong security mode. Run the connection diagnosis to see which port answers from here.</p></div>
+  <a class="text-link" href="<?= e(url('admin/smtp')) ?>">Diagnose connection →</a>
+</div>
+<div class="notice info">
   <div><strong>Background delivery</strong><p>Messages leave the queue when the scheduled task runs. Copy the command below into your hosting cron job, once per minute. You can also deliver a small batch now — useful while the cron job is being set up.</p></div>
   <form method="post"><?= Security::csrfField() ?><button name="action" value="process" class="button secondary small">Deliver queued messages now</button></form>
 </div>

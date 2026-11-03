@@ -35,7 +35,9 @@ final class Mail {
                 $retry = $retryable && (int)$mail['attempts'] < 6;
                 DB::run('UPDATE mail_queue SET status=?,available_at=?,lease_token=NULL,leased_at=NULL,last_error=? WHERE id=?', [$retry?'pending':'failed',gmdate('Y-m-d H:i:s',time()+min(3600,60*(2**((int)$mail['attempts']-1)))),mb_substr($safe,0,240),$mail['id']]);
                 $stats['failed']++;
-                error_log('KB mail delivery failed for queue id ' . $mail['id'] . ($e instanceof MailError ? ' stage=' . $e->stage . ' code=' . ($e->smtpCode ?? 'none') : ''));
+                error_log('KB mail delivery failed for queue id ' . $mail['id'] . ($e instanceof MailError
+                    ? ' stage=' . $e->stage . ' code=' . ($e->smtpCode ?? 'none') . ' message=' . $safe
+                    : ' message=' . $safe));
             }
             $stats['processed']++;
         }
@@ -90,7 +92,7 @@ final class Mail {
         $address = ($security==='ssl'?'ssl://':'tcp://') . $host . ':' . $port;
         $stream = @stream_socket_client($address, $errno, $error, 6, STREAM_CLIENT_CONNECT, $context);
         if (!$stream) {
-            throw new MailError('Could not connect to '.$host.':'.$port.'. Check the host/port, firewall, and whether your host allows outbound SMTP.','connection');
+            throw self::withTransportHint(new MailError('Could not connect to '.$host.':'.$port.'. Check the host/port, firewall, and whether your host allows outbound SMTP.','connection'),$host,$port,$security);
         }
         stream_set_timeout($stream, 6);
         try {
@@ -112,6 +114,8 @@ final class Mail {
             self::expect($stream,[250],'data');
             @fwrite($stream,"QUIT\r\n");
             return $messageId;
+        } catch (MailError $e) {
+            throw self::withTransportHint($e,$host,$port,$security);
         } finally { fclose($stream); }
     }
 
@@ -157,6 +161,196 @@ final class Mail {
      */
     public static function stuff(string $message): string {
         return preg_replace('/^\./m','..',$message) ?? $message;
+    }
+
+    /** Explain a transport failure using the port and security mode that were used. */
+    private static function withTransportHint(MailError $error,string $host,int $port,string $security): MailError {
+        $message = $error->getMessage();
+        $timedOut = str_contains($message,'did not answer');
+        $closed = str_contains($message,'closed the connection');
+        $refused = str_contains($message,'Could not connect');
+        if (!$timedOut && !$closed && !$refused) return $error;
+        $mode = self::securityLabel($security);
+        $hint = $refused
+            ? 'Nothing accepted a connection on '.$host.':'.$port.' using '.$mode.' — the port is closed, blocked by the host firewall, or not the port this mail server listens on.'
+            : ($timedOut
+                ? 'No reply on '.$host.':'.$port.' using '.$mode.' — the connection opened but the server stayed silent.'
+                : 'The server at '.$host.':'.$port.' closed the connection before sending a reply ('.$mode.').');
+        if ($port === 465 && $security !== 'ssl') {
+            $hint .= ' Port 465 speaks TLS from the first byte: set Connection security to “Implicit TLS (usually port 465)”, or use port 587 with STARTTLS.';
+        } elseif ($port === 587 && $security === 'ssl') {
+            $hint .= ' Port 587 starts unencrypted and upgrades with STARTTLS: set Connection security to “STARTTLS (usually port 587)”, or use port 465 with implicit TLS.';
+        } elseif ($port === 25) {
+            $hint .= ' Many hosts block outbound port 25 for new accounts: use 587 (STARTTLS) or 465 (implicit TLS) instead.';
+        } else {
+            $hint .= ' Check the port and security pair, and whether your host allows outbound SMTP on that port.';
+        }
+        return new MailError(rtrim($error->getMessage(),'.').'. '.$hint.' Run “Diagnose connection” on the Email & SMTP page to see which port answers.',$error->stage,$error->smtpCode,$error->retryable);
+    }
+
+    private static function securityLabel(string $security): string {
+        return match ($security) {
+            'ssl' => 'implicit TLS',
+            'tls' => 'STARTTLS',
+            'none' => 'no encryption',
+            default => $security,
+        };
+    }
+
+    /**
+     * Network diagnosis for the Email & SMTP page. Opens the configured port and
+     * the usual alternatives, reads the SMTP greeting and capabilities, and never
+     * sends credentials. Each probe is bounded so the request stays responsive.
+     *
+     * @return array{host:string,ips:array<int,string>,resolved:bool,configured:array<string,mixed>,probes:array<int,array<string,mixed>>,recommendation:array<string,mixed>}
+     */
+    public static function diagnose(?string $host = null, ?int $port = null, ?string $security = null): array {
+        $host = strtolower(trim($host ?? (string) Settings::get('smtp_host')));
+        $port = $port ?? (int) Settings::get('smtp_port');
+        $security = $security ?? (string) Settings::get('smtp_security');
+        if ($host === '' || preg_match('/[\r\n\/\s]/', $host)) {
+            throw new MailError('Enter the SMTP host on this page before diagnosing the connection.','configuration',null,false);
+        }
+        $ips = self::resolveHost($host);
+        $pairs = [[$port,$security]];
+        foreach ([[465,'ssl'],[587,'tls'],[25,'tls']] as $alternate) {
+            if (count($pairs) >= 3) break;
+            if ($alternate[0] === $port) continue;
+            $pairs[] = $alternate;
+        }
+        $probes = [];
+        foreach ($pairs as $index=>[$candidatePort,$candidateSecurity]) {
+            $probe = self::probeHost($host,(int)$candidatePort,(string)$candidateSecurity,4);
+            $probe['configured'] = $index === 0;
+            $probe['port'] = (int)$candidatePort;
+            $probe['security'] = (string)$candidateSecurity;
+            $probe['label'] = self::securityLabel((string)$candidateSecurity);
+            $probes[] = $probe;
+            // A working configuration makes the remaining probes unnecessary.
+            if ($index === 0 && $probe['ok'] === true) break;
+        }
+        return [
+            'host' => $host,
+            'ips' => $ips,
+            'resolved' => $ips !== [],
+            'configured' => ['port' => $port, 'security' => $security, 'label' => self::securityLabel($security)],
+            'probes' => $probes,
+            'recommendation' => self::recommendation($probes,$ips,$port,$security),
+        ];
+    }
+
+    /** @return array<int,string> */
+    private static function resolveHost(string $host): array {
+        $ips = [];
+        if (function_exists('dns_get_record')) {
+            foreach ([DNS_A => 'ip', DNS_AAAA => 'ipv6'] as $type=>$key) {
+                $records = @dns_get_record($host,$type);
+                if (is_array($records)) foreach ($records as $record) if (!empty($record[$key])) $ips[] = (string) $record[$key];
+            }
+        }
+        if ($ips === [] && filter_var($host,FILTER_VALIDATE_IP)) $ips[] = $host;
+        if ($ips === [] && filter_var($host,FILTER_VALIDATE_IP) === false) {
+            $address = @gethostbyname($host);
+            if (is_string($address) && $address !== $host && filter_var($address,FILTER_VALIDATE_IP)) $ips[] = $address;
+        }
+        return array_values(array_unique($ips));
+    }
+
+    /** @return array<string,mixed> */
+    private static function probeHost(string $host,int $port,string $security,float $timeout): array {
+        $started = microtime(true);
+        $result = ['ok'=>false,'stage'=>'connection','detail'=>'','capabilities'=>[],'banner'=>'','ms'=>0];
+        if ($port < 1 || $port > 65535) {
+            $result['detail'] = 'That port number is not valid.';
+            return $result;
+        }
+        $context = stream_context_create(['ssl'=>['verify_peer'=>true,'verify_peer_name'=>true,'SNI_enabled'=>true,'peer_name'=>$host]]);
+        $address = ($security === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port;
+        $errno = 0; $error = '';
+        $stream = @stream_socket_client($address,$errno,$error,$timeout,STREAM_CLIENT_CONNECT,$context);
+        $result['ms'] = (int) round((microtime(true) - $started) * 1000);
+        if (!$stream) {
+            $result['detail'] = self::connectFailure($errno,$error,$host,$port,$security);
+            return $result;
+        }
+        stream_set_timeout($stream,(int) ceil($timeout));
+        try {
+            [$code,$lines] = self::readResponse($stream,'greeting');
+            $result['banner'] = mb_substr((string) end($lines),0,120);
+            if ($code !== 220) {
+                $result['stage'] = 'greeting';
+                $result['detail'] = 'The port answered, but not with an SMTP greeting (reply '.$code.'). This is probably not a mail submission port.';
+                return $result;
+            }
+            $caps = self::ehlo($stream);
+            $result['capabilities'] = array_keys($caps);
+            if ($security === 'tls') {
+                if (!isset($caps['STARTTLS'])) {
+                    $result['stage'] = 'starttls';
+                    $result['detail'] = 'The server does not offer STARTTLS on this port. Use port 465 with implicit TLS if your provider supports it.';
+                    return $result;
+                }
+                self::command($stream,'STARTTLS',[220],'starttls');
+                if (@stream_socket_enable_crypto($stream,true,STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+                    $result['stage'] = 'tls';
+                    $result['detail'] = 'STARTTLS was accepted but the TLS handshake failed. The certificate may be invalid for this hostname.';
+                    return $result;
+                }
+                $caps = self::ehlo($stream);
+                $result['capabilities'] = array_keys($caps);
+            }
+            $result['ok'] = true;
+            $result['stage'] = 'ready';
+            $result['detail'] = 'Greeting and EHLO succeeded with '.self::securityLabel($security).'. Authentication was not attempted.';
+            $result['auth'] = array_values($caps['AUTH'] ?? []);
+            return $result;
+        } catch (MailError $e) {
+            $result['stage'] = $e->stage;
+            $result['detail'] = $e->getMessage();
+            return $result;
+        } finally {
+            @fwrite($stream,"QUIT\r\n");
+            fclose($stream);
+        }
+    }
+
+    private static function connectFailure(int $errno,string $error,string $host,int $port,string $security): string {
+        if ($errno === 111) return 'Connection refused: nothing is listening on '.$host.':'.$port.'.';
+        if ($errno === 110 || $errno === 60) return 'Connection timed out: a firewall or your hosting provider is very likely blocking outbound traffic to port '.$port.'.';
+        if ($security === 'ssl' && stripos($error,'ssl') !== false) return 'TLS handshake failed before SMTP started: '.mb_substr($error,0,120).'. Port 465 needs implicit TLS; port 587 needs STARTTLS.';
+        if ($errno === 0 && $error !== '') return 'Could not connect to '.$host.':'.$port.' — '.mb_substr($error,0,120).'.';
+        return 'Could not connect to '.$host.':'.$port.($errno ? ' (error '.$errno.')' : '').'. The port may be blocked by your host.';
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $probes
+     * @param array<int,string> $ips
+     * @return array<string,mixed>
+     */
+    private static function recommendation(array $probes,array $ips,int $port,string $security): array {
+        if ($ips === []) {
+            return ['code'=>'dns','text'=>'The host name did not resolve. Check the spelling — it is usually something like mail.yourdomain.com, without https:// or a port.'];
+        }
+        $working = null; $silent = 0; $refused = 0;
+        foreach ($probes as $probe) {
+            if ($probe['ok']) { $working = $probe; break; }
+            if ($probe['stage'] === 'connection') $refused++;
+            if (str_contains((string) $probe['detail'],'did not answer')) $silent++;
+        }
+        if ($working !== null) {
+            if ($working['configured']) {
+                return ['code'=>'ok','text'=>'The saved port and security mode answer correctly, so the connection itself is fine. If a test still fails, look at the username, app password or sender address.'];
+            }
+            return ['code'=>'switch','port'=>(int)$working['port'],'security'=>(string)$working['security'],
+                'text'=>'Port '.$working['port'].' with '.$working['label'].' answers correctly but your saved setting is port '.$port.' with '.self::securityLabel($security).'. Switch and save, then send a test message.'];
+        }
+        if ($silent > 0 && $refused === 0) {
+            return ['code'=>'silent','text'=>'Something accepts the connection but never speaks SMTP. That usually means the wrong port or security mode; try the alternative below.'];
+        }
+        if ($refused === count($probes)) {
+            return ['code'=>'blocked','text'=>'None of the mail ports answered from this server. Shared hosts often block outbound SMTP — ask your provider to open port 587 or 465, or give you their relay host, then enter it here.'];
+        }
+        return ['code'=>'unknown','text'=>'No usable mail port was found. Send the results below to your email or hosting provider.'];
     }
 
     private static function ehlo($stream): array {
@@ -264,9 +458,15 @@ final class Mail {
     }
     /** @return array{0:int,1:array<int,string>} */
     private static function readResponse($stream,string $stage): array {
-        $lines = []; $deadline = time()+8; $code = 0;
+        $lines = []; $deadline = time()+8; $code = 0; $first = true;
         while (($line=fgets($stream,1024)) !== false) {
             $lines[] = rtrim($line,"\r\n");
+            // A port that is not SMTP answers with something else (POP3, HTTP, a
+            // TLS alert). Report it at once instead of waiting for a timeout.
+            if ($first && !preg_match('/^\d{3}/', $line)) {
+                throw new MailError('The server answered with something that is not SMTP during '.$stage.': “'.mb_substr(trim($line),0,80).'”. This is usually the wrong port.',$stage,null,true);
+            }
+            $first = false;
             if (preg_match('/^(\d{3})([ -])/', $line, $m)) {
                 $code = (int)$m[1];
                 if ($m[2] === ' ') return [$code,$lines];
@@ -274,7 +474,8 @@ final class Mail {
             if (strlen(implode('', $lines)) > 16384 || time() > $deadline) break;
         }
         $meta = stream_get_meta_data($stream);
-        if (!empty($meta['timed_out'])) throw new MailError('The SMTP server timed out during '.$stage.'. Check the port/security mode and provider status.','timeout');
+        // Keep the real stage (greeting, auth, …) so logs identify where it stopped.
+        if (!empty($meta['timed_out'])) throw new MailError('The SMTP server did not answer during '.$stage.' within the time limit.',$stage,null,true);
         throw new MailError('The SMTP server closed the connection or returned an invalid response during '.$stage.'.','protocol',$code ?: null);
     }
     private static function throwStage(string $stage,int $code): never {
