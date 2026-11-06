@@ -14,6 +14,7 @@ require __DIR__.'/Database.php';
 require __DIR__.'/Money.php';
 require __DIR__.'/ChurchPortal.php';
 require __DIR__.'/HierarchyManager.php';
+require __DIR__.'/DirectoryPagination.php';
 require __DIR__.'/Security.php';
 require __DIR__.'/ManagerClient.php';
 require __DIR__.'/LicenseManager.php';

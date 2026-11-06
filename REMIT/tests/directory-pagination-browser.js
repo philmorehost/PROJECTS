@@ -1,0 +1,22 @@
+/* Generate fixtures using hierarchy-page-ui.php (see README). Tests use fictional data only. */
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');const {chromium}=require('playwright');
+(async()=>{const dir=process.argv[2],assets=path.resolve(__dirname,'../public/assets'),css=fs.readFileSync(path.join(assets,fs.readdirSync(assets).find(f=>f.endsWith('.css'))),'utf8'),js=fs.readFileSync(path.join(assets,fs.readdirSync(assets).find(f=>f.endsWith('.js'))),'utf8');const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE||undefined,args:['--no-sandbox']});let checks=0;
+try{
+ const page=await browser.newPage({viewport:{width:320,height:850}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('http://remit.test/**',route=>{const url=new URL(route.request().url());const file=url.searchParams.get('directory_page')==='2'?'page2':'provincial_admin';return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(dir,file+'.html'),'utf8')});});
+ // Without injecting the enhancement: follow a real server-rendered GET page link.
+ await page.goto('http://remit.test/index.php?page=hierarchy');await page.addStyleTag({content:css});assert.equal(await page.locator('#directory-list>article').count(),6);assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 2');checks+=2;
+ await page.locator('#directory-pagination-controls>a').last().click();assert(new URL(page.url()).searchParams.get('directory_page')==='2');assert.equal(await page.locator('#directory-list>article').first().getAttribute('data-unit-id'),'12');assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 2 of 2');checks+=3;
+ await page.addStyleTag({content:css});await page.addScriptTag({content:js});assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 2 of 2');checks++;
+ const editHref=await page.locator('#directory-list [data-directory-action=edit]').first().getAttribute('href');assert(new URL(editHref).searchParams.get('directory_page')==='2');checks++;
+ await page.locator('#directory-pagination-controls>a').first().click();assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 2');assert(new URL(page.url()).searchParams.get('directory_page')==='1');checks+=2;
+ await page.goBack();await page.waitForFunction(()=>document.querySelector('#directory-page-counter').textContent==='Page 2 of 2');checks++;
+ await page.goForward();await page.waitForFunction(()=>document.querySelector('#directory-page-counter').textContent==='Page 1 of 2');checks++;
+ await page.locator('#directory-pagination-controls>a').last().click();await page.locator('#directory-type').selectOption('parish');assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 2');assert(new URL(page.url()).searchParams.get('directory_page')==='1');checks+=2;
+ await page.locator('#directory-zone').selectOption('Zone Beta');await page.locator('#directory-size').selectOption('12');assert.equal(await page.locator('#directory-list>article').count(),8);assert(new URL(page.url()).searchParams.get('directory_size')==='12');checks+=2;
+ await page.locator('#directory-search').fill('No matches');assert.equal(await page.locator('#directory-list>article').count(),0);assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 1');assert.equal(await page.locator('#directory-pagination-controls>.is-disabled').count(),2);checks+=3;
+ assert.deepEqual(errors,[]);checks++;await page.close();
+ // Verify filtered server-rendered results before loading any production JavaScript.
+ for(const [name,total,first,counter] of [['filtered',2,'16','Page 2 of 2'],['empty',0,null,'Page 1 of 1'],['contact',1,'4','Page 1 of 1']]){const page=await browser.newPage();await page.setContent(fs.readFileSync(path.join(dir,name+'.html'),'utf8'));assert.equal(await page.locator('#directory-list>article').count(),total);assert.equal(await page.locator('#directory-page-counter').textContent(),counter);checks+=2;if(first){assert.equal(await page.locator('#directory-list>article').first().getAttribute('data-unit-id'),first);checks++;}await page.close();}
+ console.log(`PASS: ${checks} directory URL, history and GET fallback browser assertions`);
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

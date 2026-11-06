@@ -280,3 +280,24 @@ php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/d
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/hierarchy-page-browser.js /tmp/remit-directory-fixtures
 ```
+
+## 0.4.1 — Responsive Church directory pagination
+
+The directory displays **6 units per page** by default, with **6 / 12 / 24** choices. Phones show large Previous/Next controls and a Page X of Y indicator; wider layouts also show a bounded numbered page strip. Search, level and Zone filters apply across the entire authorized directory, not just the current page. Changing a filter or page size returns to page 1; out-of-range pages are clamped safely. Empty lists show 0–0 counts and disabled navigation.
+
+Pagination and filtering work as server-rendered GET requests without JavaScript (use **Apply filters**). With JavaScript enabled they update instantly, preserve shareable/refreshable URL state and support Back/Forward between page selections. Admin edit/delete links retain the selected directory filters and page on the confirmation/edit view. Role scope and admin-only contact visibility/search remain unchanged. No database migration is required; deploy PHP views and fingerprinted assets together.
+
+This is **display pagination**, not database LIMIT/OFFSET pagination: the existing role-authorized nodes are still loaded for hierarchy tools, and an inert HTML template holds their cards for instant filtering. Only the current page's cards are active in the directory. Large-province data-volume optimization would require a separate scoped query/API design.
+
+Validation: 42 pure-PHP pagination assertions; 294 directory interaction/layout assertions across admin/read-only roles and six widths (320–1440px); 27 URL/history/server-rendered fallback assertions using fictional fixtures. Existing finance, hierarchy edit/delete, registration, licence/update, CSV, autocomplete and mobile-navigation regressions also pass. Browser checks use headless Chromium, not physical devices; live cPanel/MySQL acceptance remains necessary.
+
+```sh
+php tests/directory-pagination.php
+# First generate the admin/read-only/edit/delete fixtures shown above, then:
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/page2.html '' 'directory_page=2'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/filtered.html '' 'directory_q=Planted&directory_size=6&directory_page=2'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/empty.html '' 'directory_q=DoesNotExist&directory_page=999'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/contact.html '' 'directory_q=Test+Officer'
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/directory-pagination-browser.js /tmp/remit-directory-fixtures
+```
