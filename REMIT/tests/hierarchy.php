@@ -39,11 +39,12 @@ $csv=fopen('php://temp','w+');fputcsv($csv,HierarchyImporter::CSV_HEADER,',','"'
 check(HierarchyImporter::import($db,$csv)===1,'blank area CSV accepted');$row=$db->query("SELECT p.node_type parish_type,z.node_type parent_type FROM church_hierarchy p JOIN church_hierarchy z ON p.parent_id=z.id WHERE p.parish_code='DIRECT001'")->fetch();check($row['parish_type']==='parish'&&$row['parent_type']==='zone','blank area creates zone to parish relation');
 rewind($csv);HierarchyImporter::import($db,$csv);check((int)$db->query("SELECT COUNT(*) FROM church_hierarchy WHERE parish_code='DIRECT001'")->fetchColumn()===1,'direct zone import repeatable');fclose($csv);
 check(str_contains(unitLabel(['id'=>1,'node_type'=>'parish','node_name'=>'Hope','parish_code'=>'H01','parent_name'=>'Area 1','zone_name'=>'Zone B']),'Zone B'),'labels include zone context');
-$source=file_get_contents(__DIR__.'/../app/register.php');preg_match('/\$parishes=\$enabled\?\$db->query\("([^\"]+)"\)/',$source,$match);check(!empty($match[1]),'registration directory query found');
-$directory=$db->query($match[1])->fetchAll();$byCode=[];foreach($directory as $record)$byCode[$record['parish_code']]=$record;
-check($byCode['DIRECT001']['area_name']==='' && $byCode['DIRECT001']['zone_name']==='Import Zone','registration labels direct zone parish correctly');
-check($byCode['P001']['area_name']==='Area 3' && $byCode['P001']['zone_name']==='Zone B','registration labels moved parish correctly');
-check($byCode['BABY']['area_name']==='New Growth Area' && $byCode['BABY']['zone_name']==='Zone A','registration labels upgraded headquarters correctly');
+require_once __DIR__.'/../app/ChurchPortal.php';
+check(method_exists(ChurchPortal::class,'directory'),'registration discovery query available');
+$directory=ChurchPortal::directory($db);$byCode=[];foreach($directory as $record)if($record['parish_code']!==null)$byCode[$record['parish_code']]=$record;
+check($byCode['DIRECT001']['parent_name']==='Import Zone','registration labels direct zone parish correctly');
+check($byCode['P001']['parent_name']==='Area 3' && $byCode['P001']['zone_name']==='Zone B','registration labels moved parish correctly');
+check($byCode['BABY']['parent_name']==='New Growth Area' && $byCode['BABY']['zone_name']==='Zone A','registration labels upgraded headquarters correctly');
 $source=file_get_contents(__DIR__.'/../index.php');preg_match('/\$nodes=\$db->query\("([^\"]+)"\)/',$source,$nodeMatch);check(!empty($nodeMatch[1]),'production directory query found');
 $directory=$db->query($nodeMatch[1])->fetchAll();$byId=[];foreach($directory as $record)$byId[(int)$record['id']]=$record;
 check($byId[$p1]['parent_name']==='Area 3' && $byId[$p1]['zone_name']==='Zone B','directory shows parent and zone after move');

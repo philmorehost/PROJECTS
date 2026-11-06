@@ -4,11 +4,21 @@ declare(strict_types=1);
 final class ChurchPortal
 {
     public static function ready(PDO $db): bool { return setting($db,'church_portal_schema')==='2'; }
+    public static function officerRegistrationReady(PDO $db): bool { return self::ready($db) && setting($db,'officer_registration_schema')==='1'; }
     public static function migrate(PDO $db): void
     {
         $lock=$db->query("SELECT GET_LOCK('remit_church_portal_migration', 5)")->fetchColumn();
         if ((int)$lock!==1) throw new RuntimeException('Another schema upgrade is running. Retry shortly.');
-        try { foreach(explode(';',file_get_contents(ROOT.'/database/migrations/002-church-portal.sql')) as $sql) if(trim($sql)!=='') $db->exec($sql); }
+        try {
+            if(self::officerRegistrationReady($db))return;
+            if(!self::ready($db))foreach(explode(';',file_get_contents(ROOT.'/database/migrations/002-church-portal.sql')) as $sql) if(trim($sql)!=='') $db->exec($sql);
+            // DDL auto-commits. Column checks make interrupted upgrades safely resumable.
+            $columns=$db->query('SHOW COLUMNS FROM church_registrations')->fetchAll(PDO::FETCH_COLUMN);
+            $db->exec('ALTER TABLE church_registrations MODIFY parish_id INT NULL');
+            if(!in_array('requested_church_name',$columns,true))$db->exec('ALTER TABLE church_registrations ADD requested_church_name VARCHAR(150) NULL');
+            if(!in_array('requested_church_type',$columns,true))$db->exec("ALTER TABLE church_registrations ADD requested_church_type ENUM('parish','area','zone') NULL");
+            $db->exec("INSERT INTO security_settings(setting_key,setting_value) VALUES ('officer_registration_schema','1') ON DUPLICATE KEY UPDATE setting_value='1'");
+        }
         finally { $db->query("SELECT RELEASE_LOCK('remit_church_portal_migration')"); }
     }
     public static function percentage(string $value): int
@@ -62,9 +72,39 @@ final class ChurchPortal
         if($number===false) throw new RuntimeException('Bank account details could not be decrypted. Restore the original bank.key if this site was moved.');
         return $number;
     }
+    /** Public discovery data deliberately excludes contacts, officers and bank details. */
+    public static function directory(PDO $db): array
+    {
+        return $db->query("SELECT h.id,h.node_name,h.node_type,h.parish_code,p.node_name parent_name,z.node_name zone_name FROM church_hierarchy h LEFT JOIN church_hierarchy p ON h.parent_id=p.id LEFT JOIN church_hierarchy z ON p.parent_id=z.id WHERE h.node_type IN ('parish','area','zone') ORDER BY h.node_name,h.id")->fetchAll();
+    }
+    public static function nameKey(string $name): string
+    {
+        return preg_replace('/[^\p{L}\p{N}]+/u','',trim($name)) ?? '';
+    }
+    public static function resolveChurch(PDO $db,array $input): array
+    {
+        $id=filter_var($input['parish_id'] ?? 0,FILTER_VALIDATE_INT);
+        if($id && $id>0 && ($input['church_unlisted'] ?? '')!=='1'){
+            $s=$db->prepare("SELECT id,node_type FROM church_hierarchy WHERE id=? AND node_type IN ('parish','area','zone')");$s->execute([$id]);
+            if($unit=$s->fetch())return [(int)$unit['id'],null,null];
+            throw new InvalidArgumentException('Select a church that is still in the directory.');
+        }
+        if(($input['church_unlisted'] ?? '')!=='1')throw new InvalidArgumentException('Select your Parish, Area or Zone from the directory, or choose church not listed.');
+        $raw=is_string($input['church_name'] ?? null)?trim($input['church_name']):'';
+        if($raw==='' || strlen($raw)>150 || preg_match('//u',$raw)!==1 || preg_match('/[\x00-\x1f\x7f]/',$raw))throw new InvalidArgumentException('Enter a church name of up to 150 bytes.');
+        $key=self::nameKey($raw);if($key==='' || !preg_match('/\p{L}/u',$key))throw new InvalidArgumentException('Enter a valid church name.');
+        $matches=[];
+        foreach(self::directory($db) as $unit)if(preg_match('/^'.preg_quote($key,'/').'$/iu',self::nameKey($unit['node_name']))===1)$matches[]=$unit;
+        if(count($matches)===1)return [(int)$matches[0]['id'],null,null];
+        if(count($matches)>1)throw new InvalidArgumentException('More than one church has this name. Select the correct level and parent from the directory.');
+        $name=preg_replace('/\s+/u',' ',strtoupper($raw));
+        if(preg_match('/\p{Ll}/u',$name))throw new InvalidArgumentException('Enter the unlisted church name in CAPS.');
+        $type=$input['church_type'] ?? '';if(!in_array($type,['parish','area','zone'],true))throw new InvalidArgumentException('Choose whether the unlisted church is a Parish, Area or Zone.');
+        return [null,$name,$type];
+    }
     public static function register(PDO $db,array $input): void
     {
-        if(!self::ready($db) || setting($db,'registration_enabled')!=='1') throw new RuntimeException('Church registration is not available. Contact the provincial administrator.');
+        if(!self::officerRegistrationReady($db) || setting($db,'registration_enabled')!=='1') throw new RuntimeException('Church registration is not available. Contact the provincial administrator.');
         // Count every attempt, including invalid forms, before password hashing or account queries.
         $db->beginTransaction();
         try {
@@ -74,30 +114,37 @@ final class ChurchPortal
             if((int)$limit['attempts']>=5){$db->commit();throw new RuntimeException('Too many registration attempts. Please try again in an hour.');}
             $db->prepare('UPDATE registration_limits SET attempts=attempts+1 WHERE ip_address=?')->execute([$ip]);$db->commit();
         } catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+        foreach(['full_name','email','phone','password','password_confirm'] as $field)if(!is_string($input[$field] ?? null))throw new InvalidArgumentException('Provide valid officer account details.');
         $name=trim($input['full_name'] ?? '');$email=strtolower(trim($input['email'] ?? ''));$phone=trim($input['phone'] ?? '');$password=$input['password'] ?? '';
         if($name==='' || strlen($name)>100 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($email)>150 || !preg_match('/^[+0-9 ()-]{7,25}$/D',$phone) || strlen($password)<12 || strlen($password)>72 || $password!==($input['password_confirm'] ?? '')) throw new InvalidArgumentException('Check your name, email and phone. Use a 12–72 byte password and matching confirmation.');
-        [$bank,$account,$number]=self::bank($input);
-        $parish=(int)($input['parish_id'] ?? 0);$s=$db->prepare("SELECT id FROM church_hierarchy WHERE id=? AND node_type='parish'");$s->execute([$parish]);if(!$s->fetchColumn())throw new InvalidArgumentException('Select a church from the parish directory.');
+        // No public request ever creates a church. Resolve exact normalized names server-side,
+        // even if JavaScript was bypassed; ambiguous/fuzzy names require a human choice.
+        [$unit,$requested,$type]=self::resolveChurch($db,$input);
         $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn())return;
-        $s=$db->prepare('INSERT IGNORE INTO church_registrations(parish_id,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?)');
-        $s->execute([$parish,$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),$bank,$account,self::encrypt($number),substr($number,-4)]);
-        if($s->rowCount())notify($db,setting($db,'notification_email'),'Church registration awaiting review','A new parish officer registration is awaiting verification in the church directory.');
+        $s=$db->prepare('INSERT IGNORE INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+        $s->execute([$unit,$requested,$type,$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),'','','','']);
+        if($s->rowCount())notify($db,setting($db,'notification_email'),'Officer registration awaiting review','A new officer registration is awaiting church affiliation verification in the church directory.');
     }
-    public static function reviewRegistration(PDO $db,array $admin,int $id,string $decision): string
+    public static function reviewRegistration(PDO $db,array $admin,int $id,string $decision,int $resolvedUnit=0): string
     {
         requireRole($admin,['provincial_admin']);
         if(!in_array($decision,['approved','rejected'],true))throw new InvalidArgumentException('Invalid review decision.');
         $db->beginTransaction();
         try {
+            $db->query("SELECT id FROM security_settings WHERE setting_key='site_title' FOR UPDATE")->fetch();
             $s=$db->prepare('SELECT * FROM church_registrations WHERE id=? FOR UPDATE');$s->execute([$id]);$row=$s->fetch();
             if(!$row || $row['status']!=='pending')throw new RuntimeException('This registration has already been reviewed or is unavailable.');
             if($decision==='approved') {
-                $db->prepare("INSERT INTO users(hierarchy_id,full_name,email,password_hash,role) VALUES(?,?,?,?,'parish_officer')")->execute([$row['parish_id'],$row['full_name'],$row['email'],$row['password_hash']]);
+                $unit=(int)($row['parish_id'] ?? $resolvedUnit);
+                $s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$unit]);$level=$s->fetchColumn();
+                $role=match($level){'parish'=>'parish_officer','area'=>'area_rep','zone'=>'zonal_rep',default=>throw new RuntimeException('Link this application to an existing Parish, Area or Zone before approval. Add any genuinely missing church using the directory tools first.')};
+                $db->prepare('UPDATE church_registrations SET parish_id=? WHERE id=?')->execute([$unit,$id]);
+                $db->prepare('INSERT INTO users(hierarchy_id,full_name,email,password_hash,role) VALUES(?,?,?,?,?)')->execute([$unit,$row['full_name'],$row['email'],$row['password_hash'],$role]);
                 $uid=$db->lastInsertId();
                 $db->prepare('INSERT INTO officer_profiles(user_id,phone,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?)')->execute([$uid,$row['phone'],$row['bank_name'],$row['account_name'],$row['account_ciphertext'],$row['account_last4']]);
             }
             $db->prepare('UPDATE church_registrations SET status=?,reviewed_by=?,password_hash=NULL WHERE id=?')->execute([$decision,$admin['id'],$id]);
-            notify($db,$row['email'],'Church registration '.$decision,$decision==='approved'?'Your registration has been approved. Sign in using the password you chose.':'Your registration was not approved. Please contact the provincial administrator.');
+            notify($db,$row['email'],'Officer registration '.$decision,$decision==='approved'?'Your registration has been approved. Sign in using the password you chose.':'Your registration was not approved. Please contact the provincial administrator.');
             $db->commit();return 'Registration '.$decision.'. Notification queued.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }

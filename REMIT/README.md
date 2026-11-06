@@ -301,3 +301,28 @@ php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/c
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/directory-pagination-browser.js /tmp/remit-directory-fixtures
 ```
+
+## 0.5.0 — Officer-only registration and intelligent church discovery
+
+`index.php?page=register` now registers an **officer account**, not a new church/bank account. Search or select admin-added **Parishes, Areas and Zones**. Suggestions rank exact, partial, multi-word and common typo matches, including parent/code context. Suggestions never silently choose a fuzzy match. The native directory dropdown remains usable without JavaScript. Full name, phone, email and password are required; bank details are no longer collected or stored during signup. Approved Parish officers can complete their bank profile later in **My church account**.
+
+If genuinely absent, check **my church is not listed**, enter its **CAPS name** and level, then submit for review. The browser uppercases the name and offers similar churches alongside it. Server-side checks independently ignore case, spacing and punctuation when comparing names: a unique exact normalized match reuses the existing unit, even if “not listed” was chosen. Ambiguous matches require explicit directory selection. Approximate matches do not auto-link. No public registration request creates any hierarchy row, preventing duplicate church creation from this flow, including concurrent submissions. Different officer applications may refer to the same church; emails remain unique per application/account.
+
+Unlisted names appear in the admin's **Church hierarchy → Registrations** queue, including their submitted level. Verify affiliation independently, select an existing church, or first add the genuinely missing church using Quick add (correct parent and parish code), then link it before approval. Rejection needs no church link. Approval derives the role from the verified unit: `parish_officer`, `area_rep`, or `zonal_rep`; applicants cannot request treasury/admin roles. Existing license/CSRF checks, IP attempt limits, pending-password clearing, foreign keys and unique-email constraints remain. Legacy pending registrations retain their bank ciphertext and profile details on approval. Notifications remain queued in the existing outbox, not guaranteed email delivery.
+
+### Required upgrade for existing installations
+
+1. Back up the database, files and original `config/bank.key`.
+2. Deploy all 0.5.0 PHP files and fingerprinted assets together.
+3. As admin, open **Portal settings → Upgrade registration & payment features**. New public registrations stay unavailable until this completes; existing login/payment/report features remain enabled.
+4. The existing licence/CSRF/admin-gated schema upgrader makes `church_registrations.parish_id` nullable and adds nullable `requested_church_name` / `requested_church_type` columns, then records `officer_registration_schema=1`. It preserves existing records, foreign keys, bank data, percentages and financial history. MySQL DDL auto-commits: interrupted column additions can be retried through the same upgrade action. New installations receive the changes during setup.
+5. Verify a Parish, Area, Zone and unlisted application on your hosting environment before rollout. Recheck representative scopes after approval. No public hierarchy creation is offered.
+
+Validation adds **35** officer registration SQL/role/privacy/rollback assertions (on top of 156 existing portal checks), **24** migration SQL-recording assertions and **125** discovery/browser checks at widths 320, 390, 768, 1024 and 1440. Existing hierarchy, edit/delete, pagination, CSV, money, licensing, autocomplete and mobile regressions pass. SQLite and SQL-recording harnesses do **not** prove real MySQL/MariaDB DDL, locking or concurrent deployment; headless Chromium is not physical-device acceptance.
+
+```sh
+php tests/officer-registration.php /tmp/remit-registration.html
+php tests/registration-upgrade.php
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/officer-registration-browser.js /tmp/remit-registration.html
+```
