@@ -107,8 +107,8 @@ The public docs explain validation but not the update payload. The updater contr
 
 LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
 
-- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.3`.
-- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.3.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.4.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.3.0`.
+- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.4.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
 - Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
 - Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
 - Automatic installation permits selected source files under `app`, `bin`, `tests`, `database`, `public/assets`, and known root files. It never executes packaged SQL or PHP migration hooks. Any non-empty `database_queries` or `files_to_delete` list rejects automatic installation. Schema-changing releases require a reviewed manual migration/deployment.
@@ -205,3 +205,43 @@ No schema migration or frontend asset update is needed for this patch. Deploy th
 ## 0.2.3 — Hidden desktop sidebar scrollbar
 
 The desktop sidebar (901px and wider) hides its scrollbar in Firefox and WebKit/Blink browsers while retaining `overflow-y: auto`. Mouse-wheel, trackpad and keyboard navigation continue to work; mobile navigation is unchanged. Deploy the updated templates and fingerprinted stylesheet together. No database migration is required.
+
+## 0.3.0 — Searchable units, bulk assignment and zone-planted parishes
+
+### Find a church without scrolling
+
+Church-unit selects in registration, officer provisioning, unit creation, bulk destination selection and parish upgrades now become type-ahead comboboxes. Type a name, parish code, parent or zone; matching units appear automatically (up to 20 suggestions at a time; refine the query to narrow large matches). Click a result or use Arrow keys and Enter. Free text is not accepted as a unit ID. Escape closes the suggestions; native selects remain available without JavaScript. The search uses the permitted options already rendered to the page, with no new public lookup endpoint or contact-data exposure. Public registration lists church names/codes and area/zone context, including parishes directly under a zone.
+
+### Assign multiple units
+
+Provincial administrators can open **Church hierarchy → Assign church units in bulk**:
+
+1. Search/select the destination Zone or Area.
+2. Filter source units by name/code/parent/zone and by Area/Parish.
+3. Select individual checkboxes or **Select visible units**, then **Assign selected units** (maximum 500 per operation). Filtering retains hidden selections; the visible/selected count and Clear selection control make this explicit.
+
+Areas may be assigned only to Zones. Parishes may be assigned to Areas **or directly to Zones**. Zones cannot be moved beneath another unit. Moving an Area keeps its child parishes attached, so select the Area only, not its descendants. Mixed batches that cannot all use the selected destination are rejected atomically. Unknown IDs, self-assignment, cyclic ancestry, selected ancestor/descendant batches and unauthorized roles are rejected. Moves serialize with CSV imports and other hierarchy writes using the `site_title` row lock; reports, parish IDs/codes and officer accounts are not recreated or deleted. Representatives' authorized scope follows the new tree on the next request. Already-open pages do not update until refreshed.
+
+### Upgrade a planted parish safely
+
+Use **Church hierarchy → Upgrade a zone-planted parish to an Area** for a Parish currently directly under a Zone. Enter the new Area name. The action creates an Area under the original Zone and moves the original Parish beneath it as the headquarters parish. It deliberately **does not change the old parish's type or ID**: existing financial records and parish-officer accounts remain attached to that parish and remain visible in rollups. Add other parishes using the assignment tool and provision a separate Area representative against the new Area. Repeating the upgrade after the parish has moved beneath an Area is rejected.
+
+Hierarchy move/upgrade identifiers are logged to the server application log; no contacts, passwords or bank details are logged by these operations. Retain/protect server logs according to the deployment policy.
+
+### CSV and installation compatibility
+
+No database migration is required. Existing hierarchies retain their structure until an administrator changes them. New Parishes can choose either an Area or Zone parent in the creation form; Areas still require a Zone. CSV imports retain the same six columns, but `area` may now be blank for a direct Zone parish:
+
+```csv
+zone,area,parish,parish_code,contact_person,phone_number
+Example Zone,,Example Planted Parish,PLANT001,Example Officer,08000000000
+```
+
+Existing parish-code conflicts still reject the import; importing does not silently move a previously assigned parish. Use the bulk assignment tool for reorganizations. The downloaded three-row sample remains compatible, and the import page now explains the optional Area column.
+
+### Verification
+
+- `php tests/hierarchy.php`: 44 assertions using a SQLite compatibility harness for parent validation, role restrictions, atomic move rejection, moving Areas/Parishes, representative scopes, safe upgrades, CSV direct-parish import/reimport and registration labels. MySQL row-lock/concurrency semantics still need deployment testing.
+- `php tests/hierarchy-ui.php /tmp/remit-hierarchy-ui.html` generates a fictional-only test fixture from the production hierarchy-tools view.
+- With Playwright/Chromium available, `node tests/hierarchy-browser.js /tmp/remit-hierarchy-ui.html` runs 40 assertions at phone and desktop widths for live suggestions, result limiting, pointer/keyboard selection, invalid free text, no-results messaging, retained hidden selections, clearing and destination selection. Use the external dev-tools `NODE_PATH`/`CHROME_EXECUTABLE` setup documented above. Fixtures do not contain live church data.
+- Existing church portal, money, licence/update, sample CSV and role-specific navigation regression tests are retained. Deploy PHP and newly fingerprinted frontend assets together; validate real MySQL/cPanel and representative account scopes before a large reorganization.
