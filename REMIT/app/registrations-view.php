@@ -1,0 +1,7 @@
+<?php
+declare(strict_types=1);
+requireRole($user,['provincial_admin']);
+if(!$portalReady)return;
+$requests=$db->query("SELECT r.id,r.full_name,r.email,r.phone,r.bank_name,r.account_name,r.account_last4,r.created_at,h.node_name FROM church_registrations r JOIN church_hierarchy h ON h.id=r.parish_id WHERE r.status='pending' ORDER BY r.id LIMIT 100")->fetchAll();
+?>
+<section class="panel"><div class="panel-heading"><div><h2>Church registrations</h2><p>Verify the officer’s identity and parish authorization independently before approval.</p></div><span class="chip"><?= count($requests) ?> awaiting review (up to 100)</span></div><?php if(!$requests): ?><div class="empty"><span>✓</span><h3>You’re all caught up</h3><p>New church applications will appear here for approval.</p></div><?php endif ?><?php foreach($requests as $request): ?><article class="review-card"><div><span class="badge pending">Pending approval</span><h3><?= e($request['node_name']) ?></h3><p><?= e($request['full_name'].' · '.$request['email'].' · '.$request['phone']) ?></p><p class="muted small">Church account: <?= e($request['bank_name'].' · '.$request['account_name'].' · ••••••'.$request['account_last4']) ?></p></div><form method="post" class="review-actions"><?php hiddenAction('registration_review') ?><input type="hidden" name="registration_id" value="<?= (int)$request['id'] ?>"><button name="decision" value="approved" class="primary">Approve account</button><button name="decision" value="rejected" class="secondary">Reject</button></form></article><?php endforeach ?></section>
