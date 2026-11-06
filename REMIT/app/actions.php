@@ -3,6 +3,19 @@ declare(strict_types=1);
 function action(PDO $db,array $user,array $ids): string {
  checkCsrf(); $action=$_POST['action'] ?? '';
  if ($action==='logout') { $_SESSION=[]; session_regenerate_id(true); redirect('login'); }
+ if (in_array($action, ['license_save','license_recheck','update_check','update_pull','update_install'], true)) {
+  requireRole($user, ['provincial_admin']);
+  $license = new LicenseManager(ROOT); $host = $_SERVER['HTTP_HOST'] ?? '';
+  if ($action === 'license_save') { $license->activate((string)($_POST['license_key'] ?? ''), $host); return 'Licence activated for this domain.'; }
+  if ($action === 'license_recheck') { $state = $license->check($host, true); if (!$state['valid']) throw new RuntimeException($state['message']); return $state['message']; }
+  $updates = new UpdateManager(ROOT);
+  if ($action === 'update_check') { $offer = $updates->check(); return $offer['available'] ? 'Release '.$offer['version'].' is available. Review the release notes and pull it below.' : 'No newer release is available.'; }
+  if ($action === 'update_pull') return $updates->pull();
+  if (($_POST['backup_confirmed'] ?? '') !== '1') throw new RuntimeException('Confirm that you have a current database and application backup.');
+  if (!Security::verifyPin($db, $user, (string)($_POST['pin'] ?? ''))) throw new RuntimeException('PIN invalid or temporarily locked.');
+  return $updates->install();
+ }
+ if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
  if ($action==='report') {
   requireRole($user,['parish_officer']);
   $parish=(int)$user['hierarchy_id']; if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid parish scope.');
