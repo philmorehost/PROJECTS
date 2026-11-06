@@ -99,17 +99,54 @@ document.querySelectorAll('[data-unit-bulk]').forEach(form=>{
  form.addEventListener('submit',event=>{const selected=rows.filter(row=>row.querySelector('input').checked).length;if(!selected||selected>500){event.preventDefault();count.textContent='Select between 1 and 500 units before assigning.';}});update();
 });
 
-const directorySearch=document.querySelector('#directory-search');
-const directoryType=document.querySelector('#directory-type');
-const directoryZone=document.querySelector('#directory-zone');
-function filterDirectory(){
- const rows=Array.from(document.querySelectorAll('[data-directory-unit]'));let shown=0;
- const query=(directorySearch?.value||'').trim().toLocaleLowerCase();
- rows.forEach(row=>{row.hidden=!(row.textContent.toLocaleLowerCase().includes(query)&&(!directoryType?.value||row.dataset.type===directoryType.value)&&(!directoryZone?.value||row.dataset.zone===directoryZone.value));if(!row.hidden)shown++;});
- const result=document.querySelector('#directory-result');if(result)result.textContent=`${shown} of ${rows.length} church units shown`;
- const empty=document.querySelector('#directory-empty');if(empty)empty.hidden=shown>0;
+// The server renders one page and real GET links. Enhance with instant pagination
+// over the same authorized records kept in an inert template (not visible cards).
+const directoryForm=document.querySelector('#directory-filters');
+const directoryTemplate=document.querySelector('#directory-all-units');
+const directoryList=document.querySelector('#directory-list');
+const directoryControls=document.querySelector('#directory-pagination-controls');
+if(directoryForm&&directoryTemplate&&directoryList&&directoryControls){
+ const records=Array.from(directoryTemplate.content.querySelectorAll('[data-directory-unit]')).map(node=>({node,text:node.dataset.directorySearch.toLocaleLowerCase(),type:node.dataset.type,zone:node.dataset.zone}));
+ const search=directoryForm.querySelector('#directory-search');const type=directoryForm.querySelector('#directory-type');const zone=directoryForm.querySelector('#directory-zone');const size=directoryForm.querySelector('#directory-size');
+ let current=Number(document.querySelector('.directory-pagination').dataset.directoryPage)||1;
+ const pageUrl=(page,action=null,id=null)=>{
+  try{const url=new URL(directoryForm.getAttribute('action'),location.href);
+   url.search=new URLSearchParams(new FormData(directoryForm)).toString();url.searchParams.set('directory_page',String(page));
+   if(action){url.searchParams.set(action==='edit'?'edit_unit':'delete_unit',id);url.hash=action==='edit'?'hierarchy-editor':'delete-unit';}
+   return url;
+  }catch{return null;}
+ };
+ const render=(requested=1,moveFocus=false,saveUrl=true)=>{
+  const query=search.value.trim().toLocaleLowerCase();const perPage=[6,12,24].includes(Number(size.value))?Number(size.value):6;
+  const matches=records.filter(record=>record.text.includes(query)&&(!type.value||record.type===type.value)&&(!zone.value||record.zone===zone.value));
+  const pages=Math.max(1,Math.ceil(matches.length/perPage));current=Math.max(1,Math.min(pages,requested));
+  const start=(current-1)*perPage;const visible=matches.slice(start,start+perPage);
+  directoryList.replaceChildren(...visible.map(record=>{const node=record.node.cloneNode(true);node.querySelectorAll('[data-directory-action]').forEach(link=>{const url=pageUrl(current,link.dataset.directoryAction,node.dataset.unitId);if(url)link.href=url.href;});return node;}));
+  document.querySelector('#directory-result').textContent=`Showing ${matches.length?start+1:0}–${Math.min(start+perPage,matches.length)} of ${matches.length} matching units · ${records.length} in your scope`;
+  document.querySelector('#directory-empty').hidden=matches.length>0;
+  document.querySelector('#directory-page-counter').textContent=`Page ${current} of ${pages}`;
+  document.querySelector('.directory-pagination').dataset.directoryPage=String(current);
+  directoryControls.replaceChildren();
+  const control=(label,page,disabled=false,number=false)=>{
+   const item=document.createElement(disabled?'span':'a');item.className='page-link'+(disabled?' is-disabled':'')+(number?' page-number':'');item.textContent=label;
+   if(disabled)item.setAttribute('aria-disabled','true');
+   else{item.dataset.directoryPage=String(page);const url=pageUrl(page);item.href=url?url.href:'#church-directory';if(number)item.setAttribute('aria-label',`Page ${page}`);if(number&&page===current)item.setAttribute('aria-current','page');}
+   return item;
+  };
+  directoryControls.append(control('← Previous',current-1,current===1));
+  const numbers=document.createElement('div');numbers.className='directory-page-numbers';let last=0;
+  const candidates=Array.from(new Set([1,Math.max(1,current-1),current,Math.min(pages,current+1),pages])).sort((a,b)=>a-b);
+  candidates.forEach(page=>{if(last&&page>last+1){const gap=document.createElement('span');gap.className='page-ellipsis';gap.textContent='…';gap.setAttribute('aria-hidden','true');numbers.append(gap);}numbers.append(control(String(page),page,false,true));last=page;});
+  directoryControls.append(numbers,control('Next →',current+1,current===pages));
+  if(saveUrl){const url=pageUrl(current);if(url&&url.origin===location.origin){try{history[moveFocus?'pushState':'replaceState'](null,'',url);}catch{ /* GET links still work if history updates are unavailable. */ }}}
+  if(moveFocus){const heading=document.querySelector('#church-directory-title');heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true});heading.scrollIntoView({block:'start'});}
+ };
+ directoryForm.addEventListener('submit',event=>{event.preventDefault();render(1);});
+ search.addEventListener('input',()=>render(1));[type,zone,size].forEach(control=>control.addEventListener('change',()=>render(1)));
+ directoryControls.addEventListener('click',event=>{const link=event.target.closest('a[data-directory-page]');if(!link||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();render(Number(link.dataset.directoryPage),true);});
+ window.addEventListener('popstate',()=>{const params=new URLSearchParams(location.search);search.value=params.get('directory_q')||'';type.value=params.get('directory_type')||'';zone.value=params.get('directory_zone')||'';size.value=params.get('directory_size')||'6';render(Number(params.get('directory_page'))||1,false,false);});
+ render(current,false,false);
 }
-[directorySearch,directoryType,directoryZone].forEach(control=>control?.addEventListener(control===directorySearch?'input':'change',filterDirectory));filterDirectory();
 function openHierarchyTool(){
  let id;try{id=decodeURIComponent(location.hash.slice(1));}catch{return;}
  const target=document.getElementById(id);if(!target)return;
