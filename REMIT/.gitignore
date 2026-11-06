@@ -5,3 +5,6 @@
 !/storage/.htaccess
 !/storage/receipts/
 /storage/receipts/*
+/config/license.json
+/config/license-cache.json
+/config/setup.mutex

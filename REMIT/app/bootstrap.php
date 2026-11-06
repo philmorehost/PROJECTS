@@ -13,6 +13,9 @@ header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-sr
 require __DIR__.'/Database.php';
 require __DIR__.'/Money.php';
 require __DIR__.'/Security.php';
+require __DIR__.'/ManagerClient.php';
+require __DIR__.'/LicenseManager.php';
+require __DIR__.'/UpdateManager.php';
 function e(mixed $s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function redirect(string $page): never { header('Location: index.php?page='.rawurlencode($page), true, 303); exit; }
 function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
