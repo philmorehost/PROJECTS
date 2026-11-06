@@ -13,6 +13,7 @@ header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-sr
 require __DIR__.'/Database.php';
 require __DIR__.'/Money.php';
 require __DIR__.'/ChurchPortal.php';
+require __DIR__.'/HierarchyManager.php';
 require __DIR__.'/Security.php';
 require __DIR__.'/ManagerClient.php';
 require __DIR__.'/LicenseManager.php';

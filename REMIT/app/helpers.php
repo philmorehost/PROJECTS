@@ -13,3 +13,11 @@ function scope(PDO $db, array $user): array {
  $s->execute([$user['hierarchy_id']]); return array_map('intval',$s->fetchAll(PDO::FETCH_COLUMN));
 }
 function requireRole(array $user, array $roles): void { if (!in_array($user['role'],$roles,true)) { http_response_code(403); throw new RuntimeException('You do not have permission for this action.'); } }
+
+function unitLabel(array $node): string {
+ $parts=[ucfirst($node['node_type']).' · '.$node['node_name']];
+ if(!empty($node['parish_code']))$parts[]=$node['parish_code'];
+ if(!empty($node['parent_name']))$parts[]='Under '.$node['parent_name'];
+ if(!empty($node['zone_name']) && $node['zone_name']!==($node['parent_name'] ?? '') && $node['node_type']!=='zone')$parts[]='Zone: '.$node['zone_name'];
+ return implode(' — ',$parts);
+}

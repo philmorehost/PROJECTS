@@ -79,14 +79,9 @@ function action(PDO $db,array $user,array $ids): string {
   try {$count=HierarchyImporter::import($db,$stream);} finally {fclose($stream);}
   return $count.' CSV rows imported. Provision officer accounts separately; contact details are not login credentials.';
  }
- if ($action==='node') {
-  requireRole($user,['provincial_admin']);
-  $name=trim($_POST['node_name'] ?? ''); $type=$_POST['node_type'] ?? ''; $parent=(int)($_POST['parent_id'] ?? 0);
-  if($name==='' || strlen($name)>150 || !in_array($type,['zone','area','parish'],true)) throw new RuntimeException('Invalid organizational unit.');
-  if($type!=='zone') { $s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$parent]); if($s->fetchColumn()!==($type==='area'?'zone':'area')) throw new RuntimeException('Areas must belong to zones; parishes must belong to areas.'); }
-  $code=trim($_POST['parish_code'] ?? ''); if(strlen($code)>20 || ($type==='parish' && $code==='')) throw new RuntimeException('Parishes need a unique code of up to 20 characters.');
-  $db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code) VALUES(?,?,?,?)')->execute([$name,$type,$type==='zone'?null:$parent,$type==='parish'?$code:null]);return 'Organizational unit created.';
- }
+ if ($action==='node') return HierarchyManager::create($db,$user,$_POST);
+ if ($action==='move_units') return HierarchyManager::move($db,$user,$_POST);
+ if ($action==='upgrade_parish') return HierarchyManager::upgrade($db,$user,$_POST);
  if ($action==='user') {
   requireRole($user,['provincial_admin']);
   $name=trim($_POST['full_name'] ?? '');$email=strtolower(trim($_POST['email'] ?? ''));$password=$_POST['password'] ?? '';$role=$_POST['role'] ?? '';$node=(int)($_POST['hierarchy_id'] ?? 0);

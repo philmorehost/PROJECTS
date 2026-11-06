@@ -32,10 +32,12 @@ final class HierarchyImporter {
     if($row===[null])continue;
     if(++$count>5000 || count($row)!==6) throw new InvalidArgumentException('CSV must contain at most 5,000 rows, each with six columns.');
     [$zone,$area,$parish,$code,$contact,$phone]=array_map('trim',$row);
-    foreach([$zone,$area,$parish] as $name) if($name==='' || strlen($name)>150)throw new InvalidArgumentException('Invalid church name at row '.($count+1));
+    foreach([$zone,$parish] as $name) if($name==='' || strlen($name)>150)throw new InvalidArgumentException('Invalid church name at row '.($count+1));
     if($code==='' || strlen($code)>20 || strlen($contact)>100 || strlen($phone)>25) throw new InvalidArgumentException('Invalid code or contact fields at row '.($count+1));
+    if(strlen($area)>150)throw new InvalidArgumentException('Area name is too long at row '.($count+1));
     $parent=null;
     foreach(['zone'=>$zone,'area'=>$area] as $type=>$name) {
+     if($type==='area' && $name==='')continue;
      $s=$db->prepare('SELECT id FROM church_hierarchy WHERE node_type=? AND node_name=? AND parent_id <=> ?');$s->execute([$type,$name,$parent]);$id=$s->fetchColumn();
      if(!$id){$db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id) VALUES(?,?,?)')->execute([$name,$type,$parent]);$id=$db->lastInsertId();}
      $parent=(int)$id;
