@@ -159,3 +159,37 @@ document.querySelectorAll('.hierarchy-shortcuts a[href^="#"]').forEach(link=>lin
  const target=document.getElementById(link.getAttribute('href').slice(1));
  if(target?.matches('details'))target.open=true;
 }));
+
+// Officer registration: suggest, never silently choose a fuzzy church match.
+const registrationSelect=document.querySelector('#registration-church');
+if(registrationSelect){
+ const unlisted=document.querySelector('#church-unlisted'),fields=document.querySelector('#unlisted-church-fields'),name=document.querySelector('#new-church-name'),level=document.querySelector('#new-church-type');
+ const normalize=text=>text.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ const distance=(a,b)=>{let row=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,row[j]+1,row[j-1]+(a[i-1]===b[j-1]?0:1));row=next;}return row[b.length];};
+ const options=Array.from(registrationSelect.options).filter(o=>o.value).map(o=>({id:o.value,label:o.textContent.trim(),name:normalize(o.dataset.churchName),search:normalize(o.textContent)}));
+ const searchLabel=document.createElement('label');searchLabel.textContent='Search church names, codes or parents';
+ const search=document.createElement('input');search.type='search';search.id='registration-church-search';search.maxLength=150;search.autocomplete='off';search.placeholder='Start typing your church name…';searchLabel.append(search);
+ const suggestions=document.createElement('div');document.querySelector('#church-discovery').append(searchLabel,suggestions);
+ const sync=()=>{fields.hidden=!unlisted.checked;fields.disabled=!unlisted.checked;name.required=unlisted.checked;level.required=unlisted.checked;registrationSelect.required=!unlisted.checked;};
+ const choose=option=>{registrationSelect.value=option.id;unlisted.checked=false;sync();search.value=option.label;suggestions.replaceChildren();document.querySelector('#new-church-suggestions').replaceChildren();registrationSelect.focus();};
+ const rank=(option,query)=>{
+  if(!query)return 4;
+  if(option.name.replace(/ /g,'')===query.replace(/ /g,''))return 0;
+  if(option.search.includes(query))return 1;
+  const words=query.split(' '),target=option.search.split(' ');
+  if(words.every(word=>target.some(value=>value.startsWith(word)||(word.length>=3&&Math.abs(value.length-word.length)<=2&&distance(word,value)<=(word.length>=6?2:1)))))return 2;
+  if(query.length>=4&&Math.abs(option.name.length-query.length)<=3&&distance(query,option.name)<=Math.max(1,Math.floor(query.length*.2)))return 3;
+  return 99;
+ };
+ const render=(text,target)=>{
+  const query=normalize(text).slice(0,150);target.replaceChildren();if(!query)return;
+  const matches=options.map(option=>({option,score:rank(option,query)})).filter(match=>match.score<99).sort((a,b)=>a.score-b.score).slice(0,8);
+  const status=document.createElement('p');status.className='small muted';status.setAttribute('role','status');status.textContent=matches.length?'Similar churches — select the correct name and parent:':'No close matches found. Try another spelling or code, or use the unlisted church option for admin review.';target.append(status);
+  matches.forEach(({option})=>{const button=document.createElement('button');button.type='button';button.className='church-suggestion';button.textContent=option.label;button.addEventListener('click',()=>choose(option));target.append(button);});
+ };
+ search.addEventListener('input',()=>{registrationSelect.value='';render(search.value,suggestions);});
+ name.addEventListener('input',()=>{const start=name.selectionStart,end=name.selectionEnd;name.value=name.value.toLocaleUpperCase();name.setSelectionRange(start,end);render(name.value,document.querySelector('#new-church-suggestions'));});
+ unlisted.addEventListener('change',()=>{if(unlisted.checked){registrationSelect.value='';if(!name.value)name.value=search.value.toLocaleUpperCase();render(name.value,document.querySelector('#new-church-suggestions'));}sync();});
+ registrationSelect.addEventListener('change',()=>{if(registrationSelect.value){const option=options.find(o=>o.id===registrationSelect.value);if(option)choose(option);}});
+ registrationSelect.form.addEventListener('reset',()=>setTimeout(sync,0));sync();
+}

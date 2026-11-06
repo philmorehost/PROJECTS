@@ -16,9 +16,9 @@ function action(PDO $db,array $user,array $ids): string {
   return $updates->install();
  }
  if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
- if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Church registration and payment schema enabled. Existing records and percentages are unchanged.'; }
+ if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Officer registration and payment schema enabled. Existing records and percentages are unchanged.'; }
  if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
- if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''));
+ if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''),(int)($_POST['resolved_unit_id'] ?? 0));
  if ($action==='payment_submit') return ChurchPortal::submitPayment($db,$user,$_POST);
  if ($action==='payment_review') return ChurchPortal::reviewPayment($db,$user,$_POST);
  if ($action==='allocation_settings') {
