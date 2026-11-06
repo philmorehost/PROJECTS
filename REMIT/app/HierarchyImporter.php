@@ -1,10 +1,29 @@
 <?php
 declare(strict_types=1);
 final class HierarchyImporter {
+ public const CSV_HEADER = ['zone','area','parish','parish_code','contact_person','phone_number'];
+ /** A generated, BOM-free template containing fictional examples only. */
+ public static function sampleCsv(array $user): string {
+  requireRole($user,['provincial_admin']);
+  $stream=fopen('php://temp','w+');
+  if(!$stream)throw new RuntimeException('Cannot generate the sample CSV.');
+  try {
+   $rows=[self::CSV_HEADER,
+    ['Example Zone','Example Area One','Example Parish One','SAMPLE001','Example Officer One','08000000000'],
+    ['Example Zone','Example Area One','Example Parish Two','SAMPLE002','Example Officer Two','08000000000'],
+    ['Example Zone','Example Area Two','Example Parish Three','SAMPLE003','Example Officer Three','08000000000'],
+   ];
+   foreach($rows as $row)if(fputcsv($stream,$row,',','"','',"\r\n")===false)throw new RuntimeException('Cannot generate the sample CSV.');
+   rewind($stream);$csv=stream_get_contents($stream);
+   if($csv===false)throw new RuntimeException('Cannot read the sample CSV.');
+   return $csv;
+  }finally{fclose($stream);}
+ }
+
  /** @param resource $stream */
  public static function import(PDO $db,$stream): int {
   $header=fgetcsv($stream,4096,',','"','');
-  if($header!==['zone','area','parish','parish_code','contact_person','phone_number']) throw new InvalidArgumentException('CSV header must be: zone,area,parish,parish_code,contact_person,phone_number');
+  if($header!==self::CSV_HEADER) throw new InvalidArgumentException('CSV header must be: zone,area,parish,parish_code,contact_person,phone_number');
   $count=0;$db->beginTransaction();
   try {
    // Serialize directory imports, including shared ancestors, using an existing singleton setting row.

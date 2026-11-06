@@ -107,7 +107,7 @@ The public docs explain validation but not the update payload. The updater contr
 
 LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
 
-- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.1`.
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.2`.
 - `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.3.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
 - Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
 - Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
@@ -188,3 +188,15 @@ npm install --prefix /tmp/remit-browser-tools playwright
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/mobile-browser.js /tmp/remit-mobile-fixtures
 ```
+
+## 0.2.2 — Downloadable church import sample
+
+Provincial administrators can open **Church hierarchy → Import a church directory → Download sample CSV**. The download is generated server-side through the authenticated portal, requires an active licence, and is not a public asset. It uses the importer's shared column definition:
+
+```csv
+zone,area,parish,parish_code,contact_person,phone_number
+```
+
+The attachment `remit-church-import-sample.csv` is UTF-8 without a BOM, uses CRLF rows, and contains three explicitly fictional parish examples showing a shared zone and two areas. Replace all sample rows before uploading; keep the exact header/order, assign unique parish codes, and treat phone numbers as text in spreadsheet tools to preserve leading zeroes. Downloading does not read/export existing churches or change the database.
+
+No schema migration or frontend asset update is needed for this patch. Deploy the updated PHP files together. `php tests/import-sample.php` verifies admin authorization, CSV formatting/header compatibility and sample import/reimport using a SQLite compatibility harness (26 assertions). Live MySQL and browser download headers still need deployment verification.
