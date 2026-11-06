@@ -79,6 +79,8 @@ function action(PDO $db,array $user,array $ids): string {
   try {$count=HierarchyImporter::import($db,$stream);} finally {fclose($stream);}
   return $count.' CSV rows imported. Provision officer accounts separately; contact details are not login credentials.';
  }
+ if ($action==='edit_unit') return HierarchyManager::edit($db,$user,$_POST);
+ if ($action==='delete_unit') return HierarchyManager::delete($db,$user,$_POST);
  if ($action==='node') return HierarchyManager::create($db,$user,$_POST);
  if ($action==='move_units') return HierarchyManager::move($db,$user,$_POST);
  if ($action==='upgrade_parish') return HierarchyManager::upgrade($db,$user,$_POST);

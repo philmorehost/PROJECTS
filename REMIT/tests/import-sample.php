@@ -25,5 +25,5 @@ verify((int)$db->query("SELECT COUNT(*) FROM church_hierarchy WHERE node_type='p
 rewind($stream);verify(HierarchyImporter::import($db,$stream)===3,'repeat sample accepted');
 verify((int)$db->query('SELECT COUNT(*) FROM church_hierarchy')->fetchColumn()===6,'reimport creates no duplicates');
 fclose($stream);
-verify(str_contains(file_get_contents(__DIR__.'/../index.php'),'download=church-import-sample'),'import form links to download');
+verify(str_contains(file_get_contents(__DIR__.'/../app/hierarchy-import.php'),'download=church-import-sample'),'import form links to download');
 echo "PASS: $checks sample CSV assertions (SQLite compatibility harness)\n";
