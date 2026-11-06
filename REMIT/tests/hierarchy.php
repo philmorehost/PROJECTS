@@ -5,7 +5,7 @@ $count=0;
 function check(bool $ok,string $label):void{global $count;$count++;if(!$ok)throw new RuntimeException('FAIL: '.$label);}
 function denied(Closure $call,string $label):void{$no=false;try{$call();}catch(RuntimeException|InvalidArgumentException $e){$no=true;}check($no,$label);}
 class TreePDO extends PDO {
- public function prepare(string $q,array $options=[]):PDOStatement|false{return parent::prepare(str_replace('<=>','IS',$q),$options);}
+ public function prepare(string $q,array $options=[]):PDOStatement|false{return parent::prepare(str_replace(['<=>',' FOR UPDATE'],['IS',''],$q),$options);}
  public function query(string $q,?int $mode=null,mixed ...$args):PDOStatement|false{$q=str_replace(' FOR UPDATE','',$q);return $mode===null?parent::query($q):parent::query($q,$mode,...$args);}
 }
 $db=new TreePDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);$db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE,PDO::FETCH_ASSOC);$db->exec('PRAGMA foreign_keys=ON');

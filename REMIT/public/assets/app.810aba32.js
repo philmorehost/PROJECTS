@@ -98,3 +98,27 @@ document.querySelectorAll('[data-unit-bulk]').forEach(form=>{
  form.querySelector('[data-bulk-clear]').addEventListener('click',()=>{rows.forEach(row=>row.querySelector('input').checked=false);update();});
  form.addEventListener('submit',event=>{const selected=rows.filter(row=>row.querySelector('input').checked).length;if(!selected||selected>500){event.preventDefault();count.textContent='Select between 1 and 500 units before assigning.';}});update();
 });
+
+const directorySearch=document.querySelector('#directory-search');
+const directoryType=document.querySelector('#directory-type');
+const directoryZone=document.querySelector('#directory-zone');
+function filterDirectory(){
+ const rows=Array.from(document.querySelectorAll('[data-directory-unit]'));let shown=0;
+ const query=(directorySearch?.value||'').trim().toLocaleLowerCase();
+ rows.forEach(row=>{row.hidden=!(row.textContent.toLocaleLowerCase().includes(query)&&(!directoryType?.value||row.dataset.type===directoryType.value)&&(!directoryZone?.value||row.dataset.zone===directoryZone.value));if(!row.hidden)shown++;});
+ const result=document.querySelector('#directory-result');if(result)result.textContent=`${shown} of ${rows.length} church units shown`;
+ const empty=document.querySelector('#directory-empty');if(empty)empty.hidden=shown>0;
+}
+[directorySearch,directoryType,directoryZone].forEach(control=>control?.addEventListener(control===directorySearch?'input':'change',filterDirectory));filterDirectory();
+function openHierarchyTool(){
+ let id;try{id=decodeURIComponent(location.hash.slice(1));}catch{return;}
+ const target=document.getElementById(id);if(!target)return;
+ let detail=target.closest('details');while(detail){detail.open=true;detail=detail.parentElement?.closest('details');}
+}
+window.addEventListener('hashchange',openHierarchyTool);openHierarchyTool();
+
+// Reopen a disclosure even when its shortcut's hash is already the current hash.
+document.querySelectorAll('.hierarchy-shortcuts a[href^="#"]').forEach(link=>link.addEventListener('click',()=>{
+ const target=document.getElementById(link.getAttribute('href').slice(1));
+ if(target?.matches('details'))target.open=true;
+}));

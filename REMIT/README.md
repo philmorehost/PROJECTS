@@ -107,8 +107,8 @@ The public docs explain validation but not the update payload. The updater contr
 
 LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
 
-- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.4.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.3.0`.
-- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.4.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.5.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.4.0`.
+- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.5.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
 - Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
 - Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
 - Automatic installation permits selected source files under `app`, `bin`, `tests`, `database`, `public/assets`, and known root files. It never executes packaged SQL or PHP migration hooks. Any non-empty `database_queries` or `files_to_delete` list rejects automatic installation. Schema-changing releases require a reviewed manual migration/deployment.
@@ -245,3 +245,38 @@ Existing parish-code conflicts still reject the import; importing does not silen
 - `php tests/hierarchy-ui.php /tmp/remit-hierarchy-ui.html` generates a fictional-only test fixture from the production hierarchy-tools view.
 - With Playwright/Chromium available, `node tests/hierarchy-browser.js /tmp/remit-hierarchy-ui.html` runs 40 assertions at phone and desktop widths for live suggestions, result limiting, pointer/keyboard selection, invalid free text, no-results messaging, retained hidden selections, clearing and destination selection. Use the external dev-tools `NODE_PATH`/`CHROME_EXECUTABLE` setup documented above. Fixtures do not contain live church data.
 - Existing church portal, money, licence/update, sample CSV and role-specific navigation regression tests are retained. Deploy PHP and newly fingerprinted frontend assets together; validate real MySQL/cPanel and representative account scopes before a large reorganization.
+
+## 0.4.0 — Church directory workspace, editing and protected deletion
+
+**Church hierarchy** now puts Quick add/edit first, alongside the directory at widths of 1100px and above. Smaller screens stack the tools above the cards. A top shortcut bar opens CSV import, officer provisioning, bulk assignment and registration review; less-used tools are collapsible instead of forcing administrators to scroll past them before reaching the list. Directory cards support combined name/code/contact/parent search, level filtering, Zone filtering, result counts and an empty-results state. Non-admin users retain read-only, server-scoped views; contact fields and edit/delete controls are admin-only.
+
+### Edit a unit
+
+Choose **Edit details** on a directory card. You can update the name, parish code, contacts and valid parent. Unit ID and level remain unchanged; this preserves officer/registration/financial relationships. Areas still require Zone parents, and Parishes can use Area or Zone parents. Zones remain at the provincial root. Level changes are rejected; use the existing safe Parish-to-Area upgrade instead. Duplicate parish codes are rejected by the database and changes roll back together. Parent changes alter representative scope on subsequent requests. Quick add now also accepts optional contact details.
+
+### Delete an unused unit
+
+The **Delete** link only opens a confirmation view; it never mutates data via GET. The administrator must type the exact current unit name and check a confirmation box, then submit a CSRF-protected POST with a valid site licence. An unused leaf Parish, empty Area or empty Zone can be permanently removed. Deletion is blocked when the unit has:
+
+- Any child units (move/reassign them first).
+- Any officer/user accounts attached to it.
+- Any remittance ledger entry, including unpaid reports.
+- Any church registration records when that feature schema is enabled, including rejected/approved records.
+
+No cascade deletion of accounts, registrations or financial history is offered. Database foreign keys provide a further safeguard against links added concurrently. Structural writes share the same serialization lock used by creation, imports, bulk assignments and upgrades. Edit/delete unit IDs and actor IDs are logged to the application log without bank or contact details. Logs are not a substitute for external backups. Repeated deletion and stale/wrong-name confirmations are rejected.
+
+**No database migration is required.** Deploy the updated PHP templates and fingerprinted assets together. Existing data is unchanged until an administrator submits an action. MySQL concurrency/permissions and browser behavior on the actual hosting site should still be verified before reorganizing a live province.
+
+Validation for this release: `tests/hierarchy-edit-delete.php` adds 25 SQL/role/rollback/protection assertions on top of the 44 existing hierarchy assertions (SQLite compatibility harness, not a MySQL locking test). `tests/hierarchy-page-ui.php` renders fictional-only admin/read-only/edit/delete fixtures; `tests/hierarchy-page-browser.js` runs 138 Chromium assertions across 320, 390, 768, 1024, 1100 and 1440 pixel layouts, including tool ordering, side-by-side alignment, mobile overflow, tool disclosure shortcuts, filters, role visibility and prefilled confirmation/edit forms. Existing autocomplete, mobile navigation, finance, registration, CSV and licence/update regressions are retained.
+
+Optional workspace browser check (using the external Playwright/Chromium setup above):
+
+```sh
+mkdir -p /tmp/remit-directory-fixtures
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/provincial_admin.html
+php tests/hierarchy-page-ui.php area_rep /tmp/remit-directory-fixtures/area_rep.html
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/edit.html edit
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/delete.html delete
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/hierarchy-page-browser.js /tmp/remit-directory-fixtures
+```

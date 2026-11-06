@@ -16,15 +16,57 @@ final class HierarchyManager
     {
         requireRole($user,['provincial_admin']);
         $name=trim($input['node_name'] ?? '');$type=$input['node_type'] ?? '';$parent=(int)($input['parent_id'] ?? 0);$code=trim($input['parish_code'] ?? '');
+        $contact=trim($input['contact_person'] ?? '');$phone=trim($input['phone_number'] ?? '');
+        if(strlen($contact)>100 || strlen($phone)>25)throw new InvalidArgumentException('Contact name is limited to 100 characters and phone to 25.');
         if($name==='' || strlen($name)>150 || !in_array($type,['zone','area','parish'],true) || strlen($code)>20 || ($type==='parish' && $code===''))throw new InvalidArgumentException('Provide a unit name, valid level and a unique parish code for parishes.');
         $db->beginTransaction();
         try {
             self::lock($db);$parentType=null;
             if($type!=='zone') {$s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$parent]);$parentType=$s->fetchColumn();if($parentType===false)throw new RuntimeException('Select an existing parent unit.');}
             if(!self::validParent($type,$parentType))throw new RuntimeException('Areas belong to zones. Parishes may belong to an area or directly to a zone.');
-            $db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code) VALUES(?,?,?,?)')->execute([$name,$type,$type==='zone'?null:$parent,$type==='parish'?$code:null]);
+            $db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code,contact_person,phone_number) VALUES(?,?,?,?,?,?)')->execute([$name,$type,$type==='zone'?null:$parent,$type==='parish'?$code:null,$contact?:null,$phone?:null]);
             $db->commit();return 'Organizational unit created.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+    }
+    public static function edit(PDO $db,array $user,array $input): string
+    {
+        requireRole($user,['provincial_admin']);
+        $id=(int)($input['unit_id'] ?? 0);$name=trim($input['node_name'] ?? '');$code=trim($input['parish_code'] ?? '');
+        $contact=trim($input['contact_person'] ?? '');$phone=trim($input['phone_number'] ?? '');
+        if($name==='' || strlen($name)>150 || strlen($code)>20 || strlen($contact)>100 || strlen($phone)>25)throw new InvalidArgumentException('Check the unit name, parish code and contact field lengths.');
+        $db->beginTransaction();
+        try{
+            self::lock($db);$s=$db->prepare('SELECT * FROM church_hierarchy WHERE id=? FOR UPDATE');$s->execute([$id]);$unit=$s->fetch();
+            if(!$unit)throw new RuntimeException('Church unit no longer exists. Refresh the directory.');
+            if(isset($input['node_type']) && $input['node_type']!==$unit['node_type'])throw new RuntimeException('Unit level cannot be changed by editing. Use the safe parish upgrade tool instead.');
+            if($unit['node_type']==='parish' && $code==='')throw new InvalidArgumentException('Parishes must keep a unique parish code.');
+            $parent=array_key_exists('parent_id',$input)?(int)$input['parent_id']:(int)$unit['parent_id'];
+            if($unit['node_type']==='zone' && $parent!==0)throw new RuntimeException('Zones must remain at provincial root level.');
+            $parentType=null;
+            if($parent){$s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$parent]);$parentType=$s->fetchColumn();if($parentType===false)throw new RuntimeException('Selected parent no longer exists.');}
+            if(!self::validParent($unit['node_type'],$parentType))throw new RuntimeException('Areas require a Zone parent; Parishes require an Area or Zone parent.');
+            $cursor=$parent;$seen=[];while($cursor){if($cursor===$id || isset($seen[$cursor]))throw new RuntimeException('This parent would create a hierarchy cycle.');$seen[$cursor]=true;$s=$db->prepare('SELECT parent_id FROM church_hierarchy WHERE id=?');$s->execute([$cursor]);$cursor=(int)$s->fetchColumn();}
+            $db->prepare('UPDATE church_hierarchy SET node_name=?,parent_id=?,parish_code=?,contact_person=?,phone_number=? WHERE id=?')->execute([$name,$parent?:null,$unit['node_type']==='parish'?$code:null,$contact?:null,$phone?:null,$id]);
+            $db->commit();error_log('REMIT hierarchy edit by user '.(int)$user['id'].'; unit '.$id);
+            return 'Church unit updated. Its ID, officer accounts and financial records were preserved.';
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+    }
+    public static function delete(PDO $db,array $user,array $input): string
+    {
+        requireRole($user,['provincial_admin']);$id=(int)($input['unit_id'] ?? 0);
+        if(($input['delete_confirm'] ?? '')!=='1')throw new InvalidArgumentException('Confirm deletion explicitly before continuing.');
+        $db->beginTransaction();
+        try{
+            self::lock($db);$s=$db->prepare('SELECT * FROM church_hierarchy WHERE id=? FOR UPDATE');$s->execute([$id]);$unit=$s->fetch();
+            if(!$unit)throw new RuntimeException('Church unit no longer exists.');
+            if((string)($input['confirm_name'] ?? '')!==$unit['node_name'])throw new InvalidArgumentException('Type the exact current unit name to confirm deletion.');
+            $checks=[['church_hierarchy','parent_id','Move or remove its child units first.'],['users','hierarchy_id','This unit has officer accounts. It cannot be deleted.'],['remittance_ledgers','parish_id','This unit has financial records. Deletion is blocked to preserve history.']];
+            if(setting($db,'church_portal_schema')==='2')$checks[]=['church_registrations','parish_id','This unit has church registration records. It cannot be deleted.'];
+            foreach($checks as [$table,$column,$message]){$s=$db->prepare("SELECT id FROM $table WHERE $column=? LIMIT 1");$s->execute([$id]);if($s->fetchColumn())throw new RuntimeException($message);}
+            $db->prepare('DELETE FROM church_hierarchy WHERE id=?')->execute([$id]);
+            $db->commit();error_log('REMIT hierarchy delete by user '.(int)$user['id'].'; unit '.$id);
+            return 'Unused church unit deleted. No child units, accounts or financial records were removed.';
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($e instanceof PDOException && (string)$e->getCode()==='23000')throw new RuntimeException('Deletion blocked because this unit has linked records. Refresh the directory and review its dependencies.');throw $e;}
     }
     public static function move(PDO $db,array $user,array $input): string
     {
