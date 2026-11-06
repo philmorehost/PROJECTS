@@ -107,7 +107,7 @@ The public docs explain validation but not the update payload. The updater contr
 
 LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
 
-- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.0`.
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.1`.
 - `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.3.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
 - Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
 - Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
@@ -162,3 +162,29 @@ Church officers see the configured provincial account, enter their full Youth Th
 ### Tests for this release
 
 `php tests/church-portal.php` passes **156 assertions** covering percentages, cent conservation, encrypted account integrity, registration/approval/rejection, rate limiting, scope checks, notification/PIN/replay handling, confirmed balances, historical rate snapshots and view rendering. It executes real SQL through a SQLite compatibility harness that adapts MySQL syntax. It does **not** validate MySQL DDL, MySQL row locks, simultaneous approvals, cPanel permissions or live external APIs. Run the MySQL deployment acceptance checks, two-parish authorization tests and concurrent payment tests before handling real remittances.
+
+
+## 0.2.1 — Readability, mobile navigation and dashboard improvements
+
+- Body text is now 16px, inputs/selects at least 16px (avoiding input-focus auto-zoom on phones), with larger labels, explanatory text and accessible focus indicators. Buttons and navigation controls have at least 44px touch targets. Browser zoom remains enabled.
+- Authenticated views at 900px and below use a fixed footer icon bar: Home, Payments/Ledger, Churches, More. The top hamburger opens the same role-aware native dialog. The dialog supports Escape, a visible close button, backdrop dismissal, focus containment/return and scroll locking. Profile/admin links are shown according to the current role; these remain navigation conveniences, not authorization controls. Extra fallback links remain available when scripting/dialog support is absent.
+- Bottom navigation accounts for safe-area insets; page/footer padding prevents it covering content. The desktop sidebar remains available above 900px. There are no new external scripts, fonts or icon services; footer icons are inline accessible SVG.
+- Dashboard shortcuts guide officers to reporting, payments and their account details; administrators get review, directory and percentage shortcuts. Guidance uses existing scoped database totals, with no fabricated collection trends. Report completion is explicitly about submitted reports, not churches that have not reported.
+- The ledger now combines search and status filtering, announces the loaded result count, and displays a no-matches message. At 600px and below its rows become labelled cards; other wide administrative tables retain internal scrolling. Filtering only covers the currently loaded reports (existing 100-report limit), not a full-history search.
+- No schema migration is required for this patch. Deploy all code/assets together. Earlier 0.2.0 installations still need the documented church-feature schema activation if not already done. Clear hosting/CDN HTML caches if needed; asset filenames are content-fingerprinted.
+
+Validation: 39 PHP role-specific navigation assertions, 237 Chromium browser assertions over three roles and five viewport widths, plus the existing 156 church-portal, 1,020 money and 76 licence/update assertions. Browser checks use isolated **test fixtures**, not live user/financial data. They cover font sizes, touch targets, modal open/close/Escape/focus return, role menus, card layout, ledger filters, script-free fallback links and absence of page-level horizontal overflow. Actual iOS/Android device testing and production MySQL/cPanel acceptance remain recommended.
+
+Optional browser regression (requires PHP, Node, Playwright and an installed Chromium):
+
+```sh
+mkdir -p /tmp/remit-mobile-fixtures
+for role in parish_officer provincial_admin area_rep; do
+  php tests/mobile-ui.php "$role" "/tmp/remit-mobile-fixtures/$role.html"
+done
+# Install Playwright in an external development tools directory, not production:
+npm install --prefix /tmp/remit-browser-tools playwright
+# Point to your installed Chromium binary; omit CHROME_EXECUTABLE for Playwright-managed Chromium.
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/mobile-browser.js /tmp/remit-mobile-fixtures
+```
