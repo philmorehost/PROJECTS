@@ -16,15 +16,42 @@ function action(PDO $db,array $user,array $ids): string {
   return $updates->install();
  }
  if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
+ if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Church registration and payment schema enabled. Existing records and percentages are unchanged.'; }
+ if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
+ if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''));
+ if ($action==='payment_submit') return ChurchPortal::submitPayment($db,$user,$_POST);
+ if ($action==='payment_review') return ChurchPortal::reviewPayment($db,$user,$_POST);
+ if ($action==='allocation_settings') {
+  requireRole($user,['provincial_admin']);
+  $retained=ChurchPortal::percentage(trim($_POST['retained_percentage'] ?? ''));
+  [$bank,$name,$number]=ChurchPortal::bank($_POST);
+  $enabled=$_POST['registration_enabled'] ?? '';if(!in_array($enabled,['0','1'],true))throw new InvalidArgumentException('Invalid registration setting.');
+  $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled];
+  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
+  return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
+ }
+ if ($action==='profile') {
+  requireRole($user,['parish_officer']);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
+  if(!preg_match('/^[+0-9 ()-]{7,25}$/D',$phone))throw new InvalidArgumentException('Enter a valid contact phone number.');
+  $db->prepare('INSERT INTO officer_profiles(user_id,phone,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE phone=VALUES(phone),bank_name=VALUES(bank_name),account_name=VALUES(account_name),account_ciphertext=VALUES(account_ciphertext),account_last4=VALUES(account_last4)')->execute([$user['id'],$phone,$bank,$name,ChurchPortal::encrypt($number),substr($number,-4)]);
+  return 'Your account details have been saved securely. This does not change the provincial receiving account.';
+ }
  if ($action==='report') {
   requireRole($user,['parish_officer']);
   $parish=(int)$user['hierarchy_id']; if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid parish scope.');
   $month=filter_var($_POST['month'] ?? '',FILTER_VALIDATE_INT); $year=filter_var($_POST['year'] ?? '',FILTER_VALIDATE_INT);
   if ($month<1 || $month>12 || $year<2020 || $year>(int)date('Y')+1) throw new RuntimeException('Select a valid reporting period.');
   $gross=Money::cents(trim($_POST['gross'] ?? '')); if($gross<=0) throw new RuntimeException('Gross collections must be greater than zero.');
-  $due=Money::levy($gross,(int)setting($db,'levy_basis_points'));
-  $db->prepare('INSERT INTO remittance_ledgers(parish_id,period_month,period_year,gross_income,provincial_levy_due,payment_reference) VALUES(?,?,?,?,?,?)')->execute([$parish,$month,$year,Money::decimal($gross),Money::decimal($due),'RMT-'.strtoupper(bin2hex(random_bytes(10)))]);
-  return 'Income report created. Provincial allocation is '.Money::display(Money::decimal($due)).'.';
+  if(!ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the new church portal schema before new reports can be submitted.');
+  $db->beginTransaction();
+  try {
+   $rateQuery=$db->query("SELECT setting_value FROM security_settings WHERE setting_key='levy_basis_points' FOR UPDATE");$rate=(int)$rateQuery->fetchColumn();
+   $split=ChurchPortal::split($gross,$rate);$due=$split['payable'];
+   $db->prepare('INSERT INTO remittance_ledgers(parish_id,period_month,period_year,gross_income,provincial_levy_due,payment_reference,status) VALUES(?,?,?,?,?,?,?)')->execute([$parish,$month,$year,Money::decimal($gross),Money::decimal($due),'RMT-'.strtoupper(bin2hex(random_bytes(10))),$due===0?'verified':'pending']);
+   $db->prepare('INSERT INTO report_allocations(ledger_id,payable_basis_points,retained_amount) VALUES(?,?,?)')->execute([$db->lastInsertId(),$rate,Money::decimal($split['retained'])]);
+   $db->commit();
+  }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+  return 'Youth Thanksgiving offering saved. Amount to pay: '.Money::display(Money::decimal($due)).'. Church retains '.Money::display(Money::decimal($split['retained'])).'.';
  }
  if ($action==='verify') {
   requireRole($user,['provincial_admin','provincial_treasurer']);
@@ -74,7 +101,7 @@ function action(PDO $db,array $user,array $ids): string {
   $rules=['username_protection'=>[0,1],'protect_privileged'=>[0,1],'local_only'=>[0,1],'ip_protection'=>[0,1],'block_days'=>[1,7,30,365],'log_retention'=>[5,10,15,60]];
   $values=[];
   foreach($rules as $key=>$allowed) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || !in_array($v,$allowed,true)) throw new RuntimeException('Invalid security setting.');$values[$key]=(string)$v; }
-  foreach(['account_window','ip_window','account_max','ip_max','levy_basis_points'] as $key) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);$max=$key==='levy_basis_points'?10000:1440;$min=$key==='levy_basis_points'?0:1;if($v===false || $v<$min || $v>$max) throw new RuntimeException('Setting outside allowed range.');$values[$key]=(string)$v; }
+  foreach(['account_window','ip_window','account_max','ip_max'] as $key) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || $v<1 || $v>1440) throw new RuntimeException('Setting outside allowed range.');$values[$key]=(string)$v; }
   $db->beginTransaction(); try {$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();} catch(Throwable $e){$db->rollBack();throw $e;} return 'Settings saved. Existing account and IP locks are retained.';
  }
  if ($action==='unsuspend') {

@@ -10,12 +10,12 @@ Initial native PHP implementation. No framework, Composer package or frontend bu
 - Configurable account and IP failure windows, application IP blocks, suspension scope and privileged-role exceptions, audit log, PIN throttling, recognized-IP green king badge after five clean session logins. Recognition never bypasses security. Unknown accounts trigger IP blocks when IP protection is enabled.
 - Province-wide treasurer/admin views and recursive hierarchy-scoped representative/officer views. Only parish officers submit their own reports. Representatives are read-only.
 - Integer-cent money arithmetic (64-bit required), half-up basis-point allocation, monthly income reports, cumulative bank-confirmed reconciliation under row locks with a transaction PIN and audit entry.
-- Responsive dark dashboard driven by actual database records, ledger filtering, directory builder, atomic/repeatable CSV directory import, officer provisioning, settings and security event views.
+- Responsive bright dashboard driven by actual database records, ledger filtering, directory builder, atomic/repeatable CSV directory import, officer provisioning, settings and security event views.
 - Transactional notification outbox and firewall work queue (no delivery/execution workers yet).
 
 ## Requirements / deployment
 
-PHP **8.2+**, 64-bit; PDO, pdo_mysql, curl, gd, json (plus ZIP for software updates); MySQL 8+ or MariaDB 10.6+; Apache 2.4/LiteSpeed with .htaccess enabled. Use a dedicated empty database and database user with only that database's privileges. DDL privileges are needed for installation; reduce privileges afterward. Never use the database root account.
+PHP **8.2+**, 64-bit; PDO, pdo_mysql, curl, gd, json, OpenSSL (plus ZIP for software updates); MySQL 8+ or MariaDB 10.6+; Apache 2.4/LiteSpeed with .htaccess enabled. Use a dedicated empty database and database user with only that database's privileges. DDL privileges are needed for installation; reduce privileges afterward. Never use the database root account.
 
 1. Upload the contents of this folder to a dedicated document directory/subdomain. Keep sibling projects separate.
 2. Verify `app`, `config`, `storage`, `database`, `bin`, and `tests` return **403/404 over HTTP**. `.htaccess` protects them but server configuration must honor it. Disable directory listing. Do not serve the repository root as a public document root.
@@ -36,6 +36,7 @@ MySQL DDL auto-commits. Migration is deliberately **not retried destructively**.
 cd REMIT
 php tests/run.php
 php tests/license-updates.php
+php tests/church-portal.php
 find . -name '*.php' -print0 | xargs -0 -n1 php -l
 php -S 0.0.0.0:8080 router.php
 ```
@@ -60,7 +61,7 @@ Up to 5,000 rows and 2 MB. The importer reuses matching zone/area ancestors and 
 - **Receipts:** no upload/download endpoint is exposed yet; `storage/receipts` is private. Implement MIME/content validation, size limits, randomized names, malware review and an authenticated scope-checked download handler before exposing proof uploads.
 - **Firewall:** application blocks work immediately; `firewall_jobs` contains **pending requests only**. Build a separately privileged worker with a narrow, validated firewall adapter (e.g. CSF API), management-IP safeguards, expiry/unblock handling, idempotent retries and status reporting. Never run privileged shell commands in PHP web requests. Shared hosting may not permit this integration.
 - **Email:** notifications are queued, not delivered. Add a retry-safe, atomically claimed SMTP worker and escaped HTML templates. Never email passwords or PINs. Compliance scheduling and device fingerprinting are not implemented (alerts currently use unrecognized IPs only).
-- Income category breakdowns, multi-rate split configuration, receipt audit workflow, payment history/overpayment policy, period-aware compliance, weekly charts, live polling, interactive tree view, exports, admin user lifecycle/PIN reset, password change/recovery, setup recovery, MFA, integration tests and deployment hardening remain.
+- Income category breakdowns, category-specific split configuration, receipt upload/audit workflow, extended payment history/overpayment policy, period-aware compliance, weekly charts, live polling, interactive tree view, exports, admin user lifecycle/PIN reset, password change/recovery, setup recovery, MFA, integration tests and deployment hardening remain.
 
 ## Acceptance checklist (requires PHP + MySQL)
 
@@ -106,8 +107,8 @@ The public docs explain validation but not the update payload. The updater contr
 
 LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
 
-- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.2.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.1.0`.
-- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.2.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.3.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.2.0`.
+- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.3.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
 - Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
 - Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
 - Automatic installation permits selected source files under `app`, `bin`, `tests`, `database`, `public/assets`, and known root files. It never executes packaged SQL or PHP migration hooks. Any non-empty `database_queries` or `files_to_delete` list rejects automatic installation. Schema-changing releases require a reviewed manual migration/deployment.
@@ -123,3 +124,41 @@ If `storage/maintenance.json` remains after a crash, keep public traffic stopped
 ### New verification
 
 `php tests/license-updates.php` covers activation fields, cached validation, suspension, domain binding, outage-grace boundaries, URL restrictions, protected paths, ZIP traversal/links, wrong products/versions, migration/deletion refusal, GitHub subtree isolation and a complete staged file installation with backup/config preservation. The licence transport is mocked; no real LM keys or live requests are used. A deployed cPanel/LM integration test and failure-recovery drill remain required.
+
+## 0.2.0 — Bright church portal and Youth Thanksgiving workflow
+
+The portal now uses a light blue/white design with teal confirmation states, larger offering inputs and explicit total/retention/payable cards. No demo transactions or gateway settlements are fabricated.
+
+### Upgrade an existing installation
+
+1. Back up the application **and database** externally. Deploy the complete updated `REMIT` directory without overwriting generated private config or storage.
+2. Sign in as provincial administrator, open **Portal settings**, and select **Enable registration & payment features**. This executes `database/migrations/002-church-portal.sql`, an additive/idempotent migration serialized with a MySQL advisory lock. DDL auto-commits; inspect logs and retry if interrupted. No existing ledger amounts or rates are rewritten.
+3. Configure **Church retention / deduction (%)**, the provincial receiving bank account, and whether public registration is open.
+4. Review new applications under **Church hierarchy → Church registrations**. Verify parish authority through an independent trusted contact before approving. Multiple approved officers may represent one parish; they share parish ledger visibility, but each officer has separate bank profile details.
+5. Confirm the PHP OpenSSL extension and config-directory permissions. The first account-detail submission creates `config/bank.key` (32 random bytes, owner-only permissions). Back up this key securely **with your database backups**, outside the public document root. Losing it makes existing account numbers undecryptable. Do not regenerate or replace it during an update or restore. Account details remain masked to registration reviewers and are shown in full only to the owning officer's authenticated profile.
+
+New installations apply the migration automatically during database setup. Old installations remain able to view their existing data and use licence repair while awaiting upgrade; new reports and church features require the migration. Migration activation requires a valid licence, CSRF protection and the provincial administrator role. Restrict database DDL permissions again after activation if using a least-privilege runtime account.
+
+### Percentage meaning
+
+**Total offering is always 100%.** The administrator sets the percentage the church **retains / deducts** from its total. The remainder is the percentage payable to the province. For example: ₦100,000 total − 20% church retention = ₦80,000 payable and ₦20,000 retained. Enter `20`, not `2000`, in the new admin field. The old internal `levy_basis_points` setting still stores the *payable* percentage to preserve existing installations; existing default 10% payable therefore appears as 90% retained until changed by the administrator.
+
+The payable amount is rounded half-up to cents, and retention is the exact remainder so both always add to the full collection. Server-side validation/calculation is authoritative; the browser preview uses integer arithmetic too. Each new report snapshots the rate, service type and retention in `report_allocations`. Policy changes never recalculate old reports. A 100%-retained / zero-payable report is marked complete without creating a payment. One report per parish/month is retained from the existing model (multiple service entries within a month are not supported yet).
+
+### Church self-registration and account privacy
+
+`index.php?page=register` lets an officer search the existing church directory, select their parish, supply officer/contact details, choose a password and submit the church's bank name, account name and 10-digit Nigerian account number. The directory exposes only parish/code/area/zone labels, not other officers' contacts or banking details. No new church, privileged role or login access is created by an unapproved application. The public route is available only when registration is enabled, the schema is ready and the site's licence is valid.
+
+Every valid-CSRF submission attempt is counted server-side (five per IP per hour), including invalid inputs. Approval creates only a parish-officer account for the requested parish, copies its encrypted bank profile and clears the application's password hash. Rejection also clears the password hash. Duplicate emails receive the same generic acknowledgement without creating another account. Registration is admin-verified, not email-verified; automatic email delivery and password recovery remain pending. Configure a deployment-level request limit/WAF as additional spam protection; shared/NAT IPs share this application limit.
+
+Account numbers use AES-256-GCM with a local key; only their last four digits are retained separately for masked review. Bank name, account name, officer contacts and registration records are personal information: restrict database/backups, define a retention/privacy policy, and do not include credentials, PINs, BVNs or card details. Registration approvals and review decisions are retained on each application; email notifications are **queued, not delivered** until an email worker is configured. Officer profile changes do not alter the provincial receiving account and do not perform bank-account ownership verification.
+
+### Manual transfers and notifications
+
+Church officers see the configured provincial account, enter their full Youth Thanksgiving collection and save their calculated report. After transferring funds, they submit an amount, actual bank transaction reference and transfer date. Notifications are pending and do not change confirmed revenue. Pending amounts cannot exceed the outstanding balance; report access is parish-scoped. Treasurer/admin approval requires the transaction PIN and independent statement verification. Approval adds the notification amount once, with row locks, audit records and replay protection. Rejection leaves the ledger unchanged and can include a review note. Existing cumulative manual confirmation remains available to treasurers for bank-statement reconciliation; it does not auto-approve or consume pending notifications. Resolve/reject any conflicting pending notifications before confirming them.
+
+**Automated PayHub deposit remains unavailable.** The payment-method card is explicitly marked unavailable, with no initiation, virtual-account or webhook route pretending to work. The published PayHub page still lacks the detailed authentication/initialization/verification/signature contract. Receipt upload/download also remains unimplemented; the new notification form takes bank transaction details only, not proof files.
+
+### Tests for this release
+
+`php tests/church-portal.php` passes **156 assertions** covering percentages, cent conservation, encrypted account integrity, registration/approval/rejection, rate limiting, scope checks, notification/PIN/replay handling, confirmed balances, historical rate snapshots and view rendering. It executes real SQL through a SQLite compatibility harness that adapts MySQL syntax. It does **not** validate MySQL DDL, MySQL row locks, simultaneous approvals, cPanel permissions or live external APIs. Run the MySQL deployment acceptance checks, two-parish authorization tests and concurrent payment tests before handling real remittances.

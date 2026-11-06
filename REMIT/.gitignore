@@ -8,3 +8,5 @@
 /config/license.json
 /config/license-cache.json
 /config/setup.mutex
+/config/bank.key
+/config/bank-key.lock
