@@ -1,0 +1,71 @@
+<?php
+declare(strict_types=1);
+function action(PDO $db,array $user,array $ids): string {
+ checkCsrf(); $action=$_POST['action'] ?? '';
+ if ($action==='logout') { $_SESSION=[]; session_regenerate_id(true); redirect('login'); }
+ if ($action==='report') {
+  requireRole($user,['parish_officer']);
+  $parish=(int)$user['hierarchy_id']; if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid parish scope.');
+  $month=filter_var($_POST['month'] ?? '',FILTER_VALIDATE_INT); $year=filter_var($_POST['year'] ?? '',FILTER_VALIDATE_INT);
+  if ($month<1 || $month>12 || $year<2020 || $year>(int)date('Y')+1) throw new RuntimeException('Select a valid reporting period.');
+  $gross=Money::cents(trim($_POST['gross'] ?? '')); if($gross<=0) throw new RuntimeException('Gross collections must be greater than zero.');
+  $due=Money::levy($gross,(int)setting($db,'levy_basis_points'));
+  $db->prepare('INSERT INTO remittance_ledgers(parish_id,period_month,period_year,gross_income,provincial_levy_due,payment_reference) VALUES(?,?,?,?,?,?)')->execute([$parish,$month,$year,Money::decimal($gross),Money::decimal($due),'RMT-'.strtoupper(bin2hex(random_bytes(10)))]);
+  return 'Income report created. Provincial allocation is '.Money::display(Money::decimal($due)).'.';
+ }
+ if ($action==='verify') {
+  requireRole($user,['provincial_admin','provincial_treasurer']);
+  $db->beginTransaction();
+  try {
+   $s=$db->prepare('SELECT * FROM users WHERE id=? FOR UPDATE');$s->execute([$user['id']]);$fresh=$s->fetch();
+   if(!Security::verifyPin($db,$fresh,(string)($_POST['pin'] ?? ''))) { $db->commit(); throw new RuntimeException('PIN invalid or temporarily locked after five failures. Try again after 15 minutes.'); }
+   $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? FOR UPDATE'); $s->execute([(int)($_POST['ledger_id'] ?? 0)]); $row=$s->fetch();
+   if(!$row || $row['status']==='verified') throw new RuntimeException('Report not found or already verified.');
+   $paid=Money::cents(trim($_POST['paid'] ?? ''));
+   if($paid<=0 || $paid>Money::cents($row['provincial_levy_due'])) throw new RuntimeException('Enter the cumulative bank-confirmed amount, no greater than the amount due.');
+   if($paid<Money::cents($row['amount_paid'])) throw new RuntimeException('Confirmed payment cannot be reduced.');
+   $status=$paid===Money::cents($row['provincial_levy_due'])?'verified':'partial';
+   $db->prepare('UPDATE remittance_ledgers SET amount_paid=?,status=? WHERE id=?')->execute([Money::decimal($paid),$status,$row['id']]);
+   audit($db,'remittance_verified',$user['email'],json_encode(['ledger'=>$row['id'],'amount'=>Money::decimal($paid),'actor'=>$user['id']]));
+   $s=$db->prepare("SELECT email FROM users WHERE hierarchy_id=? AND role='parish_officer'"); $s->execute([$row['parish_id']]); foreach($s->fetchAll(PDO::FETCH_COLUMN) as $email) notify($db,$email,'Remittance confirmed',$row['payment_reference'].' • Confirmed '.Money::decimal($paid).' NGN. Status: '.$status);
+   $db->commit(); return 'Bank-confirmed payment recorded. Notification queued.';
+  } catch(Throwable $e) {if($db->inTransaction()) $db->rollBack();throw $e;}
+ }
+ if ($action==='import') {
+  requireRole($user,['provincial_admin']);
+  $file=$_FILES['csv'] ?? [];
+  if(($file['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || ($file['size'] ?? 0)>2097152 || !is_uploaded_file($file['tmp_name'] ?? '')) throw new RuntimeException('Upload a CSV file no larger than 2 MB.');
+  require_once __DIR__.'/HierarchyImporter.php';$stream=fopen($file['tmp_name'],'rb');
+  try {$count=HierarchyImporter::import($db,$stream);} finally {fclose($stream);}
+  return $count.' CSV rows imported. Provision officer accounts separately; contact details are not login credentials.';
+ }
+ if ($action==='node') {
+  requireRole($user,['provincial_admin']);
+  $name=trim($_POST['node_name'] ?? ''); $type=$_POST['node_type'] ?? ''; $parent=(int)($_POST['parent_id'] ?? 0);
+  if($name==='' || strlen($name)>150 || !in_array($type,['zone','area','parish'],true)) throw new RuntimeException('Invalid organizational unit.');
+  if($type!=='zone') { $s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$parent]); if($s->fetchColumn()!==($type==='area'?'zone':'area')) throw new RuntimeException('Areas must belong to zones; parishes must belong to areas.'); }
+  $code=trim($_POST['parish_code'] ?? ''); if(strlen($code)>20 || ($type==='parish' && $code==='')) throw new RuntimeException('Parishes need a unique code of up to 20 characters.');
+  $db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code) VALUES(?,?,?,?)')->execute([$name,$type,$type==='zone'?null:$parent,$type==='parish'?$code:null]);return 'Organizational unit created.';
+ }
+ if ($action==='user') {
+  requireRole($user,['provincial_admin']);
+  $name=trim($_POST['full_name'] ?? '');$email=strtolower(trim($_POST['email'] ?? ''));$password=$_POST['password'] ?? '';$role=$_POST['role'] ?? '';$node=(int)($_POST['hierarchy_id'] ?? 0);
+  $types=['zonal_rep'=>'zone','area_rep'=>'area','parish_officer'=>'parish'];
+  if($name==='' || strlen($name)>100 || strlen($email)>150 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($password)<12 || strlen($password)>72 || !isset($types[$role])) throw new RuntimeException('Provide valid officer details and a 12–72 byte initial password.');
+  $s=$db->prepare('SELECT node_type FROM church_hierarchy WHERE id=?');$s->execute([$node]);if($s->fetchColumn()!==$types[$role]) throw new RuntimeException('Role does not match the selected hierarchy unit.');
+  $db->prepare('INSERT INTO users(full_name,email,password_hash,role,hierarchy_id) VALUES(?,?,?,?,?)')->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT),$role,$node]);
+  notify($db,$email,'Welcome to REMIT','Your parish officer account has been created. Contact your provincial administrator through a trusted channel for access credentials.');return 'Officer account created. Share initial credentials through a secure channel, not email.';
+ }
+ if ($action==='settings') {
+  requireRole($user,['provincial_admin']);
+  $rules=['username_protection'=>[0,1],'protect_privileged'=>[0,1],'local_only'=>[0,1],'ip_protection'=>[0,1],'block_days'=>[1,7,30,365],'log_retention'=>[5,10,15,60]];
+  $values=[];
+  foreach($rules as $key=>$allowed) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || !in_array($v,$allowed,true)) throw new RuntimeException('Invalid security setting.');$values[$key]=(string)$v; }
+  foreach(['account_window','ip_window','account_max','ip_max','levy_basis_points'] as $key) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);$max=$key==='levy_basis_points'?10000:1440;$min=$key==='levy_basis_points'?0:1;if($v===false || $v<$min || $v>$max) throw new RuntimeException('Setting outside allowed range.');$values[$key]=(string)$v; }
+  $db->beginTransaction(); try {$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();} catch(Throwable $e){$db->rollBack();throw $e;} return 'Settings saved. Existing account and IP locks are retained.';
+ }
+ if ($action==='unsuspend') {
+  requireRole($user,['provincial_admin']);$db->prepare('UPDATE users SET is_suspended=0 WHERE id=?')->execute([(int)($_POST['user_id'] ?? 0)]);return 'Account suspension cleared. Failed-attempt history is retained.';
+ }
+ throw new RuntimeException('Unknown action.');
+}

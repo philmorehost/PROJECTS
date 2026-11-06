@@ -1,0 +1,7 @@
+/config/database.php
+/config/installed.lock
+/config/install-token
+/storage/*
+!/storage/.htaccess
+!/storage/receipts/
+/storage/receipts/*
