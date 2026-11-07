@@ -10,6 +10,7 @@ Copy these into your cPanel or VPS crontab. Replace `YOUR_USERNAME` with your ac
 
 | Frequency | File | Purpose |
 |---|---|---|
+| `*/5 * * * *` | `cron/release_expired_bruteforce_blocks.php` | Release expired automatic brute-force account/IP blocks |
 | `* * * * *` | `cron/process_bulk_queue.php` | Process queued bulk airtime/data batches in the background |
 | `*/5 * * * *` | `cron/aggregator_monitor.php` | Monitor API provider success rates |
 | `0 7 * * *` | `cron/ai_daily_briefing.php` | AI Daily briefing emailed to vendors |
@@ -23,6 +24,12 @@ Copy these into your cPanel or VPS crontab. Replace `YOUR_USERNAME` with your ac
 
 1. Log into your **cPanel** → **Advanced** → **Cron Jobs**.
 2. For each job, select the frequency and paste the command below:
+
+### Brute-Force Auto-Unblock (Every 5 minutes)
+```bash
+*/5 * * * * /usr/bin/php /home/YOUR_USERNAME/public_html/cron/release_expired_bruteforce_blocks.php >> /home/YOUR_USERNAME/logs/bruteforce_auto_unblock.log 2>&1
+```
+This clears expired automatic account/IP blocks and resets the corresponding account lock flags. It does not clear manual blocks. Check `logs/bruteforce_auto_unblock.log` for each run's counts or any database error. Confirm the PHP CLI path with `which php` and use the actual installation path.
 
 ### Bulk Airtime/Data Queue Processor (Every 1 minute)
 ```bash
