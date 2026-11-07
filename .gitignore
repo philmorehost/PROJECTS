@@ -1,3 +1,18 @@
 
 # Upload bundles built for the host
 /KINGDOMBUILDERS-*-upload.zip
+# Release signing material and build artifacts (never commit)
+# A committed .jks permanently leaks the upload key for every clone, fork and backup.
+VTU/play-signing-keys/
+*.jks
+*.keystore
+*.p12
+*.pfx
+*-cert.pem
+*-cert.der
+key.properties
+keystore.properties
+
+# Signed bundles/APKs produced for upload, and their hand-off notes
+**/release-output/
+*.aab
