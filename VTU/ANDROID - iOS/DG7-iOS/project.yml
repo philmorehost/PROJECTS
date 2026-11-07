@@ -1,0 +1,48 @@
+﻿# XcodeGen configuration for DG7-iOS.
+# Generates a real .xcodeproj so the app can be archived/signed.
+# Bundle identifier: com.datagifting.app (matches DG7-Android applicationId).
+# Build: xcodegen generate  (CI runs this automatically when project.yml exists)
+name: DG7-iOS
+
+options:
+  xcodeVersion: "15.0"
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+targets:
+  DG7-iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - DG6-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.datagifting.app
+        # Without this the springboard name falls back to the target name ("DG7-iOS").
+        INFOPLIST_KEY_CFBundleDisplayName: DG7
+        # Points the app at DG6-iOS/Assets.xcassets/AppIcon.appiconset. Without it the icon set is
+        # copied into the bundle but never used and the app ships with a blank icon, which App Store
+        # validation rejects on archive.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        # AIChatView drives SFSpeechRecognizer + AVAudioEngine. iOS KILLS the app on the first
+        # permission request if these strings are missing - not a warning, a crash.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Microphone access is used to dictate messages to the AI assistant."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Speech recognition converts your spoken words into text for the AI assistant."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Photo library access is used to upload your KYC documents."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Camera access is used to capture your KYC documents and selfie."
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "1.0.2"
+        CURRENT_PROJECT_VERSION: "3"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+    # No Swift Package dependencies: VoveID was removed permanently (VoveSDK was imported by
+    # KYCView but no symbol from it was ever used, so the package was dead weight that could fail
+    # to resolve at build time).

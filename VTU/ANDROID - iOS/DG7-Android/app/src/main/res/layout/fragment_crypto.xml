@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/primary"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="16dp">
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_crypto"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:tint="#FFFFFF"
+            android:contentDescription="Back" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Crypto Hub"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <!-- Horizontal progress bar (loading indicator) -->
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+    <!-- Swipe-to-refresh + scrollable content -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <!-- ── Balance Hero Card ─────────────────────────────── -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="6dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="20dp"
+                        android:background="@color/primary">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="NGN WALLET BALANCE"
+                            android:textColor="#CCFFFFFF"
+                            android:textSize="11sp"
+                            android:letterSpacing="0.08"
+                            android:textAllCaps="true" />
+
+                        <TextView
+                            android:id="@+id/tv_ngn_balance"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="₦0.00"
+                            android:textColor="#FFFFFF"
+                            android:textSize="30sp"
+                            android:textStyle="bold"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="20dp" />
+
+                        <!-- Coin row (decorative tickers) -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginBottom="16dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="₦" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" android:layout_marginEnd="6dp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="₿" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" android:layout_marginEnd="6dp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="Ξ" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" android:layout_marginEnd="6dp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="Ł" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" android:layout_marginEnd="6dp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="₮" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" android:layout_marginEnd="6dp" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
+                                android:text="Ð" android:textColor="#CCFFFFFF" android:textSize="11sp"
+                                android:gravity="center" />
+                        </LinearLayout>
+
+                        <!-- Quick action buttons -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="4">
+
+                            <LinearLayout
+                                android:id="@+id/btn_action_deposit"
+                                android:layout_width="0dp"
+                                android:layout_height="64dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:layout_marginEnd="4dp"
+                                android:background="#33FFFFFF"
+                                android:clickable="true"
+                                android:focusable="true">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="⬇" android:textColor="#FFFFFF" android:textSize="18sp" />
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="Deposit" android:textColor="#FFFFFF" android:textSize="10sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/btn_action_send"
+                                android:layout_width="0dp"
+                                android:layout_height="64dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:layout_marginEnd="4dp"
+                                android:background="#33FFFFFF"
+                                android:clickable="true"
+                                android:focusable="true">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="⬆" android:textColor="#FFFFFF" android:textSize="18sp" />
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="Send" android:textColor="#FFFFFF" android:textSize="10sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/btn_action_swap"
+                                android:layout_width="0dp"
+                                android:layout_height="64dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:layout_marginEnd="4dp"
+                                android:background="#33FFFFFF"
+                                android:clickable="true"
+                                android:focusable="true">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="⇄" android:textColor="#FFFFFF" android:textSize="18sp" />
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="Swap" android:textColor="#FFFFFF" android:textSize="10sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/btn_action_to_ngn"
+                                android:layout_width="0dp"
+                                android:layout_height="64dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:gravity="center"
+                                android:background="#33FFFFFF"
+                                android:clickable="true"
+                                android:focusable="true">
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="₦" android:textColor="#FFFFFF" android:textSize="18sp" />
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                    android:text="To NGN" android:textColor="#FFFFFF" android:textSize="10sp"
+                                    android:layout_marginTop="2dp" />
+                            </LinearLayout>
+
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- ── My Wallets Section ──────────────────────────── -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="My Wallets"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:id="@+id/container_wallets"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/tv_no_wallets"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No active crypto wallets. Tap Deposit to get started."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:visibility="gone" />
+
+                <!-- ── Recent Activity Section ─────────────────────── -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="8dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Recent Activity"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_primary" />
+                    <Button
+                        android:id="@+id/btn_view_all_history"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="View All"
+                        android:textSize="12sp"
+                        style="@style/Widget.Material3.Button.TextButton" />
+                </LinearLayout>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:id="@+id/container_history"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <TextView
+                    android:id="@+id/tv_no_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No crypto transactions yet."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+        </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+</LinearLayout>

@@ -1,0 +1,14 @@
+# DGV6.90 — /bc-spadmin/.htaccess
+# Clean URLs for super admin panel
+
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /bc-spadmin/
+
+    # Serve clean URL → actual .php file
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^([^/]+)$ $1.php [L,QSA]
+</IfModule>

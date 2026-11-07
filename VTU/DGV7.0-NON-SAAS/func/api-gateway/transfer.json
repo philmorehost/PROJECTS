@@ -1,0 +1,21 @@
+{
+    "status": true,
+    "message": "Transfer successful",
+    "data": {
+        "status": "success",
+        "transaction_ref": "21647989035535609787",
+        "amount_sent": 2380,
+        "amount_charged": 2410,
+        "currency": "NGN",
+        "fee": 30,
+        "destination": {
+            "bank_code": "100033",
+            "bank_name": "PALMPAY",
+            "account_number": "8124232128",
+            "account_name": "Habeebullahi  Abdulrahaman",
+            "enquiry_id": "090286250901161709751685675034",
+            "session_id": "090286250901161718551600095597",
+            "narration": "Beewave Merchant | From Localhost | My Beewave Customers Deposit"
+        }
+    }
+}

@@ -1,0 +1,8 @@
+# Allow public access to this directory
+Options -Indexes
+
+# Allow APK file downloads
+<FilesMatch "\.apk$">
+    Header set Content-Disposition "attachment"
+    Header set Content-Type "application/vnd.android.package-archive"
+</FilesMatch>

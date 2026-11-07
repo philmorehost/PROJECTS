@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background"
+    android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="center" android:padding="32dp">
+
+        <ImageView android:layout_width="72dp" android:layout_height="72dp"
+            android:src="@drawable/ic_lock" android:tint="@color/primary"
+            android:contentDescription="Locked" android:layout_marginBottom="16dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Verify It's You" android:textSize="22sp" android:textStyle="bold"
+            android:textColor="@color/text_primary" android:layout_marginBottom="8dp" />
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="For your security, please answer your security question to continue."
+            android:textSize="14sp" android:textColor="@color/text_secondary"
+            android:gravity="center" android:layout_marginBottom="24dp" />
+
+        <!-- Verify group: shown when a security question already exists -->
+        <LinearLayout android:id="@+id/group_verify" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical"
+            android:visibility="gone">
+            <TextView android:id="@+id/tv_question" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text=""
+                android:textSize="16sp" android:textStyle="bold" android:gravity="center"
+                android:textColor="@color/text_primary" android:layout_marginBottom="16dp" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Your Answer" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_verify_answer" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <Button android:id="@+id/btn_verify" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Verify &amp; Continue"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+            <TextView android:id="@+id/tv_forgot_answer" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Forgot your answer? Reset it"
+                android:textSize="13sp" android:textColor="@color/primary"
+                android:layout_gravity="center" android:layout_marginTop="16dp"
+                android:padding="8dp" android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground" />
+        </LinearLayout>
+
+        <!-- Reset group: re-enter account password + choose a new question/answer -->
+        <LinearLayout android:id="@+id/group_reset" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical"
+            android:visibility="gone">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Re-enter your account password, then choose a new security question and answer."
+                android:textSize="13sp" android:textColor="@color/text_secondary"
+                android:gravity="center" android:layout_marginBottom="16dp" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Account Password" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_reset_password" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="textPassword" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <Spinner android:id="@+id/spinner_reset_question" android:layout_width="match_parent"
+                android:layout_height="48dp" android:layout_marginBottom="16dp" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="New Answer (3-20 characters)" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_reset_answer" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="text"
+                    android:maxLength="20" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <Button android:id="@+id/btn_save_reset" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Reset &amp; Continue"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"
+                android:layout_marginBottom="8dp" />
+            <TextView android:id="@+id/tv_cancel_reset" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Cancel"
+                android:textSize="13sp" android:textColor="@color/text_secondary"
+                android:layout_gravity="center" android:padding="8dp"
+                android:clickable="true" android:focusable="true"
+                android:background="?attr/selectableItemBackground" />
+        </LinearLayout>
+
+        <!-- Setup group: shown the first time, when no security question is set yet -->
+        <LinearLayout android:id="@+id/group_setup" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical"
+            android:visibility="gone">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Set up a security question now — you'll be asked to answer it if the app is ever left open and unattended."
+                android:textSize="13sp" android:textColor="@color/text_secondary"
+                android:gravity="center" android:layout_marginBottom="16dp" />
+            <Spinner android:id="@+id/spinner_question" android:layout_width="match_parent"
+                android:layout_height="48dp" android:layout_marginBottom="16dp" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Your Answer (3-20 characters)" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_setup_answer" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="text"
+                    android:maxLength="20" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <Button android:id="@+id/btn_save_setup" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Save"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+
+        <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:visibility="gone"
+            android:layout_marginTop="16dp" />
+    </LinearLayout>
+</ScrollView>

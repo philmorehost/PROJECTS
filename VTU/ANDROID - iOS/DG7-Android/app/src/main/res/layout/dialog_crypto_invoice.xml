@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="✅ Invoice Created!"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/success"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Reference -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Reference Number"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:textAllCaps="true" />
+        <TextView
+            android:id="@+id/tv_reference"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="14dp"
+            android:layout_marginTop="2dp" />
+
+        <!-- Wallet address -->
+        <TextView
+            android:id="@+id/label_wallet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Pay-to Address"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:textAllCaps="true"
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/tv_wallet_address"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:padding="8dp"
+            android:background="@color/surface_variant"
+            android:layout_marginBottom="14dp"
+            android:layout_marginTop="2dp"
+            android:visibility="gone" />
+
+        <!-- Invoice URL -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Invoice Link"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:textAllCaps="true" />
+        <TextView
+            android:id="@+id/tv_invoice_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:background="@color/surface_variant"
+            android:layout_marginBottom="14dp"
+            android:layout_marginTop="2dp" />
+
+        <!-- Action buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/btn_copy_url"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="Copy Link"
+                android:textSize="13sp"
+                android:layout_marginEnd="6dp"
+                style="@style/Widget.Material3.Button.OutlinedButton" />
+            <Button
+                android:id="@+id/btn_open_url"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="Open Invoice"
+                android:textSize="13sp"
+                style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚠  Keep this reference number. Use it to manually sync your payment if it doesn't reflect within 5–10 minutes."
+            android:textColor="@color/warning"
+            android:textSize="11sp"
+            android:layout_marginTop="12dp" />
+
+    </LinearLayout>
+</ScrollView>

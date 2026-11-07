@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row of the conversion history. Mirrors the columns on web/CoinConversion.php. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:background="#FFFFFF"
+    android:padding="12dp" android:layout_marginBottom="8dp">
+
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/tv_conv_date" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="12sp"
+            android:textColor="#1E293B" />
+        <TextView android:id="@+id/tv_conv_points" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="11sp"
+            android:textColor="#64748B" android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="end">
+        <TextView android:id="@+id/tv_conv_amount" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="15sp"
+            android:textStyle="bold" android:textColor="#1E293B" />
+        <TextView android:id="@+id/tv_conv_status" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="11sp"
+            android:textStyle="bold" android:layout_marginTop="2dp" />
+    </LinearLayout>
+</LinearLayout>

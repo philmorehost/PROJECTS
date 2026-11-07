@@ -1,0 +1,29 @@
+{
+    "Airtime.php": {
+        "title": "Airtime Purchase Guide 📱",
+        "steps": [
+            "Select your Network Provider (MTN, Airtel, etc.).",
+            "Enter the Phone Number or pick from favorites.",
+            "Input the Amount you want to buy.",
+            "💡 AI Tip: Just say 'Buy MTN 100 airtime for 08012345678' to the bot."
+        ]
+    },
+    "Data.php": {
+        "title": "Data Subscription Guide 🌐",
+        "steps": [
+            "Choose your Network and Data Plan.",
+            "Select Data Type (SME, Gifting, etc.) - MANDATORY.",
+            "Enter the Recipient Phone Number.",
+            "💡 AI Tip: Use 'Buy Airtel 1GB SME data for 08123456789'."
+        ]
+    },
+    "Electric.php": {
+        "title": "Bill Payment Guide ⚡",
+        "steps": [
+            "Select your DisCo and Meter Type (Prepaid/Postpaid).",
+            "Enter your Meter or Account Number.",
+            "Click 'Verify' to see the Account Name.",
+            "💡 AI Tip: Try 'Pay 5000 for AEDC Prepaid 010123456789'."
+        ]
+    }
+}

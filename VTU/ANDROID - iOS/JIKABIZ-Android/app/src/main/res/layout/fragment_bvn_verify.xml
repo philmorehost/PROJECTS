@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Toolbar -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back"
+                android:layout_width="40dp" android:layout_height="40dp"
+                android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="BVN Verification"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+
+            <!-- Info card -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:background="#EBF5FB"
+                android:padding="12dp" android:layout_marginBottom="20dp"
+                android:gravity="center_vertical">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Enter your 11-digit BVN to verify your bank identity. A service fee will be deducted from your wallet."
+                    android:textSize="13sp" android:textColor="#1A5276" android:lineSpacingExtra="2dp"/>
+            </LinearLayout>
+
+            <!-- BVN input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="BVN (11 digits)"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_marginBottom="20dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_bvn"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:inputType="number" android:maxLength="11" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ProgressBar android:id="@+id/progress_bar"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="center" android:visibility="gone"
+                android:layout_marginBottom="8dp" />
+
+            <Button android:id="@+id/btn_verify"
+                android:layout_width="match_parent" android:layout_height="52dp"
+                android:text="Verify BVN"
+                android:textSize="15sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary"
+                style="@style/Widget.Material3.Button" />
+
+            <!-- Result Card -->
+            <androidx.cardview.widget.CardView android:id="@+id/card_result"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:visibility="gone"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:padding="16dp">
+
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="BVN DETAILS" android:textStyle="bold" android:textSize="14sp"
+                        android:textColor="@color/primary" android:layout_marginBottom="12dp" />
+
+                    <TextView android:id="@+id/tv_full_name"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="15sp" android:textStyle="bold" android:layout_marginBottom="6dp"/>
+                    <TextView android:id="@+id/tv_dob"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:layout_marginBottom="4dp"/>
+                    <TextView android:id="@+id/tv_gender"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:layout_marginBottom="4dp"/>
+                    <TextView android:id="@+id/tv_phone"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:layout_marginBottom="4dp"/>
+                    <TextView android:id="@+id/tv_bank"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:layout_marginBottom="4dp"/>
+                    <TextView android:id="@+id/tv_level"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:textSize="13sp" android:layout_marginBottom="4dp"/>
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

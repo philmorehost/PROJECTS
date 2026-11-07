@@ -1,0 +1,17 @@
+
+
+
+
+
+
+
+
+
+
+VENDWCB5TO5RfJFCNkwSX8z0F8ZwD91:VENDuEwtekJEcWiwzC1gDdiDzKcJFk1
+
+
+{"resource":"create_card_holder","status":"error","message":"Authentication Failed. Your merchant account is not active"}
+VENDWCB5TO5RfJFCNkwSX8z0F8ZwD91:VENDuEwtekJEcWiwzC1gDdiDzKcJFk1
+
+

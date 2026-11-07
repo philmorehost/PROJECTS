@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Colors -->
+    <color name="primary">#0d6efd</color>
+    <color name="primary_dark">#0a58ca</color>
+    <color name="primary_light">#e7f0ff</color>
+    <color name="secondary">#6c757d</color>
+    <color name="accent">#00f2fe</color>
+
+    <!-- Background -->
+    <color name="background">#F8FAFC</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F1F5F9</color>
+
+    <!-- Text -->
+    <color name="text_primary">#1E293B</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="text_hint">#94A3B8</color>
+    <color name="text_on_primary">#FFFFFF</color>
+
+    <!-- Status -->
+    <color name="success">#22C55E</color>
+    <color name="success_light">#DCFCE7</color>
+    <color name="warning">#F59E0B</color>
+    <color name="warning_light">#FEF3C7</color>
+    <color name="error">#EF4444</color>
+    <color name="error_light">#FEE2E2</color>
+    <color name="info">#3B82F6</color>
+    <color name="info_light">#DBEAFE</color>
+
+    <!-- Transaction -->
+    <color name="debit">#EF4444</color>
+    <color name="credit">#22C55E</color>
+
+    <!-- Service Icon Colors -->
+    <color name="icon_airtime">#FF6B35</color>
+    <color name="icon_airtime_bg">#FFF0EB</color>
+    <color name="icon_data">#4361EE</color>
+    <color name="icon_data_bg">#EEF0FD</color>
+    <color name="icon_electric">#F7B731</color>
+    <color name="icon_electric_bg">#FEFAE0</color>
+    <color name="icon_cable">#26de81</color>
+    <color name="icon_cable_bg">#E8FDF3</color>
+    <color name="icon_exam">#FC5C65</color>
+    <color name="icon_exam_bg">#FEECEE</color>
+    <color name="icon_sms">#8854d0</color>
+    <color name="icon_sms_bg">#F3EEF9</color>
+    <color name="icon_giftcard">#FD9644</color>
+    <color name="icon_giftcard_bg">#FFF3E8</color>
+    <color name="icon_vcard">#2bcbba</color>
+    <color name="icon_vcard_bg">#E5FAF8</color>
+    <color name="icon_crypto">#F7B731</color>
+    <color name="icon_crypto_bg">#FEFAE0</color>
+    <color name="icon_share">#45aaf2</color>
+    <color name="icon_share_bg">#EBF5FE</color>
+    <color name="icon_print">#1565C0</color>
+    <color name="icon_print_bg">#E3F0FF</color>
+    <color name="icon_bvn">#1B5E20</color>
+    <color name="icon_bvn_bg">#E8F5E9</color>
+    <color name="icon_withdraw">#a55eea</color>
+    <color name="icon_withdraw_bg">#F4EBFD</color>
+    <color name="icon_history">#778ca3</color>
+    <color name="icon_history_bg">#F0F3F6</color>
+
+    <!-- Icon background colors for bank and betting -->
+    <color name="icon_bank_bg">#E3F2FD</color>
+    <color name="icon_betting_bg">#FDECEA</color>
+
+    <!-- Network Colors -->
+    <color name="mtn_yellow">#FFC107</color>
+    <color name="glo_green">#4CAF50</color>
+    <color name="airtel_red">#F44336</color>
+    <color name="mobile9_teal">#009688</color>
+
+    <!-- Misc -->
+    <color name="divider">#E2E8F0</color>
+    <color name="card_border">#E2E8F0</color>
+    <color name="shimmer_base">#E0E0E0</color>
+    <color name="shimmer_highlight">#F5F5F5</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
+    <color name="ic_launcher_background">#0d6efd</color>
+</resources>

@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="All Services" android:textSize="24sp" android:textStyle="bold"
+            android:textColor="@color/text_primary" android:layout_marginBottom="4dp"
+            android:layout_marginTop="8dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Choose from our range of services below"
+            android:textSize="13sp" android:textColor="@color/text_secondary"
+            android:layout_marginBottom="20dp" />
+
+        <!-- ── TELECOM ── -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="📱  Telecom" android:textSize="13sp" android:textStyle="bold"
+            android:textColor="@color/text_secondary" android:textAllCaps="true"
+            android:letterSpacing="0.08" android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="1dp"
+            app:cardBackgroundColor="@color/surface"
+            android:layout_marginBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout android:id="@+id/btn_svc_airtime"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_airtime" android:background="@drawable/bg_icon_airtime"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Airtime" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Buy Airtime" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="MTN, Glo, Airtel, 9mobile — instant recharge"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_nin"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_print" android:background="@drawable/bg_icon_print"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="NIN Slip" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="NIN Slip" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Retrieve &amp; print your NIN slip instantly"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_data"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_data" android:background="@drawable/bg_icon_data"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Data" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Buy Data" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="All networks — cheap &amp; fast data bundles"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── UTILITY BILLS ── -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="💡  Utility Bills" android:textSize="13sp" android:textStyle="bold"
+            android:textColor="@color/text_secondary" android:textAllCaps="true"
+            android:letterSpacing="0.08" android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="1dp"
+            app:cardBackgroundColor="@color/surface"
+            android:layout_marginBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout android:id="@+id/btn_svc_electric"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_electric" android:background="@drawable/bg_icon_electric"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Electricity" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Buy Electricity" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Prepaid &amp; Postpaid token — instant delivery"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_cable"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_cable" android:background="@drawable/bg_icon_cable"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Cable TV" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Cable TV" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="DSTV, GOtv, StarTimes, Showmax subscriptions"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_exam"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_exam" android:background="@drawable/bg_icon_exam"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Exam Pin" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Exam Pin" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="WAEC, NECO, NABTEB, JAMB scratch cards"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_sms"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_message" android:background="@drawable/bg_icon_data"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Bulk SMS" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Bulk SMS" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Send custom SMS to multiple recipients"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_betting"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_casino" android:background="@drawable/bg_icon_betting"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Betting" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Betting" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Fund betting accounts — Sportybet, Bet9ja &amp; more"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── WALLET & FINANCE ── -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="💰  Wallet &amp; Finance" android:textSize="13sp" android:textStyle="bold"
+            android:textColor="@color/text_secondary" android:textAllCaps="true"
+            android:letterSpacing="0.08" android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="1dp"
+            app:cardBackgroundColor="@color/surface"
+            android:layout_marginBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout android:id="@+id/btn_svc_fund"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_bank" android:background="@drawable/bg_icon_bank"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Fund Wallet" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Fund Wallet" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Add money via bank transfer or card payment"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_withdraw"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_bank" android:background="@drawable/bg_icon_bank"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Withdraw" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Wallet to Bank" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Instant withdrawal to any Nigerian bank account"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_share"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_share" android:background="@drawable/bg_icon_share"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Share Fund" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Share Fund" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Inter-wallet transfer to other users"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ── CARDS & CRYPTO ── -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="💳  Cards &amp; Crypto" android:textSize="13sp" android:textStyle="bold"
+            android:textColor="@color/text_secondary" android:textAllCaps="true"
+            android:letterSpacing="0.08" android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="1dp"
+            app:cardBackgroundColor="@color/surface"
+            android:layout_marginBottom="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout android:id="@+id/btn_svc_vcard"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_vcard" android:background="@drawable/bg_icon_vcard"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Virtual Card" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Virtual Card" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Dollar &amp; Naira virtual cards for online payments"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_giftcard"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_giftcard" android:background="@drawable/bg_icon_giftcard"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Gift Cards" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Gift Cards" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Trade local &amp; international gift cards at best rates"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_crypto"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_crypto" android:background="@drawable/bg_icon_crypto"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="Crypto Hub" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Crypto Hub" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Send, swap &amp; hold stable coins securely"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/divider" android:layout_marginStart="70dp" />
+
+                <LinearLayout android:id="@+id/btn_svc_bvn"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:padding="16dp" android:foreground="?attr/selectableItemBackground"
+                    android:clickable="true" android:focusable="true">
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                        android:src="@drawable/ic_bvn_verify" android:background="@drawable/bg_icon_bvn_verify"
+                        android:padding="9dp" android:layout_marginEnd="14dp"
+                        android:contentDescription="BVN Verify" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="BVN Verify" android:textSize="15sp" android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Verify bank identity via BVN lookup"
+                            android:textSize="12sp" android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</ScrollView>

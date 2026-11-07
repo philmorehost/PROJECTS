@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
+            android:background="@color/primary" android:gravity="center_vertical"
+            android:paddingStart="8dp" android:paddingEnd="16dp">
+            <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
+                android:layout_height="40dp" android:src="@drawable/ic_home"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF" android:contentDescription="Back" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Share Fund"
+                android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="20dp">
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Recipient Username" style="@style/InputFieldStyle"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_recipient" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="textNoSuggestions" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Amount (₦)" style="@style/InputFieldStyle"
+                android:layout_marginBottom="24dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_amount" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:inputType="numberDecimal" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="center"
+                android:visibility="gone" android:layout_marginBottom="8dp" />
+            <Button android:id="@+id/btn_send" android:layout_width="match_parent"
+                android:layout_height="52dp" android:text="Send Fund"
+                android:textSize="16sp" android:textStyle="bold"
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
