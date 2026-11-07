@@ -553,6 +553,7 @@ $webhook_url = lm_site_url('webhook.php');
             }
         }
     </style>
+<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php require __DIR__ . '/_mobile_nav.php'; ?>

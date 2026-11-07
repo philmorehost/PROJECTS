@@ -171,6 +171,7 @@ function get_webhook_default_email_template() {
         .license-key { font-size: 18px; font-weight: bold; font-family: monospace; color: #3b82f6; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #94a3b8; }
     </style>
+<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
     <div class="container">

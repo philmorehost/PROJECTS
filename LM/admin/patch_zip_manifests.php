@@ -125,6 +125,7 @@ $all_updates = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN s
         .warning { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: 0.875rem; color: #78350f; }
         .result-msg { font-size: 0.8rem; color: #64748b; }
     </style>
+<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php require __DIR__ . '/_mobile_nav.php'; ?>

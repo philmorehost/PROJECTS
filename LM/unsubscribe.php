@@ -123,6 +123,7 @@ $icon = $state === 'invalid' ? '!' : ($state === 'unsubscribed' ? '✓' : ($stat
         .btn-ghost { background: #eef2ff; color: #4338ca; }
         .foot { margin-top: 26px; font-size: 12px; color: #94a3b8; }
     </style>
+<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
     <div class="card">

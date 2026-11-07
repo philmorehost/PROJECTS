@@ -33,3 +33,6 @@ Thumbs.db
 # QA harness dependencies (scripts are tracked; node_modules is not)
 qa/node_modules/
 qa/package-lock.json
+
+# Rendered previews (qa/preview.cjs output)
+previews/

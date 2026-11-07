@@ -21,6 +21,7 @@ lm_ui_boot();
     <meta name="robots" content="noindex">
     <title>Payment status — <?= htmlspecialchars(lm_site_name()) ?></title>
     <?php lm_public_assets(); ?>
+<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('order'); ?>

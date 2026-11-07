@@ -98,6 +98,21 @@ HTML
 HTML
                     ),
                 ),
+                array(
+                    'id' => 'phone',
+                    'title' => 'On a phone or a tablet',
+                    'html' => <<<'HTML'
+<p>Every screen — this console, the customer portal and the public site — works at
+360 pixels wide, which is what an older Android phone gives you.</p>
+<ul class="lm-guide-list">
+  <li><strong>The console sidebar becomes a drawer.</strong> A top bar carries the page name and a menu button; the four places an operator uses most (Dashboard, Licences, Updates, GitHub) sit in a tab bar along the bottom. The drawer holds everything else.</li>
+  <li><strong>Wide tables scroll inside their card</strong> instead of pushing the page sideways. The first column stays put while the rest slides.</li>
+  <li><strong>Two-column forms become one column</strong>, and every field is at least 16px, which is the size iOS Safari refuses to zoom into.</li>
+  <li><strong>Buttons are at least 44px tall</strong> — the size Apple asks for a tap target.</li>
+</ul>
+<p class="lm-guide-note">The layout switches at 980px, not at 700px: that is where the sidebar stops fitting next to the content. Nothing changes on a desktop.</p>
+HTML
+                ),
             ),
 
             /* ---------------------------------------------------------- */

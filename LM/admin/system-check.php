@@ -530,6 +530,7 @@ if ($diagnostics['curl_enabled'] && $diagnostics['paystack_configured']) {
         .quarantine button { padding: 6px 12px; border-radius: 7px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; font-size: 12px; font-weight: 700; cursor: pointer; }
         .quarantine button[disabled] { opacity: .45; cursor: not-allowed; }
     </style>
+<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php require __DIR__ . '/_mobile_nav.php'; ?>

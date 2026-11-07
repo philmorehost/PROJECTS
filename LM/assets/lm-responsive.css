@@ -1,0 +1,496 @@
+/* ==========================================================================
+   License Manager — responsive layer
+   --------------------------------------------------------------------------
+   Every screen in this panel carries its own <style> block, written against a
+   desktop canvas: 264px sidebars, five-column tables, 2rem card padding and
+   form grids with `repeat(2, 1fr)`. On a 360px phone those turn into a page
+   that scrolls sideways, fields the browser zooms into, and buttons too small
+   to hit.
+
+   Rather than rewrite thirty stylesheets, this file is loaded LAST — after the
+   page's own CSS, after the admin chrome — and repairs the parts that break:
+
+     * tables wider than the screen, which used to push <body> sideways;
+     * multi-column grids, collapsed on phones by assets/js/lm-responsive.js;
+     * 16px form fields, so iOS Safari does not zoom on focus;
+     * 44px tap targets;
+     * oversized headings, paddings and modals;
+     * long licence keys, API payloads and log lines that cannot wrap.
+
+   Desktop is untouched: everything that changes a layout sits inside a
+   max-width media query, and the rest only acts on something that would
+   otherwise overflow.
+
+   Loaded by includes/responsive.php — see lm_responsive_head().
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Every width — safety net
+   -------------------------------------------------------------------------- */
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* An in-page jump must not land behind the fixed admin bar. */
+    scroll-padding-top: 76px;
+}
+
+body {
+    max-width: 100%;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+    max-width: 100%;
+}
+
+img,
+video {
+    height: auto;
+}
+
+/* Long licence keys, e-mail addresses, API payloads, file paths. */
+pre,
+code,
+kbd,
+samp,
+code,
+.mono,
+.license-key,
+.key,
+.code-block,
+.log-content,
+.detail-value,
+dd {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* …but a <pre> is allowed to scroll instead of being chopped into confetti. */
+pre,
+.code-block,
+.log-content,
+.log-line {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+/* Added around every <table> by assets/js/lm-responsive.js. */
+.lm-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+.lm-table-scroll:focus-visible {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+}
+
+.lm-table-scroll > table {
+    margin-bottom: 0;
+}
+
+/* Tables the markup already scrolls must not be wrapped a second time. */
+[data-lm-no-scroll] {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* --------------------------------------------------------------------------
+   2. Tablets and small laptops — 980px, the same breakpoint the admin chrome
+      uses (admin/_mobile_nav.php), so both layers switch at once.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 980px) {
+    /*
+     * A stray wide element would otherwise give the whole document a sideways
+     * scroll. Only on small screens: on a desktop the page already fits, and
+     * the public site's sticky header must keep working.
+     */
+    body {
+        overflow-x: hidden;
+    }
+
+    /* Filter bars, toolbars and button rows: let them wrap instead of
+       squeezing a 240px select into 120px. */
+    .toolbar,
+    .filters,
+    .head-actions,
+    .card-actions,
+    .bulk-bar,
+    .tabs,
+    .nav-tabs {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    /* A horizontal strip of tabs is better than four stacked full-width
+       buttons on a tablet. */
+    .tabs,
+    .nav-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .tabs > *,
+    .nav-tabs > * {
+        flex: 0 0 auto;
+    }
+
+    /* The two-column settings layout goes single column before it gets
+       uncomfortable. */
+    .settings-grid,
+    .two-col,
+    .split,
+    .layout {
+        display: block !important;
+    }
+
+    .card,
+    .panel {
+        min-width: 0;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   3. Phones — 700px
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 700px) {
+    /* 16px stops iOS Safari from zooming the page when a field is focused.
+       Checkboxes and radios keep their own size. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea,
+    .input,
+    .form-control,
+    .wide-input,
+    .search {
+        font-size: 16px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+    }
+
+    /* Comfortable targets: Apple asks for 44px, Android for 48dp. */
+    .btn,
+    button,
+    .btn-sm,
+    .btn-ghost,
+    .submit-btn,
+    .logout-btn,
+    .link-button,
+    .tab,
+    input[type="submit"],
+    input[type="button"],
+    select {
+        min-height: 44px;
+    }
+
+    .btn,
+    .submit-btn,
+    button {
+        max-width: 100%;
+        white-space: normal;
+        text-align: center;
+    }
+
+    /* Card padding was drawn for a 1440px canvas. */
+    .card,
+    .panel,
+    .box,
+    .info-box,
+    .login-box {
+        border-radius: 14px;
+    }
+
+    .card-header,
+    .card-head,
+    .card-body,
+    .card-footer,
+    .panel-body {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+    }
+
+    .card-header,
+    .card-head {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .card-body {
+        padding-top: 16px !important;
+        padding-bottom: 16px !important;
+    }
+
+    /* Page headings: two lines of 29px is a third of the screen. */
+    .page-head,
+    .header,
+    .page-header {
+        display: block !important;
+        margin-bottom: 18px !important;
+    }
+
+    .page-head h1,
+    .page-header h1,
+    .header h1,
+    main > h1,
+    .main > h1,
+    .main-content > h1 {
+        font-size: 22px !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.4px !important;
+        overflow-wrap: anywhere;
+    }
+
+    .page-head p,
+    .page-header p {
+        font-size: 13.5px !important;
+    }
+
+    /* Every form grid becomes one column: label, field, label, field. */
+    .grid-2,
+    .grid-3,
+    .grid-4,
+    .form-grid,
+    .form-row,
+    .field-row,
+    .input-row,
+    .two-up,
+    .three-up {
+        display: block !important;
+    }
+
+    .grid-2 > *,
+    .grid-3 > *,
+    .form-grid > *,
+    .form-row > *,
+    .input-row > * {
+        margin-bottom: 14px;
+    }
+
+    .grid-3 > *:last-child,
+    .form-grid > *:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Collapsed by the script: any grid that still had two or more columns. */
+    .lm-stack {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* Modals fill the screen instead of floating off the right edge. */
+    .modal,
+    .modal-overlay,
+    .overlay,
+    .dialog {
+        padding: 12px !important;
+        align-items: flex-end !important;
+    }
+
+    .modal-box,
+    .modal-card,
+    .dialog-card,
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        border-radius: 16px !important;
+        padding: 18px !important;
+        overflow-y: auto !important;
+    }
+
+    .modal-footer,
+    .modal-actions {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .modal-footer > *,
+    .modal-actions > * {
+        flex: 1 1 140px;
+    }
+
+    /* Badges, chips and key fragments: wrap instead of pushing the card wide. */
+    .badges,
+    .chips,
+    .badge-row,
+    .actions {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* Statistics were four across. */
+    .stats,
+    .stat-grid,
+    .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    .stat .value,
+    .stat-value {
+        font-size: 21px !important;
+    }
+
+    /* Never let a <pre> or a log viewer decide the page width. */
+    pre,
+    .code-block {
+        padding: 12px !important;
+        font-size: 12.5px !important;
+    }
+
+    /* Toast messages sit over the bottom tab bar otherwise. */
+    .toast,
+    .notice,
+    .alert {
+        left: 12px !important;
+        right: 12px !important;
+        bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+        max-width: none !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   4. Customer and public pages (no admin chrome) — same repairs, tuned for
+      the page shells those screens use.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+    .container,
+    .wrap,
+    .lm-wrap,
+    .content,
+    .page {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        max-width: 100% !important;
+    }
+
+    /* A licence table in the customer portal. */
+    .license-card,
+    .licence-card,
+    .detail-row,
+    .key-row {
+        display: block !important;
+    }
+
+    .detail-label {
+        margin-bottom: 2px;
+    }
+
+    /* The dashboard nav on customer pages. */
+    .navbar,
+    .nav-bar,
+    .menu,
+    .user-nav {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .navbar a,
+    .nav-bar a,
+    .user-nav a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   5. Very small screens — iPhone SE, Galaxy A0x
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 400px) {
+    .card-header,
+    .card-head,
+    .card-body,
+    .panel-body {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+
+    .stats,
+    .stat-grid,
+    .metrics {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* Only the buttons that belong to a form become full width — an icon
+       button in the top bar must keep its square. */
+    form .btn,
+    form .submit-btn,
+    .form-actions .btn,
+    .modal-actions .btn,
+    .modal-footer .btn {
+        width: 100%;
+    }
+
+    .btn-group,
+    .actions,
+    .head-actions {
+        width: 100%;
+    }
+
+    table {
+        font-size: 12.5px;
+    }
+
+    th,
+    td {
+        padding: 8px 9px !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   6. Motion and print
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+@media print {
+    .sidebar,
+    .lm-m-bar,
+    .lm-m-tabs,
+    .lm-m-drawer,
+    .no-print,
+    .toast {
+        display: none !important;
+    }
+
+    .main,
+    .main-content {
+        margin: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .lm-table-scroll {
+        overflow: visible !important;
+    }
+}

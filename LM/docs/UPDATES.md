@@ -1436,6 +1436,93 @@ upload is obvious instead of breaking the Licences page.
 
 ---
 
+## 6s. 9.6.2 — the pages that did not fit a phone
+
+**What was reported.**
+
+> Pls help to implement responsiveness to all the pages of the website. Several
+> pages of the website are not responsive on mobile devices.
+
+Nothing was wrong with the *chrome*. The console already had a phone navigation
+(`admin/_mobile_nav.php`: top bar, drawer, bottom tab bar) and the public pages
+already had their own breakpoints in `assets/site.css`. What did not fit was
+everything **inside** those shells.
+
+### What was actually wrong
+
+| Symptom | Cause |
+|---|---|
+| `admin/fix_license_tiers.php` and `admin/patch_zip_manifests.php` looked tiny and zoomed out on a phone | neither page had a `<meta name="viewport">`, so the browser assumed a 980px canvas and shrank the whole page to about 37% |
+| the page slid sideways under the finger | tables with seven and eight columns had no scroll container, so they widened `<body>` |
+| forms ran off the right edge | `grid-template-columns: repeat(2, minmax(0,1fr))` stayed two columns at any width |
+| tapping a field zoomed the page in | inputs were 13–14px; iOS Safari zooms anything under 16px |
+| buttons were hard to hit | 30–36px tall |
+| cards wasted a third of the screen | 22–24px side padding and `max-width: 720px` modals with 24px gutters |
+
+### What changed
+
+| File | What it does |
+|---|---|
+| `includes/responsive.php` | one `<head>` include: prints a viewport **only when the page has none**, a theme colour, the stylesheet and a deferred script. Calling it twice prints once. |
+| `assets/lm-responsive.css` | the layer itself. Breakpoints at **980px** (same as the console chrome), **760px** (customer and public pages), **700px** (forms, tap targets, modals) and **400px**. Desktop is untouched: every layout rule lives inside a media query. |
+| `assets/lm-responsive.js` | wraps every table in `.lm-table-scroll` (focusable, labelled, first column sticky) and collapses multi-column grids to one column on a phone. Skips tables that already scroll, the navigation drawer, and `auto-fit` grids that wrap by themselves. |
+| 30 screens | the include added immediately before `</head>`, after each page's own `<style>`, so the layer wins the cascade without `!important` everywhere |
+
+Because the layer is loaded last and keyed on the DOM rather than on class names,
+a page added later only needs the one include line — it does not need its own
+media queries.
+
+### What it looks like on a phone now
+
+* the sidebar becomes a drawer behind a top bar; Dashboard, Licences, Updates
+  and GitHub move to a bottom tab bar;
+* wide tables scroll **inside their card**, first column pinned, and can be
+  focused from a keyboard with `tabindex="0"`;
+* two-column forms become one column; fields are 16px; buttons are 44px;
+* modals open full width from the bottom of the screen;
+* `<pre>` and log viewers scroll instead of stretching the page;
+* `prefers-reduced-motion` and print are respected.
+
+### Files to upload
+
+| File | Change |
+|---|---|
+| `includes/responsive.php` | **new** |
+| `assets/lm-responsive.css` | **new** |
+| `assets/lm-responsive.js` | **new** |
+| `includes/lm_config.php` | version 9.6.2 |
+| `includes/guide.php` | new section: *On a phone or a tablet* |
+| everything listed below | the one-line include before `</head>` |
+
+Pages touched by the include — upload the ones you use. A page left on the old
+copy keeps working; it simply does not get the layer:
+
+`index.php`, `order.php`, `success.php`, `success_manual.php`, `api-docs.php`,
+`unsubscribe.php`, `health.php`, `api-verify-payment.php`, `webhook.php`,
+`user/index.php`, `user/login.php`, `user/license-details.php`,
+`user/profile.php`, `user/change-domain.php`,
+`admin/index.php`, `admin/_ui.php`, `admin/dashboard.php`, `admin/licenses.php`,
+`admin/updates.php`, `admin/settings.php`, `admin/transactions.php`,
+`admin/profile.php`, `admin/system-check.php`, `admin/diagnostic.php`,
+`admin/database-repair.php`, `admin/webhook-tester.php`, `admin/payment-debug.php`,
+`admin/fix_license_tiers.php`, `admin/patch_zip_manifests.php`, `build.json`.
+
+`admin/projects.php`, `admin/github-updates.php`, `admin/guide.php` and
+`admin/update-notifications.php` are covered by `admin/_ui.php` — they do not
+need their own copy of the line.
+
+### Checking it yourself
+
+1. Open the panel on the phone and rotate to landscape: the drawer must still
+   close, and the page must not scroll sideways.
+2. `admin/licenses.php` — the table should scroll left and right *inside* its
+   card, with the page itself staying still.
+3. `admin/settings.php` — every field should be full width, and tapping one must
+   not zoom the page.
+4. `admin/fix_license_tiers.php` — the text should be readable at normal size.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |
