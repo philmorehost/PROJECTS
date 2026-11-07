@@ -209,7 +209,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
 
 <script>
-  const msg = '<?php echo $_SESSION["product_purchase_response"]; ?>';
+  const msg = '<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>';
   const isBlocked = msg.includes('Access Denied') || msg.includes('Account Locked');
 
   if (isBlocked) {

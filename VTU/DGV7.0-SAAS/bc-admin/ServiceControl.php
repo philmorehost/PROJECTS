@@ -16,6 +16,10 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_control
 
 $services = [
     'data' => 'Buy Data Bundle',
+    'sme-data' => 'Data Type — SME DATA',
+    'cg-data' => 'Data Type — CORPORATE DATA',
+    'shared-data' => 'Data Type — SHARED DATA',
+    'dd-data' => 'Data Type — DIRECT DATA',
     'airtime' => 'Buy Airtime VTU',
     'cable' => 'Buy CableTv Sub',
     'electric' => 'Buy Electric Token',

@@ -9,6 +9,13 @@ if (isset($_POST["buy-data"])) {
 
     $all_isps = $_POST["isp"];
     $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["type"] ?? ""))));
+    $allowed_data_types = array("sme-data", "cg-data", "dd-data", "shared-data");
+    if (!in_array($type, $allowed_data_types, true) || !isServiceEnabled($type, $get_logged_user_details["vendor_id"])) {
+        $_SESSION["product_purchase_response"] = "This data type is currently unavailable.";
+        $_SESSION["product_purchase_status"] = "failed";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit;
+    }
     $quantity = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["quantity"] ?? "")));
     $multi_carrier = count(array_filter(explode(",", trim($all_isps)))) > 1;
 
@@ -115,10 +122,18 @@ if (isset($_POST["buy-data"])) {
                         <label class="form-label small fw-bold text-uppercase text-muted">Data Type</label>
                         <select id="internet-data-type" name="type" onchange="tickBulkDataCarrier(); resetDataQuantity();" class="form-select form-control-lg" required>
                             <option value="" default hidden selected>Select Type</option>
-                            <option value="shared-data">Shared Data</option>
-                            <option value="sme-data">SME Data</option>
-                            <option value="cg-data">Corporate Gifting</option>
-                            <option value="dd-data">Direct Data</option>
+                            <?php
+                            $data_type_labels = [
+                                'shared-data' => 'Shared Data',
+                                'sme-data' => 'SME Data',
+                                'cg-data' => 'Corporate Gifting',
+                                'dd-data' => 'Direct Data',
+                            ];
+                            foreach ($data_type_labels as $data_type_key => $data_type_label):
+                                if (!isServiceEnabled($data_type_key, $get_logged_user_details['vendor_id'])) continue;
+                            ?>
+                            <option value="<?php echo htmlspecialchars($data_type_key, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($data_type_label, ENT_QUOTES, 'UTF-8'); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -140,6 +155,7 @@ if (isset($_POST["buy-data"])) {
 
                             $plans_query = mysqli_query($connection_server, $plans_sql);
                             while($row = mysqli_fetch_assoc($plans_query)){
+                                if (!isServiceEnabled($row['api_type'], $vid)) continue;
                                 if($row["val_2"] > 0){
                                     $pname = $row['product_name'];
                                     $dtype = $row['api_type'];

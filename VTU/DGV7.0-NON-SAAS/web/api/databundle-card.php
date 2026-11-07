@@ -69,6 +69,9 @@ if ($service_type == 'data' && empty($data_type)) {
 $get_plan = mysqli_fetch_array(mysqli_query($connection_server, "SELECT p.*, prod.product_name FROM sas_databundle_plans p JOIN sas_products prod ON p.product_id = prod.id WHERE p.vendor_id='".$user["vendor_id"]."' AND prod.product_name='$network' AND p.service_type='$service_type' AND p.data_type='$data_type' AND p.plan_code='$plan_code' AND p.status=1"));
 
 if(!$get_plan) exit(json_encode(["status" => "failed", "desc" => "Plan not found or inactive for $service_type - $data_type ($network)"]));
+if ($get_plan['service_type'] === 'data' && !isServiceEnabled($get_plan['data_type'], $user['vendor_id'])) {
+    exit(json_encode(["status" => "failed", "desc" => "This data type is currently unavailable."]));
+}
 
 $unit_price = (float)($get_plan['price'] ?? 0);
 if($unit_price <= 0) exit(json_encode(["status" => "failed", "desc" => "Plan price not configured."]));

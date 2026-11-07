@@ -58,6 +58,7 @@ if ($select_vendor_table) {
                 $plans_response["MOBILE_NETWORK"][$network_label] = [];
 
                 foreach ($data_types as $type_key => $status_table) {
+                    if (!isServiceEnabled($type_key, $get_logged_user_details["vendor_id"])) continue;
                     // Only include network+type combos that are active in the status table
                     $status_query = mysqli_query($connection_server, "SELECT * FROM $status_table WHERE vendor_id='" . $get_logged_user_details["vendor_id"] . "' && product_name='$network_key' && status='1'");
                     $status = mysqli_fetch_array($status_query);

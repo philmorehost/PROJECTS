@@ -11,25 +11,19 @@ if (PHP_SAPI !== 'cli') {
 include(__DIR__ . "/../func/bc-connect.php");
 include(__DIR__ . "/../func/bc-tables.php");
 
-// --- Brute-Force Block Auto-Release (daily) ---
-// Belt-and-suspenders to the lazy release inside isIPBlocked()/isAccountLocked():
-// purges EXPIRED auto-blocks daily so the admin block lists stay accurate and
-// accounts recover even if nobody logs in. Only accounts that had an expired
-// auto-block row get their is_blocked flag reset — manual blocks are untouched.
-$expired_blocks = mysqli_query($connection_server, "SELECT username, vendor_id FROM sas_blocked_accounts WHERE block_until <= NOW()");
-$expired_accounts = [];
-if ($expired_blocks) {
-    while ($e = mysqli_fetch_assoc($expired_blocks)) $expired_accounts[] = $e;
+// --- Brute-force block auto-release ---
+$block_release = bc_release_all_expired_bruteforce_blocks($connection_server);
+if (empty($block_release['ok'])) {
+    $message = $block_release['error'] ?? 'Unknown block-release error.';
+    error_log('[DGV-BRUTEFORCE-CRON] ' . $message);
+    echo "Brute-force auto-release failed: $message\n";
+} else {
+    echo 'Brute-force auto-release: '
+        . (int)$block_release['accounts_removed'] . ' account block(s), '
+        . (int)$block_release['ips_removed'] . ' IP block(s) removed; '
+        . (int)$block_release['users_unblocked'] . ' user(s), '
+        . (int)$block_release['vendors_unblocked'] . " vendor(s) unlocked.\n";
 }
-mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE block_until <= NOW()");
-mysqli_query($connection_server, "DELETE FROM sas_blocked_ips WHERE block_until <= NOW()");
-foreach ($expired_accounts as $e) {
-    $u = mysqli_real_escape_string($connection_server, $e['username']);
-    $v = (int)$e['vendor_id'];
-    mysqli_query($connection_server, "UPDATE sas_users SET is_blocked=0 WHERE username='$u' AND vendor_id='$v' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$u' AND b.vendor_id='$v')");
-    mysqli_query($connection_server, "UPDATE sas_vendors SET is_blocked=0 WHERE email='$u' AND id='$v' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$u' AND b.vendor_id='$v')");
-}
-echo "Released " . count($expired_accounts) . " expired brute-force block(s).\n";
 
 // --- Subscription Expiry Reminders ---
 $reminder_date = date('Y-m-d', strtotime('+7 days'));

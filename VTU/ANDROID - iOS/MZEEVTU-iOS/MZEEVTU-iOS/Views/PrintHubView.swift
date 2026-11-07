@@ -69,6 +69,11 @@ struct PrintHubView: View {
         "shared-data": "Shared Data"
     ]
 
+    var enabledDataTypeCodes: [String] {
+        let planTypes = Set(allPlans.values.flatMap { $0.compactMap { $0.data_type?.lowercased() } })
+        return dataTypes.keys.filter { planTypes.contains($0) }.sorted()
+    }
+
     var filteredPlans: [PrintPlan] {
         guard let networkPlans = allPlans[selectedNetwork.uppercased()] else { return [] }
         return networkPlans.filter { plan in
@@ -118,7 +123,7 @@ struct PrintHubView: View {
                 .padding(.horizontal)
 
                 // Data Type Selector (Only if Data is selected)
-                if serviceType == "data" {
+                if serviceType == "data" && !enabledDataTypeCodes.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("DATA TYPE")
                             .font(.caption)
@@ -126,8 +131,8 @@ struct PrintHubView: View {
                             .foregroundColor(.secondary)
                         
                         Picker("Data Type", selection: $selectedDataType) {
-                            ForEach(dataTypes.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                                Text(value).tag(key)
+                            ForEach(enabledDataTypeCodes, id: \.self) { key in
+                                Text(dataTypes[key] ?? key).tag(key)
                             }
                         }
                         .pickerStyle(MenuPickerStyle())
@@ -135,6 +140,7 @@ struct PrintHubView: View {
                         .padding(4)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
+                        .onChange(of: selectedDataType) { _ in selectedPlanCode = "" }
                     }
                     .padding(.horizontal)
                 }
@@ -258,10 +264,16 @@ struct PrintHubView: View {
             case .success(let response):
                 if response.status == "success" {
                     self.allPlans = response.MOBILE_NETWORK ?? [:]
+                    if !self.enabledDataTypeCodes.contains(self.selectedDataType) {
+                        self.selectedDataType = self.enabledDataTypeCodes.first ?? ""
+                        self.selectedPlanCode = ""
+                    }
                 } else {
                     self.feedbackMessage = "Failed to load print plans"
                 }
             case .failure(let error):
+                self.allPlans = [:]
+                self.selectedDataType = ""
                 self.feedbackMessage = "Error: \(error.localizedDescription)"
             }
         }

@@ -45,6 +45,10 @@ if ($select_vendor_table) {
             $fixed_quantity = mysqli_real_escape_string($connection_server, trim(strip_tags($get_api_post_info["quantity"] ?? $get_api_post_info["plan_code"] ?? "")));
 
             if (count($phone_array) > 1) {
+                $allowed_data_types = array("sme-data", "cg-data", "dd-data", "shared-data");
+                if (!in_array($fixed_type, $allowed_data_types, true) || !isServiceEnabled($fixed_type, $get_logged_user_details["vendor_id"])) {
+                    $api_json_response_encode = json_encode(["status" => "failed", "desc" => "This data type is currently unavailable."]);
+                } else {
                 $queue_items = array();
                 foreach ($phone_array as $each_phone) {
                     $queue_items[] = array(
@@ -61,6 +65,7 @@ if ($select_vendor_table) {
                     "batch_number" => $enqueue_result["batch_number"],
                     "count" => $enqueue_result["total"]
                 ]);
+                }
             } else {
                 include_once("../func/data.php");
                 $api_json_response_encode = $json_response_encode ?? "";

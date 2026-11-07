@@ -133,10 +133,10 @@
                 </div>
                 <?php }else{ ?>
                 <div class="text-center mb-4">
-                  <img alt="<?php echo $_SESSION['customer_provider']; ?>" id="<?php echo $_SESSION['customer_provider']; ?>-lg" src="/asset/<?php echo $_SESSION['customer_provider']; ?>.jpg" class="service-logo rounded-4 shadow-sm border mb-3" /><br/>
+                  <img alt="<?php echo htmlspecialchars($_SESSION['customer_provider'], ENT_QUOTES, 'UTF-8'); ?>" id="<?php echo htmlspecialchars($_SESSION['customer_provider'], ENT_QUOTES, 'UTF-8'); ?>-lg" src="/asset/<?php echo htmlspecialchars($_SESSION['customer_provider'], ENT_QUOTES, 'UTF-8'); ?>.jpg" class="service-logo rounded-4 shadow-sm border mb-3" /><br/>
                   <div class="bg-light p-3 rounded-4 border text-start">
                       <div class="mb-2"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Customer Name</small><br><span class="fw-bold text-dark"><?php echo strtoupper($_SESSION['customer_name']); ?></span></div>
-                      <div class="mb-2"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Customer ID</small><br><span class="fw-bold text-dark"><?php echo $_SESSION['customer_id']; ?></span></div>
+                      <div class="mb-2"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Customer ID</small><br><span class="fw-bold text-dark"><?php echo htmlspecialchars($_SESSION['customer_id'], ENT_QUOTES, 'UTF-8'); ?></span></div>
                       <div class="mb-0"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Amount To Fund</small><br><span class="h4 fw-bold text-success">₦<?php echo number_format($_SESSION['customer_amount'], 2); ?></span></div>
                   </div>
                 </div>

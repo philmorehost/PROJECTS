@@ -61,7 +61,8 @@ $stats_q = mysqli_query($connection_server, "SELECT
     FROM sas_users $stats_vendor_stmt");
 
 if (!$stats_q) {
-    echo json_encode(["status" => "error", "message" => "Stats query failed: " . mysqli_error($connection_server)]);
+    error_log("[ajax-users] Stats query failed: " . mysqli_error($connection_server));
+    echo json_encode(["status" => "error", "message" => "Stats query failed. Please try again."]);
     exit;
 }
 

@@ -60,7 +60,11 @@ function bc_demo_snapshot($connection_server) {
     foreach (bc_demo_tables() as $table) {
         $snapshot[$table] = [];
         $result = @mysqli_query($connection_server, "SELECT * FROM `$table`");
-        if (!$result) continue;
+        if (!$result) {
+            // Never save an incomplete snapshot: restore would otherwise interpret the empty
+            // list as authoritative and could delete production data on the mode switch back.
+            throw new RuntimeException('Unable to capture production snapshot for ' . $table . '.');
+        }
         while ($row = mysqli_fetch_assoc($result)) $snapshot[$table][] = $row;
     }
     return $snapshot;
@@ -69,6 +73,20 @@ function bc_demo_snapshot($connection_server) {
 function bc_demo_restore_table($connection_server, $table, $rows) {
     $table_esc = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
     if (!$table_esc) return false;
+
+    // sas_vendor_settings is optional on legacy installs. Snapshot capture records it as an
+    // empty list when the table is absent; in that case there is nothing to restore or delete.
+    // If the snapshot contains rows, keep failing safely rather than silently losing them.
+    if ($table_esc === 'sas_vendor_settings') {
+        $table_name_esc = mysqli_real_escape_string($connection_server, $table_esc);
+        $table_check = @mysqli_query(
+            $connection_server,
+            "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='$table_name_esc' LIMIT 1"
+        );
+        if (!$table_check) return false;
+        if (mysqli_num_rows($table_check) === 0) return empty($rows);
+    }
+
     if (!@mysqli_query($connection_server, "DELETE FROM `$table_esc`")) return false;
     foreach ((array)$rows as $row) {
         if (!$row) continue;
@@ -102,7 +120,9 @@ function bc_demo_toggle($connection_server, $mode, $lock_key = '') {
         if ($mode === 'demo') {
             // Entering demo starts a fresh, locked session for settings edits.
             bc_demo_revoke_edit_unlock();
-            $snapshot = mysqli_real_escape_string($connection_server, json_encode(bc_demo_snapshot($connection_server), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $snapshot_json = json_encode(bc_demo_snapshot($connection_server), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($snapshot_json === false) throw new Exception('Unable to encode the locked production snapshot.');
+            $snapshot = mysqli_real_escape_string($connection_server, $snapshot_json);
             if (!mysqli_query($connection_server, "UPDATE sas_demo_mode SET mode='demo', snapshot_json='$snapshot', snapshot_created_at=NOW() WHERE id=1")) throw new Exception('Unable to save the locked production snapshot.');
         } else {
             $snapshot = json_decode($state['snapshot_json'] ?? '', true);

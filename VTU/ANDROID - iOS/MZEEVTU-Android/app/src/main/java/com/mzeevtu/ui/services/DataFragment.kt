@@ -39,12 +39,13 @@ class DataFragment : Fragment(R.layout.fragment_data) {
     private var currentPlans: List<DataPlanItem> = emptyList()
     private var suppressDropdownCallback = false
 
-    private val dataTypes = listOf(
+    private val allDataTypes = listOf(
         DataTypeItem("sme-data",    "SME Data",           "Standard SME data bundles"),
         DataTypeItem("cg-data",     "Corporate Gifting",  "Corporate gifting data plans"),
         DataTypeItem("dd-data",     "Direct Data",        "Direct data bundles"),
         DataTypeItem("shared-data", "Shared Data",        "Shared/reseller data plans")
     )
+    private var dataTypes: List<DataTypeItem> = emptyList()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -100,19 +101,26 @@ class DataFragment : Fragment(R.layout.fragment_data) {
 
     /** Data Type drop-down (replaces the old list of selectable rows). */
     private fun setupDataTypeDropdown() {
-        val labels = dataTypes.map { it.name }
-        binding.spinnerDataType.setSimpleItems(labels.toTypedArray())
-
-        // Default selection: sme-data (index 0)
-        selectedDataType = dataTypes[0].code
-        binding.spinnerDataType.setText(dataTypes[0].name, false)
-
+        binding.spinnerDataType.setSimpleItems(emptyArray<String>())
+        binding.spinnerDataType.isEnabled = false
         binding.spinnerDataType.setOnItemClickListener { _, _, position, _ ->
             dataTypes.getOrNull(position)?.let {
                 selectedDataType = it.code
                 updatePlanList()
             }
         }
+    }
+
+    private fun refreshDataTypeDropdown() {
+        val enabledCodes = allPlans.keys.mapNotNull { it.substringAfter('|', "").takeIf { it.isNotEmpty() } }.toSet()
+        dataTypes = allDataTypes.filter { it.code in enabledCodes }
+        if (dataTypes.none { it.code == selectedDataType }) {
+            selectedDataType = dataTypes.firstOrNull()?.code ?: ""
+        }
+
+        binding.spinnerDataType.setSimpleItems(dataTypes.map { it.name }.toTypedArray())
+        binding.spinnerDataType.isEnabled = dataTypes.isNotEmpty()
+        binding.spinnerDataType.setText(dataTypes.firstOrNull { it.code == selectedDataType }?.name ?: "", false)
     }
 
     /** Plan drop-down, rebuilt whenever the network or data type changes. */
@@ -153,6 +161,7 @@ class DataFragment : Fragment(R.layout.fragment_data) {
                     activity?.runOnUiThread {
                         if (_binding == null) return@runOnUiThread
                         binding.progressBar.visibility = View.GONE
+                        refreshDataTypeDropdown()
                         updatePlanList()
                     }
                 } else {

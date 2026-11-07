@@ -1,0 +1,22 @@
+<?php
+declare(strict_types=1);
+const ROOT = __DIR__ . '/..';
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+session_name('remit_session');
+session_set_cookie_params(['httponly'=>true, 'secure'=>!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite'=>'Lax', 'path'=>rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/']);
+session_start();
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+require __DIR__.'/Database.php';
+require __DIR__.'/Money.php';
+require __DIR__.'/ChurchPortal.php';
+require __DIR__.'/HierarchyManager.php';
+require __DIR__.'/DirectoryPagination.php';
+require __DIR__.'/Security.php';
+require __DIR__.'/ManagerClient.php';
+require __DIR__.'/LicenseManager.php';
+require __DIR__.'/UpdateManager.php';
+require __DIR__.'/helpers.php';

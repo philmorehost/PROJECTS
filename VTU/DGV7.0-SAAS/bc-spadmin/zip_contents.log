@@ -323,7 +323,6 @@ func/vendor/phpmailer/src/POP3.php
 func/vendor/phpmailer/src/SMTP.php
 func/vendor/phpmailer/VERSION
 func/voveid-client.php
-func/whmcs-func.php
 scratch/
 scratch/check_cols.php
 scratch/check_db.php

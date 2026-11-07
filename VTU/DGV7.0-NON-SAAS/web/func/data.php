@@ -33,6 +33,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
 
     $data_type_array = array("sme-data", "cg-data", "dd-data", "shared-data");
     if (in_array($type, $data_type_array)) {
+        if (!isServiceEnabled($type, (int)($get_logged_user_details["vendor_id"] ?? 0))) {
+            $json_response_encode = json_encode(["status" => "failed", "desc" => "This data type is currently unavailable."], true);
+        } else {
         // Transaction PIN enforcement - only for a PERSON buying: our own website ("WEB") or the
         // mobile app ("APP"). External API integrations ("API") are deliberately EXEMPT: one merchant
         // api_key serves that merchant's own customers, so there is no single PIN to ask for, and
@@ -228,6 +231,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
             //Balance is LOW
             $json_response_array = array("status" => "failed", "desc" => "Balance is LOW");
             $json_response_encode = json_encode($json_response_array, true);
+        }
         }
     } else {
         //Invalid data type

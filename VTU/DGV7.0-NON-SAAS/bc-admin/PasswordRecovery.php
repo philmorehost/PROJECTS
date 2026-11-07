@@ -311,7 +311,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
 
 <script>
-  Swal.fire ('Notification', '<?php echo $_SESSION["product_purchase_response"]; ?>', 'info') ;
+  Swal.fire ('Notification', '<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>', 'info') ;
           setTimeout(() => {
                 fetch('/func/unset-product-response.php')
                     .then(response => response.text());

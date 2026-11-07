@@ -139,7 +139,14 @@ $safe_input";
             $esc_label = mysqli_real_escape_string($connection_server, ($ai_action === 'ai_write' ? 'SendMail Write' : 'SendMail Refine') . ': ' . substr($safe_input, 0, 150));
             mysqli_query($connection_server, "INSERT INTO sas_ai_transactions (vendor_id, username, prompt, response, tokens_burned, status, duration_ms) VALUES ('$vid', 'admin_{$get_logged_admin_details['email']}', '$esc_label', '$esc_res', '$tokens', 'success', '$duration')");
 
-            mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $per_tx_cost WHERE id='$vid'");
+            // Atomic debit: subtract only if balance is sufficient to prevent race-condition double-spend
+            $deduct_result = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $per_tx_cost WHERE id='$vid' AND ai_token_balance >= $per_tx_cost");
+            if (!$deduct_result || mysqli_affected_rows($connection_server) === 0) {
+                mysqli_query($connection_server, "UPDATE sas_ai_transactions SET status='failed' WHERE vendor_id='$vid' AND prompt='$esc_label' ORDER BY id DESC LIMIT 1");
+                $get_logged_admin_details['ai_token_balance'] = 0;
+                echo json_encode(['status' => 'error', 'message' => 'Insufficient AI token balance. Please top up your account.']);
+                exit;
+            }
             $get_logged_admin_details['ai_token_balance'] = $token_bal - $per_tx_cost;
 
             $subject_out = '';

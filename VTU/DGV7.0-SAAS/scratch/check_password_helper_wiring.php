@@ -10,7 +10,7 @@
  * WHY: the helpers live in func/bc-security.php, which is only loaded by the full configs
  * (bc-config.php, bc-admin-config.php, bc-spadmin-config.php). VendorReg.php deliberately
  * bootstraps with the "basic configs" (bc-connect + bc-tables + bc-email-templates + bc-func +
- * whmcs-func) so it can run before a super admin is signed in - and none of those load
+ * whmp-func) so it can run before a super admin is signed in - and none of those load
  * bc-security.php. PHP only fails on an undefined function when the call is *reached*, so this
  * sat dormant until someone actually registered a vendor.
  *

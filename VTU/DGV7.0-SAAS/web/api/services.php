@@ -44,9 +44,18 @@ foreach ($all_possible_services as $s_name) {
     }
 }
 
+$data_type_codes = ['sme-data', 'cg-data', 'dd-data', 'shared-data'];
+$enabled_data_types = [];
+if (in_array('data', $services, true)) {
+    foreach ($data_type_codes as $type) {
+        if (isServiceEnabled($type, $vendor_id)) $enabled_data_types[] = $type;
+    }
+}
+
 $response_data = [
     "status" => "success",
     "services" => $services,
+    "data_types" => $enabled_data_types,
     "plans" => []
 ];
 
@@ -67,10 +76,17 @@ function fetchCategoryPlans($vid, $acc_table, $api_type) {
 }
 
 if (in_array('data', $services)) {
-    $response_data['plans']['data']['sme'] = fetchCategoryPlans($vendor_id, $acc_table, 'sme-data');
-    $response_data['plans']['data']['gifting'] = fetchCategoryPlans($vendor_id, $acc_table, 'cg-data');
-    $response_data['plans']['data']['direct'] = fetchCategoryPlans($vendor_id, $acc_table, 'dd-data');
-    $response_data['plans']['data']['shared'] = fetchCategoryPlans($vendor_id, $acc_table, 'shared-data');
+    $data_plan_categories = [
+        'sme' => 'sme-data',
+        'gifting' => 'cg-data',
+        'direct' => 'dd-data',
+        'shared' => 'shared-data',
+    ];
+    foreach ($data_plan_categories as $category => $type) {
+        if (isServiceEnabled($type, $vendor_id)) {
+            $response_data['plans']['data'][$category] = fetchCategoryPlans($vendor_id, $acc_table, $type);
+        }
+    }
 }
 
 if (in_array('airtime', $services)) {

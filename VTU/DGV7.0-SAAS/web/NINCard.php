@@ -80,6 +80,20 @@ if (isset($_POST["request-nin-card"])) {
         exit();
     }
 
+    // A provider may return status=success without any name fields. Do not charge
+    // users for a slip that would render essentially blank.
+    $profile_name = trim(implode(' ', array_filter([
+        trim((string)($profile['firstname'] ?? '')),
+        trim((string)($profile['middlename'] ?? '')),
+        trim((string)($profile['lastname'] ?? '')),
+    ], function ($part) { return $part !== ''; })));
+    if ($profile_name === '') {
+        chargeUser("credit", $reference . "_REFUND", "NIN Slip Refund", $reference . "_RF", "", $service_fee, $service_fee, "Refund: NIN provider returned no name", "WEB", $_SERVER["HTTP_HOST"], 1);
+        $_SESSION["product_purchase_response"] = "NIN lookup returned an incomplete profile. Your payment has been refunded; please try another provider or contact support.";
+        header("Location: NINCard.php");
+        exit();
+    }
+
     // Store request record
     $firstname   = mysqli_real_escape_string($connection_server, $profile['firstname'] ?? '');
     $middlename  = mysqli_real_escape_string($connection_server, $profile['middlename'] ?? '');
@@ -95,12 +109,19 @@ if (isset($_POST["request-nin-card"])) {
 
     $user_portrait = mysqli_real_escape_string($connection_server, $user_portrait);
 
-    mysqli_query($connection_server, "INSERT INTO sas_nin_card_requests
+    $insert_result = mysqli_query($connection_server, "INSERT INTO sas_nin_card_requests
         (vendor_id, user_id, reference, nin_input, firstname, middlename, lastname, birthdate, gender, photo_data, phone, address, residence_state, state_of_origin, price, provider, user_portrait, status)
         VALUES
         ('".$get_logged_user_details["vendor_id"]."', '".$get_logged_user_details["id"]."', '$reference', '$nin_input',
          '$firstname', '$middlename', '$lastname', '$birthdate', '$gender', '$photo_data', '$phone', '$address', '$res_state', '$soo',
          '$service_fee', '$provider', '$user_portrait', 'success')");
+    if (!$insert_result) {
+        chargeUser("credit", $reference . "_REFUND", "NIN Slip Refund", $reference . "_RF", "", $service_fee, $service_fee, "Refund: Could not save NIN slip", "WEB", $_SERVER["HTTP_HOST"], 1);
+        error_log('[NINCard] Could not save slip request for reference ' . $reference . ': ' . mysqli_error($connection_server));
+        $_SESSION["product_purchase_response"] = "We could not save your NIN slip. Your payment has been refunded; please try again.";
+        header("Location: NINCard.php");
+        exit();
+    }
 
     header("Location: ViewNINCard.php?ref=$reference");
     exit();

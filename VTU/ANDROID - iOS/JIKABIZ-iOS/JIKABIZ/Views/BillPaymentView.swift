@@ -12,6 +12,10 @@ struct BillPaymentView: View {
 
     let categories = ["Electricity", "Cable TV"]
 
+    init(serviceType: String = "electric") {
+        _selectedCategory = State(initialValue: serviceType.lowercased() == "cable" ? "Cable TV" : "Electricity")
+    }
+
     var body: some View {
         Form {
             Section(header: Text("Bill Category")) {
@@ -85,7 +89,7 @@ struct BillPaymentView: View {
             "number": meterNumber,
             "amount": amount,
             "provider": selectedProvider,
-            "category": selectedCategory.lowercased(),
+            "category": selectedCategory == "Electricity" ? "electric" : "cable",
             "action": "bill_payment"
         ]
 

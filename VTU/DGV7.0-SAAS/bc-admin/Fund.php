@@ -355,7 +355,7 @@
                     <?php endif; ?>
 
                     <div class="form-floating mb-4">
-                        <input id="fund-amount" type="number" class="form-control form-control-lg rounded-3 border-0 bg-light" onkeyup="vcheckPaymentGatewayDetails('fundProceedBtn','2');" placeholder="Amount" step="1" min="100" required value="<?php echo $_GET['amount'] ?? ''; ?>" <?php echo isset($_GET['amount']) ? 'readonly' : ''; ?>>
+                        <input id="fund-amount" type="number" class="form-control form-control-lg rounded-3 border-0 bg-light" onkeyup="vcheckPaymentGatewayDetails('fundProceedBtn','2');" placeholder="Amount" step="1" min="100" required value="<?php echo htmlspecialchars($_GET['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" <?php echo isset($_GET['amount']) ? 'readonly' : ''; ?>>
                         <label for="fund-amount" class="text-muted ps-3">Amount to Fund (₦)</label>
                         <div class="form-text small mt-2 ps-2 text-primary fw-bold" id="product-status-span"></div>
                     </div>
@@ -365,7 +365,7 @@
                     <input id="user-name" value="<?php echo $get_logged_admin_details['firstname']." ".$get_logged_admin_details['lastname']." ".(isset($get_logged_admin_details['othername']) ? $get_logged_admin_details['othername'] : ""); ?>" hidden readonly required/>
                     <input id="user-email" value="<?php echo $get_logged_admin_details['email']; ?>" hidden readonly required/>
                     <input id="user-phone" value="<?php echo $get_logged_admin_details['phone_number']; ?>" hidden readonly required/>
-                    <input id="num-ref" value="<?php echo $_GET['ref'] ?? ''; ?>" hidden readonly required/>
+                    <input id="num-ref" value="<?php echo htmlspecialchars($_GET['ref'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" hidden readonly required/>
                     <input id="gateway-public" hidden readonly required/>
                     <input id="gateway-encrypt" hidden readonly required/>
 

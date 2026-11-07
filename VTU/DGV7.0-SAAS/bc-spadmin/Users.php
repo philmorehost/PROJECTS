@@ -59,7 +59,7 @@
         if(mysqli_query($connection_server, "UPDATE sas_users SET $column='$status' WHERE vendor_id='$vid' && username='$account_user'")){
             $_SESSION["product_purchase_response"] = "User ".ucwords($account_user)." updated successfully";
         }
-        header("Location: Users.php" . (isset($_GET['vid']) ? "?vid=".$_GET['vid'] : ""));
+        header("Location: Users.php" . (isset($_GET['vid']) && is_numeric($_GET['vid']) ? "?vid=".(int)$_GET['vid'] : ""));
         exit();
     }
 
@@ -208,7 +208,7 @@
                         <label class="small fw-bold text-muted">SEARCH USERS</label>
                         <div class="input-group">
                             <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                            <input id="user-search-input" type="text" placeholder="Username, Email, Phone..." class="form-control border-start-0" value="<?php echo $_GET['searchq'] ?? ''; ?>" />
+                            <input id="user-search-input" type="text" placeholder="Username, Email, Phone..." class="form-control border-start-0" value="<?php echo htmlspecialchars($_GET['searchq'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" />
                         </div>
                     </div>
                     <div class="col-md-3">

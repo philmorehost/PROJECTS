@@ -195,7 +195,10 @@ foreach ($ED as $edition => $root) {
 
     $tables = file_get_contents($root . '/func/bc-tables.php');
     bc_assert_true("$edition: audit columns exist for the admin pages too", strpos($tables, '"kyc_provider_data" => "LONGTEXT NULL"') !== false);
-    bc_assert_true("$edition: schema version bumped for them", strpos($tables, "BC_TABLES_VERSION', '2026.09.19-4'") !== false);
+    // Later migrations must bump the gate without making this original audit-column check stale.
+    preg_match("/BC_TABLES_VERSION',\\s*'([^']+)'/", $tables, $schema_version_match);
+    $schema_version = str_replace('-', '.', $schema_version_match[1] ?? '0');
+    bc_assert_true("$edition: schema version is at least the audit-column migration", version_compare($schema_version, '2026.09.19.4', '>='));
 }
 
 echo "\n----------------------------------------\n";

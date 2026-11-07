@@ -14,6 +14,8 @@ include_once("../../func/bc-connect.php");
 // bc-connect.php does not pull in by itself. Without this the status/upload replies fatal on an
 // undefined function.
 include_once(__DIR__ . "/../../func/bc-security.php");
+// AI KYC Compliance Engine: document analysis via multimodal AI
+include_once(__DIR__ . "/../../func/bc-kyc-ai-analyzer.php");
 
 $vendor_id = resolveVendorID();
 $select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server,
@@ -45,26 +47,17 @@ $action = trim(strip_tags($_POST['action'] ?? ''));
 // per row, so duplicate settings rows told the app to collect the same document several times over.
 $enabled_checks = bc_kyc_enabled_checks($connection_server, $vendor_id);
 
-// Return current KYC status
-if ($action === 'status') {
-    $kyc_names = [0 => "Unverified", 1 => "Under Review", 2 => "Verified", 3 => "Rejected"];
-    
-    // Check if VoveID is enabled for this vendor
-    $voveid_enabled = false;
-    $voveid_q = mysqli_query($connection_server, "SELECT option_value FROM sas_vendor_settings WHERE vendor_id='$vendor_id' AND option_name='voveid_enabled' LIMIT 1");
-    if ($voveid_q && $r = mysqli_fetch_assoc($voveid_q)) {
-        $voveid_enabled = (int)$r['option_value'] === 1;
-    }
-    
-    echo json_encode([
-        "status"      => "success",
-        "kyc_status"  => (int)$user['kyc_status'],
-        "kyc_name"    => $kyc_names[$user['kyc_status']] ?? "Unknown",
-        "kyc_verified"=> ($user['kyc_status'] == 2) ? "Yes" : "No",
-        "bvn_set"     => !empty($user['bvn']) ? "Yes" : "No",
-        "nin_set"     => !empty($user['nin']) ? "Yes" : "No",
-        "voveid_enabled" => $voveid_enabled ? "Yes" : "No",
-        "voveid_status" => $user['voveid_status'] ?? 'unverified',
+    // Return current KYC status
+    if ($action === 'status') {
+        $kyc_names = [0 => "Unverified", 1 => "Under Review", 2 => "Verified", 3 => "Rejected"];
+
+        echo json_encode([
+            "status"      => "success",
+            "kyc_status"  => (int)$user['kyc_status'],
+            "kyc_name"    => $kyc_names[$user['kyc_status']] ?? "Unknown",
+            "kyc_verified"=> ($user['kyc_status'] == 2) ? "Yes" : "No",
+            "bvn_set"     => !empty($user['bvn']) ? "Yes" : "No",
+            "nin_set"     => !empty($user['nin']) ? "Yes" : "No",
         // Manual (non-API) KYC: what the reviewer decided, why, and what is still outstanding, so the
         // app can show the same information the website does instead of just "Unverified".
         "kyc_reject_reason" => (string)($user['kyc_reject_reason'] ?? ''),
@@ -72,86 +65,6 @@ if ($action === 'status') {
         "has_documents"     => (empty($user['govt_id_card']) && empty($user['kyc_face_image'])) ? "No" : "Yes",
         "still_needed"      => array_map('bc_kyc_check_label', bc_kyc_checks_pending($user, $enabled_checks)),
     ]);
-    exit;
-}
-
-// Create VoveID session for mobile app
-if ($action === 'voveid_session') {
-    // Check if VoveID is enabled for this vendor
-    $voveid_enabled = false;
-    $voveid_q = mysqli_query($connection_server, "SELECT option_value FROM sas_vendor_settings WHERE vendor_id='$vendor_id' AND option_name='voveid_enabled' LIMIT 1");
-    if ($voveid_q && $r = mysqli_fetch_assoc($voveid_q)) {
-        $voveid_enabled = (int)$r['option_value'] === 1;
-    }
-    
-    if (!$voveid_enabled) {
-        echo json_encode(["status" => "failed", "desc" => "VoveID KYC is not enabled for this vendor"]);
-        exit;
-    }
-    
-    $user_id = (int)$user['id'];
-    $refId = (string)$user['id'];
-    
-    // Check if user already has a VoveID ref_id stored
-    $refId_q = mysqli_query($connection_server, "SELECT voveid_ref_id FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
-    if ($refId_q && $r = mysqli_fetch_assoc($refId_q)) {
-        if (!empty($r['voveid_ref_id'])) {
-            $refId = $r['voveid_ref_id'];
-        }
-    }
-    
-    // Include VoveID client
-    require_once __DIR__ . "/../../func/voveid-client.php";
-    
-    // Create VoveID session
-    $result = voveid_create_session($vendor_id, $user_id, $refId);
-    
-    if ($result['success'] && isset($result['data']['token'])) {
-        $sessionToken = $result['data']['token'];
-        $sessionId = $result['data']['sessionId'] ?? '';
-        $flowId = $result['data']['flowId'] ?? '';
-        
-        // Store session in database
-        $expiresAt = date('Y-m-d H:i:s', time() + 1800); // 30 minutes
-        $refIdEsc = mysqli_real_escape_string($connection_server, $refId);
-        $sessionTokenEsc = mysqli_real_escape_string($connection_server, $sessionToken);
-        $sessionIdEsc = mysqli_real_escape_string($connection_server, $sessionId);
-        $flowIdEsc = mysqli_real_escape_string($connection_server, $flowId ?? '');
-        
-        mysqli_query($connection_server, "
-            INSERT INTO sas_voveid_sessions (vendor_id, user_id, ref_id, session_token, session_id, flow_id, status, expires_at)
-            VALUES ('$vendor_id', '$user_id', '$refIdEsc', '$sessionTokenEsc', '$sessionIdEsc', '$flowIdEsc', 'created', '$expiresAt')
-            ON DUPLICATE KEY UPDATE 
-                session_token='$sessionTokenEsc', 
-                session_id='$sessionIdEsc', 
-                flow_id='$flowIdEsc', 
-                status='created', 
-                expires_at='$expiresAt',
-                updated_at=NOW()
-        ");
-        
-        // Update user's voveid_ref_id if not set
-        $refIdCheck = mysqli_query($connection_server, "SELECT voveid_ref_id FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
-        if ($refIdCheck && $r = mysqli_fetch_assoc($refIdCheck)) {
-            if (empty($r['voveid_ref_id'])) {
-                $refIdEsc = mysqli_real_escape_string($connection_server, $refId);
-                mysqli_query($connection_server, "UPDATE sas_users SET voveid_ref_id='$refIdEsc' WHERE id='$user_id' AND vendor_id='$vendor_id'");
-            }
-        }
-        
-        echo json_encode([
-            "status" => "success",
-            "token" => $sessionToken,
-            "session_id" => $sessionId,
-            "ref_id" => $refId,
-            "expires_at" => $expiresAt,
-        ]);
-    } else {
-        echo json_encode([
-            "status" => "failed",
-            "desc" => $result['error'] ?? 'Failed to create VoveID session',
-        ]);
-    }
     exit;
 }
 
@@ -168,7 +81,7 @@ if ($action === 'submit_bvn_nin') {
     $value_esc = mysqli_real_escape_string($connection_server, $value);
 
     // Verify with the vendor's provider and let it approve the account when it can prove everything
-    // this vendor requires (VoveID does the same through its webhook). Manual-upload checks stay
+    // this vendor requires. Manual-upload checks stay
     // manual: they keep the submission in the review queue either way.
     $verification = verifyBvnNin($value, $type, '', '', $user['firstname'] ?? '', $user['lastname'] ?? '', $vendor_id);
     $outcome = bc_kyc_provider_verify($connection_server, $vendor_id, $uid, $type, $value, $verification, 'KYC-' . strtoupper($type) . '-' . $uid);
@@ -264,6 +177,72 @@ if ($action === 'upload_document') {
     } else {
         echo json_encode(["status" => "failed", "desc" => "No valid documents received"]);
     }
+    exit;
+}
+
+// ─── AI KYC Compliance Analysis ───────────────────────────────────────────────────────────────────
+
+if ($action === 'ai_analyze_documents') {
+    $vendor_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve, kyc_ai_billing FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+    $vendor_row = $vendor_q ? mysqli_fetch_assoc($vendor_q) : null;
+    if (!$vendor_row || (int)($vendor_row['kyc_ai_enabled'] ?? 0) !== 1) {
+        echo json_encode(["status" => "failed", "desc" => "AI KYC analysis is not enabled for this vendor."]);
+        exit;
+    }
+    if (!function_exists('ai_engine')) {
+        echo json_encode(["status" => "failed", "desc" => "AI engine is not available on this installation."]);
+        exit;
+    }
+    $user_id = (int)$user['id'];
+    $q_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
+    $user_row = $q_user ? (mysqli_fetch_assoc($q_user) ?: $user) : $user;
+    $has_docs = !empty($user_row['govt_id_card']) || !empty($user_row['kyc_face_image'])
+        || !empty($user_row['proof_of_address']) || !empty($user_row['liveliness_video']);
+    if (!$has_docs) {
+        echo json_encode(["status" => "failed", "desc" => "No documents uploaded to analyze."]);
+        exit;
+    }
+    $analysis = bc_kyc_ai_analyze_all($user_row, $enabled_checks);
+    $analysis['username'] = $user_row['username'];
+    // NON-SAAS: no billing, pays directly
+    $billing = bc_kyc_ai_billing_cost($analysis['total_tokens'] ?? 0, $vendor_row);
+    $billing['billed'] = false; // NON-SAAS pays directly, no billing
+    $analysis['billing'] = $billing;
+    $auto_apply = (int)($vendor_row['kyc_ai_auto_approve'] ?? 1) === 1;
+    $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, $auto_apply);
+    echo json_encode([
+        "status"        => "success",
+        "desc"          => $store_result['decision']['reason'] ?? "AI analysis complete",
+        "ai_status"     => $store_result['decision']['status'] ?? 'error',
+        "kyc_status"    => $store_result['decision']['kyc_status'] ?? 0,
+        "confidence"    => $store_result['decision']['confidence'] ?? 0,
+        "auto_approved" => $store_result['applied'],
+        "reasons"       => $store_result['decision']['reasons'] ?? [],
+        "errors"        => $analysis['errors'] ?? [],
+        "results"       => $analysis['results'] ?? [],
+        "duration_ms"   => $analysis['total_duration_ms'] ?? 0,
+    ]);
+    exit;
+}
+
+if ($action === 'ai_get_status') {
+    $decision = bc_kyc_ai_get_decision($connection_server, (int)$user['id']);
+    if ($decision === null) {
+        echo json_encode(["status" => "success", "has_analysis" => false, "desc" => "No AI analysis has been performed yet."]);
+        exit;
+    }
+    echo json_encode([
+        "status"        => "success",
+        "has_analysis"  => true,
+        "ai_status"     => $decision['status'],
+        "reason"        => $decision['reason'],
+        "confidence"    => $decision['confidence'],
+        "kyc_status"    => $decision['decision']['kyc_status'] ?? 0,
+        "reasons"       => $decision['decision']['reasons'] ?? [],
+        "results"       => $decision['results'],
+        "analyzed_at"   => $decision['analyzed_at'],
+        "tokens_used"   => $decision['tokens_used'],
+    ]);
     exit;
 }
 

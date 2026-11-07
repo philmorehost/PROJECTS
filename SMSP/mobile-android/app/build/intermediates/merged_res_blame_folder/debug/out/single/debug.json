@@ -1,0 +1,46 @@
+[
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/drawable_splash_logo.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/drawable/splash_logo.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.schoolapp.portal.app-merged_res-41:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.schoolapp.portal.app-main-43:/mipmap-xxxhdpi/ic_launcher.png"
+    }
+]

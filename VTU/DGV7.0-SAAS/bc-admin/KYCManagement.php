@@ -1,5 +1,7 @@
 <?php session_start();
 include("../func/bc-admin-config.php");
+// AI KYC Compliance Engine: show AI analysis results in the review console
+include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 
 $vid = (int)$get_logged_admin_details['id'];
 
@@ -336,6 +338,76 @@ if (isset($_GET['view'])) {
                     <p class="small text-muted mt-3 mb-0">
                       Compare the face in the selfie with the photo on the government ID before approving.
                     </p>
+                  <?php endif; ?>
+
+                  <!-- AI Analysis Results -->
+                  <?php
+                  $ai_decision = bc_kyc_ai_get_decision($connection_server, (int)$review_user['id']);
+                  if ($ai_decision && $ai_decision['status'] !== ''):
+                      $ai_status_badge = [
+                          'approve' => 'success',
+                          'reject'  => 'danger',
+                          'review'  => 'warning',
+                          'error'   => 'secondary',
+                      ];
+                      $ai_status_label = [
+                          'approve' => 'AI Approved',
+                          'reject'  => 'AI Rejected',
+                          'review'  => 'AI: Needs Review',
+                          'error'   => 'AI: Analysis Error',
+                      ];
+                      $ai_badge = $ai_status_badge[$ai_decision['status']] ?? 'secondary';
+                      $ai_label = $ai_status_label[$ai_decision['status']] ?? 'AI: Unknown';
+                      $ai_results = $ai_decision['results'] ?? [];
+                  ?>
+                      <h6 class="fw-bold mt-4 mb-2">AI Analysis</h6>
+                      <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-<?php echo $ai_badge; ?> px-3 py-2">
+                          <i class="bi bi-cpu me-1"></i><?php echo $ai_label; ?>
+                        </span>
+                        <?php if ($ai_decision['confidence'] > 0): ?>
+                          <span class="small text-muted">Confidence: <?php echo (int)$ai_decision['confidence']; ?>%</span>
+                        <?php endif; ?>
+                        <?php if ($ai_decision['analyzed_at']): ?>
+                          <span class="small text-muted">&middot; <?php echo date('M d, Y H:i', strtotime($ai_decision['analyzed_at'])); ?></span>
+                        <?php endif; ?>
+                      </div>
+                      <?php if ($ai_decision['reason']): ?>
+                        <div class="alert alert-<?php echo $ai_badge === 'danger' ? 'danger' : ($ai_badge === 'warning' ? 'warning' : 'info'); ?> small mb-2">
+                          <strong>AI says:</strong> <?php echo nl2br(htmlspecialchars($ai_decision['reason'])); ?>
+                        </div>
+                      <?php endif; ?>
+                      <?php if (!empty($ai_results)): ?>
+                        <div class="row g-2 mb-2">
+                          <?php
+                            $ai_check_labels = [
+                                'govt_id' => ['Government ID', 'id'],
+                                'selfie' => ['Selfie vs ID', 'selfie'],
+                                'proof_of_address' => ['Proof of Address', 'poa'],
+                                'liveliness_video' => ['Liveliness Video', 'video'],
+                            ];
+                            foreach ($ai_check_labels as $key => $label_info) {
+                                if (isset($ai_results[$key]) && ($ai_results[$key]['status'] ?? '') === 'success') {
+                                    $r = $ai_results[$key];
+                                    $check_ok = true;
+                                    // Determine if this check passed based on the AI result
+                                    if ($key === 'govt_id') {
+                                        $check_ok = ($r['is_valid'] ?? true) && ($r['is_expired'] ?? false) === false && ($r['name_matches'] ?? true) !== false;
+                                    } elseif ($key === 'selfie') {
+                                        $check_ok = ($r['face_detected'] ?? false) && ($r['is_live_photo'] ?? false) && ($r['face_matches_id'] ?? true) !== false;
+                                    } elseif ($key === 'proof_of_address') {
+                                        $check_ok = ($r['is_valid_utility_bill'] ?? false) && ($r['is_under_3_months'] ?? false) && ($r['address_matches'] ?? true) !== false;
+                                    } elseif ($key === 'liveliness_video') {
+                                        $check_ok = ($r['face_detected'] ?? false) && ($r['is_live_video'] ?? false);
+                                    }
+                                    $check_badge = $check_ok ? 'success' : 'danger';
+                                    $check_icon = $check_ok ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+                                    echo '<div class="col-md-6"><span class="badge bg-' . $check_badge . ' text-white d-block mb-1"><i class="bi ' . $check_icon . ' me-1"></i>' . htmlspecialchars($label_info[0]) . '</span></div>';
+                                }
+                            }
+                          ?>
+                        </div>
+                      <?php endif; ?>
                   <?php endif; ?>
 
                   <h6 class="fw-bold mt-4 mb-2">Identity number</h6>

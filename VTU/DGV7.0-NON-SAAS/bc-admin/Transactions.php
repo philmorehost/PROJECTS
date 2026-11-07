@@ -2,11 +2,12 @@
     include("../func/bc-admin-config.php");
 
     // Handle approve / cancel of pending wallet-funding transactions in sas_transactions
+    // and the DGV7.0 manual reversal / restore of successful VTU transactions.
     if (isset($_GET["order-ref"]) && isset($_GET["order-status"])) {
         $t_ref    = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
         $t_status = trim(strip_tags($_GET["order-status"]));
 
-        if (in_array($t_status, array("approve", "cancel", "mark-success"))) {
+        if (in_array($t_status, array("approve", "cancel", "mark-success", "reverse", "restore"))) {
             $select_tx = mysqli_query($connection_server,
                 "SELECT * FROM sas_transactions
                  WHERE vendor_id='" . $get_logged_admin_details["id"] . "'
@@ -33,6 +34,66 @@
                            AND reference='$t_ref'"
                     );
                     $_SESSION["product_purchase_response"] = "Transaction marked as successful and user billed appropriately.";
+                } else if ($t_status === "reverse" || $t_status === "restore") {
+                    // DGV7.0 manual reversal of a successful VTU transaction.
+                    //   reverse  -> refund the customer and flag the original row reversed=1
+                    //   restore -> undo a reversal (admin's mistake): re-debit the refund and
+                    //              flag the original row reversed=0 ("mark successful" again)
+                    $is_wallet_funding = in_array($tx_row['product_unique_id'], ['wallet_funding', 'manual_funding'])
+                        || stripos($tx_row['type_alternative'] ?? '', 'Wallet Funding') !== false
+                        || stripos($tx_row['type_alternative'] ?? '', 'Wallet Credit') !== false
+                        || stripos($tx_row['type_alternative'] ?? '', 'Refund') !== false
+                        || stripos($tx_row['type_alternative'] ?? '', 'Credit') !== false
+                        || stripos($tx_row['type_alternative'] ?? '', 'Received') !== false;
+
+                    if ($is_wallet_funding) {
+                        $_SESSION["product_purchase_response"] = "Only successful VTU service transactions can be reversed.";
+                    } elseif ($t_status === "reverse" && (int)$tx_row["status"] === 1 && (int)$tx_row["reversed"] !== 1) {
+                        $refund = chargeOtherUser(
+                            $tx_row["username"], "credit",
+                            $tx_row["product_unique_id"], "Reversed Refund",
+                            substr(str_shuffle("12345678901234567890"), 0, 15),
+                            $t_ref,
+                            $tx_row["amount"], $tx_row["discounted_amount"],
+                            "Transaction reversed by admin. Refund for Ref: $t_ref",
+                            "WEB", $_SERVER["HTTP_HOST"], 1
+                        );
+                        if ($refund === "success") {
+                            mysqli_query($connection_server,
+                                "UPDATE sas_transactions SET reversed=1 WHERE vendor_id='" . $get_logged_admin_details["id"] . "' AND reference='$t_ref'"
+                            );
+                            // Invalidate the 10-minute dashboard stats cache so sales reflect the reversal.
+                            mysqli_query($connection_server,
+                                "DELETE FROM sas_dashboard_cache WHERE vendor_id='" . $get_logged_admin_details["id"] . "' AND cache_key='admin_stats'"
+                            );
+                            $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " refunded ₦" . number_format($tx_row["discounted_amount"], 2) . " — transaction reversed");
+                        } else {
+                            $_SESSION["product_purchase_response"] = "Failed to reverse transaction. Please try again.";
+                        }
+                    } elseif ($t_status === "restore" && (int)$tx_row["reversed"] === 1) {
+                        $re_debit = chargeOtherUser(
+                            $tx_row["username"], "debit",
+                            $tx_row["product_unique_id"], "Restored Transaction",
+                            substr(str_shuffle("12345678901234567890"), 0, 15),
+                            $t_ref,
+                            $tx_row["amount"], $tx_row["discounted_amount"],
+                            "Reversal undone by admin. Re-billed for Ref: $t_ref",
+                            "WEB", $_SERVER["HTTP_HOST"], 1
+                        );
+                        if ($re_debit === "success") {
+                            mysqli_query($connection_server,
+                                "UPDATE sas_transactions SET reversed=0 WHERE vendor_id='" . $get_logged_admin_details["id"] . "' AND reference='$t_ref'"
+                            );
+                            mysqli_query($connection_server,
+                                "DELETE FROM sas_dashboard_cache WHERE vendor_id='" . $get_logged_admin_details["id"] . "' AND cache_key='admin_stats'"
+                            );
+                            $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " re-billed ₦" . number_format($tx_row["discounted_amount"], 2) . " — transaction marked successful");
+                        } else {
+                            $_SESSION["product_purchase_response"] = "Failed to restore transaction. Please try again.";
+                        }
+                    } else {
+                        $_SESSION["product_purchase_response"] = "This transaction cannot be reversed or restored in its current state.";
+                    }
                 } else if ($tx_row["status"] == '2' && (in_array($tx_row['product_unique_id'], ['wallet_funding', 'manual_funding']) || stripos($tx_row['type_alternative'], 'Wallet Funding') !== false || stripos($tx_row['type_alternative'], 'Wallet Credit') !== false)) {
                     if ($t_status === "approve") {
                         $credit = chargeOtherUser(
@@ -192,11 +253,11 @@
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label small fw-bold">From</label>
-                                    <input name="start_date" type="date" value="<?php echo $_GET['start_date'] ?? ''; ?>" class="form-control" />
+                                    <input name="start_date" type="date" value="<?php echo htmlspecialchars($_GET['start_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="form-control" />
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label small fw-bold">To</label>
-                                    <input name="end_date" type="date" value="<?php echo $_GET['end_date'] ?? ''; ?>" class="form-control" />
+                                    <input name="end_date" type="date" value="<?php echo htmlspecialchars($_GET['end_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="form-control" />
                                 </div>
                                 <div class="col-md-3 d-flex gap-2">
                                     <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>

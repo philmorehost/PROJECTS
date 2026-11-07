@@ -13,7 +13,8 @@ $sql = "SELECT vd.*, v.firstname, v.lastname, v.website_url,
         LEFT JOIN sas_billing_addons a ON vd.addon_id = a.id
         LEFT JOIN sas_billing_packages bp ON vd.package_id = bp.id
         ORDER BY vd.last_download_at DESC";
-$logs = mysqli_query($connection_server, $sql) or die(mysqli_error($connection_server));
+$logs = mysqli_query($connection_server, $sql);
+if (!$logs) { error_log("[VendorDownloadStats] Error: " . mysqli_error($connection_server)); }
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -297,7 +297,7 @@
 <?php if(isset($_SESSION["product_purchase_response"])){ ?>
 
 <script>
-  const msg = '<?php echo $_SESSION["product_purchase_response"]; ?>';
+  const msg = '<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>';
   const isBlocked = msg.includes('Access Denied') || msg.includes('Account Locked');
 
   if (isBlocked) {
@@ -327,7 +327,7 @@
             return fetch('ajax-unblock-request.php', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: '<?php echo $_POST['user'] ?? ''; ?>', reason: reason })
+              body: JSON.stringify({ username: <?php echo json_encode($_POST['user'] ?? '', JSON_HEX_QUOT|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_TAG); ?>, reason: reason })
             })
             .then(response => response.json())
             .then(data => {
@@ -358,7 +358,7 @@
 
 	<!-- <div style="text-align: center;" id="customAlertDiv" class="bg-2 box-shadow m-z-index-2 s-z-index-2 m-block-dp s-block-dp m-position-fix s-position-fix m-top-20 s-top-40 br-radius-5px m-width-60 s-width-26 m-height-auto s-height-auto m-padding-lt-1 s-padding-lt-1 m-padding-rt-1 s-padding-rt-1 m-padding-tp-5 s-padding-tp-1 m-padding-bm-5 s-padding-bm-1 m-margin-lt-19 s-margin-lt-36 m-margin-bm-2 s-margin-bm-2">
 	<span style="user-select: notne;" class="color-10 text-bold-500 m-font-size-20 s-font-size-25">
-		<?php echo $_SESSION["product_purchase_response"]; ?>
+		<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>
 	</span><br/>
 	<button style="text-align: center; user-select: auto;" onclick="customDismissPop();" onkeypress="keyCustomDismissPop(event);" class="button-box onhover-bg-color-10 a-cursor color-2 bg-10 m-font-size-12 s-font-size-13 br-style-tp-0 m-inline-dp s-inline-block-dp m-position-rel s-position-rel m-width-30 s-width-30 m-height-auto s-height-auto m-margin-tp-1 s-margin-tp-1 m-margin-bm-2 s-margin-bm-2 m-margin-lt-0 s-margin-lt-0 m-margin-rt-0 s-margin-rt-0 m-padding-tp-5 s-padding-tp-5 m-padding-bm-5 s-padding-bm-5 m-padding-lt-5 s-padding-lt-5 m-padding-rt-5 s-padding-rt-5">
 		DISMISS

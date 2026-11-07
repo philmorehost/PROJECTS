@@ -359,7 +359,7 @@ if (isset($_POST["reset-bank"])) {
                     if (isset($_SESSION["product_purchase_response"])) { ?>
                         <div class="alert alert-info alert-dismissible fade show rounded-3 mb-4" role="alert">
                             <i class="bi bi-info-circle me-2"></i>
-                            <?php echo $_SESSION["product_purchase_response"]; ?>
+                            <?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     <?php unset($_SESSION["product_purchase_response"]); } ?>
@@ -618,7 +618,7 @@ if (isset($_POST["reset-bank"])) {
 
         if (saveCheck && saveCheck.checked && SAVED_BENEFICIARIES.length >= 4) {
             // Check if current account is already saved
-            const currentAcc = "<?php echo $_SESSION['account_number'] ?? ''; ?>";
+            const currentAcc = "<?php echo htmlspecialchars($_SESSION['account_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>";
             const isAlreadySaved = SAVED_BENEFICIARIES.some(b => b.account_number === currentAcc);
 
             if (!isAlreadySaved) {

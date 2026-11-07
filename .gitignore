@@ -1,12 +1,45 @@
+# ---------------------------------------------------------------------------
+# Repository-wide — applies to every project in this repo (LM, VTU, SMSP,
+# KINGDOMBUILDERS, REMIT). Do not drop a rule from this block: a committed
+# .jks permanently leaks the upload key for every clone, fork and backup.
+# ---------------------------------------------------------------------------
+
+# Upload bundles built for the host
+/KINGDOMBUILDERS-*-upload.zip
+
+# Release signing material and build artifacts (never commit)
+VTU/play-signing-keys/
+*.jks
+*.keystore
+*.p12
+*.pfx
+*-cert.pem
+*-cert.der
+key.properties
+keystore.properties
+
+# Signed bundles/APKs produced for upload, and their hand-off notes
+**/release-output/
+*.aab
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# ---------------------------------------------------------------------------
 # License Manager runtime data (never commit secrets, logs or packages)
 # settings.json holds the GitHub token, SMTP password and cron key. It is
 # created on the server and must never be replaced by a deploy, so it is not
 # tracked — LM/settings.sample.json is the reference copy.
+# ---------------------------------------------------------------------------
 LM/settings.json
 LM/settings.json.tmp.*
+
 # Database credentials for one host — never commit.
 LM/db.local.php
 LM/user/error_log
+
 LM/storage/*
 !LM/storage/.htaccess
 !LM/storage/index.php
@@ -16,19 +49,16 @@ LM/storage/tmp/*
 !LM/storage/logs/
 LM/storage/logs/*
 !LM/storage/logs/index.php
+
 # Uploaded logos live here; only the deny-exec rule is shipped.
 LM/uploads/*
 !LM/uploads/.htaccess
+
 LM/*.log
 LM/*_debug.log
 LM/check_update_log.txt
 LM/download_log.txt
 secure_updates/
-
-# OS / editor noise
-.DS_Store
-Thumbs.db
-*.swp
 
 # QA harness dependencies (scripts are tracked; node_modules is not)
 qa/node_modules/

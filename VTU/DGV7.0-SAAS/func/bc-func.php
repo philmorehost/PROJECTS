@@ -287,6 +287,16 @@ function bc_normalize_vendor_host($value) {
     return preg_replace('/^www\./i', '', $host);
 }
 
+function bc_is_valid_domain_name($domain) {
+    $domain = strtolower(trim((string)$domain));
+    if ($domain === '' || strlen($domain) > 253 || strpos($domain, '.') === false) return false;
+    return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $domain) === 1;
+}
+
+function bc_is_valid_vendor_access_hash($access_hash) {
+    return is_string($access_hash) && preg_match('/^[a-f0-9]{48,100}$/i', $access_hash) === 1;
+}
+
 function bc_temporary_vendor_domain() {
     if (!function_exists('getSuperAdminOption')) return '';
     $domain = bc_clean_vendor_domain(getSuperAdminOption('temporary_vendor_domain', ''));
@@ -303,7 +313,7 @@ function bc_is_temporary_vendor_host($host = null) {
 
 function bc_temporary_vendor_portal_url($access_hash) {
     $domain = bc_temporary_vendor_domain();
-    if ($domain === '' || !preg_match('/^[a-f0-9]{48,100}$/i', (string)$access_hash)) return '';
+    if ($domain === '' || !bc_is_valid_vendor_access_hash($access_hash)) return '';
     return 'https://' . $domain . '/VendorOrderPortal.php?hash=' . rawurlencode($access_hash);
 }
 
@@ -3336,12 +3346,13 @@ function fetchNINProfileWithPrembly($nin, $vid) {
     if ($res['status'] !== 'success') return $res;
 
     $body = $res['body'];
-    $d = $body['data'] ?? ($body['nin_data'] ?? []);
+    $d = $body['data'] ?? ($body['nin_data'] ?? ($body['result'] ?? []));
+    if (is_array($d['nin_data'] ?? null)) $d = $d['nin_data'];
     if (!is_array($d) || empty($d)) {
         return ["status" => "failed", "message" => "Prembly returned no NIN profile"];
     }
 
-    $gender_raw = strtolower((string)($d['gender'] ?? ''));
+    $gender_raw = strtolower(bc_nin_profile_value($d, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male'
         : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
@@ -3355,13 +3366,13 @@ function fetchNINProfileWithPrembly($nin, $vid) {
     return [
         "status"          => "success",
         "provider"        => "prembly",
-        "firstname"       => strtoupper(trim((string)($d['firstname'] ?? ''))),
-        "middlename"      => strtoupper(trim((string)($d['middlename'] ?? ''))),
-        "lastname"        => strtoupper(trim((string)($d['surname'] ?? $d['lastname'] ?? ''))),
-        "birthdate"       => (string)($d['birthdate'] ?? ''),
+        "firstname"       => strtoupper(bc_nin_profile_value($d, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($d, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($d, ['surname', 'lastname', 'last_name', 'lastName', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($d, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
         "gender"          => $gender,
-        "photo_data"      => (string)($d['photo'] ?? ''),
-        "phone"           => (string)($d['telephoneno'] ?? ''),
+        "photo_data"      => bc_nin_profile_value($d, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($d, ['telephoneno', 'phone', 'phone_number', 'phoneNumber', 'mobileNumber']),
         "address"         => $address,
         "residence_state" => (string)($d['residence_state'] ?? ''),
         "state_of_origin" => (string)($d['self_origin_state'] ?? ''),
@@ -3608,6 +3619,18 @@ if (!function_exists('bc_identity_local_charge_vendor')) {
     }
 }
 
+if (!function_exists('bc_nin_profile_value')) {
+    /** Return the first non-empty scalar from a provider response's possible field names. */
+    function bc_nin_profile_value(array $source, array $keys, $default = '') {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $source) || !is_scalar($source[$key])) continue;
+            $value = trim((string)$source[$key]);
+            if ($value !== '') return $value;
+        }
+        return $default;
+    }
+}
+
 function fetchNINProfile($nin, $vid) {
     global $connection_server;
     $provider = getIdentityProvider($vid);
@@ -3670,20 +3693,27 @@ function fetchNINProfileWithLocalhost($nin, $vid) {
         return ["status" => "failed", "message" => $body['desc'] ?? "Failed to connect to local API"];
     }
 
-    // Map the standard DGV API response back to our internal profile format
+    // The platform NIN API returns the normalized profile under `data`; older
+    // marketplace servers returned the same fields at the top level.
+    $profile_data = $body['data'] ?? ($body['profile'] ?? $body);
+    if (is_array($profile_data['data'] ?? null)) $profile_data = $profile_data['data'];
+    if (!is_array($profile_data)) {
+        return ["status" => "failed", "message" => "Local API returned an invalid NIN profile"];
+    }
+
     return [
         "status"          => "success",
         "provider"        => "localhost:" . $api_details['api_base_url'],
-        "firstname"       => $body['firstname'] ?? '',
-        "middlename"      => $body['middlename'] ?? '',
-        "lastname"        => $body['lastname'] ?? '',
-        "birthdate"       => $body['birthdate'] ?? '',
-        "gender"          => $body['gender'] ?? '',
-        "photo_data"      => $body['photo_data'] ?? '',
-        "phone"           => $body['phone'] ?? '',
-        "address"         => $body['address'] ?? '',
-        "residence_state" => $body['residence_state'] ?? '',
-        "state_of_origin" => $body['state_of_origin'] ?? '',
+        "firstname"       => bc_nin_profile_value($profile_data, ['firstname', 'first_name', 'firstName', 'given_name']),
+        "middlename"      => bc_nin_profile_value($profile_data, ['middlename', 'middle_name', 'middleName']),
+        "lastname"        => bc_nin_profile_value($profile_data, ['lastname', 'last_name', 'lastName', 'surname']),
+        "birthdate"       => bc_nin_profile_value($profile_data, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
+        "gender"          => bc_nin_profile_value($profile_data, ['gender', 'sex']),
+        "photo_data"      => bc_nin_profile_value($profile_data, ['photo_data', 'photo', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($profile_data, ['phone', 'telephone', 'phone_number', 'phoneNumber', 'mobileNumber']),
+        "address"         => bc_nin_profile_value($profile_data, ['address', 'residence_address', 'residenceAddress']),
+        "residence_state" => bc_nin_profile_value($profile_data, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($profile_data, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 
@@ -3713,36 +3743,39 @@ function fetchNINProfileWithDojah($nin, $vid) {
     $body = $res ? json_decode($res, true) : null;
     curl_close($ch);
 
-    if (!$body || empty($body['entity'])) {
+    $e = $body['entity'] ?? ($body['data']['entity'] ?? ($body['data'] ?? []));
+    if (!$body || !is_array($e) || empty($e)) {
         $err = isset($body['error']) ? $body['error'] : "No response from Dojah";
         return ["status" => "failed", "message" => $err];
     }
-    $e = $body['entity'];
 
-    $gender_raw = strtolower($e['gender'] ?? '');
+    $gender_raw = strtolower(bc_nin_profile_value($e, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male' : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
-    $address_parts = array_filter([
-        $e['residence_address'] ?? '',
-        $e['residence_town'] ?? '',
-        $e['residence_lga'] ?? '',
-        $e['residence_state'] ?? '',
-    ]);
-    $address = implode(', ', $address_parts);
+    $address = bc_nin_profile_value($e, ['address', 'residence_address', 'residenceAddress']);
+    if ($address === '') {
+        $address_parts = array_filter([
+            bc_nin_profile_value($e, ['residence_address', 'residenceAddress']),
+            bc_nin_profile_value($e, ['residence_town', 'residenceTown', 'town']),
+            bc_nin_profile_value($e, ['residence_lga', 'residenceLga', 'lga']),
+            bc_nin_profile_value($e, ['residence_state', 'residenceState', 'state']),
+        ]);
+        $address = implode(', ', $address_parts);
+    }
 
     return [
         "status"          => "success",
         "provider"        => "dojah",
-        "firstname"       => strtoupper($e['firstname'] ?? ''),
-        "middlename"      => strtoupper($e['middlename'] ?? ''),
-        "lastname"        => strtoupper($e['surname'] ?? $e['lastName'] ?? ''),
-        "birthdate"       => $e['birthdate'] ?? '',
+        "firstname"       => strtoupper(bc_nin_profile_value($e, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($e, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($e, ['surname', 'lastname', 'last_name', 'lastName', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($e, ['birthdate', 'date_of_birth', 'dateOfBirth', 'dob']),
         "gender"          => $gender,
-        "photo_data"      => $e['photo'] ?? '',
-        "phone"           => $e['telephone'] ?? $e['phone'] ?? '',
+        "photo_data"      => bc_nin_profile_value($e, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($e, ['telephone', 'phone', 'phone_number', 'phoneNumber', 'mobileNumber']),
         "address"         => $address,
-        "residence_state" => $e['residence_state'] ?? '',
-        "state_of_origin" => $e['state_of_origin'] ?? '',
+        "residence_state" => bc_nin_profile_value($e, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($e, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 
@@ -3792,28 +3825,28 @@ function fetchNINProfileWithQoreID($nin, $vid) {
     $body = $res ? json_decode($res, true) : null;
     curl_close($ch2);
 
-    if (!$body || empty($body['applicant'])) {
+    $a = $body['applicant'] ?? ($body['data']['applicant'] ?? ($body['data'] ?? []));
+    if (!$body || !is_array($a) || empty($a)) {
         $err = isset($body['message']) ? $body['message'] : "No response from QoreID";
         return ["status" => "failed", "message" => $err];
     }
-    $a = $body['applicant'];
 
-    $gender_raw = strtolower($a['gender'] ?? '');
+    $gender_raw = strtolower(bc_nin_profile_value($a, ['gender', 'sex']));
     $gender = ($gender_raw === 'm' || $gender_raw === 'male') ? 'Male' : (($gender_raw === 'f' || $gender_raw === 'female') ? 'Female' : ucfirst($gender_raw));
 
     return [
         "status"          => "success",
         "provider"        => "qoreid",
-        "firstname"       => strtoupper($a['firstname'] ?? ''),
-        "middlename"      => strtoupper($a['middlename'] ?? ''),
-        "lastname"        => strtoupper($a['lastname'] ?? ''),
-        "birthdate"       => $a['dob'] ?? $a['birthdate'] ?? '',
+        "firstname"       => strtoupper(bc_nin_profile_value($a, ['firstname', 'first_name', 'firstName', 'given_name'])),
+        "middlename"      => strtoupper(bc_nin_profile_value($a, ['middlename', 'middle_name', 'middleName'])),
+        "lastname"        => strtoupper(bc_nin_profile_value($a, ['lastname', 'last_name', 'lastName', 'surname', 'family_name'])),
+        "birthdate"       => bc_nin_profile_value($a, ['dob', 'birthdate', 'date_of_birth', 'dateOfBirth']),
         "gender"          => $gender,
-        "photo_data"      => $a['photo'] ?? '',
-        "phone"           => $a['phone'] ?? '',
-        "address"         => $a['address'] ?? '',
-        "residence_state" => $a['residence_state'] ?? $a['state'] ?? '',
-        "state_of_origin" => $a['state_of_origin'] ?? '',
+        "photo_data"      => bc_nin_profile_value($a, ['photo', 'photo_data', 'photoData', 'portrait', 'image']),
+        "phone"           => bc_nin_profile_value($a, ['phone', 'telephone', 'phone_number', 'phoneNumber', 'mobileNumber']),
+        "address"         => bc_nin_profile_value($a, ['address', 'residence_address', 'residenceAddress']),
+        "residence_state" => bc_nin_profile_value($a, ['residence_state', 'residenceState', 'state']),
+        "state_of_origin" => bc_nin_profile_value($a, ['state_of_origin', 'stateOfOrigin', 'self_origin_state']),
     ];
 }
 
@@ -6497,38 +6530,90 @@ function bc_is_password_reset_blocked($username, $ip, $vendor_id) {
 }
 
 /**
- * bc_release_expired_blocks()
- * Lazy auto-release of EXPIRED brute-force auto-blocks — this is what makes a
- * "1-day block" automatically lift WITHOUT a cronjob.
- *
- * If an account/IP has a sas_blocked_accounts / sas_blocked_ips row whose
- * block_until has already passed, that row is removed and the is_blocked flag on
- * the matching user/vendor is cleared. MANUAL blocks (is_blocked=1 with no block
- * row, e.g. set from the admin panel) are never touched.
+ * Release every expired automatic brute-force block.
+ * Expiry checks deliberately use the database clock (NOW()) throughout. Comparing a
+ * database DATETIME with PHP time() can leave the is_blocked flag set when the DB and
+ * PHP hosts use different time zones. Only rows with expired auto-block records qualify;
+ * manual blocks without such a record are never cleared.
+ */
+function bc_release_all_expired_bruteforce_blocks($db = null) {
+    global $connection_server;
+    if (!$db) $db = $connection_server;
+    if (!$db) return ['ok' => false, 'error' => 'Database connection is unavailable.'];
+
+    $accounts_q = @mysqli_query($db, "SELECT COUNT(*) AS total FROM sas_blocked_accounts WHERE block_until <= NOW()");
+    $ips_q = @mysqli_query($db, "SELECT COUNT(*) AS total FROM sas_blocked_ips WHERE block_until <= NOW()");
+    if (!$accounts_q || !$ips_q) {
+        return ['ok' => false, 'error' => 'Unable to inspect expired brute-force blocks: ' . mysqli_error($db)];
+    }
+    $expired_accounts = (int)(mysqli_fetch_assoc($accounts_q)['total'] ?? 0);
+    $expired_ips = (int)(mysqli_fetch_assoc($ips_q)['total'] ?? 0);
+
+    $users_unblocked = 0;
+    if (!mysqli_query($db, "UPDATE sas_users
+        SET is_blocked=0
+        WHERE is_blocked=1
+          AND EXISTS (SELECT 1 FROM sas_blocked_accounts e
+                      WHERE e.username=sas_users.username AND e.vendor_id=sas_users.vendor_id AND e.block_until <= NOW())
+          AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts a
+                          WHERE a.username=sas_users.username AND a.vendor_id=sas_users.vendor_id AND a.block_until > NOW())")) {
+        return ['ok' => false, 'error' => 'Unable to clear expired user lock flags: ' . mysqli_error($db)];
+    }
+    $users_unblocked = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "UPDATE sas_vendors
+        SET is_blocked=0
+        WHERE is_blocked=1
+          AND EXISTS (SELECT 1 FROM sas_blocked_accounts e
+                      WHERE e.username=sas_vendors.email AND e.vendor_id=sas_vendors.id AND e.block_until <= NOW())
+          AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts a
+                          WHERE a.username=sas_vendors.email AND a.vendor_id=sas_vendors.id AND a.block_until > NOW())")) {
+        return ['ok' => false, 'error' => 'Unable to clear expired vendor lock flags: ' . mysqli_error($db)];
+    }
+    $vendors_unblocked = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "DELETE FROM sas_blocked_accounts WHERE block_until <= NOW()")) {
+        return ['ok' => false, 'error' => 'Unable to remove expired account blocks: ' . mysqli_error($db)];
+    }
+    $accounts_removed = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "DELETE FROM sas_blocked_ips WHERE block_until <= NOW()")) {
+        return ['ok' => false, 'error' => 'Unable to remove expired IP blocks: ' . mysqli_error($db)];
+    }
+    $ips_removed = max(0, mysqli_affected_rows($db));
+
+    return [
+        'ok' => true,
+        'expired_accounts' => $expired_accounts,
+        'expired_ips' => $expired_ips,
+        'accounts_removed' => $accounts_removed,
+        'ips_removed' => $ips_removed,
+        'users_unblocked' => $users_unblocked,
+        'vendors_unblocked' => $vendors_unblocked,
+    ];
+}
+
+/**
+ * Lazy release for the account/IP currently being checked at login or in a session.
+ * Uses database-side expiry comparisons to stay consistent with the blocking queries.
  */
 function bc_release_expired_blocks($username, $ip, $vendor_id) {
     global $connection_server;
     if ($vendor_id <= 0 || !$connection_server) return;
 
-    // 1) Account auto-block
     if ($username !== '') {
         $esc_user = mysqli_real_escape_string($connection_server, (string)$username);
-        $row = @mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT block_until FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id' LIMIT 1"));
-        if ($row && isset($row['block_until']) && strtotime($row['block_until']) <= time()) {
-            mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id'");
-            // Release the flag only if no OTHER active auto-block remains for this account.
+        $delete = @mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id' AND block_until <= NOW()");
+        if ($delete && mysqli_affected_rows($connection_server) > 0) {
+            // Only clear a matching account flag when no active automatic lock remains.
             mysqli_query($connection_server, "UPDATE sas_users SET is_blocked=0 WHERE username='$esc_user' AND vendor_id='$vendor_id' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$esc_user' AND b.vendor_id='$vendor_id' AND b.block_until > NOW())");
             mysqli_query($connection_server, "UPDATE sas_vendors SET is_blocked=0 WHERE email='$esc_user' AND id='$vendor_id' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$esc_user' AND b.vendor_id='$vendor_id' AND b.block_until > NOW())");
         }
     }
 
-    // 2) IP auto-block
     if ($ip !== '') {
         $esc_ip = mysqli_real_escape_string($connection_server, (string)$ip);
-        $row = @mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT block_until FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id' LIMIT 1"));
-        if ($row && isset($row['block_until']) && strtotime($row['block_until']) <= time()) {
-            mysqli_query($connection_server, "DELETE FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id'");
-        }
+        @mysqli_query($connection_server, "DELETE FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id' AND block_until <= NOW()");
     }
 }
 
@@ -6960,11 +7045,14 @@ function setVendorOption($vid, $name, $value) {
 function getSuperAdminOption($name, $default = '') {
     global $connection_server;
     static $admin_options_cache = [];
+    // Temporary portal host changes in bc-spadmin must reach existing vendor sessions
+    // immediately, so do not reuse this value from request or session cache.
+    $always_fresh = ($name === 'temporary_vendor_domain');
 
-    if (isset($admin_options_cache[$name])) return $admin_options_cache[$name];
+    if (!$always_fresh && isset($admin_options_cache[$name])) return $admin_options_cache[$name];
 
     // Branch DG6.7 Optimization: Session Caching for platform-wide options
-    if (isset($_SESSION['super_admin_options_cache'][$name])) {
+    if (!$always_fresh && isset($_SESSION['super_admin_options_cache'][$name])) {
         $admin_options_cache[$name] = $_SESSION['super_admin_options_cache'][$name];
         return $admin_options_cache[$name];
     }
@@ -7002,8 +7090,10 @@ function getSuperAdminOption($name, $default = '') {
 
     $q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='".mysqli_real_escape_string($connection_server, $name)."' LIMIT 1");
     if ($q && $r = mysqli_fetch_assoc($q)) {
-        $admin_options_cache[$name] = $r['option_value'];
-        if (isset($_SESSION)) $_SESSION['super_admin_options_cache'][$name] = $r['option_value'];
+        if (!$always_fresh) {
+            $admin_options_cache[$name] = $r['option_value'];
+            if (isset($_SESSION)) $_SESSION['super_admin_options_cache'][$name] = $r['option_value'];
+        }
         return $r['option_value'];
     }
     return $default;

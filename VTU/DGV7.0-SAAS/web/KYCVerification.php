@@ -31,11 +31,8 @@ $kyc_still_needed = $enabled_checks ? bc_kyc_checks_pending($kyc_self, $enabled_
 
 $is_kyc_enabled = isKYCEnforced($vid);
 
-// VoveID integration has been removed permanently (too expensive for vendors).
-// Kept as a hard-off flag so any stale template block remains inert.
-$voveid_enabled = false;
-$voveid_public_key = '';
-$voveid_env = 'production';
+// AI KYC Compliance Engine
+include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 
 // Handle Submissions
 if (isset($_POST['submit_bvn_nin'])) {
@@ -152,10 +149,80 @@ if (isset($_POST['submit_media'])) {
             $msg .= " Everything your provider requires is now with them.";
         }
         $_SESSION['product_purchase_response'] = $msg;
+
+        // ─── Auto-trigger AI KYC analysis after document submission ────────────────────────────
+        if (!empty($updates) && function_exists('ai_engine')) {
+            $vendor_kyc_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve FROM sas_vendors WHERE id='$vid' LIMIT 1");
+            $vendor_kyc_ai = $vendor_kyc_ai_q ? mysqli_fetch_assoc($vendor_kyc_ai_q) : null;
+            if ($vendor_kyc_ai && (int)($vendor_kyc_ai['kyc_ai_enabled'] ?? 0) === 1) {
+                // Re-read the user row to get the latest document paths
+                $q_reread = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
+                $user_reread = $q_reread ? (mysqli_fetch_assoc($q_reread) ?: []) : [];
+                if ($user_reread) {
+                    $analysis = bc_kyc_ai_analyze_all($user_reread, $enabled_checks);
+                    $analysis['username'] = $user_reread['username'];
+                    $auto_apply = (int)($vendor_kyc_ai['kyc_ai_auto_approve'] ?? 1) === 1;
+                    $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
+
+                    if ($store_result['applied']) {
+                        $_SESSION['product_purchase_response'] = "🎉 AI has verified your documents and approved your KYC automatically! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
+                    } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
+                        $_SESSION['product_purchase_response'] = "⚠️ AI has reviewed your documents but could not approve them: " . ($store_result['decision']['reason'] ?? 'Please check your documents and resubmit.');
+                    } else {
+                        $_SESSION['product_purchase_response'] = "📋 Your documents have been submitted and are being analyzed by our AI Compliance Engine. You can also run a manual AI analysis below.";
+                    }
+                }
+            }
+        }
     } else {
         $_SESSION['product_purchase_response'] = "Error: no valid file received. Check the file type and that it is under the size limit.";
     }
 
+    header("Location: KYCVerification.php");
+    exit();
+}
+
+// ─── Manual AI analysis trigger ──────────────────────────────────────────────────────────────────
+if (isset($_POST['ai_analyze'])) {
+    if (!function_exists('ai_engine')) {
+        $_SESSION['product_purchase_response'] = "AI engine is not available on this installation.";
+        header("Location: KYCVerification.php");
+        exit();
+    }
+    $vendor_kyc_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve FROM sas_vendors WHERE id='$vid' LIMIT 1");
+    $vendor_kyc_ai = $vendor_kyc_ai_q ? mysqli_fetch_assoc($vendor_kyc_ai_q) : null;
+    if (!$vendor_kyc_ai || (int)($vendor_kyc_ai['kyc_ai_enabled'] ?? 0) !== 1) {
+        $_SESSION['product_purchase_response'] = "AI KYC analysis is not enabled for your vendor.";
+        header("Location: KYCVerification.php");
+        exit();
+    }
+    $user_id = (int)$get_logged_user_details['id'];
+    $q_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
+    $user_row = $q_user ? (mysqli_fetch_assoc($q_user) ?: []) : [];
+    if (!$user_row) {
+        $_SESSION['product_purchase_response'] = "Account not found.";
+        header("Location: KYCVerification.php");
+        exit();
+    }
+    $has_docs = !empty($user_row['govt_id_card']) || !empty($user_row['kyc_face_image'])
+        || !empty($user_row['proof_of_address']) || !empty($user_row['liveliness_video']);
+    if (!$has_docs) {
+        $_SESSION['product_purchase_response'] = "Please upload your KYC documents first before running AI analysis.";
+        header("Location: KYCVerification.php");
+        exit();
+    }
+    $analysis = bc_kyc_ai_analyze_all($user_row, $enabled_checks);
+    $analysis['username'] = $user_row['username'];
+    $auto_apply = (int)($vendor_kyc_ai['kyc_ai_auto_approve'] ?? 1) === 1;
+    $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
+
+    if ($store_result['applied']) {
+        $_SESSION['product_purchase_response'] = "🎉 AI has verified your documents and approved your KYC! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%. You now have full access to all services.";
+    } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
+        $_SESSION['product_purchase_response'] = "❌ AI rejected your documents: " . ($store_result['decision']['reason'] ?? 'Please fix the issues and resubmit.');
+    } else {
+        $_SESSION['product_purchase_response'] = "📋 AI analysis complete. Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%. " . ($store_result['decision']['reason'] ?? 'Manual review recommended.');
+    }
     header("Location: KYCVerification.php");
     exit();
 }
@@ -308,29 +375,6 @@ if (isset($_GET['doc'])) {
                 <?php endif; ?>
 
                 <div class="row g-3">
-                    <!-- VoveID Verification Section -->
-                    <?php if ($voveid_enabled && !empty($voveid_public_key)): ?>
-                    <div class="col-12">
-                        <div class="card kyc-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                            <div class="card-body p-4">
-                                <div class="row align-items-center">
-                                    <div class="col-md-8">
-                                        <h5 class="fw-bold mb-2"><i class="bi bi-shield-check me-2"></i>VoveID Identity Verification</h5>
-                                        <p class="small text-white-50 mb-3">Complete your KYC in minutes with VoveID's AI-powered verification. Secure, fast, and compliant.</p>
-                                        <button type="button" id="btnStartVoveID" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm" onclick="startVoveIDVerification()">
-                                            <i class="bi bi-shield-lock me-2"></i>Start VoveID Verification
-                                        </button>
-                                        <span id="voveidStatus" class="ms-3 small text-white-50"></span>
-                                    </div>
-                                    <div class="col-md-4 text-center d-none d-md-block">
-                                        <i class="bi bi-shield-lock-fill display-4 opacity-50"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-
                     <!-- BVN/NIN Section -->
                     <?php if(($kyc_settings['bvn'] ?? 0) == 1 || ($kyc_settings['nin'] ?? 0) == 1): ?>
                     <div class="col-md-6">
@@ -434,6 +478,60 @@ if (isset($_GET['doc'])) {
                     </div>
                     <?php endif; ?>
 
+                    <!-- AI KYC Analysis Section -->
+                    <?php
+                    $ai_decision = bc_kyc_ai_get_decision($connection_server, (int)$get_logged_user_details['id']);
+                    $vendor_ai_enabled = false;
+                    $v_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled FROM sas_vendors WHERE id='$vid' LIMIT 1");
+                    $v_ai = $v_ai_q ? mysqli_fetch_assoc($v_ai_q) : null;
+                    $vendor_ai_enabled = ($v_ai && (int)($v_ai['kyc_ai_enabled'] ?? 0) === 1);
+                    ?>
+                    <?php if ($vendor_ai_enabled): ?>
+                    <div class="col-md-12">
+                        <div class="card kyc-card" style="background: linear-gradient(135deg, #0f172a, #1e293b); color: white;">
+                            <div class="card-body p-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <h5 class="fw-bold mb-2"><i class="bi bi-cpu me-2"></i>AI Compliance Engine</h5>
+                                        <?php if ($ai_decision && $ai_decision['status'] !== ''): ?>
+                                            <?php
+                                            $ai_status_icon = ['approve' => 'bi-patch-check-fill text-success', 'reject' => 'bi-x-octagon-fill text-danger', 'review' => 'bi-clock-history text-warning', 'error' => 'bi-exclamation-triangle text-warning'];
+                                            $ai_status_label = ['approve' => 'Approved', 'reject' => 'Rejected', 'review' => 'Needs Review', 'error' => 'Analysis Error'];
+                                            $ai_icon = $ai_status_icon[$ai_decision['status']] ?? 'bi-exclamation-triangle text-warning';
+                                            $ai_label = $ai_status_label[$ai_decision['status']] ?? 'Unknown';
+                                            ?>
+                                            <p class="small text-white-50 mb-2">
+                                                <i class="bi <?php echo $ai_icon; ?> me-2"></i>
+                                                AI Status: <?php echo htmlspecialchars($ai_label); ?>
+                                                <?php if ($ai_decision['confidence'] > 0): ?>&middot; Confidence: <?php echo (int)$ai_decision['confidence']; ?>%<?php endif; ?>
+                                                <?php if ($ai_decision['analyzed_at']): ?>&middot; Analyzed <?php echo date('M d, Y H:i', strtotime($ai_decision['analyzed_at'])); ?><?php endif; ?>
+                                            </p>
+                                            <?php if ($ai_decision['reason']): ?>
+                                                <p class="small text-white-50"><?php echo htmlspecialchars($ai_decision['reason']); ?></p>
+                                            <?php endif; ?>
+                                            <?php if ($ai_decision['status'] === 'review' || $ai_decision['status'] === 'error'): ?>
+                                                <button type="button" class="btn btn-light btn-sm rounded-pill px-3 fw-bold shadow-sm mt-2" onclick="document.getElementById('ai-analyze-form').submit()">
+                                                    <i class="bi bi-arrow-repeat me-1"></i>Re-run AI Analysis
+                                                </button>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <p class="small text-white-50 mb-2">Upload your documents above and submit — our AI will analyze them automatically. You can also run a manual analysis below.</p>
+                                            <form method="post" id="ai-analyze-form">
+                                                <button type="submit" name="ai_analyze" class="btn btn-light rounded-pill px-4 fw-bold shadow-sm">
+                                                    <i class="bi bi-magic me-1"></i>Run AI Analysis
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="col-md-4 text-center d-none d-md-block">
+                                        <i class="bi bi-cpu-fill display-4 opacity-50"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <!-- AI Interview Section -->
                     <div class="col-md-12">
                         <div class="card kyc-card" style="background: linear-gradient(135deg, #1e1b4b, #312e81); color: white;">
@@ -478,145 +576,6 @@ if (isset($_GET['doc'])) {
             </div>
         </div>
     </div>
-
-    <?php if ($voveid_enabled && !empty($voveid_public_key)): ?>
-    <script>
-        // VoveID Web SDK Integration
-        let voveidInitialized = false;
-        
-        // Initialize VoveID SDK
-        async function initVoveID() {
-            if (typeof Vove === 'undefined') {
-                document.getElementById('voveidStatus').textContent = 'Loading VoveID SDK...';
-                // Wait for SDK to load
-                let attempts = 0;
-                while (typeof Vove === 'undefined' && attempts < 20) {
-                    await new Promise(r => setTimeout(r, 100));
-                    attempts++;
-                }
-            }
-            
-            if (typeof Vove !== 'undefined') {
-                try {
-                    await new Promise((resolve, reject) => {
-                        Vove.initialize('<?php echo addslashes($voveid_public_key); ?>', '<?php echo $voveid_env; ?>', (result) => {
-                            if (result === 'success' || result === true) {
-                                voveidInitialized = true;
-                                document.getElementById('voveidStatus').textContent = 'Ready';
-                                resolve();
-                            } else {
-                                reject(new Error('VoveID initialization failed'));
-                            }
-                        });
-                    });
-                } catch (e) {
-                    console.error('VoveID init error:', e);
-                    document.getElementById('voveidStatus').textContent = 'SDK init failed';
-                }
-            } else {
-                document.getElementById('voveidStatus').textContent = 'SDK not loaded';
-            }
-        }
-        
-        // Start VoveID Verification
-        async function startVoveIDVerification() {
-            const btn = document.getElementById('btnStartVoveID');
-            const statusEl = document.getElementById('voveidStatus');
-            
-            if (!voveidInitialized) {
-                statusEl.textContent = 'Initializing...';
-                await initVoveID();
-            }
-            
-            if (!voveidInitialized) {
-                statusEl.textContent = 'VoveID SDK not available';
-                return;
-            }
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating session...';
-            statusEl.textContent = 'Creating verification session...';
-            
-            try {
-                // Create VoveID session via our backend
-                const response = await fetch('/api/voveid-session.php', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to create session');
-                }
-                
-                const sessionToken = data.token;
-                statusEl.textContent = 'Starting verification...';
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Launching...';
-                
-                // Start VoveID verification
-                const config = {
-                    showUI: true,
-                    exitAfterEachStep: false,
-                    maxAttemptsActionCallback: () => {
-                        statusEl.textContent = 'Max attempts reached. Contact support.';
-                    }
-                };
-                
-                Vove.start(sessionToken, config, (payload) => {
-                    if (!payload) return;
-                    
-                    console.log('VoveID payload:', payload);
-                    
-                    switch (payload.result) {
-                        case 'success':
-                        case 'SUCCESS':
-                            statusEl.innerHTML = '<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Verification successful!</span>';
-                            btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Verified';
-                            btn.classList.remove('btn-light');
-                            btn.classList.add('btn-success');
-                            setTimeout(() => window.location.reload(), 3000);
-                            break;
-                        case 'pending':
-                        case 'PENDING':
-                            statusEl.textContent = 'Verification pending review...';
-                            break;
-                        case 'in_progress':
-                        case 'IN_PROGRESS':
-                            const nextStep = payload.nextStep?.name || 'processing';
-                            statusEl.textContent = 'Step completed: ' + nextStep + '. Continuing...';
-                            break;
-                        case 'canceled':
-                        case 'CANCELED':
-                            statusEl.textContent = 'Verification canceled';
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="bi bi-shield-lock me-2"></i>Start VoveID Verification';
-                            break;
-                        case 'max_attempts':
-                        case 'MAX_ATTEMPTS_REACHED':
-                            statusEl.textContent = 'Max attempts reached. Contact support.';
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="bi bi-shield-lock me-2"></i>Start VoveID Verification';
-                            break;
-                    }
-                    
-                    if (payload.nextStep && payload.nextStep.name) {
-                        console.log('Next step:', payload.nextStep.name);
-                    }
-                });
-                
-            } catch (e) {
-                console.error('VoveID error:', e);
-                statusEl.textContent = 'Error: ' + e.message;
-                btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-shield-lock me-2"></i>Start VoveID Verification';
-            }
-        }
-        
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', initVoveID);
-    </script>
-    <?php endif; ?>
 
     <script>
     // Live selfie capture. getUserMedia needs a secure context and a camera, so on an http host (or an

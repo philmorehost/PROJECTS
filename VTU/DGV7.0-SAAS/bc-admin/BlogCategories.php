@@ -91,7 +91,7 @@ $categories_result = mysqli_query($connection_server, "SELECT * FROM blog_catego
     <section class="section dashboard">
         <?php if(isset($_SESSION['page_alert'])): ?>
             <div class="alert alert-info alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
+                <?php echo htmlspecialchars($_SESSION['page_alert'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['page_alert']); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
