@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="robots" content="noindex">
     <title>Sign in — <?= htmlspecialchars(lm_site_name()) ?></title>
     <?php lm_public_assets(); ?>
-<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('account'); ?>

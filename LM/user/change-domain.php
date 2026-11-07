@@ -265,7 +265,7 @@ $changes_remaining = $license ? ($license['max_domain_changes'] - $license['doma
             }
         }
     </style>
-<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('account'); ?>

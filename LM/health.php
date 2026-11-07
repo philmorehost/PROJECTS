@@ -347,7 +347,7 @@ $ok = empty($problems);
         .net .verdict { margin-top:14px; padding:13px 15px; border-radius:12px; background:#fffbeb;
                         border:1px solid #fde68a; color:#92400e; font-size:14px; display:none; }
     </style>
-<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <div class="wrap">

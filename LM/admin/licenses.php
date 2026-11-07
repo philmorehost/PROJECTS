@@ -600,7 +600,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
             }
         }
     </style>
-<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php require __DIR__ . '/_mobile_nav.php'; ?>

@@ -323,7 +323,7 @@ $profile = [
             }
         }
     </style>
-<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('account'); ?>

@@ -305,7 +305,7 @@ $baseUrl = $base . '/api.php';
         .content section { scroll-margin-top: 90px; }
         @media (max-width: 720px) { .content { padding: 22px 18px 30px; border-radius: 16px; } }
 </style>
-<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('docs'); ?>

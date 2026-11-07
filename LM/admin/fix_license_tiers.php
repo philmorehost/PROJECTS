@@ -82,7 +82,7 @@ if (file_exists($log_file)) {
         .log-info { color: #6ee7b7; }
         .warning-bar { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: #78350f; margin-bottom: 1.5rem; }
     </style>
-<?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/../includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php require __DIR__ . '/_mobile_nav.php'; ?>

@@ -24,7 +24,7 @@ $version  = defined('LM_VERSION') ? LM_VERSION : '';
     <meta name="description" content="<?= htmlspecialchars($siteName) ?> issues licence keys, ships script updates and tells your customers when a new version is out.">
     <title><?= htmlspecialchars($siteName) ?> — licences, updates and customer notifications</title>
     <?php lm_public_assets(); ?>
-<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
 <?php lm_public_header('home'); ?>

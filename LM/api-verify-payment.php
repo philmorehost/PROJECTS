@@ -362,7 +362,7 @@ function get_default_email_template()
         .license-box { background: #fff; border: 2px dashed #d1d5db; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
         .license-key { font-size: 18px; font-weight: bold; font-family: monospace; color: #3b82f6; }
     </style>
-<?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
+    <?php require_once __DIR__ . '/includes/responsive.php'; lm_responsive_head(); ?>
 </head>
 <body>
     <div class="container">
