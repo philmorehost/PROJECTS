@@ -23,12 +23,27 @@ use function RISE63\config_dir;
 
 require dirname(__DIR__) . '/app/bootstrap.php';
 
-if (PHP_SAPI !== 'cli') {
+// cli, but also phpdbg and embed: those are never a web request, and the test harness runs the
+// embedded engine. A real request arrives as apache2handler, fpm-fcgi or cli-server.
+if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true)) {
     if (!headers_sent()) {
         http_response_code(404);
     }
     exit("Not available over HTTP.\n");
 }
+
+// Named streams: the STDOUT/STDERR constants do not exist in every SAPI, and a fatal here would
+// hide the diagnosis this script exists to print.
+$stdout = @fopen('php://stdout', 'w');
+$stderr = @fopen('php://stderr', 'w');
+$write = static function (string $text, bool $toErr = false) use ($stdout, $stderr): void {
+    $handle = $toErr ? $stderr : $stdout;
+    if (is_resource($handle)) {
+        fwrite($handle, $text);
+        return;
+    }
+    echo $text;
+};
 
 $options = ['domain' => null, 'key' => null, 'save' => false, 'probe' => false];
 foreach (array_slice($_SERVER['argv'] ?? [], 1) as $argument) {
@@ -41,10 +56,10 @@ foreach (array_slice($_SERVER['argv'] ?? [], 1) as $argument) {
     } elseif (str_starts_with($argument, '--key=')) {
         $options['key'] = substr($argument, 6);
     } elseif ($argument === '--help' || $argument === '-h') {
-        fwrite(STDOUT, "Usage: php bin/license-check.php [--domain=example.org] [--key=KEY] [--probe] [--save]\n");
+        $write("Usage: php bin/license-check.php [--domain=example.org] [--key=KEY] [--probe] [--save]\n");
         exit(0);
     } else {
-        fwrite(STDERR, "Unknown option: {$argument}\n");
+        $write("Unknown option: {$argument}\n", true);
         exit(2);
     }
 }
@@ -79,38 +94,71 @@ $candidates = static function (string $host): array {
     return array_values(array_unique(array_filter($out, [Activation::class, 'validDomain'])));
 };
 
-$host     = (string) ($options['domain'] ?? (getenv('RISE63_DOMAIN') ?: gethostname() ?: ''));
-$domain   = Activation::domainFromHost($host);
-$hostName = trim((string) (gethostname() ?: ''));
+/** The provider's address as this host resolves it, or null when DNS fails. */
+$resolves = static function (): ?string {
+    $addresses = @gethostbynamel(Activation::MANAGER_HOST);
+    return is_array($addresses) && $addresses !== [] ? $addresses[0] : null;
+};
 
-fwrite(STDOUT, "RISE 63 licence check\n" . str_repeat('─', 60) . "\n");
-fwrite(STDOUT, 'Key source      : ' . ($options['key'] !== null ? 'command line' : ($stored !== null ? 'config/activation-key.php' : 'none found:')) . "\n");
-fwrite(STDOUT, 'Key             : ' . $mask($key) . "\n");
-fwrite(STDOUT, 'Server hostname : ' . ($hostName !== '' ? $hostName : '(unknown)') . "\n");
-fwrite(STDOUT, 'Endpoint        : ' . Activation::ENDPOINT . "\n");
-fwrite(STDOUT, 'Transport       : ' . (function_exists('curl_init') ? 'cURL' : 'PHP HTTPS stream (cURL not loaded)') . "\n");
+$hostName = trim((string) (gethostname() ?: ''));
+// A server's own hostname is often not the site's domain (shared hosting, containers, CI), so the
+// order is: what the operator passed, what the environment declares, then the machine name — and a
+// machine name that is not a real domain is dropped rather than turned into a nonsense candidate.
+$source  = 'server hostname';
+$rawHost = $hostName;
+if ($options['domain'] !== null && trim($options['domain']) !== '') {
+    $rawHost = $options['domain'];
+    $source  = '--domain';
+} elseif (getenv('RISE63_DOMAIN')) {
+    $rawHost = (string) getenv('RISE63_DOMAIN');
+    $source  = 'RISE63_DOMAIN';
+}
+$domain = Activation::domainFromHost($rawHost);
+if (!Activation::validDomain($domain)) {
+    $domain = '';
+}
+
+$write("RISE 63 licence check\n" . str_repeat('─', 60) . "\n");
+$write('Key source      : ' . ($options['key'] !== null ? 'command line' : ($stored !== null ? 'config/activation-key.php' : 'none found:')) . "\n");
+$write('Key             : ' . $mask($key) . "\n");
+$write('Server hostname : ' . ($hostName !== '' ? $hostName : '(unknown)') . "\n");
+$write('Domain source   : ' . $source . "\n");
+$write('Endpoint        : ' . Activation::ENDPOINT . "\n");
+$write('Transport       : ' . (function_exists('curl_init') ? 'cURL' : 'PHP HTTPS stream (cURL not loaded)') . "\n");
+$write('DNS             : ' . Activation::MANAGER_HOST . ' -> ' . ($resolves() ?? 'does NOT resolve here') . "\n");
 
 if ($domain === '') {
-    fwrite(STDERR, "\nNo domain to check. Pass --domain=buildroom.example.org\n");
+    $write(
+    "\nNo usable domain to check: \"" . $rawHost . '\" (from ' . $source . ") is not a domain name.\n"
+    . "Pass the domain this site is served from:\n"
+    . "  php bin/license-check.php --domain=buildroom.example.org" . ($options['probe'] ? ' --probe' : '') . "\n",
+    true
+);
     exit(2);
 }
 if ($key === null || $key === '') {
-    fwrite(STDERR, "\nNo licence key stored. Create one at " . Activation::MANAGER_ORDER . "\n");
+    $write("\nNo licence key stored. Create one at " . Activation::MANAGER_ORDER . "\n", true);
     exit(1);
 }
 if (!Activation::looksLikeKey((string) $key)) {
-    fwrite(STDERR, "\n" . Activation::KEY_HINT . "\n");
+    $write("\n" . Activation::KEY_HINT . "\n", true);
     exit(1);
 }
 
-fwrite(STDOUT, "\nManager answer\n" . str_repeat('─', 60) . "\n");
+$write("\nManager answer\n" . str_repeat('─', 60) . "\n");
 
 if ($options['probe']) {
     // Try every plausible spelling; the first that the provider accepts is the answer.
-    $accepted = null;
+    $accepted    = null;
+    $unreachable = 0;
+    $tried       = 0;
     foreach ($candidates($domain) as $candidate) {
         $result = $activation->verify((string) $key, $candidate);
-        printf(
+        $tried++;
+        if (!empty($result['unreachable'])) {
+            $unreachable++;
+        }
+        fprintf($stdout,
             "  %-42s %s\n",
             $candidate,
             $result['valid'] ? 'ACCEPTED' : 'rejected — ' . $result['message']
@@ -121,24 +169,52 @@ if ($options['probe']) {
     }
 
     if ($accepted === null) {
-        fwrite(STDOUT, "\nNone of those spelling(s) were accepted for this key.\n"
-            . "That means the key itself is unknown, expired or suspended — or its domain limit has been\n"
-            . "used up — not that your domain is spelled wrongly. Check the licence in the provider's\n"
-            . "console and confirm the key was copied in full.\n");
+        if ($unreachable === $tried) {
+            // Every attempt failed at the transport layer, so nothing was decided. Saying the key is
+            // bad here would be a false diagnosis — the problem is the network path.
+            $write("\nNothing was decided: the provider could not be reached at all (" . $tried
+                . " attempt(s), all transport failures).\n"
+                . "This is a hosting question, not a licence one. Prove outbound HTTPS from this server:\n"
+                . "  curl -sS -o /dev/null -w '%{http_code}\\n' " . Activation::ENDPOINT . "\n"
+                . "A timeout or SSL error there explains it. Ask the host to allow outbound HTTPS to "
+                . Activation::MANAGER_HOST . ", then run this again.\n", true);
+            exit(2);
+        }
+        if ($unreachable > 0) {
+            // Distinguish "no DNS" (this host cannot even resolve the provider) from "DNS fine, request
+        // failed" (TLS, firewall, timeout) — the two need different people to fix them.
+        $dns = $resolves();
+        $write("\nThe provider was unreachable for " . $unreachable . ' of ' . $tried
+            . " attempt(s), so this answer is not final.\n"
+            . 'DNS check       : ' . Activation::MANAGER_HOST . ' '
+            . ($dns === null ? 'could not be resolved here' : 'resolves to ' . $dns) . "\n"
+            . ($dns === null
+                ? "That is a resolver problem on this host, not a licence one.\n"
+                : "DNS is fine, so the failure is TLS, a firewall rule or a timeout.\n")
+            . "Re-run when outbound HTTPS to " . Activation::MANAGER_HOST . " is working.\n"
+            . "If it still fails then, the key is unknown, expired or suspended, or its domain "
+            . "limit is used up.\n", true);
+            exit(2);
+        }
+        $write("\nNone of those spelling(s) were accepted for this key.\n"
+            . "The provider answered every one of them, and refused the key for all of them. That means\n"
+            . "the key is unknown, expired or suspended, or its domain limit is used up — not that your\n"
+            . "domain is spelled wrongly. Check the licence in the provider's console and confirm the\n"
+            . "key was copied in full.\n", true);
         exit(1);
     }
 
-    fwrite(STDOUT, "\nThe provider accepts the key for: " . $accepted . "\n");
+    $write("\nThe provider accepts the key for: " . $accepted . "\n");
     if ($options['save']) {
         $activation->storeKey((string) $key);
         $activation->rememberDomain($accepted);
         if (Activation::domainFromHost($accepted) !== $domain) {
-            fwrite(STDOUT, "NOTE: that is not this site's own name (" . $domain . "). Setup will now use "
+            $write("NOTE: that is not this site's own name (" . $domain . "). Setup will now use "
                 . $accepted . "; make sure that is intentional.\n");
         }
-        fwrite(STDOUT, "Saved           : config/activation-key.php (mode 0600) with the accepted domain recorded\n");
+        $write("Saved           : config/activation-key.php (mode 0600) with the accepted domain recorded\n");
     } else {
-        fwrite(STDOUT, "Re-run with --save to record it and skip the licence step.\n");
+        $write("Re-run with --save to record it and skip the licence step.\n");
     }
     exit(0);
 }
@@ -147,30 +223,41 @@ $result = $options['key'] !== null
     ? $activation->verify((string) $key, $domain)
     : $activation->check($domain, true);
 
-fwrite(STDOUT, 'Domain checked  : ' . $domain . "\n");
-fwrite(STDOUT, 'Result          : ' . ($result['valid'] ? 'VALID' : 'NOT VALID') . "\n");
-fwrite(STDOUT, 'Message         : ' . $result['message'] . "\n");
+$write('Domain checked  : ' . $domain . "\n");
+$write('Result          : ' . ($result['valid']
+    ? 'VALID'
+    : (!empty($result['unreachable']) ? 'UNDECIDED (provider unreachable)' : 'NOT VALID')) . "\n");
+$write('Message         : ' . $result['message'] . "\n");
 if (!empty($result['grace'])) {
-    fwrite(STDOUT, "Note            : the provider was unreachable; a previously confirmed site is on its grace window.\n");
+    $write("Note            : the provider was unreachable; a previously confirmed site is on its grace window.\n");
 }
 
 if ($result['valid']) {
     if ($options['save']) {
         $activation->storeKey((string) $key);
         $activation->rememberDomain($domain);
-        fwrite(STDOUT, "Saved           : config/activation-key.php (mode 0600)\n");
+        $write("Saved           : config/activation-key.php (mode 0600)\n");
     }
-    fwrite(STDOUT, "\nThis installation is licensed for " . $domain . ".\n");
+    $write("\nThis installation is licensed for " . $domain . ".\n");
     exit(0);
 }
 
-fwrite(STDOUT, "\nWhat to do next\n" . str_repeat('─', 60) . "\n");
-fwrite(STDOUT, "1. Find the exact domain on your licence. Try the spellings:\n");
-fwrite(STDOUT, "     php bin/license-check.php" . ($options['key'] !== null ? ' --key=' . $mask((string) $key) : '') . " --probe\n");
-fwrite(STDOUT, "2. Open the provider's console and compare: " . Activation::MANAGER_SIGNIN . "\n");
-fwrite(STDOUT, "   Domains are limited and changes may be capped, so check before editing it there.\n");
-fwrite(STDOUT, "3. Confirm the key arrived in full — no leading/trailing spaces, one line only.\n");
-fwrite(STDOUT, "4. Prove the server can reach the provider at all:\n");
-fwrite(STDOUT, "     curl -sS -o /dev/null -w '%{http_code}\\n' " . Activation::ENDPOINT . "\n");
-fwrite(STDOUT, "   A timeout or an SSL error here is a host firewall question, not a licence one.\n");
+if (!empty($result['unreachable'])) {
+    // Nothing was decided, so do not present this as a licence refusal.
+    $write("\nNothing was decided: the provider could not be reached (" . $result['message'] . ")\n"
+        . "The key may well be fine. Prove outbound HTTPS from this server first:\n"
+        . "  curl -sS -o /dev/null -w '%{http_code}\\n' " . Activation::ENDPOINT . "\n"
+        . "Then run this command again.\n", true);
+    exit(2);
+}
+
+$write("\nWhat to do next\n" . str_repeat('─', 60) . "\n");
+$write("1. Find the exact domain on your licence. Try the spellings:\n");
+$write("     php bin/license-check.php" . ($options['key'] !== null ? ' --key=' . $mask((string) $key) : '') . " --probe\n");
+$write("2. Open the provider's console and compare: " . Activation::MANAGER_SIGNIN . "\n");
+$write("   Domains are limited and changes may be capped, so check before editing it there.\n");
+$write("3. Confirm the key arrived in full — no leading/trailing spaces, one line only.\n");
+$write("4. Prove the server can reach the provider at all:\n");
+$write("     curl -sS -o /dev/null -w '%{http_code}\\n' " . Activation::ENDPOINT . "\n");
+$write("   A timeout or an SSL error here is a host firewall question, not a licence one.\n");
 exit(1);

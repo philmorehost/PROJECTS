@@ -144,16 +144,40 @@ php bin/license-check.php --probe --save       # ...and record that one, then sk
 
 `--probe` exists because *"Invalid license key or domain"* is the provider's answer to every
 mismatch, and the wizard has to send one exact string. It tries the bare domain, `www.`, the parent
-domain and this server's own hostname, and prints which of them returned `status: 1`. If none does,
-the key itself is unknown, expired, suspended or out of domain slots — the output says so rather
-than blaming the spelling.
+domain and (when it is a real domain) the server's own hostname, and prints the provider's answer
+for each.
+
+The three outcomes are deliberately kept apart:
+
+| What happened | What the tool says | Exit |
+|---|---|---|
+| The provider answered and accepted a spelling | Names that spelling; `--save` records it | `0` |
+| The provider answered and refused every spelling | The key is unknown, expired, suspended or out of domain slots — not a spelling problem | `1` |
+| The provider could not be contacted | **Nothing was decided.** Prints the DNS result and a `curl` command to prove outbound HTTPS | `2` |
+
+That third case matters: an unreachable manager is a hosting firewall question, and reporting it as
+a licence refusal would send you off to buy a key you already own.
 
 The output masks the key (first and last four characters only) and never writes it to a log.
-Exit codes: `0` licensed · `1` not licensed · `2` configuration problem.
+Exit codes: `0` licensed · `1` refused · `2` configuration or transport problem.
 
 Hosts without cURL are fine: activation falls back to PHP's HTTPS stream wrapper. If both fail,
 run `curl -sS -o /dev/null -w '%{http_code}\n' https://manager.pmhserver.name.ng/api.php` from the
 server to prove outbound HTTPS is open.
+
+Check the installation itself — read-only, safe on a live site:
+
+```sh
+php bin/doctor.php           # full report; exits 0 only when nothing blocks launch
+php bin/doctor.php --quiet   # problems and notes only, for cron or monitoring
+php bin/doctor.php --no-net  # skip the licence call (e.g. a maintenance window)
+```
+
+`doctor` covers the PHP build and extensions, writable `config/` and `storage/`, the `.htaccess`
+guards that stop a browser reading them, key-file permissions, the SMTP host, table and
+administrator presence, whether the ledger triggers were installed, the security-e-mail setting and
+the licence. It reports rather than guesses: a CLI run cannot see whether HTTPS is on, so it says so
+instead of claiming the site is insecure.
 
 ## 4. Immediately after setup
 

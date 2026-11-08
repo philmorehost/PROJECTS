@@ -114,7 +114,9 @@ final class Activation
      *
      * @param bool $remember record a confirmed result so the following check() does not call the
      *                       provider a second time. Only ever set after the key has been saved.
-     * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
+     * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string, unreachable?:bool}
+     *         `unreachable` is set when the provider could not be contacted at all. That is *not* a
+     *         refusal: the key may be perfectly good. Callers must not report it as one.
      */
     public function verify(string $key, string $host, bool $remember = false, ?string $override = null): array
     {
@@ -129,7 +131,7 @@ final class Activation
         try {
             $state = $this->interpret($this->post(['key' => $key, 'domain' => $domain]));
         } catch (RuntimeException $error) {
-            return $this->result(false, $error->getMessage(), false, false, $domain);
+            return $this->result(false, $error->getMessage(), false, false, $domain) + ['unreachable' => true];
         }
         // Caching is opt-in and happens only after the key has been written to disk. Caching a
         // probe would let the wizard advance with no key stored, and the site would then fail six
@@ -454,7 +456,8 @@ final class Activation
                 $domain
             );
         }
-        return $this->result(false, $reason . ' Sign-in stays paused until the licence can be confirmed.', false, false, $domain);
+        return $this->result(false, $reason . ' Sign-in stays paused until the licence can be confirmed.', false, false, $domain)
+            + ['unreachable' => true];
     }
 }
 

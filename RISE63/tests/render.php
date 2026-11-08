@@ -575,6 +575,12 @@ ok('Every bootstrap constant is referenced with its namespace', function (): voi
             assertMissing('id="domain"', $source, 'the read-only domain field was replaced');
             assertContains('$probe3      = $activation3->verify($replacement, $host3);', $source,
                 'a replacement key is probed against the typed domain');
+            // Resuming setup must not force a fresh provider call for a domain already accepted.
+            assertContains('$activation->domainAccepted($probeDomain)', $source,
+                'resuming setup checks the recorded domain before calling the provider');
+            // A refusal must say which string was sent, or the operator cannot tell a bad key from
+            // a differently-spelled domain.
+            assertContains("The domain sent was ", $source, 'refusals must name the domain sent');
         }
     }
     assertSame([], $problems, 'bare constant references outside the RISE63 namespace');
