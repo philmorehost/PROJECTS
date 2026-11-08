@@ -23,7 +23,7 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Suite | Command | Result |
 |---|---|---|
 | Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **35 passed, 0 failed** |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **36 passed, 0 failed** |
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **27 passed, 0 failed** |
 
 What the logic suite actually asserts:
@@ -102,7 +102,19 @@ Worth recording, because each would have failed only on a live database or brows
 | Migrations | Needs MySQL | On a copy of staging: `bin/migrate.php --status`, `--dry-run`, then `--apply`; re-run and confirm exit code 2 (nothing pending). Corrupt one applied file and confirm exit 3. |
 | Password reset end to end | Needs MySQL + SMTP | Request a link, open it, set a password, confirm the old one stops working and other devices are signed out. Request again for a non-existent address and confirm the same wording. |
 
-`tests/integration.php` is the intended home for the database-backed cases above. It is written to refuse to run unless the database name ends in `_test`.
+`tests/integration.php` now exists for the database-backed cases above. It refuses to run unless the database name ends in `_test`, and it has **never been executed** — this sandbox has no MySQL:
+
+```sh
+RISE63_TEST_DSN='mysql:host=127.0.0.1;dbname=rise63_test' \
+RISE63_TEST_USER=rise RISE63_TEST_PASS=secret php tests/integration.php
+```
+
+It asserts: the schema and triggers build; `UPDATE`/`DELETE` on the ledger raise 45000; a second
+connection blocks on the pool lock for at least 1.5 s; the Idempotency key collision is refused by the
+unique index; reset tokens expire and burn correctly against real `DATETIME` arithmetic; and the
+migration runner applies in order, re-runs as a no-op, and reports a modified file. Every one of those
+is a *claim* until it runs on a machine with MySQL — treat a green unit/render run as the weaker signal
+it is. Nothing here has been executed against a database.
 
 ---
 
@@ -132,7 +144,7 @@ Worth recording, because each would have failed only on a live database or brows
 5. **No SMS notifications.**
 6. **Mail is at-least-once.** A crash between "SMTP accepted" and "row marked sent" can duplicate a message. Templates contain no secrets, so this is tolerable; keep it in mind before adding anything sensitive.
 7. **No automated off-site backup** — the guide schedules host backups and demands a restore drill.
-8. **`tests/integration.php` needs writing** (see §3 for the case list).
+8. **`tests/integration.php` has never run.** It is written and lint-clean; it needs a `_test` database.
 9. **No load testing.** Capacity numbers are unmeasured; do not promise throughput.
 10. **Password history is one deep.** A reset or change cannot reuse the *current* password; older ones are not stored, so they are not checked. Honest limitation of not keeping a history table.
 11. **Accessibility**: keyboard focus, labels, `aria-live` and contrast are designed in, but have not been audited with a screen reader or axe.

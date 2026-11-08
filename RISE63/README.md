@@ -31,6 +31,7 @@ Production never sets that variable. See `docs/DEPLOYMENT.md` for the real flow.
 ```sh
 php tests/unit.php          # money, state machine, security policy, settings schema, schema integrity
 php tests/render.php        # every view against fixtures, XSS probes, UX contract, route consistency
+php tests/integration.php   # MySQL: schema, ledger triggers, pool lock, migrations (needs a _test database)
 php bin/build-assets.php    # fingerprint CSS/JS + refresh the service-worker shell list
 php bin/migrate.php --status # apply pending schema migrations (--dry-run to read them first)
 ```
@@ -44,7 +45,7 @@ node tests/support/phpwasm-test.mjs
 node tests/support/phpwasm-render.mjs
 ```
 
-Current state: **64 files lint clean, 35 logic tests pass, 27 view tests pass.** What is verified and what still
+Current state: **65 files lint clean, 36 logic tests pass, 27 view tests pass.** The MySQL suite in `tests/integration.php` is written but has never been executed here — no database in this sandbox. What is verified and what still
 needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Highlights
@@ -74,7 +75,7 @@ app/Views/             layout + auth/ member/ staff/ partials/
 bin/                   mail-worker, security-worker, maintenance, build-assets
 database/              schema.sql, countries.sql (250 ISO), seed.sql, ledger-guards.sql
 public/                assets + PWA icons
-tests/                 unit.php, render.php, php-wasm harnesses
+tests/                 unit.php, render.php, integration.php (MySQL), php-wasm harnesses
 docs/                  DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/blueprint-v0.md
 ```
 
