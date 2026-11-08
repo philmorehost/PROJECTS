@@ -113,7 +113,7 @@ function asset(string $file): string
 {
     static $map;
     if ($map === null) {
-        $map     = [];
+        $map      = [];
         $manifest = ROOT . '/public/assets/manifest.php';
         if (is_file($manifest)) {
             $loaded = require $manifest;
@@ -122,8 +122,31 @@ function asset(string $file): string
             }
         }
     }
-    $name = $map[$file] ?? $file;
-    return url('public/assets/' . $name);
+
+    // No manifest, or no entry for this file: fall back to a content fingerprint computed from the
+    // file itself rather than to the bare name.
+    //
+    // This is not a nicety. The bare name is cached by browsers and by the service worker, so a
+    // deploy that skipped `bin/build-assets.php` served the *previous* app.css beside the *new*
+    // HTML: the markup was current, the stylesheet and script were a release behind, and the
+    // result looked exactly like "the redesign was never applied" — or like a button that does
+    // nothing. Deriving the fingerprint here makes the browser-side cache correct even when the
+    // build step was forgotten, at the cost of one hash per asset per request.
+    if (isset($map[$file])) {
+        return url('public/assets/' . $map[$file]);
+    }
+
+    $path = ROOT . '/public/assets/' . $file;
+    $hash = is_file($path) ? substr(hash('sha256', (string) file_get_contents($path)), 0, 8) : '';
+    if ($hash === '') {
+        return url('public/assets/' . $file);
+    }
+    $info = pathinfo($file);
+    $name = $info['filename'] . '.' . $hash . '.' . ($info['extension'] ?? '');
+
+    // Serve the fingerprinted copy if the build has already written it; otherwise the URL carries
+    // the hash of the source, which is what the browser would ask for anyway.
+    return url('public/assets/' . (is_file(ROOT . '/public/assets/' . $name) ? $name : $file) . '?v=' . $hash);
 }
 
 function redirect(string $path, array $query = []): never

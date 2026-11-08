@@ -124,6 +124,18 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**A design change "was not applied"**
+
+Check what the browser actually received before assuming the change is missing. The HTML is served
+fresh on every request, while the stylesheet and script are cached; if `public/assets/manifest.php`
+does not exist (the build step was skipped), `asset()` still returns a fingerprinted
+`app.css?v=<hash>` URL so this should not happen — but if you see an old design, confirm the URL in
+view-source carries a `?v=` or a hashed filename. If it does, the change really is not deployed.
+
+```sh
+php bin/build-assets.php     # optional: faster than the per-request fallback
+```
+
 **A button renders but does nothing after an update**
 
 Almost always a stale script, not a broken button. The page markup is served fresh on every request

@@ -7,7 +7,7 @@
 <title>Updates · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">
+<meta name="csrf-token" content="aab1330f132353d28551b993d1bcb1b233a2a44ff6f08647a9861144a6c8f669">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -188,7 +188,7 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .icon-btn:active { transform: scale(0.95); }
 
 .page { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: 20px 16px 28px; }
-.page.has-bottom-nav { padding-bottom: 96px; }
+.page.has-bottom-nav { padding-bottom: 112px; }
 
 .site-footer {
   border-top: 1px solid var(--border); padding: 20px 16px 28px;
@@ -197,10 +197,19 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .site-footer p { margin: 4px 0; }
 
 /* ── Bottom navigation ────────────────────────────────────────────────────────── */
-/* A phone-style tab bar: a floating, translucent slab with a hairline top edge, drawn SVG marks,
-   and one pill that slides to the active tab. It has to survive three fidelities — a 320px phone,
-   a wide desktop, and the printed page — so the widths are proportional (--tab-count) rather than
-   hard-coded for seven items. */
+/* A sticky, phone-style tab bar.
+ *
+ * "Sticky" here means what it means on a phone: pinned to the bottom of the *viewport* while the
+ * page scrolls underneath it, never scrolling away with the content and never in a second copy.
+ * `position: fixed` is the pinned behaviour; `position: sticky` would pin it inside the document
+ * flow instead, which is why it looked like part of the footer rather than like a tab bar.
+ *
+ * The look is deliberately modern but not trendy: a translucent slab with a blur, a hairline edge,
+ * a soft layered shadow, drawn SVG marks, and one pill that slides to the active tab. Widths are
+ * proportional (--tab-count) so it survives seven tabs on a 320px phone as well as on a desktop.
+ *
+ * It floats above the content rather than sitting in a strip at the bottom edge — which is why the
+ * page reserves space for it below (.page.has-bottom-nav). */
 .bottom-nav {
   position: fixed; z-index: 30;
   left: 50%; transform: translateX(-50%);
@@ -530,43 +539,63 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
-/* The offline bar sits *below* the sticky top bar rather than over it: covering the top bar hid
-   the brand and the theme button at the exact moment the user was looking for a way out. It is
-   only ever on screen while the browser reports no connection; app.js owns that decision and
-   removes it without delay when the connection returns. */
-.offline-banner {
-  position: fixed; z-index: 40;
-  top: calc(env(safe-area-inset-top) + 0px); left: 0; right: 0;
-  display: flex; gap: 10px; align-items: center;
+/* ── Offline modal ─────────────────────────────────────────────────────────────── */
+/* A bottom sheet, not a top bar. The top-bar version covered the header (hiding the brand and the
+   theme control at the exact moment the user was looking for a way out) and, on the first release,
+   could not be closed at all. A connectivity notice is the one thing on the page you cannot
+   navigate away from, so it has to be dismissible and it must not sit on top of the navigation.
+
+   The sheet rises from the bottom on phones — where the thumb is — and centres as a dialog on a
+   wide screen. It never covers the sticky tab bar: the sheet stops above it. */
+.offline-modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, #0b1120 55%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: offline-fade 0.16s ease-out both;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.offline-modal[hidden] { display: none; }
+.offline-sheet {
+  width: min(520px, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 44px -12px rgba(15, 23, 42, 0.45);
+  text-align: center;
+  animation: offline-rise 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.offline-emoji {
+  display: grid; place-items: center;
+  width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 50%;
   background: var(--warn-soft); color: var(--warn);
-  padding: 9px 14px; font-size: var(--t-sm); font-weight: 600;
-  border-bottom: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
-  box-shadow: 0 6px 18px -8px rgba(15, 23, 42, 0.35);
-  /* Slide down on show, up on hide. Never 0s: an instant jump is harder to notice than a fast
-     slide, and "gone immediately" is about latency, not about skipping the transition. */
-  animation: offline-in 0.18s ease-out both;
 }
-/* Leaving: app.js adds [hidden] the moment connectivity returns and the bar is removed from the
-   layout in the same frame — this rule only exists so the exit is not a jolt when the browser
-   honours the transition. */
-.offline-banner[hidden] { display: none; }
-.offline-banner .offline-icon { display: grid; place-items: center; flex: 0 0 auto; }
-.offline-banner .offline-icon svg { width: 18px; height: 18px; }
-.offline-banner .offline-text { margin: 0; flex: 1 1 auto; min-width: 0; }
-.offline-banner .offline-close {
-  flex: 0 0 auto; display: grid; place-items: center;
-  width: 32px; height: 32px; margin: -4px -6px -4px 0;
-  background: transparent; border: 0; border-radius: 10px;
-  color: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer;
-  opacity: 0.75; transition: opacity 0.12s ease, background 0.12s ease;
+.offline-emoji svg { width: 24px; height: 24px; }
+.offline-sheet h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.offline-sheet p { margin: 0 auto 16px; color: var(--text-muted); font-size: var(--t-sm); max-width: 40ch; }
+.offline-actions { display: grid; gap: 8px; }
+.offline-hint { margin: 10px 0 0 !important; font-size: var(--t-sm); color: var(--warn); min-height: 1.2em; }
+/* The hint holds its line so the sheet does not jump when "Checking…" appears. */
+
+/* While the sheet is open the page behind it must not scroll, or a thumb drag can slide the page
+   under the dialog and make it look as though the dialog swallowed the content. */
+html.offline-open, html.offline-open body { overflow: hidden; }
+
+@keyframes offline-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes offline-rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (min-width: 720px) {
+  /* Wide screen: a centred dialog. Aligned to the middle rather than the bottom so it reads as a
+     notification, not as a menu that was opened by accident. */
+  .offline-modal { align-items: center; padding: 24px; }
+  .offline-sheet { border-radius: 22px; border-bottom: 1px solid var(--border); }
 }
-.offline-banner .offline-close:hover { opacity: 1; background: color-mix(in srgb, var(--warn) 14%, transparent); }
-.offline-banner .offline-close:active { transform: scale(0.92); }
-@keyframes offline-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .offline-banner { animation: none; }
-  .bottom-nav .nav-indicator { transition: none; }
-}
+
 .install-prompt {
   position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 50;
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
@@ -632,7 +661,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 @media print {
-  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-banner, .form-actions { display: none !important; }
+  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-modal, .form-actions { display: none !important; }
   body { background: #fff; color: #000; }
   .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
   .page { padding: 0; max-width: none; }
@@ -652,30 +681,63 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 <body class="signed-in">
 <a class="skip-link" href="#main">Skip to main content</a>
 
-<div class="offline-banner" id="offline-banner" role="status" aria-live="polite" hidden>
-  <span class="offline-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 18.5h9.2a3.3 3.3 0 0 0 .6-6.5 5 5 0 0 0-8.3-3.4"/><path d="M4.5 4.5 19.5 19.5"/></svg></span>
-  <p class="offline-text">No internet connection. Anything you submit will be saved and sent when you reconnect.</p>
-  <button type="button" class="offline-close" id="offline-dismiss" aria-label="Dismiss offline notice">
-    <span aria-hidden="true">&times;</span>
-  </button>
+<div class="offline-modal" id="offline-modal" role="dialog" aria-modal="true"
+     aria-labelledby="offline-title" aria-describedby="offline-body" hidden>
+  <div class="offline-sheet" role="document">
+    <span class="offline-emoji" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 18.5h9.2a3.3 3.3 0 0 0 .6-6.5 5 5 0 0 0-8.3-3.4"/><path d="M4.5 4.5 19.5 19.5"/></svg></span>
+    <h2 id="offline-title">You are offline</h2>
+    <p id="offline-body">This device has lost its internet connection. Anything you submit will be
+      kept and sent as soon as you reconnect.</p>
+    <div class="offline-actions">
+      <button type="button" class="btn btn-primary btn-block" id="offline-close">Dismiss</button>
+      <button type="button" class="btn btn-ghost btn-block" id="offline-retry">Try again now</button>
+    </div>
+    <p class="offline-hint" id="offline-hint" aria-live="polite"></p>
+  </div>
 </div>
 <script>
-  // The second half of the close button, deliberately independent of app.js.
+  // The modal's own controls, deliberately independent of app.js.
   //
-  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
-  // It exists because the first report of "the × does nothing" was almost certainly a cached
-  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
-  // the previous release, so the button rendered and did nothing. A handler that ships in the same
-  // response as the markup cannot drift out of step with it.
+  // app.js binds the same buttons and owns the connectivity decision; this copy only dismisses and
+  // re-tests. It exists because the first report of "the × does nothing" was a cached app.js: the
+  // markup had been updated while the script that bound it was a release behind. A handler that
+  // ships in the same response as the markup cannot drift out of step with it.
   //
-  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
-  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
-  // disagree.
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet runs only because its
+  // SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two disagree.
   (function () {
-    var button = document.getElementById('offline-dismiss');
-    var banner = document.getElementById('offline-banner');
-    if (!button || !banner) { return; }
-    button.addEventListener('click', function () { banner.hidden = true; });
+    var modal = document.getElementById('offline-modal');
+    if (!modal) { return; }
+    var sheet = modal.querySelector('.offline-sheet');
+    var hint = document.getElementById('offline-hint');
+    var close = document.getElementById('offline-close');
+    var retry = document.getElementById('offline-retry');
+
+    function hide() {
+      modal.hidden = true;
+      modal.setAttribute('data-dismissed', '1');
+      document.documentElement.classList.remove('offline-open');
+    }
+    if (close) { close.addEventListener('click', hide); }
+    // Backdrop click closes; a click inside the sheet must not.
+    modal.addEventListener('click', function (event) {
+      if (sheet && !sheet.contains(event.target)) { hide(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) { hide(); }
+    });
+    if (retry) {
+      retry.addEventListener('click', function () {
+        if (hint) { hint.textContent = 'Checking…'; }
+        // A HEAD to a tiny same-origin file: any HTTP answer means the server was reached.
+        fetch('./favicon.svg', { method: 'HEAD', cache: 'no-store' }).then(function () {
+          hide();
+          window.location.reload();
+        }, function () {
+          if (hint) { hint.textContent = 'Still no connection. Check Wi-Fi or mobile data.'; }
+        });
+      });
+    }
   }());
 </script>
 
@@ -723,7 +785,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     </p>
 
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">      <input type="hidden" name="action" value="update-check">
+      <input type="hidden" name="csrf" value="aab1330f132353d28551b993d1bcb1b233a2a44ff6f08647a9861144a6c8f669">      <input type="hidden" name="action" value="update-check">
       <input type="hidden" name="return_to" value="updates">
       <button class="btn btn-primary" type="submit">Check now</button>
     </form>
@@ -734,7 +796,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                                           <div class="block" style="margin-top:8px; white-space:pre-wrap">- Academy attendance panel is now read-only for members
 - Treasury export includes the parish code</div>
                                 <form method="post" action="/" style="margin-top:12px">
-              <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">              <input type="hidden" name="action" value="update-plan">
+              <input type="hidden" name="csrf" value="aab1330f132353d28551b993d1bcb1b233a2a44ff6f08647a9861144a6c8f669">              <input type="hidden" name="action" value="update-plan">
               <input type="hidden" name="return_to" value="updates">
               <button class="btn btn-primary" type="submit">Download and review what changes</button>
             </form>
@@ -816,7 +878,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       <span class="nav-label">Settings</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="aab1330f132353d28551b993d1bcb1b233a2a44ff6f08647a9861144a6c8f669">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
@@ -840,491 +902,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </div>
 </div>
 
-<script>
-/* RISE 63 — progressive enhancement only.
-   Everything here is optional: every form and page works with JavaScript disabled.
-   Contents: theme switch, offline banner, install prompt, live-search combobox,
-   draft autosave, idempotent offline submit queue, service-worker registration, update toast. */
-(function () {
-  'use strict';
-
-  var THEME_KEY = 'rise63-theme';
-  var DRAFT_PREFIX = 'rise63-draft-';
-  var QUEUE_KEY = 'rise63-queue';
-  var SNOOZE_KEY = 'rise63-install-snoozed';
-  var root = document.documentElement;
-
-  function store(key, value) {
-    try { window.localStorage.setItem(key, value); } catch (e) { /* private mode */ }
-  }
-  function read(key) {
-    try { return window.localStorage.getItem(key); } catch (e) { return null; }
-  }
-  function remove(key) {
-    try { window.localStorage.removeItem(key); } catch (e) { /* noop */ }
-  }
-
-  /* ── Theme ─────────────────────────────────────────────────────────────────── */
-  function currentTheme() {
-    return root.dataset.theme || 'system';
-  }
-  function applyTheme(theme) {
-    root.dataset.theme = theme;
-    store(THEME_KEY, theme);
-    var button = document.getElementById('theme-toggle');
-    if (button) {
-      var label = theme === 'system' ? 'Appearance: follows your device' : 'Appearance: ' + theme;
-      button.setAttribute('aria-label', label);
-      button.title = label;
-    }
-  }
-  function nextTheme(theme) {
-    return theme === 'system' ? 'light' : (theme === 'light' ? 'dark' : 'system');
-  }
-  var themeButton = document.getElementById('theme-toggle');
-  if (themeButton) {
-    themeButton.addEventListener('click', function () {
-      applyTheme(nextTheme(currentTheme()));
-    });
-  }
-  applyTheme(currentTheme());
-
-  /* ── Offline banner ────────────────────────────────────────────────────────── */
-  /* Requirements, in order of how easy they are to get wrong:
-       1. automatic — no user action needed to make it appear;
-       2. only while actually offline — navigator.onLine reports "connected" to any network,
-          including a router with no internet, so it is a hint and never the answer;
-       3. removed with no perceptible delay when the connection returns, and re-tested on a timer
-          so a missing 'online' event cannot leave it stranded on screen;
-       4. closable by hand, and a dismissal sticks until the next time the connection drops —
-          otherwise the bar would reappear seconds after being dismissed. */
-  var banner = document.getElementById('offline-banner');
-  var bannerDismiss = document.getElementById('offline-dismiss');
-  var offlineDismissed = false;
-  var probeTimer = null;
-  var probeInFlight = false;
-  /* 5s: fast enough that an offline bar never outlives a working connection by more than a moment,
-     cheap enough to run on a metered phone (one HEAD to the favicon the page already loaded). */
-  var PROBE_INTERVAL = 5000;
-
-  function setBanner(offline) {
-    if (!banner) { return; }
-    var wasHidden = banner.hidden;
-    var show = offline && !offlineDismissed;
-    banner.hidden = !show;
-    // The bar is fixed, so it does not move the page; nothing needs reflow. Announce the change
-    // once, for screen readers, rather than on every probe.
-    if (show && wasHidden) {
-      banner.setAttribute('data-since', String(Date.now()));
-    }
-  }
-
-  /* A request that fails fast is a better answer than navigator.onLine. HEAD on the same origin
-     proves the route to this server; a captive portal that answers everything still counts as
-     online, which is correct — the app can reach something. */
-  function probe() {
-    if (probeInFlight || !window.fetch) { return; }
-    probeInFlight = true;
-    var done = function (reachable) {
-      probeInFlight = false;
-      if (reachable) {
-        if (offlineDismissed) { offlineDismissed = false; }
-        setBanner(false);
-        flushQueue();
-      } else {
-        setBanner(true);
-      }
-    };
-    var url = (document.querySelector('link[rel="icon"]') || {}).href || window.location.href;
-    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timer = setTimeout(function () {
-      if (controller) { controller.abort(); }
-    }, 4000);
-    window.fetch(url, {
-      method: 'HEAD',
-      cache: 'no-store',
-      credentials: 'same-origin',
-      signal: controller ? controller.signal : undefined
-    }).then(function (response) {
-      clearTimeout(timer);
-      // Any HTTP answer — even 403 or 404 — means the server was reached.
-      done(true);
-    }, function () {
-      clearTimeout(timer);
-      done(false);
-    });
-  }
-
-  function startProbing() {
-    if (probeTimer !== null) { return; }
-    probeTimer = setInterval(probe, PROBE_INTERVAL);
-  }
-  function stopProbing() {
-    if (probeTimer === null) { return; }
-    clearInterval(probeTimer);
-    probeTimer = null;
-  }
-
-  if (banner) {
-    // navigator.onLine is only trusted when it says "offline": that is a reliable negative. When
-    // it flips to online the bar is cleared at once, then a probe confirms the server agrees.
-    window.addEventListener('offline', function () {
-      offlineDismissed = false;
-      setBanner(true);
-      startProbing();
-    });
-    window.addEventListener('online', function () {
-      offlineDismissed = false;
-      setBanner(false);
-      probe();
-      stopProbing();
-    });
-    window.addEventListener('pageshow', function () { if (navigator.onLine === false) { setBanner(true); startProbing(); } });
-
-    if (bannerDismiss) {
-      bannerDismiss.addEventListener('click', function () {
-        offlineDismissed = true;
-        setBanner(false);
-        // Keep probing while dismissed: the flag has to clear when the connection returns, or the
-        // next outage would show nothing at all.
-        startProbing();
-      });
-    }
-
-    // Initial state. navigator.onLine === false is trustworthy; true is not, so probe once on load
-    // rather than trusting it and silently hiding a real outage.
-    if (navigator.onLine === false) {
-      setBanner(true);
-      startProbing();
-    } else {
-      probe();
-    }
-  }
-
-  /* ── Install prompt (Android/Chromium) ─────────────────────────────────────── */
-  var installBox = document.getElementById('install-prompt');
-  var installHint = document.getElementById('install-hint');
-  var deferredPrompt = null;
-  var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-  function snoozed() {
-    var value = parseInt(read(SNOOZE_KEY) || '0', 10);
-    return value > Date.now();
-  }
-  function showInstall(hintText) {
-    if (!installBox || standalone || snoozed()) { return; }
-    if (hintText && installHint) { installHint.textContent = hintText; }
-    installBox.hidden = false;
-  }
-  window.addEventListener('beforeinstallprompt', function (event) {
-    event.preventDefault();
-    deferredPrompt = event;
-    showInstall('Add RISE 63 to your home screen — it works offline.');
-  });
-  var accept = document.getElementById('install-accept');
-  if (accept) {
-    accept.addEventListener('click', function () {
-      if (installBox) { installBox.hidden = true; }
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt = null;
-      }
-    });
-  }
-  var dismiss = document.getElementById('install-dismiss');
-  if (dismiss) {
-    dismiss.addEventListener('click', function () {
-      if (installBox) { installBox.hidden = true; }
-      store(SNOOZE_KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000));
-    });
-  }
-  var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-  if (isIos && !standalone) {
-    showInstall('Tap Share, then “Add to Home Screen” to install RISE 63.');
-  }
-
-  /* ── Live-search combobox ──────────────────────────────────────────────────── */
-  function initCombobox(combo) {
-    var input = combo.querySelector('input[role="combobox"]');
-    var hidden = combo.querySelector('input[type="hidden"]');
-    var list = combo.querySelector('.combo-list');
-    if (!input || !list) { return; }
-    var endpoint = combo.dataset.endpoint;
-    var timer = null;
-    var controller = null;
-    var active = -1;
-    var options = [];
-
-    function close() {
-      list.hidden = true;
-      list.innerHTML = '';
-      input.setAttribute('aria-expanded', 'false');
-      active = -1;
-      options = [];
-    }
-    function render(items, term) {
-      list.innerHTML = '';
-      if (!items.length) {
-        var empty = document.createElement('li');
-        empty.className = 'combo-empty';
-        empty.textContent = term ? 'No parish matches “' + term + '”.' : 'Start typing your parish, area or zone.';
-        list.appendChild(empty);
-      } else {
-        items.forEach(function (item, index) {
-          var li = document.createElement('li');
-          li.className = 'combo-option';
-          li.id = combo.id + '-opt-' + index;
-          li.setAttribute('role', 'option');
-          li.dataset.id = item.id;
-          li.dataset.label = item.label;
-          li.innerHTML = '<strong></strong><small></small>';
-          li.querySelector('strong').textContent = item.parish;
-          li.querySelector('small').textContent = item.area + ' · ' + item.zone;
-          li.addEventListener('mousedown', function (event) {
-            event.preventDefault();
-            choose(item);
-          });
-          list.appendChild(li);
-        });
-      }
-      options = Array.prototype.slice.call(list.querySelectorAll('.combo-option'));
-      list.hidden = false;
-      input.setAttribute('aria-expanded', 'true');
-    }
-    function choose(item) {
-      input.value = item.label;
-      if (hidden) { hidden.value = item.id; }
-      close();
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    function highlight(index) {
-      options.forEach(function (li) { li.setAttribute('aria-selected', 'false'); });
-      if (index < 0 || index >= options.length) { return; }
-      options[index].setAttribute('aria-selected', 'true');
-      input.setAttribute('aria-activedescendant', options[index].id);
-      if (options[index].scrollIntoView) { options[index].scrollIntoView({ block: 'nearest' }); }
-    }
-    function search(term) {
-      if (!endpoint) { return; }
-      if (controller) { controller.abort(); }
-      controller = typeof AbortController === 'function' ? new AbortController() : null;
-      fetch(endpoint + '?q=' + encodeURIComponent(term), {
-        headers: { Accept: 'application/json' },
-        credentials: 'same-origin',
-        signal: controller ? controller.signal : undefined
-      }).then(function (response) {
-        if (!response.ok) { throw new Error('search failed'); }
-        return response.json();
-      }).then(function (data) {
-        render(Array.isArray(data.parishes) ? data.parishes : [], term);
-      }).catch(function () {
-        if (list.hidden) { return; }
-        close();
-      });
-    }
-
-    input.addEventListener('input', function () {
-      if (hidden) { hidden.value = ''; }
-      var term = input.value.trim();
-      window.clearTimeout(timer);
-      timer = window.setTimeout(function () { search(term); }, 120);
-    });
-    input.addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        if (list.hidden) { search(input.value.trim()); return; }
-        active = Math.min(active + 1, options.length - 1);
-        highlight(active);
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        active = Math.max(active - 1, 0);
-        highlight(active);
-      } else if (event.key === 'Enter') {
-        if (!list.hidden && active >= 0 && options[active]) {
-          event.preventDefault();
-          choose({ id: options[active].dataset.id, label: options[active].dataset.label });
-        }
-      } else if (event.key === 'Escape') {
-        close();
-      }
-    });
-    input.addEventListener('focus', function () {
-      if (list.hidden) { search(input.value.trim()); }
-    });
-    document.addEventListener('click', function (event) {
-      if (!combo.contains(event.target)) { close(); }
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('[data-combobox]'), initCombobox);
-
-  /* ── Destructive-action confirmation ───────────────────────────────────────── */
-  // Any form carrying data-confirm asks once before submitting. Native confirm() is used
-  // deliberately: it works offline, needs no markup and cannot be styled into something the
-  // user misreads. Buttons stay enabled if they cancel.
-  function initConfirm() {
-    document.addEventListener('submit', function (event) {
-      var form = event.target;
-      if (!(form instanceof HTMLFormElement)) { return; }
-      var message = form.getAttribute('data-confirm');
-      if (!message || form.dataset.confirmed === '1') { return; }
-      if (!window.confirm(message)) {
-        event.preventDefault();
-        return;
-      }
-      form.dataset.confirmed = '1';
-    }, true);
-  }
-
-  /* ── Caps Lock hint on password fields ─────────────────────────────────────── */
-  function initCapsHint() {
-    var hint = document.getElementById('caps-hint');
-    if (!hint) { return; }
-    document.addEventListener('keyup', function (event) {
-      if (typeof event.getModifierState !== 'function') { return; }
-      hint.hidden = !event.getModifierState('CapsLock');
-    });
-  }
-
-  /* ── Draft autosave ────────────────────────────────────────────────────────── */
-  Array.prototype.forEach.call(document.querySelectorAll('form[data-autosave]'), function (form) {
-    var key = DRAFT_PREFIX + form.id;
-    if (!form.id) { return; }
-    var timer = null;
-    var status = form.querySelector('[data-draft-status]');
-    var saved = read(key);
-    if (saved) {
-      try {
-        var draft = JSON.parse(saved);
-        var restored = 0;
-        Object.keys(draft).forEach(function (name) {
-          var field = form.elements[name];
-          if (field && typeof field.value === 'string' && field.value === '') {
-            field.value = draft[name];
-            restored++;
-          }
-        });
-        if (restored && status) { status.textContent = 'Restored your saved draft.'; }
-      } catch (e) { /* ignore malformed draft */ }
-    }
-    function snapshot() {
-      var data = {};
-      Array.prototype.forEach.call(form.elements, function (field) {
-        if (!field.name || field.type === 'file' || field.type === 'hidden' || field.type === 'password') { return; }
-        if (field.type === 'checkbox' || field.type === 'radio') {
-          if (field.checked) { data[field.name] = field.value; }
-        } else if (field.value) {
-          data[field.name] = field.value;
-        }
-      });
-      store(key, JSON.stringify(data));
-      if (status) { status.textContent = 'Draft saved on this device.'; }
-    }
-    form.addEventListener('input', function () {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(snapshot, 900);
-    });
-    form.addEventListener('submit', function () {
-      window.clearTimeout(timer);
-      remove(key);
-    });
-  });
-
-  /* ── Idempotency key for offline-safe submits ──────────────────────────────── */
-  function newKey() {
-    if (window.crypto && window.crypto.getRandomValues) {
-      var bytes = new Uint8Array(16);
-      window.crypto.getRandomValues(bytes);
-      return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
-    }
-    return String(Date.now()) + Math.random().toString(16).slice(2);
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('form[data-offline-queue]'), function (form) {
-    var field = form.querySelector('input[name="idempotency_key"]');
-    if (field && !field.value) { field.value = newKey(); }
-  });
-
-  function queuePush(payload) {
-    var queue = [];
-    try { queue = JSON.parse(read(QUEUE_KEY) || '[]'); } catch (e) { queue = []; }
-    queue.push(payload);
-    store(QUEUE_KEY, JSON.stringify(queue.slice(-20)));
-  }
-  function queueLen() {
-    try { return (JSON.parse(read(QUEUE_KEY) || '[]')).length; } catch (e) { return 0; }
-  }
-  function flushQueue() {
-    if (!navigator.onLine || queueLen() === 0) { return; }
-    var queue;
-    try { queue = JSON.parse(read(QUEUE_KEY) || '[]'); } catch (e) { return; }
-    var next = [];
-    queue.forEach(function (item) {
-      var body = new URLSearchParams(item.fields);
-      fetch(item.action, {
-        method: 'POST',
-        body: body,
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      }).then(function (response) {
-        if (!response.ok) { next.push(item); }
-      }).catch(function () { next.push(item); });
-    });
-    store(QUEUE_KEY, JSON.stringify(next));
-  }
-
-  /* ── Copy-to-clipboard helper ──────────────────────────────────────────────── */
-  // [data-copy-target] copies the value of the element with that id. The installer uses it so the
-  // operator can paste the exact domain into the provider's order form without retyping.
-  function initCopyButtons() {
-    document.addEventListener('click', function (event) {
-      var button = event.target.closest('[data-copy-target]');
-      if (!button) { return; }
-      var field = document.getElementById(button.getAttribute('data-copy-target'));
-      if (!field) { return; }
-      var value = field.value !== undefined ? field.value : field.textContent;
-      var done = function () {
-        var original = button.textContent;
-        button.textContent = 'Copied';
-        window.setTimeout(function () { button.textContent = original; }, 1600);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(value).then(done, function () { field.select && field.select(); });
-      } else if (field.select) {
-        field.select();
-        try { document.execCommand('copy'); done(); } catch (e) { /* leave it selected */ }
-      }
-    });
-  }
-
-  /* ── Boot the small behaviours ─────────────────────────────────────────────── */
-  initConfirm();
-  initCapsHint();
-  initCopyButtons();
-
-  /* ── Service worker & update toast ─────────────────────────────────────────── */
-  if ('serviceWorker' in navigator && document.body.classList.contains('signed-in')) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register(document.body.dataset.sw || 'sw.js', { scope: './' }).catch(function () { /* ignore */ });
-    });
-    var refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (refreshing) { return; }
-      refreshing = true;
-      var toast = document.createElement('div');
-      toast.className = 'flash flash-info';
-      toast.setAttribute('role', 'status');
-      toast.textContent = 'RISE 63 has been updated. Reload to use the new version.';
-      var button = document.createElement('button');
-      button.className = 'btn btn-sm btn-secondary';
-      button.type = 'button';
-      button.textContent = 'Reload';
-      button.addEventListener('click', function () { window.location.reload(); });
-      toast.appendChild(document.createTextNode(' '));
-      toast.appendChild(button);
-      document.getElementById('main').prepend(toast);
-    });
-  }
-}());
-
-</script>
+<script src="/public/assets/app.js?v=2a50a162" defer></script>
 </body>
 </html>
