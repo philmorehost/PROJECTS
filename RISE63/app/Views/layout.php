@@ -4,7 +4,7 @@ declare(strict_types=1);
 use RISE63\Core\Auth;
 use RISE63\Core\Security;
 
-use function RISE63\{asset, e, favicon_letter, site_title, title_hue, url};
+use function RISE63\{asset, e, favicon_letter, icon, site_title, title_hue, url};
 
 /** @var string $content */
 $account  = $account ?? null;
@@ -15,23 +15,47 @@ $letter   = favicon_letter();
 $hue      = title_hue(site_title());
 $brand    = (string) (\RISE63\setting('theme_color', '#2563eb'));
 $flashes  = $flashes ?? [];
+// [label, icon name] per tab. The icons are drawn SVG (see icon() in Functions.php) rather than
+// text glyphs: a tab bar is judged by whether the marks line up, and ▤ ▦ ₦ ◈ ⚙ ⏻ do not.
+// [label, icon, short label]. The short label is rendered as well and swapped in by CSS below
+// 420px, where a 360px phone leaves ~46px per tab and “Parish Connect” would ellipsise to "Par…".
 $navItems = $account === null ? [] : ($isStaff
     ? [
-        'dashboard'    => ['Dashboard', '▤'],
-        'applications' => ['Applications', '▦'],
-        'parishes'     => ['Parish Connect', '⌂'],
-        'treasury'     => ['Treasury', '₦'],
+        'dashboard'    => ['Dashboard', 'dashboard', 'Home'],
+        'applications' => ['Applications', 'applications', 'Apps'],
+        'parishes'     => ['Parish Connect', 'parish', 'Parish'],
+        'treasury'     => ['Treasury', 'treasury', 'Treasury'],
     ]
     : [
-        'my-rise'  => ['My RISE', '★'],
-        'programs' => ['Programs', '◈'],
-        'parishes' => ['Parish Connect', '⌂'],
+        'my-rise'  => ['My RISE', 'star', 'My RISE'],
+        'programs' => ['Programs', 'programs', 'Programs'],
+        'parishes' => ['Parish Connect', 'parish', 'Parish'],
     ]);
 if ($account !== null && !Auth::isTreasurer($account)) {
     unset($navItems['treasury']);
 }
 if ($account !== null && (string) $account['role'] === 'youth_member') {
-    $navItems['parishes'] = ['Parish Connect', '⌂'];
+    $navItems['parishes'] = ['Parish Connect', 'parish', 'Parish'];
+}
+
+// The tab bar is assembled up front so the active-indicator transform can be indexed by position,
+// and so the markup below has one shape for links and the sign-out button alike.
+$tabs = [];
+foreach ($navItems as $key => [$label, $iconName, $short]) {
+    $tabs[] = ['href' => url($key), 'icon' => $iconName, 'label' => $label, 'short' => $short, 'active' => $page === $key];
+}
+if ($account !== null && $isStaff && (Auth::isAdmin($account) || (string) $account['role'] === 'csr_rep')) {
+    $tabs[] = ['href' => url('security'), 'icon' => 'security', 'label' => 'Security', 'short' => 'Security', 'active' => $page === 'security'];
+}
+if ($account !== null && Auth::isAdmin($account)) {
+    $tabs[] = ['href' => url('settings'), 'icon' => 'settings', 'label' => 'Settings', 'short' => 'Settings', 'active' => $page === 'settings'];
+}
+$activeIndex = 0;
+foreach ($tabs as $index => $tab) {
+    if ($tab['active']) {
+        $activeIndex = $index;
+        break;
+    }
 }
 ?>
 <!doctype html>
@@ -60,9 +84,16 @@ if ($account !== null && (string) $account['role'] === 'youth_member') {
 <body class="<?= $account === null ? 'guest' : 'signed-in' ?><?= $large ? ' text-large' : '' ?>">
 <a class="skip-link" href="#main">Skip to main content</a>
 
-<div class="offline-banner" id="offline-banner" role="status" hidden>
-  <span aria-hidden="true">◍</span>
-  <p>You are offline. Changes will sync when you reconnect.</p>
+<?php /* Shown only while the browser reports no connection, and removed the moment it returns —
+         both are handled by app.js, which also re-tests the connection every few seconds so a
+         stale "online" flag cannot leave the bar on screen. Hidden in the markup, so it never
+         flashes on a healthy page before the script runs. */ ?>
+<div class="offline-banner" id="offline-banner" role="status" aria-live="polite" hidden>
+  <span class="offline-icon" aria-hidden="true"><?= icon('offline', 'icon') ?></span>
+  <p class="offline-text">No internet connection. Anything you submit will be saved and sent when you reconnect.</p>
+  <button type="button" class="offline-close" id="offline-dismiss" aria-label="Dismiss offline notice">
+    <span aria-hidden="true">&times;</span>
+  </button>
 </div>
 
 <?php if ($account !== null): ?>
@@ -100,27 +131,29 @@ if ($account !== null && (string) $account['role'] === 'youth_member') {
 </main>
 
 <?php if ($account !== null): ?>
-<nav class="bottom-nav" aria-label="Primary">
-  <?php foreach ($navItems as $key => [$label, $icon]): ?>
-    <a href="<?= e(url($key)) ?>" class="<?= $page === $key ? 'active' : '' ?>" <?= $page === $key ? 'aria-current="page"' : '' ?>>
-      <span class="nav-icon" aria-hidden="true"><?= e($icon) ?></span>
-      <span class="nav-label"><?= e($label) ?></span>
+<?php $tabCount = count($tabs) + 1; ?>
+<nav class="bottom-nav" aria-label="Primary" style="--tab-count: <?= e((string) $tabCount) ?>; --active-index: <?= e((string) $activeIndex) ?>">
+  <?php /* One element that slides under the active tab. Animated with a transform so it costs the
+           compositor nothing, and hidden entirely when no tab is active. */ ?>
+  <span class="nav-indicator" aria-hidden="true"<?= $activeIndex === 0 && !($tabs[0]['active'] ?? false) ? ' data-idle="1"' : '' ?>></span>
+  <?php foreach ($tabs as $tab): ?>
+    <a href="<?= e((string) $tab['href']) ?>"
+       class="nav-tab<?= $tab['active'] ? ' active' : '' ?>"
+       <?= $tab['active'] ? 'aria-current="page"' : '' ?>>
+      <span class="nav-icon" aria-hidden="true"><?= icon((string) $tab['icon']) ?></span>
+      <span class="nav-label"><?= e((string) $tab['label']) ?></span>
+      <?php if (($tab['short'] ?? '') !== $tab['label']): ?>
+        <span class="nav-label nav-label-short" aria-hidden="true"><?= e((string) $tab['short']) ?></span>
+      <?php endif; ?>
     </a>
   <?php endforeach; ?>
-  <?php if ($isStaff && (Auth::isAdmin($account) || (string) $account['role'] === 'csr_rep')): ?>
-    <a href="<?= e(url('security')) ?>" class="<?= $page === 'security' ? 'active' : '' ?>">
-      <span class="nav-icon" aria-hidden="true">◈</span><span class="nav-label">Security</span>
-    </a>
-  <?php endif; ?>
-  <?php if (Auth::isAdmin($account)): ?>
-    <a href="<?= e(url('settings')) ?>" class="<?= $page === 'settings' ? 'active' : '' ?>">
-      <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span>
-    </a>
-  <?php endif; ?>
   <form method="post" action="<?= e(url('')) ?>" class="nav-logout">
     <?= Security::csrfField() ?>
     <input type="hidden" name="action" value="logout">
-    <button type="submit"><span class="nav-icon" aria-hidden="true">⏻</span><span class="nav-label">Sign out</span></button>
+    <button type="submit" class="nav-tab">
+      <span class="nav-icon" aria-hidden="true"><?= icon('logout') ?></span>
+      <span class="nav-label">Sign out</span>
+    </button>
   </form>
 </nav>
 <?php endif; ?>

@@ -183,25 +183,94 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .site-footer p { margin: 4px 0; }
 
 /* ── Bottom navigation ────────────────────────────────────────────────────────── */
+/* A phone-style tab bar: a floating, translucent slab with a hairline top edge, drawn SVG marks,
+   and one pill that slides to the active tab. It has to survive three fidelities — a 320px phone,
+   a wide desktop, and the printed page — so the widths are proportional (--tab-count) rather than
+   hard-coded for seven items. */
 .bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
-  display: flex; justify-content: space-around; align-items: stretch;
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
-  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.07);
+  position: fixed; z-index: 30;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  width: min(680px, calc(100% - 20px));
+  display: flex; align-items: stretch; justify-content: space-between;
+  gap: 2px; padding: 6px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 22px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 60%, transparent) inset,
+    0 10px 30px -10px rgba(15, 23, 42, 0.35),
+    0 2px 8px rgba(15, 23, 42, 0.08);
 }
+
+/* The sliding pill. One element, moved with a transform: width and offset come from the number of
+   tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
+   parked under the first tab, which would claim that tab was current. */
+.bottom-nav .nav-indicator {
+  position: absolute; z-index: 0;
+  top: 6px; bottom: 6px; left: 6px;
+  width: calc((100% - 12px) / var(--tab-count, 6) - 2px);
+  border-radius: 16px;
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent) inset;
+  transform: translateX(calc(var(--active-index, 0) * (100% + 2px)));
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.bottom-nav .nav-indicator[data-idle] { opacity: 0; }
+
 .bottom-nav a, .bottom-nav button {
-  flex: 1 1 0; min-height: var(--touch); min-width: var(--touch);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  background: none; border: 0; color: var(--text-muted); text-decoration: none;
-  font: inherit; font-size: var(--t-xs); cursor: pointer; border-radius: 10px;
-  padding: 2px;
+  position: relative; z-index: 1;
+  flex: 1 1 0; min-width: 0; min-height: var(--touch);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: none; border: 0; color: var(--text-faint); text-decoration: none;
+  font: inherit; font-size: var(--t-xs); line-height: 1.1; cursor: pointer;
+  padding: 6px 2px; border-radius: 16px;
+  transition: color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.bottom-nav .nav-icon { font-size: 1.15rem; line-height: 1; }
-.bottom-nav a.active, .bottom-nav a[aria-current="page"] { color: var(--brand); font-weight: 700; background: var(--brand-soft); }
-.bottom-nav form { flex: 1 1 0; margin: 0; display: flex; }
+.bottom-nav .nav-icon { display: grid; place-items: center; width: 24px; height: 24px; }
+.bottom-nav .nav-icon svg { width: 24px; height: 24px; display: block; }
+.bottom-nav .nav-label {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.75rem; letter-spacing: 0.01em; font-weight: 600;
+}
+
+/* The active tab: brand colour, a filled mark, and a slightly bolder label. The fill is a solid
+   tint behind the stroked path so it reads at a glance on a small screen. */
+.bottom-nav a.active, .bottom-nav a[aria-current="page"] { color: var(--brand); }
+.bottom-nav a.active .nav-label, .bottom-nav a[aria-current="page"] .nav-label { font-weight: 800; }
+.bottom-nav a.active .nav-icon svg, .bottom-nav a[aria-current="page"] .nav-icon svg {
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--brand) 35%, transparent));
+}
+.bottom-nav a.active .nav-icon, .bottom-nav a[aria-current="page"] .nav-icon { transform: translateY(-1px); }
+
+.bottom-nav form { flex: 1 1 0; margin: 0; display: flex; min-width: 0; }
 .bottom-nav button { width: 100%; }
-.bottom-nav button:active, .bottom-nav a:active { transform: scale(0.97); }
+.bottom-nav a:hover, .bottom-nav button:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.bottom-nav a:active, .bottom-nav button:active { transform: scale(0.94); }
+.bottom-nav .nav-logout button { color: var(--text-faint); }
+.bottom-nav .nav-logout button:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* A phone narrow enough that the full labels would ellipsise: swap in the short label. Both are
+   in the markup so the accessible name stays the long one — the short copy is aria-hidden. */
+.bottom-nav .nav-label-short { display: none; }
+@media (max-width: 420px) {
+  .bottom-nav { width: calc(100% - 12px); bottom: calc(6px + env(safe-area-inset-bottom)); border-radius: 20px; padding: 5px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; }
+  .bottom-nav a, .bottom-nav button { gap: 3px; }
+  .bottom-nav .nav-label:not(.nav-label-short) { display: none; }
+  .bottom-nav .nav-label-short { display: block; }
+}
+
+/* Nine tabs (admin on a phone) is the worst case: shrink the mark, never the words. The label
+   floor is 0.6875rem — the stylesheet's readability rule is enforced by a test. */
+@media (max-width: 360px) {
+  .bottom-nav .nav-icon, .bottom-nav .nav-icon svg { width: 21px; height: 21px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; letter-spacing: -0.01em; }
+}
 
 /* ── Setup wizard ─────────────────────────────────────────────────────────────── */
 /* Used by install/index.php. A wide, two-column shell on desktop that collapses to one column on
@@ -447,14 +516,43 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
+/* The offline bar sits *below* the sticky top bar rather than over it: covering the top bar hid
+   the brand and the theme button at the exact moment the user was looking for a way out. It is
+   only ever on screen while the browser reports no connection; app.js owns that decision and
+   removes it without delay when the connection returns. */
 .offline-banner {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 60;
-  display: flex; gap: 10px; align-items: center; justify-content: center;
+  position: fixed; z-index: 40;
+  top: calc(env(safe-area-inset-top) + 0px); left: 0; right: 0;
+  display: flex; gap: 10px; align-items: center;
   background: var(--warn-soft); color: var(--warn);
-  padding: 10px 16px; font-size: var(--t-sm); font-weight: 600;
-  border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  padding: 9px 14px; font-size: var(--t-sm); font-weight: 600;
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+  box-shadow: 0 6px 18px -8px rgba(15, 23, 42, 0.35);
+  /* Slide down on show, up on hide. Never 0s: an instant jump is harder to notice than a fast
+     slide, and "gone immediately" is about latency, not about skipping the transition. */
+  animation: offline-in 0.18s ease-out both;
 }
-.offline-banner p { margin: 0; }
+/* Leaving: app.js adds [hidden] the moment connectivity returns and the bar is removed from the
+   layout in the same frame — this rule only exists so the exit is not a jolt when the browser
+   honours the transition. */
+.offline-banner[hidden] { display: none; }
+.offline-banner .offline-icon { display: grid; place-items: center; flex: 0 0 auto; }
+.offline-banner .offline-icon svg { width: 18px; height: 18px; }
+.offline-banner .offline-text { margin: 0; flex: 1 1 auto; min-width: 0; }
+.offline-banner .offline-close {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 32px; height: 32px; margin: -4px -6px -4px 0;
+  background: transparent; border: 0; border-radius: 10px;
+  color: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer;
+  opacity: 0.75; transition: opacity 0.12s ease, background 0.12s ease;
+}
+.offline-banner .offline-close:hover { opacity: 1; background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.offline-banner .offline-close:active { transform: scale(0.92); }
+@keyframes offline-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .offline-banner { animation: none; }
+  .bottom-nav .nav-indicator { transition: none; }
+}
 .install-prompt {
   position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 50;
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
@@ -501,9 +599,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (min-width: 720px) {
   .page { padding: 28px 24px 40px; }
-  .page.has-bottom-nav { padding-bottom: 40px; }
-  .bottom-nav { position: static; border-top: 1px solid var(--border); box-shadow: none; border-bottom: 0; }
-  .install-prompt { left: auto; right: 24px; bottom: 24px; max-width: 420px; }
+  /* The bar stays floating on a wide screen — it was previously switched to a static block here,
+     which would have parked a "phone" tab bar under the page content on every desktop. Only the
+     room beneath the page changes. */
+  .page.has-bottom-nav { padding-bottom: 104px; }
+  .install-prompt { left: auto; right: 24px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 420px; }
   .card { padding: 22px; }
 }
 

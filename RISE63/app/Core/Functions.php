@@ -290,3 +290,56 @@ function remember(string $key, callable $factory): mixed
     }
     return $store[$key];
 }
+
+/**
+ * An inline SVG icon, sized by CSS.
+ *
+ * The bottom bar previously used text glyphs (▤ ▦ ⌂ ₦ ◈ ⚙ ⏻). They are not the same width, they
+ * sit at different heights, and several of them render as a different picture — or as a missing
+ * box — depending on the device's font. A phone-style tab bar needs marks that are drawn the same
+ * everywhere and that can be filled when the tab is active, so these are stroked paths that switch
+ * to a filled state via CSS `currentColor`.
+ *
+ * Only a fixed set of names is accepted: the icon name is never interpolated into the markup.
+ */
+function icon(string $name, string $class = 'icon'): string
+{
+    $paths = [
+        // A grid of four panes — "dashboard".
+        'dashboard' => '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/>'
+            . '<rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+        // A page with lines — "applications".
+        'applications' => '<path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19"/><path d="M9 12h6M9 16h6"/>',
+        // A house — "parish connect".
+        'parish' => '<path d="M4 11 12 4l8 7"/><path d="M6.5 9.8V20h11V9.8"/><path d="M10 20v-5h4v5"/>',
+        // A stacked-coin mark in place of a currency glyph, which renders as a box on many phones.
+        'treasury' => '<circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/>',
+        // A shield with a tick — "security".
+        'security' => '<path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/>',
+        // A slider pair — "settings".
+        'settings' => '<path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>',
+        // A star — member "my rise".
+        'star' => '<path d="m12 3.8 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.5 10l5.9-.9z"/>',
+        // A compass — "programs".
+        'programs' => '<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+        // A door with an arrow — sign out.
+        'logout' => '<path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/>',
+        // A cloud with a slash — offline.
+        'offline' => '<path d="M7 18.5h9.2a3.3 3.3 0 0 0 .6-6.5 5 5 0 0 0-8.3-3.4"/><path d="M4.5 4.5 19.5 19.5"/>',
+        // A crossed-out phone/tower — nothing is reachable.
+        'signal-off' => '<path d="M4 20h4M12 20h.01M20 20h.01"/><path d="M7 16.5a7 7 0 0 1 3-1.6"/>'
+            . '<path d="M4.5 4.5 19.5 19.5"/>',
+        // A plain check — "back online".
+        'check' => '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    ];
+
+    if (!isset($paths[$name])) {
+        return '';
+    }
+
+    $class = preg_replace('/[^a-z0-9 -]/i', '', $class) ?? 'icon';
+
+    return '<svg class="' . $class . '" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        . ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
+        . ' aria-hidden="true" focusable="false">' . $paths[$name] . '</svg>';
+}

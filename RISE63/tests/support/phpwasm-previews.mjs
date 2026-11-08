@@ -282,3 +282,88 @@ echo '<!-- page resolved from the path: ' . \\RISE63\\page_from_path('/login') .
   console.log(`sign-in at /login → docs/preview/login-at-clean-url.html (${html.length} bytes, page=${
     /page resolved from the path: login/.test(html) ? 'login' : 'NOT RESOLVED'})`);
 }
+
+
+/**
+ * The signed-in shell: the redesigned tab bar on a real dashboard, and the offline bar in the two
+ * states that matter. Rendered through layout.php with fixtures, so the preview is the same markup
+ * the browser receives — this is the screen the redesign was asked for.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  const bar = await (async () => {
+    await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/dashboard',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+$content = '<section class="stack">'
+    . '<div class="card"><p class="muted" style="margin:0">Province overview</p><h1>Dashboard</h1>'
+    . '<p class="muted" style="margin:0">Signed in as Build Room. The bar below is the redesigned tab bar.</p></div>'
+    . '<div class="grid-2">'
+    . '<div class="stat"><strong>0</strong><span>Active parishes</span></div>'
+    . '<div class="stat"><strong>0</strong><span>Applications</span></div>'
+    . '</div></section>';
+$account = array(
+    'id' => 1, 'full_name' => 'Build Room', 'email' => 'yemi.abiose@gmail.com',
+    'role' => 'provincial_admin', 'parish_id' => 3, 'theme_preference' => 'dark',
+    'large_text' => 0, 'is_suspended' => 0,
+);
+$user = $account; $page = 'dashboard'; $title = 'Dashboard'; $flashes = array();
+echo \\RISE63\\Core\\View::capture('/src/app/Views/layout.php', array(
+    'content' => $content, 'title' => 'Dashboard', 'page' => 'dashboard',
+    'account' => $account, 'user' => $account, 'flashes' => array(),
+), false);
+`);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return output;
+  })();
+
+  let html = bar;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  html = html.replace('</body>', `<script>
+  // Show the offline bar for the screenshot; in the app it appears only when the probe fails.
+  document.getElementById('offline-banner').hidden = false;
+</script>
+</body>`);
+  await writeFile(join(root, 'docs/preview/nav-and-offline.html'), html);
+
+  // Phones: the same bar at 390px and 360px, where seven tabs is the hard case. The media queries
+  // are CSS-only, so the preview is the same document inside a fixed-width frame.
+  const phone = (width, path) => html.replace('</head>',
+    `<style>body{width:${width}px;margin:0 auto;outline:1px dashed #556;}</style>\n</head>`)
+    .replace('border-radius: 22px', 'border-radius: 22px');
+  await writeFile(join(root, 'docs/preview/nav-phone-390.html'), phone(390));
+  await writeFile(join(root, 'docs/preview/nav-phone-360.html'), phone(360));
+
+  console.log(`tab bar + offline bar → docs/preview/nav-and-offline.html (${html.length} bytes, ${
+    (html.match(/class="nav-tab/g) || []).length} tabs)`);
+  console.log('phone widths → docs/preview/nav-phone-390.html, docs/preview/nav-phone-360.html');
+}

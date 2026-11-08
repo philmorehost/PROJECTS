@@ -241,6 +241,12 @@ ok('Member home shows the empty state and program cards', function () use ($rend
     assertContains('Start with a program', $html);
     assertContains('Academy graduation required', $html);
     assertContains('bottom-nav', $html, 'signed-in chrome');
+    // The tab bar is drawn SVG, indexed by position, and the active tab is marked for CSS.
+    assertContains('class="nav-indicator"', $html, 'sliding active pill');
+    assertContains('--tab-count:', $html, 'tab count drives the pill width');
+    assertContains('--active-index:', $html, 'active tab drives the pill position');
+    assertContains('<svg class="icon"', $html, 'icons are drawn, not text glyphs');
+    assertContains('nav-logout', $html, 'sign out stays a POST with a CSRF token');
 });
 
 ok('Member home lists applications with the three-step tracker', function () use ($renderPage, $member, $application): void {
@@ -617,10 +623,20 @@ ok('Stylesheet meets the mobile-first contract', function (): void {
     assertContains('.tracker-step', $css);
     assertContains('.combo-list', $css);
     assertContains('.offline-banner', $css);
+    assertContains('.offline-banner .offline-close', $css, 'the offline bar can be closed by hand');
+    assertContains('.bottom-nav .nav-indicator', $css);
+    // The bar must stay floating on a wide screen; a static rule here would park it under the page.
+    assertMissing('.bottom-nav { position: static', $css, 'the tab bar stays fixed at every width');
     assertContains('.install-prompt', $css);
     assertContains('@media print', $css);
-    assertMissing('font-size: 0.6', $css, 'no unreadably small type');
+    // No unreadably small type. Checked by value, not by prefix: 0.6875rem (11px) is the floor a
+    // tab-bar label may use, and the old 'font-size: 0.6' prefix would reject it while accepting
+    // e.g. 0.65rem. Every rem size in the sheet is parsed and the smallest one must clear 11px.
+    preg_match_all('/font-size:\s*([0-9.]+)rem/', $css, $remSizes);
+    $smallest = $remSizes[1] === [] ? 1.0 : min(array_map('floatval', $remSizes[1]));
+    assertTrue($smallest >= 0.6875, 'smallest rem font-size is ' . $smallest . 'rem, below the 11px floor');
     assertMissing('font-size:10px', $css);
+    assertMissing('font-size: 10px', $css);
 });
 
 ok('Manifest and service worker satisfy the install requirements', function (): void {
