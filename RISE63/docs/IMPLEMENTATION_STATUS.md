@@ -53,7 +53,7 @@ What the view suite asserts:
 * Every form action in the templates has a POST handler, and the only GET-with-action route
   (`document-download`) lives in its own file with scope, attachment and `realpath` containment
   checks — the tests assert all three.
-* The stylesheet declares 16 px base type, a 48 px touch token, 16 px inputs, both themes, reduced-motion, print, tracker, combobox, offline banner and install prompt — and contains no type below 13 px.
+* The stylesheet declares 16 px base type, a 48 px touch token, 16 px inputs, both themes, reduced-motion, print, tracker, combobox, offline banner and install prompt — and contains no type below 11 px (0.6875rem), the tab-bar label floor.
 * The manifest is valid JSON with 192/512 any-purpose **and** maskable icons that exist on disk; the service worker versions its cache, deletes old caches, and refuses to cache `/api/` or non-GET requests.
 
 ### 2.2 Static SQL consistency audit (no database needed)
@@ -297,6 +297,45 @@ rather than per script path, so one CLI run could not look at two installations.
 `/install/`, `/api/`, nested pages and encoded traversal; the smoke harness asserts the rewrite rule
 exists, that it maps a bare segment, that it leaves asset paths alone, and that it is guarded by the
 `!-f`/`!-d` conditions — and that assertion was verified to fail when the rule is deleted.
+
+### 2.3g The tab bar and the offline notice
+
+**Tab bar.** It was seven text glyphs (▤ ▦ ⌂ ₦ ◈ ⚙ ⏻) in a flat strip. Text glyphs are the wrong
+material for a tab bar: they have different widths and baseline heights, and several render as a
+different picture — or a missing box — depending on the device's fonts. Rebuilt as a phone-style
+bar:
+
+- **drawn SVG icons** from `icon()` in `Functions.php`, a fixed allow-list so an icon name is never
+  interpolated into markup, all on the same 24px grid and stroke weight;
+- a **floating translucent slab** with a hairline border and a layered shadow, instead of a
+  full-width strip welded to the bottom edge;
+- a **sliding pill** under the active tab, driven by `--active-index` and `--tab-count` so adding a
+  tab needs no CSS change, and hidden entirely when no tab is current;
+- **safe-area inset** honoured, labels floored at 11px, marks shrinking rather than targets below
+  360px, and `prefers-reduced-motion` respected.
+
+One real defect fell out of this: a `min-width: 720px` rule set `.bottom-nav` to `position: static`,
+so on any desktop the bar became a block under the page content. That rule was written for the flat
+strip; with a floating bar it would have looked broken on every desktop. Removed, and a test now
+asserts the rule cannot come back.
+
+**Offline notice.** The old version toggled `navigator.onLine` and nothing else, and had no way to
+close it. `navigator.onLine` is a hint, not an answer: it reports "connected" to a router with no
+internet. Now:
+
+| Requirement | How |
+|---|---|
+| Automatic | `offline`/`online` events plus a 5s same-origin `HEAD` probe; no user action needed |
+| Only while actually offline | `onLine === false` is trusted as a negative; "online" is confirmed by the probe |
+| Removed with no perceptible delay | cleared in the `online` handler itself, before any probe resolves |
+| Manual close | a × button sets a flag that survives repeated probes and clears on the next recovery |
+
+Probing stops once the connection is confirmed and resumes on `offline`, so a page left open on a
+phone does not make a request every five seconds indefinitely.
+
+**Verified** with `tests/support/offline-behaviour.mjs`, which loads the real `app.js` in a stubbed
+browser and asserts all four behaviours — and was checked to fail when the `online` handler or the
+dismiss handler is deliberately broken.
 
 ### 2.4 Updates from the licence server
 

@@ -47,15 +47,116 @@
   applyTheme(currentTheme());
 
   /* ── Offline banner ────────────────────────────────────────────────────────── */
+  /* Requirements, in order of how easy they are to get wrong:
+       1. automatic — no user action needed to make it appear;
+       2. only while actually offline — navigator.onLine reports "connected" to any network,
+          including a router with no internet, so it is a hint and never the answer;
+       3. removed with no perceptible delay when the connection returns, and re-tested on a timer
+          so a missing 'online' event cannot leave it stranded on screen;
+       4. closable by hand, and a dismissal sticks until the next time the connection drops —
+          otherwise the bar would reappear seconds after being dismissed. */
   var banner = document.getElementById('offline-banner');
-  function paintConnectivity() {
+  var bannerDismiss = document.getElementById('offline-dismiss');
+  var offlineDismissed = false;
+  var probeTimer = null;
+  var probeInFlight = false;
+  /* 5s: fast enough that an offline bar never outlives a working connection by more than a moment,
+     cheap enough to run on a metered phone (one HEAD to the favicon the page already loaded). */
+  var PROBE_INTERVAL = 5000;
+
+  function setBanner(offline) {
     if (!banner) { return; }
-    banner.hidden = navigator.onLine !== false;
-    document.body.style.paddingTop = banner.hidden ? '' : banner.offsetHeight + 'px';
+    var wasHidden = banner.hidden;
+    var show = offline && !offlineDismissed;
+    banner.hidden = !show;
+    // The bar is fixed, so it does not move the page; nothing needs reflow. Announce the change
+    // once, for screen readers, rather than on every probe.
+    if (show && wasHidden) {
+      banner.setAttribute('data-since', String(Date.now()));
+    }
   }
-  window.addEventListener('online', function () { paintConnectivity(); flushQueue(); });
-  window.addEventListener('offline', paintConnectivity);
-  paintConnectivity();
+
+  /* A request that fails fast is a better answer than navigator.onLine. HEAD on the same origin
+     proves the route to this server; a captive portal that answers everything still counts as
+     online, which is correct — the app can reach something. */
+  function probe() {
+    if (probeInFlight || !window.fetch) { return; }
+    probeInFlight = true;
+    var done = function (reachable) {
+      probeInFlight = false;
+      if (reachable) {
+        if (offlineDismissed) { offlineDismissed = false; }
+        setBanner(false);
+        flushQueue();
+      } else {
+        setBanner(true);
+      }
+    };
+    var url = (document.querySelector('link[rel="icon"]') || {}).href || window.location.href;
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (controller) { controller.abort(); }
+    }, 4000);
+    window.fetch(url, {
+      method: 'HEAD',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined
+    }).then(function (response) {
+      clearTimeout(timer);
+      // Any HTTP answer — even 403 or 404 — means the server was reached.
+      done(true);
+    }, function () {
+      clearTimeout(timer);
+      done(false);
+    });
+  }
+
+  function startProbing() {
+    if (probeTimer !== null) { return; }
+    probeTimer = setInterval(probe, PROBE_INTERVAL);
+  }
+  function stopProbing() {
+    if (probeTimer === null) { return; }
+    clearInterval(probeTimer);
+    probeTimer = null;
+  }
+
+  if (banner) {
+    // navigator.onLine is only trusted when it says "offline": that is a reliable negative. When
+    // it flips to online the bar is cleared at once, then a probe confirms the server agrees.
+    window.addEventListener('offline', function () {
+      offlineDismissed = false;
+      setBanner(true);
+      startProbing();
+    });
+    window.addEventListener('online', function () {
+      offlineDismissed = false;
+      setBanner(false);
+      probe();
+      stopProbing();
+    });
+    window.addEventListener('pageshow', function () { if (navigator.onLine === false) { setBanner(true); startProbing(); } });
+
+    if (bannerDismiss) {
+      bannerDismiss.addEventListener('click', function () {
+        offlineDismissed = true;
+        setBanner(false);
+        // Keep probing while dismissed: the flag has to clear when the connection returns, or the
+        // next outage would show nothing at all.
+        startProbing();
+      });
+    }
+
+    // Initial state. navigator.onLine === false is trustworthy; true is not, so probe once on load
+    // rather than trusting it and silently hiding a real outage.
+    if (navigator.onLine === false) {
+      setBanner(true);
+      startProbing();
+    } else {
+      probe();
+    }
+  }
 
   /* ── Install prompt (Android/Chromium) ─────────────────────────────────────── */
   var installBox = document.getElementById('install-prompt');
