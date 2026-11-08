@@ -1,0 +1,49 @@
+# RISE 63 — Apache 2.4 / LiteSpeed.
+# These rules are defence in depth. The deployment guide requires the same denials at the
+# server level, because .htaccess is ignored when AllowOverride is off.
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+# Never serve dotfiles, SQL, JSON config, locks, logs or PHP sources as text.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(?:sql|md|log|lock|ini|dist|bak|sh|env)$">
+    Require all denied
+</FilesMatch>
+# Config and storage JSON/keys must never be downloadable.
+<FilesMatch "\.(?:json|php)$">
+    <If "%{REQUEST_URI} =~ m#^/(?:config|storage|database|app|tests|bin|docs)/#">
+        Require all denied
+    </If>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:app|config|storage|database|tests|bin|docs)(?:/|$) - [F,L]
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/javascript application/json image/svg+xml
+</IfModule>
+
+# Caching: fingerprinted assets are immutable; HTML and JSON are never cached here.
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # Only content-addressed files may be cached for a year. src="app.css" would otherwise
+    # pin an old build in browsers long after an edit.
+    <FilesMatch "\.[0-9a-f]{8}\.(?:css|js)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    <FilesMatch "(?<![0-9a-f]{8})\.(?:css|js|png|svg|webp|woff2)$">
+        Header set Cache-Control "public, max-age=3600, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "\.(?:php|webmanifest)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
+# Block common probe paths outright with a cheap 403 rather than a 404 page render.
+RedirectMatch 403 ^/(?:\.git|\.env|wp-admin|wp-login|phpmyadmin|vendor)(?:/|$)

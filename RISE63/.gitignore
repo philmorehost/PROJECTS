@@ -1,0 +1,20 @@
+# Private runtime state — never commit.
+config/installed.lock
+config/database.php
+config/system-token.php
+config/activation-cache.json
+config/smtp.php
+config/firewall.php
+config/trusted_proxies.php
+config/geo.php
+config/setup.mutex
+storage/sessions/
+storage/documents/
+storage/logs/
+!storage/README.txt
+!config/README.txt
+
+# Tooling
+node_modules/
+package-lock.json
+*.log
