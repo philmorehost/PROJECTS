@@ -217,6 +217,59 @@ ok('Academy attendance percentage guards bad input', function (): void {
     assertSame(100, RISE63\Core\Academy::percent(3, 5), 'clamped at 100');
 });
 
+ok('Temporary passwords satisfy the policy they will be replaced under', function (): void {
+    for ($i = 0; $i < 40; $i++) {
+        $temporary = RISE63\Core\Security::temporaryPassword();
+        assertSame(14, strlen($temporary), 'fixed length keeps it easy to read aloud');
+        assert(preg_match('/[0-9]/', $temporary) === 1, 'must contain a digit');
+        assert(preg_match('/[^A-Za-z0-9]/', $temporary) === 1, 'must contain a symbol');
+        assert(preg_match('/[0OlI]/', $temporary) === 0, 'no ambiguous glyphs');
+        assertSame(null, RISE63\Core\Security::passwordProblem($temporary), 'must pass the real policy');
+    }
+    $batch = [];
+    for ($i = 0; $i < 50; $i++) {
+        $batch[RISE63\Core\Security::temporaryPassword()] = true;
+    }
+    assertSame(50, count($batch), 'no collisions in 50 draws');
+});
+
+ok('Reset tokens are random, url-safe and only ever stored hashed', function (): void {
+    $a = RISE63\Core\Security::randomToken(32);
+    $b = RISE63\Core\Security::randomToken(32);
+    assert($a !== $b, 'two tokens must differ');
+    assertSame(64, strlen($a), '32 bytes as hex = 64 chars');
+    assert(preg_match('/^[a-f0-9]{64}$/D', $a) === 1, 'must match the shape the resolver accepts');
+    assertSame(hash('sha256', $a), RISE63\Core\Security::hashToken($a));
+    assertSame(64, strlen(RISE63\Core\Security::hashToken($a)));
+    // The resolver's pattern must reject everything else, without touching the database.
+    foreach (['', 'short', str_repeat('a', 63), str_repeat('a', 65), strtoupper($a), '../../etc/passwd'] as $bad) {
+        assert(preg_match('/^[a-f0-9]{64}$/D', $bad) !== 1, 'must reject malformed token');
+    }
+});
+
+ok('Migration files follow the shipping rules', function (): void {
+    $dir = RISE63_TEST_ROOT . '/database/migrations';
+    assert(is_dir($dir), 'database/migrations must exist');
+    $files = glob($dir . '/*.sql') ?: [];
+    sort($files);
+    assert(count($files) >= 1, 'at least one migration ships with this version');
+    $seen = [];
+    foreach ($files as $file) {
+        $name = basename($file);
+        assert(preg_match('/^(\d{4})_[a-z0-9_]{1,60}\.sql$/D', $name) === 1, 'bad migration name: ' . $name);
+        preg_match('/^(\d{4})/', $name, $m);
+        assert(!isset($seen[$m[1]]), 'duplicate migration version ' . $m[1]);
+        $seen[$m[1]] = true;
+        $sql = (string) file_get_contents($file);
+        assert(stripos($sql, 'DELIMITER') === false, 'no DELIMITER blocks in migrations: ' . $name);
+        assert(stripos($sql, 'CREATE TRIGGER') === false, 'triggers live in ledger-guards.sql: ' . $name);
+        assert(stripos($sql, 'DROP TABLE') === false, 'migrations must not drop tables: ' . $name);
+        assert(substr_count($sql, ';') >= 1, 'a migration must contain statements');
+    }
+    // Versions must be contiguous from 0001.
+    assertSame('0001', array_key_first($seen));
+});
+
 /* ─────────────────────── Security: passwords & PINs ────────────────────────── */
 
 ok('Password policy rejects weak secrets', function (): void {

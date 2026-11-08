@@ -136,12 +136,49 @@ try {
             if (!hash_equals($next, $confirm)) {
                 throw new InvalidArgumentException('The two new passwords do not match.');
             }
-            Database::run('UPDATE users SET password_hash = ?, password_changed_at = UTC_TIMESTAMP() WHERE id = ?', [Security::hashPassword($next), (int) $account['id']]);
+            if (Security::passwordReused($next, (int) $account['id'])) {
+                throw new InvalidArgumentException('Choose a password you have not used on this account before.');
+            }
+            Database::run(
+                'UPDATE users SET password_hash = ?, password_changed_at = UTC_TIMESTAMP(), must_change_password = 0 WHERE id = ?',
+                [Security::hashPassword($next), (int) $account['id']]
+            );
             Audit::log((int) $account['id'], 'password.change', 'user', (string) $account['id'], 'Password changed by the account holder.');
-            RISE63\Core\Notifier::preferenceChanged($account, 'Password', true);
+            RISE63\Core\Notifier::securityNotice(
+                $account,
+                'your password was changed',
+                'Your password was changed',
+                '<p>Your RISE 63 password was changed from ' . RISE63\e(Security::clientIp()) . ' at '
+                . RISE63\e(gmdate('j M Y, H:i') . ' UTC') . '.</p><p>Other devices were signed out. If this was not you, contact the province office.</p>'
+            );
             flash('Password changed. Other devices were signed out.', 'success');
             Auth::revokeOthers((int) $account['id']);
-            $back('profile');
+            $back('change-password' === (string) $input('return_to', 'profile') ? 'my-rise' : 'profile');
+
+        // ── Password reset (signed out) ──────────────────────────────────────────────
+        case 'password-reset-request':
+            // Always the same answer, with or without an account, so this cannot be used to
+            // discover who is registered.
+            RISE63\Core\PasswordReset::request((string) $input('email', ''), Security::clientIp());
+            flash(RISE63\Core\PasswordReset::NEUTRAL_MESSAGE, 'success');
+            redirect('forgot-password', ['sent' => '1']);
+
+        case 'password-reset-complete':
+            try {
+                $resetUser = RISE63\Core\PasswordReset::complete(
+                    (string) $input('token', ''),
+                    (string) ($_POST['new_password'] ?? ''),
+                    (string) ($_POST['new_password_confirm'] ?? ''),
+                    Security::clientIp()
+                );
+            } catch (InvalidArgumentException $error) {
+                flash($error->getMessage(), 'error');
+                redirect('forgot-password');
+            }
+            // The member just proved control of the mailbox and chose the password, so sign them in.
+            Auth::loginAs($resetUser);
+            flash('Your password has been changed and you are signed in.', 'success');
+            redirect($home($resetUser));
 
         case 'pin-set':
             $account = Auth::requireLogin();
@@ -463,6 +500,23 @@ try {
             ], $account);
             flash('Account created for ' . $created['email'] . '. Share the temporary password through a trusted channel.', 'success');
             $back('people');
+
+        case 'user-temporary-password':
+            $account = Auth::requireLogin();
+            Auth::requireAdmin($account);
+            $target = Database::one('SELECT * FROM users WHERE id = ?', [(int) ($_POST['user_id'] ?? 0)]);
+            if ($target === null) {
+                throw new NotFound('That account does not exist.');
+            }
+            if ((int) $target['id'] === (int) $account['id']) {
+                throw new InvalidArgumentException('Use My account to change your own password.');
+            }
+            $temporary = RISE63\Core\PasswordReset::issueTemporary($target, $account);
+            // Shown once, never stored in the clear and never queued: an administrator reads it out
+            // or writes it down and hands it over in person.
+            flash('Temporary password for ' . (string) $target['full_name'] . ': ' . $temporary
+                . ' — write it down now; it cannot be shown again.', 'success');
+            redirect('people', ['user' => (int) $target['id']]);
 
         case 'user-role':
             $account = Auth::requireLogin();

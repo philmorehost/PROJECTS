@@ -63,6 +63,7 @@ CREATE TABLE users (
     email                       VARCHAR(150) NOT NULL,
     phone                       VARCHAR(30)  NULL,
     password_hash               VARCHAR(255) NOT NULL,
+    must_change_password        TINYINT(1)   NOT NULL DEFAULT 0,
     role                        ENUM('provincial_admin','provincial_treasurer','csr_rep','youth_member') NOT NULL DEFAULT 'youth_member',
     transaction_pin_hash        VARCHAR(255) NULL,
     is_suspended                TINYINT(1)   NOT NULL DEFAULT 0,
@@ -318,5 +319,6 @@ CREATE TABLE sessions_meta (
 
 CREATE TABLE schema_migrations (
     version    VARCHAR(40) PRIMARY KEY,
+    checksum   CHAR(64)    NULL,
     applied_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

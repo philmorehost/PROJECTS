@@ -32,6 +32,7 @@ Production never sets that variable. See `docs/DEPLOYMENT.md` for the real flow.
 php tests/unit.php          # money, state machine, security policy, settings schema, schema integrity
 php tests/render.php        # every view against fixtures, XSS probes, UX contract, route consistency
 php bin/build-assets.php    # fingerprint CSS/JS + refresh the service-worker shell list
+php bin/migrate.php --status # apply pending schema migrations (--dry-run to read them first)
 ```
 
 In a sandbox without a PHP binary, the same suites run through php-wasm:
@@ -43,13 +44,14 @@ node tests/support/phpwasm-test.mjs
 node tests/support/phpwasm-render.mjs
 ```
 
-Current state: **58 files lint clean, 32 logic tests pass, 25 view tests pass.** What is verified and what still
+Current state: **64 files lint clean, 35 logic tests pass, 27 view tests pass.** What is verified and what still
 needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Highlights
 
 | Area | What is actually built |
 |---|---|
+| **Accounts** | Self-service reset with single-use 30-minute hashed tokens (offered only when SMTP is configured), forced change after an administrator issues a temporary password, device revocation and a queued security notice on every change. |
 | **Installer** | Four stages — system check + activation, database, administrator, lock. Filesystem mutex, refuses a non-empty database, writes `config/*` as 0600. |
 | **Security** | Account suspension and IP blocks on independent windows, immediate block for unknown accounts, escalating day→week→month→year blocks, five-clean-session recognition with a crown badge, 250-country filter, manual IP/e-mail rules, queued firewall jobs applied by a least-privilege worker. |
 | **Money** | Integer-kobo `Money` value object, `DECIMAL(15,2)` columns, append-only ledger with database triggers, two-person disbursement (request → PIN confirmation), Seed Grant pool locked with `SELECT … FOR UPDATE`. |
@@ -81,6 +83,6 @@ docs/                  DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/blueprin
 1. Follow `docs/DEPLOYMENT.md` §1–§4 — HTTPS, private-directory denial, installer lock.
 2. Install the three cron entries; without them no notification is ever delivered.
 3. Read `docs/IMPLEMENTATION_STATUS.md` §3 and §5: run the database, brute-force and PWA checks on staging, and note
-   the known gaps (no self-service password reset, no 2FA, no payment gateway, no integration suite yet).
+   the known gaps (no 2FA, no payment gateway, no integration suite yet).
 
 Not yet production-complete. Nothing in this repository claims otherwise.

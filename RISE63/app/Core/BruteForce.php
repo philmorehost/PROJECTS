@@ -314,7 +314,8 @@ final class BruteForce
 
     public static function log(string $ip, ?string $country, ?string $username, string $event, string $details = ''): void
     {
-        $allowed = ['failed_login', 'account_suspended', 'account_unsuspended', 'ip_blocked', 'ip_unblocked', 'whitelisted_ip', 'country_blocked', 'success', 'pin_failure', 'settings_changed', 'login_alert'];
+        $allowed = ['failed_login', 'account_suspended', 'account_unsuspended', 'ip_blocked', 'ip_unblocked', 'whitelisted_ip', 'country_blocked', 'success', 'pin_failure', 'settings_changed', 'login_alert',
+            'reset_requested', 'reset_completed', 'password_forced', 'two_factor'];
         if (!in_array($event, $allowed, true)) {
             throw new \LogicException('Unsupported security event.');
         }

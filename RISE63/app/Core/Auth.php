@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace RISE63\Core;
 
+use RuntimeException;
+
 /**
  * Authentication, session lifetime, role gates and transaction-PIN checks.
  *
@@ -68,17 +70,10 @@ final class Auth
 
         $wasRecognised = (int) (Database::value('SELECT whitelisted FROM security_ips WHERE ip_address = ?', [$ip]) ?? 0) === 1;
 
-        session_regenerate_id(true);
-        $_SESSION['rise63_user']     = (int) $user['id'];
-        $_SESSION['rise63_last_seen'] = time();
-        $_SESSION['rise63_csrf']     = Security::randomToken(32);
-        unset($_SESSION['rise63_counted_ip']);
+        self::establishSession($user, $ip);
 
         $recognition = BruteForce::recordSuccess($ip, $admit['country'], $user);
         $_SESSION['rise63_counted_ip'] = true;
-
-        Database::run('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [(int) $user['id']]);
-        self::rememberDevice($user, $ip);
 
         $alerts = (int) $user['login_notifications_enabled'] === 1 && Settings::bool('login_alerts_enabled');
         if ($alerts && !$wasRecognised) {
@@ -87,6 +82,38 @@ final class Auth
         }
 
         return ['ok' => true, 'message' => '', 'user' => $user, 'retry_after' => null];
+    }
+
+    /**
+     * Sign a user in without a password check.
+     *
+     * Only two callers may use this: a completed password reset (the token *was* the proof of
+     * control, and it has just been consumed) and privileged flows that have already verified the
+     * account another way. It never runs the admission/country checks — those belong to `attempt()`
+     * — so callers must have gated the request themselves.
+     */
+    public static function loginAs(array $user): void
+    {
+        if ((int) $user['is_suspended'] === 1) {
+            throw new RuntimeException('That account is suspended.');
+        }
+        $ip = Security::clientIp();
+        self::establishSession($user, $ip);
+        $_SESSION['rise63_counted_ip'] = true;
+        BruteForce::recordSuccess($ip, null, $user);
+    }
+
+    /** Rotate the session id, bind the identity and touch the device record. */
+    private static function establishSession(array $user, string $ip): void
+    {
+        session_regenerate_id(true);
+        $_SESSION['rise63_user']      = (int) $user['id'];
+        $_SESSION['rise63_last_seen'] = time();
+        $_SESSION['rise63_csrf']      = Security::randomToken(32);
+        unset($_SESSION['rise63_counted_ip']);
+
+        Database::run('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [(int) $user['id']]);
+        self::rememberDevice($user, $ip);
     }
 
     /** @return array<string, mixed>|null */
@@ -196,6 +223,15 @@ final class Auth
         if (!in_array((string) $user['role'], $roles, true)) {
             Security::fail(403, 'You do not have permission to open this page.');
         }
+    }
+
+    /**
+     * Administrator gate for POST handlers. The rendered page is gated in pages.php, but a form
+     * action can be replayed directly, so every privileged handler asks again.
+     */
+    public static function requireAdmin(array $user): void
+    {
+        self::requireRole($user, ['provincial_admin']);
     }
 
     public static function isAdmin(array $user): bool

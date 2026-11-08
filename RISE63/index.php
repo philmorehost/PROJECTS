@@ -54,7 +54,7 @@ $page    = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_GET['page'] ?
 $action  = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['action'] ?? ''))) ?? '';
 $method  = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
-$publicPages = ['login', 'register', 'forgot-password', 'offline', 'about'];
+$publicPages = ['login', 'register', 'forgot-password', 'reset-password', 'offline', 'about'];
 if ($page === '') {
     $page = $user === null ? 'login' : 'dashboard';
 }
@@ -91,8 +91,19 @@ try {
     if ($user === null && !in_array($page, $publicPages, true)) {
         redirect('login');
     }
-    if ($user !== null && in_array($page, ['login', 'register'], true)) {
+    if ($user !== null && in_array($page, ['login', 'register', 'forgot-password', 'reset-password'], true)) {
         redirect($home($user));
+    }
+
+    // A temporary password must be replaced before anything else is reachable. Only the change
+    // form, the sign-out action and the theme toggle are allowed through.
+    if ($user !== null && (int) ($user['must_change_password'] ?? 0) === 1) {
+        $exempt = $page === 'change-password'
+            || ($method === 'POST' && in_array($action, ['password-change', 'theme', 'logout'], true));
+        if (!$exempt) {
+            flash('Choose a new password before continuing — your current one was issued by an administrator.', 'error');
+            redirect('change-password');
+        }
     }
 
     require __DIR__ . '/app/pages.php';

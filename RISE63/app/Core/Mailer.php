@@ -19,6 +19,17 @@ final class Mailer
     {
     }
 
+    /** True when a usable SMTP configuration exists — the UI uses this to decide what to promise. */
+    public static function configured(): bool
+    {
+        $file = \RISE63\config_dir() . '/smtp.php';
+        if (!is_file($file)) {
+            return false;
+        }
+        $config = require $file;
+        return is_array($config) && trim((string) ($config['host'] ?? '')) !== '';
+    }
+
     public static function fromConfig(): self
     {
         $file = \RISE63\config_dir() . '/smtp.php';

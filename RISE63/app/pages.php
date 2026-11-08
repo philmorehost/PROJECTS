@@ -51,7 +51,30 @@ switch ($page) {
         break;
 
     case 'forgot-password':
-        $render('auth/forgot-password', ['title' => 'Password help']);
+        $render('auth/forgot-password', [
+            'title'    => 'Password help',
+            'sent'     => isset($_GET['sent']),
+            'canEmail' => RISE63\Core\Mailer::configured(),
+        ]);
+        break;
+
+    case 'reset-password':
+        // The token arrives in the URL; it is never echoed back into the page.
+        $token = (string) ($_GET['token'] ?? '');
+        if (RISE63\Core\PasswordReset::resolve($token) === null) {
+            $render('auth/reset-password', ['title' => 'Reset link expired', 'valid' => false, 'token' => '']);
+            break;
+        }
+        $render('auth/reset-password', ['title' => 'Choose a new password', 'valid' => true, 'token' => $token]);
+        break;
+
+    case 'change-password':
+        $account = Auth::requireLogin();
+        $render('auth/change-password', [
+            'title'   => 'Choose a new password',
+            'forced'  => (int) ($account['must_change_password'] ?? 0) === 1,
+            'account' => $account,
+        ]);
         break;
 
     case 'about':

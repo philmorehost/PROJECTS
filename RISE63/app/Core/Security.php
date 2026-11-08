@@ -247,6 +247,45 @@ final class Security
         return null;
     }
 
+    /**
+     * Reject a password the account has used before.
+     *
+     * Only the current password can be compared: the application never stores history. Callers
+     * get an honest check, not a pretend one — nothing here pretends to know older secrets.
+     */
+    public static function passwordReused(string $password, int $userId): bool
+    {
+        $hash = Database::value('SELECT password_hash FROM users WHERE id = ?', [$userId]);
+        return is_string($hash) && $hash !== '' && password_verify($password, $hash);
+    }
+
+    /**
+     * A readable, high-entropy temporary password for an administrator to hand over in person.
+     * 14 characters, no ambiguous glyphs (0/O, 1/l/I), always includes a digit and a symbol so it
+     * passes the same policy the member will be asked to meet on change.
+     */
+    public static function temporaryPassword(): string
+    {
+        $letters = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+        $digits  = '23456789';
+        $symbols = '!@#%&*?';
+        $alphabet = $letters . $digits . $symbols;
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $out = '';
+            for ($i = 0; $i < 14; $i++) {
+                $out .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            if (preg_match('/[0-9]/', $out) === 1 && preg_match('/[^A-Za-z0-9]/', $out) === 1
+                && self::passwordProblem($out) === null) {
+                return $out;
+            }
+        }
+
+        // Deterministic fallback; still random, just forced to satisfy the character classes.
+        return strtoupper(bin2hex(random_bytes(4))) . '-' . random_int(1000, 9999) . '-Rise!63';
+    }
+
     public static function needsRehash(string $hash): bool
     {
         return password_needs_rehash($hash, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);

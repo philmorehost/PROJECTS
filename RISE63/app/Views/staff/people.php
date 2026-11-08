@@ -91,12 +91,21 @@ use function RISE63\{e, human_date, relative_time, url};
             <td data-label="Status">
               <?php if ((int) $person['is_suspended'] === 1): ?>
                 <span class="badge badge-danger">Suspended</span>
+              <?php elseif ((int) ($person['must_change_password'] ?? 0) === 1): ?>
+                <span class="badge badge-warn">Temporary password</span>
               <?php else: ?>
                 <span class="badge badge-ok">Active</span>
               <?php endif; ?>
             </td>
             <td>
               <?php if ((int) $person['id'] !== (int) $account['id']): ?>
+                <form method="post" action="<?= e(url('')) ?>" style="margin-bottom:6px"
+                      data-confirm="Issue a temporary password for <?= e((string) $person['full_name']) ?>? Their current password stops working immediately and every device is signed out.">
+                  <?= Security::csrfField() ?>
+                  <input type="hidden" name="action" value="user-temporary-password">
+                  <input type="hidden" name="user_id" value="<?= (int) $person['id'] ?>">
+                  <button class="btn btn-quiet btn-sm" type="submit">New temporary password</button>
+                </form>
                 <form method="post" action="<?= e(url('')) ?>">
                   <?= Security::csrfField() ?>
                   <input type="hidden" name="action" value="account-suspend">
