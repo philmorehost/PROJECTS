@@ -123,6 +123,24 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**The key is not in the provider's database**
+
+`api.php` answers `Invalid license key or domain.` for every mismatch, so it cannot tell you that.
+`check-update.php` can, and it is read-only for a rejected key:
+
+```sh
+curl -sS "https://manager.pmhserver.name.ng/check-update.php?license_key=YOUR-KEY&domain=your-domain"
+```
+
+| Answer | Meaning |
+|---|---|
+| `{"status":"error","message":"Invalid license key."}` | The key is **not in the provider's database at all**. No domain spelling will help: re-copy it, or ask the provider which key belongs to this domain |
+| `{"status":"success","latest_version":"…"}` | The key **and** the domain are both accepted, so the refusal from `api.php` is about the licence's state — check it is active in the console |
+| `{"status":"suspended",…}` | Suspended by the provider |
+| Empty answer / TLS error | The host cannot reach the provider; a firewall question |
+
+`php bin/license-check.php` runs this check for you and tells you which of the four it is.
+
 **A note on two different endpoints**
 
 The API reference documents `api.php` (validate a key). Updates come from `check-update.php`, which

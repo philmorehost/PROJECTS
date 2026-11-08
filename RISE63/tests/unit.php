@@ -912,6 +912,103 @@ ok('The installed version comes from the update record, not a hard-coded constan
     rmdir($root);
 });
 
+
+/* ────────────────────── Why a licence was refused (field report) ─────────────────── */
+
+ok('A refusal names the key, the domain and what the provider actually said', function (): void {
+    // The provider answers 'Invalid license key or domain.' for four unrelated faults. A gate that
+    // shows only that sentence leaves the operator with no next step, which is exactly what
+    // happened in the field: they were told their key was wrong when the key was never in the
+    // provider's database at all.
+    $state = [
+        'valid' => false, 'grace' => false, 'domain' => 'buildroom.rccglp63yaya.org.ng',
+        'key' => 'MAN-749B9B757500', 'message' => 'Invalid license key or domain.',
+    ];
+    $diagnosis = RISE63\Core\ActivationDiagnosis::of($state);
+
+    assertSame('rejected', $diagnosis['cause']);
+    assert(str_contains($diagnosis['headline'], 'refused'), $diagnosis['headline']);
+    assertSame('buildroom.rccglp63yaya.org.ng', $diagnosis['detail']['domain']);
+    $masked = $diagnosis['detail']['key'];
+    assert(str_starts_with($masked, 'MAN-'), 'the prefix is kept so the operator can recognise the key');
+    assert(str_ends_with($masked, '7500'), 'the last four characters are kept');
+    assert(substr_count($masked, '•') >= 4, 'the middle is replaced by bullets: ' . $masked);
+    assert(!str_contains(json_encode($diagnosis), '749B9B75'), 'the middle of the key never reaches a page');
+
+    // A missing key is its own cause, not a "refusal".
+    $missing = RISE63\Core\ActivationDiagnosis::of(['valid' => false, 'grace' => false, 'domain' => 'x.example.org', 'key' => '']);
+    assertSame('missing', $missing['cause']);
+
+    // A provider that could not be reached must not be described as a key problem.
+    $unreachable = RISE63\Core\ActivationDiagnosis::of([
+        'valid' => false, 'grace' => true, 'domain' => 'x.example.org', 'key' => 'MAN-0123456789ABCDEF',
+        'message' => 'The licence service could not be reached',
+    ]);
+    assertSame('grace', $unreachable['cause']);
+    assert(str_contains($unreachable['headline'], 'could not be reached'), $unreachable['headline']);
+
+    // The masked form is what the CLI and the gate print.
+    $mask = static fn (string $k): string => RISE63\Core\ActivationDiagnosis::mask($k);
+    assertSame('(none)', $mask(''));
+    $m = $mask('MAN-749B9B757500');
+    assert(str_starts_with($m, 'MAN-') && str_ends_with($m, '7500'), $m);
+    assert(!str_contains($m, '749B9B75'), 'no middle characters survive: ' . $m);
+    assertSame('••••', $mask('abcd'));
+});
+
+ok('The updater understands the deployed endpoint, not just the written contract', function (): void {
+    // Probe of the live service (2026-11-08) returned: status "success", an access.allowed block,
+    // update_required, changelog_format and project. None of those are in the documented contract,
+    // and access.allowed === false arrives with status "success".
+    $root = sys_get_temp_dir() . '/rise63-shape-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+    $updater = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+
+    $interpret = new ReflectionMethod(RISE63\Core\Updater::class, 'interpretCheck');
+    $interpret->setAccessible(true);
+
+    // A normal release.
+    $release = $interpret->invoke($updater, [
+        'status' => 'success', 'latest_version' => '7.57', 'update_required' => true,
+        'checksum' => str_repeat('a', 64), 'changelog' => 'notes', 'changelog_format' => 'text',
+        'download_url' => 'https://manager.pmhserver.name.ng/download.php?token=x',
+        'tier_detected' => 'NON-SAAS', 'project' => 'DGV7.0-NON-SAAS',
+        'access' => ['allowed' => true, 'reason' => 'ok'],
+    ]);
+    assertSame(true, $release['ok']);
+    assertSame('7.57', $release['version']);
+    assertSame(true, $release['update_required']);
+    assertSame('DGV7.0-NON-SAAS', $release['project']);
+
+    // Nothing published yet.
+    $none = $interpret->invoke($updater, ['status' => 'success', 'latest_version' => '0.00']);
+    assertSame(false, $none['ok']);
+    assert(str_contains($none['message'], 'No update'), $none['message']);
+
+    // status "success" but the licence is blocked: this is a refusal, not an available release.
+    $blocked = $interpret->invoke($updater, [
+        'status' => 'success', 'latest_version' => '7.57',
+        'access' => ['allowed' => false, 'title' => 'Licence on hold', 'message' => 'Updates are on hold for this licence.'],
+    ]);
+    assertSame(false, $blocked['ok'], 'a blocked licence never reports an available release');
+    assertSame('blocked', $blocked['status']);
+    assert(str_contains($blocked['message'], 'on hold'), $blocked['message']);
+
+    // The documented refusal shape.
+    $refused = $interpret->invoke($updater, ['status' => 'error', 'message' => 'Invalid license key.']);
+    assertSame(false, $refused['ok']);
+    assert(str_contains($refused['message'], 'Invalid license key'), $refused['message']);
+
+    // A suspended licence.
+    $suspended = $interpret->invoke($updater, ['status' => 'suspended', 'message' => 'Suspended']);
+    assertSame(false, $suspended['ok']);
+    assert(str_contains($suspended['message'], 'suspended'), $suspended['message']);
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    rmdir($root . '/config');
+    rmdir($root);
+});
+
 echo "\n";
 echo str_repeat('─', 62) . "\n";
 

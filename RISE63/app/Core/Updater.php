@@ -125,7 +125,13 @@ final class Updater
             return $fail(['message' => 'This installation has no usable domain name to send to the provider.']);
         }
 
-        $fields = ['key' => (string) $key['key'], 'domain' => $domain];
+        // installed_version is not in the written contract, but the deployed endpoint returns
+        // update_required against it; sending it costs nothing and lets the server answer precisely.
+        $fields = [
+            'key'               => (string) $key['key'],
+            'domain'            => $domain,
+            'installed_version' => $this->currentVersion(),
+        ];
         if ($forceVersion !== null && trim($forceVersion) !== '') {
             $fields['force_version'] = trim($forceVersion);
         }
@@ -147,15 +153,56 @@ final class Updater
             ]);
         }
 
+        return $this->interpretCheck($data);
+    }
+
+    /**
+     * Interpret a check-update.php body.
+     *
+     * Kept separate from the HTTP call so every response shape can be tested against the shapes
+     * the deployed service actually sends — which differ from the written contract in three ways:
+     * it adds an `access` block, it reports `update_required`, and it sends `status: "success"`
+     * even when `access.allowed` is false (a licence on hold).
+     *
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function interpretCheck(array $data): array
+    {
+        $blank = [
+            'ok' => false, 'unreachable' => false, 'status' => '', 'message' => '',
+            'version' => '', 'changelog' => '', 'checksum' => '', 'download_url' => '', 'tier' => '',
+            'project' => '', 'update_required' => null,
+        ];
+        $fail = static fn (array $overrides): array => array_merge($blank, $overrides);
+
         $status  = (string) ($data['status'] ?? '');
         $message = (string) ($data['message'] ?? '');
-        if ($status !== 'success') {
+        // "success" is what the endpoint sends today; "ok"/1 are accepted defensively rather than
+        // silently treating a good answer as a refusal if it changes again.
+        if (!in_array($status, ['success', 'ok', 'valid', '1'], true)) {
             $text = match ($status) {
                 'suspended' => 'This licence is suspended, so updates are not served.',
                 'error'     => 'The provider refused the update request: ' . ($message !== '' ? $message : 'no reason given'),
                 default     => 'The provider did not return a usable answer' . ($message !== '' ? ': ' . $message : '.'),
             };
             return $fail(['status' => $status, 'message' => $text]);
+        }
+
+        // A blocked licence arrives with status "success". It must never be read as "a release is
+        // available", or the page would offer an update the download link will refuse.
+        $access = $data['access'] ?? null;
+        if (is_array($access) && array_key_exists('allowed', $access) && $access['allowed'] === false) {
+            $reason = trim((string) ($access['message'] ?? ''));
+            $title  = trim((string) ($access['title'] ?? ''));
+            return $fail([
+                'status'  => 'blocked',
+                'tier'    => (string) ($data['tier_detected'] ?? ''),
+                'message' => 'The provider has blocked updates for this licence'
+                    . ($title !== '' ? ' (' . $title . ')' : '')
+                    . ($reason !== '' ? ': ' . $reason : '.')
+                    . ' Contact the provider to have it reinstated.',
+            ]);
         }
 
         $version = (string) ($data['latest_version'] ?? '');
@@ -177,6 +224,10 @@ final class Updater
             'checksum'     => strtolower(trim((string) ($data['checksum'] ?? ''))),
             'download_url' => (string) ($data['download_url'] ?? ''),
             'tier'         => (string) ($data['tier_detected'] ?? ''),
+            'project'      => (string) ($data['project'] ?? ''),
+            'update_required' => array_key_exists('update_required', $data)
+                ? (bool) $data['update_required']
+                : null,
         ];
     }
 

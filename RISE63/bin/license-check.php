@@ -251,7 +251,61 @@ if (!empty($result['unreachable'])) {
     exit(2);
 }
 
+// api.php answers "Invalid license key or domain" for every mismatch. The update endpoint shares
+// the same key table and is far more specific: it returns "Invalid license key." when the key is
+// not in the database at all, and names the domain limit when the key exists but the domain does
+// not belong to it. That is the difference between "check what you pasted" and "the provider has
+// to add this domain", so it is worth one more request on the failure path only.
+$write("\nNarrowing it down\n" . str_repeat('─', 60) . "\n");
+$verdict = 'unknown';
+try {
+    $body = $activation->diagnose((string) $key, $domain);
+    $data = json_decode($body, true);
+    $text = is_array($data) ? strtolower((string) ($data['message'] ?? '')) : strtolower(trim($body));
+
+    if (is_array($data) && ($data['status'] ?? '') === 'success') {
+        // The update endpoint accepted the key *and* the domain, so api.php's refusal is not about
+        // either of them — it is about the licence's state.
+        $verdict = 'state';
+        $write("The update endpoint ACCEPTED this key and domain (latest release "
+            . (string) ($data['latest_version'] ?? '?') . "), so the key and the domain are both fine.\n");
+        $write("The refusal is therefore about the licence's state in the provider's console.\n");
+    } elseif (str_contains($text, 'invalid license key') && !str_contains($text, 'domain')) {
+        $verdict = 'unknown-key';
+        $write("The update endpoint does not know this key either: \""
+            . trim((string) ($data['message'] ?? $body)) . "\".\n");
+        $write("So this is NOT a domain problem. The key is not in the provider's database for this\n");
+        $write("project: it is mistyped, truncated, or was issued for a different product.\n");
+    } elseif (str_contains($text, 'domain')) {
+        $verdict = 'domain';
+        $write("The key exists but the domain is not on it: \""
+            . trim((string) ($data['message'] ?? $body)) . "\".\n");
+    } else {
+        $verdict = 'inconclusive';
+        $write("Could not get a clearer answer: " . substr(trim($body), 0, 200) . "\n");
+    }
+} catch (Throwable $error) {
+    $write("Could not ask the update endpoint: " . $error->getMessage() . "\n");
+}
+
 $write("\nWhat to do next\n" . str_repeat('─', 60) . "\n");
+
+if ($verdict === 'unknown-key') {
+    $write("1. Re-copy the key from the provider's console — select the whole line, including the\n");
+    $write("   MAN- prefix. One missing character is enough for it to be unknown.\n");
+    $write("2. Compare it character by character with " . Activation::MANAGER_SIGNIN . "\n");
+    $write("3. If the console shows a different key for this domain, that is the one to use:\n");
+    $write("     php bin/license-check.php --key=THE-CORRECT-KEY --save\n");
+    exit(1);
+}
+
+if ($verdict === 'state') {
+    $write("1. Open " . Activation::MANAGER_SIGNIN . " and check the licence status is active.\n");
+    $write("2. If it is suspended or expired, ask the provider to reinstate it; no key change here\n");
+    $write("   will help.\n");
+    exit(1);
+}
+
 $write("1. Find the exact domain on your licence. Try the spellings:\n");
 $write("     php bin/license-check.php" . ($options['key'] !== null ? ' --key=' . $mask((string) $key) : '') . " --probe\n");
 $write("2. Open the provider's console and compare: " . Activation::MANAGER_SIGNIN . "\n");

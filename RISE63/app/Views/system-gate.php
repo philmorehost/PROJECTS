@@ -19,13 +19,33 @@ header('Retry-After: 3600');
   <div class="auth-shell">
     <div class="card">
       <h1>Activation required</h1>
-      <p><?= e($activationState['message'] ?? 'This installation is not activated.') ?></p>
+      <?php $diagnosis = \RISE63\Core\ActivationDiagnosis::of(is_array($activationState ?? null) ? $activationState : []); ?>
+      <p><strong><?= e($diagnosis['headline']) ?></strong></p>
+      <p class="muted"><?= e($activationState['message'] ?? 'This installation is not activated.') ?></p>
+      <table class="table" style="margin-top:8px">
+        <tbody>
+          <tr><th scope="row">Domain sent</th><td><code><?= e($diagnosis['detail']['domain'] ?: '(none)') ?></code></td></tr>
+          <tr><th scope="row">Key on file</th><td><code><?= e($diagnosis['detail']['key']) ?></code></td></tr>
+        </tbody>
+      </table>
       <div class="notice">
         <strong>For the site operator</strong>
-        This installation runs on a licence locked to a domain. Check that the key in
-        <code>config/activation-key.php</code> belongs to <code><?= e($domain ?? 'this domain') ?></code>,
-        and that the host allows outbound HTTPS to <code>manager.pmhserver.name.ng</code>.
-        The licence service must answer at least once every 24 hours.
+        <span class="block">The provider says only “invalid key or domain” for every kind of mismatch,
+          so check these in order — the first one that is wrong is the cause:</span>
+        <ol class="list-plain" style="margin-top:8px; list-style:decimal; padding-left:20px">
+          <li>Is the key complete? It is copied from the provider console; a missing digit or a stray
+            space makes it an unknown key.</li>
+          <li>Is it <em>this</em> licence? A key belonging to another project or another site is
+            “unknown” to this one.</li>
+          <li>Is the domain on the licence exactly <code><?= e($diagnosis['detail']['domain'] ?: ($domain ?? 'this domain')) ?></code>?
+            Domains are matched with <code>www.</code> ignored, but a different subdomain is a
+            different licence.</li>
+          <li>Is the licence <em>active</em> in the provider console? A suspended one is refused
+            the same way.</li>
+          <li>The key actually in use is the one in <code>config/activation-key.php</code> — shown
+            above, masked. If it is not the key you expect, that is the whole problem.</li>
+          <li>Can this host reach <code>manager.pmhserver.name.ng</code> over HTTPS at all?</li>
+        </ol>
       </div>
       <ul class="list-plain" style="margin-top:12px">
         <li><a href="<?= e(RISE63\Core\Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence for this domain</a></li>
@@ -36,9 +56,16 @@ header('Retry-After: 3600');
         <input type="hidden" name="action" value="activation-retry">
         <button class="btn btn-secondary btn-block" type="submit">Try again now</button>
       </form>
-      <p class="hint">Re-checks the licence with the provider straight away instead of waiting for the
-        cached answer to expire. If it still fails here, run <code>php bin/license-check.php --probe</code>
-        on the server — it says whether the key, the domain or the host's outbound HTTPS is at fault.</p>
+      <p class="hint">Re-checks now instead of waiting for the 6-hour cache to expire. Nothing else on
+        this screen changes until the provider accepts the key, so run the checker on the server:
+        it is the only thing that can tell the four faults apart.</p>
+      <div class="notice" style="margin-top:12px">
+        <strong>On the server, in the installation folder</strong>
+        <code class="block" style="margin-top:6px">php bin/license-check.php --probe</code>
+        <span class="hint">Prints the masked key, this domain, the provider's DNS and its literal
+          answer for each plausible domain spelling, and whether the key is unknown, refused or
+          simply unreachable.</span>
+      </div>
     </div>
   </div>
 </main>
