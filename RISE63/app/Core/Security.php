@@ -17,6 +17,39 @@ final class Security
         . "font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
         . "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'";
 
+    /**
+     * Trusted hashes of every inline script the templates emit.
+     *
+     * The policy above has no 'unsafe-inline', which is the right default — but it means an inline
+     * <script> is *silently blocked*, and a blocked script looks exactly like a script that ran and
+     * did nothing. In this application that produced a specific, hard-to-attribute symptom: the
+     * pre-paint theme script never ran, so a signed-in user saw the wrong theme flash on every
+     * load, and the bottom bar's redundant close handler never ran either.
+     *
+     * A SHA-256 allow-list keeps the policy strict (no 'unsafe-inline', no nonce bookkeeping) while
+     * letting those two known snippets execute. Add a hash here when you add an inline script —
+     * tests/render.php asserts this list matches what the templates actually emit, so a mismatch
+     * fails the build rather than failing silently in a browser.
+     *
+     * @var list<string>
+     */
+    public const INLINE_SCRIPT_HASHES = [
+        // layout.php — applies a stored theme before first paint.
+        'sha256-a/4YpLwB4tGIPyCAQ0A9/B2e6oil9IDrSDz5h0Y3kt0=',
+        // layout.php — offline bar close, independent of app.js.
+        'sha256-EC+VCbCxxpwIu9kDuACT7OBl1utnm/dXk/+HHuX29Po=',
+    ];
+
+    /** The policy header for this response, including the inline-script allow-list. */
+    public static function contentSecurityPolicy(): string
+    {
+        if (self::INLINE_SCRIPT_HASHES === []) {
+            return self::CSP;
+        }
+        $hashes = array_map(static fn (string $hash): string => "'" . $hash . "'", self::INLINE_SCRIPT_HASHES);
+        return str_replace("script-src 'self';", "script-src 'self' " . implode(' ', $hashes) . ';', self::CSP);
+    }
+
     public static function sendHeaders(bool $authenticatedPage = true): void
     {
         header('X-Content-Type-Options: nosniff');
@@ -24,7 +57,7 @@ final class Security
         header('X-Frame-Options: DENY');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
         header('Cross-Origin-Opener-Policy: same-origin');
-        header('Content-Security-Policy: ' . self::CSP);
+        header('Content-Security-Policy: ' . self::contentSecurityPolicy());
         header($authenticatedPage ? 'Cache-Control: no-store, private' : 'Cache-Control: no-cache');
         if (self::isHttps()) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains');

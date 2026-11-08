@@ -124,6 +124,25 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**A button renders but does nothing after an update**
+
+Almost always a stale script, not a broken button. The page markup is served fresh on every request
+(`Cache-Control: no-store` for signed-in pages), while `/public/assets/app.js` is cached — and if the
+service worker was never given a new cache name, the *previous* release's script keeps running beside
+the new markup. Nothing throws, so there is nothing in the console.
+
+Two defences are now in place, and both should hold:
+
+1. `php bin/build-assets.php` renames the asset to include a content hash
+   (`app.f6d1df85.js`), so a browser cannot confuse it with an older copy. **Run it on every deploy.**
+2. The service worker's cache name is derived from the shell list plus a release id — never a
+   hand-maintained literal — so a deploy installs a new worker, which deletes the old cache.
+
+If a user is still stuck after a correct deploy, they are holding the old worker. A hard reload
+(`Ctrl`/`Cmd` + `Shift` + `R`) or closing every tab of the site clears it. You should not need this:
+the close button on the offline bar also ships its own handler inside the HTML, so it keeps working
+even when the cached script is out of date.
+
 **"Not Found" instead of the page I asked for**
 
 Every link in this application is a path segment (`/login`, `/treasury`), and one file serves them
@@ -414,7 +433,7 @@ return [
 
 1. Enable OPcache in cPanel → Select PHP Version → Options: `opcache.enable=1`, `opcache.memory_consumption=128`, `opcache.max_accelerated_files=10000`, `opcache.validate_timestamps=1` (keep revalidation on; turn it off only if you have a deploy hook that reloads PHP-FPM).
 2. Enable gzip/Brotli (`.htaccess` already asks for `mod_deflate`).
-3. Run `php bin/build-assets.php` after any change to `public/assets/*`. It writes fingerprinted copies, `manifest.php` and the service-worker shell list. Only fingerprinted files are cached for a year.
+3. Run `php bin/build-assets.php` after **every** change to `public/assets/*`, and after any release that touches the templates. It writes fingerprinted copies, `manifest.php` and the service-worker shell list (`sw-assets.js`), which also carries a release id that the service worker folds into its cache name. Skip it and browsers keep serving the previous `app.js` beside the new HTML — the page looks updated and the new javascript never runs. That failure has no error message; it was reported here as "the × did nothing".
 4. Persistent PDO connections are **off by default**. Set `RISE63_DB_PERSISTENT=1` in the PHP environment only after confirming your FPM pool does not leave connections mid-transaction (a crashed request can). The single largest speed win is OPcache plus the asset build, not persistent connections.
 5. Sessions are stored in `storage/sessions`. On a single server that is correct; for multiple web nodes use a shared session handler first (documented gap).
 

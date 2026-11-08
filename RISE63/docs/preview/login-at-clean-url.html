@@ -6,7 +6,7 @@
 <title>Sign in · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="ac074899165b9bfe0127139d07749d1a7cc745fb58c77e1f72b269816d46d541">
+<meta name="csrf-token" content="c04cc5e018523664853d03cb2f68effe8a5a47a1d6a13bea88ee71f442aba04b">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -658,6 +658,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     <span aria-hidden="true">&times;</span>
   </button>
 </div>
+<script>
+  // The second half of the close button, deliberately independent of app.js.
+  //
+  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
+  // It exists because the first report of "the × does nothing" was almost certainly a cached
+  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
+  // the previous release, so the button rendered and did nothing. A handler that ships in the same
+  // response as the markup cannot drift out of step with it.
+  //
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
+  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
+  // disagree.
+  (function () {
+    var button = document.getElementById('offline-dismiss');
+    var banner = document.getElementById('offline-banner');
+    if (!button || !banner) { return; }
+    button.addEventListener('click', function () { banner.hidden = true; });
+  }());
+</script>
 
 
 <main id="main" class="page" tabindex="-1">
@@ -689,7 +708,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       <p class="auth-lead">Sign in to apply for programs, track your application or manage the province.</p>
 
       <form method="post" action="/">
-        <input type="hidden" name="csrf" value="ac074899165b9bfe0127139d07749d1a7cc745fb58c77e1f72b269816d46d541">        <input type="hidden" name="action" value="login">
+        <input type="hidden" name="csrf" value="c04cc5e018523664853d03cb2f68effe8a5a47a1d6a13bea88ee71f442aba04b">        <input type="hidden" name="action" value="login">
         <div class="field">
           <label for="email">E-mail address</label>
           <input type="email" id="email" name="email" required autocomplete="username"

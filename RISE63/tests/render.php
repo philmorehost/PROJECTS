@@ -611,6 +611,42 @@ ok('Stylesheet defines every class the setup wizard uses', function (): void {
     assertContains('grid-template-columns: repeat(2, minmax(0, 1fr))', $css, 'step rail halves on small screens');
 });
 
+ok('Every inline script the browser receives is allowed by the CSP hash list', function () use ($renderPage, $admin): void {
+    // script-src has no 'unsafe-inline', so an inline script whose hash is missing runs *nowhere*
+    // and says nothing about it. That shipped: the pre-paint theme script was blocked, so a
+    // signed-in user saw the wrong theme flash on every load, and the redundant offline-close
+    // handler could not cover for a stale app.js either.
+    //
+    // The hash must be computed over the *rendered* markup, not the template file: a PHP
+    // expression inside a <script> block emits different bytes than the source, and the browser
+    // hashes what it receives.
+    $html = $renderPage('member/home', [
+        'applications' => [],
+        'summary' => ['total' => 0, 'pending' => 0, 'approved' => 0, 'disbursed' => 0, 'rejected' => 0, 'requested' => 0],
+        'eligibility' => [
+            'academy' => ['label' => 'RISE Academy', 'available' => true, 'reason' => null],
+            'seed_grant' => ['label' => 'Seed Grant', 'available' => false, 'reason' => 'Academy graduation required'],
+        ],
+    ], $admin);
+
+    preg_match_all('#<script>(.*?)</script>#s', $html, $matches);
+    assertTrue(count($matches[1]) >= 2, 'expected the theme and offline-close snippets, got ' . count($matches[1]));
+
+    $declared = RISE63\Core\Security::INLINE_SCRIPT_HASHES;
+    $policy   = RISE63\Core\Security::contentSecurityPolicy();
+    assertContains("script-src 'self' 'sha256-", $policy, 'the policy carries the allow-list');
+    assertMissing("'unsafe-inline'", $policy, 'the allow-list must not weaken the policy');
+
+    foreach ($matches[1] as $index => $inline) {
+        $hash = 'sha256-' . base64_encode(hash('sha256', $inline, true));
+        assertTrue(in_array($hash, $declared, true),
+            'inline script #' . $index . ' would be blocked by the CSP. hash=' . $hash);
+        assertContains("'" . $hash . "'", $policy);
+    }
+
+    assertSame(count($matches[1]), count($declared), 'one declared hash per inline script, no orphans');
+});
+
 ok('Stylesheet meets the mobile-first contract', function (): void {
     $css = (string) file_get_contents(RISE63_TEST_ROOT . '/public/assets/app.css');
     assertContains('--t-base: 1rem', $css, 'base type is 16px');

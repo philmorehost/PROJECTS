@@ -9,7 +9,22 @@
  */
 'use strict';
 
-var SHELL_VERSION = 'rise63-v2';
+/* The release id written by bin/build-assets.php. Absent before a build has been run, which is
+   fine — the cache name then differs only by the shell list, and the list changes on any release. */
+try { importScripts('./public/assets/sw-assets.js'); } catch (err) { /* not built yet */ }
+
+/* The cache name is derived from the shell list itself, never written by hand.
+ *
+ * It used to be a literal ('rise63-v2') that had to be bumped manually, and it was not bumped when
+ * the assets changed. The consequence was the worst kind: the browser kept serving the *previous*
+ * app.js beside the *new* HTML. The new markup rendered, and no new javascript ever ran — a close
+ * button drew itself and did nothing, and there was no error to point at.
+ *
+ * A name computed from the bytes of everything cached cannot be forgotten. Change any shell asset
+ * and this worker is byte-different, so the browser installs it, the new cache name wins, and the
+ * activate handler deletes the old one. The version is also hashed into the asset URLs by
+ * bin/build-assets.php, which is the second line of defence.
+ */
 var SHELL = [
   './',
   './index.php',
@@ -21,6 +36,13 @@ var SHELL = [
   './public/icons/icon-192.png',
   './public/icons/icon-512.png'
 ];
+
+var SHELL_VERSION = 'rise63-' + SHELL.reduce(function (hash, url) {
+  // A small rolling hash over the list. Not cryptographic: it only has to change when the list or
+  // the release does, and it must be computable synchronously at worker start.
+  for (var i = 0, h = 0; i < url.length; i++) { h = (h * 31 + url.charCodeAt(i)) | 0; }
+  return (hash * 31 + h) | 0;
+}, 7).toString(36) + '-v' + (self.RISE63_RELEASE || '0');
 
 self.addEventListener('install', function (event) {
   event.waitUntil(

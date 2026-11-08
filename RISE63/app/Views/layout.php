@@ -95,6 +95,25 @@ foreach ($tabs as $index => $tab) {
     <span aria-hidden="true">&times;</span>
   </button>
 </div>
+<script>
+  // The second half of the close button, deliberately independent of app.js.
+  //
+  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
+  // It exists because the first report of "the × does nothing" was almost certainly a cached
+  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
+  // the previous release, so the button rendered and did nothing. A handler that ships in the same
+  // response as the markup cannot drift out of step with it.
+  //
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
+  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
+  // disagree.
+  (function () {
+    var button = document.getElementById('offline-dismiss');
+    var banner = document.getElementById('offline-banner');
+    if (!button || !banner) { return; }
+    button.addEventListener('click', function () { banner.hidden = true; });
+  }());
+</script>
 
 <?php if ($account !== null): ?>
 <header class="topbar">
