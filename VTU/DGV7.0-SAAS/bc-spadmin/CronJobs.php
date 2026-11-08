@@ -7,6 +7,14 @@ $current_page = "CronJobs.php";
 $php_bin = '/usr/bin/php';
 $logs_dir = dirname(__FILE__) . '/../logs';
 $root = dirname(__FILE__) . '/..';
+// A missing redirect target makes the shell abort before it starts PHP. Create the
+// folder when this page is opened, and report failures so generated cron lines do
+// not silently appear to work while their output path is unavailable.
+$logs_dir_ready = is_dir($logs_dir) || @mkdir($logs_dir, 0755, true);
+if ($logs_dir_ready && !file_exists($logs_dir . '/.htaccess')) {
+    @file_put_contents($logs_dir . '/.htaccess', "Order deny,allow\nDeny from all\n");
+}
+$logs_dir_writable = $logs_dir_ready && is_writable($logs_dir);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,6 +48,12 @@ $root = dirname(__FILE__) . '/..';
         <i class="bi bi-exclamation-triangle-fill me-1"></i>
         The commands below assume the PHP CLI binary is at <code>/usr/bin/php</code>. On some servers it is <code>/usr/local/bin/php</code> — run <code>which php</code> over SSH to confirm and adjust if needed.
     </div>
+    <?php if (!$logs_dir_writable): ?>
+    <div class="alert alert-danger border-0 rounded-4 p-3 small mb-4">
+        <i class="bi bi-exclamation-circle-fill me-1"></i>
+        The cron log folder <code><?php echo htmlspecialchars($logs_dir, ENT_QUOTES, 'UTF-8'); ?></code> could not be created or is not writable. Shell output redirection will prevent those cron commands from starting until the folder permissions are fixed.
+    </div>
+    <?php endif; ?>
 
     <div class="row g-4">
         <!-- ── Core business cronjobs ─────────────────────────────────────── -->
@@ -110,6 +124,15 @@ $root = dirname(__FILE__) . '/..';
             <div class="card border-0 rounded-4 shadow-sm">
                 <div class="card-body p-4">
                     <h5 class="fw-bold mb-3"><i class="bi bi-arrow-repeat text-success me-2"></i>Subscription &amp; Platform Maintenance</h5>
+
+                    <!-- Brute-force lock expiry -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold small text-uppercase d-flex align-items-center gap-2">Brute-Force Auto-Unblock <span class="badge bg-success bg-opacity-10 text-success schedule-badge">Every 5 minutes</span></h6>
+                        <p class="text-muted small mb-2">Removes expired automatic account/IP blocks and clears their account lock flags. Manual blocks without an expired brute-force record are left alone. The run summary and database errors are written to the log below.</p>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">COPY</button>
+                            <code>*/5 * * * * <?php echo $php_bin; ?> <?php echo realpath($root . '/cron/release_expired_bruteforce_blocks.php'); ?> &gt;&gt; <?php echo $logs_dir; ?>/bruteforce_auto_unblock.log 2&gt;&amp;1</code>
+                        </div>
+                    </div>
 
                     <!-- Subscription checking -->
                     <div class="mb-4">
