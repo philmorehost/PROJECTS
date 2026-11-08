@@ -1,0 +1,543 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * POST handler.
+ *
+ * Every branch starts from Security::assertPost() (CSRF + origin) which the front controller
+ * runs first. Invalid input raises an exception carrying a message we are happy to show;
+ * anything unexpected becomes a generic message and a log line.
+ */
+
+use RISE63\Core\Applications;
+use RISE63\Core\Audit;
+use RISE63\Core\Auth;
+use RISE63\Core\BruteForce;
+use RISE63\Core\Database;
+use RISE63\Core\Ledger;
+use RISE63\Core\NotFound;
+use RISE63\Core\ParishDirectory;
+use RISE63\Core\Program;
+use RISE63\Core\Security;
+use RISE63\Core\Settings;
+
+use function RISE63\{e, flash, redirect, site_title};
+
+$input  = static fn (string $key, ?string $default = null): ?string
+    => isset($_POST[$key]) && is_string($_POST[$key]) ? trim($_POST[$key]) : $default;
+$array  = static fn (string $key): array => isset($_POST[$key]) && is_array($_POST[$key]) ? $_POST[$key] : [];
+$back   = static function (string $fallback) use ($page): never {
+    $target = preg_replace('/[^a-z0-9-]/', '', (string) ($_POST['return_to'] ?? $page));
+    redirect($target !== '' ? $target : $fallback);
+};
+/** The page a user of this role lands on. */
+$home = static fn (array $account): string => (string) $account['role'] === 'youth_member' ? 'my-rise' : 'dashboard';
+
+$wantsJson = str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+    || (string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+
+try {
+    switch ($action) {
+
+        // ── Authentication ───────────────────────────────────────────────────────────
+        case 'login':
+            $result = Auth::attempt((string) $input('email', ''), (string) ($_POST['password'] ?? ''));
+            if (!$result['ok']) {
+                if ($result['retry_after'] !== null) {
+                    header('Retry-After: ' . (int) $result['retry_after']);
+                }
+                flash($result['message'], 'error');
+                redirect('login');
+            }
+            $account = Auth::user();
+            flash('Welcome back, ' . ($account['full_name'] ?? 'friend') . '.', 'success');
+            redirect($account === null ? 'dashboard' : $home($account));
+
+        case 'logout':
+            Auth::logout();
+            flash('You have signed out.', 'success');
+            redirect('login');
+
+        case 'register':
+            // Public self-registration is opt-in: a province may prefer to provision accounts itself.
+            if (!Settings::bool('allow_self_registration')) {
+                throw new InvalidArgumentException('Self-registration is closed. Ask your parish representative for an account.');
+            }
+            $account = RISE63\Core\Registration::create([
+                'full_name' => (string) $input('full_name', ''),
+                'email'     => (string) $input('email', ''),
+                'phone'     => (string) $input('phone', ''),
+                'parish_id' => $input('parish_id'),
+                'password'  => (string) ($_POST['password'] ?? ''),
+                'confirm'   => (string) ($_POST['password_confirm'] ?? ''),
+            ]);
+            flash('Your RISE 63 account is ready. Welcome!', 'success');
+            Auth::attempt((string) $account['email'], (string) ($_POST['password'] ?? ''));
+            redirect('my-rise');
+
+        // ── Profile & security preferences ───────────────────────────────────────────
+        case 'profile-save':
+            $account = Auth::requireLogin();
+            $name    = (string) $input('full_name', '');
+            $phone   = (string) $input('phone', '');
+            $parish  = $input('parish_id');
+            if ($name === '' || mb_strlen($name) > 150) {
+                throw new InvalidArgumentException('Enter your full name.');
+            }
+            if ($phone !== '' && preg_match('/^\+?[0-9 ()-]{7,25}$/D', $phone) !== 1) {
+                throw new InvalidArgumentException('Enter a valid phone number.');
+            }
+            $parishId = null;
+            if ($parish !== null && $parish !== '') {
+                $parishId = (int) $parish;
+                if (ParishDirectory::parish($parishId) === null) {
+                    throw new InvalidArgumentException('Choose your parish from the list.');
+                }
+            }
+            Database::run(
+                'UPDATE users SET full_name = ?, phone = ?, parish_id = ? WHERE id = ?',
+                [$name, $phone === '' ? null : $phone, $parishId, (int) $account['id']]
+            );
+            Audit::log((int) $account['id'], 'profile.update', 'user', (string) $account['id'], 'Profile details updated.');
+            flash('Your profile has been updated.', 'success');
+            $back('profile');
+
+        case 'preference-save':
+            $account = Auth::requireLogin();
+            $alerts  = $input('login_notifications_enabled') === '1';
+            $theme   = (string) $input('theme_preference', 'system');
+            $large   = $input('large_text') === '1';
+            if (!in_array($theme, ['system', 'light', 'dark'], true)) {
+                throw new InvalidArgumentException('Choose a valid appearance.');
+            }
+            $changed = (int) $account['login_notifications_enabled'] !== ($alerts ? 1 : 0);
+            Database::run(
+                'UPDATE users SET login_notifications_enabled = ?, theme_preference = ?, large_text = ? WHERE id = ?',
+                [$alerts ? 1 : 0, $theme, $large ? 1 : 0, (int) $account['id']]
+            );
+            if ($changed) {
+                RISE63\Core\Notifier::preferenceChanged($account, 'Sign-in alerts', $alerts);
+            }
+            flash('Preferences saved.', 'success');
+            $back('profile');
+
+        case 'password-change':
+            $account  = Auth::requireLogin();
+            $current  = (string) ($_POST['current_password'] ?? '');
+            $next     = (string) ($_POST['new_password'] ?? '');
+            $confirm  = (string) ($_POST['new_password_confirm'] ?? '');
+            if (!password_verify($current, (string) $account['password_hash'])) {
+                throw new InvalidArgumentException('Your current password is not correct.');
+            }
+            $problem = Security::passwordProblem($next, (string) $account['email'], (string) $account['full_name']);
+            if ($problem !== null) {
+                throw new InvalidArgumentException($problem);
+            }
+            if (!hash_equals($next, $confirm)) {
+                throw new InvalidArgumentException('The two new passwords do not match.');
+            }
+            Database::run('UPDATE users SET password_hash = ?, password_changed_at = UTC_TIMESTAMP() WHERE id = ?', [Security::hashPassword($next), (int) $account['id']]);
+            Audit::log((int) $account['id'], 'password.change', 'user', (string) $account['id'], 'Password changed by the account holder.');
+            RISE63\Core\Notifier::preferenceChanged($account, 'Password', true);
+            flash('Password changed. Other devices were signed out.', 'success');
+            Auth::revokeOthers((int) $account['id']);
+            $back('profile');
+
+        case 'pin-set':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'provincial_treasurer']);
+            if (!password_verify((string) ($_POST['current_password'] ?? ''), (string) $account['password_hash'])) {
+                throw new InvalidArgumentException('Your password is required to set a transaction PIN.');
+            }
+            Auth::setPin((int) $account['id'], (string) ($_POST['pin'] ?? ''));
+            Audit::log((int) $account['id'], 'pin.set', 'user', (string) $account['id'], 'Transaction PIN set.');
+            flash('Transaction PIN updated.', 'success');
+            $back('profile');
+
+        case 'revoke-devices':
+            $account = Auth::requireLogin();
+            $count   = Auth::revokeOthers((int) $account['id']);
+            flash($count === 0 ? 'No other device sessions were active.' : $count . ' other device session(s) signed out.', 'success');
+            $back('profile');
+
+        case 'theme':
+            // Works without JavaScript: the preference is stored on the account and in a cookie.
+            $account = Auth::requireLogin();
+            $theme   = (string) $input('theme', 'system');
+            if (!in_array($theme, ['system', 'light', 'dark'], true)) {
+                $theme = 'system';
+            }
+            Database::run('UPDATE users SET theme_preference = ? WHERE id = ?', [$theme, (int) $account['id']]);
+            setcookie('rise63_theme', $theme, ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax', 'httponly' => true, 'secure' => Security::isHttps()]);
+            $back('dashboard');
+
+        // ── Applications ─────────────────────────────────────────────────────────────
+        case 'application-submit':
+            $account = Auth::requireLogin();
+            $type    = (string) $input('program_type', '');
+            $result  = Applications::submit($account, $type, [
+                'education_level'  => (string) $input('education_level', 'none'),
+                'school_name'      => (string) $input('school_name', ''),
+                'school_class'     => (string) $input('school_class', ''),
+                'requested_amount' => (string) $input('requested_amount', '0'),
+                'answers'          => $array('answers'),
+                'idempotency_key'  => (string) $input('idempotency_key', ''),
+            ]);
+            flash($result['created'] ? 'Application received. We will review it shortly.' : 'That application had already been received — nothing was duplicated.', 'success');
+            redirect('application', ['id' => $result['id']]);
+
+        case 'application-transition':
+            $account = Auth::requireLogin();
+            $id      = (int) ($_POST['application_id'] ?? 0);
+            $to      = (string) $input('to_status', '');
+            if ($id <= 0) {
+                throw new InvalidArgumentException('Choose an application.');
+            }
+            // Members may only act on their own record; reviewers are scoped by role.
+            $candidate = Applications::find($id, $account);
+            if ($candidate === null) {
+                throw new NotFound('That application is not available to you.');
+            }
+            Applications::transition($id, $account, $to, (string) $input('note', ''));
+            flash('Application moved to ' . Program::statusLabel($to) . '.', 'success');
+            $back('applications');
+
+        case 'application-withdraw':
+            $account = Auth::requireLogin();
+            $id      = (int) ($_POST['application_id'] ?? 0);
+            $application = Applications::find($id, $account);
+            if ($application === null || (int) $application['user_id'] !== (int) $account['id']) {
+                throw new NotFound('That application is not available to you.');
+            }
+            Applications::transition($id, $account, 'withdrawn', (string) $input('note', 'Withdrawn by the applicant.'));
+            flash('Application withdrawn.', 'success');
+            redirect('my-rise');
+
+        case 'application-document':
+            $account = Auth::requireLogin();
+            $id      = (int) ($_POST['application_id'] ?? 0);
+            $application = Applications::find($id, $account);
+            if ($application === null || (int) $application['user_id'] !== (int) $account['id']) {
+                throw new NotFound('That application is not available to you.');
+            }
+            $document = Security::storeUpload($_FILES['document'] ?? []);
+            $document['type'] = (string) $input('document_type', 'supporting document');
+            Applications::attachDocument($id, $document, (int) $account['id']);
+            flash('Document uploaded: ' . $document['name'], 'success');
+            redirect('application', ['id' => $id]);
+
+        case 'document-download':
+            $account = Auth::requireLogin();
+            $stored  = (string) ($_GET['file'] ?? '');
+            if (preg_match('/^[a-f0-9]{32}-[A-Za-z0-9._-]{1,80}$/D', $stored) !== 1) {
+                Security::fail(404, 'Document not found.');
+            }
+            $applicationId = (int) ($_GET['id'] ?? 0);
+            $application   = Applications::find($applicationId, $account);
+            if ($application === null) {
+                Security::fail(403, 'You cannot open that document.');
+            }
+            $owned = false;
+            foreach (Applications::documents($application) as $doc) {
+                if (($doc['stored'] ?? '') === $stored) {
+                    $owned = true;
+                    break;
+                }
+            }
+            if (!$owned) {
+                Security::fail(404, 'Document not found.');
+            }
+            $path = RISE63\path('storage/documents/' . $stored);
+            if (!is_file($path)) {
+                Security::fail(404, 'Document not found.');
+            }
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $stored) . '"');
+            header('Content-Length: ' . (string) filesize($path));
+            header('X-Content-Type-Options: nosniff');
+            readfile($path);
+            exit;
+
+        // ── Parish Connect ───────────────────────────────────────────────────────────
+        case 'parish-create':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'csr_rep']);
+            $id = ParishDirectory::createParish([
+                'parish_name'     => (string) $input('parish_name', ''),
+                'area_id'         => (int) ($_POST['area_id'] ?? 0),
+                'parish_code'     => $input('parish_code'),
+                'worship_address' => (string) $input('worship_address', ''),
+                'yaya_rep_name'   => (string) $input('yaya_rep_name', ''),
+                'yaya_rep_phone'  => (string) $input('yaya_rep_phone', ''),
+                'youth_count'     => (int) ($_POST['youth_count'] ?? 0),
+                'needs_summary'   => (string) $input('needs_summary', ''),
+            ], (int) $account['id']);
+            flash('Parish added to the directory.', 'success');
+            redirect('parish', ['id' => $id]);
+
+        case 'parish-update':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'csr_rep']);
+            $id = (int) ($_POST['parish_id'] ?? 0);
+            if ($account['role'] === 'csr_rep' && (int) $account['parish_id'] !== $id) {
+                Security::fail(403, 'You can only update your own parish.');
+            }
+            ParishDirectory::updateParish($id, [
+                'parish_name'     => (string) $input('parish_name', ''),
+                'area_id'         => (int) ($_POST['area_id'] ?? 0),
+                'parish_code'     => $input('parish_code'),
+                'worship_address' => (string) $input('worship_address', ''),
+                'yaya_rep_name'   => (string) $input('yaya_rep_name', ''),
+                'yaya_rep_phone'  => (string) $input('yaya_rep_phone', ''),
+                'youth_count'     => (int) ($_POST['youth_count'] ?? 0),
+                'needs_summary'   => (string) $input('needs_summary', ''),
+                'is_active'       => $input('is_active') === '1',
+            ], (int) $account['id']);
+            flash('Parish details saved.', 'success');
+            $back('parishes');
+
+        case 'zone-create':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            ParishDirectory::createZone((string) $input('zone_name', ''), $input('zone_code'), (int) $account['id']);
+            flash('Zone created.', 'success');
+            $back('parishes');
+
+        case 'area-create':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            ParishDirectory::createArea((int) ($_POST['zone_id'] ?? 0), (string) $input('area_name', ''), $input('area_code'), (int) $account['id']);
+            flash('Area created.', 'success');
+            $back('parishes');
+
+        // ── Treasury ─────────────────────────────────────────────────────────────────
+        case 'remittance-request':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'provincial_treasurer']);
+            $application = Applications::find((int) ($_POST['application_id'] ?? 0), $account);
+            if ($application === null) {
+                throw new NotFound('That application is not available.');
+            }
+            Ledger::requestDisbursement($application, $account, $_POST);
+            flash('Disbursement queued. Confirm it with your transaction PIN.', 'success');
+            redirect('treasury');
+
+        case 'remittance-confirm':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'provincial_treasurer']);
+            $locked = Auth::pinLockedFor($account);
+            if ($locked > 0) {
+                throw new InvalidArgumentException('The transaction PIN is locked for another ' . max(1, (int) ceil($locked / 60)) . ' minute(s).');
+            }
+            if (!Auth::verifyPin($account, (string) ($_POST['pin'] ?? ''))) {
+                throw new InvalidArgumentException('That transaction PIN is not correct.');
+            }
+            $record = Ledger::confirm((int) ($_POST['remittance_id'] ?? 0), $account);
+            flash('Disbursement confirmed: ' . RISE63\Core\Money::fromDecimal($record['amount'])->format() . '.', 'success');
+            redirect('treasury');
+
+        // ── Administration ───────────────────────────────────────────────────────────
+        case 'settings-save':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $group   = (string) $input('group', '');
+            $values  = [];
+            foreach ($array('settings') as $key => $value) {
+                if (!is_string($key) || !is_scalar($value)) {
+                    continue;
+                }
+                $values[$key] = (string) $value;
+            }
+            foreach ($array('settings_bool') as $key => $value) {
+                $values[(string) $key] = $value === '1' ? '1' : '0';
+            }
+            Settings::setMany($values, (int) $account['id']);
+            BruteForce::log(Security::clientIp(), null, (string) $account['email'], 'settings_changed', 'Group: ' . $group);
+            flash('Settings saved.', 'success');
+            $back('settings');
+
+        case 'security-save':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $values = [];
+            foreach ($array('settings') as $key => $value) {
+                if (!is_string($key) || !is_scalar($value)) {
+                    continue;
+                }
+                $values[$key] = (string) $value;
+            }
+            foreach ($array('settings_bool') as $key => $value) {
+                $values[(string) $key] = $value === '1' ? '1' : '0';
+            }
+            Settings::setMany($values, (int) $account['id']);
+            BruteForce::log(Security::clientIp(), null, (string) $account['email'], 'settings_changed', 'Security policy updated.');
+            flash('Security policy saved. Existing suspensions are unchanged.', 'success');
+            $back('security');
+
+        case 'country-rule':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $code   = strtoupper((string) $input('country_code', ''));
+            $rule   = (string) $input('action', 'not_specified');
+            if (preg_match('/^[A-Z]{2}$/D', $code) !== 1 || !in_array($rule, ['whitelisted', 'not_specified', 'blacklisted'], true)) {
+                throw new InvalidArgumentException('That country rule is not valid.');
+            }
+            Database::run('UPDATE country_rules SET action_code = ? WHERE country_code = ?', [$rule, $code]);
+            BruteForce::log(Security::clientIp(), $code, (string) $account['email'], 'settings_changed', 'Country ' . $code . ' set to ' . $rule . '.');
+            if ($wantsJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['ok' => true, 'code' => $code, 'action' => $rule]);
+                exit;
+            }
+            flash('Country rule updated.', 'success');
+            $back('security');
+
+        case 'access-rule':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $type   = (string) $input('rule_type', 'ip');
+            $target = trim((string) $input('target_value', ''));
+            $next   = (string) $input('action', 'whitelisted');
+            if (!in_array($type, ['ip', 'username'], true) || !in_array($next, ['whitelisted', 'blacklisted'], true)) {
+                throw new InvalidArgumentException('That rule is not valid.');
+            }
+            if ($type === 'ip' && filter_var($target, FILTER_VALIDATE_IP) === false) {
+                throw new InvalidArgumentException('Enter a single IPv4 or IPv6 address.');
+            }
+            if ($type === 'username') {
+                $target = strtolower($target);
+                if (!filter_var($target, FILTER_VALIDATE_EMAIL)) {
+                    throw new InvalidArgumentException('Enter the account e-mail address.');
+                }
+                if ($next === 'blacklisted' && $target === strtolower((string) $account['email'])) {
+                    throw new InvalidArgumentException('You cannot blacklist your own account.');
+                }
+            }
+            if ($target === Security::clientIp() && $next === 'blacklisted') {
+                throw new InvalidArgumentException('You cannot blacklist the address you are using.');
+            }
+            Database::run(
+                'INSERT INTO manual_access_rules (rule_type, target_value, action, note, created_by) VALUES (?,?,?,?,?) '
+                . 'ON DUPLICATE KEY UPDATE created_at = UTC_TIMESTAMP()',
+                [$type, $target, $next, (string) $input('note', ''), (int) $account['id']]
+            );
+            if ($type === 'ip' && $next === 'whitelisted') {
+                Database::run('INSERT INTO security_ips (ip_address, whitelisted) VALUES (?,1) ON DUPLICATE KEY UPDATE whitelisted = 1', [$target]);
+            }
+            Audit::log((int) $account['id'], 'access.rule', 'access_rule', $target, $type . ' ' . $next);
+            flash('Access rule saved.', 'success');
+            $back('security');
+
+        case 'access-rule-delete':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            Database::run('DELETE FROM manual_access_rules WHERE id = ?', [(int) ($_POST['rule_id'] ?? 0)]);
+            flash('Access rule removed.', 'success');
+            $back('security');
+
+        case 'ip-unblock':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $ip = (string) $input('ip', '');
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+                throw new InvalidArgumentException('That IP address is not valid.');
+            }
+            Database::run('UPDATE security_ips SET blocked_until = NULL, escalation_level = 0 WHERE ip_address = ?', [$ip]);
+            BruteForce::log($ip, null, (string) $account['email'], 'ip_unblocked', 'Block cleared by an administrator.');
+            if (Settings::bool('firewall_enabled')) {
+                Database::run('INSERT INTO firewall_jobs (ip_address, action, block_until) VALUES (?,?,UTC_TIMESTAMP())', [$ip, 'unblock']);
+            }
+            Audit::log((int) $account['id'], 'ip.unblock', 'ip', $ip, 'Block cleared.');
+            flash('Block cleared for ' . $ip . '.', 'success');
+            $back('security');
+
+        case 'account-suspend':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $targetId = (int) ($_POST['user_id'] ?? 0);
+            if ($targetId === (int) $account['id']) {
+                throw new InvalidArgumentException('You cannot suspend your own account.');
+            }
+            BruteForce::suspend($targetId, $input('suspend') === '1', (int) $account['id']);
+            flash('Account updated.', 'success');
+            $back('people');
+
+        case 'user-create':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $created = RISE63\Core\Registration::createByAdmin([
+                'full_name' => (string) $input('full_name', ''),
+                'email'     => (string) $input('email', ''),
+                'phone'     => (string) $input('phone', ''),
+                'parish_id' => $input('parish_id'),
+                'role'      => (string) $input('role', 'youth_member'),
+                'password'  => (string) ($_POST['password'] ?? ''),
+            ], $account);
+            flash('Account created for ' . $created['email'] . '. Share the temporary password through a trusted channel.', 'success');
+            $back('people');
+
+        case 'user-role':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $targetId = (int) ($_POST['user_id'] ?? 0);
+            $role     = (string) $input('role', '');
+            if (!isset(Auth::ROLES[$role])) {
+                throw new InvalidArgumentException('Choose a valid role.');
+            }
+            if ($targetId === (int) $account['id'] && $role !== 'provincial_admin') {
+                throw new InvalidArgumentException('You cannot remove your own administrator role.');
+            }
+            if ($role !== 'provincial_admin' && (string) Database::value('SELECT role FROM users WHERE id = ?', [$targetId]) === 'provincial_admin'
+                && (int) Database::value("SELECT COUNT(*) FROM users WHERE role = 'provincial_admin' AND is_suspended = 0") <= 1) {
+                throw new InvalidArgumentException('The last active provincial administrator must keep that role.');
+            }
+            Database::run('UPDATE users SET role = ? WHERE id = ?', [$role, $targetId]);
+            Audit::log((int) $account['id'], 'user.role', 'user', (string) $targetId, $role);
+            flash('Role updated.', 'success');
+            $back('people');
+
+        case 'queue-test':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            RISE63\Core\Notifier::queue(
+                (string) ($account['email'] ?? ''),
+                'RISE 63 notification test',
+                RISE63\Core\Notifier::wrap('Notification pipeline test', '<p>This message confirms the queue accepts and renders HTML mail. Delivery requires <code>bin/mail-worker.php</code> to run from cron.</p>'),
+                'test'
+            );
+            flash('Test message queued. Delivery happens on the next mail worker run.', 'success');
+            $back('settings');
+
+        case 'run-maintenance':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $removed = BruteForce::prune();
+            flash('Maintenance complete: ' . $removed . ' expired failure log row(s) removed.', 'success');
+            $back('security');
+
+        default:
+            throw new InvalidArgumentException('That action is not recognised.');
+    }
+} catch (InvalidArgumentException | RISE63\Core\DuplicateApplication $error) {
+    flash($error->getMessage(), 'error');
+    $back($page !== '' ? $page : 'dashboard');
+} catch (RISE63\Core\StatusConflict $error) {
+    http_response_code(409);
+    flash($error->getMessage(), 'error');
+    $back($page !== '' ? $page : 'dashboard');
+} catch (NotFound $error) {
+    http_response_code(404);
+    flash($error->getMessage(), 'error');
+    $back('dashboard');
+} catch (\PDOException $error) {
+    error_log('RISE63 PDO: ' . $error->getMessage());
+    if ($error->getCode() === '23000') {
+        flash('That record already exists. Check the parish name, code or e-mail address.', 'error');
+    } else {
+        flash('The record could not be saved. Please try again.', 'error');
+    }
+    $back($page !== '' ? $page : 'dashboard');
+} catch (RISE63\Core\ActivationRequired $error) {
+    flash($error->getMessage(), 'error');
+    redirect('dashboard');
+}

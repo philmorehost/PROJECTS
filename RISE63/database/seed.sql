@@ -1,0 +1,38 @@
+-- RISE 63 — default settings seed. Every value here is validated against the typed
+-- schema in app/Core/Settings.php, so an administrator can never persist a value the
+-- application cannot interpret.
+
+INSERT INTO security_settings (setting_key, setting_value) VALUES
+('site_title', 'RISE 63'),
+('site_tagline', 'LP63 YAYA CSR & Young Professionals Club'),
+('notification_email', ''),
+('support_phone', ''),
+('theme_color', '#2563eb'),
+('pwa_install_prompt', '1'),
+('allow_self_registration', '1'),
+('maintenance_mode', '0'),
+('session_idle_minutes', '30'),
+('login_alerts_enabled', '1'),
+('username_protection', '1'),
+('account_window_minutes', '15'),
+('account_max_failures', '5'),
+('protect_privileged', '0'),
+('protection_scope', 'all'),
+('ip_protection', '1'),
+('ip_window_minutes', '15'),
+('ip_max_failures', '10'),
+('unknown_user_insta_block', '1'),
+('block_duration', 'day'),
+('escalate_repeat_blocks', '1'),
+('auto_whitelist_sessions', '5'),
+('log_retention_minutes', '60'),
+('country_filter_enabled', '1'),
+('country_unknown_policy', 'allow'),
+('firewall_enabled', '0'),
+('pin_max_attempts', '5'),
+('pin_lock_minutes', '15'),
+('academy_graduation_percent', '80'),
+('seed_grant_monthly_pool', '100000.00'),
+('seed_grant_max_per_application', '100000.00'),
+('education_bridge_sla_hours', '72'),
+('current_cycle_year', '2026');
