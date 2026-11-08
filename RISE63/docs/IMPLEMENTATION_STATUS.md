@@ -265,6 +265,39 @@ The two earlier reports were the same symptom seen from different angles: the re
 well-formed, so no key could match, and the provider's one-size-fits-all message sent us looking at
 the key, then the domain, before the body itself.
 
+### 2.3f Field report seven — "Not Found" on every page but the home page
+
+Activation cleared, then `/login` returned Apache's `Not Found`.
+
+**Cause.** The application routes on `$_GET['page']`, and every link and redirect it emits is a
+path segment (`url('login')` → `/login`). `.htaccess` had no rule mapping a path segment to
+`index.php`. Nothing failed for the site root, because `DirectoryIndex index.php` serves it —
+which is exactly why the symptom read as "the site is up, the links are broken".
+
+So clean URLs had never worked on Apache. The development router (`router.php`) sent everything to
+`index.php` but *without* translating the path into `?page=`, and the harnesses all passed
+`?page=…` directly, so the gap was invisible to every test.
+
+**Fix, in three layers.**
+
+1. `.htaccess` gains the missing front-controller rule, guarded by `!-f` and `!-d` so real files
+   (`public/`, `api/`, `install/`, assets) are never rewritten, and with no `RewriteBase` so a
+   subdirectory install keeps working.
+2. `page_from_path()` derives the page from `REQUEST_URI` when `?page=` is absent, after stripping
+   `base_path()`. A host with `AllowOverride` off therefore still serves `/login` correctly — the
+   rewrite becomes an optimisation, not a requirement.
+3. `router.php` (development) now does the same translation, so `php -S` behaves like the host.
+
+Two latent bugs surfaced while testing this, both pre-existing: `index.php` used `base_path()` and
+`app/pages.php` used `site_title()` without importing them into the namespace — either would have
+been a fatal error on a fresh install. `base_path()` also cached its answer for the whole process
+rather than per script path, so one CLI run could not look at two installations.
+
+**Tests.** `page_from_path()` is unit-tested against roots, subdirectory installs, `index.php`,
+`/install/`, `/api/`, nested pages and encoded traversal; the smoke harness asserts the rewrite rule
+exists, that it maps a bare segment, that it leaves asset paths alone, and that it is guarded by the
+`!-f`/`!-d` conditions — and that assertion was verified to fail when the rule is deleted.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

@@ -17,7 +17,7 @@ use RISE63\Core\Security;
 use RISE63\Core\Settings;
 use RISE63\Core\View;
 
-use function RISE63\{config_dir, e, flash, installed, redirect, site_title, take_flashes, url};
+use function RISE63\{config_dir, e, flash, installed, page_from_path, redirect, site_title, take_flashes, url};
 
 // ── Installer hand-off ────────────────────────────────────────────────────────────────
 if (!installed()) {
@@ -64,7 +64,16 @@ if (!$activationState['valid']) {
 Settings::flush();
 
 // ── Routing ───────────────────────────────────────────────────────────────────────────
+// The page comes from ?page= when the rewrite in .htaccess supplied it, and from the URL path
+// otherwise. Both are supported on purpose: /login must work as a path segment (every link and
+// every redirect in this application emits one) *and* as /?page=login, which is what the
+// development router and the preview harnesses produce. Deriving it here rather than relying on
+// the rewrite alone means a host with AllowOverride off still serves /login correctly instead of
+// an Apache "Not Found" — and if the rewrite is added later it does the same thing.
 $page    = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_GET['page'] ?? ''))) ?? '';
+if ($page === '') {
+    $page = page_from_path((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+}
 $action  = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['action'] ?? ''))) ?? '';
 $method  = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 

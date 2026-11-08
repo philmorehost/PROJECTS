@@ -21,7 +21,7 @@ use RISE63\Core\Settings;
 use RISE63\Core\Updater;
 use RISE63\Core\View;
 
-use function RISE63\{e, take_flashes};
+use function RISE63\{e, site_title, take_flashes};
 
 $flashes = take_flashes();
 $now     = ['flashes' => $flashes, 'user' => $user, 'page' => $page, 'title' => site_title()];

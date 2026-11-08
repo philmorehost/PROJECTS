@@ -913,6 +913,54 @@ ok('The installed version comes from the update record, not a hard-coded constan
 });
 
 
+/* ───────────────────── Clean URLs: /login must select the login page ─────────────────── */
+
+ok('A URL path selects the page when no rewrite supplied ?page=', function (): void {
+    // The first real installation answered /login with Apache's own "Not Found": every link in
+    // this application is a path segment, but .htaccess had no rule sending segments to
+    // index.php, and index.php only ever read ?page=. The root worked (DirectoryIndex) and
+    // nothing else did. page_from_path() is the fallback that closes that hole.
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+
+    assertSame('login', RISE63\page_from_path('/login'));
+    assertSame('login', RISE63\page_from_path('/login/'));
+    assertSame('login', RISE63\page_from_path('/login?next=%2Fmembers'));
+    assertSame('treasury', RISE63\page_from_path('/treasury'));
+
+    // The root and the front controller itself name no page of their own.
+    assertSame('', RISE63\page_from_path('/'));
+    assertSame('', RISE63\page_from_path('/index.php'));
+    assertSame('', RISE63\page_from_path('/index.php?page=login'));
+
+    // Sub-applications have their own entry point; naming them as pages would 404 them.
+    assertSame('', RISE63\page_from_path('/install/'));
+    assertSame('', RISE63\page_from_path('/install/index.php'));
+    assertSame('', RISE63\page_from_path('/api/index.php'));
+
+    // A deeper path is a page plus an identifier: the page is the first segment.
+    assertSame('members', RISE63\page_from_path('/members/12/edit'));
+
+    // A traversal attempt names no page at all: the first segment is '..', which the filter
+    // empties. It must never survive as something a controller could act on.
+    assertSame('', RISE63\page_from_path('/../../config/database.php'));
+    assertSame('', RISE63\page_from_path('/%2e%2e/secret'));
+    assertSame('script', RISE63\page_from_path('/<script>'), 'the angle brackets are stripped, not the name');
+    assertSame('phpmyadmin', RISE63\page_from_path('/phpmyadmin/'));
+});
+
+ok('A subdirectory install derives both base path and page correctly', function (): void {
+    // Hosts often put the app at /rise63. base_path() is cached per request, so this test proves
+    // the /rise63 prefix is stripped before the page is read — otherwise every page would be
+    // named "rise63".
+    $_SERVER['SCRIPT_NAME'] = '/rise63/index.php';
+    assertSame('/rise63', RISE63\base_path());
+    assertSame('login', RISE63\page_from_path('/rise63/login'));
+    assertSame('dashboard', RISE63\page_from_path('/rise63/dashboard'));
+    assertSame('', RISE63\page_from_path('/rise63/'));
+    assertSame('', RISE63\page_from_path('/rise63/index.php'));
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+});
+
 /* ───────────── The bug that made every key look invalid (field report six) ───────────── */
 
 ok('The activation request posts a plain string key, never a nested array', function (): void {

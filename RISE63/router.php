@@ -33,4 +33,13 @@ if ($file !== false && is_file($file) && str_starts_with($file, __DIR__ . DIRECT
     return false;
 }
 
+// Reproduce the rewrite in .htaccess: a bare path segment names a page. Without this, the built-in
+// server answers /login with its own 404 and the clean-URL bug that broke the first installation
+// stays invisible in development.
+$segments = array_values(array_filter(explode('/', trim($path, '/')), static fn (string $s): bool => $s !== ''));
+if (count($segments) === 1 && !isset($_GET['page'])) {
+    $_GET['page']    = rawurldecode($segments[0]);
+    $_REQUEST['page'] = $_GET['page'];
+}
+
 require __DIR__ . '/index.php';

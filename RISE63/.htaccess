@@ -20,6 +20,20 @@ DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Every link in this application is a path segment (/login, /treasury), but there is a single
+    # entry point, index.php. Without this Apache answers /login with its own 404 page before PHP
+    # is ever reached — which is exactly what happened on the first real installation: the site
+    # root loaded (DirectoryIndex) and every other page was "Not Found".
+    #
+    # Deliberately no RewriteBase: the substitution is then relative to the directory holding this
+    # file, so an install in a subdirectory keeps working. Real files and real directories
+    # (public/, api/, install/, assets) are never rewritten; only a bare path segment is.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([^/]+)/?$ index.php?page=$1 [QSA,L]
+
+    # Private directories are refused, not rewritten.
     RewriteRule ^(?:app|config|storage|database|tests|bin|docs)(?:/|$) - [F,L]
 </IfModule>
 
