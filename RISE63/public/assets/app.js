@@ -327,9 +327,34 @@
     store(QUEUE_KEY, JSON.stringify(next));
   }
 
+  /* ── Copy-to-clipboard helper ──────────────────────────────────────────────── */
+  // [data-copy-target] copies the value of the element with that id. The installer uses it so the
+  // operator can paste the exact domain into the provider's order form without retyping.
+  function initCopyButtons() {
+    document.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-copy-target]');
+      if (!button) { return; }
+      var field = document.getElementById(button.getAttribute('data-copy-target'));
+      if (!field) { return; }
+      var value = field.value !== undefined ? field.value : field.textContent;
+      var done = function () {
+        var original = button.textContent;
+        button.textContent = 'Copied';
+        window.setTimeout(function () { button.textContent = original; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(done, function () { field.select && field.select(); });
+      } else if (field.select) {
+        field.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* leave it selected */ }
+      }
+    });
+  }
+
   /* ── Boot the small behaviours ─────────────────────────────────────────────── */
   initConfirm();
   initCapsHint();
+  initCopyButtons();
 
   /* ── Service worker & update toast ─────────────────────────────────────────── */
   if ('serviceWorker' in navigator && document.body.classList.contains('signed-in')) {

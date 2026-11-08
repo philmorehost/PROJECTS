@@ -147,6 +147,17 @@ check('installer shows the stage-1 checklist', /Setup|Environment|System check/i
 check('installer names the running PHP version', /PHP 8\.\d/.test(installer), installer.slice(0, 300));
 check('installer has no PHP notices', !notice.test(installer), installer.slice(0, 600));
 
+// The licence step: the operator must be able to reach the provider and paste a key here.
+check('installer offers a link to request a licence',
+  /Request a licence/i.test(installer) && /manager\.pmhserver\.name\.ng\/order\.php/.test(installer),
+  installer.slice(0, 400));
+check('installer links to the sign-in page for an existing key',
+  /manager\.pmhserver\.name\.ng\/user\/login\.php/.test(installer));
+check('installer asks for a licence key, not a system token',
+  /name="license_key"/.test(installer) && !/name="system_token"/.test(installer));
+check('installer shows the domain it will license', /name="domain"|id="domain"/.test(installer)
+  && /x\.test/.test(installer) === false, 'the readonly field must be this host');
+
 /* 2. CSRF protection on the installer POST. */
 const noToken = await request({ method: 'POST', uri: '/', post: { stage: '1' } });
 check('installer POST without a CSRF token is refused', !fatal.test(noToken) && /csrf|security|expired|reload/i.test(noToken),
@@ -174,6 +185,6 @@ check('the wizard refuses to run a second time', /already installed/i.test(wizar
   wizardAgain.replace(/\s+/g, ' ').slice(0, 300));
 
 console.log('\n' + '─'.repeat(62));
-const total = 11;
+const total = 15;
 console.log(`${total - failures.length} passed, ${failures.length} failed`);
 process.exit(failures.length === 0 ? 0 : 1);

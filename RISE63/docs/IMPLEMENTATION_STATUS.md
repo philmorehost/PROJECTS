@@ -23,9 +23,9 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Suite | Command | Result |
 |---|---|---|
 | Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **36 passed, 0 failed** |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **40 passed, 0 failed** |
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **28 passed, 0 failed** |
-| Requests | `node tests/support/phpwasm-smoke.mjs` | **11 passed, 0 failed** |
+| Requests | `node tests/support/phpwasm-smoke.mjs` | **15 passed, 0 failed** |
 
 What the logic suite actually asserts:
 
@@ -33,6 +33,7 @@ What the logic suite actually asserts:
 * **Application state machine** — only declared transitions are legal; approval cannot skip verification; terminal states are terminal; reasons are mandatory for rejection and document requests; reviewers cannot set system-only statuses (e.g. `disbursed`); members can only withdraw before money moves; the three-step tracker mapping.
 * **Security policy** — password policy (length, common words, name/e-mail fragments), transaction-PIN policy (rejects `0000`, `1234`, `4321`, `2026`), hashing round-trip and rehash detection, CIDR boundary matching for IPv4 /25 /12 /8 and IPv6 mismatch, local-vs-remote classification, the cPHulk-style block decision table (threshold, immediate block for unknown accounts, protection-off), country policy (unknown → allow by default, deny on request, filter-off disables rules), and the escalation ladder day → week → month → year with clamping and a safe fallback for invalid configuration.
 * **Settings** — every declared type rejects the values the draft blueprint would have accepted ("sixty" in a retention window, `blue` as a colour, `lots` as a money value, control characters in a title); the seed file cannot contain a key the schema does not declare.
+* **Licensing** — keys are rejected before any network call if they are malformed (spaces, newlines, wrong length, non-ASCII); domains are normalised the way the provider stores them (`www.`, scheme, port, trailing dot removed); and only `status: 1` grants access across the documented response table, including `{"status":0}`, unreadable JSON, a missing status field and the suspended marker.
 * **Account lifecycle** — temporary passwords satisfy the policy they will be replaced under, contain no ambiguous glyphs and do not collide across 50 draws; reset tokens are 64 hex characters, only their sha256 is stored, and the resolver's pattern rejects every malformed shape (short, long, uppercase, path traversal).
 * **Migration shipping rules** — file names, contiguous versions, no `DELIMITER`, no triggers, no `DROP TABLE`.
 * **Academy attendance** — the percentage gate used to unlock Seed Grants (0 sessions → 0 %, 8/10 → 80 %, clamping at 100 %).
@@ -123,7 +124,7 @@ Worth recording, because each would have failed only on a live database or brows
 | Ledger triggers | Trivial to check but needs MySQL | `UPDATE remittance_ledger SET amount = 1` must raise `45000`. |
 | Mail delivery | Needs SMTP | Configure `config/smtp.php`, run `bin/mail-worker.php --verbose`, confirm inbox placement and SPF/DKIM. |
 | Firewall worker | Needs a firewall adapter | Test the `command` adapter against a scratch CSF install; confirm whitelisted/loopback addresses are skipped. |
-| Activation | Needs a real token and domain | Install with a live token at stage 1 and 3; confirm the 24-hour grace window by pointing the host at a dead manager. |
+| Licensing | **The API has never been called from this environment** — this sandbox blocks `manager.pmhserver.name.ng` (outbound HTTPS is limited to package registries). The response handling is tested against the documented contract; the network call itself is not. | Run `php bin/license-check.php` on the host with a real key. Then `php bin/license-check.php --domain=wrong.example` to confirm `status: 0`, and `--key=… --save` to confirm a key is stored. For the grace window: confirm once, block outbound HTTPS, and reload. |
 | PWA install | Needs a browser | Chrome Android: install banner, standalone launch, offline reload. iOS Safari: Share → Add to Home Screen, guide text. |
 | 320–430 px layout | Needs a browser | No horizontal scroll on every page; 48 px targets; dark/light contrast. |
 | Service-worker update | Needs a version bump | Change `SHELL_VERSION`, reload twice, confirm the "Reload" toast. |

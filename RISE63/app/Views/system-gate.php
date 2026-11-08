@@ -22,10 +22,15 @@ header('Retry-After: 3600');
       <p><?= e($activationState['message'] ?? 'This installation is not activated.') ?></p>
       <div class="notice">
         <strong>For the site operator</strong>
-        Confirm the system token in <code>config/system-token.php</code>, that this domain is authorized in the manager,
-        and that outbound HTTPS to <code>manager.pmhserver.name.ng</code> is allowed by the host.
-        A reachable manager is required at least once every 24 hours.
+        This installation runs on a licence locked to a domain. Check that the key in
+        <code>config/activation-key.php</code> belongs to <code><?= e($domain ?? 'this domain') ?></code>,
+        and that the host allows outbound HTTPS to <code>manager.pmhserver.name.ng</code>.
+        The licence service must answer at least once every 24 hours.
       </div>
+      <ul class="list-plain" style="margin-top:12px">
+        <li><a href="<?= e(RISE63\Core\Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence for this domain</a></li>
+        <li><a href="<?= e(RISE63\Core\Activation::MANAGER_SIGNIN) ?>" target="_blank" rel="noopener noreferrer">Sign in to copy or move your key</a></li>
+      </ul>
       <a class="btn btn-secondary btn-block" style="margin-top:16px" href="<?= e(url('')) ?>">Try again</a>
     </div>
   </div>

@@ -15,7 +15,7 @@ Audience: the person who will put this on the cPanel/LiteSpeed host and keep it 
 | Database | MySQL 8.0+ or MariaDB 10.6+, one **empty** database, one user limited to that database. |
 | Cron | Two entries, every five minutes, plus one hourly. See §5. |
 | Domain | A dedicated domain or subdomain, e.g. `rise63.yourdomain.org`. **Do not** point a domain at the repository root: sibling projects would become reachable. |
-| Activation | The system token from your manager account (`manager.pmhserver.name.ng`) and the domain authorized for it. |
+| Licence | A key from `manager.pmhserver.name.ng`, issued for **this domain**. Create it during setup — the installer links to the order form — or copy an existing one from your account. |
 | Certificate | Let's Encrypt or better, installed **before** setup. |
 
 Memory: 256 MB PHP memory limit is plenty; 512 MB is comfortable. Disk: allow 2 GB for documents and logs.
@@ -51,7 +51,7 @@ public/        0755
 everything else 0644 files, 0755 directories
 ```
 
-`config/*.php`, `config/installed.lock` and `config/system-token.php` are written with mode **0600**. If your PHP user differs from the file owner, `chmod 0640` and add the PHP user to the file's group.
+`config/*.php`, `config/installed.lock` and `config/activation-key.php` are written with mode **0600**. If your PHP user differs from the file owner, `chmod 0640` and add the PHP user to the file's group.
 
 > **Never** run the application with the database root account. Never store the activation token in source control.
 
@@ -90,6 +90,57 @@ Requirements if you enable e-mail reset:
 2. Cron for `bin/mail-worker.php` running (§5) — without it, the link is never delivered.
 3. SPF and DKIM published for the sending domain, or the link lands in spam and someone phones you.
 4. Send one real reset to a mailbox you control before announcing the feature.
+
+## 3b. The licence, start to finish
+
+RISE 63 is licensed per domain. The check is a server-side POST to the provider's API — a browser
+check can be skipped, so it is never trusted:
+
+```
+POST https://manager.pmhserver.name.ng/api.php
+     key=<your key>&domain=<this domain>
+ ->  {"status":1,"message":"License is valid."}              licensed
+ ->  {"status":0,"message":"Invalid license key or domain."} not licensed
+```
+
+**Getting a key**
+
+1. Open <https://manager.pmhserver.name.ng/order.php> (the installer links to it on stage 1).
+2. Enter your e-mail and the exact domain shown in the installer's **Domain to license** field, which
+   is read from the request and has any `www.` removed.
+3. The key arrives by e-mail. Existing customers can copy it from
+   <https://manager.pmhserver.name.ng/user/login.php>.
+
+**During setup**
+
+- Paste the key into **Licence key** and press **Check this key first** to see the answer without
+  committing — useful if you want to confirm the domain before creating an administrator.
+- **Save key and continue** writes `config/activation-key.php` (mode 0600) and moves on.
+- Nothing is enabled until the manager returns `status: 1` for this domain.
+
+**After setup**
+
+| Situation | Behaviour |
+|---|---|
+| Confirmed within 6 hours | No network call; the cached result is used |
+| Manager unreachable, last success < 24 hours | Site keeps running on the grace window, and the banner says so |
+| Manager unreachable, never confirmed | Sign-in stays paused — a fresh install cannot run unlicensed through an outage |
+| Key invalid or domain changed | Activation page, with links to the order form and to sign in |
+
+Diagnose from the server:
+
+```sh
+php bin/license-check.php                      # stored key + this host
+php bin/license-check.php --domain=example.org # what the manager says for another domain
+php bin/license-check.php --key=NEWKEY --save  # test a new key, keep it only if valid
+```
+
+The output masks the key (first and last four characters only) and never writes it to a log.
+Exit codes: `0` licensed · `1` not licensed · `2` configuration problem.
+
+Hosts without cURL are fine: activation falls back to PHP's HTTPS stream wrapper. If both fail,
+run `curl -sS -o /dev/null -w '%{http_code}\n' https://manager.pmhserver.name.ng/api.php` from the
+server to prove outbound HTTPS is open.
 
 ## 4. Immediately after setup
 
@@ -267,7 +318,7 @@ Notes that matter:
 | Symptom | Likely cause | Action |
 |---|---|---|
 | Everyone is locked out | An untrusted proxy makes all visitors look like one IP, or `unknown country` is denied | Check **Security → blocked addresses** (one IP, many usernames is the signature). Add the proxy to `config/trusted_proxies.php`, or whitelist the address, and set the unknown-country policy back to allow. |
-| "Activation required" page | Token revoked, domain changed, or outbound HTTPS blocked | Confirm the domain in the manager, check `config/system-token.php` exists, test `curl -I https://manager.pmhserver.name.ng/api.php` from the server. Sites keep working for 24 hours after the last successful check. |
+| "Activation required" page | Key revoked, domain changed, or outbound HTTPS blocked | Run `php bin/license-check.php` — it prints the masked key, the domain, the transport and the manager's answer. Check the domain on your order form matches exactly (no `https://`, no `www.`), and that the server can reach the endpoint. A site that was confirmed in the last 24 hours keeps running while the manager is unreachable. |
 | 503 for everyone | `storage/maintenance.json` present or `maintenance_mode` on | Remove the file / switch the setting off. Administrators are not blocked by maintenance mode. |
 | No e-mails | cron not installed, or SMTP unconfigured | **Settings → Notifications** shows queue state; run `php bin/mail-worker.php --verbose` manually and read the error. |
 | Blank page / 500 | PHP fatal | Read `error_log` in cPanel. `RISE63_DEBUG=1` in the PHP environment adds the exception message to the error page — never leave it on. |

@@ -287,6 +287,114 @@ ok('Migration files follow the shipping rules', function (): void {
     assertSame('0001', array_key_first($seen));
 });
 
+ok('Licence keys are validated before anything is sent to the provider', function (): void {
+    $looks = static fn (string $key): bool => RISE63\Core\Activation::looksLikeKey($key);
+
+    assert($looks('ABCD-1234-EFGH-5678'), 'dashed keys are the normal shape');
+    assert($looks(str_repeat('a', 200)), 'long keys are accepted');
+    assert($looks('  padded-key-0123456789  '), 'surrounding whitespace is trimmed, not a failure');
+
+    foreach ([
+        '', 'short', str_repeat('a', 255 + 1), 'has space in the middle key', "multi\nline-key-1234567890",
+        "tab\tkey-1234567890", 'unicode-☃-key-12345678',
+    ] as $bad) {
+        assert(!$looks($bad), 'must reject: ' . var_export($bad, true));
+    }
+});
+
+ok('Domains are normalised the way the provider stores them', function (): void {
+    $norm = static fn (string $host): string => RISE63\Core\Activation::domainFromHost($host);
+
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('buildroom.rccglp63yaya.org.ng'));
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('BUILDROOM.RCCGLP63YAYA.ORG.NG'));
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('buildroom.rccglp63yaya.org.ng:8443'));
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('www.buildroom.rccglp63yaya.org.ng'));
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('https://www.buildroom.rccglp63yaya.org.ng/path'));
+    assertSame('buildroom.rccglp63yaya.org.ng', $norm('buildroom.rccglp63yaya.org.ng.'));
+
+    assert(RISE63\Core\Activation::validDomain('example.co.uk'), 'multi-label domains are fine');
+    assert(RISE63\Core\Activation::validDomain('x.io'), 'short domains are fine');
+    foreach (['', 'localhost', 'no-tld', 'http://example.org', 'exa mple.org', 'a.b', str_repeat('a', 260) . '.org'] as $bad) {
+        assert(!RISE63\Core\Activation::validDomain($bad), 'must reject domain: ' . var_export($bad, true));
+    }
+});
+
+ok('The manager response decides access, and only status 1 grants it', function (): void {
+    // Reaches the private interpreter through the public surface: a stored key plus a stubbed
+    // transport is not possible here without a network, so the response table is asserted
+    // against the documented contract via reflection.
+    $method = new ReflectionMethod(RISE63\Core\Activation::class, 'interpret');
+    $method->setAccessible(true);
+    $activation = new RISE63\Core\Activation(sys_get_temp_dir());
+
+    $cases = [
+        '{"status":1,"message":"License is valid."}'        => [true,  'License is valid.'],
+        '{"status":"1","message":"ok"}'                     => [true,  'ok'],
+        '{"status":0,"message":"Invalid license key or domain."}' => [false, 'Invalid license key or domain.'],
+        '{"status":"suspended","message":"Suspended"}'      => [false, 'suspended by the provider'],
+        '{"status":0}'                                      => [false, 'not valid for this domain'],
+        'not json at all'                                   => [false, 'could not be read'],
+        '{"message":"no status field"}'                     => [false, 'no status field'],
+    ];
+
+    foreach ($cases as $body => [$expectedValid, $expectedText]) {
+        $state = $method->invoke($activation, $body);
+        assertSame($expectedValid, $state['valid'], 'validity for ' . $body);
+        assert(str_contains($state['message'], $expectedText), 'message for ' . $body . ': ' . $state['message']);
+    }
+
+    // A key is never echoed back in a message, whatever the manager says.
+    $state = $method->invoke($activation, '{"status":0,"message":"Invalid license key or domain."}');
+    assert(!str_contains($state['message'], 'eyJ'), 'the response message must never carry a key');
+});
+
+ok('Licence diagnosis without a network: missing key, transport messages, legacy file', function (): void {
+    $dir = sys_get_temp_dir() . '/rise63-licence-' . bin2hex(random_bytes(4));
+    mkdir($dir, 0700, true);
+    $activation = new RISE63\Core\Activation($dir);
+
+    // No key anywhere: the message must tell the operator exactly what to do next.
+    assertSame(null, $activation->storedKey());
+    $state = $activation->check('buildroom.example.org');
+    assertSame(false, $state['valid'], 'a site with no key is never valid');
+    assert(str_contains($state['message'], 'No licence key yet'), $state['message']);
+    assert(str_contains($state['message'], 'provider'), 'must point at where a key comes from');
+
+    // A malformed host cannot be licensed at all.
+    $state = $activation->check('localhost');
+    assertSame(false, $state['valid']);
+    assert(str_contains($state['message'], 'domain name'), $state['message']);
+
+    // A key is stored 0600 and never rendered in full by the checker.
+    $activation->storeKey('TEST-KEY-0123456789ABCDEF');
+    clearstatcache();
+    assertSame('0600', substr(sprintf('%o', fileperms($dir . '/activation-key.php')), -4), 'key file mode');
+    assertSame('TEST-KEY-0123456789ABCDEF', $activation->storedKey()['key'] ?? null);
+
+    // Backwards compatibility: an installation from an earlier build has system-token.php.
+    $legacy = sys_get_temp_dir() . '/rise63-legacy-' . bin2hex(random_bytes(4));
+    mkdir($legacy, 0700, true);
+    file_put_contents($legacy . '/system-token.php', "<?php return ['token' => 'LEGACY-TOKEN-0123456789'];
+");
+    $old = new RISE63\Core\Activation($legacy);
+    assertSame('LEGACY-TOKEN-0123456789', $old->storedKey()['key'] ?? null, 'an old token is still read');
+
+    // The diagnostics shown to the operator must distinguish "unreachable" from "rejected".
+    $transport = new ReflectionMethod(RISE63\Core\Activation::class, 'transportMessage');
+    $transport->setAccessible(true);
+    $unreachable = $transport->invoke(null, 0, 'Could not resolve host');
+    assert(str_contains($unreachable, 'could not be reached'), $unreachable);
+    assert(str_contains($unreachable, 'manager.pmhserver.name.ng'), 'must name the host to test');
+    $rejected = $transport->invoke(null, 500, '');
+    assert(str_contains($rejected, 'answered with an error'), $rejected);
+    assert(str_contains($rejected, 'HTTP 500'), $rejected);
+
+    array_map('unlink', glob($dir . '/*') ?: []);
+    array_map('unlink', glob($legacy . '/*') ?: []);
+    rmdir($dir);
+    rmdir($legacy);
+});
+
 /* ─────────────────────── Security: passwords & PINs ────────────────────────── */
 
 ok('Password policy rejects weak secrets', function (): void {

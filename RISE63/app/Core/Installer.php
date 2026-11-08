@@ -170,7 +170,7 @@ final class Installer
     /**
      * Stage 3 — first provincial administrator, site title, PIN.
      */
-    public function createAdministrator(array $input, ?string $systemToken): int
+    public function createAdministrator(array $input): int
     {
         $name   = trim((string) ($input['full_name'] ?? ''));
         $email  = strtolower(trim((string) ($input['email'] ?? '')));
@@ -204,13 +204,13 @@ final class Installer
             throw new RuntimeException('Enter a valid security notification e-mail address.');
         }
 
+        // Re-check the licence here as well as in stage 1. It is normally answered from the 6-hour
+        // cache; doing it again means a key revoked mid-setup cannot slip an administrator account
+        // into a database.
         $activation = new Activation($this->configDir);
-        if ($systemToken !== null && trim($systemToken) !== '') {
-            $activation->storeToken($systemToken);
-        }
-        $state = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''), true);
+        $state      = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''), true);
         if (!$state['valid']) {
-            throw new RuntimeException('System activation did not succeed: ' . $state['message']);
+            throw new RuntimeException('The licence is not confirmed for this domain: ' . $state['message']);
         }
 
         return Database::transaction(function () use ($name, $email, $pass, $pin, $title, $notify): int {
