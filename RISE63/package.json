@@ -5,7 +5,8 @@
   "scripts": {
     "lint": "node tests/support/phpwasm-lint.mjs",
     "test": "node tests/support/phpwasm-test.mjs && node tests/support/phpwasm-render.mjs && node tests/support/phpwasm-smoke.mjs",
-    "test:smoke": "node tests/support/phpwasm-smoke.mjs"
+    "test:smoke": "node tests/support/phpwasm-smoke.mjs",
+    "preview": "node tests/support/phpwasm-previews.mjs"
   },
   "devDependencies": {
     "php-wasm": "^0.2.0"

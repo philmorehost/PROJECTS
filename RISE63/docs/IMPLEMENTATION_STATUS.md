@@ -24,8 +24,8 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 |---|---|---|
 | Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
 | Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **40 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **28 passed, 0 failed** |
-| Requests | `node tests/support/phpwasm-smoke.mjs` | **15 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **29 passed, 0 failed** |
+| Requests | `node tests/support/phpwasm-smoke.mjs` | **20 passed, 0 failed** |
 
 What the logic suite actually asserts:
 
@@ -100,6 +100,27 @@ outside the `RISE63` namespace, so the class of bug fails a test rather than a u
 
 Lesson recorded here because it applies to the whole project: **a green lint and a green unit suite
 say nothing about whether a page renders.** The smoke suite is now the check that does.
+
+### 2.3a Field report two — the wizard rendered as unstyled HTML
+
+The second deployment showed the setup wizard as bare HTML: no layout, no colours, default
+browser form controls. Every PHP file was valid; the page simply had no stylesheet.
+
+| Defect | Why it happened |
+|---|---|
+| `base_path()` used `$_SERVER['SCRIPT_NAME']` | `install/index.php` and `api/index.php` are **included by** `index.php`, so SCRIPT_NAME points at `/install/index.php`. Every `url()`/`asset()` call therefore produced `/install/public/assets/app.css`, which does not exist (404) |
+| The installer had no layout of its own | It borrowed `.auth-shell`, which is a narrow single-column centred card meant for a login form — wrong for a four-step wizard with a checklist and two-column fields |
+
+`base_path()` now strips the `/install`, `/api` and `/bin` suffixes, with `RISE63_BASE_PATH` as an
+explicit escape hatch. The wizard got its own `.wizard-*` component: a header with brand and version,
+a four-step progress rail that marks done/current, a checklist using tick/cross icons instead of raw
+`<ul>`, a two-column field grid that collapses on small screens, and a completion screen.
+
+**Screenshots cannot be produced in this sandbox** (no browser; the Chromium download is blocked), so
+`node tests/support/phpwasm-previews.mjs` renders each stage to `docs/preview/*.html` with the real
+`app.css` inlined — open those files in any browser to see exactly what a host renders. That is also
+why the smoke suite now asserts the stylesheet URL, the absence of `/install/public/`, that the CSS
+link is in `<head>` before `<body>`, and that the wizard shell markup is present.
 
 ### 2.4 Defects found by this review and fixed
 
@@ -207,7 +228,8 @@ RISE63/
   public/assets/             app.css, app.js, security.js + fingerprinted builds
   public/icons/              PWA icons (any + maskable + apple-touch)
   tests/                     unit.php, render.php, integration.php (MySQL), run.sh
-  tests/support/             php-wasm harnesses: lint, logic, views, request-level smoke
+  tests/support/             php-wasm harnesses: lint, logic, views, smoke, preview generator
+  docs/preview/              static snapshots of the setup wizard (open in a browser)
   docs/                      DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/
 ```
 

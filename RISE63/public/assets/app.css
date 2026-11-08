@@ -203,6 +203,102 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .bottom-nav button { width: 100%; }
 .bottom-nav button:active, .bottom-nav a:active { transform: scale(0.97); }
 
+/* ── Setup wizard ─────────────────────────────────────────────────────────────── */
+/* Used by install/index.php. A wide, two-column shell on desktop that collapses to one column on
+   a phone, with the step list as a progress rail rather than a bare <ol>. */
+body.wizard { background: var(--bg); }
+.wizard-wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+
+.wizard-top {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 22px;
+}
+.wizard-top .brand-mark { width: 52px; height: 52px; flex-basis: 52px; font-size: 1.5rem; border-radius: 15px; }
+.wizard-top h1 { margin: 0; font-size: var(--t-2xl); line-height: 1.15; letter-spacing: -0.015em; }
+.wizard-top p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-sm); }
+.wizard-top .wizard-version { margin-left: auto; text-align: right; font-size: var(--t-xs); color: var(--text-faint); }
+
+/* Step rail */
+.wizard-steps {
+  display: grid; gap: 6px; grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none; margin: 0 0 20px; padding: 0;
+}
+.wizard-steps li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: var(--t-sm); color: var(--text-muted); min-width: 0;
+}
+.wizard-steps .step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700;
+}
+.wizard-steps .step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.wizard-steps .is-done { color: var(--text); }
+.wizard-steps .is-done .step-num { background: var(--ok-soft); color: var(--ok); }
+.wizard-steps .is-current {
+  color: var(--text); border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface)); font-weight: 700;
+}
+.wizard-steps .is-current .step-num { background: var(--brand); color: var(--brand-ink); }
+
+/* Panel */
+.wizard-panel { padding: 24px; }
+.wizard-panel > h2 { margin: 0 0 4px; font-size: var(--t-xl); }
+.wizard-panel > .lead { margin: 0 0 20px; color: var(--text-muted); font-size: var(--t-sm); max-width: 62ch; }
+.wizard-panel h3 { font-size: var(--t-lg); }
+
+/* Check list */
+.checklist { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 8px; }
+.checklist li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.checklist .check-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; font-size: 0.9rem; font-weight: 700;
+}
+.checklist .check-body { min-width: 0; flex: 1 1 auto; }
+.checklist .check-body strong { display: block; font-size: var(--t-base); }
+.checklist .check-body span { display: block; color: var(--text-muted); font-size: var(--t-xs); }
+.checklist .is-ok .check-icon { background: var(--ok-soft); color: var(--ok); }
+.checklist .is-bad { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
+.checklist .is-bad .check-icon { background: var(--surface); color: var(--danger); }
+
+/* Form grid inside the wizard */
+.wizard-fields { display: grid; gap: 0 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wizard-fields .field-full { grid-column: 1 / -1; }
+.wizard-fields .field { margin-bottom: 16px; }
+.wizard-actions { display: grid; gap: 8px; margin-top: 22px; }
+.wizard-actions .btn { min-height: 50px; }
+
+.wizard-note { margin: 0 0 20px; }
+.wizard-note a { font-weight: 650; }
+
+/* Completion screen */
+.wizard-done { text-align: center; padding: 16px 4px 8px; }
+.wizard-done .done-mark {
+  width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ok-soft); color: var(--ok); font-size: 1.9rem;
+}
+.wizard-done h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.wizard-done p { margin: 0 auto 18px; color: var(--text-muted); max-width: 52ch; }
+
+@media (max-width: 720px) {
+  .wizard-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wizard-fields { grid-template-columns: minmax(0, 1fr); }
+  .wizard-panel { padding: 18px; }
+  .wizard-top .wizard-version { display: none; }
+}
+
+@media print {
+  .wizard-steps, .wizard-actions { display: none !important; }
+}
+
 /* ── Cards & surfaces ─────────────────────────────────────────────────────────── */
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);

@@ -49,9 +49,10 @@ node tests/support/phpwasm-lint.mjs      # syntax
 node tests/support/phpwasm-test.mjs      # logic
 node tests/support/phpwasm-render.mjs    # every view
 node tests/support/phpwasm-smoke.mjs     # real requests through index.php (installer included)
+node tests/support/phpwasm-previews.mjs  # static snapshots of the wizard → docs/preview/
 ```
 
-Current state: **66 files lint clean, 40 logic tests, 28 view tests and 15 request-level smoke tests pass.** The MySQL suite in `tests/integration.php` is written but has never been executed here — no database in this sandbox. What is verified and what still
+Current state: **66 files lint clean, 40 logic tests, 29 view tests and 20 request-level smoke tests pass.** The MySQL suite in `tests/integration.php` is written but has never been executed here — no database in this sandbox. What is verified and what still
 needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Highlights
@@ -59,7 +60,7 @@ needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENT
 | Area | What is actually built |
 |---|---|
 | **Accounts** | Self-service reset with single-use 30-minute hashed tokens (offered only when SMTP is configured), forced change after an administrator issues a temporary password, device revocation and a queued security notice on every change. |
-| **Installer** | Four stages — system check + licence, database, administrator, lock. The licence step links to the provider's order form, shows the exact domain to use, checks the key before saving it, and stores it as `config/activation-key.php` (0600). Filesystem mutex; refuses a non-empty database. |
+| **Installer** | Styled four-step wizard — progress rail, tick/cross server checklist, two-column forms, completion checklist. Four stages — system check + licence, database, administrator, lock. The licence step links to the provider's order form, shows the exact domain to use, checks the key before saving it, and stores it as `config/activation-key.php` (0600). Filesystem mutex; refuses a non-empty database. |
 | **Security** | Account suspension and IP blocks on independent windows, immediate block for unknown accounts, escalating day→week→month→year blocks, five-clean-session recognition with a crown badge, 250-country filter, manual IP/e-mail rules, queued firewall jobs applied by a least-privilege worker. |
 | **Money** | Integer-kobo `Money` value object, `DECIMAL(15,2)` columns, append-only ledger with database triggers, two-person disbursement (request → PIN confirmation), Seed Grant pool locked with `SELECT … FOR UPDATE`. |
 | **Programs** | One enforced state machine for all four modules: illegal transitions are refused (409), every move writes a timeline row and queues a notification. Academy attendance is recorded per applicant and gates Seed Grant eligibility. |

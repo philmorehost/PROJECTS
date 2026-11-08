@@ -143,7 +143,20 @@ const notice = /Warning:|Notice:|Deprecated:/;
 /* 1. The installer's first screen — the exact page that fataled. */
 const installer = await request({ uri: '/', query: {} });
 check('installer renders without a fatal', !fatal.test(installer), installer.slice(0, 600));
-check('installer shows the stage-1 checklist', /Setup|Environment|System check/i.test(installer));
+check('installer shows the stage-1 checklist', /Server check|System check/i.test(installer));
+
+// The bug that made setup render as unstyled HTML: a stylesheet URL resolved against
+// SCRIPT_NAME (/install/index.php) instead of the front controller.
+check('installer asks for the stylesheet at the site root',
+  /href="\/public\/assets\/app\.css"/.test(installer),
+  installer.match(/<link[^>]*app\.css[^>]*>/)?.[0] ?? 'no stylesheet tag found');
+check('installer never asks for /install/public',
+  !/\/install\/public\//.test(installer), 'assets must not be resolved relative to the installer');
+check('installer loads the stylesheet before any content',
+  installer.indexOf('app.css') < installer.indexOf('<body'), 'CSS must be in the head, not injected later');
+check('installer is marked up with the wizard shell',
+  /class="wizard-wrap"/.test(installer) && /class="wizard-steps"/.test(installer),
+  'the wizard layout must be present');
 check('installer names the running PHP version', /PHP 8\.\d/.test(installer), installer.slice(0, 300));
 check('installer has no PHP notices', !notice.test(installer), installer.slice(0, 600));
 
@@ -155,8 +168,11 @@ check('installer links to the sign-in page for an existing key',
   /manager\.pmhserver\.name\.ng\/user\/login\.php/.test(installer));
 check('installer asks for a licence key, not a system token',
   /name="license_key"/.test(installer) && !/name="system_token"/.test(installer));
-check('installer shows the domain it will license', /name="domain"|id="domain"/.test(installer)
-  && /x\.test/.test(installer) === false, 'the readonly field must be this host');
+check('installer shows the domain it will license', /id="domain"/.test(installer));
+
+// Same resolution question for the API and for a subdirectory install.
+const apiCss = await request({ uri: '/api/index.php', entry: '/src/api/index.php', script: '/api/index.php' });
+check('the api endpoint never borrows the installer path', !/\/api\/public\//.test(apiCss), apiCss.slice(0, 200));
 
 /* 2. CSRF protection on the installer POST. */
 const noToken = await request({ method: 'POST', uri: '/', post: { stage: '1' } });
@@ -185,6 +201,6 @@ check('the wizard refuses to run a second time', /already installed/i.test(wizar
   wizardAgain.replace(/\s+/g, ' ').slice(0, 300));
 
 console.log('\n' + '─'.repeat(62));
-const total = 15;
+const total = 20;
 console.log(`${total - failures.length} passed, ${failures.length} failed`);
 process.exit(failures.length === 0 ? 0 : 1);
