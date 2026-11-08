@@ -133,6 +133,10 @@ final class Security
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
+        // An existing $_SESSION before session_start() means the caller already populated it —
+        // which only happens in tests (php-wasm cannot start a session because headers are sent).
+        // session_start() would clear it, so in CLI keep what is there.
+        $preset = in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true) && isset($_SESSION) && is_array($_SESSION) ? $_SESSION : [];
         $secure = self::isHttps();
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
@@ -159,6 +163,9 @@ final class Security
             'samesite' => 'Lax',
         ]);
         session_start();
+        if ($preset !== [] && is_array($_SESSION ?? null)) {
+            $_SESSION = $preset + $_SESSION;
+        }
     }
 
     public static function csrf(): string

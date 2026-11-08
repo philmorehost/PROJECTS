@@ -570,6 +570,23 @@ ok('Every bootstrap constant is referenced with its namespace', function (): voi
 
 /* ───────────────────────────────── UX contract ─────────────────────────────── */
 
+ok('Stylesheet defines every class the setup wizard uses', function (): void {
+    // The wizard markup was rewritten; CSS that does not exist is worse than no markup at all.
+    $css = (string) file_get_contents(RISE63_TEST_ROOT . '/public/assets/app.css');
+    foreach ([
+        'wizard-wrap', 'wizard-top', 'wizard-version', 'wizard-steps', 'step-num', 'step-label',
+        'is-current', 'is-done', 'wizard-panel', 'checklist', 'check-icon', 'check-body', 'is-ok',
+        'is-bad', 'wizard-fields', 'field-full', 'wizard-actions', 'wizard-note', 'wizard-done',
+        'done-mark',
+    ] as $class) {
+        assertContains('.' . $class, $css, 'missing wizard style .' . $class);
+    }
+
+    // The wizard must stay usable on a phone: the step rail and the two-column fields collapse.
+    assertContains('@media (max-width: 720px)', $css);
+    assertContains('grid-template-columns: repeat(2, minmax(0, 1fr))', $css, 'step rail halves on small screens');
+});
+
 ok('Stylesheet meets the mobile-first contract', function (): void {
     $css = (string) file_get_contents(RISE63_TEST_ROOT . '/public/assets/app.css');
     assertContains('--t-base: 1rem', $css, 'base type is 16px');

@@ -26,14 +26,38 @@ function installed(): bool
 }
 
 /** Base URL path for the application, e.g. "" or "/rise63". */
+/**
+ * URL base for the installation, e.g. "" at a domain root or "/rise63" in a subdirectory.
+ *
+ * Derived from the front controller's location, never from SCRIPT_NAME. Pages under /install/
+ * and /api/ are included *by* index.php, so SCRIPT_NAME there points at the wrong directory:
+ * that mismatch made /install/index.php ask for /install/public/assets/app.css (a 404) and the
+ * setup wizard rendered as unstyled HTML.
+ */
 function base_path(): string
 {
     static $base;
     if ($base !== null) {
         return $base;
     }
+
+    // RISE63_BASE_PATH is an escape hatch for hosts whose document root maps elsewhere.
+    $override = getenv('RISE63_BASE_PATH');
+    if (is_string($override) && $override !== '') {
+        return $base = ($override === '/' ? '' : '/' . trim($override, '/'));
+    }
+
     $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
     $dir    = rtrim(dirname($script), '/.');
+
+    // Included pages (install/, api/) sit one level below the front controller.
+    foreach (['/install', '/api', '/bin'] as $nested) {
+        if (str_ends_with($dir, $nested)) {
+            $dir = substr($dir, 0, -strlen($nested));
+            break;
+        }
+    }
+
     return $base = ($dir === '/' ? '' : $dir);
 }
 
