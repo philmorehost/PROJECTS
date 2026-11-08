@@ -913,6 +913,58 @@ ok('The installed version comes from the update record, not a hard-coded constan
 });
 
 
+/* ───────────── The bug that made every key look invalid (field report six) ───────────── */
+
+ok('The activation request posts a plain string key, never a nested array', function (): void {
+    // storedKey() returns a metadata row: ['key' => 'MAN-…']. Handing that row to
+    // http_build_query() posts `key[key]=MAN-…`, the provider reads $_POST['key'] as an array,
+    // its `WHERE license_key = ?` matches nothing, and it answers the same generic
+    // "Invalid license key or domain." it uses for a genuinely wrong key. A correct key was
+    // therefore indistinguishable from a wrong one, for every installation, for weeks.
+    $root = sys_get_temp_dir() . '/rise63-wire-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+    file_put_contents(
+        $root . '/config/activation-key.php',
+        "<?php\nreturn " . var_export(['key' => 'MAN-8F91CCC3CC57', 'domain' => 'buildroom.rccglp63yaya.org.ng'], true) . ";\n"
+    );
+
+    $activation = new RISE63\Core\Activation($root . '/config');
+    $stored = $activation->storedKey();
+    assertSame('MAN-8F91CCC3CC57', $stored['key'], 'storedKey() keeps its row shape for metadata');
+
+    // The row shape is the trap. What goes on the wire must be flat.
+    try {
+        RISE63\Core\Activation::encode(['key' => $stored, 'domain' => 'buildroom.rccglp63yaya.org.ng']);
+        assert(false, 'encode() must refuse a nested value instead of posting key[key]=…');
+    } catch (RuntimeException $error) {
+        assert(str_contains($error->getMessage(), 'not a key problem'), 'the message says whose bug it is');
+    }
+
+    // The correct body, byte for byte. If this string ever changes, the provider stops matching.
+    $wire = RISE63\Core\Activation::encode([
+        'key'    => 'MAN-8F91CCC3CC57',
+        'domain' => 'buildroom.rccglp63yaya.org.ng',
+    ]);
+    assertSame('key=MAN-8F91CCC3CC57&domain=buildroom.rccglp63yaya.org.ng', $wire);
+    assert(!str_contains($wire, 'key%5B'), 'no key[key] in the body');
+
+    // And prove the provider would have seen an array: parse the buggy body back.
+    parse_str('key%5Bkey%5D=MAN-8F91CCC3CC57&domain=x.example.org', $received);
+    assert(is_array($received['key']), 'the old body arrives as an array — which matches no key row');
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    rmdir($root . '/config');
+    rmdir($root);
+});
+
+ok('A real key verifies without the array trap, including when it holds no special characters', function (): void {
+    // The plain-string path must survive a key pasted with trailing whitespace, which is the other
+    // way a correct key becomes an unknown one.
+    $wire = RISE63\Core\Activation::encode(['key' => trim("  MAN-8F91CCC3CC57\n"), 'domain' => 'x.example.org']);
+    assert(str_starts_with($wire, 'key=MAN-8F91CCC3CC57&'), $wire);
+    assert(!str_contains($wire, '+'), 'no stray spaces survive into the body: ' . $wire);
+});
+
 /* ────────────────────── Why a licence was refused (field report) ─────────────────── */
 
 ok('A refusal names the key, the domain and what the provider actually said', function (): void {
@@ -923,6 +975,7 @@ ok('A refusal names the key, the domain and what the provider actually said', fu
     $state = [
         'valid' => false, 'grace' => false, 'domain' => 'buildroom.rccglp63yaya.org.ng',
         'key' => 'MAN-749B9B757500', 'message' => 'Invalid license key or domain.',
+        'answer' => '{"status":0,"message":"Invalid license key or domain."}',
     ];
     $diagnosis = RISE63\Core\ActivationDiagnosis::of($state);
 
@@ -945,6 +998,14 @@ ok('A refusal names the key, the domain and what the provider actually said', fu
         'message' => 'The licence service could not be reached',
     ]);
     assertSame('grace', $unreachable['cause']);
+
+    // A provider that answers with a web page, or with nothing at all, is a transport fault and
+    // must not be described as a key problem either.
+    $html = RISE63\Core\ActivationDiagnosis::of([
+        'valid' => false, 'grace' => false, 'domain' => 'x.example.org', 'key' => 'MAN-0123456789ABCDEF',
+        'answer' => '<!DOCTYPE html><html><body>403 Forbidden</body></html>',
+    ]);
+    assertSame('transport', $html['cause']);
     assert(str_contains($unreachable['headline'], 'could not be reached'), $unreachable['headline']);
 
     // The masked form is what the CLI and the gate print.

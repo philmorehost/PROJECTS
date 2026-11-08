@@ -231,6 +231,40 @@ the written contract. That endpoint adds an `access` block, reports `update_requ
 `changelog_format`, and — importantly — sends `status: "success"` even when `access.allowed` is
 false. Reading only `status` would have offered an update for a licence that is on hold.
 
+### 2.3e Field report six — the real cause: a nested array on the wire
+
+Systematic probing finally separated the two endpoints:
+
+| Probe | Answer |
+|---|---|
+| `check-update.php` with `MAN-8F91CCC3CC57` + this domain | `status: "success"`, version 7.58, `access.allowed: true` |
+| `api.php` with the same key and domain, from the installation | `{"status":0,"message":"Invalid license key or domain."}` |
+
+`check-update.php` *strictly* requires a `licensed_domains` row and passed, so the key and the
+domain were both genuinely correct. The key was never the problem.
+
+**The fault was in our client.** `check()` built its request like this:
+
+```php
+$key = $this->key();                     // ['key' => 'MAN-8F91CCC3CC57']  ← a metadata row
+$this->post(['key' => $key, ...]);       // http_build_query() nests it
+```
+
+which puts `key%5Bkey%5D=MAN-8F91CCC3CC57` on the wire. PHP parses that into
+`$_POST['key'] = ['key' => '…']` — an **array**. `api.php` binds it to `WHERE license_key = ?`,
+matches nothing, and takes the `!$license` branch, which answers exactly `Invalid license key or
+domain.` So every valid key was rejected, on every installation, with a message that blamed the
+operator. `KINGDOMBUILDERS` passes a string and never had the fault; only RISE63 wrapped it.
+
+**Fix.** `key()` now returns the string, and `Activation::encode()` refuses any non-string field
+outright — a nested value becomes a loud "this is a bug in the activation client, not a key
+problem" instead of a silent mismatch. The regression test asserts the wire body byte for byte
+(`key=MAN-8F91CCC3CC57&domain=…`) and proves the old body parses back as an array.
+
+The two earlier reports were the same symptom seen from different angles: the request was never
+well-formed, so no key could match, and the provider's one-size-fits-all message sent us looking at
+the key, then the domain, before the body itself.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

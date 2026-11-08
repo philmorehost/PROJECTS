@@ -117,7 +117,7 @@ final class Activation
 
         $result = $this->result($state['valid'], $state['message'], false, false, $domain);
         if (!$state['valid']) {
-            $result['key']    = is_array($key) ? (string) ($key['key'] ?? '') : '';
+            $result['key']    = $key;
             $result['answer'] = substr(trim($answer), 0, 400);
         }
         return $result;
@@ -302,10 +302,18 @@ final class Activation
         return ['valid' => $valid, 'message' => $message, 'cached' => $cached, 'grace' => $grace, 'domain' => $domain];
     }
 
-    /** @return array{key:string}|null */
-    private function key(): ?array
+    /**
+     * The stored key as a plain string — never the ['key' => …] row.
+     *
+     * This distinction cost an installation a week of false "invalid key" refusals: `storedKey()`
+     * returns a row for metadata, and handing that row to http_build_query() posts
+     * `key[key]=MAN-…`, which the provider reads as an *array* and can never match against its
+     * key column. Every key looks invalid, no matter how correct it is.
+     */
+    private function key(): ?string
     {
-        return $this->storedKey();
+        $row = $this->storedKey();
+        return $row === null ? null : $row['key'];
     }
 
     /** @param array<string,mixed>|null $cache */
@@ -408,19 +416,44 @@ final class Activation
 
     private function post(array $fields): string
     {
+        $body = self::encode($fields);
         if (function_exists('curl_init')) {
-            return $this->postWithCurl($fields);
+            return $this->postWithCurl($body);
         }
-        return $this->postWithStream($fields);
+        return $this->postWithStream($body);
     }
 
-    private function postWithCurl(array $fields): string
+    /**
+     * Serialise a form body, refusing anything nested.
+     *
+     * http_build_query() silently turns a nested array into `key[key]=…`. The provider's api.php
+     * then receives $_POST['key'] as an array, binds it to a string column, matches nothing, and
+     * answers "Invalid license key or domain." — identical to a genuinely wrong key, so the real
+     * fault is invisible from both ends. Failing loudly here is far cheaper than another field
+     * report that blames the operator's key.
+     *
+     * @param array<string,string> $fields
+     */
+    public static function encode(array $fields): string
+    {
+        foreach ($fields as $name => $value) {
+            if (!is_string($value)) {
+                throw new RuntimeException(
+                    'Refusing to send a non-text "' . $name . '" to the licence service ('
+                    . gettype($value) . '). This is a bug in the activation client, not a key problem.'
+                );
+            }
+        }
+        return http_build_query($fields);
+    }
+
+    private function postWithCurl(string $payload): string
     {
         $handle = curl_init(self::ENDPOINT);
         $body   = '';
         curl_setopt_array($handle, [
             CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => http_build_query($fields),
+            CURLOPT_POSTFIELDS     => $payload,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'],
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => false,
@@ -452,13 +485,13 @@ final class Activation
         return $body;
     }
 
-    private function postWithStream(array $fields): string
+    private function postWithStream(string $payload): string
     {
         $context = stream_context_create([
             'http' => [
                 'method'        => 'POST',
                 'header'        => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
-                'content'       => http_build_query($fields),
+                'content'       => $payload,
                 'timeout'       => 10,
                 'ignore_errors' => true,
                 'follow_location' => 0,
@@ -610,6 +643,18 @@ final class ActivationDiagnosis
             return [
                 'cause'    => 'missing',
                 'headline' => 'No complete licence key is stored on this installation.',
+                'detail'   => $detail,
+                'actions'  => $actions,
+            ];
+        }
+
+        // An answer PHP itself could not have produced means the request never reached api.php in a
+        // usable form — a transport fault, not a licence one.
+        $hasAnswer = array_key_exists('answer', $state);
+        if ($hasAnswer && str_contains($answer, '<')) {
+            return [
+                'cause'    => 'transport',
+                'headline' => 'The licence service answered with a web page instead of a result.',
                 'detail'   => $detail,
                 'actions'  => $actions,
             ];
