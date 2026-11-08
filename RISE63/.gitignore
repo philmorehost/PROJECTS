@@ -1,6 +1,7 @@
 # Private runtime state — never commit.
 config/installed.lock
 config/database.php
+config/activation-key.php
 config/system-token.php
 config/activation-cache.json
 config/smtp.php

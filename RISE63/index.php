@@ -43,6 +43,7 @@ if (Settings::bool('maintenance_mode') && !($user !== null && Auth::isAdmin($use
 $activation = new Activation(config_dir());
 $activationState = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''));
 if (!$activationState['valid']) {
+    $domain = $activationState['domain'] ?? Activation::domainFromHost((string) ($_SERVER['HTTP_HOST'] ?? ''));
     require __DIR__ . '/app/Views/system-gate.php';
     exit;
 }

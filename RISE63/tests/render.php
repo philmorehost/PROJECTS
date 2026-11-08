@@ -214,7 +214,14 @@ ok('Error, maintenance and gate screens are self-contained', function (): void {
     assertContains('Back shortly', $maintenance);
 
     ob_start();
-    $gate = View::capture(RISE63_TEST_ROOT . '/app/Views/system-gate.php', ['activationState' => ['message' => 'Not activated']], false);
+    $gate = View::capture(RISE63_TEST_ROOT . '/app/Views/system-gate.php',
+        ['activationState' => ['message' => 'Not activated', 'domain' => 'buildroom.example.org'], 'domain' => 'buildroom.example.org'], false);
+    // The gate must tell the operator what to do, not just that something is wrong.
+    assertContains('Request a licence for this domain', $gate);
+    assertContains('manager.pmhserver.name.ng/order.php', $gate);
+    assertContains('config/activation-key.php', $gate);
+    assertContains('buildroom.example.org', $gate);
+    assertMissing('system-token.php', $gate, 'the old token file must no longer be referenced');
     ob_end_clean();
     header_remove();
     assertContains('Activation required', $gate);

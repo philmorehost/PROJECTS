@@ -6,68 +6,94 @@ namespace RISE63\Core;
 use RuntimeException;
 
 /**
- * "System activation" client.
+ * Activation client for the License Manager.
  *
- * The product never uses the word licence in the interface, logs or parameters. What it does is
- * verify that this installation is allowed to run on this host:
- *   POST  https://manager.pmhserver.name.ng/api.php   key=<system token>, domain=<host>
- *   reply {"status":1|"suspended"|0, "message":"..."}
+ * A licence key is obtained from the provider's site, locked to one domain, and pasted into the
+ * installer. The installer then asks the manager — over HTTPS, from PHP, not from the browser —
+ * whether that key is valid for this domain:
  *
- * Behaviour:
- *   • TLS is verified, redirects are refused, the response is size-capped.
- *   • A successful check is cached for 6 hours in private storage.
- *   • A network failure inside the 24-hour grace window keeps the site running,
- *     which protects a live installation from an upstream outage.
- *   • RISE63_ACTIVATION=local-fixture is a documented, explicit developer override. It can only
- *     be enabled through an environment variable that production hosting never sets.
+ *   POST https://manager.pmhserver.name.ng/api.php
+ *        key=<licence key>   domain=<host>
+ *   ->   {"status": 1, "message": "License is valid."}      valid
+ *   ->   {"status": 0, "message": "Invalid license key or domain."}
+ *
+ * Design notes:
+ *   • The check happens server-side. A browser-side check can be skipped by anyone with
+ *     devtools, so it is only ever an optimisation, never the decision.
+ *   • TLS is verified, redirects are refused and the response is size-capped.
+ *   • A successful check is cached for six hours; after that the manager is asked again. If the
+ *     manager is unreachable, a site that was valid within the last 24 hours keeps running
+ *     (grace window) so an outage upstream does not take a live installation down.
+ *   • The key is stored 0600 in private config and never written to a log or echoed back.
+ *   • Nothing here trusts the caller: `check()` is the only thing that can return valid=true,
+ *     and an unreachable manager can only ever grant the grace window to a site that was
+ *     previously confirmed.
  */
 final class Activation
 {
-    public const MANAGER_HOST  = 'manager.pmhserver.name.ng';
-    public const ENDPOINT      = 'https://manager.pmhserver.name.ng/api.php';
-    public const CACHE_TTL     = 21600;  // 6 hours
-    public const GRACE_WINDOW  = 86400;  // 24 hours of tolerated manager downtime
-    public const MAX_RESPONSE  = 16384;
+    /** Where keys are created and managed. */
+    public const MANAGER_SITE    = 'https://manager.pmhserver.name.ng/index.php';
+    public const MANAGER_ORDER   = 'https://manager.pmhserver.name.ng/order.php';
+    public const MANAGER_SIGNIN  = 'https://manager.pmhserver.name.ng/user/login.php';
+    public const MANAGER_DOCS    = 'https://manager.pmhserver.name.ng/api-docs.php';
+    public const MANAGER_HOST    = 'manager.pmhserver.name.ng';
+    public const ENDPOINT        = 'https://manager.pmhserver.name.ng/api.php';
 
+    public const CACHE_TTL    = 21600;   // 6 hours between checks
+    public const GRACE_WINDOW = 86400;   // 24 hours of tolerated manager downtime
+    public const MAX_RESPONSE = 16384;
+    public const KEY_FILE     = 'activation-key.php';
+    public const LEGACY_FILE  = 'system-token.php';
+
+    /** The key file that used to be written by earlier builds. Read-only compatibility. */
     public function __construct(private readonly string $configDir)
     {
     }
 
+    /** Strip scheme, port, trailing dot and "www." so the value matches what the manager holds. */
     public static function domainFromHost(string $host): string
     {
         $host = strtolower(trim($host));
+        $host = preg_replace('#^[a-z]+://#', '', $host) ?? $host;
+        $host = explode('/', $host)[0];
         $host = preg_replace('/:\d+$/', '', $host) ?? $host;
+        $host = rtrim($host, '.');
         return preg_replace('/^www\./', '', $host) ?? $host;
     }
 
+    public static function validDomain(string $domain): bool
+    {
+        return preg_match('/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/D', $domain) === 1;
+    }
+
+    /* ─────────────────────────────── public API ─────────────────────────────── */
+
     /**
-     * @return array{valid:bool, message:string, cached:bool, grace:bool}
+     * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
      */
     public function check(string $host, bool $force = false): array
     {
         if (getenv('RISE63_ACTIVATION') === 'local-fixture') {
-            return ['valid' => true, 'message' => 'Local development activation fixture.', 'cached' => false, 'grace' => false];
+            return $this->result(true, 'Local development fixture — the manager was not contacted.', false, false, self::domainFromHost($host));
         }
 
         $domain = self::domainFromHost($host);
-        if ($domain === '' || !preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/D', $domain)) {
-            return ['valid' => false, 'message' => 'This address cannot be activated. Open the site through its domain name.', 'cached' => false, 'grace' => false];
+        if (!self::validDomain($domain)) {
+            return $this->result(false, 'This address cannot be activated. Open the site through its domain name.', false, false, $domain);
         }
 
         $cache = $this->readCache();
-        if (!$force && is_array($cache) && ($cache['domain'] ?? '') === $domain
-            && (int) ($cache['checked_at'] ?? 0) > time() - self::CACHE_TTL && !empty($cache['valid'])) {
-            return ['valid' => true, 'message' => 'Activation confirmed (cached).', 'cached' => true, 'grace' => false];
+        if (!$force && $this->isFreshSuccess($cache, $domain)) {
+            return $this->result(true, 'Licensed to ' . $domain . ' (checked recently).', true, false, $domain);
         }
 
-        $token = $this->token();
-        if ($token === null) {
-            return ['valid' => false, 'message' => 'Enter the system token from your manager account to activate this installation.', 'cached' => false, 'grace' => false];
+        $key = $this->key();
+        if ($key === null) {
+            return $this->result(false, 'No licence key yet. Create one at the provider\'s site, then paste it here.', false, false, $domain);
         }
 
         try {
-            $response = $this->post(['key' => $token['value'], 'domain' => $domain]);
-            $state    = $this->interpret($response);
+            $state = $this->interpret($this->post(['key' => $key, 'domain' => $domain]));
         } catch (RuntimeException $error) {
             return $this->graceOrFail($cache, $domain, $error->getMessage());
         }
@@ -79,65 +105,172 @@ final class Activation
             'status'     => $state['status'],
         ]);
 
-        return ['valid' => $state['valid'], 'message' => $state['message'], 'cached' => false, 'grace' => false];
+        return $this->result($state['valid'], $state['message'], false, false, $domain);
     }
 
-    /** Persist a system token supplied during setup. Stored 0600 in private config. */
-    public function storeToken(string $token): void
+    /**
+     * Check a key that has not been stored yet — used by the installer's "Check this key" button so
+     * the operator learns the answer before committing.
+     *
+     * @param bool $remember record a confirmed result so the following check() does not call the
+     *                       provider a second time. Only ever set after the key has been saved.
+     * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
+     */
+    public function verify(string $key, string $host, bool $remember = false): array
     {
-        $token = trim($token);
-        if (strlen($token) < 16 || strlen($token) > 255 || preg_match('/[\x00-\x1F\s]/', $token) === 1) {
-            throw new RuntimeException('That system token does not look valid.');
+        $domain = self::domainFromHost($host);
+        $key    = trim($key);
+        if (!self::looksLikeKey($key)) {
+            return $this->result(false, self::KEY_HINT, false, false, $domain);
         }
-        $path = $this->configDir . '/system-token.php';
-        $payload = "<?php\n// RISE 63 activation token. Never commit this file.\nreturn " . var_export(['token' => $token], true) . ";\n";
-        if (file_put_contents($path, $payload, LOCK_EX) === false) {
-            throw new RuntimeException('The system token could not be saved. Check that config/ is writable.');
+        if (!self::validDomain($domain)) {
+            return $this->result(false, 'This address cannot be activated. Open the site through its domain name.', false, false, $domain);
         }
-        @chmod($path, 0600);
+        try {
+            $state = $this->interpret($this->post(['key' => $key, 'domain' => $domain]));
+        } catch (RuntimeException $error) {
+            return $this->result(false, $error->getMessage(), false, false, $domain);
+        }
+        // Caching is opt-in and happens only after the key has been written to disk. Caching a
+        // probe would let the wizard advance with no key stored, and the site would then fail six
+        // hours later with no explanation.
+        if ($state['valid'] && $remember) {
+            $this->writeCache(['domain' => $domain, 'checked_at' => time(), 'valid' => true, 'status' => 1]);
+        }
+        return $this->result($state['valid'], $state['message'], false, false, $domain);
     }
 
-    /** @return array{value:string}|null */
-    private function token(): ?array
+    public const KEY_HINT = 'That does not look like a licence key. Copy the whole key from the provider\'s site — it is a single line with no spaces.';
+
+    /** Keys are single-line, 16–255 characters, printable ASCII. */
+    public static function looksLikeKey(string $key): bool
     {
+        $key = trim($key);
+        if (strlen($key) < 16 || strlen($key) > 255) {
+            return false;
+        }
+        return preg_match('/^[\x21-\x7E]+$/D', $key) === 1;
+    }
+
+    /** Persist a key supplied during setup. Stored 0600 in private config, never logged. */
+    public function storeKey(string $key): void
+    {
+        $key = trim($key);
+        if (!self::looksLikeKey($key)) {
+            throw new RuntimeException(self::KEY_HINT);
+        }
+        $this->write([
+            'key'       => $key,
+            'domain'    => null,
+            'saved_at'  => gmdate('c'),
+        ]);
+        // The old file, if a previous build wrote one, must not linger with a stale value.
+        @unlink($this->configDir . '/' . self::LEGACY_FILE);
+    }
+
+    /** @return array{key:string}|null */
+    public function storedKey(): ?array
+    {
+        $env = getenv('RISE63_LICENSE_KEY');
+        if (is_string($env) && trim($env) !== '') {
+            return ['key' => trim($env)];
+        }
         $env = getenv('RISE63_SYSTEM_TOKEN');
         if (is_string($env) && trim($env) !== '') {
-            return ['value' => trim($env)];
+            return ['key' => trim($env)];
         }
-        $path = $this->configDir . '/system-token.php';
-        if (!is_file($path)) {
-            return null;
+
+        foreach ([self::KEY_FILE, self::LEGACY_FILE] as $file) {
+            $path = $this->configDir . '/' . $file;
+            if (!is_file($path)) {
+                continue;
+            }
+            $data = require $path;
+            if (!is_array($data)) {
+                continue;
+            }
+            $value = trim((string) ($data['key'] ?? $data['token'] ?? ''));
+            if ($value !== '') {
+                return ['key' => $value];
+            }
         }
-        $data = require $path;
-        $value = is_array($data) ? trim((string) ($data['token'] ?? '')) : '';
-        return $value === '' ? null : ['value' => $value];
+        return null;
     }
 
-    /** @return array{status:mixed, message:string} */
+    /** The last cache entry, for the operator-facing status screen. @return array<string,mixed>|null */
+    public function cache(): ?array
+    {
+        return $this->readCache();
+    }
+
+    /* ─────────────────────────────── internals ─────────────────────────────── */
+
+    /** @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string} */
+    private function result(bool $valid, string $message, bool $cached, bool $grace, string $domain): array
+    {
+        return ['valid' => $valid, 'message' => $message, 'cached' => $cached, 'grace' => $grace, 'domain' => $domain];
+    }
+
+    /** @return array{key:string}|null */
+    private function key(): ?array
+    {
+        return $this->storedKey();
+    }
+
+    /** @param array<string,mixed>|null $cache */
+    private function isFreshSuccess(?array $cache, string $domain): bool
+    {
+        return is_array($cache)
+            && ($cache['domain'] ?? '') === $domain
+            && !empty($cache['valid'])
+            && (int) ($cache['checked_at'] ?? 0) > time() - self::CACHE_TTL;
+    }
+
+    /** @return array{status:mixed, valid:bool, message:string} */
     private function interpret(string $body): array
     {
         $data = json_decode($body, true, 16);
         if (!is_array($data)) {
-            return ['status' => 0, 'valid' => false, 'message' => 'The activation service returned an unreadable answer. Try again shortly.'];
+            return [
+                'status'  => 0,
+                'valid'   => false,
+                'message' => 'The licence service returned an answer that could not be read. Try again in a moment.',
+            ];
         }
-        $status  = $data['status'] ?? 0;
-        $message = is_string($data['message'] ?? null) ? substr($data['message'], 0, 300) : '';
-        $valid   = $status === 1 || $status === '1' || $status === true;
+
+        $status    = $data['status'] ?? 0;
+        $message   = is_string($data['message'] ?? null) ? substr(trim($data['message']), 0, 300) : '';
+        $valid     = $status === 1 || $status === '1' || $status === true;
         $suspended = $status === 'suspended';
+
         return [
             'status'  => $status,
             'valid'   => $valid,
             'message' => $valid
-                ? ($message !== '' ? $message : 'Activation confirmed.')
-                : ($suspended ? 'This installation has been suspended by the provider.' : ($message !== '' ? $message : 'Activation was not confirmed for this domain.')),
+                ? ($message !== '' ? $message : 'Licence confirmed for this domain.')
+                : ($suspended
+                    ? 'This installation has been suspended by the provider. Contact them to reinstate it.'
+                    : ($message !== '' ? $message : 'The licence key is not valid for this domain.')),
         ];
     }
 
+    /**
+     * POST to the manager.
+     *
+     * Uses cURL when it is available and falls back to PHP's HTTPS stream wrapper when it is not,
+     * because plenty of shared hosts ship without cURL — and activation is the first thing an
+     * operator hits, so "enable cURL" is a poor first experience if a fallback works.
+     */
     private function post(array $fields): string
     {
-        if (!function_exists('curl_init')) {
-            throw new RuntimeException('Enable the PHP cURL extension to reach the activation service.');
+        if (function_exists('curl_init')) {
+            return $this->postWithCurl($fields);
         }
+        return $this->postWithStream($fields);
+    }
+
+    private function postWithCurl(array $fields): string
+    {
         $handle = curl_init(self::ENDPOINT);
         $body   = '';
         curl_setopt_array($handle, [
@@ -151,26 +284,70 @@ final class Activation
             CURLOPT_TIMEOUT        => 10,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT      => 'RISE63-Activation/1.0',
+            CURLOPT_USERAGENT      => 'RISE63-Activation/2.0',
             CURLOPT_WRITEFUNCTION  => static function ($curl, string $chunk) use (&$body): int {
                 if (strlen($body) + strlen($chunk) > self::MAX_RESPONSE) {
-                    return 0; // Abort oversized responses.
+                    return 0; // abort oversized responses
                 }
                 $body .= $chunk;
                 return strlen($chunk);
             },
         ]);
+
         try {
             $ok   = curl_exec($handle);
             $code = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+            $err  = curl_error($handle);
             if ($ok === false || $code < 200 || $code >= 300) {
-                // Never log the request fields: they contain the system token.
-                throw new RuntimeException('The activation service could not be reached.');
+                throw new RuntimeException(self::transportMessage($code, $err));
             }
         } finally {
             curl_close($handle);
         }
         return $body;
+    }
+
+    private function postWithStream(array $fields): string
+    {
+        $context = stream_context_create([
+            'http' => [
+                'method'        => 'POST',
+                'header'        => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
+                'content'       => http_build_query($fields),
+                'timeout'       => 10,
+                'ignore_errors' => true,
+                'follow_location' => 0,
+                'max_redirects' => 0,
+                'user_agent'    => 'RISE63-Activation/2.0',
+            ],
+            'ssl' => [
+                'verify_peer'      => true,
+                'verify_peer_name' => true,
+                'allow_self_signed' => false,
+            ],
+        ]);
+
+        $body = @file_get_contents(self::ENDPOINT, false, $context);
+        $code = 0;
+        foreach ($http_response_header ?? [] as $header) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $header, $m) === 1) {
+                $code = (int) $m[1];
+            }
+        }
+        if ($body === false || $code < 200 || $code >= 300) {
+            throw new RuntimeException(self::transportMessage($code, ''));
+        }
+        return substr($body, 0, self::MAX_RESPONSE);
+    }
+
+    private static function transportMessage(int $code, string $curlError): string
+    {
+        $detail = $curlError !== '' ? $curlError : ($code > 0 ? 'HTTP ' . $code : 'no response');
+        if ($code === 0) {
+            return 'The licence service could not be reached (' . $detail . '). '
+                . 'Check that the host allows outbound HTTPS to ' . self::MANAGER_HOST . '.';
+        }
+        return 'The licence service answered with an error (' . $detail . '). Try again shortly.';
     }
 
     /** @return array<string, mixed>|null */
@@ -191,20 +368,40 @@ final class Activation
         @chmod($path, 0600);
     }
 
+    private function write(array $data): void
+    {
+        $path    = $this->configDir . '/' . self::KEY_FILE;
+        $payload = "<?php\n"
+            . "// RISE 63 licence key. Written by the installer; never commit or share this file.\n"
+            . 'return ' . var_export($data, true) . ";\n";
+        if (@file_put_contents($path, $payload, LOCK_EX) === false) {
+            throw new RuntimeException('The licence key could not be saved. Check that config/ is writable.');
+        }
+        @chmod($path, 0600);
+    }
+
     /**
-     * A manager outage must not take a running site down immediately.
+     * An unreachable manager must not take a running site down immediately — but it must never
+     * grant access to a site that has *never* been confirmed.
      *
      * @param array<string, mixed>|null $cache
-     * @return array{valid:bool, message:string, cached:bool, grace:bool}
+     * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
      */
     private function graceOrFail(?array $cache, string $domain, string $reason): array
     {
         $lastGood = (int) ($cache['checked_at'] ?? 0);
         $sameSite = is_array($cache) && ($cache['domain'] ?? '') === $domain && !empty($cache['valid']);
         if ($sameSite && $lastGood > time() - self::GRACE_WINDOW) {
-            return ['valid' => true, 'message' => 'The activation service is unreachable; this site continues on its 24-hour grace window.', 'cached' => true, 'grace' => true];
+            return $this->result(
+                true,
+                'The licence service is unreachable, so this site continues on its 24-hour grace window. '
+                . 'Last confirmed ' . gmdate('j M Y H:i', $lastGood) . ' UTC.',
+                true,
+                true,
+                $domain
+            );
         }
-        return ['valid' => false, 'message' => $reason . ' Sign-in is paused until activation can be confirmed.', 'cached' => false, 'grace' => false];
+        return $this->result(false, $reason . ' Sign-in stays paused until the licence can be confirmed.', false, false, $domain);
     }
 }
 

@@ -8,6 +8,7 @@ declare(strict_types=1);
  * locked this file does nothing but say so; it never reveals configuration details.
  */
 
+use RISE63\Core\Activation;
 use RISE63\Core\Installer;
 use RISE63\Core\Security;
 
@@ -50,6 +51,9 @@ if ($mutex === false || !flock($mutex, LOCK_EX | LOCK_NB)) {
 $stage  = $installer->stage();
 $error  = '';
 $notice = '';
+$licenseNotice = '';
+$verifiedKey   = '';
+$storedKey     = null;
 $old    = ['host' => 'localhost', 'port' => '3306', 'name' => '', 'user' => '', 'full_name' => '', 'email' => '', 'site_title' => 'RISE 63', 'notification_email' => ''];
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
@@ -59,18 +63,45 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         if ($stage === 1) {
             $checks = $installer->environment();
-            $token  = trim((string) ($_POST['system_token'] ?? ''));
             if (!$installer->environmentOk($checks)) {
                 throw new RuntimeException('Resolve the items marked “Action required” before continuing.');
             }
-            if ($token !== '') {
-                (new RISE63\Core\Activation(config_dir()))->storeToken($token);
+
+            $activation = new Activation(config_dir());
+            $host       = (string) ($_SERVER['HTTP_HOST'] ?? '');
+            $key        = trim((string) ($_POST['license_key'] ?? ''));
+
+            if (($_POST['verify_only'] ?? '') === '1') {
+                // Ask the manager without committing, so the operator can see the answer first.
+                $probe = $activation->verify($key, $host);
+                if ($probe['valid']) {
+                    $licenseNotice = 'That key is valid for ' . $probe['domain'] . '. Press “Save key and continue” to use it.';
+                    $verifiedKey   = $key;
+                } else {
+                    $verifiedKey = $key;   // keep it in the field so a typo can be corrected
+                    throw new RuntimeException($probe['message']);
+                }
+            } elseif ($key !== '') {
+                // Never write a key that the provider has not confirmed: an unverified key on disk
+                // would block the wizard on the next attempt for no reason.
+                $probe = $activation->verify($key, $host);
+                $verifiedKey = $key;
+                if (!$probe['valid']) {
+                    throw new RuntimeException($probe['message']);
+                }
+                $activation->storeKey($key);
+                $activation->verify($key, $host, true);   // records the result, no second call needed
+                $licenseNotice = 'Licence saved and confirmed for ' . $probe['domain'] . '.';
+                $installer->advance(2);
+            } else {
+                // Resuming setup with a key already on disk.
+                $state = $activation->check($host, true);
+                if (!$state['valid']) {
+                    throw new RuntimeException($state['message']);
+                }
+                $licenseNotice = $state['message'];
+                $installer->advance(2);
             }
-            $state = (new RISE63\Core\Activation(config_dir()))->check((string) ($_SERVER['HTTP_HOST'] ?? ''), true);
-            if (!$state['valid']) {
-                throw new RuntimeException($state['message']);
-            }
-            $installer->advance(2);
         } elseif ($stage === 2) {
             $old = [
                 'host' => (string) ($_POST['host'] ?? 'localhost'),
@@ -93,6 +124,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'site_title'         => (string) ($_POST['site_title'] ?? 'RISE 63'),
                 'notification_email' => (string) ($_POST['notification_email'] ?? ''),
             ];
+            $replacement = trim((string) ($_POST['license_key'] ?? ''));
+            if ($replacement !== '') {
+                $activation3 = new Activation(config_dir());
+                $probe3      = $activation3->verify($replacement, (string) ($_SERVER['HTTP_HOST'] ?? ''));
+                if (!$probe3['valid']) {
+                    throw new RuntimeException('The replacement licence key was not accepted: ' . $probe3['message']);
+                }
+                $activation3->storeKey($replacement);
+                $activation3->verify($replacement, (string) ($_SERVER['HTTP_HOST'] ?? ''), true);
+            }
             $installer->createAdministrator([
                 'full_name'          => $old['full_name'],
                 'email'              => $old['email'],
@@ -101,7 +142,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'pin'                => (string) ($_POST['pin'] ?? ''),
                 'site_title'         => $old['site_title'],
                 'notification_email' => $old['notification_email'],
-            ], (string) ($_POST['system_token'] ?? ''));
+            ]);
         } elseif ($stage === 4) {
             $installer->complete();
             flock($mutex, LOCK_UN);
@@ -140,9 +181,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-$stage = $installer->stage();
-$checks = $stage === 1 ? $installer->environment() : [];
-$host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$stage   = $installer->stage();
+$checks  = $stage === 1 ? $installer->environment() : [];
+$host    = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$license = $stage === 1 ? new Activation(config_dir()) : null;
+// Display only: never block the first paint on a network call. If there is no cached answer the
+// panel simply shows nothing, and the operator triggers the real check with the button.
+$current = ['valid' => false, 'message' => '', 'grace' => false, 'domain' => ''];
+$cachedLicense = $license?->cache();
+if (is_array($cachedLicense) && Activation::domainFromHost($host) === ($cachedLicense['domain'] ?? null)) {
+    $current = [
+        'valid'   => !empty($cachedLicense['valid']),
+        'message' => !empty($cachedLicense['valid'])
+            ? 'Last confirmed ' . gmdate('j M Y H:i', (int) ($cachedLicense['checked_at'] ?? 0)) . ' UTC'
+            : 'The last check did not confirm this domain.',
+        'grace'   => (int) ($cachedLicense['checked_at'] ?? 0) > 0 && !empty($cachedLicense['valid']),
+        'domain'  => (string) $cachedLicense['domain'],
+    ];
+}
+$maskedKey = $license?->storedKey();
+$maskedKey = $maskedKey === null ? '' : substr($maskedKey['key'], 0, 4)
+    . str_repeat('•', max(4, strlen($maskedKey['key']) - 8)) . substr($maskedKey['key'], -4);
 ?><!doctype html>
 <html lang="en" data-theme="system">
 <head>
@@ -180,7 +239,7 @@ $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
       <input type="hidden" name="stage" value="<?= e((string) $stage) ?>">
 
       <?php if ($stage === 1): ?>
-        <h2>01 · System check</h2>
+        <h2>System check &amp; licence</h2>
         <p class="muted">Every row must read “Ready” before setup continues.</p>
         <ul class="list-plain">
           <?php foreach ($checks as $key => $check): ?>
@@ -190,17 +249,70 @@ $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
             </li>
           <?php endforeach; ?>
         </ul>
-        <div class="field" style="margin-top:16px">
-          <label for="system_token">System token</label>
-          <input type="password" id="system_token" name="system_token" autocomplete="off" maxlength="255"
-                 placeholder="Paste the token from your manager account">
-          <span class="hint">The token is stored privately in <code>config/system-token.php</code> and is never written to logs.</span>
+        <h3 style="margin:22px 0 6px;font-size:1.0625rem">Licence key</h3>
+        <p class="muted" style="margin-top:0">RISE 63 runs on a licence locked to this domain. The key is created on the
+          provider's site — follow the link, enter your e-mail and the domain below, and the key is sent to you.</p>
+
+        <div class="notice" style="margin-bottom:14px">
+          <strong>No key yet?</strong>
+          <a href="<?= e(Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence for this domain &rarr;</a>
+          <br>
+          <span class="faint">
+            Already have an account?
+            <a href="<?= e(Activation::MANAGER_SIGNIN) ?>" target="_blank" rel="noopener noreferrer">Sign in to copy your key</a>
+            &middot;
+            <a href="<?= e(Activation::MANAGER_DOCS) ?>" target="_blank" rel="noopener noreferrer">API reference</a>
+          </span>
         </div>
+
+        <?php if ($maskedKey !== '' && $current['grace']): ?>
+          <div class="flash flash-warning" role="status">
+            The licence service is currently unreachable. This site is running on its grace window:
+            <?= e((string) $current['message']) ?>
+          </div>
+        <?php endif; ?>
+        <?php if ($maskedKey !== ''): ?>
+          <div class="flash <?= $current['valid'] ? 'flash-success' : 'flash-warning' ?>" role="status">
+            Key already saved: <code><?= e($maskedKey) ?></code> —
+            <?= $current['valid']
+                ? 'confirmed for ' . e((string) $current['domain']) . '.'
+                : 'not confirmed yet: ' . e((string) $current['message']) ?>
+            Pasting a new key below replaces it.
+          </div>
+        <?php endif; ?>
+
         <div class="field">
-          <label for="domain">Domain being activated</label>
-          <input type="text" id="domain" value="<?= e(RISE63\Core\Activation::domainFromHost($host)) ?>" readonly>
+          <label for="domain">Domain to license</label>
+          <input type="text" id="domain" value="<?= e(Activation::domainFromHost($host)) ?>" readonly>
+          <span class="hint">Read from this request. Use this exact value on the provider's order form.
+            <?php if (str_starts_with(Activation::domainFromHost($host), 'www.')): ?>
+              Keys are checked without the <code>www.</code> prefix.
+            <?php endif; ?>
+          </span>
+          <button class="btn btn-quiet btn-sm" type="button" data-copy-target="domain" style="margin-top:6px">Copy domain</button>
         </div>
-        <div class="form-actions"><button class="btn btn-primary btn-block" type="submit">Verify &amp; continue</button></div>
+
+        <div class="field">
+          <label for="license_key">Licence key</label>
+          <input type="text" id="license_key" name="license_key" autocomplete="off" spellcheck="false"
+                 autocapitalize="none" maxlength="255" placeholder="Paste the key from the provider"
+                 value="<?= e($verifiedKey) ?>">
+          <span class="hint">Stored privately as <code>config/activation-key.php</code> (mode 0600) and never written to
+            the error log. It is sent only to <code><?= e(Activation::MANAGER_HOST) ?></code>, over HTTPS, from PHP.</span>
+        </div>
+
+        <?php if ($licenseNotice !== ''): ?>
+          <div class="flash flash-success" role="status"><?= e($licenseNotice) ?></div>
+        <?php endif; ?>
+
+        <div class="form-actions" style="display:grid;gap:8px">
+          <button class="btn btn-secondary btn-block" type="submit" name="verify_only" value="1" formnovalidate>
+            Check this key first
+          </button>
+          <button class="btn btn-primary btn-block" type="submit">Save key and continue</button>
+        </div>
+        <p class="faint" style="margin-bottom:0">Both buttons contact the licence service. Nothing is enabled until it
+          confirms the key for this domain.</p>
 
       <?php elseif ($stage === 2): ?>
         <h2>02 · Database</h2>
@@ -241,6 +353,13 @@ $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
         <div class="field"><label for="pin">Four-digit transaction PIN</label>
           <input type="password" id="pin" name="pin" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password">
           <span class="hint">Used to confirm disbursements. Sequences such as 1234 are rejected.</span></div>
+        <div class="field">
+          <label for="license_key_stage3">Licence key</label>
+          <input type="text" id="license_key_stage3" name="license_key" autocomplete="off" spellcheck="false"
+                 autocapitalize="none" maxlength="255" placeholder="<?= $maskedKey !== '' ? 'Leave blank to keep the saved key' : 'Paste your licence key' ?>">
+          <span class="hint">Replaces the saved key if you paste one.
+            <a href="<?= e(Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence</a>.</span>
+        </div>
         <div class="form-actions"><button class="btn btn-primary btn-block" type="submit">Create administrator</button></div>
 
       <?php else: ?>
