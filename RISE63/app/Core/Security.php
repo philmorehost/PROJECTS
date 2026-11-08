@@ -36,8 +36,8 @@ final class Security
     public const INLINE_SCRIPT_HASHES = [
         // layout.php — applies a stored theme before first paint.
         'sha256-a/4YpLwB4tGIPyCAQ0A9/B2e6oil9IDrSDz5h0Y3kt0=',
-        // layout.php — offline bar close, independent of app.js.
-        'sha256-EC+VCbCxxpwIu9kDuACT7OBl1utnm/dXk/+HHuX29Po=',
+        // layout.php — offline modal controls, independent of app.js.
+        'sha256-yoamfd+tBCvxp+8J7JY1f1xX4FmLBx0+H2uJd/DK93s=',
     ];
 
     /** The policy header for this response, including the inline-script allow-list. */

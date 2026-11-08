@@ -149,8 +149,10 @@ check('installer shows the stage-1 checklist', /Server check|System check/i.test
 
 // The bug that made setup render as unstyled HTML: a stylesheet URL resolved against
 // SCRIPT_NAME (/install/index.php) instead of the front controller.
+// The URL now carries a content fingerprint (?v=… or a hashed filename) so a deploy cannot leave a
+// stale stylesheet in the browser. What matters here is still the *root*, not /install/.
 check('installer asks for the stylesheet at the site root',
-  /href="\/public\/assets\/app\.css"/.test(installer),
+  /href="\/public\/assets\/app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?"/.test(installer),
   installer.match(/<link[^>]*app\.css[^>]*>/)?.[0] ?? 'no stylesheet tag found');
 check('installer never asks for /install/public',
   !/\/install\/public\//.test(installer), 'assets must not be resolved relative to the installer');

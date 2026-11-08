@@ -174,7 +174,7 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .icon-btn:active { transform: scale(0.95); }
 
 .page { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: 20px 16px 28px; }
-.page.has-bottom-nav { padding-bottom: 96px; }
+.page.has-bottom-nav { padding-bottom: 112px; }
 
 .site-footer {
   border-top: 1px solid var(--border); padding: 20px 16px 28px;
@@ -183,10 +183,19 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
 .site-footer p { margin: 4px 0; }
 
 /* ── Bottom navigation ────────────────────────────────────────────────────────── */
-/* A phone-style tab bar: a floating, translucent slab with a hairline top edge, drawn SVG marks,
-   and one pill that slides to the active tab. It has to survive three fidelities — a 320px phone,
-   a wide desktop, and the printed page — so the widths are proportional (--tab-count) rather than
-   hard-coded for seven items. */
+/* A sticky, phone-style tab bar.
+ *
+ * "Sticky" here means what it means on a phone: pinned to the bottom of the *viewport* while the
+ * page scrolls underneath it, never scrolling away with the content and never in a second copy.
+ * `position: fixed` is the pinned behaviour; `position: sticky` would pin it inside the document
+ * flow instead, which is why it looked like part of the footer rather than like a tab bar.
+ *
+ * The look is deliberately modern but not trendy: a translucent slab with a blur, a hairline edge,
+ * a soft layered shadow, drawn SVG marks, and one pill that slides to the active tab. Widths are
+ * proportional (--tab-count) so it survives seven tabs on a 320px phone as well as on a desktop.
+ *
+ * It floats above the content rather than sitting in a strip at the bottom edge — which is why the
+ * page reserves space for it below (.page.has-bottom-nav). */
 .bottom-nav {
   position: fixed; z-index: 30;
   left: 50%; transform: translateX(-50%);
@@ -516,43 +525,63 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
-/* The offline bar sits *below* the sticky top bar rather than over it: covering the top bar hid
-   the brand and the theme button at the exact moment the user was looking for a way out. It is
-   only ever on screen while the browser reports no connection; app.js owns that decision and
-   removes it without delay when the connection returns. */
-.offline-banner {
-  position: fixed; z-index: 40;
-  top: calc(env(safe-area-inset-top) + 0px); left: 0; right: 0;
-  display: flex; gap: 10px; align-items: center;
+/* ── Offline modal ─────────────────────────────────────────────────────────────── */
+/* A bottom sheet, not a top bar. The top-bar version covered the header (hiding the brand and the
+   theme control at the exact moment the user was looking for a way out) and, on the first release,
+   could not be closed at all. A connectivity notice is the one thing on the page you cannot
+   navigate away from, so it has to be dismissible and it must not sit on top of the navigation.
+
+   The sheet rises from the bottom on phones — where the thumb is — and centres as a dialog on a
+   wide screen. It never covers the sticky tab bar: the sheet stops above it. */
+.offline-modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, #0b1120 55%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: offline-fade 0.16s ease-out both;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.offline-modal[hidden] { display: none; }
+.offline-sheet {
+  width: min(520px, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 44px -12px rgba(15, 23, 42, 0.45);
+  text-align: center;
+  animation: offline-rise 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.offline-emoji {
+  display: grid; place-items: center;
+  width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 50%;
   background: var(--warn-soft); color: var(--warn);
-  padding: 9px 14px; font-size: var(--t-sm); font-weight: 600;
-  border-bottom: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
-  box-shadow: 0 6px 18px -8px rgba(15, 23, 42, 0.35);
-  /* Slide down on show, up on hide. Never 0s: an instant jump is harder to notice than a fast
-     slide, and "gone immediately" is about latency, not about skipping the transition. */
-  animation: offline-in 0.18s ease-out both;
 }
-/* Leaving: app.js adds [hidden] the moment connectivity returns and the bar is removed from the
-   layout in the same frame — this rule only exists so the exit is not a jolt when the browser
-   honours the transition. */
-.offline-banner[hidden] { display: none; }
-.offline-banner .offline-icon { display: grid; place-items: center; flex: 0 0 auto; }
-.offline-banner .offline-icon svg { width: 18px; height: 18px; }
-.offline-banner .offline-text { margin: 0; flex: 1 1 auto; min-width: 0; }
-.offline-banner .offline-close {
-  flex: 0 0 auto; display: grid; place-items: center;
-  width: 32px; height: 32px; margin: -4px -6px -4px 0;
-  background: transparent; border: 0; border-radius: 10px;
-  color: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer;
-  opacity: 0.75; transition: opacity 0.12s ease, background 0.12s ease;
+.offline-emoji svg { width: 24px; height: 24px; }
+.offline-sheet h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.offline-sheet p { margin: 0 auto 16px; color: var(--text-muted); font-size: var(--t-sm); max-width: 40ch; }
+.offline-actions { display: grid; gap: 8px; }
+.offline-hint { margin: 10px 0 0 !important; font-size: var(--t-sm); color: var(--warn); min-height: 1.2em; }
+/* The hint holds its line so the sheet does not jump when "Checking…" appears. */
+
+/* While the sheet is open the page behind it must not scroll, or a thumb drag can slide the page
+   under the dialog and make it look as though the dialog swallowed the content. */
+html.offline-open, html.offline-open body { overflow: hidden; }
+
+@keyframes offline-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes offline-rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (min-width: 720px) {
+  /* Wide screen: a centred dialog. Aligned to the middle rather than the bottom so it reads as a
+     notification, not as a menu that was opened by accident. */
+  .offline-modal { align-items: center; padding: 24px; }
+  .offline-sheet { border-radius: 22px; border-bottom: 1px solid var(--border); }
 }
-.offline-banner .offline-close:hover { opacity: 1; background: color-mix(in srgb, var(--warn) 14%, transparent); }
-.offline-banner .offline-close:active { transform: scale(0.92); }
-@keyframes offline-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .offline-banner { animation: none; }
-  .bottom-nav .nav-indicator { transition: none; }
-}
+
 .install-prompt {
   position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 50;
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
@@ -618,7 +647,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 @media print {
-  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-banner, .form-actions { display: none !important; }
+  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-modal, .form-actions { display: none !important; }
   body { background: #fff; color: #000; }
   .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
   .page { padding: 0; max-width: none; }

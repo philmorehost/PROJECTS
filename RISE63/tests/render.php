@@ -658,11 +658,25 @@ ok('Stylesheet meets the mobile-first contract', function (): void {
     assertContains('[data-theme="dark"]', $css);
     assertContains('.tracker-step', $css);
     assertContains('.combo-list', $css);
-    assertContains('.offline-banner', $css);
-    assertContains('.offline-banner .offline-close', $css, 'the offline bar can be closed by hand');
+    assertContains('.offline-modal', $css, 'the connectivity notice is a modal');
+    assertContains('.offline-sheet', $css);
+    assertContains('html.offline-open', $css, 'the page behind the modal does not scroll');
     assertContains('.bottom-nav .nav-indicator', $css);
-    // The bar must stay floating on a wide screen; a static rule here would park it under the page.
-    assertMissing('.bottom-nav { position: static', $css, 'the tab bar stays fixed at every width');
+
+    // Sticky, at every width: pinned to the viewport, never static and never a second copy inside
+    // the page flow. Reported twice as "not sticky", so it is asserted rather than assumed.
+    preg_match('/\.bottom-nav \{[^}]*\}/', $css, $navBlock);
+    $nav = $navBlock[0] ?? '';
+    assertContains('position: fixed', $nav, 'the tab bar is pinned to the viewport');
+    assertContains('bottom: calc(', $nav, 'it sits above the home-indicator inset');
+    assertMissing('.bottom-nav { position: static', $css, 'never static at any width');
+    assertMissing('.bottom-nav { position: relative', $css, 'never in the document flow');
+    // Exactly one tab bar per page: a second copy in the footer would scroll away while the fixed
+    // one stayed, which reads as two nav bars.
+    $layout = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Views/layout.php');
+    assertSame(1, substr_count($layout, 'class="bottom-nav"'), 'one tab bar, not two');
+    assertContains('has-bottom-nav', $layout, 'the page reserves room for the bar');
+    assertContains('.page.has-bottom-nav', $css, 'and the stylesheet defines that room');
     assertContains('.install-prompt', $css);
     assertContains('@media print', $css);
     // No unreadably small type. Checked by value, not by prefix: 0.6875rem (11px) is the floor a

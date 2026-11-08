@@ -373,6 +373,45 @@ matching entry in the allow-list, with no orphans. `tests/support/assets-and-cac
 cache name changes with both the release and the shell list, that every pre-cached file exists, and
 that one changed byte yields a different asset URL.
 
+### 2.3i The notice that would not close, and a footer that never arrived
+
+Two reports, one root cause, plus a shape problem.
+
+**"The top bar notice is stubborn, it won't close."** A top bar was the wrong shape for this
+message: it covered the header (hiding the brand and the theme control at the moment the user was
+looking for a way out), and a connectivity notice is the one thing on a page you cannot navigate
+away from — so being unable to close it is worse than never showing it. It is now a **modal bottom
+sheet**: rises from the bottom on a phone, centres as a dialog on a desktop, dismissible three ways
+(Dismiss, backdrop, Escape), and closing sticks until the connection actually drops again. While it
+is open the page behind cannot scroll.
+
+Two real bugs surfaced while building it:
+
+- `var dismiss` in the new code collided with the install prompt's `var dismiss` in the same
+  function scope. `var` is function-scoped, so the later assignment replaced the modal's helper
+  with a DOM element, and every close path threw. The behaviour harness caught it on the backdrop
+  case — the one path the inline fallback does not cover.
+- The inline handler is a *second* implementation, so it can go stale independently. The CSP hash
+  test blocks that: change the snippet without updating `Security::INLINE_SCRIPT_HASHES` and the
+  build fails.
+
+**"The footer-menu redesign was never applied."** It was: the CSS was in the tree and every test
+asserted on it. What the browser received was the *previous* stylesheet, because
+`public/assets/manifest.php` — written by the manual `bin/build-assets.php` step — did not exist on
+the deployed host. `asset()` then returned the bare `app.css`, which is cacheable, so the new HTML
+was paired with the old CSS. The symptom is indistinguishable from "the change was never made".
+
+`asset()` no longer depends on the build having run: with no manifest entry it hashes the file and
+returns `app.css?v=<hash>`, so the browser-side cache is correct regardless. The build still writes
+fingerprinted filenames (`app.f6d1df85.js`), which is the faster path; the fallback is the safety
+net. Both are tested.
+
+**Sticky.** The bar was already `position: fixed`, but the request kept coming back, so it is now
+asserted rather than assumed: one tab bar per page (not a second copy in the footer), pinned with
+`position: fixed` at every width, never `static` or `relative`, sitting above the home-indicator
+inset, with the page reserving room beneath it. Three of those assertions would have failed against
+the previous stylesheet.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

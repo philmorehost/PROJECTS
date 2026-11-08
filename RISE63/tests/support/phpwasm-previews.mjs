@@ -88,7 +88,10 @@ require '/src/install/index.php';`);
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   let html = output;
-  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  // The stylesheet URL now carries a content fingerprint, so match it rather than requiring the bare
+  // filename; otherwise every preview silently loses its styling.
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
   html = html.replace(/<script src="[^"]*app\.js" defer><\/script>/, '<script>\n' + js + '\n</script>');
   html = html.replace('<head>', '<head>\n<!-- Static preview of the RISE 63 setup wizard, stage ' + stage
     + '. Generated from install/index.php with the real app.css inlined. No server needed. -->');
@@ -160,7 +163,10 @@ RISE63\\Core\\View::render('staff/updates', array(
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   let html = output;
-  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  // The stylesheet URL now carries a content fingerprint, so match it rather than requiring the bare
+  // filename; otherwise every preview silently loses its styling.
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
   html = html.replace(/<script src="[^"]*app\.js" defer><\/script>/, '<script>\n' + js + '\n</script>');
   html = html.replace('<head>', '<head>\n<!-- Static preview of the admin Updates screen. Generated from app/Views/staff/updates.php with the real app.css inlined. -->');
 
@@ -220,7 +226,10 @@ require '/src/app/Views/system-gate.php';`);
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   let html = output;
-  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  // The stylesheet URL now carries a content fingerprint, so match it rather than requiring the bare
+  // filename; otherwise every preview silently loses its styling.
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
   html = html.replace('<head>', '<head>\n<!-- Static preview of the activation gate after a refusal. Generated from app/Views/system-gate.php. -->');
 
   await writeFile(join(root, 'docs/preview/activation-gate.html'), html);
@@ -277,7 +286,10 @@ echo '<!-- page resolved from the path: ' . \\RISE63\\page_from_path('/login') .
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   let html = output;
-  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  // The stylesheet URL now carries a content fingerprint, so match it rather than requiring the bare
+  // filename; otherwise every preview silently loses its styling.
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
   await writeFile(join(root, 'docs/preview/login-at-clean-url.html'), html);
   console.log(`sign-in at /login → docs/preview/login-at-clean-url.html (${html.length} bytes, page=${
     /page resolved from the path: login/.test(html) ? 'login' : 'NOT RESOLVED'})`);
@@ -347,10 +359,18 @@ echo \\RISE63\\Core\\View::capture('/src/app/Views/layout.php', array(
   })();
 
   let html = bar;
-  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
-  html = html.replace('</body>', `<script>
-  // Show the offline bar for the screenshot; in the app it appears only when the probe fails.
-  document.getElementById('offline-banner').hidden = false;
+  // The stylesheet URL now carries a content fingerprint, so match it rather than requiring the bare
+  // filename; otherwise every preview silently loses its styling.
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
+  html = html.replace('</body>', `<style>
+  /* For the screenshot only: open the modal the way app.js would, without a network probe. */
+  .offline-modal { display: flex !important; }
+  html.offline-open, html.offline-open body { overflow: hidden; }
+</style>
+<script>
+  document.getElementById('offline-modal').hidden = false;
+  document.documentElement.classList.add('offline-open');
 </script>
 </body>`);
   await writeFile(join(root, 'docs/preview/nav-and-offline.html'), html);

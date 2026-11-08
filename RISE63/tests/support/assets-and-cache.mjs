@@ -110,6 +110,46 @@ check('every pre-cached asset exists', missing.length === 0, missing.join(', '))
   }
 }
 
+/* 5. asset() must degrade safely. Before a build the manifest does not exist; serving the bare
+      filename then lets the browser keep a previous release, which is precisely how a redesign
+      shipped and was never seen. The helper must fall back to a content fingerprint. */
+{
+  const runtime = new PhpNode(phpModule);
+  let out = '';
+  runtime.addEventListener('output', (e) => { out += e.detail[0] ?? ''; });
+  runtime.addEventListener('error', (e) => { out += String(e.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const functions = await readFile(root + 'app/Core/Functions.php', 'utf8');
+  await runtime.writeFile('/f.php', functions);
+  // php-wasm has its own virtual filesystem, so the asset has to be placed inside it; ROOT points
+  // at the directory the helper will actually look in.
+  for (const dir of ['/src', '/src/public', '/src/public/assets']) {
+    try { await runtime.mkdir(dir); } catch { /* exists */ }
+  }
+  await runtime.writeFile('/src/public/assets/app.css', await readFile(root + 'public/assets/app.css', 'utf8'));
+  await runtime.run(`<?php
+namespace RISE63 {
+    // Functions.php declares url() too, so only ROOT is provided here.
+    const ROOT = '/src';
+}
+namespace {
+    require '/f.php';
+    echo \\RISE63\\asset('app.css');
+}
+`);
+  await new Promise((r) => setTimeout(r, 1000));
+  const url = out.trim();
+
+  check('without a manifest, asset() still returns a fingerprinted URL',
+    /app\.(css|\.[0-9a-f]{8}\.css)(\?v=[0-9a-f]{8})?$/.test(url) && /[0-9a-f]{8}/.test(url), url);
+  check('the fallback never returns the bare, cacheable filename',
+    !/\/app\.css$/.test(url), url);
+  const cssBytes = await readFile(root + 'public/assets/app.css', 'utf8');
+  const expected = (await import('node:crypto')).createHash('sha256').update(cssBytes).digest('hex').slice(0, 8);
+  check('the fallback fingerprint matches the file contents', url.includes(expected), `${url} vs ${expected}`);
+}
+
 console.log('\n' + '─'.repeat(62));
 console.log(`${checks - failures.length} passed, ${failures.length} failed`);
 process.exit(failures.length === 0 ? 0 : 1);

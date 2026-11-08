@@ -88,30 +88,72 @@ foreach ($tabs as $index => $tab) {
          both are handled by app.js, which also re-tests the connection every few seconds so a
          stale "online" flag cannot leave the bar on screen. Hidden in the markup, so it never
          flashes on a healthy page before the script runs. */ ?>
-<div class="offline-banner" id="offline-banner" role="status" aria-live="polite" hidden>
-  <span class="offline-icon" aria-hidden="true"><?= icon('offline', 'icon') ?></span>
-  <p class="offline-text">No internet connection. Anything you submit will be saved and sent when you reconnect.</p>
-  <button type="button" class="offline-close" id="offline-dismiss" aria-label="Dismiss offline notice">
-    <span aria-hidden="true">&times;</span>
-  </button>
+<?php /* Connectivity notice.
+         A bar pinned to the top of the viewport was the wrong shape for this message. It sat over
+         the top bar, it could not be closed on a first release (the handler was in a stale
+         app.js), and — because it is the one thing on the page the user cannot navigate away from
+         — being unable to close it is worse than not showing it at all.
+         Now: a modal dialog in the bottom sheet position, so it never covers the header, it is
+         dismissible three ways (button, backdrop, Escape), and closing it sticks until the next
+         time the connection actually drops. Hidden in the markup, so it never flashes on a page
+         that loaded fine. */ ?>
+<div class="offline-modal" id="offline-modal" role="dialog" aria-modal="true"
+     aria-labelledby="offline-title" aria-describedby="offline-body" hidden>
+  <div class="offline-sheet" role="document">
+    <span class="offline-emoji" aria-hidden="true"><?= icon('offline', 'icon') ?></span>
+    <h2 id="offline-title">You are offline</h2>
+    <p id="offline-body">This device has lost its internet connection. Anything you submit will be
+      kept and sent as soon as you reconnect.</p>
+    <div class="offline-actions">
+      <button type="button" class="btn btn-primary btn-block" id="offline-close">Dismiss</button>
+      <button type="button" class="btn btn-ghost btn-block" id="offline-retry">Try again now</button>
+    </div>
+    <p class="offline-hint" id="offline-hint" aria-live="polite"></p>
+  </div>
 </div>
 <script>
-  // The second half of the close button, deliberately independent of app.js.
+  // The modal's own controls, deliberately independent of app.js.
   //
-  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
-  // It exists because the first report of "the × does nothing" was almost certainly a cached
-  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
-  // the previous release, so the button rendered and did nothing. A handler that ships in the same
-  // response as the markup cannot drift out of step with it.
+  // app.js binds the same buttons and owns the connectivity decision; this copy only dismisses and
+  // re-tests. It exists because the first report of "the × does nothing" was a cached app.js: the
+  // markup had been updated while the script that bound it was a release behind. A handler that
+  // ships in the same response as the markup cannot drift out of step with it.
   //
-  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
-  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
-  // disagree.
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet runs only because its
+  // SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two disagree.
   (function () {
-    var button = document.getElementById('offline-dismiss');
-    var banner = document.getElementById('offline-banner');
-    if (!button || !banner) { return; }
-    button.addEventListener('click', function () { banner.hidden = true; });
+    var modal = document.getElementById('offline-modal');
+    if (!modal) { return; }
+    var sheet = modal.querySelector('.offline-sheet');
+    var hint = document.getElementById('offline-hint');
+    var close = document.getElementById('offline-close');
+    var retry = document.getElementById('offline-retry');
+
+    function hide() {
+      modal.hidden = true;
+      modal.setAttribute('data-dismissed', '1');
+      document.documentElement.classList.remove('offline-open');
+    }
+    if (close) { close.addEventListener('click', hide); }
+    // Backdrop click closes; a click inside the sheet must not.
+    modal.addEventListener('click', function (event) {
+      if (sheet && !sheet.contains(event.target)) { hide(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) { hide(); }
+    });
+    if (retry) {
+      retry.addEventListener('click', function () {
+        if (hint) { hint.textContent = 'Checking…'; }
+        // A HEAD to a tiny same-origin file: any HTTP answer means the server was reached.
+        fetch('./favicon.svg', { method: 'HEAD', cache: 'no-store' }).then(function () {
+          hide();
+          window.location.reload();
+        }, function () {
+          if (hint) { hint.textContent = 'Still no connection. Check Wi-Fi or mobile data.'; }
+        });
+      });
+    }
   }());
 </script>
 
