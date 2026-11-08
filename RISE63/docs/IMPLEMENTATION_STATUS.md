@@ -49,11 +49,36 @@ What the view suite asserts:
 * The stylesheet declares 16 px base type, a 48 px touch token, 16 px inputs, both themes, reduced-motion, print, tracker, combobox, offline banner and install prompt — and contains no type below 13 px.
 * The manifest is valid JSON with 192/512 any-purpose **and** maskable icons that exist on disk; the service worker versions its cache, deletes old caches, and refuses to cache `/api/` or non-GET requests.
 
-### 2.2 What that does and does not prove
+### 2.2 Static SQL consistency audit (no database needed)
+
+Because SQL cannot be executed here, the code was cross-checked against `database/schema.sql` with a
+one-off parser instead:
+
+* every table named after `FROM` / `JOIN` / `INSERT INTO` / `UPDATE` exists (22 tables + the view);
+* every `INSERT` column list and every `UPDATE … SET` assignment names a real column (no mismatches);
+* 86 qualified/selected column references in `SELECT` lists resolve, including through table aliases.
+
+The audit is a script kept outside the repository (it is a review tool, not a test); rerun it after schema
+edits. It cannot catch type, index or constraint mistakes — only naming and existence.
+
+### 2.3 What that does and does not prove
 
 It proves the grammar, the pure logic and the rendered markup. It does **not** prove anything that needs a database, an SMTP server or a real browser: SQL execution, transactions under concurrency, `SELECT … FOR UPDATE` behaviour, session persistence, real email delivery, installability, or Android/iOS layout.
 
 ---
+
+### 2.4 Defects found by this review and fixed
+
+Worth recording, because each would have failed only on a live database or browser:
+
+| Defect | Effect if shipped | Fix |
+|---|---|---|
+| Document download was wired as a POST-only action but linked as a GET | Every attachment link returned 404 | Moved to `app/download.php`, routed for GET, with scope + attachment + `realpath` containment checks |
+| The optional attachment on the apply form was never submitted or stored | Applicants believed a document was attached | One `document-upload` handler used by both the apply form (multipart) and the detail page |
+| The parish picker on the public registration page received 401 | Registration on a phone was unusable | Restricted anonymous branch: ≥3 characters, ≤15 rows, names only, cookie rate limit, no session |
+| An outbound activation call happened while a page was already being rendered in maintenance mode | "Headers already sent" during outages | Maintenance check moved before the activation gate |
+| Academy attendance had no write path | The Seed Grant graduation rule was unreachable | `Academy::save()` + panel, staff-only |
+| Typo `RPCG` in the meta description | Visible on every page | Corrected |
 
 ## 3. Written but not yet verified (must be tested on hosting)
 
@@ -115,6 +140,7 @@ It proves the grammar, the pure logic and the rendered markup. It does **not** p
 RISE63/
   blueprint.php              refined blueprint (this version)
   index.php                  front controller
+  router.php                 development router for php -S (never deployed)
   install/index.php          four-stage wizard
   api/index.php              JSON parish selector (authenticated)
   favicon.svg                dynamic SVG favicon
@@ -132,7 +158,7 @@ RISE63/
   database/                  schema.sql, countries.sql, seed.sql, ledger-guards.sql
   public/assets/             app.css, app.js, security.js + fingerprinted builds
   public/icons/              PWA icons (any + maskable + apple-touch)
-  tests/                     unit.php, render.php + php-wasm harnesses
+  tests/                     unit.php, render.php, run.sh + php-wasm harnesses
   docs/                      DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/
 ```
 
