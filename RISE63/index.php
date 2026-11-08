@@ -40,8 +40,21 @@ if (Settings::bool('maintenance_mode') && !($user !== null && Auth::isAdmin($use
 
 // ── System activation gate ────────────────────────────────────────────────────────────
 // Cached for 6 hours with a 24-hour grace window, so this is usually a single local read.
+//
+// "Try again" on the gate is a POST to ?retry=activation. Without this the button reloaded the
+// same cached failure and the operator could not force a re-check after fixing their key or the
+// host's firewall — the screen looked stuck no matter what they did.
+$retryActivation = false;
+if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST'
+    && ($_POST['action'] ?? '') === 'activation-retry') {
+    // The gate is rendered before the CSRF-checked POST router, so the token and origin are
+    // verified here. Without this the retry button would be a one-click way to hammer the
+    // provider from any third-party page.
+    Security::assertPost();
+    $retryActivation = true;
+}
 $activation = new Activation(config_dir());
-$activationState = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''));
+$activationState = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''), $retryActivation);
 if (!$activationState['valid']) {
     $domain = $activationState['domain'] ?? Activation::domainFromHost((string) ($_SERVER['HTTP_HOST'] ?? ''));
     require __DIR__ . '/app/Views/system-gate.php';

@@ -168,6 +168,53 @@ Now:
 send are covered by tests against the documented contract (`tests/unit.php`), not by a live call.
 The live confirmation belongs on the host: `php bin/license-check.php --probe`.
 
+### 2.3c Field report four — the licence is valid in the console but rejected on the site
+
+The operator's console showed `MAN-749B9B757500` as **active** for `buildroom.rccglp63yaya.org.ng`,
+while the site reported *"Invalid license key or domain."* Both statements were true, because the
+two screens were talking to different scripts:
+
+| Endpoint | What it does |
+|---|---|
+| `api.php` (documented in the API reference) | Validates a key. Registers an unknown domain automatically while the licence has spare slots. |
+| `check-update.php` (updates only) | Validates the key **and** requires the domain to be already listed; refuses when the limit is reached. |
+
+`check-update.php` never returns "valid", so it can never be the thing that proves a licence — a
+`403` from it was being read as a licence refusal. The site's own check uses `api.php` and is
+unchanged. The distinction is now documented in `docs/DEPLOYMENT.md` §3b/§3c so the two are not
+confused again.
+
+The gate's **Try again** button also did nothing useful: it reloaded the page, which re-read the
+same cached failure, so an operator who had just fixed their key or their host's firewall saw no
+change. It is now a CSRF-checked POST that forces a fresh provider call.
+
+### 2.4 Updates from the licence server
+
+Until now the only way to get a new release onto an installation was to copy files by hand, which
+silently makes the tree disagree with the version the provider has published. There is now a real
+update path:
+
+- `app/Core/Updater.php` — requests `check-update.php`, downloads the one-time URL, verifies the
+  sha256, inspects the archive and applies it with a per-file backup and rollback.
+- `app/Core/ZipReader.php` — a read-only ZIP reader, because relying on `ZipArchive` would make
+  updates work on some hosts and fail on others (this sandbox has no `zip` extension at all).
+- **Updates** page (provincial administrator, ⇪ in the header): check → review every file that
+  changes → apply.
+- `bin/update.php --check|--plan|--apply|--history` for the cases where the admin page cannot be
+  reached.
+
+Refusals are deliberate and listed in `docs/DEPLOYMENT.md` §3c: a non-provider download host,
+a checksum mismatch, `../` or absolute paths, writes into `config/` or `storage/`, or a release that
+would replace the updater itself. A failed write restores every file already written. A failed SQL
+statement leaves the files in place but reports the exact statement, because a half-migrated schema
+is something the operator has to know about immediately.
+
+### 2.4b A bug the update tests found in the test harness
+
+`tests/support/phpwasm-test.mjs` decided success by grepping the output for "FAIL" and ignored
+PHP's exit status, so a suite that failed internally could still report success. It now honours the
+exit code as well — verified by injecting a deliberate failure and watching the harness return 1.
+
 ### 2.4 Defects found by this review and fixed
 
 Worth recording, because each would have failed only on a live database or browser:
