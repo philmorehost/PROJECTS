@@ -141,6 +141,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $activation = new Activation(config_dir());
             $host       = (string) ($_SERVER['HTTP_HOST'] ?? '');
             $key        = trim((string) ($_POST['license_key'] ?? ''));
+            // The domain shown is read from the request, but the operator may correct it: a host
+            // behind a proxy, or a licence registered to the bare domain while the site is served
+            // from a subdomain, both need this.
+            $formDomain = trim((string) ($_POST['license_domain'] ?? ''));
+            if ($formDomain !== '' && Activation::domainFromHost($formDomain) !== Activation::domainFromHost($host)) {
+                $host = $formDomain;
+            }
 
             if (($_POST['verify_only'] ?? '') === '1') {
                 // Ask the manager without committing, so the operator can see the answer first.
@@ -197,17 +204,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'notification_email' => (string) ($_POST['notification_email'] ?? ''),
             ];
             $replacement = trim((string) ($_POST['license_key'] ?? ''));
+            $replacementDomain = trim((string) ($_POST['license_domain'] ?? ''));
+            $host3 = $replacementDomain !== '' ? $replacementDomain : (string) ($_SERVER['HTTP_HOST'] ?? '');
             if ($replacement !== '') {
                 $activation3 = new Activation(config_dir());
-                $host3       = (string) ($_SERVER['HTTP_HOST'] ?? '');
                 $probe3      = $activation3->verify($replacement, $host3);
                 if (!$probe3['valid']) {
                     throw new RuntimeException('The replacement licence key was not accepted: ' . $probe3['message']);
                 }
                 $activation3->storeKey($replacement);
-                $activation3->verify($replacement, $host3, true);
             }
+            // The domain may have been corrected in either step, so it is passed through explicitly
+            // rather than re-derived from the request host inside the installer.
             $installer->createAdministrator([
+                'domain'             => $host3,
                 'full_name'          => $old['full_name'],
                 'email'              => $old['email'],
                 'password'           => (string) ($_POST['password'] ?? ''),
@@ -384,10 +394,12 @@ ob_start();
 
       <div class="wizard-fields">
         <div class="field">
-          <label for="domain">Domain to license</label>
-          <input type="text" id="domain" value="<?= e($domain) ?>" readonly>
-          <span class="hint">Use this exact value on the order form — no <code>https://</code>, no <code>www.</code></span>
-          <button class="btn btn-secondary btn-sm" type="button" data-copy-target="domain" style="margin-top:8px">Copy domain</button>
+          <label for="license_domain">Domain on the licence</label>
+          <input type="text" id="license_domain" name="license_domain" value="<?= e($domain) ?>"
+                 spellcheck="false" autocapitalize="none" maxlength="253" autocorrect="off" inputmode="url">
+          <span class="hint">Checked against the provider: no <code>https://</code>, no <code>www.</code>.
+            Edit it if your licence was issued for a different name.</span>
+          <button class="btn btn-secondary btn-sm" type="button" data-copy-target="license_domain" style="margin-top:8px">Copy domain</button>
         </div>
         <div class="field">
           <label for="license_key">Licence key</label>
@@ -488,10 +500,17 @@ ob_start();
           <span class="hint">Confirms disbursements. Sequences such as 1234 are rejected.</span>
         </div>
         <div class="field">
+          <label for="license_domain_stage3">Domain on the licence</label>
+          <input type="text" id="license_domain_stage3" name="license_domain" value="<?= e($domain) ?>"
+                 spellcheck="false" autocapitalize="none" maxlength="253" autocorrect="off" inputmode="url">
+          <span class="hint">Already confirmed for this installation. Change it only if the site now answers
+            on a different name — it must match what the provider holds.</span>
+        </div>
+        <div class="field">
           <label for="license_key_stage3">Licence key</label>
           <input type="text" id="license_key_stage3" name="license_key" spellcheck="false" autocapitalize="none"
                  maxlength="255" placeholder="<?= $maskedKey !== '' ? 'Leave blank to keep the saved key' : 'Paste your licence key' ?>">
-          <span class="hint">Only needed if you want to replace the saved key.
+          <span class="hint">Only needed to replace the saved key.
             <a href="<?= e(Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence</a>.</span>
         </div>
       </div>

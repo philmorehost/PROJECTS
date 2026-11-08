@@ -619,10 +619,17 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
           <span class="hint">Confirms disbursements. Sequences such as 1234 are rejected.</span>
         </div>
         <div class="field">
+          <label for="license_domain_stage3">Domain on the licence</label>
+          <input type="text" id="license_domain_stage3" name="license_domain" value="buildroom.rccglp63yaya.org.ng"
+                 spellcheck="false" autocapitalize="none" maxlength="253" autocorrect="off" inputmode="url">
+          <span class="hint">Already confirmed for this installation. Change it only if the site now answers
+            on a different name — it must match what the provider holds.</span>
+        </div>
+        <div class="field">
           <label for="license_key_stage3">Licence key</label>
           <input type="text" id="license_key_stage3" name="license_key" spellcheck="false" autocapitalize="none"
                  maxlength="255" placeholder="Paste your licence key">
-          <span class="hint">Only needed if you want to replace the saved key.
+          <span class="hint">Only needed to replace the saved key.
             <a href="https://manager.pmhserver.name.ng/order.php" target="_blank" rel="noopener noreferrer">Request a licence</a>.</span>
         </div>
       </div>

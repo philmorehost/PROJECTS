@@ -170,7 +170,7 @@ final class Installer
     /**
      * Stage 3 — first provincial administrator, site title, PIN.
      */
-    public function createAdministrator(array $input): int
+    public function createAdministrator(array $input, ?string $domain = null): int
     {
         $name   = trim((string) ($input['full_name'] ?? ''));
         $email  = strtolower(trim((string) ($input['email'] ?? '')));
@@ -204,13 +204,30 @@ final class Installer
             throw new RuntimeException('Enter a valid security notification e-mail address.');
         }
 
-        // Re-check the licence here as well as in stage 1. It is normally answered from the 6-hour
-        // cache; doing it again means a key revoked mid-setup cannot slip an administrator account
-        // into a database.
+        // The licence must not be re-checked over the network here.
+        //
+        // This used to force a fresh call every time stage 3 was submitted. The provider rate-limits
+        // validation, so a key that had just been confirmed in stage 1 came back "Invalid license key
+        // or domain" moments later and setup could not be finished. The domain was verified in stage
+        // 1 and the accepted domain was recorded with the key; confirm that record locally instead,
+        // and let check() re-ask the provider once the site is live (it does so with its own cache
+        // and error handling).
         $activation = new Activation($this->configDir);
-        $state      = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''), true);
-        if (!$state['valid']) {
-            throw new RuntimeException('The licence is not confirmed for this domain: ' . $state['message']);
+        $host       = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $domain     = Activation::domainFromHost($domain ?? $host);
+
+        if ($activation->storedKey() === null) {
+            throw new RuntimeException('No licence key is saved. Go back to the licence step and paste the key.');
+        }
+        if (!$activation->domainAccepted($domain)) {
+            // Nothing recorded for this host — but the provider may still accept it, so ask once.
+            $state = $activation->check($host, true);
+            if (!$state['valid']) {
+                throw new RuntimeException(
+                    'The licence is not confirmed for ' . $domain . ': ' . $state['message']
+                    . ' Fix the domain on the licence step, or correct the domain on the provider\'s site.'
+                );
+            }
         }
 
         return Database::transaction(function () use ($name, $email, $pass, $pin, $title, $notify): int {

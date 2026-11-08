@@ -106,8 +106,9 @@ POST https://manager.pmhserver.name.ng/api.php
 **Getting a key**
 
 1. Open <https://manager.pmhserver.name.ng/order.php> (the installer links to it on stage 1).
-2. Enter your e-mail and the exact domain shown in the installer's **Domain to license** field, which
-   is read from the request and has any `www.` removed.
+2. Enter your e-mail and the exact domain shown in the installer's **Domain on the licence** field,
+   which is read from the request and has any `www.` removed. If the order form was completed with a
+   different spelling, type that spelling into the field — it is editable.
 3. The key arrives by e-mail. Existing customers can copy it from
    <https://manager.pmhserver.name.ng/user/login.php>.
 
@@ -117,6 +118,10 @@ POST https://manager.pmhserver.name.ng/api.php
   committing — useful if you want to confirm the domain before creating an administrator.
 - **Save key and continue** writes `config/activation-key.php` (mode 0600) and moves on.
 - Nothing is enabled until the manager returns `status: 1` for this domain.
+- **The domain is checked once, at stage 1.** A later stage does not ask the manager again — it
+  compares against the domain the manager already accepted, which is recorded in
+  `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
+  submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
 **After setup**
 
@@ -133,7 +138,15 @@ Diagnose from the server:
 php bin/license-check.php                      # stored key + this host
 php bin/license-check.php --domain=example.org # what the manager says for another domain
 php bin/license-check.php --key=NEWKEY --save  # test a new key, keep it only if valid
+php bin/license-check.php --probe              # try the likely spellings; says which one is accepted
+php bin/license-check.php --probe --save       # ...and record that one, then skip the licence step
 ```
+
+`--probe` exists because *"Invalid license key or domain"* is the provider's answer to every
+mismatch, and the wizard has to send one exact string. It tries the bare domain, `www.`, the parent
+domain and this server's own hostname, and prints which of them returned `status: 1`. If none does,
+the key itself is unknown, expired, suspended or out of domain slots — the output says so rather
+than blaming the spelling.
 
 The output masks the key (first and last four characters only) and never writes it to a log.
 Exit codes: `0` licensed · `1` not licensed · `2` configuration problem.

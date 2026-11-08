@@ -168,7 +168,9 @@ check('installer links to the sign-in page for an existing key',
   /manager\.pmhserver\.name\.ng\/user\/login\.php/.test(installer));
 check('installer asks for a licence key, not a system token',
   /name="license_key"/.test(installer) && !/name="system_token"/.test(installer));
-check('installer shows the domain it will license', /id="domain"/.test(installer));
+check('installer shows the domain it will license, and lets it be corrected',
+  /id="license_domain"/.test(installer) && /name="license_domain"/.test(installer)
+  && !/id="domain"/.test(installer));
 
 // Same resolution question for the API and for a subdirectory install.
 const apiCss = await request({ uri: '/api/index.php', entry: '/src/api/index.php', script: '/api/index.php' });

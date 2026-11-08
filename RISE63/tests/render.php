@@ -564,6 +564,18 @@ ok('Every bootstrap constant is referenced with its namespace', function (): voi
         if (str_ends_with($file, 'install/index.php')) {
             assertContains('use const RISE63\\{', $source, 'the installer must import bootstrap constants');
         }
+
+        // The licence step must let the operator correct the domain: "Invalid license key or
+        // domain" is indistinguishable from a wrong spelling, and the field is the only remedy
+        // that does not involve editing files on the server.
+        if (str_ends_with($file, 'install/index.php')) {
+            assertContains('name="license_domain"', $source, 'the licence domain must be submittable');
+            assertContains('id="license_domain"', $source, 'stage 1 needs an editable domain field');
+            assertContains('id="license_domain_stage3"', $source, 'stage 3 needs an editable domain field');
+            assertMissing('id="domain"', $source, 'the read-only domain field was replaced');
+            assertContains('$probe3      = $activation3->verify($replacement, $host3);', $source,
+                'a replacement key is probed against the typed domain');
+        }
     }
     assertSame([], $problems, 'bare constant references outside the RISE63 namespace');
 });

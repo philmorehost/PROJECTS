@@ -395,6 +395,86 @@ ok('Licence diagnosis without a network: missing key, transport messages, legacy
     rmdir($legacy);
 });
 
+ok('Setup does not re-ask the manager when the administrator is created', function (): void {
+    // Regression lock. createAdministrator() used to call check($host, true) — a forced network
+    // check — so a key confirmed seconds earlier at stage 1 could be refused ("Invalid license key
+    // or domain") and setup could never finish. The licence decision belongs at stage 1; stage 3
+    // only compares against what the provider already accepted. This is asserted on the source
+    // because reaching createAdministrator() needs a live MySQL connection and a full schema.
+    $source = file_get_contents(dirname(__DIR__) . '/app/Core/Installer.php');
+    assert(is_string($source), 'Installer.php is readable');
+    $body = substr($source, (int) strpos($source, 'public function createAdministrator'));
+    $end  = strpos($body, 'public function complete');
+    $body = substr($body, 0, $end === false ? null : $end);
+
+    // At most one fallback call, and only for a host the provider has never accepted.
+    assert(substr_count($body, '->check(') <= 1, 'stage 3 must not check the manager twice');
+    assert(str_contains($body, 'if (!$activation->domainAccepted($domain))'),
+        'the recorded domain must be consulted before the manager');
+    if (str_contains($body, '->check(')) {
+        assert(strpos($body, 'domainAccepted') < strpos($body, '->check('),
+            'any manager call must come after the recorded-domain check');
+    }
+    assert(str_contains($body, 'storedKey()'), 'stage 3 must require a stored key');
+});
+
+ok('A confirmed domain is recorded, survives a key save, and is per key', function (): void {
+    $dir = sys_get_temp_dir() . '/rise63-domain-' . bin2hex(random_bytes(4));
+    mkdir($dir, 0700, true);
+    $activation = new RISE63\Core\Activation($dir);
+
+    assertSame(false, $activation->domainAccepted('buildroom.example.org'), 'nothing accepted yet');
+
+    // rememberDomain() is only ever called on a provider "valid", but even if it were called by
+    // hand it must reject garbage rather than record it.
+    $activation->rememberDomain('not a domain');
+    assertSame(false, $activation->domainAccepted('not a domain'), 'garbage is never recorded');
+
+    $activation->rememberDomain('buildroom.example.org');
+    assertSame(true, $activation->domainAccepted('buildroom.example.org'));
+
+    // Saving the same key must not discard what the provider just confirmed: the installer writes
+    // the key at stage 1 and relies on this record to finish at stage 3 without a second call.
+    $activation->storeKey('TEST-KEY-0123456789ABCDEF');
+    assertSame(true, $activation->domainAccepted('buildroom.example.org'), 'a saved key keeps its domains');
+
+    // A different key starts from a clean slate.
+    $activation->storeKey('OTHER-KEY-0123456789ABCDEF');
+    assertSame(false, $activation->domainAccepted('buildroom.example.org'), 'a new key clears old domains');
+
+    // The list is capped, so a corrupted file cannot grow without bound.
+    for ($i = 0; $i < 9; $i++) {
+        $activation->rememberDomain('site' . $i . '.example.org');
+    }
+    $data = (static function (string $path): array {
+        $value = include $path;
+        return is_array($value) ? $value : [];
+    })($dir . '/activation-key.php');
+    assert(count($data['domains'] ?? []) <= 5, 'the domain list stays small');
+
+    array_map('unlink', glob($dir . '/*') ?: []);
+    rmdir($dir);
+});
+
+ok('verify() can be told the exact domain the licence was issued to', function (): void {
+    $dir = sys_get_temp_dir() . '/rise63-override-' . bin2hex(random_bytes(4));
+    mkdir($dir, 0700, true);
+    $activation = new RISE63\Core\Activation($dir);
+
+    // The fourth argument normalises like a host, so pasting "https://Buildroom.Example.org/x"
+    // reports the domain the installer would actually send.
+    $state = $activation->verify('SHORT', 'served.example.org', false, 'https://Buildroom.Example.org/x');
+    assertSame(false, $state['valid']);
+    assertSame('buildroom.example.org', $state['domain'], 'the override wins over the request host');
+
+    $state = $activation->verify('TOO-SHORT-0123456789', 'served.example.org', false, 'localhost');
+    assertSame(false, $state['valid']);
+    assert(str_contains($state['message'], 'domain name'), $state['message']);
+
+    array_map('unlink', glob($dir . '/*') ?: []);
+    rmdir($dir);
+});
+
 /* ─────────────────────── Security: passwords & PINs ────────────────────────── */
 
 ok('Password policy rejects weak secrets', function (): void {

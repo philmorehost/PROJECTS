@@ -122,6 +122,41 @@ a four-step progress rail that marks done/current, a checklist using tick/cross 
 why the smoke suite now asserts the stylesheet URL, the absence of `/install/public/`, that the CSS
 link is in `<head>` before `<body>`, and that the wizard shell markup is present.
 
+### 2.3b Field report three — "The licence is not confirmed for this domain"
+
+The third deployment reached stage 3 with a key the operator had just been issued, and the form
+refused to advance: *"The licence is not confirmed for this domain: Invalid license key or domain."*
+The provider answers that exact sentence for **every** mismatch, so the message could not tell the
+operator whether the key was wrong, the domain was spelled differently, or the provider had simply
+been asked too often.
+
+| Defect | Why it happened |
+|---|---|
+| Stage 3 forced a **second** network check | `Installer::createAdministrator()` called `check($host, true)`. `true` means *ignore the cache*, so a key confirmed seconds earlier at stage 1 was re-submitted; a rate-limited or briefly failing provider then refused it and setup could not be finished at all |
+| The domain was read-only | `install/index.php` showed **Domain to license** as `readonly`. If the key had been ordered for `example.org` and the site is served from `buildroom.example.org`, there was no way to say so — only a shell on the server |
+| The failure message named no domain | It repeated the provider's sentence verbatim, which is the same for a bad key, a bad domain and a suspended licence |
+
+Now:
+
+- **The domain is checked once.** `verify()` records every domain the provider accepted alongside
+  the key (`domains` in `config/activation-key.php`, capped at five, written *only* on `status: 1`).
+  Stage 3 compares against that record instead of calling the provider. It still requires a stored
+  key, and it still calls the provider once if this host was never recorded — so a key revoked
+  before setup finishes cannot slip an administrator account into the database, and a first-run
+  install where the operator skipped stage 1's check is not locked out.
+- **The domain is editable** on stage 1 and stage 3, and what is typed there is the string sent to
+  the provider. A replacement key at stage 3 is probed against the typed domain before it is saved.
+- **`bin/license-check.php --probe`** tries the plausible spellings (bare domain, `www.`, parent
+  domain, this server's hostname), prints the provider's answer for each, and with `--save` records
+  the accepted one so the wizard can be skipped. If none is accepted it says the key itself is at
+  fault rather than the spelling.
+- A later forced check therefore only happens once, on a host the provider has never accepted, and
+  the error names the domain that was actually sent.
+
+**Not verified here:** the provider is unreachable from this sandbox, so the *pairs* this code will
+send are covered by tests against the documented contract (`tests/unit.php`), not by a live call.
+The live confirmation belongs on the host: `php bin/license-check.php --probe`.
+
 ### 2.4 Defects found by this review and fixed
 
 Worth recording, because each would have failed only on a live database or browser:
@@ -145,7 +180,7 @@ Worth recording, because each would have failed only on a live database or brows
 | Ledger triggers | Trivial to check but needs MySQL | `UPDATE remittance_ledger SET amount = 1` must raise `45000`. |
 | Mail delivery | Needs SMTP | Configure `config/smtp.php`, run `bin/mail-worker.php --verbose`, confirm inbox placement and SPF/DKIM. |
 | Firewall worker | Needs a firewall adapter | Test the `command` adapter against a scratch CSF install; confirm whitelisted/loopback addresses are skipped. |
-| Licensing | **The API has never been called from this environment** — this sandbox blocks `manager.pmhserver.name.ng` (outbound HTTPS is limited to package registries). The response handling is tested against the documented contract; the network call itself is not. | Run `php bin/license-check.php` on the host with a real key. Then `php bin/license-check.php --domain=wrong.example` to confirm `status: 0`, and `--key=… --save` to confirm a key is stored. For the grace window: confirm once, block outbound HTTPS, and reload. |
+| Licensing | **The API has never been called from this environment** — this sandbox blocks `manager.pmhserver.name.ng` (outbound HTTPS is limited to package registries). The response handling is tested against the documented contract; the network call itself is not. | Run `php bin/license-check.php` on the host with a real key. Then `php bin/license-check.php --domain=wrong.example` to confirm `status: 0`, and `--key=… --save` to confirm a key is stored. `--probe` identifies which exact domain string the provider holds for the key. For the grace window: confirm once, block outbound HTTPS, and reload. |
 | PWA install | Needs a browser | Chrome Android: install banner, standalone launch, offline reload. iOS Safari: Share → Add to Home Screen, guide text. |
 | 320–430 px layout | Needs a browser | No horizontal scroll on every page; 48 px targets; dark/light contrast. |
 | Service-worker update | Needs a version bump | Change `SHELL_VERSION`, reload twice, confirm the "Reload" toast. |

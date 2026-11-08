@@ -704,10 +704,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       
       <div class="wizard-fields">
         <div class="field">
-          <label for="domain">Domain to license</label>
-          <input type="text" id="domain" value="buildroom.rccglp63yaya.org.ng" readonly>
-          <span class="hint">Use this exact value on the order form — no <code>https://</code>, no <code>www.</code></span>
-          <button class="btn btn-secondary btn-sm" type="button" data-copy-target="domain" style="margin-top:8px">Copy domain</button>
+          <label for="license_domain">Domain on the licence</label>
+          <input type="text" id="license_domain" name="license_domain" value="buildroom.rccglp63yaya.org.ng"
+                 spellcheck="false" autocapitalize="none" maxlength="253" autocorrect="off" inputmode="url">
+          <span class="hint">Checked against the provider: no <code>https://</code>, no <code>www.</code>.
+            Edit it if your licence was issued for a different name.</span>
+          <button class="btn btn-secondary btn-sm" type="button" data-copy-target="license_domain" style="margin-top:8px">Copy domain</button>
         </div>
         <div class="field">
           <label for="license_key">Licence key</label>
