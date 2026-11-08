@@ -106,6 +106,15 @@ final class Notifier
         self::queue((string) $user['email'], 'RISE 63 disbursement: ' . $amount->format(), $body, 'transactional');
     }
 
+    /**
+     * A security-relevant change to the account itself. Deliberately does not read the member's
+     * notification preference: these messages are the reason the preference exists.
+     */
+    public static function securityNotice(array $user, string $subject, string $headline, string $bodyHtml): void
+    {
+        self::queue((string) $user['email'], 'RISE 63: ' . $subject, self::wrap($headline, $bodyHtml), 'security');
+    }
+
     public static function preferenceChanged(array $user, string $preference, bool $enabled): void
     {
         $body = self::wrap(

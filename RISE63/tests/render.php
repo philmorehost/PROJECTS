@@ -155,6 +155,44 @@ ok('Login screen renders with a form, CSRF and no inline script', function (): v
     assertContains('rel="manifest"', $html);
 });
 
+ok('Password help adapts to whether mail is configured', function (): void {
+    $withMail = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/forgot-password.php',
+        ['title' => 'Password help', 'sent' => false, 'canEmail' => true], false);
+    assertContains('password-reset-request', $withMail);
+    assertContains('Send reset link', $withMail);
+    assertMissing('province office so that every change', $withMail);
+
+    $noMail = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/forgot-password.php',
+        ['title' => 'Password help', 'sent' => false, 'canEmail' => false], false);
+    assertMissing('password-reset-request', $noMail, 'must not offer a link that cannot be delivered');
+    assertContains('Contact your parish CSR representative', $noMail);
+
+    // The confirmation never reveals whether the address has an account.
+    $sent = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/forgot-password.php',
+        ['title' => 'Password help', 'sent' => true, 'canEmail' => true], false);
+    assertContains('If that address belongs to a RISE 63 account', $sent);
+});
+
+ok('Reset and change-password screens never echo the token into visible text', function (): void {
+    $token = str_repeat('a', 43);
+    $reset = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/reset-password.php',
+        ['title' => 'Choose a new password', 'valid' => true, 'token' => $token], false);
+    assertContains('name="token" value="' . $token . '"', $reset);
+    assertContains('autocomplete="new-password"', $reset);
+    assertContains('maxlength="200"', $reset);
+
+    $expired = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/reset-password.php',
+        ['title' => 'Reset link expired', 'valid' => false, 'token' => ''], false);
+    assertMissing($token, $expired);
+    assertContains('Request a new link', $expired);
+
+    $forced = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/change-password.php',
+        ['title' => 'Choose a new password', 'forced' => true, 'account' => ['theme_preference' => 'dark']], false);
+    assertContains('Set your own password to continue', $forced);
+    assertMissing('Cancel', $forced, 'a forced change must not offer an escape hatch');
+    assertContains('data-theme="dark"', $forced);
+});
+
 ok('Registration screen exposes a parish combobox with a noscript fallback', function (): void {
     $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', ['flashes' => [], 'page' => 'register'], false);
     assertContains('role="combobox"', $html);

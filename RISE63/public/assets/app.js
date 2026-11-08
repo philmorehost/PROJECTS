@@ -213,6 +213,34 @@
   }
   Array.prototype.forEach.call(document.querySelectorAll('[data-combobox]'), initCombobox);
 
+  /* ── Destructive-action confirmation ───────────────────────────────────────── */
+  // Any form carrying data-confirm asks once before submitting. Native confirm() is used
+  // deliberately: it works offline, needs no markup and cannot be styled into something the
+  // user misreads. Buttons stay enabled if they cancel.
+  function initConfirm() {
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement)) { return; }
+      var message = form.getAttribute('data-confirm');
+      if (!message || form.dataset.confirmed === '1') { return; }
+      if (!window.confirm(message)) {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.confirmed = '1';
+    }, true);
+  }
+
+  /* ── Caps Lock hint on password fields ─────────────────────────────────────── */
+  function initCapsHint() {
+    var hint = document.getElementById('caps-hint');
+    if (!hint) { return; }
+    document.addEventListener('keyup', function (event) {
+      if (typeof event.getModifierState !== 'function') { return; }
+      hint.hidden = !event.getModifierState('CapsLock');
+    });
+  }
+
   /* ── Draft autosave ────────────────────────────────────────────────────────── */
   Array.prototype.forEach.call(document.querySelectorAll('form[data-autosave]'), function (form) {
     var key = DRAFT_PREFIX + form.id;
@@ -298,6 +326,10 @@
     });
     store(QUEUE_KEY, JSON.stringify(next));
   }
+
+  /* ── Boot the small behaviours ─────────────────────────────────────────────── */
+  initConfirm();
+  initCapsHint();
 
   /* ── Service worker & update toast ─────────────────────────────────────────── */
   if ('serviceWorker' in navigator && document.body.classList.contains('signed-in')) {

@@ -22,9 +22,9 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 
 | Suite | Command | Result |
 |---|---|---|
-| Syntax | `node tests/support/phpwasm-lint.mjs` | **58 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **32 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **25 passed, 0 failed** |
+| Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **35 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **27 passed, 0 failed** |
 
 What the logic suite actually asserts:
 
@@ -32,10 +32,15 @@ What the logic suite actually asserts:
 * **Application state machine** — only declared transitions are legal; approval cannot skip verification; terminal states are terminal; reasons are mandatory for rejection and document requests; reviewers cannot set system-only statuses (e.g. `disbursed`); members can only withdraw before money moves; the three-step tracker mapping.
 * **Security policy** — password policy (length, common words, name/e-mail fragments), transaction-PIN policy (rejects `0000`, `1234`, `4321`, `2026`), hashing round-trip and rehash detection, CIDR boundary matching for IPv4 /25 /12 /8 and IPv6 mismatch, local-vs-remote classification, the cPHulk-style block decision table (threshold, immediate block for unknown accounts, protection-off), country policy (unknown → allow by default, deny on request, filter-off disables rules), and the escalation ladder day → week → month → year with clamping and a safe fallback for invalid configuration.
 * **Settings** — every declared type rejects the values the draft blueprint would have accepted ("sixty" in a retention window, `blue` as a colour, `lots` as a money value, control characters in a title); the seed file cannot contain a key the schema does not declare.
+* **Account lifecycle** — temporary passwords satisfy the policy they will be replaced under, contain no ambiguous glyphs and do not collide across 50 draws; reset tokens are 64 hex characters, only their sha256 is stored, and the resolver's pattern rejects every malformed shape (short, long, uppercase, path traversal).
+* **Migration shipping rules** — file names, contiguous versions, no `DELIMITER`, no triggers, no `DROP TABLE`.
 * **Academy attendance** — the percentage gate used to unlock Seed Grants (0 sessions → 0 %, 8/10 → 80 %, clamping at 100 %).
 * **Schema** — all fifteen tables exist, money is `DECIMAL(15,2)`, InnoDB everywhere, the education CHECK constraint, the idempotency unique key, the flat `parish_directory` view replacing the draft's denormalised table, 250 ISO country rows with Nigeria whitelisted, and no private-key material in the tree.
 
 What the view suite asserts:
+
+* The password-help page offers a reset link **only** when SMTP is configured, and its confirmation never reveals whether an address has an account.
+* The reset and change-password screens never echo the token into visible text, and a forced change offers no cancel path.
 
 * All fourteen screens render against fixtures under a strict error handler (any PHP notice fails the run).
 * User-supplied strings carrying `<script>alert("xss")</script>` are escaped on every screen that displays them.
@@ -94,6 +99,8 @@ Worth recording, because each would have failed only on a live database or brows
 | PWA install | Needs a browser | Chrome Android: install banner, standalone launch, offline reload. iOS Safari: Share → Add to Home Screen, guide text. |
 | 320–430 px layout | Needs a browser | No horizontal scroll on every page; 48 px targets; dark/light contrast. |
 | Service-worker update | Needs a version bump | Change `SHELL_VERSION`, reload twice, confirm the "Reload" toast. |
+| Migrations | Needs MySQL | On a copy of staging: `bin/migrate.php --status`, `--dry-run`, then `--apply`; re-run and confirm exit code 2 (nothing pending). Corrupt one applied file and confirm exit 3. |
+| Password reset end to end | Needs MySQL + SMTP | Request a link, open it, set a password, confirm the old one stops working and other devices are signed out. Request again for a non-existent address and confirm the same wording. |
 
 `tests/integration.php` is the intended home for the database-backed cases above. It is written to refuse to run unless the database name ends in `_test`.
 
@@ -118,19 +125,18 @@ Worth recording, because each would have failed only on a live database or brows
 
 ## 5. Known gaps (honest list)
 
-1. **No self-service password reset.** Password changes require the current password; recovery is by the province office (the UI says so).
-2. **No forced first-login password change.** An administrator-created account keeps its temporary password until the holder changes it. Add a `must_change_password` flag before broad rollout.
-3. **No two-factor authentication** for administrators.
-4. **No CSV import** for the parish directory (the draft implied a large directory; bulk entry is manual, or via SQL by the operator).
-5. **No exports** (applications, ledger, directory) — needed for board reporting.
-6. **No payment gateway.** Disbursements are *recorded* and reconciled by two people; nothing is sent to a bank.
-7. **No SMS notifications.**
-8. **Mail is at-least-once.** A crash between "SMTP accepted" and "row marked sent" can duplicate a message. Templates contain no secrets, so this is tolerable; keep it in mind before adding anything sensitive.
-9. **No automated off-site backup** — the guide schedules host backups and demands a restore drill.
-10. **`tests/integration.php` needs writing** (see §3 for the case list).
-11. **No load testing.** Capacity numbers are unmeasured; do not promise throughput.
-12. **Accessibility**: keyboard focus, labels, `aria-live` and contrast are designed in, but have not been audited with a screen reader or axe.
-13. **Academy cohorts** (`academy_cohorts`) exist in the schema but attendance is recorded per application, not per cohort. Fine for a single yearly intake; add cohort assignment before running parallel intakes.
+1. **No two-factor authentication** for administrators. Everything else in the account lifecycle is built.
+2. **No CSV import** for the parish directory (the draft implied a large directory; bulk entry is manual, or via SQL by the operator).
+3. **No exports** (applications, ledger, directory) — needed for board reporting.
+4. **No payment gateway.** Disbursements are *recorded* and reconciled by two people; nothing is sent to a bank.
+5. **No SMS notifications.**
+6. **Mail is at-least-once.** A crash between "SMTP accepted" and "row marked sent" can duplicate a message. Templates contain no secrets, so this is tolerable; keep it in mind before adding anything sensitive.
+7. **No automated off-site backup** — the guide schedules host backups and demands a restore drill.
+8. **`tests/integration.php` needs writing** (see §3 for the case list).
+9. **No load testing.** Capacity numbers are unmeasured; do not promise throughput.
+10. **Password history is one deep.** A reset or change cannot reuse the *current* password; older ones are not stored, so they are not checked. Honest limitation of not keeping a history table.
+11. **Accessibility**: keyboard focus, labels, `aria-live` and contrast are designed in, but have not been audited with a screen reader or axe.
+12. **Academy cohorts** (`academy_cohorts`) exist in the schema but attendance is recorded per application, not per cohort. Fine for a single yearly intake; add cohort assignment before running parallel intakes.
 
 ---
 
@@ -154,8 +160,9 @@ RISE63/
                              Auth, Registration, ParishDirectory, Program, Applications,
                              Ledger, Notifier, Mailer, Activation, Installer, Audit, View
     Views/                   layout + auth/ member/ staff/ partials/
-  bin/                       mail-worker, security-worker, maintenance, build-assets
+  bin/                       mail-worker, security-worker, maintenance, migrate, build-assets
   database/                  schema.sql, countries.sql, seed.sql, ledger-guards.sql
+  database/migrations/       numbered, checksummed schema changes (0001 = account lifecycle)
   public/assets/             app.css, app.js, security.js + fingerprinted builds
   public/icons/              PWA icons (any + maskable + apple-touch)
   tests/                     unit.php, render.php, run.sh + php-wasm harnesses

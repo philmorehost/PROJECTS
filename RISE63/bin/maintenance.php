@@ -32,6 +32,7 @@ if (!is_file(config_dir() . '/installed.lock')) {
 Settings::flush();
 
 $logs     = BruteForce::prune();
+$resets   = RISE63\Core\PasswordReset::prune();
 $blocks   = Database::run('UPDATE security_ips SET blocked_until = NULL WHERE blocked_until IS NOT NULL AND blocked_until <= UTC_TIMESTAMP()')->rowCount();
 $stale    = Database::run("UPDATE notification_outbox SET status = 'pending', locked_until = NULL WHERE status = 'sending' AND locked_until < UTC_TIMESTAMP()")->rowCount();
 $queueAge = Database::value("SELECT TIMESTAMPDIFF(MINUTE, MIN(created_at), UTC_TIMESTAMP()) FROM notification_outbox WHERE status = 'pending'");
@@ -42,8 +43,9 @@ if (is_file($mutex) && filemtime($mutex) < time() - 3600) {
 }
 
 fwrite(STDOUT, sprintf(
-    "RISE63 maintenance: %d log row(s) pruned, %d block(s) expired, %d stale lease(s) released, oldest queued mail %s min.\n",
+    "RISE63 maintenance: %d log row(s) pruned, %d expired reset token(s) removed, %d block(s) expired, %d stale lease(s) released, oldest queued mail %s min.\n",
     $logs,
+    $resets,
     $blocks,
     $stale,
     $queueAge === null ? 'none' : (string) $queueAge

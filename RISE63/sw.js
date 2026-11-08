@@ -9,7 +9,7 @@
  */
 'use strict';
 
-var SHELL_VERSION = 'rise63-v1';
+var SHELL_VERSION = 'rise63-v2';
 var SHELL = [
   './',
   './index.php',

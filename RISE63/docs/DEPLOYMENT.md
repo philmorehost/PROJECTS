@@ -72,6 +72,25 @@ Open `https://rise63.yourdomain.org/`. With no `config/installed.lock` the front
 
 ---
 
+## 3a. Mail decides whether self-service reset exists
+
+The password-reset page checks for `config/smtp.php` and reads its `host`. Two honest outcomes:
+
+| `config/smtp.php` | Member experience |
+|---|---|
+| present with a host | "Send reset link" — a 30-minute single-use link is e-mailed and queued by the worker |
+| absent | The page says self-service reset is unavailable and directs the member to the province office |
+
+Either way, an administrator can issue a temporary password from **People** → *New temporary
+password*. That password is shown **once**, never e-mailed, and forces a change at next sign-in.
+
+Requirements if you enable e-mail reset:
+
+1. `config/smtp.php` present, mode `0600`, host reachable from the server.
+2. Cron for `bin/mail-worker.php` running (§5) — without it, the link is never delivered.
+3. SPF and DKIM published for the sending domain, or the link lands in spam and someone phones you.
+4. Send one real reset to a mailbox you control before announcing the feature.
+
 ## 4. Immediately after setup
 
 1. Sign in, open **Security** and confirm the **notification e-mail** is correct.
@@ -212,12 +231,34 @@ Restore drill (do it once before launch): restore the database into a scratch sc
 
 ## 11. Updating the application
 
-1. Back up (§10).
-2. Upload the new files over the old ones. Never delete `config/` or `storage/`.
-3. Run `php bin/build-assets.php` if the release notes say assets changed.
-4. Bump `SHELL_VERSION` in `sw.js`: installed clients then show the "Reload" toast instead of running a stale shell.
-5. Visit `/` and check the sign-in page. The service worker takes over on the next navigation.
-6. If a release includes a migration, it ships as a numbered file in `database/migrations/`; run it with phpMyAdmin during a maintenance window and record the version in `schema_migrations`.
+Treat every update as a five-minute maintenance window, even when the release looks harmless.
+
+```sh
+# 1. Back up first. No exceptions.   (§10)
+# 2. Upload the new files over the old ones. Never delete config/ or storage/.
+# 3. Check what the schema will do — this changes nothing:
+php bin/migrate.php --status
+php bin/migrate.php --dry-run
+# 4. Apply, once the output above has been read:
+php bin/migrate.php
+# 5. Housekeeping, so expired locks and leases are cleared under the new code:
+php bin/maintenance.php
+# 6. Only if the release notes say the shell changed:
+php bin/build-assets.php
+```
+
+Notes that matter:
+
+* `bin/migrate.php` exits **3** when a migration file changed after being applied. Do not work
+  around that; the fix is a new migration file, not an edited one.
+* Migrations are not one atomic unit: MySQL commits DDL immediately, so a failure part-way through
+  a single file leaves that file half applied and *not* recorded. The message says so. Read the
+  file, finish what is missing by hand, then insert its version into `schema_migrations` yourself
+  (`INSERT INTO schema_migrations (version, checksum) VALUES ('0002', '<sha256 of the file>')`).
+* Bump `SHELL_VERSION` in `sw.js` when shell assets change: installed clients then show the
+  "Reload" toast instead of running a stale shell.
+* Take the site out of maintenance only after step 5 succeeds; otherwise refresh the sign-in page
+  in a private window and confirm you get a login form rather than an error page.
 
 ---
 

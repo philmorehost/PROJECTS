@@ -158,7 +158,8 @@ final class Installer
             }
         }
 
-        Database::run("INSERT INTO schema_migrations (version) VALUES ('1.0.0')");
+        // schema_migrations stays empty on a fresh install: database/migrations/ then runs from
+        // 0001 on the next `php bin/migrate.php`, so a new install and a migrated one converge.
 
         $this->writeConfig('database.php', $config);
         Database::use($pdo);
