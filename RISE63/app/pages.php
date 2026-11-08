@@ -18,6 +18,7 @@ use RISE63\Core\ParishDirectory;
 use RISE63\Core\Program;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
+use RISE63\Core\Updater;
 use RISE63\Core\View;
 
 use function RISE63\{e, take_flashes};
@@ -308,6 +309,27 @@ switch ($page) {
             ],
             'audit'   => Audit::recent(30),
         ]);
+        break;
+
+    case 'updates':
+        $requireAdmin();
+        // The operator's view of the release channel. Everything shown here is read from disk or
+        // from a previous check; nothing in this page triggers a download or a write.
+        $updater = new Updater(RISE63\ROOT, config_dir(), RISE63\ROOT . '/storage');
+        $render('staff/updates', [
+            'title'          => 'Updates',
+            'currentVersion' => $updater->currentVersion(),
+            'check'          => $_SESSION['rise63_update_check'] ?? null,
+            'plan'           => $_SESSION['rise63_update_plan'] ?? null,
+            'result'         => $_SESSION['rise63_update_result'] ?? null,
+            'history'        => $updater->history(),
+        ]);
+        unset(
+            $_SESSION['rise63_update_result'],
+            // The check survives so the operator can see what it found; the plan does not, because
+            // applying it twice would be a second write of the same files.
+            $_SESSION['rise63_update_plan']
+        );
         break;
 
     case 'profile':

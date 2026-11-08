@@ -38,6 +38,8 @@ require __DIR__ . '/Core/Activation.php';
 require __DIR__ . '/Core/Installer.php';
 require __DIR__ . '/Core/Audit.php';
 require __DIR__ . '/Core/Migrator.php';
+require __DIR__ . '/Core/ZipReader.php';
+require __DIR__ . '/Core/Updater.php';
 require __DIR__ . '/Core/PasswordReset.php';
 
 date_default_timezone_set('UTC');

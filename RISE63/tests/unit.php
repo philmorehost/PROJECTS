@@ -722,9 +722,201 @@ ok('No personal data or secrets are committed in the tree', function (): void {
 
 /* ──────────────────────────────── Reporting ────────────────────────────────── */
 
+/* ─────────────────────────────── Updates (LM → installation) ────────────────────── */
+
+ok('A release ZIP is read without the zip extension, and rejects what it cannot trust', function (): void {
+    // The updater must behave the same on a host with ZipArchive and one without, and this suite
+    // runs where there is no zip extension at all. ZipReader is therefore exercised against real
+    // archives written here, byte by byte.
+    $dir = sys_get_temp_dir() . '/rise63-zip-' . bin2hex(random_bytes(4));
+    mkdir($dir, 0700, true);
+
+    // Minimal stored (uncompressed) ZIP writer, which is all this test needs.
+    $buildZip = static function (array $files): string {
+        $local = '';
+        $central = '';
+        $offset = 0;
+        foreach ($files as $name => $contents) {
+            $crc  = (int) sprintf('%u', crc32($contents));
+            $size = strlen($contents);
+            $head = "PK\x03\x04" . pack('vvvvvVVVvv', 20, 0, 0, 0, 0, $crc, $size, $size, strlen($name), 0);
+            $central .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', 20, 20, 0, 0, 0, 0, $crc, $size, $size, strlen($name), 0, 0, 0, 0, 0, $offset)
+                . $name;
+            $local .= $head . $name . $contents;
+            $offset += strlen($head) + strlen($name) + $size;
+        }
+        $count = count($files);
+        return $local . $central
+            . "PK\x05\x06" . pack('vvvvVVv', 0, 0, $count, $count, strlen($central), strlen($local), 0);
+    };
+
+    $path = $dir . '/release.zip';
+    file_put_contents($path, $buildZip([
+        'manifest.json'      => '{"version":"1.2.0","tier":"NON-SAAS"}',
+        'app/Views/about.php' => '<?php echo "new about page";',
+        'public/assets/app.css' => 'body{color:#000}',
+    ]));
+
+    $zip = new RISE63\Core\ZipReader($path);
+    assertTrue($zip->valid(), 'a plain ZIP must parse: ' . $zip->problem());
+    assertSame(3, count($zip->entries()), 'every entry is listed');
+    assertSame('{"version":"1.2.0","tier":"NON-SAAS"}', $zip->read('manifest.json'));
+    assertSame(hash('sha256', 'body{color:#000}'), $zip->sha256('public/assets/app.css'));
+
+    // Not a ZIP at all.
+    file_put_contents($dir . '/bad.zip', 'this is not a zip file at all, not even close');
+    $bad = new RISE63\Core\ZipReader($dir . '/bad.zip');
+    assertSame(false, $bad->valid(), 'a text file is not accepted as an archive');
+    assert(str_contains($bad->problem(), 'ZIP'), $bad->problem());
+
+    // A CRC mismatch must be caught: that is how a truncated upload shows up.
+    $corrupt = $buildZip(['a.txt' => 'hello']);
+    // Flip a byte inside the stored file data: the entry starts at offset 30 + len("a.txt").
+    $corrupt[30 + 5 + 1] = 'X';
+    file_put_contents($dir . '/crc.zip', $corrupt);
+    $zipCrc = new RISE63\Core\ZipReader($dir . '/crc.zip');
+    $threw = false;
+    try {
+        $zipCrc->read('a.txt');
+    } catch (RuntimeException $error) {
+        $threw = str_contains($error->getMessage(), 'corrupt');
+    }
+    assertTrue($threw, 'a corrupted entry is refused rather than installed');
+
+    array_map('unlink', glob($dir . '/*') ?: []);
+    rmdir($dir);
+});
+
+ok('An update plan refuses traversal, protected folders and the updater itself', function (): void {
+    // Every path in the plan comes from someone else's archive, so each one is treated as hostile.
+    $root = sys_get_temp_dir() . '/rise63-plan-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+    mkdir($root . '/storage', 0700, true);
+    mkdir($root . '/app/Core', 0700, true);
+    file_put_contents($root . '/index.php', '<?php // original');
+
+    $updater = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+
+    // Reach safePath() (private) through plan(), which is the only thing that consumes it.
+    $reflection = new ReflectionMethod(RISE63\Core\Updater::class, 'safePath');
+    $reflection->setAccessible(true);
+
+    $rejected = [
+        '../outside.php',
+        'app/../../escape.php',
+        '/etc/passwd',
+        'config/database.php',
+        'storage/logs/x.log',
+        'app/Core/Updater.php',
+        'bin/update.php',
+        'app\\..\\x.php',
+        '',
+    ];
+    foreach ($rejected as $candidate) {
+        assertSame(null, $reflection->invoke($updater, $candidate), 'must reject path: ' . var_export($candidate, true));
+    }
+
+    foreach (['app/Views/about.php', 'public/assets/app.css', 'database/migrations/0002_x.sql', 'index.php'] as $candidate) {
+        assertSame($candidate, $reflection->invoke($updater, $candidate), 'must accept path: ' . $candidate);
+    }
+
+    // And the same for a manifest's delete list, which is a second way in.
+    assertSame(null, $reflection->invoke($updater, 'config/installed.lock'), 'the installer lock cannot be deleted by a release');
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    array_map('unlink', glob($root . '/*/*/*.php') ?: []);
+    @unlink($root . '/index.php');
+    rmdir($root . '/config');
+    rmdir($root . '/storage');
+    rmdir($root . '/app/Core');
+    rmdir($root . '/app');
+    rmdir($root);
+});
+
+ok('The updater only ever downloads from the provider, over https', function (): void {
+    $root = sys_get_temp_dir() . '/rise63-dl-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+    mkdir($root . '/storage', 0700, true);
+    $updater = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+
+    $refuse = static function (string $url) use ($updater): bool {
+        try {
+            $updater->download($url);
+            return false;
+        } catch (RuntimeException $error) {
+            return str_contains($error->getMessage(), 'Refusing to download');
+        }
+    };
+
+    assertTrue($refuse('http://manager.pmhserver.name.ng/download.php?token=x'), 'plain http is refused');
+    assertTrue($refuse('https://evil.example.org/download.php?token=x'), 'another host is refused');
+    assertTrue($refuse('https://manager.pmhserver.name.ng.evil.org/x.zip'), 'a lookalike host is refused');
+    assertTrue($refuse('file:///etc/passwd'), 'a local path is refused');
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    rmdir($root . '/config');
+    rmdir($root . '/storage');
+    rmdir($root);
+});
+
+ok('A provider that cannot be reached is not reported as a refused update', function (): void {
+    $root = sys_get_temp_dir() . '/rise63-upd-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+    mkdir($root . '/storage', 0700, true);
+
+    // No licence key at all: the refusal must say so without a network call.
+    $updater = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+    $check = $updater->check(null, 'buildroom.example.org');
+    assertSame(false, $check['ok']);
+    assertSame(false, $check['unreachable'], 'a missing key is a refusal, not a network failure');
+    assert(str_contains($check['message'], 'licence key'), $check['message']);
+
+    // With a key but no route to the provider, the answer must be "unreachable".
+    file_put_contents($root . '/config/activation-key.php',
+        "<?php return array('key' => 'TEST-KEY-0123456789ABCDEF', 'domain' => null, 'saved_at' => 'now');\n");
+    $updater2 = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+    $check2   = $updater2->check(null, 'buildroom.example.org');
+    assertSame(false, $check2['ok'], 'a provider that cannot be reached never reports ok');
+    assertSame(false, $check2['unreachable'] === false && $check2['message'] === '',
+        'an unreachable provider always carries a message explaining why :: '
+        . json_encode(['unreachable' => $check2['unreachable'], 'message' => $check2['message']]));
+    assertTrue(array_key_exists('unreachable', $check2), 'the caller can tell transport from refusal');
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    rmdir($root . '/config');
+    rmdir($root . '/storage');
+    rmdir($root);
+});
+
+ok('The installed version comes from the update record, not a hard-coded constant', function (): void {
+    $root = sys_get_temp_dir() . '/rise63-ver-' . bin2hex(random_bytes(4));
+    mkdir($root . '/config', 0700, true);
+
+    $updater = new RISE63\Core\Updater($root, $root . '/config', $root . '/storage');
+    assertSame(RISE63\VERSION, $updater->currentVersion(), 'a fresh install reports the build version');
+    assertSame([], $updater->history());
+
+    file_put_contents($root . '/config/update-state.json', json_encode([
+        'version' => '1.4.2',
+        'history' => [['version' => '1.4.2', 'applied_at' => '2026-01-01T00:00:00+00:00', 'written' => 7]],
+    ]));
+    assertSame('1.4.2', $updater->currentVersion(), 'an applied update moves the version forward');
+    assertSame(1, count($updater->history()));
+
+    // A corrupt state file must not break the page.
+    file_put_contents($root . '/config/update-state.json', 'not json');
+    assertSame(RISE63\VERSION, $updater->currentVersion(), 'a corrupt record falls back to the build version');
+
+    array_map('unlink', glob($root . '/config/*') ?: []);
+    rmdir($root . '/config');
+    rmdir($root);
+});
+
 echo "\n";
 echo str_repeat('─', 62) . "\n";
+
 printf("%d passed, %d failed\n", $GLOBALS['pass'], $GLOBALS['fail']);
+
 if ($GLOBALS['failures'] !== []) {
     echo "\nFailures:\n  - " . implode("\n  - ", $GLOBALS['failures']) . "\n";
     exit(1);

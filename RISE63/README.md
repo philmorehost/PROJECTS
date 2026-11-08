@@ -23,6 +23,9 @@ Installation asks for a **licence key**, obtained from
 links to that form and shows the exact domain to enter. Licence problems are diagnosed with
 `php bin/license-check.php`; see `docs/DEPLOYMENT.md` §3b.
 
+New releases arrive from the licence server, never from GitHub directly: a provincial administrator
+opens **Updates**, or runs `php bin/update.php --plan`. See `docs/DEPLOYMENT.md` §3c.
+
 For local work you can skip the activation round-trip with the documented fixture:
 
 ```sh
@@ -38,6 +41,7 @@ php tests/unit.php          # money, state machine, security policy, settings sc
 php tests/render.php        # every view against fixtures, XSS probes, UX contract, route consistency
 php tests/integration.php   # MySQL: schema, ledger triggers, pool lock, migrations (needs a _test database)
 php bin/doctor.php          # read-only post-install self-check; exits non-zero on a blocker
+php bin/update.php --check  # what the licence server has published for this licence
 php bin/build-assets.php    # fingerprint CSS/JS + refresh the service-worker shell list
 php bin/migrate.php --status # apply pending schema migrations (--dry-run to read them first)
 ```
@@ -80,7 +84,7 @@ app/Core/              Money, Database, Settings, Security, BruteForce, GeoResol
                        Registration, ParishDirectory, Program, Applications, Ledger,
                        Notifier, Mailer, Activation, Installer, Audit, View
 app/Views/             layout + auth/ member/ staff/ partials/
-bin/                   doctor, license-check, mail-worker, security-worker, maintenance, build-assets
+bin/                   doctor, license-check, update, mail-worker, security-worker, maintenance, build-assets
 database/              schema.sql, countries.sql (250 ISO), seed.sql, ledger-guards.sql
 public/                assets + PWA icons
 tests/                 unit.php, render.php, integration.php (MySQL), php-wasm harnesses

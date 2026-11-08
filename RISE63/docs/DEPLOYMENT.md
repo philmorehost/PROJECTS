@@ -123,6 +123,16 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**A note on two different endpoints**
+
+The API reference documents `api.php` (validate a key). Updates come from `check-update.php`, which
+is a separate script on the same host with its own contract, shown in §3c. They behave differently:
+
+- `api.php` registers an unknown domain automatically while the licence has spare domain slots.
+- `check-update.php` registers the domain only if it is already listed, otherwise it **rejects** the
+  request when the domain limit is reached. It never grants a licence, so it is not a substitute
+  for the check in §3b.
+
 **After setup**
 
 | Situation | Behaviour |
@@ -178,6 +188,59 @@ guards that stop a browser reading them, key-file permissions, the SMTP host, ta
 administrator presence, whether the ledger triggers were installed, the security-e-mail setting and
 the licence. It reports rather than guesses: a CLI run cannot see whether HTTPS is on, so it says so
 instead of claiming the site is insecure.
+
+## 3c. Getting updates (the licence server, not GitHub)
+
+Upgrades arrive from the provider, not from the repository. Their admin pulls the project from
+GitHub and publishes a version; an installation then asks for it by key and domain:
+
+```
+POST https://manager.pmhserver.name.ng/check-update.php
+     key=<licence key>&domain=<this domain>[&force_version=1.1.0]
+ ->  {"status":"success","latest_version":"1.1.0","checksum":"<sha256>","changelog":"…",
+      "download_url":"https://manager.pmhserver.name.ng/download.php?token=…","tier_detected":"NON-SAAS"}
+ ->  {"status":"suspended"|"error","message":"…"}            HTTP 400 / 403 / 500
+```
+
+The download URL is single-use and expires after 30 minutes.
+
+**In the browser:** sign in as a provincial administrator → **Updates** (the ⇪ button in the header).
+
+1. **Check now** asks the provider what is published for this licence. It shows the version, the
+   licence tier and the changelog.
+2. **Download and review what changes** fetches the archive, verifies its sha256 against the
+   manifest, and lists every file that will be added, replaced or removed — plus any SQL. Nothing in
+   the installation is touched at this point.
+3. **Apply this release** backs up every file it is about to replace, writes the new ones, then runs
+   the SQL.
+
+**From a shell** — use this when the admin page cannot be reached, or from a maintenance window:
+
+```sh
+php bin/update.php --check     # what is published
+php bin/update.php --plan      # download, verify and list what changes
+php bin/update.php --apply     # apply what --plan downloaded (asks for confirmation)
+php bin/update.php --history   # what has been applied before
+```
+
+**What the updater refuses, by design**
+
+| Situation | Behaviour |
+|---|---|
+| The archive is not from `manager.pmhserver.name.ng` over HTTPS | Refused before a byte is written |
+| sha256 does not match what the provider published | Refused; the download is deleted |
+| The archive contains `../`, an absolute path, `config/` or `storage/` | Refused; the whole release is rejected |
+| The archive would replace `app/Core/Updater.php` or `bin/update.php` | Refused — an update cannot rewrite the thing that installs updates |
+| A file cannot be written | Every file already written is restored from the backup |
+| A SQL statement fails | The files stay installed, the failure is shown with the exact statement, and it is logged |
+
+**Rolling back by hand.** Backups are in `storage/updates/backup/<UTC stamp>/`, one file per path
+that was replaced, next to a `manifest.json` listing them. Copy them back over the installation. The
+applied version is recorded in `config/update-state.json`; delete that file to make the version
+report read the build's own constant again.
+
+**Never** edit files on the server by hand or copy them from GitHub. The next release assumes it is
+upgrading the version it last installed, and a hand-patched tree makes that assumption false.
 
 ## 4. Immediately after setup
 

@@ -96,3 +96,74 @@ require '/src/install/index.php';`);
   await writeFile(join(root, 'docs/preview', NAMES[stage] + '.html'), html);
   console.log(`stage ${stage} → docs/preview/${NAMES[stage]}.html (${html.length} bytes)`);
 }
+
+/**
+ * The admin update screen is rendered the same way: a real View::render through layout.php with
+ * fixed fixtures, so the page can be reviewed without a database or a login.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/?page=updates',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array('page' => 'updates'); $_POST = array(); $_REQUEST = array('page' => 'updates');
+chdir('/src');
+require '/src/app/bootstrap.php';
+RISE63\\Core\\Security::csrf();
+$account = array(
+    'id' => 1, 'full_name' => 'Adaeze Okonkwo', 'email' => 'admin@example.org',
+    'role' => 'provincial_admin', 'theme_preference' => 'system', 'large_text' => 0,
+    'parish_id' => null, 'is_suspended' => 0,
+);
+RISE63\\Core\\View::render('staff/updates', array(
+    'title' => 'Updates', 'page' => 'updates', 'account' => $account, 'user' => $account,
+    'flashes' => array(), 'csrf' => str_repeat('a', 64),
+    'currentVersion' => '1.0.0',
+    'check' => array(
+        'ok' => true, 'unreachable' => false, 'status' => 'success', 'message' => '',
+        'version' => '1.1.0', 'tier' => 'NON-SAAS', 'checksum' => str_repeat('9', 64),
+        'download_url' => '', 'changelog' => "- Academy attendance panel is now read-only for members\\n- Treasury export includes the parish code",
+    ),
+    'plan' => null, 'result' => null,
+    'history' => array(
+        array('version' => '1.0.1', 'tier' => 'NON-SAAS', 'applied_at' => '2026-11-01T09:12:00+00:00',
+              'written' => 12, 'removed' => 1, 'sql_run' => 2, 'backup' => '/src/storage/updates/backup/20261101-091200'),
+    ),
+));`);
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  let html = output;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  html = html.replace(/<script src="[^"]*app\.js" defer><\/script>/, '<script>\n' + js + '\n</script>');
+  html = html.replace('<head>', '<head>\n<!-- Static preview of the admin Updates screen. Generated from app/Views/staff/updates.php with the real app.css inlined. -->');
+
+  await writeFile(join(root, 'docs/preview', 'admin-updates.html'), html);
+  console.log(`admin updates → docs/preview/admin-updates.html (${html.length} bytes)`);
+}

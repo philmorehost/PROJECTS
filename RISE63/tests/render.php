@@ -681,6 +681,14 @@ ok('Every routed page has matching handling and navigation', function (): void {
     }
     assertTrue(in_array('security', $pageCases[1], true));
     assertTrue(in_array('settings', $pageCases[1], true));
+
+    // The update page is admin-only and must be reachable from the chrome, or an operator who is
+    // told to "check for updates" has nowhere to click.
+    assertTrue(in_array('updates', $pageCases[1], true), 'the updates page is routed');
+    assertTrue(str_contains($layout, "url('updates')"), 'the updates page is linked from the header');
+    foreach (['update-check', 'update-plan', 'update-apply'] as $action) {
+        assertTrue(in_array($action, $actionCases[1], true), 'no POST handler for ' . $action);
+    }
 });
 
 ok('Every privileged page declares its role gate', function (): void {

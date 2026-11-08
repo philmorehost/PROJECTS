@@ -31,7 +31,14 @@ header('Retry-After: 3600');
         <li><a href="<?= e(RISE63\Core\Activation::MANAGER_ORDER) ?>" target="_blank" rel="noopener noreferrer">Request a licence for this domain</a></li>
         <li><a href="<?= e(RISE63\Core\Activation::MANAGER_SIGNIN) ?>" target="_blank" rel="noopener noreferrer">Sign in to copy or move your key</a></li>
       </ul>
-      <a class="btn btn-secondary btn-block" style="margin-top:16px" href="<?= e(url('')) ?>">Try again</a>
+      <form method="post" action="<?= e(url('')) ?>" style="margin-top:16px">
+        <?= \RISE63\Core\Security::csrfField() ?>
+        <input type="hidden" name="action" value="activation-retry">
+        <button class="btn btn-secondary btn-block" type="submit">Try again now</button>
+      </form>
+      <p class="hint">Re-checks the licence with the provider straight away instead of waiting for the
+        cached answer to expire. If it still fails here, run <code>php bin/license-check.php --probe</code>
+        on the server — it says whether the key, the domain or the host's outbound HTTPS is at fault.</p>
     </div>
   </div>
 </main>

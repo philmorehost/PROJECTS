@@ -20,8 +20,9 @@ use RISE63\Core\ParishDirectory;
 use RISE63\Core\Program;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
+use RISE63\Core\Updater;
 
-use function RISE63\{e, flash, redirect, site_title};
+use function RISE63\{config_dir, e, flash, redirect, site_title};
 
 $input  = static fn (string $key, ?string $default = null): ?string
     => isset($_POST[$key]) && is_string($_POST[$key]) ? trim($_POST[$key]) : $default;
@@ -549,6 +550,93 @@ try {
             );
             flash('Test message queued. Delivery happens on the next mail worker run.', 'success');
             $back('settings');
+
+        // ── Updates ──────────────────────────────────────────────────────────────────
+        // Three steps, deliberately separate: ask what is published, download and inspect it, then
+        // apply. The download step is the one that writes a file to disk (under storage/updates/),
+        // and the apply step is the only one that writes into the installation.
+        case 'update-check':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $updater = new Updater(RISE63\ROOT, config_dir(), RISE63\ROOT . '/storage');
+            $check   = $updater->check();
+
+            $_SESSION['rise63_update_check'] = $check;
+            unset($_SESSION['rise63_update_plan']);
+
+            if ($check['ok']) {
+                flash(
+                    version_compare((string) $check['version'], $updater->currentVersion(), '>')
+                        ? 'Version ' . $check['version'] . ' is available.'
+                        : 'This installation is already on the latest published release (' . $updater->currentVersion() . ').',
+                    'success'
+                );
+            } else {
+                flash((string) $check['message'], 'error');
+            }
+            $back('updates');
+
+        case 'update-plan':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $updater = new Updater(RISE63\ROOT, config_dir(), RISE63\ROOT . '/storage');
+            $check   = $_SESSION['rise63_update_check'] ?? null;
+            if (!is_array($check) || ($check['ok'] ?? false) !== true || (string) ($check['download_url'] ?? '') === '') {
+                throw new RuntimeException('Check for an update again: the release details are no longer held in this session.');
+            }
+
+            $download = $updater->download((string) $check['download_url'], (string) ($check['checksum'] ?? ''));
+            $plan     = $updater->plan($download['archive'], $download['sha256']);
+            if (is_array($_SESSION['rise63_update_check'] ?? null)) {
+                $plan['tier']      = (string) ($_SESSION['rise63_update_check']['tier'] ?? '');
+                $plan['changelog'] = (string) ($_SESSION['rise63_update_check']['changelog'] ?? '');
+            }
+            $_SESSION['rise63_update_plan'] = $plan;
+
+            flash(
+                $plan['ok']
+                    ? 'Release ' . ($plan['version'] !== '' ? $plan['version'] : $check['version']) . ' downloaded and verified. Review it below.'
+                    : 'The release was downloaded but cannot be applied safely. See the problems below.',
+                $plan['ok'] ? 'success' : 'error'
+            );
+            $back('updates');
+
+        case 'update-apply':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $updater = new Updater(RISE63\ROOT, config_dir(), RISE63\ROOT . '/storage');
+            $plan    = $_SESSION['rise63_update_plan'] ?? null;
+            if (!is_array($plan) || !is_file((string) ($plan['archive'] ?? ''))) {
+                throw new RuntimeException('Review the release again before applying it: the download is no longer on disk.');
+            }
+            if (($plan['ok'] ?? false) !== true) {
+                throw new RuntimeException('This release was rejected when it was inspected, so it will not be applied.');
+            }
+
+            $result = $updater->apply((string) $plan['archive'], $plan);
+            $result['version'] = (string) ($plan['version'] ?? '');
+            $_SESSION['rise63_update_result'] = $result;
+            unset($_SESSION['rise63_update_plan']);
+
+            Audit::log(
+                (int) $account['id'],
+                'system.update',
+                'installation',
+                $result['version'] !== '' ? $result['version'] : null,
+                ($result['ok'] ? 'Applied' : 'Attempted')
+                    . ' release ' . ($result['version'] !== '' ? $result['version'] : '(unversioned)')
+                    . ': ' . $result['written'] . ' file(s) written, '
+                    . $result['removed'] . ' removed, ' . $result['sql_run'] . ' SQL statement(s)'
+                    . ($result['sql_failed'] > 0 ? ', ' . $result['sql_failed'] . ' SQL failure(s)' : '')
+            );
+
+            flash(
+                $result['ok']
+                    ? 'Updated to ' . ($result['version'] !== '' ? $result['version'] : 'the new release') . '.'
+                    : 'The update was not applied. Nothing was changed.',
+                $result['ok'] ? 'success' : 'error'
+            );
+            $back('updates');
 
         case 'run-maintenance':
             $account = Auth::requireLogin();

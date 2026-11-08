@@ -79,6 +79,9 @@ if ($account !== null && (string) $account['role'] === 'youth_member') {
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
         <span class="theme-icon" aria-hidden="true">◑</span>
       </button>
+      <?php if (Auth::isAdmin($account)): ?>
+        <a class="icon-btn" href="<?= e(url('updates')) ?>" aria-label="Updates" title="Updates">⇪</a>
+      <?php endif; ?>
       <a class="icon-btn" href="<?= e(url('profile')) ?>" aria-label="My account" title="My account">
         <span aria-hidden="true"><?= e(\RISE63\initials((string) $account['full_name'])) ?></span>
       </a>
