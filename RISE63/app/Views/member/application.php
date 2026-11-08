@@ -124,6 +124,51 @@ $ageHours = hours_since((string) ($application['submitted_at'] ?? $application['
   <?php endif; ?>
 </section>
 
+<?php if ((string) $application['program_type'] === 'academy'): ?>
+  <section class="card">
+    <h2>RISE Academy attendance</h2>
+    <?php if (($academy ?? null) !== null): ?>
+      <p class="row row-end" style="margin-bottom:8px">
+        <span class="muted"><?= (int) $academy['sessions_attended'] ?> of <?= (int) $academy['sessions_held'] ?> sessions</span>
+        <span class="badge <?= $academy['graduated'] ? 'badge-ok' : 'badge-warn' ?>">
+          <?= (int) $academy['percent'] ?>%<?= $academy['graduated'] ? ' · graduated' : '' ?>
+        </span>
+      </p>
+      <?php if (!empty($academy['mentor_note'])): ?>
+        <div class="notice"><strong>Mentor note</strong><?= e((string) $academy['mentor_note']) ?></div>
+      <?php endif; ?>
+    <?php else: ?>
+      <p class="faint">No attendance recorded yet. The graduation gate for Seed Grants is
+        <?= (int) setting('academy_graduation_percent', 80) ?>% of sessions attended.</p>
+    <?php endif; ?>
+
+    <?php if ($canRecord): ?>
+      <form method="post" action="<?= e(url('')) ?>" style="margin-top:12px">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="academy-save">
+        <input type="hidden" name="application_id" value="<?= (int) $application['id'] ?>">
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="sessions_held">Sessions held</label>
+            <input type="number" id="sessions_held" name="sessions_held" min="0" max="60" required
+                   value="<?= (int) ($academy['sessions_held'] ?? 0) ?>">
+          </div>
+          <div class="field">
+            <label for="sessions_attended">Sessions attended</label>
+            <input type="number" id="sessions_attended" name="sessions_attended" min="0" max="60" required
+                   value="<?= (int) ($academy['sessions_attended'] ?? 0) ?>">
+          </div>
+        </div>
+        <div class="field">
+          <label for="mentor_note">Mentor note <span class="faint">(visible to the applicant)</span></label>
+          <textarea id="mentor_note" name="mentor_note" maxlength="500"><?= e((string) ($academy['mentor_note'] ?? '')) ?></textarea>
+        </div>
+        <button class="btn btn-secondary" type="submit">Save attendance</button>
+      </form>
+    <?php endif; ?>
+  </section>
+<?php endif; ?>
+
 <?php if ($isOwner && Program::memberCanWithdraw($status)): ?>
   <section class="card">
     <h2>Withdraw</h2>

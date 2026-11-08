@@ -258,6 +258,17 @@ try {
             readfile($path);
             exit;
 
+        case 'academy-save':
+            $account = Auth::requireLogin();
+            $id      = (int) ($_POST['application_id'] ?? 0);
+            $application = Applications::find($id, $account);
+            if ($application === null) {
+                throw new NotFound('That application is not available to you.');
+            }
+            RISE63\Core\Academy::save($application, $account, $_POST);
+            flash('Academy attendance saved.', 'success');
+            redirect('application', ['id' => $id]);
+
         // ── Parish Connect ───────────────────────────────────────────────────────────
         case 'parish-create':
             $account = Auth::requireLogin();

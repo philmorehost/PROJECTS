@@ -386,3 +386,112 @@ final class DuplicateApplication extends RuntimeException
 final class NotFound extends RuntimeException
 {
 }
+
+/**
+ * Academy attendance tracking.
+ *
+ * The Seed Grant rule is "graduated from RISE Academy", measured as attendance at or above the
+ * configured percentage. Until that number can be recorded, the rule cannot be satisfied through
+ * the interface, so this is the write path for it.
+ */
+final class Academy
+{
+    public static function save(array $application, array $actor, array $input): array
+    {
+        if ((string) $application['program_type'] !== 'academy') {
+            throw new InvalidArgumentException('Attendance is only recorded for RISE Academy applications.');
+        }
+        if (!Auth::isAdmin($actor) && !((string) $actor['role'] === 'csr_rep'
+            && $actor['parish_id'] !== null && (int) $actor['parish_id'] === (int) $application['parish_id'])) {
+            throw new InvalidArgumentException('Only a provincial administrator or the parish representative can record attendance.');
+        }
+        if (!in_array((string) $application['status'], ['under_review', 'verified', 'approved', 'disbursed', 'completed', 'documents_requested'], true)) {
+            throw new InvalidArgumentException('Attendance can be recorded once the application is under review.');
+        }
+
+        $held     = (int) ($input['sessions_held'] ?? 0);
+        $attended = (int) ($input['sessions_attended'] ?? 0);
+        if ($held < 0 || $held > 60) {
+            throw new InvalidArgumentException('Sessions held must be between 0 and 60.');
+        }
+        if ($attended < 0 || $attended > $held) {
+            throw new InvalidArgumentException('Sessions attended cannot exceed sessions held.');
+        }
+        $idea  = self::clean((string) ($input['business_idea'] ?? ''), 2000);
+        $note  = self::clean((string) ($input['mentor_note'] ?? ''), 500);
+
+        Database::run(
+            'INSERT INTO academy_progress (application_id, sessions_held, sessions_attended, business_idea, mentor_note)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE sessions_held = VALUES(sessions_held), sessions_attended = VALUES(sessions_attended),
+                 business_idea = VALUES(business_idea), mentor_note = VALUES(mentor_note)',
+            [(int) $application['id'], $held, $attended, $idea === '' ? null : $idea, $note === '' ? null : $note]
+        );
+
+        $percent = self::percent($held, $attended);
+        Audit::log((int) $actor['id'], 'academy.progress', 'application', (string) $application['id'],
+            sprintf('%d/%d sessions (%d%%).', $attended, $held, $percent));
+
+        // Crossing the graduation line is worth telling the applicant about, once.
+        if ($held > 0 && $percent >= Settings::int('academy_graduation_percent', 80)) {
+            $already = (int) Database::value(
+                "SELECT COUNT(*) FROM application_events WHERE application_id = ? AND note LIKE 'Academy graduation threshold%'",
+                [(int) $application['id']]
+            );
+            if ($already === 0) {
+                Applications::timeline((int) $application['id'], (int) $actor['id'], (string) $application['status'], (string) $application['status'],
+                    'Academy graduation threshold reached (' . $percent . '% attendance).');
+                Notifier::queue((string) Database::value('SELECT email FROM users WHERE id = ?', [(int) $application['user_id']]) ?: '',
+                    'RISE Academy: graduation threshold reached',
+                    Notifier::wrap('You can now apply for a Seed Grant',
+                        '<p>You attended ' . $attended . ' of ' . $held . ' RISE Academy sessions — ' . $percent . '%.</p>'
+                        . '<p>That meets the graduation gate, so Seed Grants are now open to you in My RISE 63.</p>'));
+            }
+        }
+
+        return self::forApplication((int) $application['id']);
+    }
+
+    public static function percent(int $held, int $attended): int
+    {
+        if ($held <= 0) {
+            return 0;
+        }
+        return (int) min(100, round(100 * $attended / $held));
+    }
+
+    /** @return array<string, mixed>|null */
+    public static function forApplication(int $applicationId): ?array
+    {
+        $row = Database::one('SELECT * FROM academy_progress WHERE application_id = ?', [$applicationId]);
+        if ($row === null) {
+            return null;
+        }
+        $row['percent'] = self::percent((int) $row['sessions_held'], (int) $row['sessions_attended']);
+        $row['graduated'] = (int) $row['sessions_held'] > 0
+            && $row['percent'] >= Settings::int('academy_graduation_percent', 80);
+        return $row;
+    }
+
+    /** Best attendance across a member's Academy applications, used by the eligibility card. */
+    public static function bestFor(int $userId): ?array
+    {
+        $row = Database::one(
+            'SELECT pr.* FROM academy_progress pr JOIN program_applications a ON a.id = pr.application_id
+             WHERE a.user_id = ? ORDER BY (pr.sessions_attended / GREATEST(pr.sessions_held, 1)) DESC LIMIT 1',
+            [$userId]
+        );
+        if ($row === null) {
+            return null;
+        }
+        $row['percent'] = self::percent((int) $row['sessions_held'], (int) $row['sessions_attended']);
+        $row['graduated'] = (int) $row['sessions_held'] > 0
+            && $row['percent'] >= Settings::int('academy_graduation_percent', 80);
+        return $row;
+    }
+
+    private static function clean(string $value, int $max): string
+    {
+        return mb_substr(trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $value) ?? ''), 0, $max);
+    }
+}

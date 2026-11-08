@@ -421,6 +421,38 @@ ok('Settings screen groups every typed setting', function () use ($renderPage, $
     assertContains('Audit trail', $html);
 });
 
+ok('Academy attendance is recorded by staff and shown to the applicant', function () use ($renderPage, $admin, $member): void {
+    $academyApplication = [
+        'id' => 21, 'user_id' => 2, 'parish_id' => 5, 'program_type' => 'academy', 'cycle_year' => 2026,
+        'education_level' => 'none', 'school_name' => null, 'school_class' => null,
+        'requested_amount' => '0.00', 'approved_amount' => '0.00', 'documents_json' => null, 'answers_json' => null,
+        'status' => 'under_review', 'decision_note' => null, 'idempotency_key' => null,
+        'submitted_at' => '2026-10-01 09:00:00', 'verified_at' => null, 'approved_at' => null, 'disbursed_at' => null,
+        'created_at' => '2026-10-01 09:00:00', 'updated_at' => '2026-10-20 09:00:00',
+        'full_name' => 'Chinedu Eze', 'email' => 'chinedu@example.ng', 'parish_name' => 'Living Water',
+    ];
+    $progress = ['application_id' => 21, 'sessions_held' => 12, 'sessions_attended' => 11, 'percent' => 92,
+                 'graduated' => true, 'mentor_note' => 'Excellent pitch — keep the records tidy.', 'business_idea' => 'Tailoring'];
+
+    $staff = $renderPage('member/application', [
+        'application' => $academyApplication, 'events' => [], 'answers' => [], 'documents' => [],
+        'tracker' => RISE63\Core\Program::tracker('academy', 'under_review'), 'canReview' => true,
+        'academy' => $progress, 'canRecord' => true,
+    ], $admin);
+    assertContains('RISE Academy attendance', $staff);
+    assertContains('92%', $staff);
+    assertContains('Save attendance', $staff);
+    assertContains('Excellent pitch', $staff);
+
+    $applicant = $renderPage('member/application', [
+        'application' => $academyApplication, 'events' => [], 'answers' => [], 'documents' => [],
+        'tracker' => RISE63\Core\Program::tracker('academy', 'under_review'), 'canReview' => false,
+        'academy' => $progress, 'canRecord' => false,
+    ], $member);
+    assertContains('graduated', $applicant);
+    assertMissing('Save attendance', $applicant, 'members cannot edit their own attendance');
+});
+
 /* ───────────────────────────────── UX contract ─────────────────────────────── */
 
 ok('Stylesheet meets the mobile-first contract', function (): void {

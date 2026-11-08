@@ -22,9 +22,9 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 
 | Suite | Command | Result |
 |---|---|---|
-| Syntax | `node tests/support/phpwasm-lint.mjs` | **57 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **31 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **24 passed, 0 failed** |
+| Syntax | `node tests/support/phpwasm-lint.mjs` | **58 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **32 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **25 passed, 0 failed** |
 
 What the logic suite actually asserts:
 
@@ -32,6 +32,7 @@ What the logic suite actually asserts:
 * **Application state machine** — only declared transitions are legal; approval cannot skip verification; terminal states are terminal; reasons are mandatory for rejection and document requests; reviewers cannot set system-only statuses (e.g. `disbursed`); members can only withdraw before money moves; the three-step tracker mapping.
 * **Security policy** — password policy (length, common words, name/e-mail fragments), transaction-PIN policy (rejects `0000`, `1234`, `4321`, `2026`), hashing round-trip and rehash detection, CIDR boundary matching for IPv4 /25 /12 /8 and IPv6 mismatch, local-vs-remote classification, the cPHulk-style block decision table (threshold, immediate block for unknown accounts, protection-off), country policy (unknown → allow by default, deny on request, filter-off disables rules), and the escalation ladder day → week → month → year with clamping and a safe fallback for invalid configuration.
 * **Settings** — every declared type rejects the values the draft blueprint would have accepted ("sixty" in a retention window, `blue` as a colour, `lots` as a money value, control characters in a title); the seed file cannot contain a key the schema does not declare.
+* **Academy attendance** — the percentage gate used to unlock Seed Grants (0 sessions → 0 %, 8/10 → 80 %, clamping at 100 %).
 * **Schema** — all fifteen tables exist, money is `DECIMAL(15,2)`, InnoDB everywhere, the education CHECK constraint, the idempotency unique key, the flat `parish_directory` view replacing the draft's denormalised table, 250 ISO country rows with Nigeria whitelisted, and no private-key material in the tree.
 
 What the view suite asserts:
@@ -98,10 +99,10 @@ It proves the grammar, the pure logic and the rendered markup. It does **not** p
 7. **No SMS notifications.**
 8. **Mail is at-least-once.** A crash between "SMTP accepted" and "row marked sent" can duplicate a message. Templates contain no secrets, so this is tolerable; keep it in mind before adding anything sensitive.
 9. **No automated off-site backup** — the guide schedules host backups and demands a restore drill.
-10. **Academy progress entry UI is not wired** (`academy_progress` exists and gates Seed Grant eligibility, but no screen writes it yet). Until then the Seed Grant eligibility rule will report "not graduated" for everyone; the administrator can override by creating the row directly. **This is the largest functional gap in the program flow.**
-11. **`tests/integration.php` needs writing** (see §3 for the case list).
-12. **No load testing.** Capacity numbers are unmeasured; do not promise throughput.
-13. **Accessibility**: keyboard focus, labels, `aria-live` and contrast are designed in, but have not been audited with a screen reader or axe.
+10. **`tests/integration.php` needs writing** (see §3 for the case list).
+11. **No load testing.** Capacity numbers are unmeasured; do not promise throughput.
+12. **Accessibility**: keyboard focus, labels, `aria-live` and contrast are designed in, but have not been audited with a screen reader or axe.
+13. **Academy cohorts** (`academy_cohorts`) exist in the schema but attendance is recorded per application, not per cohort. Fine for a single yearly intake; add cohort assignment before running parallel intakes.
 
 ---
 
@@ -137,8 +138,7 @@ RISE63/
 ## 7. Recommended order of work from here
 
 1. Run the installer on staging MySQL; then write `tests/integration.php` with the §3 cases.
-2. Wire the Academy progress screen (gap 10) — it is the one place where a documented rule currently cannot be satisfied through the UI.
-3. Self-service password reset with signed, single-use, 30-minute tokens, once mail delivery is confirmed.
-4. CSV import for the parish directory.
-5. Exports (CSV/PDF) for the ledger and applications.
-6. Accessibility audit with a real screen reader, then a penetration test before real money moves.
+2. Self-service password reset with signed, single-use, 30-minute tokens, once mail delivery is confirmed.
+3. CSV import for the parish directory.
+4. Exports (CSV/PDF) for the ledger and applications.
+5. Accessibility audit with a real screen reader, then a penetration test before real money moves.

@@ -43,7 +43,7 @@ node tests/support/phpwasm-test.mjs
 node tests/support/phpwasm-render.mjs
 ```
 
-Current state: **57 files lint clean, 31 logic tests pass, 24 view tests pass.** What is verified and what still
+Current state: **58 files lint clean, 32 logic tests pass, 25 view tests pass.** What is verified and what still
 needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Highlights
@@ -53,7 +53,7 @@ needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENT
 | **Installer** | Four stages — system check + activation, database, administrator, lock. Filesystem mutex, refuses a non-empty database, writes `config/*` as 0600. |
 | **Security** | Account suspension and IP blocks on independent windows, immediate block for unknown accounts, escalating day→week→month→year blocks, five-clean-session recognition with a crown badge, 250-country filter, manual IP/e-mail rules, queued firewall jobs applied by a least-privilege worker. |
 | **Money** | Integer-kobo `Money` value object, `DECIMAL(15,2)` columns, append-only ledger with database triggers, two-person disbursement (request → PIN confirmation), Seed Grant pool locked with `SELECT … FOR UPDATE`. |
-| **Programs** | One enforced state machine for all four modules: illegal transitions are refused (409), every move writes a timeline row and queues a notification. |
+| **Programs** | One enforced state machine for all four modules: illegal transitions are refused (409), every move writes a timeline row and queues a notification. Academy attendance is recorded per applicant and gates Seed Grant eligibility. |
 | **Mobile UX** | 16 px+ type, 48 px targets, live-search parish combobox, three-step status tracker, offline banner, draft autosave, idempotent offline submissions, dark/light/system themes, large-text mode. |
 | **PWA** | Manifest with any + maskable icons, versioned service worker (never caches `/api/` or authenticated POSTs), floating install prompt with an iOS Share-guide, update toast, dynamic SVG favicon from the site title. |
 | **Operations** | Mail worker with lease + backoff, firewall worker, maintenance worker with meaningful exit codes, `.htaccess` + vhost hardening notes, backup/restore drill, incident playbook. |
@@ -81,6 +81,6 @@ docs/                  DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/blueprin
 1. Follow `docs/DEPLOYMENT.md` §1–§4 — HTTPS, private-directory denial, installer lock.
 2. Install the three cron entries; without them no notification is ever delivered.
 3. Read `docs/IMPLEMENTATION_STATUS.md` §3 and §5: run the database, brute-force and PWA checks on staging, and note
-   the known gaps (no self-service password reset, no 2FA, no gateway, Academy progress entry still to be wired).
+   the known gaps (no self-service password reset, no 2FA, no payment gateway, no integration suite yet).
 
 Not yet production-complete. Nothing in this repository claims otherwise.

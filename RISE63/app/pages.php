@@ -68,6 +68,7 @@ switch ($page) {
             'applications' => $applications,
             'summary'      => $summary,
             'eligibility'  => Applications::eligibility($user),
+            'academy'      => RISE63\Core\Academy::bestFor((int) $user['id']),
         ]);
         break;
 
@@ -102,6 +103,13 @@ switch ($page) {
                 (string) ($application['updated_at'] ?? '')
             ),
             'canReview'   => Auth::isReviewer($user) && (int) $application['user_id'] !== (int) $user['id'],
+            'academy'     => (string) $application['program_type'] === 'academy'
+                ? RISE63\Core\Academy::forApplication((int) $application['id'])
+                : null,
+            'canRecord'   => Auth::isAdmin($user)
+                || ((string) $user['role'] === 'csr_rep'
+                    && $user['parish_id'] !== null
+                    && (int) $user['parish_id'] === (int) $application['parish_id']),
         ]);
         break;
 
@@ -210,6 +218,7 @@ switch ($page) {
             'applications' => $applications,
             'summary'      => Applications::summaryFor($user),
             'eligibility'  => Applications::eligibility($user),
+            'academy'      => RISE63\Core\Academy::bestFor((int) $user['id']),
         ]);
         break;
 

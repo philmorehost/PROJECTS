@@ -78,6 +78,19 @@ $firstName = explode(' ', trim((string) $account['full_name']))[0] ?? 'friend';
   <?php endforeach; ?>
 <?php endif; ?>
 
+<?php if (($academy ?? null) !== null): ?>
+  <section class="card">
+    <h2>RISE Academy standing</h2>
+    <p class="row row-end">
+      <span class="muted"><?= (int) $academy['sessions_attended'] ?> of <?= (int) $academy['sessions_held'] ?> sessions attended</span>
+      <span class="badge <?= $academy['graduated'] ? 'badge-ok' : 'badge-warn' ?>"><?= (int) $academy['percent'] ?>%</span>
+    </p>
+    <p class="faint"><?= $academy['graduated']
+        ? 'You have met the graduation gate — Seed Grants are open to you.'
+        : 'Attend at least ' . (int) setting('academy_graduation_percent', 80) . '% of sessions to unlock Seed Grants.' ?></p>
+  </section>
+<?php endif; ?>
+
 <section class="card">
   <h2>Programs open to you</h2>
   <ul class="list-plain">

@@ -208,6 +208,15 @@ ok('Education levels are constrained per program', function (): void {
     assertThrows(LogicException::class, fn () => Program::assertTransition('submitted', 'not_a_status', 'x'));
 });
 
+ok('Academy attendance percentage guards bad input', function (): void {
+    assertSame(0, RISE63\Core\Academy::percent(0, 0), 'no sessions means no percentage');
+    assertSame(0, RISE63\Core\Academy::percent(10, 0));
+    assertSame(80, RISE63\Core\Academy::percent(10, 8));
+    assertSame(100, RISE63\Core\Academy::percent(12, 12));
+    assertSame(67, RISE63\Core\Academy::percent(3, 2));
+    assertSame(100, RISE63\Core\Academy::percent(3, 5), 'clamped at 100');
+});
+
 /* ─────────────────────── Security: passwords & PINs ────────────────────────── */
 
 ok('Password policy rejects weak secrets', function (): void {
