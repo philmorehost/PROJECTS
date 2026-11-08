@@ -493,6 +493,74 @@ ok('Academy attendance is recorded by staff and shown to the applicant', functio
     assertMissing('Save attendance', $applicant, 'members cannot edit their own attendance');
 });
 
+ok('Every bootstrap constant is referenced with its namespace', function (): void {
+    // Regression guard for the installer fatal: "Undefined constant ROOT". A file outside the
+    // RISE63 namespace must import the constants it uses, or qualify them. PHP's lint cannot see
+    // this, and the render harness only loads Views, so it is checked textually here.
+    $constants = ['ROOT', 'VERSION', 'PRODUCT', 'SESSION_NAME', 'IDLE_MINUTES', 'MAX_BODY_BYTES', 'MIN_PHP'];
+    $files = [];
+    foreach (['index.php', 'install/index.php', 'api/index.php', 'app/download.php', 'router.php'] as $file) {
+        $files[] = RISE63_TEST_ROOT . '/' . $file;
+    }
+    foreach (glob(RISE63_TEST_ROOT . '/app/*.php') ?: [] as $file) {
+        $files[] = $file;
+    }
+    foreach (glob(RISE63_TEST_ROOT . '/app/Views/*.php') ?: [] as $file) {
+        $files[] = $file;
+    }
+    foreach (glob(RISE63_TEST_ROOT . '/app/Views/*/*.php') ?: [] as $file) {
+        $files[] = $file;
+    }
+    foreach (glob(RISE63_TEST_ROOT . '/bin/*.php') ?: [] as $file) {
+        $files[] = $file;
+    }
+
+    $problems = [];
+    foreach ($files as $file) {
+        $source = (string) file_get_contents($file);
+        $imported = [];
+        if (preg_match_all('/use const RISE63\\\{([^}]*)\}/', $source, $m) > 0) {
+            foreach ($m[1] as $list) {
+                foreach (array_filter(array_map('trim', explode(',', $list))) as $name) {
+                    $imported[$name] = true;
+                }
+            }
+        }
+        if (preg_match_all('/^use const RISE63\\\s*(\w+);/m', $source, $m2) > 0) {
+            foreach ($m2[1] as $name) {
+                $imported[$name] = true;
+            }
+        }
+        // A `namespace RISE63;` header makes bare constants resolve on their own.
+        $namespaced = preg_match('/^namespace RISE63;[\s\S]*?(?:const|require)/m', $source) === 1;
+
+        foreach ($constants as $constant) {
+            // Look for bare usage: not preceded by a backslash or namespace separators.
+            if (preg_match('/(?<![\\\w])' . $constant . '(?![\w\'"])/', $source) !== 1) {
+                continue;
+            }
+            // Ignore harmless mentions: the import list itself and comments/strings we cannot
+            // parse here are filtered by requiring an identifier boundary before it.
+            if (isset($imported[$constant])) {
+                continue;
+            }
+            if ($namespaced) {
+                continue;
+            }
+            if (str_contains($source, 'RISE63\\' . $constant)) {
+                continue;
+            }
+            $problems[] = basename($file) . ' uses bare ' . $constant;
+        }
+
+        // And the import itself must exist where it is needed for install/index.php's constructor.
+        if (str_ends_with($file, 'install/index.php')) {
+            assertContains('use const RISE63\\{', $source, 'the installer must import bootstrap constants');
+        }
+    }
+    assertSame([], $problems, 'bare constant references outside the RISE63 namespace');
+});
+
 /* ───────────────────────────────── UX contract ─────────────────────────────── */
 
 ok('Stylesheet meets the mobile-first contract', function (): void {

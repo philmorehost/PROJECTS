@@ -1,0 +1,13 @@
+{
+  "name": "rise63-tests",
+  "private": true,
+  "description": "Test tooling only. RISE 63 itself has no JavaScript build step and no runtime dependencies.",
+  "scripts": {
+    "lint": "node tests/support/phpwasm-lint.mjs",
+    "test": "node tests/support/phpwasm-test.mjs && node tests/support/phpwasm-render.mjs && node tests/support/phpwasm-smoke.mjs",
+    "test:smoke": "node tests/support/phpwasm-smoke.mjs"
+  },
+  "devDependencies": {
+    "php-wasm": "^0.2.0"
+  }
+}

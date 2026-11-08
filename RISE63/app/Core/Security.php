@@ -137,8 +137,13 @@ final class Security
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
         ini_set('session.cookie_httponly', '1');
-        ini_set('session.sid_length', '48');
-        ini_set('session.sid_bits_per_character', '5');
+        // PHP 8.4 deprecated these two INI settings and hard-codes their modern defaults, so
+        // setting them only produces a deprecation line in the error log on every request.
+        // Below 8.4 they are still meaningful (the defaults are the same, but be explicit).
+        if (PHP_VERSION_ID < 80400) {
+            ini_set('session.sid_length', '48');
+            ini_set('session.sid_bits_per_character', '5');
+        }
         ini_set('session.gc_maxlifetime', '86400');
         $savePath = \RISE63\path('storage/sessions');
         if (is_dir($savePath) && is_writable($savePath)) {

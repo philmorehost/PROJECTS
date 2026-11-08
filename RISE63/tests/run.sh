@@ -7,6 +7,7 @@ if command -v php >/dev/null 2>&1; then
   echo "== PHP lint =="
   find . -name '*.php' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l >/dev/null
   echo "OK"
+  echo "== smoke (request-level) =="; node tests/support/phpwasm-smoke.mjs 2>/dev/null || echo "(smoke needs node + php-wasm; skipped)"
   echo "== unit =="; php tests/unit.php
   echo "== render =="; php tests/render.php
   if [ -n "$RISE63_TEST_DSN" ]; then

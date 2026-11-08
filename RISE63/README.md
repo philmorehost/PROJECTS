@@ -40,12 +40,13 @@ In a sandbox without a PHP binary, the same suites run through php-wasm:
 
 ```sh
 npm i php-wasm
-node tests/support/phpwasm-lint.mjs
-node tests/support/phpwasm-test.mjs
-node tests/support/phpwasm-render.mjs
+node tests/support/phpwasm-lint.mjs      # syntax
+node tests/support/phpwasm-test.mjs      # logic
+node tests/support/phpwasm-render.mjs    # every view
+node tests/support/phpwasm-smoke.mjs     # real requests through index.php (installer included)
 ```
 
-Current state: **65 files lint clean, 36 logic tests pass, 27 view tests pass.** The MySQL suite in `tests/integration.php` is written but has never been executed here — no database in this sandbox. What is verified and what still
+Current state: **65 files lint clean, 36 logic tests, 28 view tests and 11 request-level smoke tests pass.** The MySQL suite in `tests/integration.php` is written but has never been executed here — no database in this sandbox. What is verified and what still
 needs a real database/browser is listed, without decoration, in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ## Highlights
