@@ -100,8 +100,14 @@ $bytes = static function (int $value): string {
           <?php if (($check['tier'] ?? '') !== ''): ?>
             <span class="block muted">Licence tier: <?= e((string) $check['tier']) ?></span>
           <?php endif; ?>
-          <?php if (trim((string) ($check['changelog'] ?? '')) !== ''): ?>
-            <div class="block" style="margin-top:8px; white-space:pre-wrap"><?= e((string) $check['changelog']) ?></div>
+          <?php
+          $changelog = trim((string) ($check['changelog'] ?? ''));
+          // The provider may send changelog_format:"text" with list markup inside the text (it does
+          // today). It is escaped either way — a release note must never be able to script the
+          // administrator's session — and shown pre-wrapped so the markup stays readable.
+          ?>
+          <?php if ($changelog !== ''): ?>
+            <div class="block" style="margin-top:8px; white-space:pre-wrap"><?= e($changelog) ?></div>
           <?php endif; ?>
           <?php if (!$uptodate): ?>
             <form method="post" action="<?= e(url('')) ?>" style="margin-top:12px">

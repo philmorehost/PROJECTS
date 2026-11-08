@@ -167,3 +167,62 @@ RISE63\\Core\\View::render('staff/updates', array(
   await writeFile(join(root, 'docs/preview', 'admin-updates.html'), html);
   console.log(`admin updates → docs/preview/admin-updates.html (${html.length} bytes)`);
 }
+
+/**
+ * The activation gate, with a refusal that actually happened in the field: the provider answered
+ * "Invalid license key or domain." for a key that was never in its database. The preview exists so
+ * the screen can be checked for the thing that matters — it says what was sent and what came back,
+ * instead of relaying that one sentence.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+$activationState = array(
+    'valid' => false, 'grace' => false,
+    'domain' => 'buildroom.rccglp63yaya.org.ng',
+    'key' => 'MAN-749B9B757500',
+    'message' => 'Invalid license key or domain.',
+);
+$domain = 'buildroom.rccglp63yaya.org.ng';
+require '/src/app/Views/system-gate.php';`);
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  let html = output;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  html = html.replace('<head>', '<head>\n<!-- Static preview of the activation gate after a refusal. Generated from app/Views/system-gate.php. -->');
+
+  await writeFile(join(root, 'docs/preview/activation-gate.html'), html);
+  console.log(`activation gate → docs/preview/activation-gate.html (${html.length} bytes)`);
+}

@@ -188,6 +188,49 @@ The gate's **Try again** button also did nothing useful: it reloaded the page, w
 same cached failure, so an operator who had just fixed their key or their host's firewall saw no
 change. It is now a CSRF-checked POST that forces a fresh provider call.
 
+### 2.3d Field report five — a valid-looking key that the provider does not have
+
+The installation completed, the console showed an active licence, and the site still refused. The
+screen showed only the provider's sentence, *"Invalid license key or domain."*, which covers four
+unrelated faults, so it pointed at the wrong one.
+
+**What was actually wrong.** Probing the provider directly with the key on file settled it in one
+request:
+
+```
+GET https://manager.pmhserver.name.ng/check-update.php
+        ?license_key=MAN-749B9B757500&domain=buildroom.rccglp63yaya.org.ng
+ -> {"status":"error","message":"Invalid license key."}
+```
+
+`Invalid license key.` — *not* "…or domain" — comes from `LM/check-update.php` line 109, the branch
+taken when the `SELECT … WHERE license_key = ?` finds **no row**. The key is not in the provider's
+database, so no domain spelling could ever have worked. The same probe against a known-good licence
+returned `{"status":"success","latest_version":"7.57",…}`, which proves the method rather than the
+conclusion.
+
+The key on file came from the *console's* row for this domain. Either it was edited in the console
+after it was issued, or the domain row and the key row disagree. That is a provider-side fact this
+application cannot repair, and it must not pretend otherwise.
+
+**What changed here.** A refusal now reports the three things that identify it, instead of a
+sentence that fits four faults:
+
+- the masked key that was **actually sent** (`MAN-••••••••7500`), which is what exposes a wrong or
+  stale key;
+- the domain that was sent;
+- the provider's literal answer.
+
+`bin/license-check.php` additionally asks `check-update.php` on the failure path — the one endpoint
+that can tell *unknown key* from *domain not on the licence* — and gives a single instruction based
+on the answer. The gate points at that command and lists the five checks in the order that
+eliminates them.
+
+Also in this change: the updater now understands the **deployed** release endpoint rather than only
+the written contract. That endpoint adds an `access` block, reports `update_required`, sends
+`changelog_format`, and — importantly — sends `status: "success"` even when `access.allowed` is
+false. Reading only `status` would have offered an update for a licence that is on hold.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

@@ -39,6 +39,9 @@ final class Activation
     public const MANAGER_HOST    = 'manager.pmhserver.name.ng';
     public const ENDPOINT        = 'https://manager.pmhserver.name.ng/api.php';
 
+    /** Releases. Read with GET; it is also the only endpoint that says *why* a key was refused. */
+    public const UPDATE_ENDPOINT = 'https://manager.pmhserver.name.ng/check-update.php';
+
     public const CACHE_TTL    = 21600;   // 6 hours between checks
     public const GRACE_WINDOW = 86400;   // 24 hours of tolerated manager downtime
     public const MAX_RESPONSE = 16384;
@@ -69,7 +72,13 @@ final class Activation
     /* ─────────────────────────────── public API ─────────────────────────────── */
 
     /**
+     * Check the stored key against the provider.
+     *
+     * @param bool $force ignore a fresh cached success and ask the provider again
      * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
+     *         A refusal also carries `key` and `answer` — which key was sent and what the provider
+     *         literally replied. Without those the operator has to guess between four different
+     *         faults (wrong key, wrong domain, suspended licence, blocked outbound HTTPS).
      */
     public function check(string $host, bool $force = false): array
     {
@@ -93,7 +102,8 @@ final class Activation
         }
 
         try {
-            $state = $this->interpret($this->post(['key' => $key, 'domain' => $domain]));
+            $answer = $this->post(['key' => $key, 'domain' => $domain]);
+            $state  = $this->interpret($answer);
         } catch (RuntimeException $error) {
             return $this->graceOrFail($cache, $domain, $error->getMessage());
         }
@@ -105,7 +115,12 @@ final class Activation
             'status'     => $state['status'],
         ]);
 
-        return $this->result($state['valid'], $state['message'], false, false, $domain);
+        $result = $this->result($state['valid'], $state['message'], false, false, $domain);
+        if (!$state['valid']) {
+            $result['key']    = is_array($key) ? (string) ($key['key'] ?? '') : '';
+            $result['answer'] = substr(trim($answer), 0, 400);
+        }
+        return $result;
     }
 
     /**
@@ -252,6 +267,27 @@ final class Activation
         return is_array($data) && is_array($data['domains'] ?? null) && array_key_exists($domain, $data['domains']);
     }
 
+    /**
+     * Ask the provider's update endpoint about a key and domain, without downloading anything.
+     *
+     * This exists for one reason: api.php cannot tell "unknown key" from "wrong domain" — it answers
+     * "Invalid license key or domain." for both. check-update.php shares the same key table and does
+     * distinguish them ("Invalid license key." when the row is missing), which is what an operator
+     * needs to know before buying or moving a licence. It is read-only: GET, no token generated for
+     * a licence that fails, and the response is never cached or trusted for access.
+     *
+     * @return string the raw body, for the caller to interpret
+     */
+    public function diagnose(string $key, string $domain): string
+    {
+        $key = trim($key);
+        if (!self::looksLikeKey($key) || !self::validDomain($domain)) {
+            return '';
+        }
+        $url = self::UPDATE_ENDPOINT . '?' . http_build_query(['license_key' => $key, 'domain' => $domain]);
+        return $this->fetch($url);
+    }
+
     /** The last cache entry, for the operator-facing status screen. @return array<string,mixed>|null */
     public function cache(): ?array
     {
@@ -316,6 +352,60 @@ final class Activation
      * because plenty of shared hosts ship without cURL — and activation is the first thing an
      * operator hits, so "enable cURL" is a poor first experience if a fallback works.
      */
+    /** GET a provider URL and return the body. TLS verified, redirects refused, size capped. */
+    private function fetch(string $url): string
+    {
+        if (function_exists('curl_init')) {
+            $handle = curl_init($url);
+            curl_setopt_array($handle, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_USERAGENT      => 'RISE63-Activation/2.0',
+                CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            ]);
+            try {
+                $body = curl_exec($handle);
+                $code = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+                $err  = curl_error($handle);
+            } finally {
+                curl_close($handle);
+            }
+            if (!is_string($body) || $body === '') {
+                throw new RuntimeException(self::transportMessage($code, $err));
+            }
+            // 403 is a documented answer here (refused key), so it is a body to read, not an error.
+            return substr($body, 0, self::MAX_RESPONSE);
+        }
+
+        $context = stream_context_create([
+            'http' => [
+                'method'          => 'GET',
+                'header'          => "Accept: application/json\r\nUser-Agent: RISE63-Activation/2.0\r\n",
+                'timeout'         => 10,
+                'ignore_errors'   => true,
+                'follow_location' => 0,
+                'max_redirects'   => 0,
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false],
+        ]);
+        $body = @file_get_contents($url, false, $context);
+        if (!is_string($body) || $body === '') {
+            $code = 0;
+            foreach ($http_response_header ?? [] as $header) {
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#', $header, $m) === 1) {
+                    $code = (int) $m[1];
+                }
+            }
+            throw new RuntimeException(self::transportMessage($code, ''));
+        }
+        return substr($body, 0, self::MAX_RESPONSE);
+    }
+
     private function post(array $fields): string
     {
         if (function_exists('curl_init')) {
@@ -464,4 +554,94 @@ final class Activation
 /** Thrown when a page requires a valid activation state. */
 final class ActivationRequired extends \RuntimeException
 {
+}
+
+/**
+ * Turn a refusal into something an operator can act on.
+ *
+ * The provider answers "Invalid license key or domain." for every mismatch, and that one sentence
+ * covers four unrelated faults. Observed in practice: a key that was never in the provider's
+ * database (a typo, or a key from a different project) produces exactly the same string as a
+ * domain the licence does not cover. Relaying it verbatim leaves the operator with no next step.
+ *
+ * The gate therefore stops relaying that sentence and instead shows what this installation knows:
+ * the masked key it sent, the domain it sent, and the provider's literal answer. It also points at
+ * `bin/license-check.php --probe`, which additionally asks the provider's update endpoint — that
+ * one distinguishes "no such key" from "key found, domain not registered", which is the difference
+ * between "check what you pasted" and "the provider must add this domain".
+ *
+ * No extra network call is made here: a refusal already happens on a slow path, and the gate must
+ * stay fast and must not fail twice at once.
+ */
+final class ActivationDiagnosis
+{
+    /** The tool that answers "which of the four faults is this?" without shell access. */
+    public const SELF_CHECK = 'bin/license-check.php';
+
+    /**
+     * @return array{cause:string, headline:string, detail:array<string,string>, actions:list<string>}
+     */
+    public static function of(array $state): array
+    {
+        $key    = (string) ($state['key'] ?? '');
+        $answer = strtolower((string) ($state['answer'] ?? ''));
+
+        $detail = [
+            'domain'  => (string) ($state['domain'] ?? ''),
+            'key'     => self::mask($key),
+            'provider' => trim((string) ($state['message'] ?? '')),
+        ];
+
+        $actions = [
+            'Open ' . self::SELF_CHECK . ' on the server: php ' . self::SELF_CHECK . ' --probe',
+            'Check the licence in the provider console: ' . Activation::MANAGER_SIGNIN,
+        ];
+
+        if (($state['grace'] ?? false) === true) {
+            return [
+                'cause'    => 'grace',
+                'headline' => 'The licence service could not be reached, and this site is outside its grace window.',
+                'detail'   => $detail,
+                'actions'  => $actions,
+            ];
+        }
+
+        if ($key === '' || strlen($key) < 16) {
+            return [
+                'cause'    => 'missing',
+                'headline' => 'No complete licence key is stored on this installation.',
+                'detail'   => $detail,
+                'actions'  => $actions,
+            ];
+        }
+
+        if (str_contains($answer, 'not found') || str_contains($answer, 'no such')) {
+            return [
+                'cause'    => 'unknown-key',
+                'headline' => 'The provider does not recognise this key at all.',
+                'detail'   => $detail,
+                'actions'  => $actions,
+            ];
+        }
+
+        return [
+            'cause'    => 'rejected',
+            'headline' => 'The provider refused this key for this domain.',
+            'detail'   => $detail,
+            'actions'  => $actions,
+        ];
+    }
+
+    /** First and last four characters only — never the whole key on a public screen. */
+    public static function mask(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return '(none)';
+        }
+        if (strlen($key) <= 8) {
+            return str_repeat('•', strlen($key));
+        }
+        return substr($key, 0, 4) . str_repeat('•', max(4, strlen($key) - 8)) . substr($key, -4);
+    }
 }
