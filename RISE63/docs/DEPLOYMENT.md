@@ -123,6 +123,19 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**Before anything else: is the installation up to date?**
+
+Every tree shipped before this fix sent the key as a nested array (`key[key]=MAN-…`). The provider
+reads that as an array, its `WHERE license_key = ?` matches nothing, and it answers `Invalid license
+key or domain.` — so **every** key was refused, and a correct key was indistinguishable from a wrong
+one. If the gate refuses a key you know is valid, update first and then re-test:
+
+```sh
+php bin/update.php --check     # which release this tree is on, and what the provider offers
+php bin/update.php --apply     # pulls the release that carries the fix
+php bin/license-check.php      # then re-test the key; it prints the exact body it sends
+```
+
 **The key is not in the provider's database**
 
 `api.php` answers `Invalid license key or domain.` for every mismatch, so it cannot tell you that.

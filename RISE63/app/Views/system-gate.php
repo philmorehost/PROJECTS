@@ -44,6 +44,9 @@ header('Retry-After: 3600');
             the same way.</li>
           <li>The key actually in use is the one in <code>config/activation-key.php</code> — shown
             above, masked. If it is not the key you expect, that is the whole problem.</li>
+          <li>Is this installation fully updated? A fault in older releases sent the key in a form
+            the provider could never match, so <em>every</em> key was refused however correct it
+            was. <code>php bin/update.php --check</code> reports the release you are on.</li>
           <li>Can this host reach <code>manager.pmhserver.name.ng</code> over HTTPS at all?</li>
         </ol>
       </div>
@@ -62,9 +65,9 @@ header('Retry-After: 3600');
       <div class="notice" style="margin-top:12px">
         <strong>On the server, in the installation folder</strong>
         <code class="block" style="margin-top:6px">php bin/license-check.php --probe</code>
-        <span class="hint">Prints the masked key, this domain, the provider's DNS and its literal
-          answer for each plausible domain spelling, and whether the key is unknown, refused or
-          simply unreachable.</span>
+        <span class="hint">Prints the masked key, the domain, the <strong>exact request body</strong>
+          it sends, the provider's DNS, and its literal answer for each plausible domain spelling —
+          so a malformed request is visible instead of looking like a wrong key.</span>
       </div>
     </div>
   </div>

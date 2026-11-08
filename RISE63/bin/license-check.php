@@ -124,6 +124,14 @@ $write('Key             : ' . $mask($key) . "\n");
 $write('Server hostname : ' . ($hostName !== '' ? $hostName : '(unknown)') . "\n");
 $write('Domain source   : ' . $source . "\n");
 $write('Endpoint        : ' . Activation::ENDPOINT . "\n");
+// Printing the body makes a malformed request visible. The nested-array bug posted key[key]=MAN-…
+// for weeks and nothing on either side of the wire said so.
+if ($key !== null && $key !== '') {
+    $write('Request body    : ' . Activation::encode([
+        'key'    => (string) $key,
+        'domain' => $domain !== '' ? $domain : '(none)',
+    ]) . "\n");
+}
 $write('Transport       : ' . (function_exists('curl_init') ? 'cURL' : 'PHP HTTPS stream (cURL not loaded)') . "\n");
 $write('DNS             : ' . Activation::MANAGER_HOST . ' -> ' . ($resolves() ?? 'does NOT resolve here') . "\n");
 
