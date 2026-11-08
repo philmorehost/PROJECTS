@@ -9,7 +9,7 @@ declare(strict_types=1);
  * level; see docs/DEPLOYMENT.md.
  */
 
-require __DIR__ . '/app/bootstrap.php';
+require_once __DIR__ . '/app/bootstrap.php';
 
 use RISE63\Core\Activation;
 use RISE63\Core\Auth;

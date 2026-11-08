@@ -24,7 +24,8 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 |---|---|---|
 | Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
 | Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **36 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **27 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **28 passed, 0 failed** |
+| Requests | `node tests/support/phpwasm-smoke.mjs` | **11 passed, 0 failed** |
 
 What the logic suite actually asserts:
 
@@ -71,6 +72,33 @@ edits. It cannot catch type, index or constraint mistakes — only naming and ex
 It proves the grammar, the pure logic and the rendered markup. It does **not** prove anything that needs a database, an SMTP server or a real browser: SQL execution, transactions under concurrency, `SELECT … FOR UPDATE` behaviour, session persistence, real email delivery, installability, or Android/iOS layout.
 
 ---
+
+### 2.4a Field report — the first real deployment attempt, and what it exposed
+
+The first upload to a real host (`buildroom.rccglp63yaya.org.ng`, PHP 8.x on cPanel) produced:
+
+```
+PHP Fatal error: Uncaught Error: Undefined constant "ROOT"
+in .../install/index.php:21
+```
+
+Three defects, all of a kind that lint, the unit suite and the view harness cannot see, because
+none of them execute a page:
+
+| Defect | Why every existing test missed it | Fix |
+|---|---|---|
+| `install/index.php` used bare `ROOT` while sitting outside the `RISE63` namespace | Lint only parses; the view harness loads *Views*, never the installer | `use const RISE63\{ROOT};` in the installer |
+| `app/Core/Installer.php` used bare `MIN_PHP` inside `RISE63\Core` — stage 1 would have fataled on the *next* screen too | Same; it is only reached by a POST through the wizard | Fully qualified `\RISE63\MIN_PHP` |
+| `session.sid_length` / `sid_bits_per_character` are deprecated in PHP 8.4 | Only runs when a session starts, and only warns | Set only below 8.4; PHP 8.4+ already uses those values |
+
+The response is structural, not just three edits: **`tests/support/phpwasm-smoke.mjs`** now drives
+real requests through `index.php` in a fresh PHP process each time — installer first screen, CSRF
+rejection on POST, a crafted `page` parameter, the installed-lock behaviour, and the wizard refusing
+to run twice. A new view-suite test also scans every entry-point file for a bare bootstrap constant
+outside the `RISE63` namespace, so the class of bug fails a test rather than a user's first upload.
+
+Lesson recorded here because it applies to the whole project: **a green lint and a green unit suite
+say nothing about whether a page renders.** The smoke suite is now the check that does.
 
 ### 2.4 Defects found by this review and fixed
 
@@ -177,7 +205,8 @@ RISE63/
   database/migrations/       numbered, checksummed schema changes (0001 = account lifecycle)
   public/assets/             app.css, app.js, security.js + fingerprinted builds
   public/icons/              PWA icons (any + maskable + apple-touch)
-  tests/                     unit.php, render.php, run.sh + php-wasm harnesses
+  tests/                     unit.php, render.php, integration.php (MySQL), run.sh
+  tests/support/             php-wasm harnesses: lint, logic, views, request-level smoke
   docs/                      DEPLOYMENT.md, IMPLEMENTATION_STATUS.md, archive/
 ```
 

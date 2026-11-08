@@ -46,8 +46,8 @@ final class Installer
     {
         $checks = [];
         $checks['php'] = [
-            'label'  => 'PHP ' . MIN_PHP . ' or newer',
-            'ok'     => version_compare(PHP_VERSION, MIN_PHP, '>='),
+            'label'  => 'PHP ' . \RISE63\MIN_PHP . ' or newer',
+            'ok'     => version_compare(PHP_VERSION, \RISE63\MIN_PHP, '>='),
             'detail' => 'Running PHP ' . PHP_VERSION,
         ];
         foreach (['pdo' => 'PDO', 'pdo_mysql' => 'PDO MySQL driver', 'json' => 'JSON', 'curl' => 'cURL (activation)', 'gd' => 'GD (image handling)', 'mbstring' => 'Multibyte strings'] as $ext => $label) {

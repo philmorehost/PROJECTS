@@ -13,6 +13,10 @@ use RISE63\Core\Security;
 
 use function RISE63\{config_dir, e, installed, site_title, url};
 
+// This file is deliberately outside the RISE63 namespace, so every bootstrap constant needs a
+// fully qualified name here: a bare ROOT resolves to the global namespace and fatals.
+use const RISE63\{ROOT};
+
 require_once dirname(__DIR__) . '/app/bootstrap.php';
 
 Security::startSession();
