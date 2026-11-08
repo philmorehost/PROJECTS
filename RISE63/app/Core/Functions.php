@@ -36,10 +36,15 @@ function installed(): bool
  */
 function base_path(): string
 {
-    static $base;
-    if ($base !== null) {
+    // Cached per script path, not once per process: a CLI run or a long-lived worker can look at
+    // more than one installation, and a cache keyed on nothing returned the first answer forever.
+    static $base = null;
+    static $forScript = null;
+    $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php');
+    if ($base !== null && $forScript === $script) {
         return $base;
     }
+    $forScript = $script;
 
     // RISE63_BASE_PATH is an escape hatch for hosts whose document root maps elsewhere.
     $override = getenv('RISE63_BASE_PATH');
@@ -47,8 +52,7 @@ function base_path(): string
         return $base = ($override === '/' ? '' : '/' . trim($override, '/'));
     }
 
-    $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
-    $dir    = rtrim(dirname($script), '/.');
+    $dir = rtrim(dirname(str_replace('\\', '/', $script)), '/.');
 
     // Included pages (install/, api/) sit one level below the front controller.
     foreach (['/install', '/api', '/bin'] as $nested) {
@@ -69,6 +73,39 @@ function url(string $path = '', array $query = []): string
         $url .= '?' . http_build_query($query);
     }
     return $url;
+}
+
+/**
+ * The page named by a request path, for the front controller.
+ *
+ * Every link and every redirect in this application emits a path segment (/login, /treasury),
+ * but there is one entry point. Apache maps the segment to index.php with ?page=…; this function
+ * is the fallback for when it does not (AllowOverride off, a rewrite the host strips, the
+ * development router), so /login still works instead of returning an Apache "Not Found".
+ *
+ * Returns '' when the path names no page of its own: the site root, index.php itself, and the
+ * sub-applications that have their own entry point (api/, install/).
+ */
+function page_from_path(string $requestUri): string
+{
+    // Decoded before segmenting, so an encoded traversal (/%2e%2e) is seen as '..' and filtered
+    // out rather than becoming the page name "2e2e".
+    $path = rawurldecode((string) (parse_url($requestUri, PHP_URL_PATH) ?: '/'));
+    $base = base_path();
+    if ($base !== '' && str_starts_with($path, $base)) {
+        $path = substr($path, strlen($base));
+    }
+    $segments = array_values(array_filter(
+        explode('/', trim($path, '/')),
+        static fn (string $segment): bool => $segment !== ''
+    ));
+    $first = $segments[0] ?? '';
+    if ($first === '' || $first === 'index.php' || in_array($first, ['api', 'install'], true)) {
+        return '';
+    }
+    // One segment is the page name; anything deeper is a page plus an identifier, which the page
+    // controller locates itself. The remainder is never accepted as input here.
+    return preg_replace('/[^a-z0-9-]/', '', strtolower($first)) ?? '';
 }
 
 /** Content-addressed public asset URL. Falls back to the unhashed name in development. */

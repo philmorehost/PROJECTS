@@ -226,3 +226,59 @@ require '/src/app/Views/system-gate.php';`);
   await writeFile(join(root, 'docs/preview/activation-gate.html'), html);
   console.log(`activation gate → docs/preview/activation-gate.html (${html.length} bytes)`);
 }
+
+/**
+ * The sign-in page, reached at /login — as a path, with no ?page= anywhere. This is the exact
+ * request that returned Apache's "Not Found" on the first real installation, so the preview is
+ * the proof that the URL now resolves to the page rather than a 404.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  // Rendered through the same view the controller uses, with the fixtures that page needs. The
+  // routing itself is what the request shows: REQUEST_URI is /login, and $_GET carries no page.
+  await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/login',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+echo '<!-- page resolved from the path: ' . \\RISE63\\page_from_path('/login') . ' -->';
+\\RISE63\\Core\\View::render('auth/login', array(
+    'title' => 'Sign in', 'parishes' => array(),
+    'flashes' => array(), 'page' => 'login', 'user' => null,
+), true);`);
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  let html = output;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app\.css">/, '<style>\n' + css + '\n</style>');
+  await writeFile(join(root, 'docs/preview/login-at-clean-url.html'), html);
+  console.log(`sign-in at /login → docs/preview/login-at-clean-url.html (${html.length} bytes, page=${
+    /page resolved from the path: login/.test(html) ? 'login' : 'NOT RESOLVED'})`);
+}

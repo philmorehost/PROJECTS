@@ -11,6 +11,7 @@ Audience: the person who will put this on the cPanel/LiteSpeed host and keep it 
 | Item | Detail |
 |---|---|
 | Hosting | cPanel or WHM, Apache 2.4 or LiteSpeed, **`mod_rewrite` and `mod_headers` enabled**, PHP 8.2+ as a CGI/FPM handler (not the "PHP as static" legacy handler). |
+| `.htaccess` honoured | **`AllowOverride All`** (or at least `FileInfo`) for the installation directory. The bundled `.htaccess` contains the rule that maps a URL path such as `/login` to `index.php`. If the host ignores `.htaccess`, the application still resolves the page itself — but set the directives at server level as well, because the private-directory denials live in the same file. |
 | PHP extensions | `pdo`, `pdo_mysql`, `json`, `curl`, `gd`, `mbstring` (recommended; polyfills exist), `openssl`, `fileinfo`, `zip` (only for software updates). |
 | Database | MySQL 8.0+ or MariaDB 10.6+, one **empty** database, one user limited to that database. |
 | Cron | Two entries, every five minutes, plus one hourly. See §5. |
@@ -122,6 +123,28 @@ POST https://manager.pmhserver.name.ng/api.php
   compares against the domain the manager already accepted, which is recorded in
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
+
+**"Not Found" instead of the page I asked for**
+
+Every link in this application is a path segment (`/login`, `/treasury`), and one file serves them
+all. Two things must be true:
+
+1. `.htaccess` is present in the installation root and Apache is allowed to read it
+   (`AllowOverride All`). Without it, Apache answers `/login` with its own 404 **before PHP runs** —
+   the site root still works, because that is `DirectoryIndex`, which is why the symptom looks like
+   "the home page is fine but every link is broken".
+2. `mod_rewrite` is loaded. The panel shows it under *Select PHP Version → Modules* (cPanel) or
+   `apachectl -M | grep rewrite` (root).
+
+The application does not depend on the rewrite: `index.php` reads the page name from the request
+path itself, so a host that ignores `.htaccess` still serves `/login` correctly. What such a host
+loses is the private-directory denials in the same file, so add them at server level instead:
+
+```apache
+<Directory /home/USER/your-domain>
+    AllowOverride All
+</Directory>
+```
 
 **Before anything else: is the installation up to date?**
 

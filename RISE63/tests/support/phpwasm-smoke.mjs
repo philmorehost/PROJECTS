@@ -230,6 +230,46 @@ const wizardAgain = await request({ uri: '/install/index.php', installed: true, 
 check('the wizard refuses to run a second time', /already installed/i.test(wizardAgain),
   wizardAgain.replace(/\s+/g, ' ').slice(0, 300));
 
+/* 5. Clean URLs. Every link this application emits is a path segment (/login), so the URL path —
+      not just ?page= — has to select the page. This regressed into an Apache "Not Found" on the
+      first real installation, where the root loaded (DirectoryIndex) and every other page 404ed. */
+// No database exists in this harness, so an installed request cannot reach the login form; what
+// matters is *which page* the router chose. The error screen names the page it failed on, so the
+// absence of a "no page named …" error is the signal, alongside the absence of an Apache 404.
+const clean = await request({ uri: '/login', installed: true, env: { RISE63_ACTIVATION: 'local-fixture' } });
+check('a clean URL path selects the page without ?page=',
+  !/no page named|Not Found|404 Not Found/i.test(clean), clean.replace(/\s+/g, ' ').slice(0, 300));
+check('a clean URL does not fall through to a 404', !fatal.test(clean) || /database/i.test(clean),
+  clean.replace(/\s+/g, ' ').slice(0, 300));
+
+// ?page= must keep working: the rewrite, the development router and the preview harnesses use it.
+const query = await request({ uri: '/', query: { page: 'login' }, installed: true, env: { RISE63_ACTIVATION: 'local-fixture' } });
+check('?page=login still selects the same page',
+  !/no page named/i.test(query), query.replace(/\s+/g, ' ').slice(0, 300));
+
+// /index.php is reached directly by some hosts and must not be mistaken for a page named index.
+const direct = await request({ uri: '/index.php', installed: true, env: { RISE63_ACTIVATION: 'local-fixture' } });
+check('/index.php is not treated as a page of its own', !/no page named/i.test(direct), direct.slice(0, 300));
+
+/* 6. The rewrite rule that makes those paths reach PHP. Apache is not available in this
+      harness, so this tests the rule *as written* against the URLs it must and must not touch —
+      not Apache's own behaviour, which only a host can demonstrate. */
+const htaccess = await readFile(new URL('../../.htaccess', import.meta.url), 'utf8');
+const rule = htaccess.match(/^\s*RewriteRule\s+(\^\S+)\s+index\.php\?page=\$1/m);
+check('the front-controller rewrite exists in .htaccess', rule !== null,
+  'without it Apache answers /login with its own 404 before PHP runs');
+if (rule) {
+  const pattern = new RegExp(rule[1]);
+  check('the rewrite maps a bare page segment', pattern.test('login') && pattern.test('treasury/'),
+    rule[1]);
+  check('the rewrite leaves nested asset paths alone', !pattern.test('public/assets/app.css'),
+    'assets are served directly, never through the router');
+  // Real files and directories are excluded by the RewriteCond !-f / !-d pairs above the rule.
+  check('the rewrite is guarded by !-f and !-d conditions',
+    /RewriteCond %\{REQUEST_FILENAME\} !-f/.test(htaccess) && /RewriteCond %\{REQUEST_FILENAME\} !-d/.test(htaccess),
+    'without these, real files such as manifest.webmanifest would be routed through PHP');
+}
+
 console.log('\n' + '─'.repeat(62));
 const total = checks;
 console.log(`${total - failures.length} passed, ${failures.length} failed`);
