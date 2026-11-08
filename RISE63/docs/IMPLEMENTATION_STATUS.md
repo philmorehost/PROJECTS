@@ -147,11 +147,22 @@ Now:
 - **The domain is editable** on stage 1 and stage 3, and what is typed there is the string sent to
   the provider. A replacement key at stage 3 is probed against the typed domain before it is saved.
 - **`bin/license-check.php --probe`** tries the plausible spellings (bare domain, `www.`, parent
-  domain, this server's hostname), prints the provider's answer for each, and with `--save` records
-  the accepted one so the wizard can be skipped. If none is accepted it says the key itself is at
-  fault rather than the spelling.
-- A later forced check therefore only happens once, on a host the provider has never accepted, and
-  the error names the domain that was actually sent.
+  domain, this server's hostname when it is a real domain), prints the provider's answer for each,
+  and with `--save` records the accepted one so the wizard can be skipped.
+- **An unreachable provider is no longer reported as a refusal.** `verify()` now marks transport
+  failures (`unreachable`), and the checker's three outcomes are kept apart: accepted (exit 0),
+  refused by a provider that answered (exit 1), and *nothing was decided* (exit 2, with the DNS
+  result and a `curl` command). Before this, a firewall blocking outbound HTTPS produced the same
+  three-word verdict as a suspended key — sending the operator to buy a licence they already owned.
+- Resuming setup at stage 1 no longer forces a fresh call either: if the stored key is already
+  accepted for this domain, it advances without asking.
+- Refusals now name the exact string that was sent.
+- **`bin/doctor.php` exists.** The stage-4 checklist had told operators to run a file that was never
+  written. It is a read-only self-check — PHP build and extensions, writable folders, the
+  `.htaccess` guards on `config/` and `storage/`, key-file mode, SMTP host, table and administrator
+  presence, ledger triggers, security e-mail, licence — and it exits 0 only when nothing blocks
+  launch. It refuses to guess: a CLI run cannot see whether HTTPS is on, so it prints a note
+  instead of claiming the site is insecure.
 
 **Not verified here:** the provider is unreachable from this sandbox, so the *pairs* this code will
 send are covered by tests against the documented contract (`tests/unit.php`), not by a live call.

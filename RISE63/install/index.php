@@ -158,7 +158,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $verifiedKey = $key;
                 } else {
                     $verifiedKey = $key;   // keep it in the field so a typo can be corrected
-                    throw new RuntimeException($probe['message']);
+                    throw new RuntimeException(
+                        $probe['message'] . ' The domain sent was ' . $probe['domain']
+                        . ' — if the licence was issued for a different name, correct the field above.'
+                    );
                 }
             } elseif ($key !== '') {
                 // Never write a key the provider has not confirmed: an unverified key on disk
@@ -166,19 +169,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $probe = $activation->verify($key, $host);
                 $verifiedKey = $key;
                 if (!$probe['valid']) {
-                    throw new RuntimeException($probe['message']);
+                    throw new RuntimeException(
+                        $probe['message'] . ' The domain sent was ' . $probe['domain'] . '.'
+                    );
                 }
                 $activation->storeKey($key);
                 $activation->verify($key, $host, true);   // record it; no second call needed
                 $licenseNotice = 'Licence saved and confirmed for ' . $probe['domain'] . '.';
                 $installer->advance(2);
             } else {
-                // Resuming setup with a key already on disk.
-                $state = $activation->check($host, true);
-                if (!$state['valid']) {
-                    throw new RuntimeException($state['message']);
+                // Resuming setup with a key already on disk. If the provider already accepted this
+                // domain for that key there is nothing to ask: forcing a call here would let a
+                // rate-limited provider block a setup that is already licensed.
+                $probeDomain = Activation::domainFromHost($host);
+                if ($activation->storedKey() !== null && $activation->domainAccepted($probeDomain)) {
+                    $licenseNotice = 'The saved key is confirmed for ' . $probeDomain . '.';
+                } else {
+                    $state = $activation->check($host, true);
+                    if (!$state['valid']) {
+                        throw new RuntimeException($state['message'] . ' The domain sent was ' . $state['domain'] . '.');
+                    }
+                    $licenseNotice = $state['message'];
                 }
-                $licenseNotice = $state['message'];
                 $installer->advance(2);
             }
         } elseif ($stage === 2) {

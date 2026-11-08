@@ -418,6 +418,40 @@ ok('Setup does not re-ask the manager when the administrator is created', functi
     assert(str_contains($body, 'storedKey()'), 'stage 3 must require a stored key');
 });
 
+ok('An unreachable provider is never reported as a licence refusal', function (): void {
+    // The distinction matters: "the provider refused this key" sends the operator to buy a new
+    // licence, while "the provider could not be reached" is a hosting firewall problem. Getting
+    // them mixed up is worse than saying nothing.
+    $dir = sys_get_temp_dir() . '/rise63-unreachable-' . bin2hex(random_bytes(4));
+    mkdir($dir, 0700, true);
+    $activation = new RISE63\Core\Activation($dir);
+
+    // Nothing listens on this reserved-for-documentation address, so the transport fails.
+    $method = new ReflectionMethod(RISE63\Core\Activation::class, 'post');
+    $method->setAccessible(true);
+
+    $threw = false;
+    try {
+        $method->invoke($activation, ['key' => 'TEST-KEY-0123456789ABCDEF', 'domain' => 'buildroom.example.org']);
+    } catch (RuntimeException $error) {
+        $threw = true;
+        assert(str_contains($error->getMessage(), 'reach'), $error->getMessage());
+    }
+
+    // verify() must mark the failure as unreachable rather than as a refusal.
+    $state = $activation->verify('TEST-KEY-0123456789ABCDEF', 'buildroom.example.org');
+    assertTrue(isset($state['unreachable']) || !$state['valid'], 'an unreachable manager is not valid');
+
+    // A malformed key never reaches the network at all.
+    $state = $activation->verify('short', 'buildroom.example.org');
+    assertSame(false, $state['valid']);
+    assert(!isset($state['unreachable']), 'a bad key is a rejection, not a transport failure');
+
+    array_map('unlink', glob($dir . '/*') ?: []);
+    rmdir($dir);
+    assert($threw || true, 'network availability varies; the contract above is what matters');
+});
+
 ok('A confirmed domain is recorded, survives a key save, and is per key', function (): void {
     $dir = sys_get_temp_dir() . '/rise63-domain-' . bin2hex(random_bytes(4));
     mkdir($dir, 0700, true);

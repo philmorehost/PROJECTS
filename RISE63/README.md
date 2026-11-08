@@ -37,6 +37,7 @@ Production never sets that variable. See `docs/DEPLOYMENT.md` for the real flow.
 php tests/unit.php          # money, state machine, security policy, settings schema, schema integrity
 php tests/render.php        # every view against fixtures, XSS probes, UX contract, route consistency
 php tests/integration.php   # MySQL: schema, ledger triggers, pool lock, migrations (needs a _test database)
+php bin/doctor.php          # read-only post-install self-check; exits non-zero on a blocker
 php bin/build-assets.php    # fingerprint CSS/JS + refresh the service-worker shell list
 php bin/migrate.php --status # apply pending schema migrations (--dry-run to read them first)
 ```
@@ -79,7 +80,7 @@ app/Core/              Money, Database, Settings, Security, BruteForce, GeoResol
                        Registration, ParishDirectory, Program, Applications, Ledger,
                        Notifier, Mailer, Activation, Installer, Audit, View
 app/Views/             layout + auth/ member/ staff/ partials/
-bin/                   mail-worker, security-worker, maintenance, build-assets
+bin/                   doctor, license-check, mail-worker, security-worker, maintenance, build-assets
 database/              schema.sql, countries.sql (250 ISO), seed.sql, ledger-guards.sql
 public/                assets + PWA icons
 tests/                 unit.php, render.php, integration.php (MySQL), php-wasm harnesses

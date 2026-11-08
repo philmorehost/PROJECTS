@@ -85,7 +85,9 @@ async function withRuntime(body) {
 }
 
 const failures = [];
+let checks = 0;
 const check = (name, condition, detail = '') => {
+  checks++;
   if (condition) {
     console.log(`PASS ${name}`);
   } else {
@@ -176,6 +178,32 @@ check('installer shows the domain it will license, and lets it be corrected',
 const apiCss = await request({ uri: '/api/index.php', entry: '/src/api/index.php', script: '/api/index.php' });
 check('the api endpoint never borrows the installer path', !/\/api\/public\//.test(apiCss), apiCss.slice(0, 200));
 
+/* 1b. bin/doctor.php must actually run. The stage-4 checklist tells the operator to run it, so a
+   script that merely parses is not enough: it has to reach a verdict and say what it checked.
+   php-wasm has no MySQL, so the database rows are expected to FAIL here — the assertion is that
+   the script survives that and still prints a summary. */
+const doctor = await withRuntime(async (runtime) => {
+  await runtime.writeFile('/src/config/installed.lock', 'test');
+  let out = '';
+  runtime.addEventListener('output', (event) => { out += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { out += String(event.detail?.[0] ?? ''); });
+  await runtime.run(`<?php
+chdir('/src');
+$_SERVER['argv'] = array('doctor.php', '--quiet', '--no-net');
+$_SERVER['argc'] = 3;
+include '/src/bin/doctor.php';
+`);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  return out;
+});
+check('doctor.php runs to a verdict instead of fataling', !fatal.test(doctor), doctor.slice(0, 600));
+check('doctor.php reports what it checked', /Extension pdo|config\/ writable|Licence key/.test(doctor),
+  doctor.slice(0, 600));
+check('doctor.php checks that config/ and storage/ are not web-readable', /\.htaccess/i.test(doctor),
+  doctor.slice(0, 600));
+check('doctor.php does not claim to know whether HTTPS is on from a CLI run',
+  !/^ok\s+HTTPS/m.test(doctor), doctor.slice(0, 600));
+
 /* 2. CSRF protection on the installer POST. */
 const noToken = await request({ method: 'POST', uri: '/', post: { stage: '1' } });
 check('installer POST without a CSRF token is refused', !fatal.test(noToken) && /csrf|security|expired|reload/i.test(noToken),
@@ -203,6 +231,6 @@ check('the wizard refuses to run a second time', /already installed/i.test(wizar
   wizardAgain.replace(/\s+/g, ' ').slice(0, 300));
 
 console.log('\n' + '─'.repeat(62));
-const total = 20;
+const total = checks;
 console.log(`${total - failures.length} passed, ${failures.length} failed`);
 process.exit(failures.length === 0 ? 0 : 1);
