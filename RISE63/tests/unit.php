@@ -247,6 +247,23 @@ ok('Reset tokens are random, url-safe and only ever stored hashed', function ():
     }
 });
 
+ok('The integration suite cannot be run by accident', function (): void {
+    $file = RISE63_TEST_ROOT . '/tests/integration.php';
+    assert(is_file($file), 'tests/integration.php must ship');
+    $source = (string) file_get_contents($file);
+
+    assertTrue(str_contains($source, '_test'), 'must require a _test database name');
+    assertTrue(str_contains($source, "str_ends_with(\$dbName, '_test')"), 'the guard must be an explicit check');
+    assertTrue(str_contains($source, "PHP_SAPI !== 'cli'"), 'must refuse to run over HTTP');
+    assertTrue(str_contains($source, 'RISE63_TEST_DSN'), 'must be configured through the environment, not a config file');
+
+    // It must not carry credentials of its own: the password comes from the environment only.
+    assertTrue(
+        preg_match('/\$pass\s*=\s*\'[^\']+\'/', $source) === 0,
+        'no hard-coded database password'
+    );
+});
+
 ok('Migration files follow the shipping rules', function (): void {
     $dir = RISE63_TEST_ROOT . '/database/migrations';
     assert(is_dir($dir), 'database/migrations must exist');
