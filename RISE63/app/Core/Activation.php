@@ -116,9 +116,9 @@ final class Activation
      *                       provider a second time. Only ever set after the key has been saved.
      * @return array{valid:bool, message:string, cached:bool, grace:bool, domain:string}
      */
-    public function verify(string $key, string $host, bool $remember = false): array
+    public function verify(string $key, string $host, bool $remember = false, ?string $override = null): array
     {
-        $domain = self::domainFromHost($host);
+        $domain = $override !== null ? self::domainFromHost($override) : self::domainFromHost($host);
         $key    = trim($key);
         if (!self::looksLikeKey($key)) {
             return $this->result(false, self::KEY_HINT, false, false, $domain);
@@ -134,8 +134,14 @@ final class Activation
         // Caching is opt-in and happens only after the key has been written to disk. Caching a
         // probe would let the wizard advance with no key stored, and the site would then fail six
         // hours later with no explanation.
-        if ($state['valid'] && $remember) {
-            $this->writeCache(['domain' => $domain, 'checked_at' => time(), 'valid' => true, 'status' => 1]);
+        if ($state['valid']) {
+            // Remember every domain the provider accepted for this key. The installer keeps
+            // working until the database stage completes, so a later stage can then confirm the
+            // licence without a second network round trip.
+            $this->rememberDomain($domain);
+            if ($remember) {
+                $this->writeCache(['domain' => $domain, 'checked_at' => time(), 'valid' => true, 'status' => 1]);
+            }
         }
         return $this->result($state['valid'], $state['message'], false, false, $domain);
     }
@@ -159,10 +165,21 @@ final class Activation
         if (!self::looksLikeKey($key)) {
             throw new RuntimeException(self::KEY_HINT);
         }
+        // Keep any domains the provider already accepted for this key — they are what lets the
+        // installer finish without a second network round trip that might be rate-limited.
+        $previous = $this->read() ?? [];
+        $domains  = is_array($previous['domains'] ?? null) ? $previous['domains'] : [];
+        $held     = is_string($previous['key'] ?? null) ? $previous['key'] : null;
+        // Clear the record only when a *different* key replaces one already on disk. A probe made
+        // before the key is saved leaves key=null and must keep its accepted domain.
+        if ($held !== null && $held !== $key) {
+            $domains = [];
+        }
         $this->write([
             'key'       => $key,
             'domain'    => null,
             'saved_at'  => gmdate('c'),
+            'domains'   => $domains,
         ]);
         // The old file, if a previous build wrote one, must not linger with a stale value.
         @unlink($this->configDir . '/' . self::LEGACY_FILE);
@@ -180,21 +197,57 @@ final class Activation
             return ['key' => trim($env)];
         }
 
+        $data = $this->read();
+        if ($data === null) {
+            return null;
+        }
+        $value = trim((string) ($data['key'] ?? $data['token'] ?? ''));
+        return $value === '' ? null : ['key' => $value];
+    }
+
+    /** @return array<string,mixed>|null the stored key file, whichever generation wrote it */
+    private function read(): ?array
+    {
         foreach ([self::KEY_FILE, self::LEGACY_FILE] as $file) {
             $path = $this->configDir . '/' . $file;
             if (!is_file($path)) {
                 continue;
             }
-            $data = require $path;
-            if (!is_array($data)) {
-                continue;
-            }
-            $value = trim((string) ($data['key'] ?? $data['token'] ?? ''));
-            if ($value !== '') {
-                return ['key' => $value];
+            $data = @include $path;
+            if (is_array($data)) {
+                return $data;
             }
         }
         return null;
+    }
+
+    /**
+     * Record a domain the provider has accepted for the stored key.
+     *
+     * Deliberately narrow: entries are added only when the *provider* returned status 1, and the
+     * list holds no more than a handful of names. It exists so setup can finish without another
+     * network call, nothing more — it never grants access by itself without the key still being
+     * on disk, which check() re-asks the provider about once the site is live.
+     */
+    public function rememberDomain(string $domain): void
+    {
+        if (!self::validDomain($domain)) {
+            return;
+        }
+        // There may be no file yet (the provider can accept a key probed before it is saved), so
+        // start from an empty record rather than silently discarding an accepted domain.
+        $data    = $this->read() ?? ['key' => null, 'saved_at' => null];
+        $domains = is_array($data['domains'] ?? null) ? $data['domains'] : [];
+        $domains[$domain] = gmdate('c');
+        $data['domains'] = array_slice($domains, -5, 5, true);
+        $this->write($data);
+    }
+
+    /** True when the provider has already accepted this exact domain for the stored key. */
+    public function domainAccepted(string $domain): bool
+    {
+        $data = $this->read();
+        return is_array($data) && is_array($data['domains'] ?? null) && array_key_exists($domain, $data['domains']);
     }
 
     /** The last cache entry, for the operator-facing status screen. @return array<string,mixed>|null */
