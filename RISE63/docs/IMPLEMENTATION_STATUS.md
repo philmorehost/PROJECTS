@@ -337,6 +337,42 @@ phone does not make a request every five seconds indefinitely.
 browser and asserts all four behaviours — and was checked to fail when the `online` handler or the
 dismiss handler is deliberately broken.
 
+### 2.3h The close button that did nothing
+
+Reported: the new offline bar appeared with the new copy, the × was visible, and pressing it had no
+effect. The tab-bar redesign in the same release was confirmed working — so the release had shipped.
+
+Three faults, all of them invisible from the page:
+
+1. **A stale script.** The HTML is served fresh (`no-store` for signed-in pages), but
+   `/public/assets/app.js` was cached un-fingerprinted, and `SHELL_VERSION` in `sw.js` was a literal
+   (`'rise63-v2'`) that nobody bumped. The browser therefore paired the **new markup** with the
+   **previous release's javascript**. The button existed; nothing was listening to it. There is no
+   error to see — the old script runs fine and knows nothing about the new element.
+2. **An inline script blocked by our own CSP.** `script-src 'self'` has no `'unsafe-inline'`, so the
+   pre-paint theme script in `layout.php` was silently dropped. That is why the theme flashed on
+   every load for a signed-in user. A blocked script and a script that ran are indistinguishable
+   from the outside, which is the same trap as (1).
+3. **A single point of failure.** The binder lived only in `app.js`, so any cache problem removed the
+   behaviour entirely.
+
+**Fixes.**
+
+- `bin/build-assets.php` fingerprints every asset (`app.f6d1df85.js`), so a browser cannot reuse an
+  older copy; the deploy step is documented as mandatory and why.
+- `sw.js` derives its cache name from the shell list and a generated release id. A deploy cannot
+  leave the old cache in place, because the name changes without anyone remembering to change it.
+- The offline close button ships its **own** handler in the same HTML response, so it works even
+  beside a stale `app.js`. `app.js` keeps its richer handler (which also re-tests the connection).
+- `Security::INLINE_SCRIPT_HASHES` allow-lists the two inline snippets by SHA-256, so the policy
+  stays strict (no `'unsafe-inline'`, no nonce bookkeeping) while those scripts execute.
+
+**Tests.** `tests/render.php` hashes every inline script in the *rendered* page — not the template,
+because a PHP expression inside a `<script>` emits different bytes than the source — and requires a
+matching entry in the allow-list, with no orphans. `tests/support/assets-and-cache.mjs` proves the
+cache name changes with both the release and the shell list, that every pre-cached file exists, and
+that one changed byte yields a different asset URL.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

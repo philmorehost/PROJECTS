@@ -7,7 +7,7 @@
 <title>Updates · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="9864c8a01a818a5438d7506b2967aaf7ed426278860b49d4cd73c0c683e85709">
+<meta name="csrf-token" content="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -659,6 +659,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     <span aria-hidden="true">&times;</span>
   </button>
 </div>
+<script>
+  // The second half of the close button, deliberately independent of app.js.
+  //
+  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
+  // It exists because the first report of "the × does nothing" was almost certainly a cached
+  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
+  // the previous release, so the button rendered and did nothing. A handler that ships in the same
+  // response as the markup cannot drift out of step with it.
+  //
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
+  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
+  // disagree.
+  (function () {
+    var button = document.getElementById('offline-dismiss');
+    var banner = document.getElementById('offline-banner');
+    if (!button || !banner) { return; }
+    button.addEventListener('click', function () { banner.hidden = true; });
+  }());
+</script>
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -704,7 +723,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     </p>
 
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="9864c8a01a818a5438d7506b2967aaf7ed426278860b49d4cd73c0c683e85709">      <input type="hidden" name="action" value="update-check">
+      <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">      <input type="hidden" name="action" value="update-check">
       <input type="hidden" name="return_to" value="updates">
       <button class="btn btn-primary" type="submit">Check now</button>
     </form>
@@ -715,7 +734,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                                           <div class="block" style="margin-top:8px; white-space:pre-wrap">- Academy attendance panel is now read-only for members
 - Treasury export includes the parish code</div>
                                 <form method="post" action="/" style="margin-top:12px">
-              <input type="hidden" name="csrf" value="9864c8a01a818a5438d7506b2967aaf7ed426278860b49d4cd73c0c683e85709">              <input type="hidden" name="action" value="update-plan">
+              <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">              <input type="hidden" name="action" value="update-plan">
               <input type="hidden" name="return_to" value="updates">
               <button class="btn btn-primary" type="submit">Download and review what changes</button>
             </form>
@@ -797,7 +816,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       <span class="nav-label">Settings</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="9864c8a01a818a5438d7506b2967aaf7ed426278860b49d4cd73c0c683e85709">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="09999df43456a82eaee6e1a0ee500b34fe1a126c5f50405836290bfb83690013">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>

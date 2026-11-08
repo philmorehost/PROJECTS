@@ -6,7 +6,7 @@
 <title>Dashboard · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="d95122eb672a0aa31152065eb8a2842883c2183ea2a11738495d342bd3d295d3">
+<meta name="csrf-token" content="b8fab583416fe44d667325a3bbfa099e35a748b5a033c52ffc2597bad825166b">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -658,6 +658,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     <span aria-hidden="true">&times;</span>
   </button>
 </div>
+<script>
+  // The second half of the close button, deliberately independent of app.js.
+  //
+  // app.js binds the same button and also re-tests the connection; this copy only closes the bar.
+  // It exists because the first report of "the × does nothing" was almost certainly a cached
+  // app.js: the markup had been updated (new copy, new ×) while the script that binds it was still
+  // the previous release, so the button rendered and did nothing. A handler that ships in the same
+  // response as the markup cannot drift out of step with it.
+  //
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet is permitted only because
+  // its SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two ever
+  // disagree.
+  (function () {
+    var button = document.getElementById('offline-dismiss');
+    var banner = document.getElementById('offline-banner');
+    if (!button || !banner) { return; }
+    button.addEventListener('click', function () { banner.hidden = true; });
+  }());
+</script>
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -725,7 +744,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       <span class="nav-label">Settings</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="d95122eb672a0aa31152065eb8a2842883c2183ea2a11738495d342bd3d295d3">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="b8fab583416fe44d667325a3bbfa099e35a748b5a033c52ffc2597bad825166b">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
