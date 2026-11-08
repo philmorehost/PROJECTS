@@ -40,7 +40,7 @@ if ($account !== null && (string) $account['role'] === 'youth_member') {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?= e($title ?? 'RISE 63') ?> · <?= e(site_title()) ?></title>
-<meta name="description" content="<?= e(\RISE63\setting('site_tagline', 'RPCG Lagos Province 63 empowerment platform')) ?>">
+<meta name="description" content="<?= e(\RISE63\setting('site_tagline', 'RCCG Lagos Province 63 empowerment platform')) ?>">
 <meta name="theme-color" content="<?= e($brand) ?>">
 <meta name="csrf-token" content="<?= e(Security::csrf()) ?>">
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>?v=<?= e(substr(hash('sha256', $letter . site_title()), 0, 8)) ?>">

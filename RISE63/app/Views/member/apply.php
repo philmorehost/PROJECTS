@@ -18,7 +18,7 @@ $isEducation = $type === 'education_bridge';
 
 <form method="post" action="<?= e(url('')) ?>" id="apply-form" data-autosave data-offline-queue enctype="multipart/form-data" novalidate>
   <?= Security::csrfField() ?>
-  <input type="hidden" name="action" value="application-submit">
+  <input type="hidden" name="action" value="document-upload">
   <input type="hidden" name="program_type" value="<?= e($type) ?>">
   <input type="hidden" name="idempotency_key" value="">
   <input type="hidden" name="return_to" value="programs">

@@ -256,6 +256,8 @@ ok('Apply form adapts to the program', function () use ($renderPage, $member): v
     assertContains('data-autosave', $edu);
     assertContains('name="idempotency_key"', $edu);
 
+    assertContains('enctype="multipart/form-data"', $edu, 'the optional attachment needs a multipart form');
+
     $academy = $renderPage('member/apply', [
         'programType' => 'academy',
         'eligibility' => [],
@@ -550,9 +552,14 @@ ok('Writes are never reachable by GET', function (): void {
     $router  = (string) file_get_contents(RISE63_TEST_ROOT . '/index.php');
     assertContains('Security::assertPost()', $router, 'the front controller must gate every POST');
     assertContains('if ($method === \'POST\')', $router);
-    // Exception: the authenticated document download is a GET and is scope-checked by the action guard.
-    assertContains('document-download', $actions);
-    assertContains('Applications::find($applicationId, $account)', $actions, 'downloads must be scope-checked');
+    // Exception: the authenticated document download is a GET, routed to its own file and
+    // scope-checked there before anything is streamed.
+    assertContains("\$action === 'document-download'", $router);
+    $download = (string) file_get_contents(RISE63_TEST_ROOT . '/app/download.php');
+    assertContains('Applications::find(', $download, 'downloads must be scope-checked');
+    assertContains('realpath(', $download, 'the path must be resolved and contained');
+    assertContains("header('Content-Disposition: attachment", $download);
+    assertMissing('Application::submit', $download);
 });
 
 ok('Templates never echo raw request data', function (): void {

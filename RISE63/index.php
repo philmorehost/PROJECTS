@@ -13,7 +13,6 @@ require __DIR__ . '/app/bootstrap.php';
 
 use RISE63\Core\Activation;
 use RISE63\Core\Auth;
-use RISE63\Core\Installer;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
 use RISE63\Core\View;
@@ -29,7 +28,18 @@ if (!installed()) {
 Security::startSession();
 Security::sendHeaders();
 
+// ── Maintenance mode ──────────────────────────────────────────────────────────────────
+// Checked before activation on purpose: during an outage the queue workers (which run from
+// cron, not through this file) can still drain the notification backlog, and an administrator
+// can still get in. Note that no outbound activation call happens in this branch.
+$user = Auth::user();
+if (Settings::bool('maintenance_mode') && !($user !== null && Auth::isAdmin($user))) {
+    require __DIR__ . '/app/Views/maintenance.php';
+    exit;
+}
+
 // ── System activation gate ────────────────────────────────────────────────────────────
+// Cached for 6 hours with a 24-hour grace window, so this is usually a single local read.
 $activation = new Activation(config_dir());
 $activationState = $activation->check((string) ($_SERVER['HTTP_HOST'] ?? ''));
 if (!$activationState['valid']) {
@@ -38,13 +48,6 @@ if (!$activationState['valid']) {
 }
 
 Settings::flush();
-
-// ── Maintenance mode (administrators still get in) ────────────────────────────────────
-$user = Auth::user();
-if (Settings::bool('maintenance_mode') && !($user !== null && Auth::isAdmin($user))) {
-    require __DIR__ . '/app/Views/maintenance.php';
-    exit;
-}
 
 // ── Routing ───────────────────────────────────────────────────────────────────────────
 $page    = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_GET['page'] ?? ''))) ?? '';
@@ -67,10 +70,16 @@ $home = static function (array $account): string {
 };
 
 try {
-    // ── Actions (all POSTs) ───────────────────────────────────────────────────────────
+    // ── Write actions (POST only: the CSRF + origin check lives in assertPost) ─────────
     if ($method === 'POST') {
         Security::assertPost();
         require __DIR__ . '/app/actions.php';
+        exit;
+    }
+
+    // ── Authenticated reads that cannot be a page (file download) ─────────────────────
+    if ($action === 'document-download') {
+        require __DIR__ . '/app/download.php';
         exit;
     }
 

@@ -101,7 +101,7 @@ $ageHours = hours_since((string) ($application['submitted_at'] ?? $application['
   <?php if ($isOwner && in_array($status, ['draft', 'submitted', 'under_review', 'documents_requested'], true)): ?>
     <form method="post" action="<?= e(url('')) ?>" enctype="multipart/form-data" class="stack" style="margin-top:14px">
       <?= Security::csrfField() ?>
-      <input type="hidden" name="action" value="application-document">
+      <input type="hidden" name="action" value="document-upload">
       <input type="hidden" name="application_id" value="<?= (int) $application['id'] ?>">
       <input type="hidden" name="return_to" value="application">
       <div class="field">

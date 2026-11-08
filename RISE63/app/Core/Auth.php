@@ -95,6 +95,10 @@ final class Auth
         static $cachedId = null;
         static $cached   = null;
 
+        if (!isset($_SESSION) || session_status() !== PHP_SESSION_ACTIVE) {
+            return null;
+        }
+
         $id = $_SESSION['rise63_user'] ?? null;
         if (!is_int($id) || $id <= 0) {
             return null;

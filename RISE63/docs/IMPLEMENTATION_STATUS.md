@@ -43,6 +43,9 @@ What the view suite asserts:
 * Role gates exist on every privileged page (`people`, `security`, `settings` → admin; `treasury` → treasurer).
 * Every form `action` in the templates has a matching POST handler; every bottom-navigation target is a routed page.
 * No template prints raw `$_GET/$_POST/$_SERVER/$_COOKIE`.
+* Every form action in the templates has a POST handler, and the only GET-with-action route
+  (`document-download`) lives in its own file with scope, attachment and `realpath` containment
+  checks — the tests assert all three.
 * The stylesheet declares 16 px base type, a 48 px touch token, 16 px inputs, both themes, reduced-motion, print, tracker, combobox, offline banner and install prompt — and contains no type below 13 px.
 * The manifest is valid JSON with 192/512 any-purpose **and** maskable icons that exist on disk; the service worker versions its cache, deletes old caches, and refuses to cache `/api/` or non-GET requests.
 

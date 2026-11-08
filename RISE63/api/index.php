@@ -23,7 +23,9 @@ if (!installed()) {
     exit;
 }
 
-Security::startSession();
+// A read-only JSON endpoint does not need a session; skipping it avoids a session file for
+// every keystroke debounce and keeps the endpoint independent of login state.
+Security::sendHeaders(false);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -35,17 +37,41 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-if (Auth::user() === null) {
-    http_response_code(401);
-    echo json_encode(['error' => 'authentication-required']);
-    exit;
+$signedIn = Auth::user() !== null;
+$term     = substr(trim((string) ($_GET['q'] ?? '')), 0, 80);
+
+if (!$signedIn) {
+    // The registration form needs the picker before anyone has an account. Anonymous callers
+    // get a deliberately narrow answer: a minimum of three characters (so the directory cannot
+    // be enumerated in one request), at most 15 rows, and only names — no codes or contacts.
+    if (mb_strlen($term) < 3) {
+        echo json_encode(['parishes' => [], 'term' => $term, 'hint' => 'Type at least three characters.']);
+        exit;
+    }
+    $cookie = 'rise63_geo_lookups';
+    $count  = (int) ($_COOKIE[$cookie] ?? 0);
+    if ($count > 120) {
+        http_response_code(429);
+        echo json_encode(['error' => 'too-many-requests']);
+        exit;
+    }
+    setcookie($cookie, (string) ($count + 1), ['expires' => time() + 3600, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => Security::isHttps()]);
 }
 
-$term = substr(trim((string) ($_GET['q'] ?? '')), 0, 80);
 try {
-    $parishes = ParishDirectory::search($term, 40);
-    if ($term === '' && $parishes === []) {
+    $parishes = ParishDirectory::search($term, $signedIn ? 40 : 15);
+    if ($signedIn && $term === '' && $parishes === []) {
         $parishes = ParishDirectory::search('', 10);
+    }
+    if (!$signedIn) {
+        $parishes = array_map(static fn (array $row): array => [
+            'id'     => $row['id'],
+            'label'  => $row['label'],
+            'parish' => $row['parish'],
+            'area'   => $row['area'],
+            'zone'   => $row['zone'],
+            'code'   => null,
+        ], $parishes);
     }
     echo json_encode(['parishes' => $parishes, 'term' => $term], JSON_UNESCAPED_UNICODE);
 } catch (\Throwable $error) {

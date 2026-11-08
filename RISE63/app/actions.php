@@ -172,20 +172,6 @@ try {
             $back('dashboard');
 
         // ── Applications ─────────────────────────────────────────────────────────────
-        case 'application-submit':
-            $account = Auth::requireLogin();
-            $type    = (string) $input('program_type', '');
-            $result  = Applications::submit($account, $type, [
-                'education_level'  => (string) $input('education_level', 'none'),
-                'school_name'      => (string) $input('school_name', ''),
-                'school_class'     => (string) $input('school_class', ''),
-                'requested_amount' => (string) $input('requested_amount', '0'),
-                'answers'          => $array('answers'),
-                'idempotency_key'  => (string) $input('idempotency_key', ''),
-            ]);
-            flash($result['created'] ? 'Application received. We will review it shortly.' : 'That application had already been received — nothing was duplicated.', 'success');
-            redirect('application', ['id' => $result['id']]);
-
         case 'application-transition':
             $account = Auth::requireLogin();
             $id      = (int) ($_POST['application_id'] ?? 0);
@@ -202,6 +188,17 @@ try {
             flash('Application moved to ' . Program::statusLabel($to) . '.', 'success');
             $back('applications');
 
+        case 'academy-save':
+            $account     = Auth::requireLogin();
+            $id          = (int) ($_POST['application_id'] ?? 0);
+            $application = Applications::find($id, $account);
+            if ($application === null) {
+                throw new NotFound('That application is not available to you.');
+            }
+            RISE63\Core\Academy::save($application, $account, $_POST);
+            flash('Academy attendance saved.', 'success');
+            redirect('application', ['id' => $id]);
+
         case 'application-withdraw':
             $account = Auth::requireLogin();
             $id      = (int) ($_POST['application_id'] ?? 0);
@@ -213,9 +210,32 @@ try {
             flash('Application withdrawn.', 'success');
             redirect('my-rise');
 
-        case 'application-document':
+        case 'document-upload':
+            // Optional attachment chosen on the apply form, plus later uploads from the detail page.
             $account = Auth::requireLogin();
-            $id      = (int) ($_POST['application_id'] ?? 0);
+            $type    = (string) $input('program_type', '');
+
+            if ($type !== '') {
+                // Coming straight from the apply form: create the application, then attach.
+                $result = Applications::submit($account, $type, [
+                    'education_level'  => (string) $input('education_level', 'none'),
+                    'school_name'      => (string) $input('school_name', ''),
+                    'school_class'     => (string) $input('school_class', ''),
+                    'requested_amount' => (string) $input('requested_amount', '0'),
+                    'answers'          => $array('answers'),
+                    'idempotency_key'  => (string) $input('idempotency_key', ''),
+                ]);
+                $id = $result['id'];
+                if (($_FILES['document']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                    $document = Security::storeUpload($_FILES['document'] ?? []);
+                    $document['type'] = 'supporting document';
+                    Applications::attachDocument($id, $document, (int) $account['id']);
+                }
+                flash('Application received' . (isset($document) ? ' with your document' : '') . '. We will review it shortly.', 'success');
+                redirect('application', ['id' => $id]);
+            }
+
+            $id          = (int) ($_POST['application_id'] ?? 0);
             $application = Applications::find($id, $account);
             if ($application === null || (int) $application['user_id'] !== (int) $account['id']) {
                 throw new NotFound('That application is not available to you.');
@@ -224,49 +244,6 @@ try {
             $document['type'] = (string) $input('document_type', 'supporting document');
             Applications::attachDocument($id, $document, (int) $account['id']);
             flash('Document uploaded: ' . $document['name'], 'success');
-            redirect('application', ['id' => $id]);
-
-        case 'document-download':
-            $account = Auth::requireLogin();
-            $stored  = (string) ($_GET['file'] ?? '');
-            if (preg_match('/^[a-f0-9]{32}-[A-Za-z0-9._-]{1,80}$/D', $stored) !== 1) {
-                Security::fail(404, 'Document not found.');
-            }
-            $applicationId = (int) ($_GET['id'] ?? 0);
-            $application   = Applications::find($applicationId, $account);
-            if ($application === null) {
-                Security::fail(403, 'You cannot open that document.');
-            }
-            $owned = false;
-            foreach (Applications::documents($application) as $doc) {
-                if (($doc['stored'] ?? '') === $stored) {
-                    $owned = true;
-                    break;
-                }
-            }
-            if (!$owned) {
-                Security::fail(404, 'Document not found.');
-            }
-            $path = RISE63\path('storage/documents/' . $stored);
-            if (!is_file($path)) {
-                Security::fail(404, 'Document not found.');
-            }
-            header('Content-Type: application/octet-stream');
-            header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $stored) . '"');
-            header('Content-Length: ' . (string) filesize($path));
-            header('X-Content-Type-Options: nosniff');
-            readfile($path);
-            exit;
-
-        case 'academy-save':
-            $account = Auth::requireLogin();
-            $id      = (int) ($_POST['application_id'] ?? 0);
-            $application = Applications::find($id, $account);
-            if ($application === null) {
-                throw new NotFound('That application is not available to you.');
-            }
-            RISE63\Core\Academy::save($application, $account, $_POST);
-            flash('Academy attendance saved.', 'success');
             redirect('application', ['id' => $id]);
 
         // ── Parish Connect ───────────────────────────────────────────────────────────
