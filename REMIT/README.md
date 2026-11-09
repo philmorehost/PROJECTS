@@ -400,3 +400,24 @@ php tests/redesign-ui.php /tmp/remit-redesign
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/representative-remittance-browser.js /tmp/remit-redesign
 ```
+
+## 0.9.0 — Readable account details and installable PWA
+
+Explicit dark text fixes the bank-card regression (white inherited text on a pale background). Account number, bank name, account name and caption now have separate high-contrast foregrounds. Supporting text, form labels, placeholders, allocation previews, cards and navigation text are darker and clearer without changing any account values, percentages or financial behavior.
+
+### Install REMIT
+
+Deploy over **HTTPS**. A scoped web manifest, standalone display, 192/512px and maskable icons, Apple home-screen metadata and root service worker make REMIT installable in supporting browsers. Chromium's **Install app** banner appears when the browser emits `beforeinstallprompt`; the browser's native install dialog is triggered only by a user click. Safari/iOS receives manual Share → Add to Home Screen instructions. Dismissing the banner suppresses it for **30 days** in that browser/profile. Installed/standalone mode and the `appinstalled` event suppress it, with a scoped local-storage hint shared between same-origin tabs. Storage-denied/private mode is best effort. A fresh native install-eligibility event can clear a stale installed hint after uninstalling. Other unsupported browsers are not falsely promised installation.
+
+**Browser → installed app:** web pages cannot reliably detect every previously installed PWA or force-open it when someone types a URL into a browser. REMIT does not use redirect loops, custom URL schemes, Android package guesses or fake “Open app” buttons. `launch_handler: navigate-existing` asks supporting browsers to reuse an installed app window when the browser/OS launches the PWA. Actual link capture/open-in-app depends on browser/OS capabilities and user preferences. Otherwise open REMIT from its home-screen/app icon. Local installed hints do not prove installation in another browser/profile and can become stale after uninstalling or clearing storage. This is a platform limitation, not an automatic handoff guarantee.
+
+### Offline and financial privacy
+
+The worker is scoped to the deployment directory, supports subfolder installs, and versions cache names per scope. It caches **only** the generic offline screen, its stylesheet and public icons. Financial pages, bank details, profiles, login/session responses, APIs, receipts and POST requests are never put in the service-worker cache. Navigations are network-first without caching their responses; network failure shows a generic reconnect screen. There is **no offline payment/report queue or automatic POST replay**. Reconnect to transact. Authentication, session expiry and sign-in requirements remain unchanged. `sw.js` and the manifest are revalidated; scripts/styles use fingerprinted names. Deployment and licence-managed updates must include the manifest, worker, offline screen and icons; updater exceptions are restricted to those exact new root/icon paths.
+
+Validation adds **24** browser assertions for native-prompt simulation, persistent dismissal, installed/standalone suppression, Safari-instruction simulation, nested deployment scope, icons/manifest, offline fallback, no private-cache entries, failed offline POST and bank-text contrast (all four card text elements ≥4.5:1). Native OS installation, iOS rendering and browser link capture still require real-device acceptance. Existing finance, role, remittance, directory and responsive regressions are retained. No database migration is required.
+
+```sh
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/pwa-browser.js
+```

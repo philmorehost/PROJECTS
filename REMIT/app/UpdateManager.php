@@ -123,7 +123,8 @@ final class UpdateManager
     public static function allowed(string $path): bool
     {
         self::safePath($path);
-        if (in_array($path, ['index.php', 'router.php', '.htaccess', '.gitignore', 'version.json', 'README.md'], true)) return true;
+        if (in_array($path, ['index.php', 'router.php', '.htaccess', '.gitignore', 'version.json', 'README.md', 'manifest.webmanifest', 'sw.js', 'offline.html'], true)) return true;
+        if(preg_match('~^public/assets/remit-(?:192|512|maskable-512)\.png$~D',$path))return true;
         if (!preg_match('~^(app|bin|tests|database|public/assets)/~', $path)) return false;
         foreach (explode('/', $path) as $part) if (str_starts_with($part, '.') && $part !== '.htaccess') return false;
         return (bool)preg_match('~(?:\.(?:php|css|js|json|md|sql)|/\.htaccess)$~D', $path);
