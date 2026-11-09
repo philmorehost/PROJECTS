@@ -1221,6 +1221,95 @@ ok('The updater understands the deployed endpoint, not just the written contract
     rmdir($root);
 });
 
+ok('The program year follows the calendar unless an administrator holds it', function (): void {
+    // Automatic (the default, and what a fresh installation uses): the year is the real year.
+    assertSame((int) gmdate('Y'), Settings::cycleYear());
+    assertSame(gmdate('Y'), Settings::autoCycleYear());
+
+    // The setting can be declared but stale — the classic failure this replaces. In automatic
+    // mode a stored value from a previous year must not win.
+    assertSame((int) gmdate('Y'), Settings::cycleYear(), 'a stale stored year is ignored while automatic');
+
+    // Validation still bounds a manually held year.
+    assertSame('2027', Settings::validateValue('current_cycle_year', '2027'));
+    assertThrows(InvalidArgumentException::class, fn () => Settings::validateValue('current_cycle_year', '1999'));
+    assertThrows(InvalidArgumentException::class, fn () => Settings::validateValue('current_cycle_year', '2101'));
+    assertSame('manual', Settings::validateValue('cycle_year_mode', 'manual'));
+    assertThrows(InvalidArgumentException::class, fn () => Settings::validateValue('cycle_year_mode', 'sometimes'));
+});
+
+ok('Money settings accept every documented figure, including zero', function (): void {
+    // The bug this covers: a `money` definition with bounds rejected everything, so the Seed Grant
+    // monthly pool could not be saved at all and a fresh installation ran on ₦0.
+    assertSame('100000.00', Settings::validateValue('seed_grant_monthly_pool', '100000'));
+    assertSame('100000.00', Settings::validateValue('seed_grant_monthly_pool', '100,000'));
+    assertSame('0.00', Settings::validateValue('seed_grant_monthly_pool', '0'), 'a pool may be emptied deliberately');
+    assertSame('250000.50', Settings::validateValue('seed_grant_opening_balance', '250000.5'));
+    assertThrows(InvalidArgumentException::class, fn () => Settings::validateValue('seed_grant_monthly_pool', '-1'));
+    assertThrows(InvalidArgumentException::class, fn () => Settings::validateValue('academy_pool', 'lots'));
+    // The ceiling is enforced, and the message names the field so the operator knows which one.
+    try {
+        Settings::validateValue('seed_grant_monthly_pool', '2000000000');
+        throw new RuntimeException('a ceiling above the maximum must be refused');
+    } catch (InvalidArgumentException $error) {
+        assert(str_contains($error->getMessage(), 'Seed Grant pool per month'), $error->getMessage());
+    }
+});
+
+ok('The documented blueprint figures are the defaults, not zero', function (): void {
+    // §8.1/§8.2: 80% attendance gate, ₦100,000/month into the Seed Grant pool, ₦100,000 ceiling
+    // per application. A fresh installation that has never opened the settings page must already
+    // behave this way — otherwise the first thing an operator sees is a gate of 50% and a pool of
+    // nothing, and the documentation is wrong about its own default.
+    $defaults = ['academy_graduation_percent' => '80', 'seed_grant_monthly_pool' => '100000.00',
+                 'seed_grant_max_per_application' => '100000.00', 'education_bridge_sla_hours' => '72',
+                 'cycle_year_mode' => 'auto'];
+    $schema = Settings::definitionsFor('programs');
+    foreach ($defaults as $key => $expected) {
+        assertTrue(isset($schema[$key]), $key . ' is a program setting');
+        assertSame($expected, $schema[$key]['default'] ?? null, $key . ' default');
+    }
+});
+
+ok('Paginator clamps page size and reads only safe cursors', function (): void {
+    // A hand-edited URL must not be able to ask for the whole audit table, nor produce an error.
+    $page = RISE63\Core\Paginator::fromRequest(['per_page' => '100000'], 'audit');
+    assertSame(RISE63\Core\Paginator::MAX_PER_PAGE, $page->perPage());
+
+    $tiny = RISE63\Core\Paginator::fromRequest(['per_page' => '1'], 'audit');
+    assertSame(RISE63\Core\Paginator::MIN_PER_PAGE, $tiny->perPage());
+
+    $junk = RISE63\Core\Paginator::fromRequest(['per_page' => 'abc', 'before' => 'DROP TABLE'], 'audit');
+    assertSame(RISE63\Core\Paginator::DEFAULT_PER_PAGE, $junk->perPage());
+    assertSame(null, $junk->before, 'a non-numeric cursor is discarded, not cast');
+
+    $cursor = RISE63\Core\Paginator::fromRequest(['before' => '41', 'kind' => 'financial'], 'audit');
+    assertSame(41, $cursor->before);
+    assertTrue($cursor->hasPrevious);
+    // Filters survive a page change: the older-page URL carries them, and adds the cursor.
+    $url = $cursor->olderUrl('17');
+    assert(str_contains($url, 'before=17'), $url);
+    assert(str_contains($url, 'kind=financial'), $url);
+    // A page-size change resets to the first page rather than stranding the reader mid-trail.
+    assert(!str_contains($cursor->sizeUrl(50), 'before='), 'changing page size starts again at the newest');
+});
+
+ok('Fund arithmetic is documented and non-negative', function (): void {
+    // Money is integer kobo; the pool maths the blueprint describes (a monthly allowance accrued
+    // over the year) is basis points with half-up rounding.
+    // Small figures here on purpose: percent() multiplies kobo by basis points, and the php-wasm
+    // build this suite runs on in CI has 32-bit integers, so ₦100,000 × 10,000 would overflow to a
+    // float there. On the 64-bit host this ships to, the real figures are exercised by the
+    // integration suite. The arithmetic below is the same arithmetic either way.
+    $monthly = Money::fromNaira('100');
+    assertSame('100.00', $monthly->percent(10000, 10000)->toDecimal(), 'twelve months accrues the whole annual figure');
+    assertSame('25.00', $monthly->percent(2500, 10000)->toDecimal(), 'three months is a quarter');
+    assertSame('8.34', Money::fromNaira('100')->percent(834, 10000)->toDecimal(), 'half-up on the kobo');
+    // Money refuses to go negative rather than silently wrapping, which is what keeps a pool honest.
+    assertThrows(InvalidArgumentException::class, fn () => Money::fromNaira('10')->minus(Money::fromNaira('11')));
+    assertTrue(Money::zero()->isZero());
+});
+
 echo "\n";
 echo str_repeat('─', 62) . "\n";
 

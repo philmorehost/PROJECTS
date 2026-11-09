@@ -136,6 +136,19 @@ $base = [
     'page' => 'test',
 ];
 
+/**
+ * The parts of the People screen that are not the roster itself: filters, counts, the parish picker
+ * and the pager. Shared so each of the three people-related tests does not restate them — and so a
+ * change to the view's contract fails in one place rather than three.
+ */
+$peopleFixture = [
+    'term' => '', 'roleFilter' => '', 'statusFilter' => '',
+    'counts' => ['total' => 12, 'suspended' => 1, 'temporary' => 2, 'admins' => 2, 'treasurers' => 1, 'reps' => 3, 'members' => 6],
+    'parishes' => [['id' => 5, 'parish_name' => 'LIVING WATER PARISH']],
+    'editing' => null,
+    'pager' => RISE63\Core\Paginator::fromState(20, null, 2, ['per_page' => '20'], 'people', true),
+];
+
 $renderPage = static function (string $view, array $data, ?array $account = null) use ($base): string {
     $payload = $data + $base;
     $payload['account'] = $account;
@@ -322,7 +335,7 @@ ok('The bulk paste box explains its own format and previews before writing', fun
     assertContains('More than three columns.', $previewing);
 });
 
-ok('A member can name a church that is not in the directory, and admins see the queue', function () use ($renderPage, $admin, $member): void {
+ok('A member can name a church that is not in the directory, and admins see the queue', function () use ($renderPage, $admin, $member, $peopleFixture): void {
     $profile = $renderPage('member/profile', [
         'devices' => [], 'pinLock' => 0, 'parish' => null,
     ], $member);
@@ -330,18 +343,40 @@ ok('A member can name a church that is not in the directory, and admins see the 
     assertContains('data-caps', $profile);
 
     // "Add it later" is only honest if somebody is told what to add.
-    $people = $renderPage('staff/people', [
-        'people' => [], 'term' => '', 'roles' => RISE63\Core\Auth::ROLES,
+    $people = $renderPage('staff/people', array_merge($peopleFixture, [
+        'people' => [],
         'unlisted' => [['parish_name_raw' => 'CHAPEL OF WONDERS PARISH', 'member_count' => 3]],
-    ], $admin);
+    ]), $admin);
     assertContains('Churches members asked for', $people);
     assertContains('CHAPEL OF WONDERS PARISH', $people);
     assertContains('3 member(s)', $people);
 
-    $nothing = $renderPage('staff/people', [
-        'people' => [], 'term' => '', 'roles' => RISE63\Core\Auth::ROLES, 'unlisted' => [],
-    ], $admin);
+    $nothing = $renderPage('staff/people', array_merge($peopleFixture, ['people' => [], 'unlisted' => []]), $admin);
     assertMissing('Churches members asked for', $nothing, 'an empty queue is not a section');
+});
+
+ok('Impersonation shows a banner that cannot be confused with a normal session', function () use ($renderPage, $member): void {
+    // A page rendered for the member, while the administrator's session is remembered.
+    $_SESSION['rise63_impersonator'] = ['id' => 1, 'name' => 'Amaka Obi', 'email' => 'amaka@example.ng', 'at' => '2026-11-08T09:00:00+00:00'];
+    $home = [
+        'applications' => [],
+        'summary' => ['total' => 0, 'pending' => 0, 'approved' => 0, 'disbursed' => 0, 'rejected' => 0, 'requested' => 0],
+        'eligibility' => [
+            'academy' => ['label' => 'RISE Academy', 'available' => true, 'reason' => null],
+            'seed_grant' => ['label' => 'Seed Grant', 'available' => false, 'reason' => 'Academy graduation required'],
+        ],
+    ];
+    $html = $renderPage('member/home', $home, $member);
+    unset($_SESSION['rise63_impersonator']);
+
+    assertContains('impersonation-bar', $html);
+    assertContains('started by Amaka Obi', $html);
+    assertContains('value="user-login-as-stop"', $html, 'and a way back out');
+    assertContains('Return to my account', $html);
+
+    // Without the session flag there is no banner at all.
+    $plain = $renderPage('member/home', $home, $member);
+    assertMissing('impersonation-bar', $plain, 'a normal session never shows the banner');
 });
 
 ok('Error, maintenance and gate screens are self-contained', function (): void {
@@ -546,6 +581,24 @@ ok('Treasury screen shows pending payouts, PIN entry and the ledger', function (
         ]],
         'totals' => ['disbursed' => RISE63\Core\Money::fromNaira('100000'), 'pending' => RISE63\Core\Money::fromNaira('50000'), 'pool' => RISE63\Core\Money::zero()],
         'pinLock' => 0,
+        'cycleYear' => 2026,
+        'funds' => [[
+            'program' => 'seed_grant',
+            'label' => 'Seed Grants',
+            'balance' => [
+                'opening' => RISE63\Core\Money::fromNaira('100000'), 'deposited' => RISE63\Core\Money::zero(),
+                'adjusted' => RISE63\Core\Money::zero(), 'disbursed' => RISE63\Core\Money::fromNaira('100000'),
+                'committed' => RISE63\Core\Money::fromNaira('100000'),
+                'remaining' => RISE63\Core\Money::zero(), 'funded' => true, 'source' => 'set',
+            ],
+            'configured' => RISE63\Core\Money::fromNaira('100000'),
+        ]],
+        'poolEntries' => [[
+            'id' => 5, 'action' => 'ledger.set_pool', 'entity' => 'fund', 'entity_id' => 'seed_grant',
+            'actor_email' => 'amaka@example.ng', 'actor_name' => 'Amaka Obi',
+            'created_at' => '2026-11-01 09:00:00',
+            'summary' => 'Seed Grants pool for 2026 set to ₦100,000.00 (Provincial board allocation)',
+        ]],
         'approved' => [[
             'id' => 9, 'full_name' => 'Chinedu Eze', 'program_type' => 'seed_grant', 'requested_amount' => '100000.00', 'status' => 'approved',
         ]],
@@ -554,22 +607,120 @@ ok('Treasury screen shows pending payouts, PIN entry and the ledger', function (
     assertContains('type="password"', $html);
     assertContains('Append-only', $html);
     assertContains('LED-RS63-AAAA-261101', $html);
+
+    // "Where does the admin set the Seed Grant pool left?" — here, next to the ledger it governs.
+    assertContains('id="funds"', $html, 'the fund panel is linkable from the dashboard');
+    assertContains('Set the Seed Grant pool', $html);
+    assertContains('value="fund-set-pool"', $html);
+    assertContains('value="fund-deposit"', $html, 'money received is recorded as its own event');
+    assertContains('Pool decisions', $html);
+    assertContains('Pool = opening commitment + deposits + adjustments − disbursed', $html);
+    // The restated-to figure appears, and is attributed.
+    assertContains('Provincial board allocation', $html);
+    assertContains('Amaka Obi', $html);
 });
 
-ok('People screen offers role changes and suspension', function () use ($renderPage, $admin): void {
-    $html = $renderPage('staff/people', [
+ok('People screen offers role changes and suspension', function () use ($renderPage, $admin, $peopleFixture): void {
+    $html = $renderPage('staff/people', array_merge($peopleFixture, [
         'people' => [
             ['id' => 2, 'full_name' => 'Chinedu Eze', 'email' => 'chinedu@example.ng', 'role' => 'youth_member',
              'parish_name' => 'Living Water', 'last_login_at' => null, 'is_suspended' => 0],
             ['id' => 1, 'full_name' => 'Amaka Obi', 'email' => 'amaka@example.ng', 'role' => 'provincial_admin',
              'parish_name' => null, 'last_login_at' => '2026-11-08 08:00:00', 'is_suspended' => 0],
         ],
-        'term' => '',
-        'roles' => RISE63\Core\Auth::ROLES,
-    ], $admin);
+    ]), $admin);
     assertContains('Suspend', $html);
     assertContains('Never', $html, 'accounts that never signed in');
     assertContains('Temporary password', $html);
+});
+
+ok('People screen supports the whole member lifecycle from the admin side', function () use ($renderPage, $admin, $peopleFixture): void {
+    $html = $renderPage('staff/people', array_merge($peopleFixture, [
+        'people' => [
+            ['id' => 2, 'full_name' => 'Chinedu Eze', 'email' => 'chinedu@example.ng', 'role' => 'youth_member',
+             'parish_name' => 'Living Water', 'last_login_at' => null, 'is_suspended' => 0],
+            ['id' => 1, 'full_name' => 'Amaka Obi', 'email' => 'amaka@example.ng', 'role' => 'provincial_admin',
+             'parish_name' => null, 'last_login_at' => '2026-11-08 08:00:00', 'is_suspended' => 0],
+        ],
+    ]), $admin);
+
+    // Create, including a church typed by hand and an optional password (one is generated).
+    assertContains('value="user-create"', $html);
+    assertContains('name="parish_name_raw"', $html, 'an unlisted church can be typed at creation');
+    assertContains('Leave blank and one is generated', $html);
+
+    // Edit: a link on every row, and the form itself when an account is opened.
+    assertContains('Edit', $html);
+    $editing = $renderPage('staff/people', array_merge($peopleFixture, [
+        'people' => [],
+        'editing' => ['id' => 2, 'full_name' => 'Chinedu Eze', 'email' => 'chinedu@example.ng',
+                      'phone' => '08030000000', 'role' => 'youth_member', 'parish_id' => null,
+                      'parish_name_raw' => 'CHAPEL OF WONDERS PARISH', 'created_at' => '2026-10-01 09:00:00'],
+    ]), $admin);
+    assertContains('value="user-update"', $editing);
+    assertContains('Edit Chinedu Eze', $editing);
+    assertContains('name="phone"', $editing, 'the editing phone field is present');
+    // The view closes the quote with a typographic mark; the assertion spells it out so this
+    // cannot silently pass on a curly-vs-straight substitution.
+    assertContains('CHAPEL OF WONDERS PARISH' . "\u{201D}" . ', which is not in the directory', $editing);
+
+    // Delete, with a confirmation that says it cannot be undone.
+    assertContains('value="user-delete"', $html);
+    assertContains('cannot be undone', $html);
+
+    // Login as, only for the other (non-admin) person.
+    assertContains('value="user-login-as"', $html);
+
+    // A second administrator.
+    assertContains('value="user-admin-create"', $html);
+    assertContains('Create another administrator', $html);
+    assertContains('one administrator cannot act invisibly', $html);
+
+    // The row for yourself offers no suspend/delete — an admin cannot lock themselves out.
+    assertContains('badge-info">you', $html);
+    assertContains('Create an account', $html);
+
+    // Filters and paging.
+    assertContains('name="status"', $html);
+    assertContains('name="role"', $html);
+    assertContains('Per page', $html);
+});
+
+ok('Activity report accounts for every administrator and member', function () use ($renderPage, $admin): void {
+    $html = $renderPage('staff/audit', [
+        'summary' => [
+            ['actor_id' => 1, 'actor_name' => 'Amaka Obi', 'actor_email' => 'amaka@example.ng',
+             'actor_role' => 'provincial_admin', 'event_count' => 42, 'money_count' => 9,
+             'account_count' => 5, 'last_seen' => '2026-11-08 09:00:00'],
+            ['actor_id' => 2, 'actor_name' => 'Chinedu Eze', 'actor_email' => 'chinedu@example.ng',
+             'actor_role' => 'youth_member', 'event_count' => 3, 'money_count' => 1,
+             'account_count' => 0, 'last_seen' => '2026-11-07 19:00:00'],
+        ],
+        'events' => [[
+            'id' => 900, 'created_at' => '2026-11-08 09:00:00', 'actor_email' => 'amaka@example.ng',
+            'actor_name' => 'Amaka Obi', 'actor_role' => 'provincial_admin', 'actor_suspended' => 0,
+            'action' => 'ledger.set_pool', 'entity' => 'fund', 'entity_id' => 'seed_grant',
+            'summary' => 'Seed Grants pool for 2026 set to ₦600,000.00',
+        ]],
+        'pager' => RISE63\Core\Paginator::fromState(25, null, 1, ['per_page' => '25'], 'audit', true),
+        'filters' => ['actor' => '', 'action' => '', 'entity' => '', 'kind' => '', 'q' => ''],
+        'actors' => [['id' => 1, 'full_name' => 'Amaka Obi', 'email' => 'amaka@example.ng', 'role' => 'provincial_admin']],
+        'actions' => ['ledger.set_pool', 'user.role'],
+        'total' => 1842, 'financial' => 214, 'adminEvents' => 645, 'cycleYear' => 2026,
+    ], $admin);
+
+    assertContains('Activity report', $html);
+    assertContains('Who has been doing what', $html);
+    assertContains('1842', $html, 'the total is stated');
+    assertContains('645', $html, 'administrator actions are counted separately');
+    // Members appear alongside administrators, not only staff.
+    assertContains('Chinedu Eze', $html);
+    assertContains('Youth Member', $html, 'the role is shown in words, not the raw enum');
+    // Each person can be drilled into.
+    assertContains('Their events', $html);
+    assertContains('ledger.set_pool', $html);
+    // And the log itself pages.
+    assertContains('Older', $html);
 });
 
 ok('Security centre renders policy, blocks, countries and the log', function () use ($renderPage, $admin): void {
@@ -607,14 +758,34 @@ ok('Settings screen groups every typed setting', function () use ($renderPage, $
                        'seed_grant_max_per_application' => '100000.00', 'education_bridge_sla_hours' => '72', 'current_cycle_year' => '2026'],
         'outbox' => [['id' => 1, 'recipient' => 'ops@example.ng', 'subject' => 'Test', 'status' => 'pending', 'attempts' => 0, 'created_at' => '2026-11-08 09:00:00']],
         'queue' => ['pending' => 1, 'failed' => 0],
-        'audit' => [['created_at' => '2026-11-08 09:00:00', 'actor_email' => 'amaka@example.ng', 'action' => 'settings.update',
+        'audit' => [['id' => 41, 'created_at' => '2026-11-08 09:00:00', 'actor_email' => 'amaka@example.ng',
+                     'actor_name' => 'Amaka Obi', 'actor_role' => 'provincial_admin', 'action' => 'settings.update',
                      'entity' => 'setting', 'entity_id' => 'site_title', 'summary' => 'site_title changed']],
+        'auditPager' => RISE63\Core\Paginator::fromState(25, null, 1, ['per_page' => '25'], 'settings', true),
+        'auditFilters' => ['actor' => '', 'action' => '', 'entity' => '', 'kind' => '', 'q' => ''],
+        'auditActors' => [['id' => 1, 'full_name' => 'Amaka Obi', 'email' => 'amaka@example.ng', 'role' => 'provincial_admin']],
+        'auditActions' => ['settings.update', 'user.role'],
+        'auditTotal' => 128,
+        'cycleYear' => 2026,
+        'autoYear' => '2026',
+        'yearMode' => 'auto',
+        'funds' => [],
     ], $admin);
     assertContains('Settings', $html);
     assertContains('name="settings[site_title]"', $html);
     assertContains('name="settings_bool[pwa_install_prompt]"', $html);
     assertContains('Queue a test message', $html);
     assertContains('Audit trail', $html);
+    // The audit card pages, and says so without JavaScript.
+    assertContains('Older', $html, 'the audit card offers a next page');
+    assertContains('128 events recorded', $html);
+    assertContains('Per page', $html);
+    // The program year explains itself and does not ask to be typed while automatic.
+    assertContains('Program year', $html);
+    assertContains('advances by itself on 1 January', $html);
+    assertContains('name="settings[cycle_year_mode]"', $html);
+    // Bookkeeping keys are not offered as free-text fields.
+    assertMissing('name="settings[seed_grant_opening_balance_year]"', $html, 'the pool year is written by the ledger, not typed');
 });
 
 ok('Academy attendance is recorded by staff and shown to the applicant', function () use ($renderPage, $admin, $member): void {

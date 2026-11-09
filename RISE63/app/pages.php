@@ -242,6 +242,11 @@ switch ($page) {
             'entries'  => Ledger::entries(80),
             'totals'   => Ledger::totals(),
             'pinLock'  => Auth::pinLockedFor($user),
+            'cycleYear' => Settings::cycleYear(),
+            'funds'    => \RISE63\Core\Fund::all(Settings::cycleYear()),
+            // Where an administrator restated a pool. A budget decision, so it lives in the audit
+            // trail; the ledger beside it holds only deposits and disbursements.
+            'poolEntries' => \RISE63\Core\Fund::poolHistory(10),
             'approved' => Database::all(
                 "SELECT a.*, u.full_name FROM program_applications a JOIN users u ON u.id = a.user_id
                  WHERE a.status = 'approved' ORDER BY a.approved_at ASC LIMIT 50"
@@ -285,23 +290,30 @@ switch ($page) {
 
     case 'people':
         $requireAdmin();
-        $term = (string) ($_GET['q'] ?? '');
-        $sql  = 'SELECT u.*, p.parish_name, a.area_name, z.zone_name FROM users u
-                 LEFT JOIN parishes p ON p.id = u.parish_id
-                 LEFT JOIN areas a ON a.id = p.area_id
-                 LEFT JOIN zones z ON z.id = a.zone_id';
-        $params = [];
-        if ($term !== '') {
-            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
-            $sql .= ' WHERE UPPER(u.full_name) LIKE ? OR UPPER(u.email) LIKE ? OR UPPER(COALESCE(p.parish_name, \'\')) LIKE ?';
-            $params = [$like, $like, $like];
-        }
-        $sql .= ' ORDER BY u.role, u.full_name LIMIT 300';
+        $directory = \RISE63\Core\Members::directory($_GET);
         $render('staff/people', [
             'title'    => 'People & roles',
-            'people'   => Database::all($sql, $params),
-            'term'     => $term,
+            'people'   => $directory['rows'],
+            'pager'    => $directory['page'],
+            'term'     => $directory['term'],
+            'roleFilter' => $directory['role'],
+            'statusFilter' => $directory['status'],
+            'counts'   => $directory['counts'],
             'roles'    => Auth::ROLES,
+            // The account being edited, if the URL names one. One row, fetched here rather than
+            // filtered out of the page in the template, so an id outside this page still works.
+            'editing'  => isset($_GET['user'])
+                ? Database::one(
+                    'SELECT u.*, p.parish_name FROM users u LEFT JOIN parishes p ON p.id = u.parish_id WHERE u.id = ?',
+                    [(int) $_GET['user']]
+                  )
+                : null,
+            // The parish list for the edit form. Scoped to active parishes; the combobox on the
+            // create form does live search, but this form is for one person, where a native picker
+            // is one tap rather than three.
+            'parishes' => Database::all(
+                'SELECT p.id, p.parish_name FROM parishes p WHERE p.is_active = 1 ORDER BY p.parish_name'
+            ),
             // The queue the "add it later" promise depends on: members who typed a church that is
             // still not in the directory. Without showing it, nobody ever adds them.
             'unlisted' => Database::all(
@@ -344,6 +356,13 @@ switch ($page) {
 
     case 'settings':
         $requireAdmin();
+        $audit = Audit::page($_GET, [
+            'actor'  => (string) ($_GET['actor'] ?? ''),
+            'action' => (string) ($_GET['do'] ?? ''),
+            'entity' => (string) ($_GET['entity'] ?? ''),
+            'kind'   => (string) ($_GET['kind'] ?? ''),
+            'q'      => (string) ($_GET['q'] ?? ''),
+        ], 'settings');
         $render('staff/settings', [
             'title'   => 'Settings',
             'settings' => Settings::all(),
@@ -352,7 +371,43 @@ switch ($page) {
                 'pending' => (int) Database::value("SELECT COUNT(*) FROM notification_outbox WHERE status = 'pending'"),
                 'failed'  => (int) Database::value("SELECT COUNT(*) FROM notification_outbox WHERE status = 'failed'"),
             ],
-            'audit'   => Audit::recent(30),
+            'audit'       => $audit['rows'],
+            'auditPager'  => $audit['page'],
+            'auditFilters' => $audit['filters'],
+            'auditActors' => Audit::actors(),
+            'auditActions' => Audit::actions(),
+            'auditTotal'  => Audit::count(),
+            'cycleYear'   => Settings::cycleYear(),
+            'autoYear'    => Settings::autoCycleYear(),
+            'yearMode'    => (string) Settings::get('cycle_year_mode', 'auto'),
+            'funds'       => \RISE63\Core\Fund::all(Settings::cycleYear()),
+        ]);
+        break;
+
+    // Full activity report: every administrator and member, filterable, paged. Separate from the
+    // audit card on Settings because it answers a different question — not "what happened lately"
+    // but "who has been doing what", and it is the page an operator opens during a review.
+    case 'audit':
+        $requireAdmin();
+        $report = Audit::page($_GET, [
+            'actor'  => (string) ($_GET['actor'] ?? ''),
+            'action' => (string) ($_GET['do'] ?? ''),
+            'entity' => (string) ($_GET['entity'] ?? ''),
+            'kind'   => (string) ($_GET['kind'] ?? ''),
+            'q'      => (string) ($_GET['q'] ?? ''),
+        ], 'audit');
+        $render('staff/audit', [
+            'title'        => 'Activity report',
+            'events'       => $report['rows'],
+            'pager'        => $report['page'],
+            'filters'      => $report['filters'],
+            'actors'       => Audit::actors(),
+            'actions'      => Audit::actions(),
+            'summary'      => Audit::actorSummary(40),
+            'total'        => Audit::count(),
+            'financial'    => Audit::count('e.action IN (\'' . implode("','", Audit::FINANCIAL_ACTIONS) . '\')'),
+            'adminEvents'  => Audit::count("u.role IN ('provincial_admin','provincial_treasurer')"),
+            'cycleYear'    => Settings::cycleYear(),
         ]);
         break;
 

@@ -15,6 +15,13 @@ $letter   = favicon_letter();
 $hue      = title_hue(site_title());
 $brand    = (string) (\RISE63\setting('theme_color', '#2563eb'));
 $flashes  = $flashes ?? [];
+// Impersonation state. Read straight from the session rather than passed down, because it is a
+// property of the session, not of the page, and a page that forgot to pass it would silently hide
+// the banner — which is precisely the failure that makes impersonation dangerous.
+$impersonator = $_SESSION['rise63_impersonator'] ?? null;
+if (!is_array($impersonator)) {
+    $impersonator = null;
+}
 // [label, icon name] per tab. The icons are drawn SVG (see icon() in Functions.php) rather than
 // text glyphs: a tab bar is judged by whether the marks line up, and ▤ ▦ ₦ ◈ ⚙ ⏻ do not.
 // [label, icon, short label]. The short label is rendered as well and swapped in by CSS below
@@ -83,6 +90,24 @@ foreach ($tabs as $index => $tab) {
 </head>
 <body class="<?= $account === null ? 'guest' : 'signed-in' ?><?= $large ? ' text-large' : '' ?>">
 <a class="skip-link" href="#main">Skip to main content</a>
+
+<?php if ($impersonator !== null): ?>
+  <?php /* An administrator is looking at a member's account. The banner cannot be dismissed: the
+           one thing that must never happen is an administrator forgetting whose account they are
+           acting in and, say, editing their own record through it. */ ?>
+  <div class="impersonation-bar" role="status">
+    <span>
+      Signed in as <strong><?= e((string) ($account['full_name'] ?? 'this member')) ?></strong>
+      — an administrator view started by <?= e((string) ($impersonator['name'] ?? 'an administrator')) ?>.
+      Actions are recorded against this member's account.
+    </span>
+    <form method="post" action="<?= e(url('')) ?>">
+      <?= Security::csrfField() ?>
+      <input type="hidden" name="action" value="user-login-as-stop">
+      <button class="btn btn-secondary btn-sm" type="submit">Return to my account</button>
+    </form>
+  </div>
+<?php endif; ?>
 
 <?php /* Shown only while the browser reports no connection, and removed the moment it returns —
          both are handled by app.js, which also re-tests the connection every few seconds so a

@@ -129,6 +129,13 @@ try {
         }
     }
 
+    // ── Program year ──────────────────────────────────────────────────────────────────
+    // Auto mode follows the calendar. Done here, once, before any page reads the year, so /register
+    // and /applications cannot disagree about which cycle an application belongs to.
+    if ($user !== null) {
+        Settings::rolloverCycleYear((int) $user['id']);
+    }
+
     require __DIR__ . '/app/pages.php';
 } catch (\Throwable $error) {
     error_log('RISE63: ' . $error->getMessage() . ' @ ' . $error->getFile() . ':' . $error->getLine());

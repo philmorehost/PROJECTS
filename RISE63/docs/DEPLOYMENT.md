@@ -365,10 +365,19 @@ upgrading the version it last installed, and a hand-patched tree makes that assu
 2. Open `/config/` and `/storage/` in a private browser window. **Both must return 403 or 404.** If they return a directory listing, `AllowOverride` is off: fix the vhost (see §6) or move the private folders above the document root.
 3. Open `/favicon.svg`: it must show the first letter of your site title.
 4. Open `/manifest.webmanifest` — it must be served as `application/manifest+json` or `application/json` (add a MIME type in cPanel if it downloads instead).
-5. Set the **site title**, **current program year** and **Seed Grant pool** in Settings.
-6. Create the zones and areas, then the parishes (Parishes → Manage zones and areas).
-7. Appoint the `csr_rep` accounts and the `provincial_treasurer`.
-8. Ask the treasurer to sign in and set the transaction PIN from **My account**.
+5. Set the **site title** in Settings. The **program year** needs nothing: it follows the calendar
+   year automatically and advances on 1 January. Check it reads the right year, and switch it to
+   *hold a year I choose* only if the province deliberately keeps a cycle open longer.
+6. Set the **Seed Grant pool** in **Treasury → Program funds**, not in Settings. Enter the total
+   committed for the year — not the remainder — and give a reason; the change is written to the
+   audit trail against your name. Until it is set, the documented ₦100,000-per-month allowance
+   accrues on its own and the fund card says "(accruing monthly)". Money that arrives during the
+   year is entered as a **deposit** beside it, so the ledger stays a record of events.
+7. Create the zones and areas, then the parishes (Parishes → Manage zones and areas).
+8. Appoint the `csr_rep` accounts and the `provincial_treasurer` — and a second
+   `provincial_admin` (People & roles → **Create another administrator**), so the province is never
+   one forgotten password away from losing access to its own records.
+9. Ask the treasurer to sign in and set the transaction PIN from **My account**.
 
 ---
 

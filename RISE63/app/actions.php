@@ -430,6 +430,35 @@ try {
             flash('Disbursement confirmed: ' . RISE63\Core\Money::fromDecimal($record['amount'])->format() . '.', 'success');
             redirect('treasury');
 
+        // ── Program funds ────────────────────────────────────────────────────────────
+        // "Where does the admin set the Seed Grant pool left?" The figure on the treasury screen is
+        // a real balance now, and these are the two ways it changes. They are deliberately not the
+        // same kind of write: a budget decision (set-pool) is audited because it is a decision, and
+        // money arriving (deposit) is ledgered because it is an event. Putting both in the ledger
+        // would count the same naira twice.
+        case 'fund-set-pool':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $program = (string) $input('program', 'seed_grant');
+            $year    = (int) ($_POST['cycle_year'] ?? Settings::cycleYear());
+            $amount  = RISE63\Core\Money::fromNaira((string) ($_POST['amount'] ?? ''));
+            $remaining = RISE63\Core\Fund::setPool($program, $year, $amount, (int) $account['id'], trim((string) $input('reason', '')));
+            flash(
+                RISE63\Core\Fund::LABELS[$program] . ' pool for ' . $year . ' set to ' . $amount->format()
+                . '. Remaining: ' . $remaining->format() . '.',
+                'success'
+            );
+            $back('treasury');
+
+        case 'fund-deposit':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin', 'provincial_treasurer']);
+            $program = (string) $input('program', 'seed_grant');
+            $amount  = RISE63\Core\Money::fromNaira((string) ($_POST['amount'] ?? ''));
+            RISE63\Core\Fund::deposit($program, $amount, (int) $account['id'], trim((string) $input('note', '')));
+            flash($amount->format() . ' added to ' . RISE63\Core\Fund::LABELS[$program] . '.', 'success');
+            $back('treasury');
+
         // ── Administration ───────────────────────────────────────────────────────────
         case 'settings-save':
             $account = Auth::requireLogin();
@@ -549,25 +578,85 @@ try {
             $account = Auth::requireLogin();
             Auth::requireRole($account, ['provincial_admin']);
             $targetId = (int) ($_POST['user_id'] ?? 0);
-            if ($targetId === (int) $account['id']) {
-                throw new InvalidArgumentException('You cannot suspend your own account.');
-            }
-            BruteForce::suspend($targetId, $input('suspend') === '1', (int) $account['id']);
-            flash('Account updated.', 'success');
+            // Members::setSuspended carries the guards (no self-suspension, never the last active
+            // administrator) so the same rules apply whether the button is on this page or another.
+            RISE63\Core\Members::setSuspended($targetId, $input('suspend') === '1', $account);
+            flash($input('suspend') === '1' ? 'Account suspended and signed out everywhere.' : 'Account reinstated.', 'success');
             $back('people');
 
         case 'user-create':
             $account = Auth::requireLogin();
             Auth::requireRole($account, ['provincial_admin']);
-            $created = RISE63\Core\Registration::createByAdmin([
-                'full_name' => (string) $input('full_name', ''),
-                'email'     => (string) $input('email', ''),
-                'phone'     => (string) $input('phone', ''),
-                'parish_id' => $input('parish_id'),
-                'role'      => (string) $input('role', 'youth_member'),
-                'password'  => (string) ($_POST['password'] ?? ''),
+            $created = RISE63\Core\Members::create([
+                'full_name'  => (string) $input('full_name', ''),
+                'email'      => (string) $input('email', ''),
+                'phone'      => (string) $input('phone', ''),
+                'parish_id'  => $input('parish_id'),
+                'parish_name_raw' => (string) $input('parish_name_raw', ''),
+                'role'       => (string) $input('role', 'youth_member'),
+                'password'   => (string) ($_POST['password'] ?? ''),
             ], $account);
-            flash('Account created for ' . $created['email'] . '. Share the temporary password through a trusted channel.', 'success');
+            flash(
+                'Account created for ' . (string) $created['user']['email'] . '. Temporary password: ' . $created['password']
+                . ' — write it down now; it cannot be shown again.',
+                'success'
+            );
+            $back('people');
+
+        case 'user-update':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $targetId = (int) ($_POST['user_id'] ?? 0);
+            RISE63\Core\Members::update($targetId, [
+                'full_name'       => (string) $input('full_name', ''),
+                'email'           => (string) $input('email', ''),
+                'phone'           => (string) $input('phone', ''),
+                'parish_id'       => $input('parish_id'),
+                'parish_name_raw' => (string) $input('parish_name_raw', ''),
+            ], $account);
+            flash('Details saved.', 'success');
+            redirect('people', ['user' => $targetId]);
+
+        case 'user-delete':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            RISE63\Core\Members::delete((int) ($_POST['user_id'] ?? 0), $account);
+            flash('Account deleted.', 'success');
+            $back('people');
+
+        // Impersonation: "sign in as this member" for support. Only members, never another
+        // administrator, and the interface banners the session while it lasts.
+        case 'user-login-as':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $target = RISE63\Core\Members::impersonate((int) ($_POST['user_id'] ?? 0), $account);
+            flash('You are signed in as ' . (string) $target['full_name'] . '. Use "Return to my account" when you are done.', 'info');
+            redirect('my-rise');
+
+        case 'user-login-as-stop':
+            Auth::requireLogin();
+            RISE63\Core\Members::stopImpersonating();
+            flash('Back in your own account.', 'success');
+            redirect('people');
+
+        case 'user-admin-create':
+            // A second administrator, so the province is not one forgotten password away from a
+            // database console. Same write path as any other account; only the role differs.
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $created = RISE63\Core\Members::create([
+                'full_name'  => (string) $input('full_name', ''),
+                'email'      => (string) $input('email', ''),
+                'phone'      => (string) $input('phone', ''),
+                'parish_id'  => $input('parish_id'),
+                'role'       => 'provincial_admin',
+                'password'   => (string) ($_POST['password'] ?? ''),
+            ], $account);
+            flash(
+                'Administrator created: ' . (string) $created['user']['email'] . '. Temporary password: ' . $created['password']
+                . ' — write it down now; it cannot be shown again.',
+                'success'
+            );
             $back('people');
 
         case 'user-temporary-password':

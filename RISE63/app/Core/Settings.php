@@ -48,11 +48,22 @@ final class Settings
         'pin_max_attempts'              => ['type' => 'int', 'min' => 3, 'max' => 10, 'label' => 'PIN attempts before lockout', 'group' => 'pin'],
         'pin_lock_minutes'              => ['type' => 'int', 'min' => 5, 'max' => 120, 'label' => 'PIN lockout duration (minutes)', 'group' => 'pin'],
 
-        'academy_graduation_percent'    => ['type' => 'int', 'min' => 50, 'max' => 100, 'label' => 'Academy graduation threshold (%)', 'group' => 'programs'],
-        'seed_grant_monthly_pool'       => ['type' => 'money', 'label' => 'Seed grant monthly pool', 'group' => 'programs'],
-        'seed_grant_max_per_application' => ['type' => 'money', 'label' => 'Seed grant maximum per application', 'group' => 'programs'],
-        'education_bridge_sla_hours'    => ['type' => 'int', 'min' => 24, 'max' => 168, 'label' => 'Education Bridge SLA (hours)', 'group' => 'programs'],
-        'current_cycle_year'            => ['type' => 'int', 'min' => 2024, 'max' => 2100, 'label' => 'Current program year', 'group' => 'programs'],
+        // ── Programs & funds ────────────────────────────────────────────────────────
+        // The blueprint fixes the Seed Grant pool at ₦100,000/month and the Academy gate at 80%.
+        // Both are settings because a province may want to change them, but the *default* must be
+        // the documented figure, not zero: a fresh install that has never been to the settings page
+        // must already behave as the blueprint describes.
+        'current_cycle_year'            => ['type' => 'int', 'min' => 2024, 'max' => 2100, 'label' => 'Program year', 'group' => 'programs', 'default' => 'auto'],
+        'cycle_year_mode'               => ['type' => 'enum', 'values' => ['auto', 'manual'], 'label' => 'Program year rolls over automatically', 'group' => 'programs', 'default' => 'auto'],
+        'academy_graduation_percent'    => ['type' => 'int', 'min' => 50, 'max' => 100, 'label' => 'Academy graduation gate (% of sessions attended)', 'group' => 'programs', 'default' => '80'],
+        'seed_grant_monthly_pool'       => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'Seed Grant pool per month (₦)', 'group' => 'programs', 'default' => '100000.00'],
+        'seed_grant_opening_balance'    => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'Seed Grant pool set for the year (₦)', 'group' => 'programs', 'default' => '0.00'],
+        'seed_grant_opening_balance_year' => ['type' => 'int', 'min' => 2024, 'max' => 2100, 'label' => 'Pool set for year', 'group' => 'programs', 'default' => '2024'],
+        'seed_grant_max_per_application' => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'Seed Grant maximum per application (₦)', 'group' => 'programs', 'default' => '100000.00'],
+        'academy_pool'                  => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'RISE Academy pool (₦)', 'group' => 'programs', 'default' => '0.00'],
+        'cooperative_pool'              => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'Cooperative Access pool (₦)', 'group' => 'programs', 'default' => '0.00'],
+        'education_bridge_pool'         => ['type' => 'money', 'min' => 0, 'max' => '1000000000', 'label' => 'Education Bridge pool (₦)', 'group' => 'programs', 'default' => '0.00'],
+        'education_bridge_sla_hours'    => ['type' => 'int', 'min' => 24, 'max' => 168, 'label' => 'Education Bridge service window (hours)', 'group' => 'programs', 'default' => '72'],
     ];
 
     /** @var array<string, string>|null */
@@ -191,11 +202,47 @@ final class Settings
         };
     }
 
+    /**
+     * Fallback for a key that has no stored row.
+     *
+     * A declared `default` wins. That matters more than it looks: before this, a `money` defaulted
+     * to 0.00 and an `int` to its minimum, so a fresh installation — one that had never opened the
+     * settings page — ran with a ₦0 Seed Grant pool and a 50% graduation gate, while the blueprint
+     * says ₦100,000/month and 80%. The documented figure is now the one that applies.
+     */
+    /**
+     * Compare two non-negative decimal strings without arithmetic.
+     *
+     * Integer parts are compared by length first, then digit by digit, and only if those are equal
+     * are the fraction parts padded and compared. No ints, no floats, so a value of any size can be
+     * checked on any build.
+     *
+     * @return int -1, 0 or 1
+     */
+    private static function compareDecimal(string $a, string $b): int
+    {
+        [$aInt, $aFrac] = array_pad(explode('.', $a, 2), 2, '');
+        [$bInt, $bFrac] = array_pad(explode('.', $b, 2), 2, '');
+        $aInt = ltrim($aInt, '0');
+        $bInt = ltrim($bInt, '0');
+        if (strlen($aInt) !== strlen($bInt)) {
+            return strlen($aInt) < strlen($bInt) ? -1 : 1;
+        }
+        if ($aInt !== $bInt) {
+            return strcmp($aInt, $bInt) < 0 ? -1 : 1;
+        }
+        $width = max(strlen($aFrac), strlen($bFrac));
+        return strcmp(str_pad($aFrac, $width, '0'), str_pad($bFrac, $width, '0')) <=> 0;
+    }
+
     private static function defaultFor(string $key): mixed
     {
         $definition = self::SCHEMA[$key] ?? null;
         if ($definition === null) {
             return null;
+        }
+        if (array_key_exists('default', $definition)) {
+            return self::resolveDynamicDefault($key, (string) $definition['default']);
         }
         return match ($definition['type']) {
             'bool'  => false,
@@ -204,6 +251,77 @@ final class Settings
             'enum'  => $definition['values'][0],
             default => '',
         };
+    }
+
+    /**
+     * A default that is computed rather than fixed.
+     *
+     * `auto` on the program year means "the current calendar year", which is the whole point of the
+     * feature: nobody should have to remember to advance the cycle on 1 January, and an
+     * installation left untouched for a year must not file new applications against last year.
+     */
+    private static function resolveDynamicDefault(string $key, string $default): string
+    {
+        if ($key === 'current_cycle_year' && $default === 'auto') {
+            return self::autoCycleYear();
+        }
+        return $default;
+    }
+
+    /** The year the platform is running, regardless of what is stored. */
+    public static function autoCycleYear(): string
+    {
+        return gmdate('Y');
+    }
+
+    /**
+     * The program year every query should use.
+     *
+     * One accessor, so "auto" and "manual" cannot be interpreted differently in two places — which
+     * is exactly the bug this replaces: `Settings::int('current_cycle_year', date('Y'))` fell back to
+     * the current year only when the key was *absent*, so an install that set 2026 in December kept
+     * filing 2026 applications all through 2027.
+     */
+    public static function cycleYear(): int
+    {
+        if (self::get('cycle_year_mode', 'auto') === 'manual') {
+            $manual = (int) self::get('current_cycle_year', 0);
+            if ($manual >= 2024 && $manual <= 2100) {
+                return $manual;
+            }
+        }
+        return (int) self::autoCycleYear();
+    }
+
+    /**
+     * Advance the program year if it is stale. Called once per request by the front controller.
+     *
+     * Returns the year it moved to, or null when nothing changed, so the caller can decide whether
+     * to announce it. It is deliberately cheap: one read of the cached settings map.
+     */
+    public static function rolloverCycleYear(?int $actorId = null): ?int
+    {
+        if (self::get('cycle_year_mode', 'auto') === 'manual') {
+            return null;
+        }
+        $stored = (int) self::get('current_cycle_year', 0);
+        $year   = (int) self::autoCycleYear();
+        if ($stored === $year) {
+            return null;
+        }
+        self::set('current_cycle_year', (string) $year, null);
+        try {
+            Audit::log(
+                $actorId,
+                'settings.update',
+                'setting',
+                'current_cycle_year',
+                'Program year rolled over from ' . ($stored > 0 ? (string) $stored : 'unset') . ' to ' . $year . ' automatically.'
+            );
+        } catch (\Throwable) {
+            // A missing audit table must not stop a request over the turn of the year.
+        }
+        return $year;
     }
 
     private static function cast(string $key, string $raw, mixed $fallback): mixed
@@ -231,7 +349,7 @@ final class Settings
             'email' => self::validateEmail($key, $value),
             'phone' => self::validatePhone($key, $value),
             'color' => self::validateColor($key, $value),
-            'money' => self::validateMoney($key, $value),
+            'money' => self::validateMoney($key, $definition, $value),
             default => self::validateText($key, $definition, $value),
         };
     }
@@ -303,13 +421,36 @@ final class Settings
         return $raw;
     }
 
-    private static function validateMoney(string $key, mixed $value): string
+    /**
+     * @param array<string, mixed> $definition
+     *
+     * A `money` definition with no `min` used to reject every amount, because `(int) null` is 0 and
+     * the comparison was `$cents < 0` against an unset bound read as the *string* minimum — the one
+     * path that made "Seed grant monthly pool" unsaveable. The bound is now read from the
+     * definition and defaults to zero, and the message names the setting so an operator knows which
+     * field was refused.
+     */
+    private static function validateMoney(string $key, array $definition, mixed $value): string
     {
+        $label = (string) ($definition['label'] ?? $key);
         try {
-            return Money::fromNaira($value)->toDecimal();
-        } catch (\Throwable) {
-            throw new InvalidArgumentException('Enter a valid amount.');
+            $amount = Money::fromNaira($value);
+        } catch (\Throwable $error) {
+            throw new InvalidArgumentException($label . ': ' . $error->getMessage(), 0, $error);
         }
+
+        // Bounds are compared as decimal strings, not through Money. A ceiling of ₦1,000,000,000
+        // is 10^11 kobo, which does not fit a 32-bit int, so converting the *bound* would throw on
+        // a 32-bit build even when the entered amount is small and perfectly valid.
+        $min = (string) ($definition['min'] ?? '0');
+        $max = (string) ($definition['max'] ?? '999999999.99');
+        if (self::compareDecimal($amount->toDecimal(), $min) === -1) {
+            throw new InvalidArgumentException($label . ' cannot be less than ' . $min . '.');
+        }
+        if (self::compareDecimal($amount->toDecimal(), $max) === 1) {
+            throw new InvalidArgumentException($label . ' cannot exceed ' . $max . '.');
+        }
+        return $amount->toDecimal();
     }
 
     /** @param array<string, mixed> $definition */

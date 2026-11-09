@@ -1,0 +1,1521 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<!-- Static preview: Settings: the program year panel and the paginated, filterable audit card. Generated from the real view with app.css inlined. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Settings · RISE 63</title>
+<meta name="description" content="">
+<meta name="theme-color" content="">
+<meta name="csrf-token" content="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
+<link rel="apple-touch-icon" href="/public/icons/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+/* RISE 63 — single stylesheet. No framework, no build step.
+   Rules that are non-negotiable and tested in tests/ui.php:
+   body/base text never below 16px · interactive targets >= 48px · AA contrast in both themes. */
+
+:root {
+  --brand: #2563eb;
+  --brand-ink: #ffffff;
+  --brand-soft: #e8efff;
+  --t-xs: 0.8125rem;
+  --t-sm: 0.9375rem;
+  --t-base: 1rem;
+  --t-lg: 1.125rem;
+  --t-xl: 1.375rem;
+  --t-2xl: clamp(1.625rem, 4.5vw, 2.25rem);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --touch: 48px;
+  --gap: 16px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* ── Light theme (default) ─────────────────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #d8e0ea;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+  --ok: #12684a;
+  --ok-soft: #e3f6ed;
+  --warn: #8a5300;
+  --warn-soft: #fdf1db;
+  --danger: #a11f1f;
+  --danger-soft: #fdeaea;
+  --info: #1c4f8a;
+  --info-soft: #e7f0fb;
+  --focus: #0b57d0;
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1120;
+  --surface: #131c2e;
+  --surface-2: #1b2740;
+  --border: #2c3b55;
+  --text: #f1f5f9;
+  --text-muted: #c2cede;
+  --text-faint: #a3b1c6;
+  --ok: #7ee0b0;
+  --ok-soft: #10301f;
+  --warn: #ffd189;
+  --warn-soft: #3a2a06;
+  --danger: #ffaaaa;
+  --danger-soft: #3d1414;
+  --info: #a8cdff;
+  --info-soft: #10233c;
+  --brand-soft: #16294d;
+  --focus: #8fb8ff;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --bg: #0b1120;
+    --surface: #131c2e;
+    --surface-2: #1b2740;
+    --border: #2c3b55;
+    --text: #f1f5f9;
+    --text-muted: #c2cede;
+    --text-faint: #a3b1c6;
+    --ok: #7ee0b0;
+    --ok-soft: #10301f;
+    --warn: #ffd189;
+    --warn-soft: #3a2a06;
+    --danger: #ffaaaa;
+    --danger-soft: #3d1414;
+    --info: #a8cdff;
+    --info-soft: #10233c;
+    --brand-soft: #16294d;
+    --focus: #8fb8ff;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--t-base);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-large { font-size: 1.0625rem; line-height: 1.75; }
+.text-large .card, .text-large p, .text-large li { line-height: 1.75; }
+
+h1, h2, h3, h4 { line-height: 1.25; margin: 0 0 0.5em; font-weight: 700; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); }
+h2 { font-size: var(--t-xl); }
+h3 { font-size: var(--t-lg); }
+h4 { font-size: var(--t-base); }
+p { margin: 0 0 1em; }
+p:last-child { margin-bottom: 0; }
+a { color: var(--brand); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration: underline; }
+small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); font-size: var(--t-sm); }
+.nowrap { white-space: nowrap; }
+.center { text-align: center; }
+.stack > * + * { margin-top: var(--gap); }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.row-end { justify-content: space-between; }
+.grow { flex: 1 1 auto; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--surface); color: var(--text); padding: 12px 16px; border-radius: 0 0 var(--radius-sm) 0;
+}
+.skip-link:focus { left: 0; }
+
+/* ── Chrome ───────────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
+}
+.topbar-inner {
+  max-width: 1080px; margin: 0 auto; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; min-width: 0; }
+.brand-mark {
+  width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: hsl(var(--brand-hue, 220) 78% 44%);
+  color: #fff; font-weight: 800; font-size: 1.25rem;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.brand-text { display: flex; flex-direction: column; min-width: 0; }
+.brand-text strong { font-size: var(--t-base); }
+.brand-text small { color: var(--text-muted); font-size: var(--t-xs); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-actions { display: flex; gap: 8px; }
+.icon-btn {
+  min-width: var(--touch); min-height: var(--touch);
+  display: inline-grid; place-items: center; gap: 0;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px;
+  font-size: 1.05rem; font-weight: 700; cursor: pointer; text-decoration: none;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.icon-btn:active { transform: scale(0.95); }
+
+.page { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: 20px 16px 28px; }
+.page.has-bottom-nav { padding-bottom: 112px; }
+
+.site-footer {
+  border-top: 1px solid var(--border); padding: 20px 16px 28px;
+  text-align: center; font-size: var(--t-sm); color: var(--text-muted);
+}
+.site-footer p { margin: 4px 0; }
+
+/* ── Bottom navigation ────────────────────────────────────────────────────────── */
+/* A sticky, phone-style tab bar.
+ *
+ * "Sticky" here means what it means on a phone: pinned to the bottom of the *viewport* while the
+ * page scrolls underneath it, never scrolling away with the content and never in a second copy.
+ * `position: fixed` is the pinned behaviour; `position: sticky` would pin it inside the document
+ * flow instead, which is why it looked like part of the footer rather than like a tab bar.
+ *
+ * The look is deliberately modern but not trendy: a translucent slab with a blur, a hairline edge,
+ * a soft layered shadow, drawn SVG marks, and one pill that slides to the active tab. Widths are
+ * proportional (--tab-count) so it survives seven tabs on a 320px phone as well as on a desktop.
+ *
+ * It floats above the content rather than sitting in a strip at the bottom edge — which is why the
+ * page reserves space for it below (.page.has-bottom-nav). */
+.bottom-nav {
+  position: fixed; z-index: 30;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  width: min(680px, calc(100% - 20px));
+  display: flex; align-items: stretch; justify-content: space-between;
+  gap: 2px; padding: 6px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 22px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 60%, transparent) inset,
+    0 10px 30px -10px rgba(15, 23, 42, 0.35),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* The sliding pill. One element, moved with a transform: width and offset come from the number of
+   tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
+   parked under the first tab, which would claim that tab was current. */
+.bottom-nav .nav-indicator {
+  position: absolute; z-index: 0;
+  top: 6px; bottom: 6px; left: 6px;
+  width: calc((100% - 12px) / var(--tab-count, 6) - 2px);
+  border-radius: 16px;
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent) inset;
+  transform: translateX(calc(var(--active-index, 0) * (100% + 2px)));
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.bottom-nav .nav-indicator[data-idle] { opacity: 0; }
+
+.bottom-nav a, .bottom-nav button {
+  position: relative; z-index: 1;
+  flex: 1 1 0; min-width: 0; min-height: var(--touch);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: none; border: 0; color: var(--text-faint); text-decoration: none;
+  font: inherit; font-size: var(--t-xs); line-height: 1.1; cursor: pointer;
+  padding: 6px 2px; border-radius: 16px;
+  transition: color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav .nav-icon { display: grid; place-items: center; width: 24px; height: 24px; }
+.bottom-nav .nav-icon svg { width: 24px; height: 24px; display: block; }
+.bottom-nav .nav-label {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.75rem; letter-spacing: 0.01em; font-weight: 600;
+}
+
+/* The active tab: brand colour, a filled mark, and a slightly bolder label. The fill is a solid
+   tint behind the stroked path so it reads at a glance on a small screen. */
+.bottom-nav a.active, .bottom-nav a[aria-current="page"] { color: var(--brand); }
+.bottom-nav a.active .nav-label, .bottom-nav a[aria-current="page"] .nav-label { font-weight: 800; }
+.bottom-nav a.active .nav-icon svg, .bottom-nav a[aria-current="page"] .nav-icon svg {
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--brand) 35%, transparent));
+}
+.bottom-nav a.active .nav-icon, .bottom-nav a[aria-current="page"] .nav-icon { transform: translateY(-1px); }
+
+.bottom-nav form { flex: 1 1 0; margin: 0; display: flex; min-width: 0; }
+.bottom-nav button { width: 100%; }
+.bottom-nav a:hover, .bottom-nav button:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.bottom-nav a:active, .bottom-nav button:active { transform: scale(0.94); }
+.bottom-nav .nav-logout button { color: var(--text-faint); }
+.bottom-nav .nav-logout button:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* A phone narrow enough that the full labels would ellipsise: swap in the short label. Both are
+   in the markup so the accessible name stays the long one — the short copy is aria-hidden. */
+.bottom-nav .nav-label-short { display: none; }
+@media (max-width: 420px) {
+  .bottom-nav { width: calc(100% - 12px); bottom: calc(6px + env(safe-area-inset-bottom)); border-radius: 20px; padding: 5px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; }
+  .bottom-nav a, .bottom-nav button { gap: 3px; }
+  .bottom-nav .nav-label:not(.nav-label-short) { display: none; }
+  .bottom-nav .nav-label-short { display: block; }
+}
+
+/* Nine tabs (admin on a phone) is the worst case: shrink the mark, never the words. The label
+   floor is 0.6875rem — the stylesheet's readability rule is enforced by a test. */
+@media (max-width: 360px) {
+  .bottom-nav .nav-icon, .bottom-nav .nav-icon svg { width: 21px; height: 21px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; letter-spacing: -0.01em; }
+}
+
+/* ── Setup wizard ─────────────────────────────────────────────────────────────── */
+/* Used by install/index.php. A wide, two-column shell on desktop that collapses to one column on
+   a phone, with the step list as a progress rail rather than a bare <ol>. */
+body.wizard { background: var(--bg); }
+.wizard-wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+
+.wizard-top {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 22px;
+}
+.wizard-top .brand-mark { width: 52px; height: 52px; flex-basis: 52px; font-size: 1.5rem; border-radius: 15px; }
+.wizard-top h1 { margin: 0; font-size: var(--t-2xl); line-height: 1.15; letter-spacing: -0.015em; }
+.wizard-top p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-sm); }
+.wizard-top .wizard-version { margin-left: auto; text-align: right; font-size: var(--t-xs); color: var(--text-faint); }
+
+/* Step rail */
+.wizard-steps {
+  display: grid; gap: 6px; grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none; margin: 0 0 20px; padding: 0;
+}
+.wizard-steps li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: var(--t-sm); color: var(--text-muted); min-width: 0;
+}
+.wizard-steps .step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700;
+}
+.wizard-steps .step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.wizard-steps .is-done { color: var(--text); }
+.wizard-steps .is-done .step-num { background: var(--ok-soft); color: var(--ok); }
+.wizard-steps .is-current {
+  color: var(--text); border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface)); font-weight: 700;
+}
+.wizard-steps .is-current .step-num { background: var(--brand); color: var(--brand-ink); }
+
+/* Panel */
+.wizard-panel { padding: 24px; }
+.wizard-panel > h2 { margin: 0 0 4px; font-size: var(--t-xl); }
+.wizard-panel > .lead { margin: 0 0 20px; color: var(--text-muted); font-size: var(--t-sm); max-width: 62ch; }
+.wizard-panel h3 { font-size: var(--t-lg); }
+
+/* Check list */
+.checklist { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 8px; }
+.checklist li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.checklist .check-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; font-size: 0.9rem; font-weight: 700;
+}
+.checklist .check-body { min-width: 0; flex: 1 1 auto; }
+.checklist .check-body strong { display: block; font-size: var(--t-base); }
+.checklist .check-body span { display: block; color: var(--text-muted); font-size: var(--t-xs); }
+.checklist .is-ok .check-icon { background: var(--ok-soft); color: var(--ok); }
+.checklist .is-bad { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
+.checklist .is-bad .check-icon { background: var(--surface); color: var(--danger); }
+
+/* Form grid inside the wizard */
+.wizard-fields { display: grid; gap: 0 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wizard-fields .field-full { grid-column: 1 / -1; }
+.wizard-fields .field { margin-bottom: 16px; }
+.wizard-actions { display: grid; gap: 8px; margin-top: 22px; }
+.wizard-actions .btn { min-height: 50px; }
+
+.wizard-note { margin: 0 0 20px; }
+.wizard-note a { font-weight: 650; }
+
+/* Completion screen */
+.wizard-done { text-align: center; padding: 16px 4px 8px; }
+.wizard-done .done-mark {
+  width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ok-soft); color: var(--ok); font-size: 1.9rem;
+}
+.wizard-done h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.wizard-done p { margin: 0 auto 18px; color: var(--text-muted); max-width: 52ch; }
+
+@media (max-width: 720px) {
+  .wizard-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wizard-fields { grid-template-columns: minmax(0, 1fr); }
+  .wizard-panel { padding: 18px; }
+  .wizard-top .wizard-version { display: none; }
+}
+
+@media print {
+  .wizard-steps, .wizard-actions { display: none !important; }
+}
+
+/* ── Cards & surfaces ─────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow); margin-bottom: var(--gap);
+}
+.card-flat { box-shadow: none; }
+.card > h2:last-child, .card > h3:last-child { margin-bottom: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.card-head h2, .card-head h3 { margin: 0; }
+.section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 24px 0 12px; }
+.section-title h2 { margin: 0; }
+.grid { display: grid; gap: var(--gap); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.grid-tight { gap: 10px; }
+
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.stat b { display: block; font-size: 1.5rem; line-height: 1.2; }
+.stat span { font-size: var(--t-sm); color: var(--text-muted); }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--touch); padding: 12px 18px;
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font: inherit; font-weight: 650; text-decoration: none; cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  text-align: center;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--brand); color: var(--brand-ink); }
+.btn-primary:hover { background: color-mix(in srgb, var(--brand) 88%, black); text-decoration: none; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--surface-2); text-decoration: none; }
+.btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+.btn-danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.btn-block { width: 100%; }
+.btn-sm { min-height: 40px; padding: 8px 14px; font-size: var(--t-sm); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Forms ────────────────────────────────────────────────────────────────────── */
+form { margin: 0; }
+.field { margin-bottom: 16px; }
+.field > label, .field-label {
+  display: block; font-weight: 650; font-size: var(--t-base); margin-bottom: 6px;
+}
+.field .hint { display: block; font-weight: 400; color: var(--text-muted); font-size: var(--t-sm); margin-top: 4px; }
+input[type="text"], input[type="email"], input[type="password"], input[type="tel"],
+input[type="number"], input[type="date"], input[type="search"], select, textarea {
+  width: 100%; min-height: var(--touch);
+  padding: 12px 14px;
+  font: inherit; font-size: var(--t-base); /* never below 16px: stops iOS zoom-on-focus */
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-position: calc(100% - 20px) 21px, calc(100% - 14px) 21px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 40px; }
+input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); outline: none; }
+input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: var(--t-sm); margin-top: 6px; }
+.check { display: flex; align-items: flex-start; gap: 12px; min-height: var(--touch); padding: 10px 0; }
+.check input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--brand); flex: 0 0 auto; }
+.check span { font-size: var(--t-base); }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin: 0 0 16px; }
+legend { font-weight: 700; padding: 0 6px; }
+.form-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.form-actions .btn { flex: 1 1 160px; }
+
+/* ── Flash & notices ──────────────────────────────────────────────────────────── */
+.flash {
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: var(--gap);
+  border: 1px solid transparent; font-size: var(--t-base);
+}
+.flash-success { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
+.flash-error { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.flash-info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 25%, transparent); }
+.notice { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; font-size: var(--t-sm); }
+.notice strong { display: block; margin-bottom: 4px; }
+
+/* ── Badges & status ──────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.01em;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border); white-space: nowrap;
+}
+.badge-ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.badge-warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.badge-info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+.badge-crown { background: var(--ok-soft); color: var(--ok); }
+.crown { font-size: 1rem; }
+
+/* Status micro-tracker: Submitted → Under review → Approved/Disbursed */
+.tracker { display: flex; gap: 0; margin: 14px 0 4px; }
+.tracker-step { flex: 1 1 0; text-align: center; position: relative; padding-top: 26px; font-size: var(--t-xs); color: var(--text-faint); }
+.tracker-step::before {
+  content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--border);
+}
+.tracker-step::after {
+  content: ""; position: absolute; top: 12px; left: 50%; width: 100%; height: 2px; background: var(--border);
+}
+.tracker-step:last-child::after { display: none; }
+.tracker-step.done { color: var(--ok); }
+.tracker-step.done::before { background: var(--ok); border-color: var(--ok); }
+.tracker-step.done::after { background: var(--ok); }
+.tracker-step.current { color: var(--brand); font-weight: 700; }
+.tracker-step.current::before { background: var(--brand); border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+
+/* ── Tables (stack on phones) ─────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-base); }
+th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-size: var(--t-sm); font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 680px) {
+  .table-stack thead { display: none; }
+  .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+  .table-stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  .table-stack td { border: 0; padding: 6px 14px; }
+  .table-stack td::before {
+    content: attr(data-label); display: block;
+    font-size: var(--t-xs); font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+  }
+  .table-stack td.num { text-align: left; }
+}
+
+/* Manage column: the roster of buttons on each person. Wraps, and keeps every control a
+   44 px target so it can be hit with a thumb on the stacked (phone) layout. */
+.manage-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.manage-actions form { margin: 0; }
+.manage-actions .btn { min-height: 38px; }
+
+/* ── Filter rows (audit, people) ─────────────────────────────────────────────── */
+/* Wraps into a column on a phone without the labels drifting away from their controls. */
+.filter-row {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+}
+.filter-row .field { flex: 1 1 150px; min-width: 0; }
+.filter-row .field.grow { flex: 2 1 220px; }
+.filter-row .btn { flex: 0 0 auto; min-height: 44px; align-self: flex-end; }
+@media (max-width: 560px) {
+  .filter-row .field, .filter-row .field.grow { flex: 1 1 100%; }
+  .filter-row .btn { flex: 1 1 100%; justify-content: center; }
+}
+
+.program-year-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 12px 0 16px; }
+.program-year-figure strong { font-size: 2rem; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.program-year-figure .faint { font-size: var(--t-sm); max-width: 46ch; }
+
+/* ── Pagination bar ──────────────────────────────────────────────────────────── */
+/* Wrapping flex rather than a fixed row: at 390 px the three parts stack, and the buttons
+   stay reachable with a thumb instead of scrolling off the side. */
+.pager {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.pager-controls { display: flex; gap: 8px; flex: 0 0 auto; }
+.pager-controls .btn { min-height: 40px; padding: 8px 14px; }
+.pager-caption { flex: 1 1 120px; margin: 0; font-size: var(--t-sm); min-width: 0; }
+.pager-caption strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.pager-sizes { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: var(--t-xs); }
+.chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; min-height: 34px; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700; text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.chip:hover { background: var(--surface-2); color: var(--text); }
+.chip-on { background: var(--brand-soft); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+a.chip { cursor: pointer; }
+@media (max-width: 520px) {
+  .pager { gap: 10px; }
+  .pager-caption { order: 3; flex-basis: 100%; }
+  .pager-controls { flex: 1 1 100%; }
+  .pager-controls .btn { flex: 1 1 0; justify-content: center; }
+  .pager-sizes { flex: 1 1 100%; justify-content: flex-start; }
+}
+
+/* Impersonation banner: an administrator looking at somebody else's account must never
+   forget which account they are in. Fixed to the top, above the header, and it does not
+   fade out. */
+.impersonation-bar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 14px;
+  background: var(--warn-soft); color: var(--text);
+  border-bottom: 2px solid var(--warn);
+  font-size: var(--t-sm);
+}
+.impersonation-bar strong { color: var(--warn); }
+.impersonation-bar form { margin: 0 0 0 auto; }
+
+/* Fund cards: the pool figures, with the set/ deposit forms attached. */
+.fund-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.fund {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px; background: var(--surface-2);
+}
+.fund h3 { margin: 0 0 2px; font-size: var(--t-base); }
+.fund .fund-amount { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.fund dl { margin: 10px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: var(--t-xs); }
+.fund dt { color: var(--text-muted); margin: 0; }
+.fund dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.fund-unfunded .fund-amount { color: var(--text-faint); }
+
+/* ── Combobox (parish live search) ────────────────────────────────────────────── */
+.combo { position: relative; }
+.combo-list {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); max-height: 300px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+}
+.combo-list[hidden] { display: none; }
+.combo-option { padding: 12px; border-radius: 8px; cursor: pointer; font-size: var(--t-base); }
+.combo-option small { display: block; color: var(--text-muted); }
+.combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
+.combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
+
+/* ── Offline / install ────────────────────────────────────────────────────────── */
+/* ── Offline modal ─────────────────────────────────────────────────────────────── */
+/* A bottom sheet, not a top bar. The top-bar version covered the header (hiding the brand and the
+   theme control at the exact moment the user was looking for a way out) and, on the first release,
+   could not be closed at all. A connectivity notice is the one thing on the page you cannot
+   navigate away from, so it has to be dismissible and it must not sit on top of the navigation.
+
+   The sheet rises from the bottom on phones — where the thumb is — and centres as a dialog on a
+   wide screen. It never covers the sticky tab bar: the sheet stops above it. */
+.offline-modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, #0b1120 55%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: offline-fade 0.16s ease-out both;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.offline-modal[hidden] { display: none; }
+.offline-sheet {
+  width: min(520px, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 44px -12px rgba(15, 23, 42, 0.45);
+  text-align: center;
+  animation: offline-rise 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.offline-emoji {
+  display: grid; place-items: center;
+  width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--warn-soft); color: var(--warn);
+}
+.offline-emoji svg { width: 24px; height: 24px; }
+.offline-sheet h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.offline-sheet p { margin: 0 auto 16px; color: var(--text-muted); font-size: var(--t-sm); max-width: 40ch; }
+.offline-actions { display: grid; gap: 8px; }
+.offline-hint { margin: 10px 0 0 !important; font-size: var(--t-sm); color: var(--warn); min-height: 1.2em; }
+/* The hint holds its line so the sheet does not jump when "Checking…" appears. */
+
+/* While the sheet is open the page behind it must not scroll, or a thumb drag can slide the page
+   under the dialog and make it look as though the dialog swallowed the content. */
+html.offline-open, html.offline-open body { overflow: hidden; }
+
+@keyframes offline-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes offline-rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (min-width: 720px) {
+  /* Wide screen: a centred dialog. Aligned to the middle rather than the bottom so it reads as a
+     notification, not as a menu that was opened by accident. */
+  .offline-modal { align-items: center; padding: 24px; }
+  .offline-sheet { border-radius: 22px; border-bottom: 1px solid var(--border); }
+}
+
+.install-prompt {
+  position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 50;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; box-shadow: 0 12px 36px rgba(15, 23, 42, 0.22);
+}
+.install-prompt[hidden] { display: none; }
+.install-body strong { display: block; }
+.install-body p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--text-muted); }
+.install-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* ── Auth screens ─────────────────────────────────────────────────────────────── */
+.auth-shell { max-width: 440px; margin: 8vh auto 0; }
+.auth-shell .brand-mark { width: 54px; height: 54px; flex-basis: 54px; font-size: 1.6rem; border-radius: 16px; }
+.auth-lead { color: var(--text-muted); margin-bottom: 20px; }
+.auth-alt { text-align: center; font-size: var(--t-sm); color: var(--text-muted); margin-top: 18px; }
+
+/* ── Program cards ────────────────────────────────────────────────────────────── */
+.program-card { display: flex; flex-direction: column; gap: 10px; }
+.program-card h3 { margin: 0; }
+.program-card p { color: var(--text-muted); font-size: var(--t-sm); margin: 0; }
+.program-icon { font-size: 1.6rem; }
+
+/* ── Timeline ─────────────────────────────────────────────────────────────────── */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { position: relative; padding: 0 0 16px 26px; }
+.timeline li::before { content: ""; position: absolute; left: 5px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); }
+.timeline li::after { content: ""; position: absolute; left: 9px; top: 18px; bottom: 0; width: 2px; background: var(--border); }
+.timeline li:last-child::after { display: none; }
+.timeline time { font-size: var(--t-xs); color: var(--text-faint); display: block; }
+
+/* ── Utilities ────────────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.divider { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+.pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.money { font-variant-numeric: tabular-nums; font-weight: 700; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-sm); }
+.list-plain { list-style: none; margin: 0; padding: 0; }
+.list-plain li { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.list-plain li:last-child { border-bottom: 0; }
+
+@media (min-width: 720px) {
+  .page { padding: 28px 24px 40px; }
+  /* The bar stays floating on a wide screen — it was previously switched to a static block here,
+     which would have parked a "phone" tab bar under the page content on every desktop. Only the
+     room beneath the page changes. */
+  .page.has-bottom-nav { padding-bottom: 104px; }
+  .install-prompt { left: auto; right: 24px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 420px; }
+  .card { padding: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .btn:active, .icon-btn:active { transform: none; }
+}
+
+@media (prefers-reduced-data: reduce) {
+  .card { box-shadow: none; }
+  .brand-mark { box-shadow: none; }
+}
+
+@media print {
+  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-modal, .form-actions { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
+  .page { padding: 0; max-width: none; }
+}
+
+</style>
+<script>
+  // Apply a stored client-side preference before first paint to avoid a theme flash.
+  (function () {
+    try {
+      var stored = localStorage.getItem('rise63-theme');
+      if (stored === 'light' || stored === 'dark') { document.documentElement.dataset.theme = stored; }
+    } catch (err) { /* private mode */ }
+  }());
+</script>
+</head>
+<body class="signed-in">
+<a class="skip-link" href="#main">Skip to main content</a>
+
+
+<div class="offline-modal" id="offline-modal" role="dialog" aria-modal="true"
+     aria-labelledby="offline-title" aria-describedby="offline-body" hidden>
+  <div class="offline-sheet" role="document">
+    <span class="offline-emoji" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 18.5h9.2a3.3 3.3 0 0 0 .6-6.5 5 5 0 0 0-8.3-3.4"/><path d="M4.5 4.5 19.5 19.5"/></svg></span>
+    <h2 id="offline-title">You are offline</h2>
+    <p id="offline-body">This device has lost its internet connection. Anything you submit will be
+      kept and sent as soon as you reconnect.</p>
+    <div class="offline-actions">
+      <button type="button" class="btn btn-primary btn-block" id="offline-close">Dismiss</button>
+      <button type="button" class="btn btn-ghost btn-block" id="offline-retry">Try again now</button>
+    </div>
+    <p class="offline-hint" id="offline-hint" aria-live="polite"></p>
+  </div>
+</div>
+<script>
+  // The modal's own controls, deliberately independent of app.js.
+  //
+  // app.js binds the same buttons and owns the connectivity decision; this copy only dismisses and
+  // re-tests. It exists because the first report of "the × does nothing" was a cached app.js: the
+  // markup had been updated while the script that bound it was a release behind. A handler that
+  // ships in the same response as the markup cannot drift out of step with it.
+  //
+  // The CSP is script-src 'self' with a hash allow-list, so this snippet runs only because its
+  // SHA-256 is in Security::INLINE_SCRIPT_HASHES — and tests/render.php fails if the two disagree.
+  (function () {
+    var modal = document.getElementById('offline-modal');
+    if (!modal) { return; }
+    var sheet = modal.querySelector('.offline-sheet');
+    var hint = document.getElementById('offline-hint');
+    var close = document.getElementById('offline-close');
+    var retry = document.getElementById('offline-retry');
+
+    function hide() {
+      modal.hidden = true;
+      modal.setAttribute('data-dismissed', '1');
+      document.documentElement.classList.remove('offline-open');
+    }
+    if (close) { close.addEventListener('click', hide); }
+    // Backdrop click closes; a click inside the sheet must not.
+    modal.addEventListener('click', function (event) {
+      if (sheet && !sheet.contains(event.target)) { hide(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) { hide(); }
+    });
+    if (retry) {
+      retry.addEventListener('click', function () {
+        if (hint) { hint.textContent = 'Checking…'; }
+        // A HEAD to a tiny same-origin file: any HTTP answer means the server was reached.
+        fetch('./favicon.svg', { method: 'HEAD', cache: 'no-store' }).then(function () {
+          hide();
+          window.location.reload();
+        }, function () {
+          if (hint) { hint.textContent = 'Still no connection. Check Wi-Fi or mobile data.'; }
+        });
+      });
+    }
+  }());
+</script>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark" style="--brand-hue: 319">R</span>
+      <span class="brand-text">
+        <strong>RISE 63</strong>
+        <small>LP63 YAYA · Young Professionals</small>
+      </span>
+    </a>
+    <div class="topbar-actions">
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
+        <span class="theme-icon" aria-hidden="true">◑</span>
+      </button>
+              <a class="icon-btn" href="/updates" aria-label="Updates" title="Updates">⇪</a>
+            <a class="icon-btn" href="/profile" aria-label="My account" title="My account">
+        <span aria-hidden="true">AO</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="page has-bottom-nav" tabindex="-1">
+    <section class="card">
+  <h1>Settings</h1>
+  <p class="muted">Every value is validated when saved, so an invalid number or e-mail can never enter the database.</p>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Program year</h2>
+      <p class="faint" style="margin:2px 0 0">Which cycle new applications and Seed Grant pools belong to.</p>
+    </div>
+    <span class="badge badge-ok">
+      Automatic    </span>
+  </div>
+
+  <p class="program-year-figure">
+    <strong>2026</strong>
+    <span class="faint">
+              — the current calendar year. It advances by itself on 1 January.
+          </span>
+  </p>
+
+  <form method="post" action="/">
+    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="settings-save">
+    <input type="hidden" name="group" value="programs">
+    <input type="hidden" name="return_to" value="settings">
+    <div class="grid grid-2">
+      <div class="field">
+        <label for="cycle_year_mode">Behaviour</label>
+        <select id="cycle_year_mode" name="settings[cycle_year_mode]">
+          <option value="auto" selected>Follow the calendar year (recommended)</option>
+          <option value="manual" >Hold a year I choose</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="current_cycle_year">Year to hold</label>
+        <input type="number" id="current_cycle_year" name="settings[current_cycle_year]"
+               value="2026"
+               min="2024" max="2100" step="1"
+               disabled>
+        <span class="hint">
+          Not used while the year follows the calendar — shown for reference.        </span>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Save program year</button>
+  </form>
+</section>
+
+  <section class="card">
+    <h2>Brand &amp; identity</h2>
+    <p class="muted">These values appear across the app, the install prompt and the dynamic icon.</p>
+    <form method="post" action="/">
+      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="group" value="brand">
+      <input type="hidden" name="return_to" value="settings">
+                                <div class="field">
+            <label for="site_title">Site title</label>
+            <input type="text"
+                   id="site_title" name="settings[site_title]" value="RISE 63"
+                                      max="120"                   maxlength="120"                                      >
+                        <span class="hint">The first letter becomes the app icon.</span>          </div>
+                                        <div class="field">
+            <label for="site_tagline">Tagline</label>
+            <input type="text"
+                   id="site_tagline" name="settings[site_tagline]" value="RCCG Lagos Province 63 empowerment platform"
+                                      max="160"                   maxlength="160"                                      >
+                                  </div>
+                                        <div class="field">
+            <label for="notification_email">Security notification e-mail</label>
+            <input type="email"
+                   id="notification_email" name="settings[notification_email]" value="ops@example.org"
+                                                                                               >
+                                  </div>
+                                        <div class="field">
+            <label for="support_phone">Support phone</label>
+            <input type="text"
+                   id="support_phone" name="settings[support_phone]" value=""
+                                                                                               >
+                                  </div>
+                                        <div class="field">
+            <label for="theme_color">Brand colour</label>
+            <input type="text"
+                   id="theme_color" name="settings[theme_color]" value="#2563eb"
+                                                                            pattern="#[0-9a-fA-F]{6}"                   >
+            <span class="hint">Six-digit hex, for example #2563eb.</span>                      </div>
+                                        <div class="check">
+            <input type="checkbox" id="pwa_install_prompt" name="settings_bool[pwa_install_prompt]" value="1" checked>
+            <label for="pwa_install_prompt" style="font-weight:400">Show install prompt</label>
+          </div>
+                                        <div class="check">
+            <input type="checkbox" id="allow_self_registration" name="settings_bool[allow_self_registration]" value="1" >
+            <label for="allow_self_registration" style="font-weight:400">Allow public self-registration</label>
+          </div>
+                                        <div class="check">
+            <input type="checkbox" id="maintenance_mode" name="settings_bool[maintenance_mode]" value="1" >
+            <label for="maintenance_mode" style="font-weight:400">Maintenance mode</label>
+          </div>
+                    <button class="btn btn-primary" type="submit">Save brand &amp;amp; identity</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Sessions &amp; alerts</h2>
+    <p class="muted">How long a session may sit idle and who receives sign-in alerts.</p>
+    <form method="post" action="/">
+      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="group" value="session">
+      <input type="hidden" name="return_to" value="settings">
+                                <div class="field">
+            <label for="session_idle_minutes">Idle session timeout (minutes)</label>
+            <input type="number"
+                   id="session_idle_minutes" name="settings[session_idle_minutes]" value="30"
+                   min="5"                   max="240"                                                         >
+                                  </div>
+                                        <div class="check">
+            <input type="checkbox" id="login_alerts_enabled" name="settings_bool[login_alerts_enabled]" value="1" checked>
+            <label for="login_alerts_enabled" style="font-weight:400">E-mail alerts for new-device admin logins</label>
+          </div>
+                    <button class="btn btn-primary" type="submit">Save sessions &amp;amp; alerts</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Programs &amp; funds</h2>
+    <p class="muted">The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.</p>
+    <form method="post" action="/">
+      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="group" value="programs">
+      <input type="hidden" name="return_to" value="settings">
+                                        <div class="field">
+            <label for="cycle_year_mode">Program year rolls over automatically</label>
+            <select id="cycle_year_mode" name="settings[cycle_year_mode]">
+                              <option value="auto" selected>Auto</option>
+                              <option value="manual" >Manual</option>
+                          </select>
+          </div>
+                                        <div class="field">
+            <label for="academy_graduation_percent">Academy graduation gate (% of sessions attended)</label>
+            <input type="number"
+                   id="academy_graduation_percent" name="settings[academy_graduation_percent]" value="80"
+                   min="50"                   max="100"                                                         >
+                                  </div>
+                                        <div class="field">
+            <label for="seed_grant_monthly_pool">Seed Grant pool per month (₦)</label>
+            <input type="text"
+                   id="seed_grant_monthly_pool" name="settings[seed_grant_monthly_pool]" value="100000.00"
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                        <div class="field">
+            <label for="seed_grant_opening_balance">Seed Grant pool set for the year (₦)</label>
+            <input type="text"
+                   id="seed_grant_opening_balance" name="settings[seed_grant_opening_balance]" value="600000.00"
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                                <div class="field">
+            <label for="seed_grant_max_per_application">Seed Grant maximum per application (₦)</label>
+            <input type="text"
+                   id="seed_grant_max_per_application" name="settings[seed_grant_max_per_application]" value="100000.00"
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                        <div class="field">
+            <label for="academy_pool">RISE Academy pool (₦)</label>
+            <input type="text"
+                   id="academy_pool" name="settings[academy_pool]" value=""
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                        <div class="field">
+            <label for="cooperative_pool">Cooperative Access pool (₦)</label>
+            <input type="text"
+                   id="cooperative_pool" name="settings[cooperative_pool]" value=""
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                        <div class="field">
+            <label for="education_bridge_pool">Education Bridge pool (₦)</label>
+            <input type="text"
+                   id="education_bridge_pool" name="settings[education_bridge_pool]" value=""
+                   min="0"                   max="1000000000"                                                         step="0.01" min="0">
+                                  </div>
+                                        <div class="field">
+            <label for="education_bridge_sla_hours">Education Bridge service window (hours)</label>
+            <input type="number"
+                   id="education_bridge_sla_hours" name="settings[education_bridge_sla_hours]" value="72"
+                   min="24"                   max="168"                                                         >
+                                  </div>
+                    <button class="btn btn-primary" type="submit">Save programs &amp;amp; funds</button>
+    </form>
+  </section>
+
+<section class="card">
+  <h2>Notifications</h2>
+  <div class="grid grid-3">
+    <div class="stat"><b>3</b><span>Queued</span></div>
+    <div class="stat"><b>0</b><span>Failed</span></div>
+    <div class="stat"><b>1</b><span>Recent</span></div>
+  </div>
+  <p class="muted" style="margin-top:12px">Mail is delivered by <code>php bin/mail-worker.php</code> from cron. Queued messages do not leave the server until that worker runs.</p>
+  <form method="post" action="/">
+    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="queue-test">
+    <input type="hidden" name="return_to" value="settings">
+    <button class="btn btn-secondary" type="submit">Queue a test message to me</button>
+  </form>
+  <ul class="list-plain" style="margin-top:12px">
+          <li class="row row-end">
+        <span>
+          <strong>RISE 63 notification test</strong>
+          <br><span class="faint">ops@example.org · 1d ago</span>
+        </span>
+        <span class="badge badge-warn">
+          pending        </span>
+      </li>
+          </ul>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Audit trail</h2>
+      <p class="faint" style="margin:2px 0 0">
+        1842 events recorded.
+        Newest first; page through with the controls below — they work without JavaScript.
+      </p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/audit">Full activity report</a>
+  </div>
+
+    <form method="get" action="/settings" class="filter-row" style="margin-top:12px">
+    <div class="field" style="margin:0">
+      <label for="audit-kind">Show</label>
+      <select id="audit-kind" name="kind">
+                  <option value="" selected>Everything</option>
+                  <option value="admins" >Administrators only</option>
+                  <option value="financial" >Money movements</option>
+                  <option value="accounts" >Account changes</option>
+              </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label for="audit-actor">Who</label>
+      <select id="audit-actor" name="actor">
+        <option value="">Anyone</option>
+                  <option value="1" >
+            Adaeze Okonkwo · provincial_admin          </option>
+                  <option value="2" >
+            Emeka Nwosu · provincial_treasurer          </option>
+              </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label for="audit-do">Action</label>
+      <select id="audit-do" name="do">
+        <option value="">Any action</option>
+                  <option value="admin.create" >admin.create</option>
+                  <option value="ledger.adjust" >ledger.adjust</option>
+                  <option value="remittance.confirm" >remittance.confirm</option>
+                  <option value="settings.update" >settings.update</option>
+                  <option value="user.create" >user.create</option>
+                  <option value="user.impersonate.start" >user.impersonate.start</option>
+                  <option value="user.role" >user.role</option>
+                  <option value="user.suspend" >user.suspend</option>
+              </select>
+    </div>
+    <div class="field grow" style="margin:0">
+      <label for="audit-q">Search</label>
+      <input type="search" id="audit-q" name="q" value="" placeholder="Summary, e-mail or id">
+    </div>
+    <button class="btn btn-secondary" type="submit">Apply</button>
+      </form>
+
+  <div class="table-wrap" style="margin-top:12px">
+    <table class="table-stack">
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Summary</th></tr></thead>
+      <tbody>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 10:00am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">user.role</td>
+            <td data-label="Entity">user #1</td>
+            <td data-label="Summary">Role set to provincial_treasurer</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:53am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">ledger.adjust</td>
+            <td data-label="Entity">fund #2</td>
+            <td data-label="Summary">Seed Grants pool for 2026 set to ₦600,000.00 (Provincial board allocation)</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:46am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">settings.update</td>
+            <td data-label="Entity">setting #3</td>
+            <td data-label="Summary">academy_graduation_percent changed</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:39am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">user.suspend</td>
+            <td data-label="Entity">user #4</td>
+            <td data-label="Summary">GRACE ADEYEMI &lt;grace@example.ng&gt;</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:32am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">remittance.confirm</td>
+            <td data-label="Entity">user #5</td>
+            <td data-label="Summary">Disbursement confirmed: ₦100,000.00</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:25am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">user.create</td>
+            <td data-label="Entity">fund #6</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:18am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">user.impersonate.start</td>
+            <td data-label="Entity">setting #7</td>
+            <td data-label="Summary">admin@example.org signed in as chinedu@example.ng</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:11am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">admin.create</td>
+            <td data-label="Entity">user #8</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 9:04am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">user.role</td>
+            <td data-label="Entity">user #9</td>
+            <td data-label="Summary">Role set to provincial_treasurer</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:57am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">ledger.adjust</td>
+            <td data-label="Entity">fund #10</td>
+            <td data-label="Summary">Seed Grants pool for 2026 set to ₦600,000.00 (Provincial board allocation)</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:50am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">settings.update</td>
+            <td data-label="Entity">setting #11</td>
+            <td data-label="Summary">academy_graduation_percent changed</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:43am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">user.suspend</td>
+            <td data-label="Entity">user #12</td>
+            <td data-label="Summary">GRACE ADEYEMI &lt;grace@example.ng&gt;</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:36am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">remittance.confirm</td>
+            <td data-label="Entity">user #1</td>
+            <td data-label="Summary">Disbursement confirmed: ₦100,000.00</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:29am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">user.create</td>
+            <td data-label="Entity">fund #2</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:22am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">user.impersonate.start</td>
+            <td data-label="Entity">setting #3</td>
+            <td data-label="Summary">admin@example.org signed in as chinedu@example.ng</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:15am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">admin.create</td>
+            <td data-label="Entity">user #4</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:08am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">user.role</td>
+            <td data-label="Entity">user #5</td>
+            <td data-label="Summary">Role set to provincial_treasurer</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 8:01am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">ledger.adjust</td>
+            <td data-label="Entity">fund #6</td>
+            <td data-label="Summary">Seed Grants pool for 2026 set to ₦600,000.00 (Provincial board allocation)</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:54am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">settings.update</td>
+            <td data-label="Entity">setting #7</td>
+            <td data-label="Summary">academy_graduation_percent changed</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:47am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">user.suspend</td>
+            <td data-label="Entity">user #8</td>
+            <td data-label="Summary">GRACE ADEYEMI &lt;grace@example.ng&gt;</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:41am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">remittance.confirm</td>
+            <td data-label="Entity">user #9</td>
+            <td data-label="Summary">Disbursement confirmed: ₦100,000.00</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:34am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Emeka Nwosu</strong><br>
+                <span class="faint">provincial_treasurer</span>
+                          </td>
+            <td data-label="Action" class="mono">user.create</td>
+            <td data-label="Entity">fund #10</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:27am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>GRACE ADEYEMI</strong><br>
+                <span class="faint">csr_rep</span>
+                          </td>
+            <td data-label="Action" class="mono">user.impersonate.start</td>
+            <td data-label="Entity">setting #11</td>
+            <td data-label="Summary">admin@example.org signed in as chinedu@example.ng</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:20am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>CHINEDU EZE</strong><br>
+                <span class="faint">youth_member</span>
+                          </td>
+            <td data-label="Action" class="mono">admin.create</td>
+            <td data-label="Entity">user #12</td>
+            <td data-label="Summary">Yemi Abiose &lt;yemi@example.org&gt; as Provincial administrator</td>
+          </tr>
+                  <tr>
+            <td data-label="When">
+              8 Nov 2026, 7:13am              <br><span class="faint">1d ago</span>
+            </td>
+            <td data-label="Who">
+                              <strong>Adaeze Okonkwo</strong><br>
+                <span class="faint">provincial_admin</span>
+                          </td>
+            <td data-label="Action" class="mono">user.role</td>
+            <td data-label="Entity">user #1</td>
+            <td data-label="Summary">Role set to provincial_treasurer</td>
+          </tr>
+                      </tbody>
+    </table>
+  </div>
+
+  <nav class="pager" aria-label="Pagination for events">
+  <div class="pager-controls">
+          <span class="btn btn-sm btn-quiet" aria-disabled="true">Newest</span>
+    
+          <a class="btn btn-secondary btn-sm" href="/settings?per_page=25&amp;before=376" rel="next">
+        Older <span aria-hidden="true">→</span>
+      </a>
+      </div>
+
+  <p class="pager-caption faint" role="status">
+          Showing <strong>25</strong> events · newest first      </p>
+
+      <div class="pager-sizes" role="group" aria-label="Rows per page">
+      <span class="faint">Per page</span>
+                        <a class="chip" href="/settings?per_page=10">10</a>
+                                <span class="chip chip-on" aria-current="true">25</span>
+                                <a class="chip" href="/settings?per_page=50">50</a>
+                                <a class="chip" href="/settings?per_page=100">100</a>
+                  </div>
+  </nav>
+</section>
+</main>
+
+<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 7; --active-index: 5">
+    <span class="nav-indicator" aria-hidden="true"></span>
+      <a href="/dashboard"
+       class="nav-tab"
+       >
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg></span>
+      <span class="nav-label">Dashboard</span>
+              <span class="nav-label nav-label-short" aria-hidden="true">Home</span>
+          </a>
+      <a href="/applications"
+       class="nav-tab"
+       >
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19"/><path d="M9 12h6M9 16h6"/></svg></span>
+      <span class="nav-label">Applications</span>
+              <span class="nav-label nav-label-short" aria-hidden="true">Apps</span>
+          </a>
+      <a href="/parishes"
+       class="nav-tab"
+       >
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11 12 4l8 7"/><path d="M6.5 9.8V20h11V9.8"/><path d="M10 20v-5h4v5"/></svg></span>
+      <span class="nav-label">Parish Connect</span>
+              <span class="nav-label nav-label-short" aria-hidden="true">Parish</span>
+          </a>
+      <a href="/treasury"
+       class="nav-tab"
+       >
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/></svg></span>
+      <span class="nav-label">Treasury</span>
+          </a>
+      <a href="/security"
+       class="nav-tab"
+       >
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <span class="nav-label">Security</span>
+          </a>
+      <a href="/settings"
+       class="nav-tab active"
+       aria-current="page">
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></span>
+      <span class="nav-label">Settings</span>
+          </a>
+    <form method="post" action="/" class="nav-logout">
+    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="logout">
+    <button type="submit" class="nav-tab">
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
+      <span class="nav-label">Sign out</span>
+    </button>
+  </form>
+</nav>
+
+<footer class="site-footer">
+  <p>© 2026 RISE 63 · RCCG Lagos Province 63</p>
+  <p class="muted">Rise. Build. Give back.</p>
+</footer>
+
+<div class="install-prompt" id="install-prompt" hidden>
+  <div class="install-body">
+    <strong>Install RISE 63</strong>
+    <p id="install-hint">Add the app to your home screen for instant access.</p>
+  </div>
+  <div class="install-actions">
+    <button type="button" class="btn btn-primary btn-sm" id="install-accept">Install</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="install-dismiss" aria-label="Not now">Not now</button>
+  </div>
+</div>
+
+<script src="/public/assets/app.6148ab27.js" defer></script>
+</body>
+</html>

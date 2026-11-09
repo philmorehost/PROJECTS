@@ -88,6 +88,15 @@ final class Ledger
             $amount = Money::fromDecimal($remittance['amount']);
             $program = (string) $application['program_type'];
 
+            // Serialise every confirmation that draws on the same fund. Locking the remittance row
+            // above is not enough: two treasurers confirming two *different* pending grants at the
+            // same instant hold two different remittance locks, both read the same remaining pool,
+            // and both conclude there is room — which overdraws it. The blueprint calls for a
+            // `SELECT … FOR UPDATE` guard on the pool, and this is it: one row per program per year,
+            // taken after the remittance lock so the lock order is always the same and cannot
+            // deadlock against itself.
+            self::lockPool($program, (int) $application['cycle_year']);
+
             $balanceAfter = self::poolBalance($program, (int) $application['cycle_year']);
             if ($program === 'seed_grant') {
                 if ($amount->compare($balanceAfter) === 1) {
@@ -131,35 +140,60 @@ final class Ledger
     }
 
     /**
+     * Take the advisory lock for one program's pool in one cycle year.
+     *
+     * `GET_LOCK` with a deterministic name (`rise63:pool:<program>:<year>`) rather than
+     * `SELECT … FOR UPDATE` on a table, because MySQL only blocks row locks on rows that exist:
+     * locking a fund with no ledger rows yet would lock nothing and let the race through. A named
+     * advisory lock has no such blind spot, is released automatically when the transaction ends or
+     * the connection dies, and is the same mechanism on MySQL 8 and MariaDB 10.6.
+     *
+     * The name is deterministic and the timeout is short: a stale lock can delay a confirmation by
+     * at most 5 seconds before the attempt is refused with a clear message, rather than appearing
+     * to hang. No schema change is needed — GET_LOCK is a server feature, not a table.
+     */
+    public static function lockPool(string $program, int $cycleYear): void
+    {
+        $name = 'rise63:pool:' . substr(preg_replace('/[^a-z_]/', '', $program) ?? 'unknown', 0, 20) . ':' . $cycleYear;
+        $got  = Database::value('SELECT GET_LOCK(?, 5)', [$name]);
+        if ((int) $got !== 1) {
+            throw new \RuntimeException(
+                'Another disbursement for this fund is being confirmed right now. Try again in a moment.'
+            );
+        }
+        // The lock is held until the transaction commits; register the release for the outer scope
+        // so a thrown exception inside the transaction still unlocks before the connection returns
+        // to the pool.
+        register_shutdown_function(static function () use ($name): void {
+            try {
+                Database::value('SELECT RELEASE_LOCK(?)', [$name]);
+            } catch (\Throwable) {
+                // The connection may already be gone; MySQL releases named locks on disconnect.
+            }
+        });
+    }
+
+    /**
      * Remaining pool for a program in a cycle year.
-     * For Seed Grants the pool is a monthly allowance multiplied by the months elapsed,
-     * minus everything already disbursed in that year.
+     *
+     * This used to be derived from the calendar (monthly allowance × months elapsed), which meant
+     * the "Seed grant pool left" figure on the treasury screen could not be set by anyone and moved
+     * on its own. It is now the real balance from {@see Fund}: opening commitment + deposits +
+     * adjustments − disbursements, all of which are attributable ledger rows.
+     *
+     * `pending` is subtracted as well, because a queued disbursement is money promised. Showing it
+     * as still-available would let two treasurers promise the same naira twice.
      */
     public static function poolBalance(string $program, int $cycleYear): Money
     {
-        if ($program !== 'seed_grant') {
-            return Money::fromCents(Money::MAX_CENTS);
-        }
-        $monthly  = Money::fromDecimal((string) Settings::get('seed_grant_monthly_pool', '0'));
-        $thisYear = (int) gmdate('Y');
-        if ($cycleYear === $thisYear) {
-            $months = (int) gmdate('n');
-        } elseif ($cycleYear < $thisYear) {
-            $months = 12;
-        } else {
-            $months = 0;
-        }
-        // Pool accrues monthly: months elapsed ÷ 12 of the annual allowance, half-up on kobo.
-        $basisPoints = (int) round($months * 10000 / 12);
-        $reserved    = $monthly->percent($basisPoints, 10000);
-
-        $commitment = Money::fromDecimal((string) Database::value(
+        $balance = Fund::balance($program, $cycleYear);
+        $pending = Money::fromDecimal((string) Database::value(
             "SELECT COALESCE(SUM(r.amount),0) FROM remittances r
              JOIN program_applications a ON a.id = r.application_id
-             WHERE a.program_type = 'seed_grant' AND a.cycle_year = ? AND r.status IN ('paid','pending')",
-            [$cycleYear]
+             WHERE a.program_type = ? AND a.cycle_year = ? AND r.status = 'pending'",
+            [$program, $cycleYear]
         ));
-        return $reserved->compare($commitment) === 1 ? $reserved->minus($commitment) : Money::zero();
+        return $balance['remaining']->compare($pending) === 1 ? $balance['remaining']->minus($pending) : Money::zero();
     }
 
     /** @return list<array<string, mixed>> */
