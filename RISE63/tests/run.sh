@@ -20,4 +20,6 @@ else
   node tests/support/phpwasm-lint.mjs
   node tests/support/phpwasm-test.mjs
   node tests/support/phpwasm-render.mjs
+  node tests/support/combobox-behaviour.mjs
+  node tests/support/offline-behaviour.mjs
 fi

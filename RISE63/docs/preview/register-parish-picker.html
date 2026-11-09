@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<!-- Static preview of the registration form. Generated from app/Views/auth/register.php. The parish search answers from a fixed list so the picker can be tried here. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account · RISE 63</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+/* RISE 63 — single stylesheet. No framework, no build step.
+   Rules that are non-negotiable and tested in tests/ui.php:
+   body/base text never below 16px · interactive targets >= 48px · AA contrast in both themes. */
+
+:root {
+  --brand: #2563eb;
+  --brand-ink: #ffffff;
+  --brand-soft: #e8efff;
+  --t-xs: 0.8125rem;
+  --t-sm: 0.9375rem;
+  --t-base: 1rem;
+  --t-lg: 1.125rem;
+  --t-xl: 1.375rem;
+  --t-2xl: clamp(1.625rem, 4.5vw, 2.25rem);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --touch: 48px;
+  --gap: 16px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* ── Light theme (default) ─────────────────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #d8e0ea;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+  --ok: #12684a;
+  --ok-soft: #e3f6ed;
+  --warn: #8a5300;
+  --warn-soft: #fdf1db;
+  --danger: #a11f1f;
+  --danger-soft: #fdeaea;
+  --info: #1c4f8a;
+  --info-soft: #e7f0fb;
+  --focus: #0b57d0;
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1120;
+  --surface: #131c2e;
+  --surface-2: #1b2740;
+  --border: #2c3b55;
+  --text: #f1f5f9;
+  --text-muted: #c2cede;
+  --text-faint: #a3b1c6;
+  --ok: #7ee0b0;
+  --ok-soft: #10301f;
+  --warn: #ffd189;
+  --warn-soft: #3a2a06;
+  --danger: #ffaaaa;
+  --danger-soft: #3d1414;
+  --info: #a8cdff;
+  --info-soft: #10233c;
+  --brand-soft: #16294d;
+  --focus: #8fb8ff;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --bg: #0b1120;
+    --surface: #131c2e;
+    --surface-2: #1b2740;
+    --border: #2c3b55;
+    --text: #f1f5f9;
+    --text-muted: #c2cede;
+    --text-faint: #a3b1c6;
+    --ok: #7ee0b0;
+    --ok-soft: #10301f;
+    --warn: #ffd189;
+    --warn-soft: #3a2a06;
+    --danger: #ffaaaa;
+    --danger-soft: #3d1414;
+    --info: #a8cdff;
+    --info-soft: #10233c;
+    --brand-soft: #16294d;
+    --focus: #8fb8ff;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--t-base);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-large { font-size: 1.0625rem; line-height: 1.75; }
+.text-large .card, .text-large p, .text-large li { line-height: 1.75; }
+
+h1, h2, h3, h4 { line-height: 1.25; margin: 0 0 0.5em; font-weight: 700; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); }
+h2 { font-size: var(--t-xl); }
+h3 { font-size: var(--t-lg); }
+h4 { font-size: var(--t-base); }
+p { margin: 0 0 1em; }
+p:last-child { margin-bottom: 0; }
+a { color: var(--brand); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration: underline; }
+small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); font-size: var(--t-sm); }
+.nowrap { white-space: nowrap; }
+.center { text-align: center; }
+.stack > * + * { margin-top: var(--gap); }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.row-end { justify-content: space-between; }
+.grow { flex: 1 1 auto; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--surface); color: var(--text); padding: 12px 16px; border-radius: 0 0 var(--radius-sm) 0;
+}
+.skip-link:focus { left: 0; }
+
+/* ── Chrome ───────────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
+}
+.topbar-inner {
+  max-width: 1080px; margin: 0 auto; padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; min-width: 0; }
+.brand-mark {
+  width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: hsl(var(--brand-hue, 220) 78% 44%);
+  color: #fff; font-weight: 800; font-size: 1.25rem;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+.brand-text { display: flex; flex-direction: column; min-width: 0; }
+.brand-text strong { font-size: var(--t-base); }
+.brand-text small { color: var(--text-muted); font-size: var(--t-xs); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-actions { display: flex; gap: 8px; }
+.icon-btn {
+  min-width: var(--touch); min-height: var(--touch);
+  display: inline-grid; place-items: center; gap: 0;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px;
+  font-size: 1.05rem; font-weight: 700; cursor: pointer; text-decoration: none;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.icon-btn:active { transform: scale(0.95); }
+
+.page { flex: 1 0 auto; width: 100%; max-width: 1080px; margin: 0 auto; padding: 20px 16px 28px; }
+.page.has-bottom-nav { padding-bottom: 112px; }
+
+.site-footer {
+  border-top: 1px solid var(--border); padding: 20px 16px 28px;
+  text-align: center; font-size: var(--t-sm); color: var(--text-muted);
+}
+.site-footer p { margin: 4px 0; }
+
+/* ── Bottom navigation ────────────────────────────────────────────────────────── */
+/* A sticky, phone-style tab bar.
+ *
+ * "Sticky" here means what it means on a phone: pinned to the bottom of the *viewport* while the
+ * page scrolls underneath it, never scrolling away with the content and never in a second copy.
+ * `position: fixed` is the pinned behaviour; `position: sticky` would pin it inside the document
+ * flow instead, which is why it looked like part of the footer rather than like a tab bar.
+ *
+ * The look is deliberately modern but not trendy: a translucent slab with a blur, a hairline edge,
+ * a soft layered shadow, drawn SVG marks, and one pill that slides to the active tab. Widths are
+ * proportional (--tab-count) so it survives seven tabs on a 320px phone as well as on a desktop.
+ *
+ * It floats above the content rather than sitting in a strip at the bottom edge — which is why the
+ * page reserves space for it below (.page.has-bottom-nav). */
+.bottom-nav {
+  position: fixed; z-index: 30;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  width: min(680px, calc(100% - 20px));
+  display: flex; align-items: stretch; justify-content: space-between;
+  gap: 2px; padding: 6px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 22px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 60%, transparent) inset,
+    0 10px 30px -10px rgba(15, 23, 42, 0.35),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* The sliding pill. One element, moved with a transform: width and offset come from the number of
+   tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
+   parked under the first tab, which would claim that tab was current. */
+.bottom-nav .nav-indicator {
+  position: absolute; z-index: 0;
+  top: 6px; bottom: 6px; left: 6px;
+  width: calc((100% - 12px) / var(--tab-count, 6) - 2px);
+  border-radius: 16px;
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent) inset;
+  transform: translateX(calc(var(--active-index, 0) * (100% + 2px)));
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.bottom-nav .nav-indicator[data-idle] { opacity: 0; }
+
+.bottom-nav a, .bottom-nav button {
+  position: relative; z-index: 1;
+  flex: 1 1 0; min-width: 0; min-height: var(--touch);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: none; border: 0; color: var(--text-faint); text-decoration: none;
+  font: inherit; font-size: var(--t-xs); line-height: 1.1; cursor: pointer;
+  padding: 6px 2px; border-radius: 16px;
+  transition: color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav .nav-icon { display: grid; place-items: center; width: 24px; height: 24px; }
+.bottom-nav .nav-icon svg { width: 24px; height: 24px; display: block; }
+.bottom-nav .nav-label {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.75rem; letter-spacing: 0.01em; font-weight: 600;
+}
+
+/* The active tab: brand colour, a filled mark, and a slightly bolder label. The fill is a solid
+   tint behind the stroked path so it reads at a glance on a small screen. */
+.bottom-nav a.active, .bottom-nav a[aria-current="page"] { color: var(--brand); }
+.bottom-nav a.active .nav-label, .bottom-nav a[aria-current="page"] .nav-label { font-weight: 800; }
+.bottom-nav a.active .nav-icon svg, .bottom-nav a[aria-current="page"] .nav-icon svg {
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--brand) 35%, transparent));
+}
+.bottom-nav a.active .nav-icon, .bottom-nav a[aria-current="page"] .nav-icon { transform: translateY(-1px); }
+
+.bottom-nav form { flex: 1 1 0; margin: 0; display: flex; min-width: 0; }
+.bottom-nav button { width: 100%; }
+.bottom-nav a:hover, .bottom-nav button:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.bottom-nav a:active, .bottom-nav button:active { transform: scale(0.94); }
+.bottom-nav .nav-logout button { color: var(--text-faint); }
+.bottom-nav .nav-logout button:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* A phone narrow enough that the full labels would ellipsise: swap in the short label. Both are
+   in the markup so the accessible name stays the long one — the short copy is aria-hidden. */
+.bottom-nav .nav-label-short { display: none; }
+@media (max-width: 420px) {
+  .bottom-nav { width: calc(100% - 12px); bottom: calc(6px + env(safe-area-inset-bottom)); border-radius: 20px; padding: 5px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; }
+  .bottom-nav a, .bottom-nav button { gap: 3px; }
+  .bottom-nav .nav-label:not(.nav-label-short) { display: none; }
+  .bottom-nav .nav-label-short { display: block; }
+}
+
+/* Nine tabs (admin on a phone) is the worst case: shrink the mark, never the words. The label
+   floor is 0.6875rem — the stylesheet's readability rule is enforced by a test. */
+@media (max-width: 360px) {
+  .bottom-nav .nav-icon, .bottom-nav .nav-icon svg { width: 21px; height: 21px; }
+  .bottom-nav .nav-label { font-size: 0.6875rem; letter-spacing: -0.01em; }
+}
+
+/* ── Setup wizard ─────────────────────────────────────────────────────────────── */
+/* Used by install/index.php. A wide, two-column shell on desktop that collapses to one column on
+   a phone, with the step list as a progress rail rather than a bare <ol>. */
+body.wizard { background: var(--bg); }
+.wizard-wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+
+.wizard-top {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 22px;
+}
+.wizard-top .brand-mark { width: 52px; height: 52px; flex-basis: 52px; font-size: 1.5rem; border-radius: 15px; }
+.wizard-top h1 { margin: 0; font-size: var(--t-2xl); line-height: 1.15; letter-spacing: -0.015em; }
+.wizard-top p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-sm); }
+.wizard-top .wizard-version { margin-left: auto; text-align: right; font-size: var(--t-xs); color: var(--text-faint); }
+
+/* Step rail */
+.wizard-steps {
+  display: grid; gap: 6px; grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none; margin: 0 0 20px; padding: 0;
+}
+.wizard-steps li {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: var(--t-sm); color: var(--text-muted); min-width: 0;
+}
+.wizard-steps .step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700;
+}
+.wizard-steps .step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.wizard-steps .is-done { color: var(--text); }
+.wizard-steps .is-done .step-num { background: var(--ok-soft); color: var(--ok); }
+.wizard-steps .is-current {
+  color: var(--text); border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface)); font-weight: 700;
+}
+.wizard-steps .is-current .step-num { background: var(--brand); color: var(--brand-ink); }
+
+/* Panel */
+.wizard-panel { padding: 24px; }
+.wizard-panel > h2 { margin: 0 0 4px; font-size: var(--t-xl); }
+.wizard-panel > .lead { margin: 0 0 20px; color: var(--text-muted); font-size: var(--t-sm); max-width: 62ch; }
+.wizard-panel h3 { font-size: var(--t-lg); }
+
+/* Check list */
+.checklist { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 8px; }
+.checklist li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.checklist .check-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; font-size: 0.9rem; font-weight: 700;
+}
+.checklist .check-body { min-width: 0; flex: 1 1 auto; }
+.checklist .check-body strong { display: block; font-size: var(--t-base); }
+.checklist .check-body span { display: block; color: var(--text-muted); font-size: var(--t-xs); }
+.checklist .is-ok .check-icon { background: var(--ok-soft); color: var(--ok); }
+.checklist .is-bad { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
+.checklist .is-bad .check-icon { background: var(--surface); color: var(--danger); }
+
+/* Form grid inside the wizard */
+.wizard-fields { display: grid; gap: 0 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wizard-fields .field-full { grid-column: 1 / -1; }
+.wizard-fields .field { margin-bottom: 16px; }
+.wizard-actions { display: grid; gap: 8px; margin-top: 22px; }
+.wizard-actions .btn { min-height: 50px; }
+
+.wizard-note { margin: 0 0 20px; }
+.wizard-note a { font-weight: 650; }
+
+/* Completion screen */
+.wizard-done { text-align: center; padding: 16px 4px 8px; }
+.wizard-done .done-mark {
+  width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ok-soft); color: var(--ok); font-size: 1.9rem;
+}
+.wizard-done h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.wizard-done p { margin: 0 auto 18px; color: var(--text-muted); max-width: 52ch; }
+
+@media (max-width: 720px) {
+  .wizard-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wizard-fields { grid-template-columns: minmax(0, 1fr); }
+  .wizard-panel { padding: 18px; }
+  .wizard-top .wizard-version { display: none; }
+}
+
+@media print {
+  .wizard-steps, .wizard-actions { display: none !important; }
+}
+
+/* ── Cards & surfaces ─────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow); margin-bottom: var(--gap);
+}
+.card-flat { box-shadow: none; }
+.card > h2:last-child, .card > h3:last-child { margin-bottom: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.card-head h2, .card-head h3 { margin: 0; }
+.section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 24px 0 12px; }
+.section-title h2 { margin: 0; }
+.grid { display: grid; gap: var(--gap); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid-tight { gap: 10px; }
+
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.stat b { display: block; font-size: 1.5rem; line-height: 1.2; }
+.stat span { font-size: var(--t-sm); color: var(--text-muted); }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--touch); padding: 12px 18px;
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font: inherit; font-weight: 650; text-decoration: none; cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  text-align: center;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--brand); color: var(--brand-ink); }
+.btn-primary:hover { background: color-mix(in srgb, var(--brand) 88%, black); text-decoration: none; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--surface-2); text-decoration: none; }
+.btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+.btn-danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.btn-block { width: 100%; }
+.btn-sm { min-height: 40px; padding: 8px 14px; font-size: var(--t-sm); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Forms ────────────────────────────────────────────────────────────────────── */
+form { margin: 0; }
+.field { margin-bottom: 16px; }
+.field > label, .field-label {
+  display: block; font-weight: 650; font-size: var(--t-base); margin-bottom: 6px;
+}
+.field .hint { display: block; font-weight: 400; color: var(--text-muted); font-size: var(--t-sm); margin-top: 4px; }
+input[type="text"], input[type="email"], input[type="password"], input[type="tel"],
+input[type="number"], input[type="date"], input[type="search"], select, textarea {
+  width: 100%; min-height: var(--touch);
+  padding: 12px 14px;
+  font: inherit; font-size: var(--t-base); /* never below 16px: stops iOS zoom-on-focus */
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-position: calc(100% - 20px) 21px, calc(100% - 14px) 21px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 40px; }
+input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); outline: none; }
+input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: var(--t-sm); margin-top: 6px; }
+.check { display: flex; align-items: flex-start; gap: 12px; min-height: var(--touch); padding: 10px 0; }
+.check input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--brand); flex: 0 0 auto; }
+.check span { font-size: var(--t-base); }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin: 0 0 16px; }
+legend { font-weight: 700; padding: 0 6px; }
+.form-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.form-actions .btn { flex: 1 1 160px; }
+
+/* ── Flash & notices ──────────────────────────────────────────────────────────── */
+.flash {
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: var(--gap);
+  border: 1px solid transparent; font-size: var(--t-base);
+}
+.flash-success { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 28%, transparent); }
+.flash-error { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.flash-info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 25%, transparent); }
+.notice { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; font-size: var(--t-sm); }
+.notice strong { display: block; margin-bottom: 4px; }
+
+/* ── Badges & status ──────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.01em;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border); white-space: nowrap;
+}
+.badge-ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.badge-warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.badge-info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+.badge-crown { background: var(--ok-soft); color: var(--ok); }
+.crown { font-size: 1rem; }
+
+/* Status micro-tracker: Submitted → Under review → Approved/Disbursed */
+.tracker { display: flex; gap: 0; margin: 14px 0 4px; }
+.tracker-step { flex: 1 1 0; text-align: center; position: relative; padding-top: 26px; font-size: var(--t-xs); color: var(--text-faint); }
+.tracker-step::before {
+  content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--border);
+}
+.tracker-step::after {
+  content: ""; position: absolute; top: 12px; left: 50%; width: 100%; height: 2px; background: var(--border);
+}
+.tracker-step:last-child::after { display: none; }
+.tracker-step.done { color: var(--ok); }
+.tracker-step.done::before { background: var(--ok); border-color: var(--ok); }
+.tracker-step.done::after { background: var(--ok); }
+.tracker-step.current { color: var(--brand); font-weight: 700; }
+.tracker-step.current::before { background: var(--brand); border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+
+/* ── Tables (stack on phones) ─────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-base); }
+th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-size: var(--t-sm); font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 680px) {
+  .table-stack thead { display: none; }
+  .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+  .table-stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  .table-stack td { border: 0; padding: 6px 14px; }
+  .table-stack td::before {
+    content: attr(data-label); display: block;
+    font-size: var(--t-xs); font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+  }
+  .table-stack td.num { text-align: left; }
+}
+
+/* ── Combobox (parish live search) ────────────────────────────────────────────── */
+.combo { position: relative; }
+.combo-list {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); max-height: 300px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+}
+.combo-list[hidden] { display: none; }
+.combo-option { padding: 12px; border-radius: 8px; cursor: pointer; font-size: var(--t-base); }
+.combo-option small { display: block; color: var(--text-muted); }
+.combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
+.combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
+
+/* ── Offline / install ────────────────────────────────────────────────────────── */
+/* ── Offline modal ─────────────────────────────────────────────────────────────── */
+/* A bottom sheet, not a top bar. The top-bar version covered the header (hiding the brand and the
+   theme control at the exact moment the user was looking for a way out) and, on the first release,
+   could not be closed at all. A connectivity notice is the one thing on the page you cannot
+   navigate away from, so it has to be dismissible and it must not sit on top of the navigation.
+
+   The sheet rises from the bottom on phones — where the thumb is — and centres as a dialog on a
+   wide screen. It never covers the sticky tab bar: the sheet stops above it. */
+.offline-modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, #0b1120 55%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: offline-fade 0.16s ease-out both;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.offline-modal[hidden] { display: none; }
+.offline-sheet {
+  width: min(520px, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 44px -12px rgba(15, 23, 42, 0.45);
+  text-align: center;
+  animation: offline-rise 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.offline-emoji {
+  display: grid; place-items: center;
+  width: 46px; height: 46px; margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--warn-soft); color: var(--warn);
+}
+.offline-emoji svg { width: 24px; height: 24px; }
+.offline-sheet h2 { margin: 0 0 8px; font-size: var(--t-xl); }
+.offline-sheet p { margin: 0 auto 16px; color: var(--text-muted); font-size: var(--t-sm); max-width: 40ch; }
+.offline-actions { display: grid; gap: 8px; }
+.offline-hint { margin: 10px 0 0 !important; font-size: var(--t-sm); color: var(--warn); min-height: 1.2em; }
+/* The hint holds its line so the sheet does not jump when "Checking…" appears. */
+
+/* While the sheet is open the page behind it must not scroll, or a thumb drag can slide the page
+   under the dialog and make it look as though the dialog swallowed the content. */
+html.offline-open, html.offline-open body { overflow: hidden; }
+
+@keyframes offline-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes offline-rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (min-width: 720px) {
+  /* Wide screen: a centred dialog. Aligned to the middle rather than the bottom so it reads as a
+     notification, not as a menu that was opened by accident. */
+  .offline-modal { align-items: center; padding: 24px; }
+  .offline-sheet { border-radius: 22px; border-bottom: 1px solid var(--border); }
+}
+
+.install-prompt {
+  position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 50;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; box-shadow: 0 12px 36px rgba(15, 23, 42, 0.22);
+}
+.install-prompt[hidden] { display: none; }
+.install-body strong { display: block; }
+.install-body p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--text-muted); }
+.install-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* ── Auth screens ─────────────────────────────────────────────────────────────── */
+.auth-shell { max-width: 440px; margin: 8vh auto 0; }
+.auth-shell .brand-mark { width: 54px; height: 54px; flex-basis: 54px; font-size: 1.6rem; border-radius: 16px; }
+.auth-lead { color: var(--text-muted); margin-bottom: 20px; }
+.auth-alt { text-align: center; font-size: var(--t-sm); color: var(--text-muted); margin-top: 18px; }
+
+/* ── Program cards ────────────────────────────────────────────────────────────── */
+.program-card { display: flex; flex-direction: column; gap: 10px; }
+.program-card h3 { margin: 0; }
+.program-card p { color: var(--text-muted); font-size: var(--t-sm); margin: 0; }
+.program-icon { font-size: 1.6rem; }
+
+/* ── Timeline ─────────────────────────────────────────────────────────────────── */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { position: relative; padding: 0 0 16px 26px; }
+.timeline li::before { content: ""; position: absolute; left: 5px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); }
+.timeline li::after { content: ""; position: absolute; left: 9px; top: 18px; bottom: 0; width: 2px; background: var(--border); }
+.timeline li:last-child::after { display: none; }
+.timeline time { font-size: var(--t-xs); color: var(--text-faint); display: block; }
+
+/* ── Utilities ────────────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.divider { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+.pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.money { font-variant-numeric: tabular-nums; font-weight: 700; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-sm); }
+.list-plain { list-style: none; margin: 0; padding: 0; }
+.list-plain li { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.list-plain li:last-child { border-bottom: 0; }
+
+@media (min-width: 720px) {
+  .page { padding: 28px 24px 40px; }
+  /* The bar stays floating on a wide screen — it was previously switched to a static block here,
+     which would have parked a "phone" tab bar under the page content on every desktop. Only the
+     room beneath the page changes. */
+  .page.has-bottom-nav { padding-bottom: 104px; }
+  .install-prompt { left: auto; right: 24px; bottom: calc(96px + env(safe-area-inset-bottom)); max-width: 420px; }
+  .card { padding: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .btn:active, .icon-btn:active { transform: none; }
+}
+
+@media (prefers-reduced-data: reduce) {
+  .card { box-shadow: none; }
+  .brand-mark { box-shadow: none; }
+}
+
+@media print {
+  .topbar, .bottom-nav, .site-footer, .install-prompt, .offline-modal, .form-actions { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
+  .page { padding: 0; max-width: none; }
+}
+
+</style>
+</head>
+<body class="guest">
+<main class="page">
+  <div class="auth-shell">
+    <div class="card">
+      <h1 style="font-size:1.5rem">Create your RISE 63 account</h1>
+      <p class="auth-lead">Your parish representative may have given you an account already — check before registering.</p>
+
+      
+      <form method="post" action="/" autocomplete="on">
+        <input type="hidden" name="csrf" value="18776453f423d547479bd4d5053ace08a0ed0ba38b1b538f3c2070540173dccf">        <input type="hidden" name="action" value="register">
+
+        <div class="field">
+          <label for="full_name">Full name</label>
+          <input type="text" id="full_name" name="full_name" required maxlength="150" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="email">E-mail address</label>
+          <input type="email" id="email" name="email" required maxlength="150" autocomplete="email"
+                 inputmode="email" autocapitalize="none" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="phone">Phone number <span class="faint">(optional)</span></label>
+          <input type="tel" id="phone" name="phone" maxlength="25" autocomplete="tel" inputmode="tel">
+        </div>
+
+        <fieldset class="field" style="border:0;padding:0;margin:0 0 16px">
+          <legend style="font-weight:700;font-size:var(--t-base);padding:0">Your parish</legend>
+          <p class="hint" style="margin-top:2px">Find your church in the list. If it is not there yet,
+            type its name and we will pass it to your parish representative.</p>
+
+          <div class="field" data-combobox id="parish-combo" data-endpoint="/api/index.php">
+            <label for="parish-search">Search for your church</label>
+            <div class="combo">
+              <input type="search" id="parish-search" role="combobox" aria-expanded="false"
+                     aria-autocomplete="list" aria-controls="parish-list" autocomplete="off"
+                     placeholder="Parish, area or zone">
+              <input type="hidden" name="parish_id" id="parish-id-field" value="">
+              <ul class="combo-list" id="parish-list" role="listbox" hidden></ul>
+            </div>
+            <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
+          </div>
+
+          <details id="parish-manual" style="margin-top:4px">
+            <summary style="cursor:pointer;min-height:32px;display:flex;align-items:center">My church is not in the list</summary>
+            <div class="field" style="margin-top:10px">
+              <label for="parish_name_raw">Church name</label>
+              <input type="text" id="parish_name_raw" name="parish_name_raw" maxlength="150"
+                     data-caps autocapitalize="characters" spellcheck="false"
+                     placeholder="CHAPEL OF WONDERS PARISH">
+              <span class="hint">Write it in full. Capitals are applied automatically, and your
+                representative adds it to the directory afterwards.</span>
+            </div>
+          </details>
+
+          <noscript>
+            <div class="field">
+              <label for="parish_id_fallback">Parish</label>
+              <select name="parish_id" id="parish_id_fallback" aria-label="Your parish">
+                <option value="">I am not sure yet</option>
+              </select>
+              <span class="hint">Searching the list needs JavaScript. You can also type the name
+                below and your representative will add it.</span>
+            </div>
+            <div class="field">
+              <label for="parish_name_raw_ns">Church name, if not listed</label>
+              <input type="text" id="parish_name_raw_ns" name="parish_name_raw" maxlength="150">
+            </div>
+          </noscript>
+        </fieldset>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required minlength="12" maxlength="72" autocomplete="new-password">
+          <span class="hint">At least 12 characters. Avoid your name, your e-mail and common words.</span>
+        </div>
+        <div class="field">
+          <label for="password_confirm">Repeat password</label>
+          <input type="password" id="password_confirm" name="password_confirm" required minlength="12" maxlength="72" autocomplete="new-password">
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary btn-block" type="submit">Create account</button>
+        </div>
+      </form>
+      <p class="auth-alt">Already registered? <a href="/login">Sign in</a></p>
+    </div>
+  </div>
+</main>
+<script>
+  /* Preview only: stands in for /api/index.php so the picker works in a static file. */
+  (function () {
+    var realFetch = window.fetch;
+    window.fetch = function (url, options) {
+      if (String(url).indexOf('api/index.php') === -1) { return realFetch(url, options); }
+      var term = decodeURIComponent(String(url).split('q=')[1] || '').toUpperCase();
+      var all = [
+        { id: 1, parish: 'LIVING WATER PARISH', area: 'HOPE AREA', zone: 'GRACE ZONE' },
+        { id: 2, parish: 'GOOD SHEPHERD PARISH', area: 'HOPE AREA', zone: 'GRACE ZONE' },
+        { id: 3, parish: 'CHAPEL OF WONDERS PARISH', area: 'CHAPEL OF WONDERS PARISH AREA', zone: 'CONQUERORS CHAPEL ZONE' }
+      ];
+      var hits = all.filter(function (p) {
+        return term.length < 3 || (p.parish + ' ' + p.area + ' ' + p.zone).indexOf(term) !== -1;
+      }).map(function (p) {
+        p.label = p.parish + ' \u00b7 ' + p.area + ' \u00b7 ' + p.zone;
+        return p;
+      });
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ parishes: hits }); } });
+    };
+  }());
+</script>
+<script>
+/* RISE 63 — progressive enhancement only.
+   Everything here is optional: every form and page works with JavaScript disabled.
+   Contents: theme switch, offline banner, install prompt, live-search combobox,
+   draft autosave, idempotent offline submit queue, service-worker registration, update toast. */
+(function () {
+  'use strict';
+
+  var THEME_KEY = 'rise63-theme';
+  var DRAFT_PREFIX = 'rise63-draft-';
+  var QUEUE_KEY = 'rise63-queue';
+  var SNOOZE_KEY = 'rise63-install-snoozed';
+  var root = document.documentElement;
+
+  function store(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) { /* private mode */ }
+  }
+  function read(key) {
+    try { return window.localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function remove(key) {
+    try { window.localStorage.removeItem(key); } catch (e) { /* noop */ }
+  }
+
+  /* ── Theme ─────────────────────────────────────────────────────────────────── */
+  function currentTheme() {
+    return root.dataset.theme || 'system';
+  }
+  function applyTheme(theme) {
+    root.dataset.theme = theme;
+    store(THEME_KEY, theme);
+    var button = document.getElementById('theme-toggle');
+    if (button) {
+      var label = theme === 'system' ? 'Appearance: follows your device' : 'Appearance: ' + theme;
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+  }
+  function nextTheme(theme) {
+    return theme === 'system' ? 'light' : (theme === 'light' ? 'dark' : 'system');
+  }
+  var themeButton = document.getElementById('theme-toggle');
+  if (themeButton) {
+    themeButton.addEventListener('click', function () {
+      applyTheme(nextTheme(currentTheme()));
+    });
+  }
+  applyTheme(currentTheme());
+
+  /* ── Offline modal ─────────────────────────────────────────────────────────── */
+  /* Requirements, in order of how easy they are to get wrong:
+       1. automatic — no user action needed to make it appear;
+       2. only while actually offline — navigator.onLine reports "connected" to any network,
+          including a router with no internet, so it is a hint and never the answer;
+       3. gone with no perceptible delay when the connection returns;
+       4. closable by hand, and a dismissal sticks until the next time the connection drops —
+          otherwise it would reopen seconds after being closed, which is the definition of
+          stubborn.
+     The bar this replaces failed (4) and sat over the header. A modal fails worse if it cannot be
+     closed, so dismissal is the primary path here, not an afterthought. */
+  var modal = document.getElementById('offline-modal');
+  var modalClose = document.getElementById('offline-close');
+  var modalRetry = document.getElementById('offline-retry');
+  var modalHint = document.getElementById('offline-hint');
+  var dismissed = false;
+  var probeTimer = null;
+  var probeInFlight = false;
+  /* 5s: fast enough that the notice never outlives a working connection by more than a moment,
+     cheap enough for a metered phone (one HEAD to a 1KB icon the page already loaded). */
+  var PROBE_INTERVAL = 5000;
+
+  function showModal(show) {
+    if (!modal) { return; }
+    modal.hidden = !show;
+    // The page behind a modal must not scroll under it, or a phone user can drag the sheet off
+    // screen and appear to have "lost" the page.
+    document.documentElement.classList.toggle('offline-open', show);
+  }
+  function openIfNeeded() {
+    if (dismissed) { return; }
+    showModal(true);
+  }
+
+  /* A request that fails fast is a better answer than navigator.onLine. HEAD on a small same-origin
+     file proves the route to this server. */
+  function probe() {
+    if (probeInFlight || !window.fetch) { return; }
+    probeInFlight = true;
+    var done = function (reachable) {
+      probeInFlight = false;
+      if (reachable) {
+        dismissed = false;
+        showModal(false);
+        if (modalHint) { modalHint.textContent = ''; }
+        flushQueue();
+        stopProbing();
+      } else {
+        openIfNeeded();
+      }
+    };
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (controller) { controller.abort(); } }, 4000);
+    window.fetch('./favicon.svg', {
+      method: 'HEAD', cache: 'no-store', credentials: 'same-origin',
+      signal: controller ? controller.signal : undefined
+    }).then(function () { clearTimeout(timer); done(true); },
+            function () { clearTimeout(timer); done(false); });
+  }
+
+  function startProbing() {
+    if (probeTimer !== null) { return; }
+    probeTimer = setInterval(probe, PROBE_INTERVAL);
+  }
+  function stopProbing() {
+    if (probeTimer === null) { return; }
+    clearInterval(probeTimer);
+    probeTimer = null;
+  }
+
+  if (modal) {
+    var closeNotice = function () {
+      dismissed = true;
+      showModal(false);
+      // Keep probing while dismissed: the flag has to clear when the connection returns, or the
+      // next outage would show nothing at all.
+      startProbing();
+    };
+
+    if (modalClose) { modalClose.addEventListener('click', closeNotice); }
+    if (modalRetry) {
+      modalRetry.addEventListener('click', function () {
+        if (modalHint) { modalHint.textContent = 'Checking…'; }
+        probe();
+      });
+    }
+    modal.addEventListener('click', function (event) {
+      var sheet = modal.querySelector('.offline-sheet');
+      if (sheet && !sheet.contains(event.target)) { closeNotice(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) { closeNotice(); }
+    });
+
+    // navigator.onLine is only trusted when it says "offline": that is a reliable negative. When it
+    // flips to online the modal is closed at once, then a probe confirms the server agrees.
+    window.addEventListener('offline', function () {
+      dismissed = false;
+      openIfNeeded();
+      startProbing();
+    });
+    window.addEventListener('online', function () {
+      dismissed = false;
+      showModal(false);
+      probe();
+    });
+    window.addEventListener('pageshow', function () {
+      if (navigator.onLine === false) { openIfNeeded(); startProbing(); }
+    });
+
+    if (navigator.onLine === false) {
+      openIfNeeded();
+      startProbing();
+    } else {
+      probe();
+    }
+  }
+
+  /* ── Install prompt (Android/Chromium) ─────────────────────────────────────── */
+  var installBox = document.getElementById('install-prompt');
+  var installHint = document.getElementById('install-hint');
+  var deferredPrompt = null;
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+  function snoozed() {
+    var value = parseInt(read(SNOOZE_KEY) || '0', 10);
+    return value > Date.now();
+  }
+  function showInstall(hintText) {
+    if (!installBox || standalone || snoozed()) { return; }
+    if (hintText && installHint) { installHint.textContent = hintText; }
+    installBox.hidden = false;
+  }
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    deferredPrompt = event;
+    showInstall('Add RISE 63 to your home screen — it works offline.');
+  });
+  var accept = document.getElementById('install-accept');
+  if (accept) {
+    accept.addEventListener('click', function () {
+      if (installBox) { installBox.hidden = true; }
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt = null;
+      }
+    });
+  }
+  var dismiss = document.getElementById('install-dismiss');
+  if (dismiss) {
+    dismiss.addEventListener('click', function () {
+      if (installBox) { installBox.hidden = true; }
+      store(SNOOZE_KEY, String(Date.now() + 14 * 24 * 60 * 60 * 1000));
+    });
+  }
+  var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if (isIos && !standalone) {
+    showInstall('Tap Share, then “Add to Home Screen” to install RISE 63.');
+  }
+
+  /* ── Live-search combobox ──────────────────────────────────────────────────── */
+  function initCombobox(combo) {
+    var input = combo.querySelector('input[role="combobox"]');
+    var hidden = combo.querySelector('input[type="hidden"]');
+    var list = combo.querySelector('.combo-list');
+    if (!input || !list) { return; }
+    var endpoint = combo.dataset.endpoint;
+    var timer = null;
+    var controller = null;
+    var active = -1;
+    var options = [];
+
+    function close() {
+      list.hidden = true;
+      list.innerHTML = '';
+      input.setAttribute('aria-expanded', 'false');
+      active = -1;
+      options = [];
+    }
+    /* The picker's escape hatch. When nothing matches — or the member simply cannot see their
+       church — the last row offers to file it as "not listed yet" and reveals the typed-name field
+       that registration already submits. Without this the only way forward was to leave the
+       question blank, which is exactly what the office was unable to act on. */
+    var manual = document.getElementById('parish-manual');
+    var manualField = document.getElementById('parish_name_raw');
+    function offerManual(term) {
+      // Three characters, matching the server's own floor for an anonymous search. Offering the
+      // escape hatch after one keystroke would invite people past a list that had barely loaded.
+      if (!manual || !manualField || !term || term.length < 3) { return; }
+      var li = document.createElement('li');
+      li.className = 'combo-option combo-option-manual';
+      li.id = combo.id + '-manual';
+      li.setAttribute('role', 'option');
+      li.innerHTML = '<strong></strong><small></small>';
+      li.querySelector('strong').textContent = 'My church is not listed';
+      li.querySelector('small').textContent = 'Add “' + term.toUpperCase() + '” and tell my representative';
+      li.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+        chooseManual(term);
+      });
+      list.appendChild(li);
+      // Deliberately not pushed onto `options` here: that array is rebuilt from the finished list
+      // at the end of render(), and an early push would make the arrow keys see a one-item list
+      // while the screen showed fifteen parishes.
+    }
+    function chooseManual(term) {
+      if (hidden) { hidden.value = ''; }
+      input.value = '';
+      manual.open = true;
+      manualField.value = term.toUpperCase();
+      close();
+      manualField.focus();
+      manualField.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function render(items, term) {
+      list.innerHTML = '';
+      options = [];
+      if (!items.length) {
+        var empty = document.createElement('li');
+        empty.className = 'combo-empty';
+        empty.textContent = term ? 'No parish matches “' + term + '”.' : 'Start typing your parish, area or zone.';
+        list.appendChild(empty);
+        offerManual(term);
+      } else {
+        items.forEach(function (item, index) {
+          var li = document.createElement('li');
+          li.className = 'combo-option';
+          li.id = combo.id + '-opt-' + index;
+          li.setAttribute('role', 'option');
+          li.dataset.id = item.id;
+          li.dataset.label = item.label;
+          li.innerHTML = '<strong></strong><small></small>';
+          li.querySelector('strong').textContent = item.parish;
+          li.querySelector('small').textContent = item.area + ' · ' + item.zone;
+          li.addEventListener('mousedown', function (event) {
+            event.preventDefault();
+            choose(item);
+          });
+          list.appendChild(li);
+        });
+        offerManual(term);
+      }
+      // Always rebuilt, in DOM order, so arrow keys, Enter and the highlight all address the
+      // same nodes the member can see — including the manual row at the end.
+      options = Array.prototype.slice.call(list.querySelectorAll('.combo-option'));
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+    function choose(item) {
+      // The manual row is an option in the same listbox, so it arrives here too. Sending it
+      // through the normal path would set both fields to "undefined" and post a parish_id of
+      // "undefined"; it is routed to its own handler instead.
+      if (item && item.manual) { chooseManual(item.term); return; }
+      input.value = item.label;
+      if (hidden) { hidden.value = item.id; }
+      // Picking from the list settles the question, so a half-typed church name must not ride
+      // along and contradict it.
+      if (manualField) { manualField.value = ''; }
+      close();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function highlight(index) {
+      options.forEach(function (li) { li.setAttribute('aria-selected', 'false'); });
+      if (index < 0 || index >= options.length) { return; }
+      options[index].setAttribute('aria-selected', 'true');
+      input.setAttribute('aria-activedescendant', options[index].id);
+      if (options[index].scrollIntoView) { options[index].scrollIntoView({ block: 'nearest' }); }
+    }
+    function search(term) {
+      if (!endpoint) { return; }
+      if (controller) { controller.abort(); }
+      controller = typeof AbortController === 'function' ? new AbortController() : null;
+      fetch(endpoint + '?q=' + encodeURIComponent(term), {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+        signal: controller ? controller.signal : undefined
+      }).then(function (response) {
+        if (!response.ok) { throw new Error('search failed'); }
+        return response.json();
+      }).then(function (data) {
+        render(Array.isArray(data.parishes) ? data.parishes : [], term);
+      }).catch(function () {
+        if (list.hidden) { return; }
+        close();
+      });
+    }
+
+    input.addEventListener('input', function () {
+      if (hidden) { hidden.value = ''; }
+      var term = input.value.trim();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () { search(term); }, 120);
+    });
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (list.hidden) { search(input.value.trim()); return; }
+        active = Math.min(active + 1, options.length - 1);
+        highlight(active);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        active = Math.max(active - 1, 0);
+        highlight(active);
+      } else if (event.key === 'Enter') {
+        if (!list.hidden && active >= 0 && options[active]) {
+          event.preventDefault();
+          if (options[active].classList.contains('combo-option-manual')) {
+            chooseManual(input.value.trim());
+          } else {
+            choose({ id: options[active].dataset.id, label: options[active].dataset.label });
+          }
+        }
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+    input.addEventListener('focus', function () {
+      if (list.hidden) { search(input.value.trim()); }
+    });
+    document.addEventListener('click', function (event) {
+      if (!combo.contains(event.target)) { close(); }
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-combobox]'), initCombobox);
+
+  /* ── Destructive-action confirmation ───────────────────────────────────────── */
+  // Any form carrying data-confirm asks once before submitting. Native confirm() is used
+  // deliberately: it works offline, needs no markup and cannot be styled into something the
+  // user misreads. Buttons stay enabled if they cancel.
+  function initConfirm() {
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement)) { return; }
+      var message = form.getAttribute('data-confirm');
+      if (!message || form.dataset.confirmed === '1') { return; }
+      if (!window.confirm(message)) {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.confirmed = '1';
+    }, true);
+  }
+
+  /* ── Caps Lock hint on password fields ─────────────────────────────────────── */
+  function initCapsHint() {
+    var hint = document.getElementById('caps-hint');
+    if (!hint) { return; }
+    document.addEventListener('keyup', function (event) {
+      if (typeof event.getModifierState !== 'function') { return; }
+      hint.hidden = !event.getModifierState('CapsLock');
+    });
+  }
+
+  /* ── Draft autosave ────────────────────────────────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('form[data-autosave]'), function (form) {
+    var key = DRAFT_PREFIX + form.id;
+    if (!form.id) { return; }
+    var timer = null;
+    var status = form.querySelector('[data-draft-status]');
+    var saved = read(key);
+    if (saved) {
+      try {
+        var draft = JSON.parse(saved);
+        var restored = 0;
+        Object.keys(draft).forEach(function (name) {
+          var field = form.elements[name];
+          if (field && typeof field.value === 'string' && field.value === '') {
+            field.value = draft[name];
+            restored++;
+          }
+        });
+        if (restored && status) { status.textContent = 'Restored your saved draft.'; }
+      } catch (e) { /* ignore malformed draft */ }
+    }
+    function snapshot() {
+      var data = {};
+      Array.prototype.forEach.call(form.elements, function (field) {
+        if (!field.name || field.type === 'file' || field.type === 'hidden' || field.type === 'password') { return; }
+        if (field.type === 'checkbox' || field.type === 'radio') {
+          if (field.checked) { data[field.name] = field.value; }
+        } else if (field.value) {
+          data[field.name] = field.value;
+        }
+      });
+      store(key, JSON.stringify(data));
+      if (status) { status.textContent = 'Draft saved on this device.'; }
+    }
+    form.addEventListener('input', function () {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(snapshot, 900);
+    });
+    form.addEventListener('submit', function () {
+      window.clearTimeout(timer);
+      remove(key);
+    });
+  });
+
+  /* ── Idempotency key for offline-safe submits ──────────────────────────────── */
+  function newKey() {
+    if (window.crypto && window.crypto.getRandomValues) {
+      var bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+    return String(Date.now()) + Math.random().toString(16).slice(2);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('form[data-offline-queue]'), function (form) {
+    var field = form.querySelector('input[name="idempotency_key"]');
+    if (field && !field.value) { field.value = newKey(); }
+  });
+
+  function queuePush(payload) {
+    var queue = [];
+    try { queue = JSON.parse(read(QUEUE_KEY) || '[]'); } catch (e) { queue = []; }
+    queue.push(payload);
+    store(QUEUE_KEY, JSON.stringify(queue.slice(-20)));
+  }
+  function queueLen() {
+    try { return (JSON.parse(read(QUEUE_KEY) || '[]')).length; } catch (e) { return 0; }
+  }
+  function flushQueue() {
+    if (!navigator.onLine || queueLen() === 0) { return; }
+    var queue;
+    try { queue = JSON.parse(read(QUEUE_KEY) || '[]'); } catch (e) { return; }
+    var next = [];
+    queue.forEach(function (item) {
+      var body = new URLSearchParams(item.fields);
+      fetch(item.action, {
+        method: 'POST',
+        body: body,
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }).then(function (response) {
+        if (!response.ok) { next.push(item); }
+      }).catch(function () { next.push(item); });
+    });
+    store(QUEUE_KEY, JSON.stringify(next));
+  }
+
+  /* ── Copy-to-clipboard helper ──────────────────────────────────────────────── */
+  // [data-copy-target] copies the value of the element with that id. The installer uses it so the
+  // operator can paste the exact domain into the provider's order form without retyping.
+  function initCopyButtons() {
+    document.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-copy-target]');
+      if (!button) { return; }
+      var field = document.getElementById(button.getAttribute('data-copy-target'));
+      if (!field) { return; }
+      var value = field.value !== undefined ? field.value : field.textContent;
+      var done = function () {
+        var original = button.textContent;
+        button.textContent = 'Copied';
+        window.setTimeout(function () { button.textContent = original; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(done, function () { field.select && field.select(); });
+      } else if (field.select) {
+        field.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* leave it selected */ }
+      }
+    });
+  }
+
+  /* ── Capitals as you type ──────────────────────────────────────────────────── */
+  /* Every church name in the directory is stored in capitals, and the server applies that rule
+     regardless. Doing it in the field too is not redundancy for its own sake: the member sees the
+     value that will be saved, so a name typed in lower case never looks like it was accepted and
+     then silently comes back shouting. The caret is preserved by rewriting only the value and
+     putting the selection back where it was, or fast typing would jump to the end. */
+  function upperCaseField(field) {
+    var start = field.selectionStart;
+    var end = field.selectionEnd;
+    var upper = field.value.toUpperCase();
+    if (upper === field.value) { return; }
+    field.value = upper;
+    try {
+      if (start !== null && end !== null) { field.setSelectionRange(start, end); }
+    } catch (e) { /* type=email has no selection API; nothing to restore */ }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-caps]'), function (field) {
+    field.addEventListener('input', function () { upperCaseField(field); });
+    // A browser autofill or a paste does not always fire input; catch the value on blur too.
+    field.addEventListener('change', function () { upperCaseField(field); });
+  });
+
+  /* ── Boot the small behaviours ─────────────────────────────────────────────── */
+  initConfirm();
+  initCapsHint();
+  initCopyButtons();
+
+  /* ── Service worker & update toast ─────────────────────────────────────────── */
+  if ('serviceWorker' in navigator && document.body.classList.contains('signed-in')) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register(document.body.dataset.sw || 'sw.js', { scope: './' }).catch(function () { /* ignore */ });
+    });
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (refreshing) { return; }
+      refreshing = true;
+      var toast = document.createElement('div');
+      toast.className = 'flash flash-info';
+      toast.setAttribute('role', 'status');
+      toast.textContent = 'RISE 63 has been updated. Reload to use the new version.';
+      var button = document.createElement('button');
+      button.className = 'btn btn-sm btn-secondary';
+      button.type = 'button';
+      button.textContent = 'Reload';
+      button.addEventListener('click', function () { window.location.reload(); });
+      toast.appendChild(document.createTextNode(' '));
+      toast.appendChild(button);
+      document.getElementById('main').prepend(toast);
+    });
+  }
+}());
+
+</script>
+</body>
+</html>

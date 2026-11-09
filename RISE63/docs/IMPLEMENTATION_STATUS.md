@@ -412,6 +412,99 @@ asserted rather than assumed: one tab bar per page (not a second copy in the foo
 inset, with the page reserving room beneath it. Three of those assertions would have failed against
 the previous stylesheet.
 
+### 2.3j The directory: one list, three columns, all capitals
+
+**The request.** Adding zones, areas and parishes went one record at a time, through separate
+forms. The province already maintains that hierarchy in a spreadsheet, so the task was to accept it
+in the shape it already exists: *zone, area, parish*, one church per line, in a paragraph box.
+
+**Why a paragraph box is the right input here.** The hierarchy is a tree, and a tree is awkward to
+enter row by row: to add four parishes to one area you open the area form four times. Written as
+lines, the same thing is four sentences that all start the same way, and the repetition *is* the
+structure:
+
+```
+GRACE ZONE, HOPE AREA, LIVING WATER PARISH
+GRACE ZONE, HOPE AREA
+GRACE ZONE, FAITH AREA, GOOD SHEPHERD PARISH
+```
+
+The second line is the part that matters most: an area whose parishes are not known yet. It creates
+the area and stops, which is exactly what "add the parish later" means in practice.
+
+**What the parser accepts** (`app/Core/DirectoryImport.php`):
+
+| Line | Result |
+|---|---|
+| `ZONE, AREA, PARISH` | creates whatever is missing |
+| `ZONE, AREA` | creates the area, no parish |
+| `ZONE` | creates the zone only |
+| repeated zone or area | matched and reused — repeats are how children are grouped |
+| blank line, `#` line | ignored (an exported sheet header can stay) |
+| four columns, or a 400-character line | reported by line number, never guessed at |
+
+Commas, tabs, semicolons and pipes all separate columns, because a paste from Excel is tab-separated
+and a paste from a PDF is not. The columns are trimmed, single-spaced and upper-cased on the way in.
+
+**Preview before write.** Two buttons, not one. "Preview changes" parses and counts — *new zones,
+new areas, new parishes, already present, duplicates* — and lists the rows it would create. Nothing
+is written. "Add to directory" then writes. This exists because the thing that goes wrong with a
+200-line paste is not a crash, it is a typo in a zone name that quietly creates a fourth zone; a
+count is checkable against the sheet, "imported" is not. The pasted text is parked in the session
+and comes back into the box after the redirect, so the second button can be pressed without pasting
+again, and it works with JavaScript disabled.
+
+**Idempotent by name, not by id.** Every step looks the zone up (`UPPER(zone_name) = ?`), then the
+area within that zone, then the parish within that area, before creating anything. So a re-paste
+creates nothing, a paste in mixed case creates nothing, and the unique key
+`(zone_id, area_name)` / `(area_id, parish_name)` is never reached as an error the operator has to
+interpret. The whole run is one transaction: a paste that fails halfway would otherwise leave three
+orphan areas and no way to tell which lines were applied.
+
+**All capitals, everywhere.** `RISE63\caps()` — collapse whitespace, upper-case, trim — is applied in
+one place and used by every path: the paragraph box, the single-record forms, the parish update form
+and member self-registration. The rule matters for more than looks: names are matched by exact
+equality on the upper-cased form, so "Hope Area" typed today and "HOPE AREA" pasted last month are
+one row, not two. The typed fields also upper-case as you type (`data-caps` in `app.js`), preserving
+the caret — not because the server needs the help, but because a member who types in lower case
+should see what will actually be saved rather than be surprised later.
+
+`mb_strtoupper` is aliased in `polyfills.php` on hosts without mbstring; the shim now maps the
+Latin-1 and Latin Extended-A ranges rather than falling back to `strtoupper`, which leaves accented
+letters untouched and would split a parish called Ọ̀ṢỌ́SA into two rows.
+
+**Registration: search and select, or type it.** The picker already searched the directory; what was
+missing was a way forward when the church is not in it. Now:
+
+- the member searches and picks — the normal path, one row, no typing of the full name;
+- if nothing matches, the last row of the list reads *"My church is not listed"* and files the term
+  they typed, in capitals, as `users.parish_name_raw` (migration `0002`);
+- the same field is available without JavaScript, in a `<details>` block that needs no script;
+- if the church has been added by the time they submit, the typed name resolves to the real row via
+  `ParishDirectory::findByName()` rather than becoming a duplicate request.
+
+`parish_name_raw` is deliberately free text and deliberately not a foreign key: it is a request to
+add a parish, not a parish. It shows on the person's row in People & roles as **Not in the
+directory**, and the top of that page lists *Churches members asked for* with a member count — the
+queue the "the admin can add it later" promise depends on. Without it, nobody ever adds them.
+
+**Search is case-insensitive in SQL, not by collation.** `ParishDirectory::search()`,
+`directory()` and the People search now compare `UPPER(column) LIKE UPPER(term)`. A stock MySQL 8
+install uses a `_ci` collation where `LIKE` would already ignore case, but that is a property of the
+host's schema, not of the code, and a `_bin` or `_as_cs` collation would quietly make the picker
+miss every church.
+
+**Two bugs found while building it, both caught by the new browser harness:**
+
+1. The manual row was pushed onto the keyboard option list *before* the list was built from the DOM,
+   so arrow keys and Enter saw a one-item list while the screen showed fifteen parishes.
+2. Enter or tap on that row reached the normal `choose()` path and set `parish_id` to the string
+   `"undefined"` — a parish id that would fail a foreign key or, worse, silently attach nobody.
+
+`tests/support/combobox-behaviour.mjs` (23 checks) drives the real `app.js` through both paths,
+including that picking a parish after typing a name clears the typed name, so the two fields can
+never both carry a value into the same submission.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

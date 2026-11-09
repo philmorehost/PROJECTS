@@ -65,12 +65,13 @@ try {
                 throw new InvalidArgumentException('Self-registration is closed. Ask your parish representative for an account.');
             }
             $account = RISE63\Core\Registration::create([
-                'full_name' => (string) $input('full_name', ''),
-                'email'     => (string) $input('email', ''),
-                'phone'     => (string) $input('phone', ''),
-                'parish_id' => $input('parish_id'),
-                'password'  => (string) ($_POST['password'] ?? ''),
-                'confirm'   => (string) ($_POST['password_confirm'] ?? ''),
+                'full_name'        => (string) $input('full_name', ''),
+                'email'            => (string) $input('email', ''),
+                'phone'            => (string) $input('phone', ''),
+                'parish_id'        => $input('parish_id'),
+                'parish_name_raw'  => (string) $input('parish_name_raw', ''),
+                'password'         => (string) ($_POST['password'] ?? ''),
+                'confirm'          => (string) ($_POST['password_confirm'] ?? ''),
             ]);
             flash('Your RISE 63 account is ready. Welcome!', 'success');
             Auth::attempt((string) $account['email'], (string) ($_POST['password'] ?? ''));
@@ -95,9 +96,27 @@ try {
                     throw new InvalidArgumentException('Choose your parish from the list.');
                 }
             }
+
+            // Same rule as registration: a chosen parish clears any leftover typed name, and a
+            // typed name is kept only when nothing was chosen, so the two can never disagree.
+            $typed = RISE63\caps((string) $input('parish_name_raw', ''));
+            if ($parishId !== null) {
+                $typed = '';
+            } elseif ($typed !== '') {
+                $match = ParishDirectory::findByName($typed);
+                if ($match !== null) {
+                    // Their church has been added since they last looked: attach them to it instead
+                    // of leaving a duplicate request behind.
+                    $parishId = (int) $match['id'];
+                    $typed    = '';
+                }
+            }
+            if (mb_strlen($typed) > 150) {
+                $typed = mb_substr($typed, 0, 150);
+            }
             Database::run(
-                'UPDATE users SET full_name = ?, phone = ?, parish_id = ? WHERE id = ?',
-                [$name, $phone === '' ? null : $phone, $parishId, (int) $account['id']]
+                'UPDATE users SET full_name = ?, phone = ?, parish_id = ?, parish_name_raw = ? WHERE id = ?',
+                [$name, $phone === '' ? null : $phone, $parishId, $typed === '' ? null : $typed, (int) $account['id']]
             );
             Audit::log((int) $account['id'], 'profile.update', 'user', (string) $account['id'], 'Profile details updated.');
             flash('Your profile has been updated.', 'success');
@@ -334,6 +353,55 @@ try {
             Auth::requireRole($account, ['provincial_admin']);
             ParishDirectory::createArea((int) ($_POST['zone_id'] ?? 0), (string) $input('area_name', ''), $input('area_code'), (int) $account['id']);
             flash('Area created.', 'success');
+            $back('parishes');
+
+        /**
+         * The bulk paste. Two modes on purpose: "preview" writes nothing and shows what the list
+         * would create, "apply" writes. A single button that both counted and wrote would be
+         * useless for the one thing that matters here — checking 200 pasted lines against the
+         * sheet they came from before they become rows.
+         *
+         * The preview text is parked in the session and read back by the parishes page, so the
+         * redirect after the POST does not lose the pasted list (PRG, no JavaScript required).
+         */
+        case 'directory-import':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $text = (string) ($_POST['hierarchy'] ?? '');
+            $mode = (string) ($_POST['mode'] ?? 'preview') === 'apply' ? 'apply' : 'preview';
+
+            $parsed = RISE63\Core\DirectoryImport::parse($text);
+            if ($parsed['lines'] === []) {
+                unset($_SESSION['directory_import']);
+                flash(
+                    $parsed['skipped'] === []
+                        ? 'Nothing to add — paste one church per line, e.g. “GRACE ZONE, HOPE AREA, LIVING WATER PARISH”.'
+                        : 'No usable lines in that list. Fix the ' . count($parsed['skipped']) . ' skipped line(s) and try again.',
+                    'error'
+                );
+                $back('parishes');
+            }
+
+            if ($mode === 'preview') {
+                $_SESSION['directory_import'] = [
+                    'text' => mb_substr($text, 0, 300000),
+                    'at'   => time(),
+                ];
+                redirect('parishes');
+            }
+
+            $tally = ParishDirectory::importLines($parsed['lines'], (int) $account['id']);
+            unset($_SESSION['directory_import']);
+
+            $message = 'Directory updated: '
+                . $tally['created'] . ' new record(s) added, '
+                . $tally['existing'] . ' already existed. '
+                . $tally['zones'] . ' zone(s), ' . $tally['areas'] . ' area(s) and '
+                . $tally['parishes'] . ' parish(es) in this list.';
+            if ($parsed['skipped'] !== []) {
+                $message .= ' ' . count($parsed['skipped']) . ' line(s) were skipped — see the preview for the reason.';
+            }
+            flash($message, $parsed['skipped'] === [] ? 'success' : 'error');
             $back('parishes');
 
         // ── Treasury ─────────────────────────────────────────────────────────────────

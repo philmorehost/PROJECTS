@@ -161,14 +161,40 @@ switch ($page) {
         $term    = (string) ($_GET['q'] ?? '');
         $rows    = ParishDirectory::directory($user, $term);
         $canEdit = Auth::isAdmin($user) || (string) $user['role'] === 'csr_rep';
+
+        // A bulk paste is previewed, not applied, on the first submission: the operator checks the
+        // parsed counts against the sheet before anything is written. The text is held in the
+        // session so the redirect after the POST does not empty the box.
+        $importPreview = null;
+        $importSkipped = [];
+        $importText    = '';
+        if (Auth::isAdmin($user)) {
+            $parked = $_SESSION['directory_import'] ?? null;
+            if (is_array($parked) && (time() - (int) ($parked['at'] ?? 0)) < 3600) {
+                $importText = (string) ($parked['text'] ?? '');
+                $parsed     = RISE63\Core\DirectoryImport::parse($importText);
+                $existing   = ParishDirectory::existingNames();
+                $importPreview = RISE63\Core\DirectoryImport::summarise(
+                    $parsed['lines'],
+                    $existing['zones'],
+                    $existing['areas'],
+                    $existing['parishes']
+                );
+                $importSkipped = $parsed['skipped'];
+            }
+        }
+
         $render('staff/parishes', [
-            'title'   => 'Parish Connect',
-            'parishes' => $rows,
-            'term'    => $term,
-            'zones'   => ParishDirectory::zones(),
-            'areas'   => ParishDirectory::areas(),
-            'totals'  => ParishDirectory::totals(),
-            'canEdit' => $canEdit,
+            'title'         => 'Parish Connect',
+            'parishes'      => $rows,
+            'term'          => $term,
+            'zones'         => ParishDirectory::zones(),
+            'areas'         => ParishDirectory::areas(),
+            'totals'        => ParishDirectory::totals(),
+            'canEdit'       => $canEdit,
+            'importPreview' => $importPreview,
+            'importSkipped' => $importSkipped,
+            'importText'    => $importText,
         ]);
         break;
 
@@ -255,8 +281,8 @@ switch ($page) {
                  LEFT JOIN zones z ON z.id = a.zone_id';
         $params = [];
         if ($term !== '') {
-            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $term) . '%';
-            $sql .= ' WHERE u.full_name LIKE ? OR u.email LIKE ? OR p.parish_name LIKE ?';
+            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
+            $sql .= ' WHERE UPPER(u.full_name) LIKE ? OR UPPER(u.email) LIKE ? OR UPPER(COALESCE(p.parish_name, \'\')) LIKE ?';
             $params = [$like, $like, $like];
         }
         $sql .= ' ORDER BY u.role, u.full_name LIMIT 300';
@@ -265,6 +291,14 @@ switch ($page) {
             'people'   => Database::all($sql, $params),
             'term'     => $term,
             'roles'    => Auth::ROLES,
+            // The queue the "add it later" promise depends on: members who typed a church that is
+            // still not in the directory. Without showing it, nobody ever adds them.
+            'unlisted' => Database::all(
+                'SELECT parish_name_raw, COUNT(*) AS member_count
+                 FROM users
+                 WHERE parish_id IS NULL AND parish_name_raw IS NOT NULL AND parish_name_raw <> \'\'
+                 GROUP BY parish_name_raw ORDER BY member_count DESC, parish_name_raw LIMIT 50'
+            ),
         ]);
         break;
 

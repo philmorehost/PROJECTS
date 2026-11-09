@@ -178,6 +178,24 @@ function initials(string $name): string
     return mb_strtoupper($first . $last);
 }
 
+/**
+ * Canonical form for every church name in the directory: trimmed, single-spaced, UPPER CASE.
+ *
+ * Zone, area and parish names are proper nouns in a fixed hierarchy, not prose, and the province
+ * maintains them in capitals. Doing it once here means the rule cannot drift between the admin
+ * forms, the paragraph-box import and member self-registration — and it makes the case-insensitive
+ * lookups elsewhere exact rather than hopeful.
+ *
+ * Collapsing whitespace first matters: a paste from a spreadsheet routinely carries a trailing
+ * tab, and "HOPE  AREA" and "HOPE AREA" must not become two rows.
+ */
+function caps(string $value): string
+{
+    $value = str_replace(["\u{00A0}", "\u{2007}", "\u{202F}", "\u{200B}"], ' ', $value);
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    return mb_strtoupper(trim($value), 'UTF-8');
+}
+
 /** First grapheme of the site title, used by the dynamic SVG favicon. */
 function favicon_letter(): string
 {

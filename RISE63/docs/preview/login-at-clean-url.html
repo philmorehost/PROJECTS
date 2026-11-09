@@ -6,7 +6,7 @@
 <title>Sign in · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="be3b25fa64d047cd69fb9f832d2f57563af7d7d034bc8160d9ecb54582b8bd2b">
+<meta name="csrf-token" content="3ce0a7ded324cfd055ec1b76a0982a15990ff084cc12076d73a8bf450b81d7d7">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -536,6 +536,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-option small { display: block; color: var(--text-muted); }
 .combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
 /* ── Offline modal ─────────────────────────────────────────────────────────────── */
@@ -751,7 +760,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 <meta name="theme-color" content="#2563eb">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="stylesheet" href="/public/assets/app.css?v=2b73e6fd">
+<link rel="stylesheet" href="/public/assets/app.css?v=1253b438">
 </head>
 <body class="guest">
 <main class="page">
@@ -770,7 +779,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <p class="auth-lead">Sign in to apply for programs, track your application or manage the province.</p>
 
       <form method="post" action="/">
-        <input type="hidden" name="csrf" value="be3b25fa64d047cd69fb9f832d2f57563af7d7d034bc8160d9ecb54582b8bd2b">        <input type="hidden" name="action" value="login">
+        <input type="hidden" name="csrf" value="3ce0a7ded324cfd055ec1b76a0982a15990ff084cc12076d73a8bf450b81d7d7">        <input type="hidden" name="action" value="login">
         <div class="field">
           <label for="email">E-mail address</label>
           <input type="email" id="email" name="email" required autocomplete="username"
@@ -816,6 +825,6 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </div>
 </div>
 
-<script src="/public/assets/app.js?v=2a50a162" defer></script>
+<script src="/public/assets/app.js?v=a95d9a3b" defer></script>
 </body>
 </html>

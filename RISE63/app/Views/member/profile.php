@@ -48,6 +48,15 @@ $isTreasury = Auth::isTreasurer($account);
         <span class="hint">Type to search by parish, area or zone.</span>
       </div>
       <div class="field">
+        <label for="parish_name_raw">Church not in the list?</label>
+        <input type="text" id="parish_name_raw" name="parish_name_raw" maxlength="150" data-caps
+               autocapitalize="characters" spellcheck="false"
+               value="<?= e((string) ($account['parish_name_raw'] ?? '')) ?>"
+               placeholder="TYPE IT IN FULL">
+        <span class="hint">Leave this blank if you chose a parish above. Capitals are applied for you;
+          your representative adds it to the directory.</span>
+      </div>
+      <div class="field">
         <label>E-mail address</label>
         <input type="email" value="<?= e((string) $account['email']) ?>" readonly aria-readonly="true">
         <span class="hint">Contact the province office to change the e-mail on your account.</span>

@@ -37,7 +37,8 @@ $canEdit = Auth::isAdmin($account) || (string) $account['role'] === 'csr_rep';
       <div class="grid grid-2">
         <div class="field">
           <label for="parish_name">Parish name</label>
-          <input type="text" id="parish_name" name="parish_name" required maxlength="150" value="<?= e((string) $parish['parish_name']) ?>">
+          <input type="text" id="parish_name" name="parish_name" required maxlength="150" data-caps
+                 autocapitalize="characters" spellcheck="false" value="<?= e((string) $parish['parish_name']) ?>">
         </div>
         <div class="field">
           <label for="area_id">Area</label>

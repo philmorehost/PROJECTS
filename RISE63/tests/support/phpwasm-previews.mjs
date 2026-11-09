@@ -297,6 +297,181 @@ echo '<!-- page resolved from the path: ' . \\RISE63\\page_from_path('/login') .
 
 
 /**
+ * The registration screen, where the member searches for their church and — if it is not there —
+ * types it. Rendered through the real view with the real stylesheet and script, so the picker can
+ * be tried by hand in a browser.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/register',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+echo RISE63\\Core\\View::capture('/src/app/Views/auth/register.php', array(
+    'flashes' => array(), 'page' => 'register', 'title' => 'Create account', 'user' => null,
+), false);`);
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  let html = output;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
+  // The picker needs a search endpoint, and a static file has no server behind it. Answer the
+  // fetch from a fixed list so the list, the manual row and the capitals can all be tried here.
+  const stub = `
+  /* Preview only: stands in for /api/index.php so the picker works in a static file. */
+  (function () {
+    var realFetch = window.fetch;
+    window.fetch = function (url, options) {
+      if (String(url).indexOf('api/index.php') === -1) { return realFetch(url, options); }
+      var term = decodeURIComponent(String(url).split('q=')[1] || '').toUpperCase();
+      var all = [
+        { id: 1, parish: 'LIVING WATER PARISH', area: 'HOPE AREA', zone: 'GRACE ZONE' },
+        { id: 2, parish: 'GOOD SHEPHERD PARISH', area: 'HOPE AREA', zone: 'GRACE ZONE' },
+        { id: 3, parish: 'CHAPEL OF WONDERS PARISH', area: 'CHAPEL OF WONDERS PARISH AREA', zone: 'CONQUERORS CHAPEL ZONE' }
+      ];
+      var hits = all.filter(function (p) {
+        return term.length < 3 || (p.parish + ' ' + p.area + ' ' + p.zone).indexOf(term) !== -1;
+      }).map(function (p) {
+        p.label = p.parish + ' \\u00b7 ' + p.area + ' \\u00b7 ' + p.zone;
+        return p;
+      });
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ parishes: hits }); } });
+    };
+  }());
+`;
+  html = html.replace(/<script src="[^"]*app(?:\.js)?[^"]*" defer><\/script>/, '<script>' + stub + '</script>\n<script>\n' + js + '\n</script>');
+  html = html.replace('<head>', '<head>\n<!-- Static preview of the registration form. Generated from app/Views/auth/register.php. The parish search answers from a fixed list so the picker can be tried here. -->');
+
+  if (html.length < 20000) {
+    throw new Error('register preview looks unstyled (' + html.length + ' bytes) — check the inliner');
+  }
+
+  await writeFile(join(root, 'docs/preview/register-parish-picker.html'), html);
+  console.log(`register → docs/preview/register-parish-picker.html (${html.length} bytes)`);
+}
+
+/**
+ * The bulk paste screen, mid-flow: a list has been pasted, previewed, and is waiting for the
+ * second button. This is the screen the province will actually use to build the directory, so it
+ * is worth being able to look at without a database.
+ */
+{
+  const runtime = new PhpNode(phpModule);
+  let output = '';
+  runtime.addEventListener('output', (event) => { output += event.detail[0] ?? ''; });
+  runtime.addEventListener('error', (event) => { output += String(event.detail?.[0] ?? ''); });
+  await runtime.refresh();
+
+  const madeDirs = new Set();
+  const ensure = async (path) => {
+    let current = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      current += '/' + part;
+      if (madeDirs.has(current)) continue;
+      try { await runtime.mkdir(current); } catch { /* exists */ }
+      madeDirs.add(current);
+    }
+  };
+  for (const file of files) {
+    const target = '/src/' + relative(root, file);
+    await ensure(target.split('/').slice(0, -1).join('/'));
+    await runtime.writeFile(target, await readFile(file, 'utf8'));
+  }
+  for (const dir of ['/src/config', '/src/storage']) await ensure(dir);
+
+  // The pasted list is the one from the field report: one area with no parishes yet, one zone
+  // with two areas, and a parish repeated on a later line.
+  const pasted = [
+    'JOYFUL ASSEMBLY PROV. HQTR ZONE, CONQUERORS CHAPEL ZONE, CHAPEL OF WONDERS PARISH AREA',
+    'JOYFUL ASSEMBLY PROV. HQTR ZONE, CONQUERORS CHAPEL ZONE, CONQUERORS CHAPEL AREA',
+    'JOYFUL ASSEMBLY PROV. HQTR ZONE, CONQUERORS CHAPEL ZONE',
+    'GRACE ZONE, HOPE AREA, LIVING WATER PARISH',
+    'GRACE ZONE, HOPE AREA',
+    'grace zone, faith area, good shepherd parish',
+  ].join('\n');
+
+  await runtime.writeFile('/src/storage/import-preview.txt', pasted);
+
+  await runtime.run(`<?php
+$_SERVER = array(
+    'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/parishes',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php',
+    'HTTP_USER_AGENT' => 'preview',
+);
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+$text = (string) file_get_contents('/src/storage/import-preview.txt');
+$parsed = RISE63\\Core\\DirectoryImport::parse($text);
+$preview = RISE63\\Core\\DirectoryImport::summarise(
+    $parsed['lines'],
+    array('JOYFUL ASSEMBLY PROV. HQTR ZONE'),
+    array(array('zone_name' => 'JOYFUL ASSEMBLY PROV. HQTR ZONE', 'area_name' => 'CONQUERORS CHAPEL ZONE')),
+    array()
+);
+$account = array(
+    'id' => 1, 'full_name' => 'Build Room', 'email' => 'yemi.abiose@gmail.com',
+    'role' => 'provincial_admin', 'parish_id' => null, 'theme_preference' => 'system',
+    'large_text' => 0, 'is_suspended' => 0,
+);
+$user = $account; $page = 'parishes'; $title = 'Parish Connect'; $flashes = array();
+echo RISE63\\Core\\View::capture('/src/app/Views/staff/parishes.php', array(
+    'content' => '', 'title' => 'Parish Connect', 'page' => 'parishes',
+    'account' => $account, 'user' => $account, 'flashes' => array(),
+    'parishes' => array(), 'term' => '', 'zones' => array(), 'areas' => array(),
+    'totals' => array('zones' => 1, 'areas' => 2, 'parishes' => 0, 'youth' => 0),
+    'canEdit' => true, 'importText' => $text, 'importPreview' => $preview,
+    'importSkipped' => $parsed['skipped'],
+), true);`);
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  let html = output;
+  html = html.replace(/<link rel="stylesheet" href="[^"]*app(?:\.[0-9a-f]{8})?\.css(?:\?v=[0-9a-f]{8})?">/,
+    '<style>\n' + css + '\n</style>');
+  html = html.replace(/<script src="[^"]*app\.js" defer><\/script>/, '<script>\n' + js + '\n</script>');
+  html = html.replace('<head>', '<head>\n<!-- Static preview of the bulk zone/area/parish paste, previewed and awaiting confirmation. Generated from app/Views/staff/parishes.php. -->');
+
+  if (html.length < 20000) {
+    throw new Error('bulk-paste preview looks unstyled (' + html.length + ' bytes) — check the inliner');
+  }
+
+  await writeFile(join(root, 'docs/preview/directory-bulk-paste.html'), html);
+  console.log(`bulk paste → docs/preview/directory-bulk-paste.html (${html.length} bytes, ${
+    (html.match(/badge-info/g) || []).length} new-parish rows)`);
+}
+
+/**
  * The signed-in shell: the redesigned tab bar on a real dashboard, and the offline bar in the two
  * states that matter. Rendered through layout.php with fixtures, so the preview is the same markup
  * the browser receives — this is the screen the redesign was asked for.
