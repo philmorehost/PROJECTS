@@ -42,6 +42,8 @@ try {
  foreach(['../index.php','/index.php','app/../../x','app\\x.php','app//x.php','app/./x.php'] as $path) rejects(fn()=>UpdateManager::safePath($path),'unsafe ZIP path');
  foreach(['config/database.php','config/license.json','storage/receipts/test.php','.git/config','public/assets/.user.ini'] as $path)test(!UpdateManager::allowed($path),'protected payload '.$path);
  test(UpdateManager::allowed('app/LicenseManager.php'),'application code accepted');
+ foreach(['manifest.webmanifest','sw.js','offline.html','public/assets/remit-192.png','public/assets/remit-512.png','public/assets/remit-maskable-512.png'] as $path)test(UpdateManager::allowed($path),'PWA resource accepted '.$path);
+ foreach(['config/manifest.webmanifest','public/assets/arbitrary.png'] as $path)test(!UpdateManager::allowed($path),'PWA exceptions stay narrow '.$path);
  if(!class_exists('ZipArchive'))throw new RuntimeException('Tests require ZIP extension.');
  $payload=['manifest.json'=>json_encode(['version'=>'0.2.0','database_queries'=>[],'files_to_delete'=>[]]),'version.json'=>json_encode(['product'=>'remit','version'=>'0.2.0']),'index.php'=>'<?php echo "new";','app/bootstrap.php'=>'<?php // new bootstrap'];
  $make=function(string $path,array $files,string $prefix=''):void{$zip=new ZipArchive();$zip->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE);foreach($files as $name=>$body)$zip->addFromString($prefix.$name,$body);$zip->close();};
