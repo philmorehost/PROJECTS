@@ -245,3 +245,16 @@ document.addEventListener('click',event=>{
  for(const [key,value] of current.searchParams)if(key.startsWith(other+'_'))url.searchParams.set(key,value);
  refreshFinancialHistory(panel,url);
 });
+
+// Per-account, per-installation onboarding preference; no financial data is stored.
+document.querySelectorAll('[data-welcome-guide]').forEach(guide=>{
+ const details=guide.querySelector('[data-guide-details]'),close=guide.querySelector('[data-guide-close]'),summary=details.querySelector('summary');
+ const key=`remit-guide-v1:${location.pathname}:${guide.dataset.guideUser}`;
+ try{if(localStorage.getItem(key)==='closed')details.open=false;}catch{/* Native disclosure remains usable when storage is unavailable. */}
+ close.hidden=false;
+ close.addEventListener('click',()=>{details.open=false;summary.focus();});
+ details.addEventListener('toggle',()=>{try{localStorage.setItem(key,details.open?'open':'closed');}catch{/* Dismiss for this page even if persistence is blocked. */}});
+});
+// Deep links should reveal the native history disclosure without requiring another tap.
+function revealFinancialHistory(){const id=location.hash.slice(1);if(!['payments-history','reports-history'].includes(id))return;const panel=document.getElementById(id);if(panel)panel.open=true;}
+revealFinancialHistory();window.addEventListener('hashchange',revealFinancialHistory);
