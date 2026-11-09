@@ -7,7 +7,7 @@
 <title>Treasury · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">
+<meta name="csrf-token" content="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -226,6 +226,25 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
     0 1px 0 color-mix(in srgb, #ffffff 60%, transparent) inset,
     0 10px 30px -10px rgba(15, 23, 42, 0.35),
     0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* Administration links in the top bar: every destination an administrator needs, as words.
+   On a phone the tab bar cannot hold them all without shrinking the labels past legibility, and a
+   destination that is hard to find is a destination that does not exist. They wrap rather than
+   overflow, and each keeps a 40 px target. */
+.admin-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-link {
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 6px 12px; border-radius: 12px;
+  font-size: var(--t-sm); font-weight: 700; color: var(--text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.admin-link:hover { background: var(--surface-2); color: var(--text); }
+.admin-link.is-current { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 520px) {
+  .admin-link { padding: 6px 8px; font-size: 0.8125rem; }
+  .topbar-inner { flex-wrap: wrap; gap: 8px; }
+  .admin-links { order: 3; flex-basis: 100%; justify-content: flex-start; }
 }
 
 /* The sliding pill. One element, moved with a transform: width and offset come from the number of
@@ -846,7 +865,12 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
         <span class="theme-icon" aria-hidden="true">◑</span>
       </button>
-              <a class="icon-btn" href="/updates" aria-label="Updates" title="Updates">⇪</a>
+                    <nav class="admin-links" aria-label="Administration">
+          <a class="admin-link" href="/settings">Settings</a>
+          <a class="admin-link" href="/security">Security</a>
+          <a class="admin-link" href="/audit">Activity</a>
+          <a class="admin-link" href="/updates">Updates</a>
+        </nav>
             <a class="icon-btn" href="/profile" aria-label="My account" title="My account">
         <span aria-hidden="true">AO</span>
       </a>
@@ -934,7 +958,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 
   <div class="grid grid-2" style="margin-top:16px">
           <form method="post" action="/">
-        <input type="hidden" name="csrf" value="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">        <input type="hidden" name="action" value="fund-set-pool">
+        <input type="hidden" name="csrf" value="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">        <input type="hidden" name="action" value="fund-set-pool">
         <input type="hidden" name="return_to" value="treasury">
         <h3 style="margin-top:0">Set the Seed Grant pool</h3>
         <p class="faint" style="margin-top:0;font-size:var(--t-sm)">
@@ -961,7 +985,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       </form>
     
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">      <input type="hidden" name="action" value="fund-deposit">
+      <input type="hidden" name="csrf" value="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">      <input type="hidden" name="action" value="fund-deposit">
       <input type="hidden" name="return_to" value="treasury">
       <h3 style="margin-top:0">Record money received</h3>
       <p class="faint" style="margin-top:0;font-size:var(--t-sm)">
@@ -1026,7 +1050,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
               Seed grant ·
               ₦100,000.00            </summary>
             <form method="post" action="/" style="margin-top:12px">
-              <input type="hidden" name="csrf" value="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">              <input type="hidden" name="action" value="remittance-request">
+              <input type="hidden" name="csrf" value="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">              <input type="hidden" name="action" value="remittance-request">
               <input type="hidden" name="application_id" value="9">
               <input type="hidden" name="return_to" value="treasury">
               <div class="grid grid-2">
@@ -1077,7 +1101,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
           <li class="row row-end"><span class="muted">Requested</span><span>4d ago</span></li>
         </ul>
                   <form method="post" action="/" class="row" style="margin-top:12px;align-items:flex-end">
-            <input type="hidden" name="csrf" value="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">            <input type="hidden" name="action" value="remittance-confirm">
+            <input type="hidden" name="csrf" value="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">            <input type="hidden" name="action" value="remittance-confirm">
             <input type="hidden" name="remittance_id" value="88">
             <input type="hidden" name="return_to" value="treasury">
             <div class="field grow" style="margin:0">
@@ -1112,7 +1136,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 </section>
 </main>
 
-<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 7; --active-index: 3">
+<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 6; --active-index: 3">
     <span class="nav-indicator" aria-hidden="true"></span>
       <a href="/dashboard"
        class="nav-tab"
@@ -1141,23 +1165,18 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/></svg></span>
       <span class="nav-label">Treasury</span>
           </a>
-      <a href="/security"
+      <a href="/people"
        class="nav-tab"
        >
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-      <span class="nav-label">Security</span>
-          </a>
-      <a href="/settings"
-       class="nav-tab"
-       >
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></span>
-      <span class="nav-label">Settings</span>
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.2 2.6-5.6 5.8-5.6s5.8 2.4 5.8 5.6"/><path d="M15.6 5.2a3.2 3.2 0 0 1 0 5.9"/><path d="M16.8 14.8c2.3.5 4 2.6 4 5.2"/></svg></span>
+      <span class="nav-label">People</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="2c9b449ab260dd79a1b7d317a297e6c7190cac6182d4715153f53c1a475f1cdc">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="d24528a691db9c6061ab8e3c59def90d5a1d10bf6ed9599dfcdc157f1eb964e4">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
+      <span class="nav-label nav-label-short" aria-hidden="true">Exit</span>
     </button>
   </form>
 </nav>

@@ -563,11 +563,11 @@ ok('The activity report counts administrators and members together', function ()
     assertTrue($found, 'every row carries the three counts the report shows');
 
     // Filtering by "administrators" must not lose the money rows a treasurer created.
-    $financial = Audit::page(['kind' => 'financial', 'per_page' => '25'], [], 'audit');
+    $financial = Audit::page(['kind' => 'financial', 'per_page' => '25'], 'audit');
     assertTrue(is_array($financial['rows']), 'the financial filter produces rows');
 
     // A page never returns more than it says it will.
-    $page = Audit::page(['per_page' => '25'], [], 'audit');
+    $page = Audit::page(['per_page' => '25'], 'audit');
     assertTrue(count($page['rows']) <= 25);
 });
 

@@ -21,7 +21,7 @@ use RISE63\Core\Settings;
 use RISE63\Core\Updater;
 use RISE63\Core\View;
 
-use function RISE63\{e, site_title, take_flashes};
+use function RISE63\{config_dir, e, site_title, take_flashes};
 
 $flashes = take_flashes();
 $now     = ['flashes' => $flashes, 'user' => $user, 'page' => $page, 'title' => site_title()];
@@ -356,13 +356,11 @@ switch ($page) {
 
     case 'settings':
         $requireAdmin();
-        $audit = Audit::page($_GET, [
-            'actor'  => (string) ($_GET['actor'] ?? ''),
-            'action' => (string) ($_GET['do'] ?? ''),
-            'entity' => (string) ($_GET['entity'] ?? ''),
-            'kind'   => (string) ($_GET['kind'] ?? ''),
-            'q'      => (string) ($_GET['q'] ?? ''),
-        ], 'settings');
+        // The form names the action filter `do`, because `action` is already the POST router's.
+        $audit = Audit::page(
+            $_GET + ['action' => (string) ($_GET['do'] ?? '')],
+            'settings'
+        );
         $render('staff/settings', [
             'title'   => 'Settings',
             'settings' => Settings::all(),
@@ -389,13 +387,10 @@ switch ($page) {
     // but "who has been doing what", and it is the page an operator opens during a review.
     case 'audit':
         $requireAdmin();
-        $report = Audit::page($_GET, [
-            'actor'  => (string) ($_GET['actor'] ?? ''),
-            'action' => (string) ($_GET['do'] ?? ''),
-            'entity' => (string) ($_GET['entity'] ?? ''),
-            'kind'   => (string) ($_GET['kind'] ?? ''),
-            'q'      => (string) ($_GET['q'] ?? ''),
-        ], 'audit');
+        $report = Audit::page(
+            $_GET + ['action' => (string) ($_GET['do'] ?? '')],
+            'audit'
+        );
         $render('staff/audit', [
             'title'        => 'Activity report',
             'events'       => $report['rows'],

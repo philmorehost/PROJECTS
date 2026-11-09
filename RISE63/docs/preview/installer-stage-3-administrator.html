@@ -226,6 +226,25 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
     0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
+/* Administration links in the top bar: every destination an administrator needs, as words.
+   On a phone the tab bar cannot hold them all without shrinking the labels past legibility, and a
+   destination that is hard to find is a destination that does not exist. They wrap rather than
+   overflow, and each keeps a 40 px target. */
+.admin-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-link {
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 6px 12px; border-radius: 12px;
+  font-size: var(--t-sm); font-weight: 700; color: var(--text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.admin-link:hover { background: var(--surface-2); color: var(--text); }
+.admin-link.is-current { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 520px) {
+  .admin-link { padding: 6px 8px; font-size: 0.8125rem; }
+  .topbar-inner { flex-wrap: wrap; gap: 8px; }
+  .admin-links { order: 3; flex-basis: 100%; justify-content: flex-start; }
+}
+
 /* The sliding pill. One element, moved with a transform: width and offset come from the number of
    tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
    parked under the first tab, which would claim that tab was current. */
@@ -403,6 +422,7 @@ body.wizard { background: var(--bg); }
 .grid { display: grid; gap: var(--gap); }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .grid-tight { gap: 10px; }
 
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
@@ -522,6 +542,87 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   }
   .table-stack td.num { text-align: left; }
 }
+
+/* Manage column: the roster of buttons on each person. Wraps, and keeps every control a
+   44 px target so it can be hit with a thumb on the stacked (phone) layout. */
+.manage-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.manage-actions form { margin: 0; }
+.manage-actions .btn { min-height: 38px; }
+
+/* ── Filter rows (audit, people) ─────────────────────────────────────────────── */
+/* Wraps into a column on a phone without the labels drifting away from their controls. */
+.filter-row {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+}
+.filter-row .field { flex: 1 1 150px; min-width: 0; }
+.filter-row .field.grow { flex: 2 1 220px; }
+.filter-row .btn { flex: 0 0 auto; min-height: 44px; align-self: flex-end; }
+@media (max-width: 560px) {
+  .filter-row .field, .filter-row .field.grow { flex: 1 1 100%; }
+  .filter-row .btn { flex: 1 1 100%; justify-content: center; }
+}
+
+.program-year-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 12px 0 16px; }
+.program-year-figure strong { font-size: 2rem; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.program-year-figure .faint { font-size: var(--t-sm); max-width: 46ch; }
+
+/* ── Pagination bar ──────────────────────────────────────────────────────────── */
+/* Wrapping flex rather than a fixed row: at 390 px the three parts stack, and the buttons
+   stay reachable with a thumb instead of scrolling off the side. */
+.pager {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.pager-controls { display: flex; gap: 8px; flex: 0 0 auto; }
+.pager-controls .btn { min-height: 40px; padding: 8px 14px; }
+.pager-caption { flex: 1 1 120px; margin: 0; font-size: var(--t-sm); min-width: 0; }
+.pager-caption strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.pager-sizes { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: var(--t-xs); }
+.chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; min-height: 34px; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700; text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.chip:hover { background: var(--surface-2); color: var(--text); }
+.chip-on { background: var(--brand-soft); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+a.chip { cursor: pointer; }
+@media (max-width: 520px) {
+  .pager { gap: 10px; }
+  .pager-caption { order: 3; flex-basis: 100%; }
+  .pager-controls { flex: 1 1 100%; }
+  .pager-controls .btn { flex: 1 1 0; justify-content: center; }
+  .pager-sizes { flex: 1 1 100%; justify-content: flex-start; }
+}
+
+/* Impersonation banner: an administrator looking at somebody else's account must never
+   forget which account they are in. Fixed to the top, above the header, and it does not
+   fade out. */
+.impersonation-bar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 14px;
+  background: var(--warn-soft); color: var(--text);
+  border-bottom: 2px solid var(--warn);
+  font-size: var(--t-sm);
+}
+.impersonation-bar strong { color: var(--warn); }
+.impersonation-bar form { margin: 0 0 0 auto; }
+
+/* Fund cards: the pool figures, with the set/ deposit forms attached. */
+.fund-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.fund {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px; background: var(--surface-2);
+}
+.fund h3 { margin: 0 0 2px; font-size: var(--t-base); }
+.fund .fund-amount { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.fund dl { margin: 10px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: var(--t-xs); }
+.fund dt { color: var(--text-muted); margin: 0; }
+.fund dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.fund-unfunded .fund-amount { color: var(--text-faint); }
 
 /* ── Combobox (parish live search) ────────────────────────────────────────────── */
 .combo { position: relative; }
@@ -685,7 +786,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <p>Four steps · about two minutes</p>
     </div>
     <div class="wizard-version">
-      Version 1.0.0<br>
+      Version 1.0.3<br>
       <span class="faint">PHP 8.4.1</span>
     </div>
   </header>
@@ -783,6 +884,6 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     RISE 63 · RCCG Lagos Province 63 · <a href="/">sign-in</a>
   </p>
 </main>
-<script src="/public/assets/app.js?v=6148ab27" defer></script>
+<script src="/public/assets/app.6148ab27.js" defer></script>
 </body>
 </html>

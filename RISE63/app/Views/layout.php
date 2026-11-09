@@ -32,12 +32,20 @@ $navItems = $account === null ? [] : ($isStaff
         'applications' => ['Applications', 'applications', 'Apps'],
         'parishes'     => ['Parish Connect', 'parish', 'Parish'],
         'treasury'     => ['Treasury', 'treasury', 'Treasury'],
+        // People is a primary admin destination, not a link buried in another page. It was
+        // reachable from nowhere at all until this release: the page worked, the forms worked, and
+        // no administrator could get to them. A feature nobody can find is not a feature.
+        'people'       => ['People', 'people', 'People'],
     ]
     : [
         'my-rise'  => ['My RISE', 'star', 'My RISE'],
         'programs' => ['Programs', 'programs', 'Programs'],
         'parishes' => ['Parish Connect', 'parish', 'Parish'],
     ]);
+if ($account !== null && !Auth::isAdmin($account)) {
+    // Representatives and members never see the roster.
+    unset($navItems['people']);
+}
 if ($account !== null && !Auth::isTreasurer($account)) {
     unset($navItems['treasury']);
 }
@@ -51,11 +59,12 @@ $tabs = [];
 foreach ($navItems as $key => [$label, $iconName, $short]) {
     $tabs[] = ['href' => url($key), 'icon' => $iconName, 'label' => $label, 'short' => $short, 'active' => $page === $key];
 }
-if ($account !== null && $isStaff && (Auth::isAdmin($account) || (string) $account['role'] === 'csr_rep')) {
+// Security is a tab only for the people who have no other route to it. For an administrator it
+// lives in the top bar with Settings and Activity, because seven-plus tabs on a 360 px phone
+// ellipsise "Treasury" and "Security" into "Treas…" and "Secur…" — and a tab bar of truncated words
+// is worse than one with fewer, legible tabs.
+if ($account !== null && $isStaff && (string) $account['role'] === 'csr_rep') {
     $tabs[] = ['href' => url('security'), 'icon' => 'security', 'label' => 'Security', 'short' => 'Security', 'active' => $page === 'security'];
-}
-if ($account !== null && Auth::isAdmin($account)) {
-    $tabs[] = ['href' => url('settings'), 'icon' => 'settings', 'label' => 'Settings', 'short' => 'Settings', 'active' => $page === 'settings'];
 }
 $activeIndex = 0;
 foreach ($tabs as $index => $tab) {
@@ -196,8 +205,16 @@ foreach ($tabs as $index => $tab) {
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
         <span class="theme-icon" aria-hidden="true">◑</span>
       </button>
+      <?php /* The four administrator destinations that do not fit as tabs on a phone. They are
+               labelled text, not glyphs: "⇪" was the only route to Updates and a glyph is not a
+               signpost — an operator who has not been told what it means will not press it. */ ?>
       <?php if (Auth::isAdmin($account)): ?>
-        <a class="icon-btn" href="<?= e(url('updates')) ?>" aria-label="Updates" title="Updates">⇪</a>
+        <nav class="admin-links" aria-label="Administration">
+          <a class="admin-link<?= $page === 'settings' ? ' is-current' : '' ?>" href="<?= e(url('settings')) ?>">Settings</a>
+          <a class="admin-link<?= $page === 'security' ? ' is-current' : '' ?>" href="<?= e(url('security')) ?>">Security</a>
+          <a class="admin-link<?= $page === 'audit' ? ' is-current' : '' ?>" href="<?= e(url('audit')) ?>">Activity</a>
+          <a class="admin-link<?= $page === 'updates' ? ' is-current' : '' ?>" href="<?= e(url('updates')) ?>">Updates</a>
+        </nav>
       <?php endif; ?>
       <a class="icon-btn" href="<?= e(url('profile')) ?>" aria-label="My account" title="My account">
         <span aria-hidden="true"><?= e(\RISE63\initials((string) $account['full_name'])) ?></span>
@@ -239,6 +256,7 @@ foreach ($tabs as $index => $tab) {
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><?= icon('logout') ?></span>
       <span class="nav-label">Sign out</span>
+      <span class="nav-label nav-label-short" aria-hidden="true">Exit</span>
     </button>
   </form>
 </nav>

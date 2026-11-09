@@ -71,12 +71,17 @@ final class Audit
     /**
      * One page of the trail, filtered.
      *
-     * @param array<string, mixed> $get the request's query string
-     * @param array{actor?:string, action?:string, entity?:string, kind?:string, q?:string} $filters
+     * The filters are read from `$get`, not passed separately. They used to be a second argument,
+     * and that is a trap: `Audit::page(['kind' => 'financial'])` looked like it filtered and silently
+     * returned everything, because the filter sat in the request array and the empty filter array
+     * won. One source of truth removes the ambiguity.
+     *
+     * @param array<string, mixed> $get usually $_GET
      * @return array{rows: list<array<string, mixed>>, page: Paginator, filters: array<string,string>}
      */
-    public static function page(array $get, array $filters, string $page = 'audit'): array
+    public static function page(array $get, string $page = 'audit'): array
     {
+        $filters = $get;
         $where  = [];
         $params = [];
         $clean  = ['actor' => '', 'action' => '', 'entity' => '', 'kind' => '', 'q' => ''];
@@ -119,8 +124,16 @@ final class Audit
 
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
-            $where[] = '(e.summary LIKE :q OR e.actor_email LIKE :q OR e.action LIKE :q OR e.entity_id = :exact)';
-            $params['q']     = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
+            // One placeholder per occurrence. The connection sets ATTR_EMULATE_PREPARES = false, so
+            // MySQL sees a native prepared statement, and a native statement binds positionally —
+            // reusing `:q` in four places makes PDO send one parameter for four markers, which is
+            // an immediate "Invalid parameter number" and a 500 on every filtered search. This
+            // happened on the first deploy: opening Settings with a saved filter took the page down.
+            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
+            $where[] = '(e.summary LIKE :q1 OR e.actor_email LIKE :q2 OR e.action LIKE :q3 OR e.entity_id = :exact)';
+            $params['q1']    = $like;
+            $params['q2']    = $like;
+            $params['q3']    = $like;
             $params['exact'] = $q;
             $clean['q'] = mb_substr($q, 0, 80);
         }
@@ -185,7 +198,11 @@ final class Audit
         return [
             'rows'    => $rows,
             'filters' => $clean,
-            'page'    => new Paginator($perPage, $before, $before !== null, $hasNext, count($rows), $carry, $page),
+            // fromState(), not `new`: the constructor is private on purpose so every page is built
+            // through a validating factory. Reaching around it is what took this page down in
+            // production — the render tests built their own Paginator via the factory and so never
+            // exercised the line the application actually runs.
+            'page'    => Paginator::fromState($perPage, $before, count($rows), $carry, $page, $hasNext),
         ];
     }
 
