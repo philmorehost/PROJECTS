@@ -264,11 +264,12 @@ include '../includes/dashboard-head.php';
                                 let t3_fee = <?php echo getConfig('payout_tier3_fee', '50'); ?>;
                                 let s_threshold = <?php echo getConfig('stamp_duty_threshold', '10000'); ?>;
                                 let s_fee = <?php echo getConfig('stamp_duty_fee', '50'); ?>;
-                                let markup = <?php echo getConfig('payout_markup', '5'); ?>;
+                                let markupFlat = <?php echo (float)getConfig('payout_markup', '5'); ?>;
+                                let markupPercent = <?php echo (float)getConfig('payout_markup_percent', '0'); ?>;
 
                                 let transferFee = (a <= t1_max) ? t1_fee : (a <= t2_max ? t2_fee : t3_fee);
                                 let stampDuty = (a >= s_threshold) ? s_fee : 0;
-                                return transferFee + stampDuty + markup;
+                                return transferFee + stampDuty + markupFlat + (a * markupPercent / 100);
                             }
                         }">
                             <input type="hidden" name="action" value="request_payout">

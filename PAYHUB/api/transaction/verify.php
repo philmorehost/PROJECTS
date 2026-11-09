@@ -94,7 +94,8 @@ if ($tx['status'] !== 'success') {
             ));
         }
 
-        $fee = calculate_fees($amount, ($data['currency'] !== 'NGN'), $user['id']);
+        $gatewayFee = isset($data['fees']) && is_numeric($data['fees']) ? ((float)$data['fees'] / 100) : null;
+        $fee = calculate_fees($amount, ($data['currency'] !== 'NGN'), $user['id'], $gatewayFee, $data['channel'] ?? '');
         $settled = $amount - $fee;
 
         $db->beginTransaction();

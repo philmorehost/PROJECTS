@@ -878,10 +878,11 @@ function calculate_payout_fee($amount) {
     $stamp_fee = (float)getConfig('stamp_duty_fee', '50');
     $stampDuty = ($amount >= $stamp_threshold) ? $stamp_fee : 0;
 
-    // 3. Add PayHub's "Markup" for profit
-    $payhubMargin = (float)getConfig('payout_markup', '0');
+    // 3. PayHub payout margin: existing flat key remains supported, with an optional percentage.
+    $payhubMargin = max(0, (float)getConfig('payout_markup', '5'))
+        + ($amount * max(0, (float)getConfig('payout_markup_percent', '0')) / 100);
 
-    return $transferFee + $stampDuty + $payhubMargin;
+    return round($transferFee + $stampDuty + $payhubMargin, 2);
 }
 
 /* =============================================================================
@@ -1307,37 +1308,56 @@ function restore_transaction_reversal($transactionId, $reversalReference) {
     }
 }
 
-function calculate_fees($amount, $is_international = false, $userId = null) {
-    $percent = null;
-    $flat = null;
+/** Estimate Paystack's published processing fee if its API did not return the confirmed fee. */
+function estimate_paystack_fee($amount, $is_international = false, $channel = '') {
+    $amount = max(0, (float)$amount);
+    $channel = strtolower((string)$channel);
 
+    // Paystack DVA collections: 1%, capped at NGN 300. This is the channel in the reported loss.
+    if (!$is_international && (strpos($channel, 'dedicated') !== false || strpos($channel, 'virtual_account') !== false)) {
+        return min($amount * 0.01, 300);
+    }
+    if ($is_international) return ($amount * 0.039) + 100;
+    return min(($amount * 0.015) + ($amount < 2500 ? 0 : 100), 2000);
+}
+
+/**
+ * The confirmed Paystack fee is a processing cost, not PayHub revenue. Charge that cost (or
+ * the published-rate estimate when no confirmed fee is available) plus an explicit PayHub
+ * markup. The optional trailing arguments keep all existing API integrations compatible.
+ */
+function calculate_fees($amount, $is_international = false, $userId = null, $gatewayFee = null, $channel = '') {
+    $amount = max(0, (float)$amount);
+    $providerFee = (is_numeric($gatewayFee) && (float)$gatewayFee >= 0)
+        ? (float)$gatewayFee
+        : estimate_paystack_fee($amount, $is_international, $channel);
+
+    $prefix = $is_international ? 'international' : 'local';
+    $markupPercent = max(0, (float)getConfig($prefix . '_markup_percent', '0'));
+    $markupFlat = max(0, (float)getConfig($prefix . '_markup_flat', '0'));
+    $markupCap = (float)getConfig($prefix . '_markup_cap', '0');
+    $markup = ($amount * $markupPercent / 100) + $markupFlat;
+    if ($markupCap > 0) $markup = min($markup, $markupCap);
+
+    // Merchant-specific fee overrides keep their historical meaning as a total quoted fee.
+    // Floor that custom fee at Paystack's actual cost, so it can never create a loss.
     if ($userId) {
-        $db = Database::connect();
-        $stmt = $db->prepare("SELECT fee_percentage, fee_flat FROM users WHERE id = ?");
-        $stmt->execute([$userId]);
-        $user = $stmt->fetch();
-        if ($user) {
-            $percent = $user['fee_percentage'];
-            $flat = $user['fee_flat'];
+        try {
+            $db = Database::connect();
+            $stmt = $db->prepare("SELECT fee_percentage, fee_flat FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $merchant = $stmt->fetch();
+            if ($merchant && ($merchant['fee_percentage'] !== null || $merchant['fee_flat'] !== null)) {
+                $merchantTotal = ($amount * max(0, (float)($merchant['fee_percentage'] ?? 0)) / 100)
+                    + max(0, (float)($merchant['fee_flat'] ?? 0));
+                return round(max($providerFee, $merchantTotal), 2);
+            }
+        } catch (\Throwable $e) {
+            // A pricing lookup failure must not break payment fulfillment.
         }
     }
 
-    if ($is_international) {
-        if ($percent === null) $percent = (float)getConfig('international_fee_percent', '3.9');
-        if ($flat === null) $flat = (float)getConfig('international_fee_flat', '100');
-        $fee = ($amount * ($percent / 100)) + $flat;
-        return $fee;
-    } else {
-        if ($percent === null) $percent = (float)getConfig('transaction_fee_percent', '1.5');
-        if ($flat === null) {
-            $flat = ($amount < 2500) ? 0 : (float)getConfig('transaction_fee_flat', '100');
-        }
-        $cap = (float)getConfig('transaction_fee_cap', '2000');
-
-        $fee = ($amount * ($percent / 100)) + $flat;
-        if ($fee > $cap) $fee = $cap;
-        return $fee;
-    }
+    return round($providerFee + $markup, 2);
 }
 
 /**
