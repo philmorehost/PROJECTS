@@ -296,7 +296,7 @@ if ($event_type === 'charge_success') {
             store_card_fingerprint($tx['id'], $data['authorization'] ?? null);
 
             // Calculate fees
-            $is_intl = ($currency !== 'NGN');
+            $is_intl = is_international_payment($currency, $data['authorization'] ?? [], $data['channel'] ?? '');
             $gatewayFee = isset($data['fees']) && is_numeric($data['fees']) ? ((float)$data['fees'] / 100) : null;
             $fee = calculate_fees($amount, $is_intl, $tx['user_id'], $gatewayFee, $data['channel'] ?? '');
             $settled = $amount - $fee;
