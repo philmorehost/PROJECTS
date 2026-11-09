@@ -4,8 +4,8 @@ self.RISE63_SHELL = [
     "./favicon.svg",
     "./public/icons/icon-192.png",
     "./public/icons/icon-512.png",
-    "./public/assets/app.24a7771a.css",
+    "./public/assets/app.1803fe68.css",
     "./public/assets/app.6148ab27.js",
     "./public/assets/security.613104f8.js"
 ];
-self.RISE63_RELEASE = "1.0.1-fbe854a3";
+self.RISE63_RELEASE = "1.0.3-af5050c9";

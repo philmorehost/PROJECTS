@@ -393,9 +393,13 @@ final class Members
         $where  = [];
         $params = [];
         if ($term !== '') {
+            // One placeholder per occurrence — see the same note in Audit::page(). Native prepares
+            // cannot bind one marker to three positions, and reusing it fails the whole request.
             $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
-            $where[] = '(UPPER(u.full_name) LIKE :term OR UPPER(u.email) LIKE :term OR UPPER(COALESCE(p.parish_name, \'\')) LIKE :term)';
-            $params['term'] = $like;
+            $where[] = '(UPPER(u.full_name) LIKE :t1 OR UPPER(u.email) LIKE :t2 OR UPPER(COALESCE(p.parish_name, \'\')) LIKE :t3)';
+            $params['t1'] = $like;
+            $params['t2'] = $like;
+            $params['t3'] = $like;
         }
         if (isset(Auth::ROLES[$role])) {
             $where[] = 'u.role = :role';
@@ -452,7 +456,7 @@ final class Members
             'role'  => $role,
             'status' => $status,
             'counts' => self::counts(),
-            'page'  => new Paginator($perPage, $before, $before !== null, $hasNext, count($rows), $carry, 'people'),
+            'page'  => Paginator::fromState($perPage, $before, count($rows), $carry, 'people', $hasNext),
         ];
     }
 
@@ -463,14 +467,17 @@ final class Members
      */
     public static function counts(): array
     {
+        // SUM(CASE WHEN … THEN 1 ELSE 0 END) rather than SUM(x = 1): the latter is a MySQL
+        // extension that sums a boolean, and it makes the query untestable anywhere else. This
+        // form is identical on MySQL 8 and MariaDB and is what the end-to-end suite runs.
         $row = Database::one(
             "SELECT COUNT(*) AS total,
-                    SUM(is_suspended = 1) AS suspended,
-                    SUM(must_change_password = 1) AS temporary,
-                    SUM(role = 'provincial_admin') AS admins,
-                    SUM(role = 'provincial_treasurer') AS treasurers,
-                    SUM(role = 'csr_rep') AS reps,
-                    SUM(role = 'youth_member') AS members
+                    SUM(CASE WHEN is_suspended = 1 THEN 1 ELSE 0 END) AS suspended,
+                    SUM(CASE WHEN must_change_password = 1 THEN 1 ELSE 0 END) AS temporary,
+                    SUM(CASE WHEN role = 'provincial_admin' THEN 1 ELSE 0 END) AS admins,
+                    SUM(CASE WHEN role = 'provincial_treasurer' THEN 1 ELSE 0 END) AS treasurers,
+                    SUM(CASE WHEN role = 'csr_rep' THEN 1 ELSE 0 END) AS reps,
+                    SUM(CASE WHEN role = 'youth_member' THEN 1 ELSE 0 END) AS members
              FROM users"
         ) ?? [];
         $counts = [];

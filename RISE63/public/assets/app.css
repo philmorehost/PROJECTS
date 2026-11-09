@@ -214,6 +214,25 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
     0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
+/* Administration links in the top bar: every destination an administrator needs, as words.
+   On a phone the tab bar cannot hold them all without shrinking the labels past legibility, and a
+   destination that is hard to find is a destination that does not exist. They wrap rather than
+   overflow, and each keeps a 40 px target. */
+.admin-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-link {
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 6px 12px; border-radius: 12px;
+  font-size: var(--t-sm); font-weight: 700; color: var(--text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.admin-link:hover { background: var(--surface-2); color: var(--text); }
+.admin-link.is-current { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 520px) {
+  .admin-link { padding: 6px 8px; font-size: 0.8125rem; }
+  .topbar-inner { flex-wrap: wrap; gap: 8px; }
+  .admin-links { order: 3; flex-basis: 100%; justify-content: flex-start; }
+}
+
 /* The sliding pill. One element, moved with a transform: width and offset come from the number of
    tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
    parked under the first tab, which would claim that tab was current. */

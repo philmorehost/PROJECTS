@@ -7,7 +7,7 @@
 <title>Updates · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="b6c7a861b9e065eeceffd4c507e176f69c4204ef0e7d5bc854ac385fc625d127">
+<meta name="csrf-token" content="787771cffc7333a882b94896556bc02e2d6f8691c5c36ec197ed0080b82cdcef">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -228,6 +228,25 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
     0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
+/* Administration links in the top bar: every destination an administrator needs, as words.
+   On a phone the tab bar cannot hold them all without shrinking the labels past legibility, and a
+   destination that is hard to find is a destination that does not exist. They wrap rather than
+   overflow, and each keeps a 40 px target. */
+.admin-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-link {
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 6px 12px; border-radius: 12px;
+  font-size: var(--t-sm); font-weight: 700; color: var(--text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.admin-link:hover { background: var(--surface-2); color: var(--text); }
+.admin-link.is-current { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 520px) {
+  .admin-link { padding: 6px 8px; font-size: 0.8125rem; }
+  .topbar-inner { flex-wrap: wrap; gap: 8px; }
+  .admin-links { order: 3; flex-basis: 100%; justify-content: flex-start; }
+}
+
 /* The sliding pill. One element, moved with a transform: width and offset come from the number of
    tabs, so adding a tab needs no CSS change. Idle (no tab active) it is invisible rather than
    parked under the first tab, which would claim that tab was current. */
@@ -405,6 +424,7 @@ body.wizard { background: var(--bg); }
 .grid { display: grid; gap: var(--gap); }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .grid-tight { gap: 10px; }
 
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
@@ -524,6 +544,87 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   }
   .table-stack td.num { text-align: left; }
 }
+
+/* Manage column: the roster of buttons on each person. Wraps, and keeps every control a
+   44 px target so it can be hit with a thumb on the stacked (phone) layout. */
+.manage-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.manage-actions form { margin: 0; }
+.manage-actions .btn { min-height: 38px; }
+
+/* ── Filter rows (audit, people) ─────────────────────────────────────────────── */
+/* Wraps into a column on a phone without the labels drifting away from their controls. */
+.filter-row {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+}
+.filter-row .field { flex: 1 1 150px; min-width: 0; }
+.filter-row .field.grow { flex: 2 1 220px; }
+.filter-row .btn { flex: 0 0 auto; min-height: 44px; align-self: flex-end; }
+@media (max-width: 560px) {
+  .filter-row .field, .filter-row .field.grow { flex: 1 1 100%; }
+  .filter-row .btn { flex: 1 1 100%; justify-content: center; }
+}
+
+.program-year-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 12px 0 16px; }
+.program-year-figure strong { font-size: 2rem; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.program-year-figure .faint { font-size: var(--t-sm); max-width: 46ch; }
+
+/* ── Pagination bar ──────────────────────────────────────────────────────────── */
+/* Wrapping flex rather than a fixed row: at 390 px the three parts stack, and the buttons
+   stay reachable with a thumb instead of scrolling off the side. */
+.pager {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.pager-controls { display: flex; gap: 8px; flex: 0 0 auto; }
+.pager-controls .btn { min-height: 40px; padding: 8px 14px; }
+.pager-caption { flex: 1 1 120px; margin: 0; font-size: var(--t-sm); min-width: 0; }
+.pager-caption strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.pager-sizes { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: var(--t-xs); }
+.chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; min-height: 34px; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-muted);
+  font-size: var(--t-xs); font-weight: 700; text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.chip:hover { background: var(--surface-2); color: var(--text); }
+.chip-on { background: var(--brand-soft); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+a.chip { cursor: pointer; }
+@media (max-width: 520px) {
+  .pager { gap: 10px; }
+  .pager-caption { order: 3; flex-basis: 100%; }
+  .pager-controls { flex: 1 1 100%; }
+  .pager-controls .btn { flex: 1 1 0; justify-content: center; }
+  .pager-sizes { flex: 1 1 100%; justify-content: flex-start; }
+}
+
+/* Impersonation banner: an administrator looking at somebody else's account must never
+   forget which account they are in. Fixed to the top, above the header, and it does not
+   fade out. */
+.impersonation-bar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 14px;
+  background: var(--warn-soft); color: var(--text);
+  border-bottom: 2px solid var(--warn);
+  font-size: var(--t-sm);
+}
+.impersonation-bar strong { color: var(--warn); }
+.impersonation-bar form { margin: 0 0 0 auto; }
+
+/* Fund cards: the pool figures, with the set/ deposit forms attached. */
+.fund-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.fund {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px; background: var(--surface-2);
+}
+.fund h3 { margin: 0 0 2px; font-size: var(--t-base); }
+.fund .fund-amount { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.fund dl { margin: 10px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: var(--t-xs); }
+.fund dt { color: var(--text-muted); margin: 0; }
+.fund dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.fund-unfunded .fund-amount { color: var(--text-faint); }
 
 /* ── Combobox (parish live search) ────────────────────────────────────────────── */
 .combo { position: relative; }
@@ -690,6 +791,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 <body class="signed-in">
 <a class="skip-link" href="#main">Skip to main content</a>
 
+
 <div class="offline-modal" id="offline-modal" role="dialog" aria-modal="true"
      aria-labelledby="offline-title" aria-describedby="offline-body" hidden>
   <div class="offline-sheet" role="document">
@@ -763,7 +865,12 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
         <span class="theme-icon" aria-hidden="true">◑</span>
       </button>
-              <a class="icon-btn" href="/updates" aria-label="Updates" title="Updates">⇪</a>
+                    <nav class="admin-links" aria-label="Administration">
+          <a class="admin-link" href="/settings">Settings</a>
+          <a class="admin-link" href="/security">Security</a>
+          <a class="admin-link" href="/audit">Activity</a>
+          <a class="admin-link is-current" href="/updates">Updates</a>
+        </nav>
             <a class="icon-btn" href="/profile" aria-label="My account" title="My account">
         <span aria-hidden="true">AO</span>
       </a>
@@ -794,7 +901,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     </p>
 
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b6c7a861b9e065eeceffd4c507e176f69c4204ef0e7d5bc854ac385fc625d127">      <input type="hidden" name="action" value="update-check">
+      <input type="hidden" name="csrf" value="787771cffc7333a882b94896556bc02e2d6f8691c5c36ec197ed0080b82cdcef">      <input type="hidden" name="action" value="update-check">
       <input type="hidden" name="return_to" value="updates">
       <button class="btn btn-primary" type="submit">Check now</button>
     </form>
@@ -805,7 +912,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                                           <div class="block" style="margin-top:8px; white-space:pre-wrap">- Academy attendance panel is now read-only for members
 - Treasury export includes the parish code</div>
                                 <form method="post" action="/" style="margin-top:12px">
-              <input type="hidden" name="csrf" value="b6c7a861b9e065eeceffd4c507e176f69c4204ef0e7d5bc854ac385fc625d127">              <input type="hidden" name="action" value="update-plan">
+              <input type="hidden" name="csrf" value="787771cffc7333a882b94896556bc02e2d6f8691c5c36ec197ed0080b82cdcef">              <input type="hidden" name="action" value="update-plan">
               <input type="hidden" name="return_to" value="updates">
               <button class="btn btn-primary" type="submit">Download and review what changes</button>
             </form>
@@ -838,14 +945,14 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <li>Every replaced file is copied to a timestamped folder under <code>storage/updates/backup/</code>
         before it is overwritten. Copy them back over the installation to roll back by hand.</li>
       <li>The installed version is recorded in <code>config/update-state.json</code>. Deleting that file
-        makes the installer-facing version report read 1.0.0 again.</li>
+        makes the installer-facing version report read 1.0.3 again.</li>
       <li>Run <code>php bin/doctor.php</code> after an update; it checks the result rather than assuming it.</li>
     </ul>
   </div>
 </section>
 </main>
 
-<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 7; --active-index: 0">
+<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 6; --active-index: 0">
     <span class="nav-indicator" aria-hidden="true" data-idle="1"></span>
       <a href="/dashboard"
        class="nav-tab"
@@ -874,23 +981,18 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/></svg></span>
       <span class="nav-label">Treasury</span>
           </a>
-      <a href="/security"
+      <a href="/people"
        class="nav-tab"
        >
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-      <span class="nav-label">Security</span>
-          </a>
-      <a href="/settings"
-       class="nav-tab"
-       >
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></span>
-      <span class="nav-label">Settings</span>
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.2 2.6-5.6 5.8-5.6s5.8 2.4 5.8 5.6"/><path d="M15.6 5.2a3.2 3.2 0 0 1 0 5.9"/><path d="M16.8 14.8c2.3.5 4 2.6 4 5.2"/></svg></span>
+      <span class="nav-label">People</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="b6c7a861b9e065eeceffd4c507e176f69c4204ef0e7d5bc854ac385fc625d127">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="787771cffc7333a882b94896556bc02e2d6f8691c5c36ec197ed0080b82cdcef">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
+      <span class="nav-label nav-label-short" aria-hidden="true">Exit</span>
     </button>
   </form>
 </nav>
@@ -911,6 +1013,6 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </div>
 </div>
 
-<script src="/public/assets/app.js?v=6148ab27" defer></script>
+<script src="/public/assets/app.6148ab27.js" defer></script>
 </body>
 </html>

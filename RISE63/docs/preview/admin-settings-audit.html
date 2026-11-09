@@ -7,7 +7,7 @@
 <title>Settings · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">
+<meta name="csrf-token" content="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -226,6 +226,25 @@ small, .meta { font-size: var(--t-sm); color: var(--text-muted); }
     0 1px 0 color-mix(in srgb, #ffffff 60%, transparent) inset,
     0 10px 30px -10px rgba(15, 23, 42, 0.35),
     0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* Administration links in the top bar: every destination an administrator needs, as words.
+   On a phone the tab bar cannot hold them all without shrinking the labels past legibility, and a
+   destination that is hard to find is a destination that does not exist. They wrap rather than
+   overflow, and each keeps a 40 px target. */
+.admin-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-link {
+  display: inline-flex; align-items: center;
+  min-height: 40px; padding: 6px 12px; border-radius: 12px;
+  font-size: var(--t-sm); font-weight: 700; color: var(--text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.admin-link:hover { background: var(--surface-2); color: var(--text); }
+.admin-link.is-current { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 520px) {
+  .admin-link { padding: 6px 8px; font-size: 0.8125rem; }
+  .topbar-inner { flex-wrap: wrap; gap: 8px; }
+  .admin-links { order: 3; flex-basis: 100%; justify-content: flex-start; }
 }
 
 /* The sliding pill. One element, moved with a transform: width and offset come from the number of
@@ -846,7 +865,12 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch appearance" title="Switch appearance">
         <span class="theme-icon" aria-hidden="true">◑</span>
       </button>
-              <a class="icon-btn" href="/updates" aria-label="Updates" title="Updates">⇪</a>
+                    <nav class="admin-links" aria-label="Administration">
+          <a class="admin-link is-current" href="/settings">Settings</a>
+          <a class="admin-link" href="/security">Security</a>
+          <a class="admin-link" href="/audit">Activity</a>
+          <a class="admin-link" href="/updates">Updates</a>
+        </nav>
             <a class="icon-btn" href="/profile" aria-label="My account" title="My account">
         <span aria-hidden="true">AO</span>
       </a>
@@ -878,7 +902,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </p>
 
   <form method="post" action="/">
-    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="settings-save">
+    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="settings-save">
     <input type="hidden" name="group" value="programs">
     <input type="hidden" name="return_to" value="settings">
     <div class="grid grid-2">
@@ -907,7 +931,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Brand &amp; identity</h2>
     <p class="muted">These values appear across the app, the install prompt and the dynamic icon.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="brand">
       <input type="hidden" name="return_to" value="settings">
                                 <div class="field">
@@ -959,7 +983,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Sessions &amp; alerts</h2>
     <p class="muted">How long a session may sit idle and who receives sign-in alerts.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="session">
       <input type="hidden" name="return_to" value="settings">
                                 <div class="field">
@@ -979,7 +1003,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Programs &amp; funds</h2>
     <p class="muted">The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="programs">
       <input type="hidden" name="return_to" value="settings">
                                         <div class="field">
@@ -1050,7 +1074,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </div>
   <p class="muted" style="margin-top:12px">Mail is delivered by <code>php bin/mail-worker.php</code> from cron. Queued messages do not leave the server until that worker runs.</p>
   <form method="post" action="/">
-    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="queue-test">
+    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="queue-test">
     <input type="hidden" name="return_to" value="settings">
     <button class="btn btn-secondary" type="submit">Queue a test message to me</button>
   </form>
@@ -1450,8 +1474,8 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 </section>
 </main>
 
-<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 7; --active-index: 5">
-    <span class="nav-indicator" aria-hidden="true"></span>
+<nav class="bottom-nav" aria-label="Primary" style="--tab-count: 6; --active-index: 0">
+    <span class="nav-indicator" aria-hidden="true" data-idle="1"></span>
       <a href="/dashboard"
        class="nav-tab"
        >
@@ -1479,23 +1503,18 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/></svg></span>
       <span class="nav-label">Treasury</span>
           </a>
-      <a href="/security"
+      <a href="/people"
        class="nav-tab"
        >
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-      <span class="nav-label">Security</span>
-          </a>
-      <a href="/settings"
-       class="nav-tab active"
-       aria-current="page">
-      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></span>
-      <span class="nav-label">Settings</span>
+      <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.2 2.6-5.6 5.8-5.6s5.8 2.4 5.8 5.6"/><path d="M15.6 5.2a3.2 3.2 0 0 1 0 5.9"/><path d="M16.8 14.8c2.3.5 4 2.6 4 5.2"/></svg></span>
+      <span class="nav-label">People</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="b61bb8383db0c8602dacbae581e2ac26786a94a2e7f7ffe453f225c87fec977f">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
+      <span class="nav-label nav-label-short" aria-hidden="true">Exit</span>
     </button>
   </form>
 </nav>

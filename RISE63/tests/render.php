@@ -405,6 +405,80 @@ ok('Error, maintenance and gate screens are self-contained', function (): void {
     assertContains('Activation required', $gate);
 });
 
+ok('Every form action in every view has a handler', function (): void {
+    // "I press the button and nothing happens" is almost always a form posting an action string the
+    // router does not have. Checking it statically costs nothing and covers forms no test renders.
+    $handlers = [];
+    $actions  = (string) file_get_contents(RISE63_TEST_ROOT . '/app/actions.php');
+    preg_match_all("/case '([a-z0-9-]+)':/", $actions, $m);
+    foreach ($m[1] as $name) {
+        $handlers[$name] = true;
+    }
+    // Handled before the POST router, by index.php.
+    $handlers['activation-retry'] = true;
+
+    $missing = [];
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(RISE63_TEST_ROOT . '/app/Views', FilesystemIterator::SKIP_DOTS)
+    );
+    foreach ($files as $file) {
+        if (!str_ends_with($file->getPathname(), '.php')) {
+            continue;
+        }
+        $html = (string) file_get_contents($file->getPathname());
+        preg_match_all('/name="action"\s+value="([a-z0-9-]+)"/', $html, $found);
+        foreach ($found[1] as $name) {
+            if (!isset($handlers[$name])) {
+                $missing[] = basename($file->getPathname()) . ' → ' . $name;
+            }
+        }
+    }
+    assertSame([], $missing, 'unhandled form actions: ' . implode(', ', $missing));
+});
+
+ok('The pages that crashed in production build their paginator through the factory', function (): void {
+    // Two faults shipped in 1.0.1 and took /settings, /updates and /people down with a 500:
+    //
+    //   1. Audit::page() and Members::directory() called `new Paginator(...)`, but the constructor
+    //      is private so every page is built through a validating factory. Every load of Settings
+    //      and People died before rendering.
+    //   2. Both reused one named placeholder in three positions. With ATTR_EMULATE_PREPARES = false
+    //      PDO sends that as a native prepare, which binds positionally, so the statement fails with
+    //      "Invalid parameter number" — a second 500 behind the first.
+    //
+    // The render tests could not catch either: they constructed the paginator by hand and never
+    // executed the SQL. This test reads the source and runs the real calls against a PDO stub that
+    // fails the way MySQL does. It costs nothing and it would have stopped the deploy.
+    foreach ([RISE63\Core\Audit::class, RISE63\Core\Members::class] as $class) {
+        $source = (string) file_get_contents((new ReflectionClass($class))->getFileName());
+        assertMissing('new Paginator(', $source, $class . ' must use Paginator::fromState()');
+    }
+
+    // Every SQL literal in the codebase binds each marker exactly once.
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(RISE63_TEST_ROOT . '/app', FilesystemIterator::SKIP_DOTS)
+    );
+    $reused = [];
+    foreach ($files as $file) {
+        if (!str_ends_with($file->getPathname(), '.php')) {
+            continue;
+        }
+        foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
+            if (!is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            preg_match_all('/(?<![:\w]):([a-zA-Z_][a-zA-Z0-9_]*)/', $token[1], $m);
+            $counts = array_count_values($m[1]);
+            foreach ($counts as $name => $count) {
+                if ($count > 1) {
+                    $reused[] = basename($file->getPathname()) . ' :' . $name;
+                }
+            }
+        }
+    }
+    assertSame([], $reused, 'a named placeholder bound once per occurrence: ' . implode(', ', $reused));
+});
+
 /* ─────────────────────────────── Member views ──────────────────────────────── */
 
 ok('Member home shows the empty state and program cards', function () use ($renderPage, $member): void {
@@ -684,6 +758,21 @@ ok('People screen supports the whole member lifecycle from the admin side', func
     assertContains('name="status"', $html);
     assertContains('name="role"', $html);
     assertContains('Per page', $html);
+});
+
+ok('Updates screen renders for an administrator and says what it is doing', function () use ($renderPage, $admin): void {
+    // Never rendered in a test before this, which is how a page can be linked from the header and
+    // still be broken. It reads only from disk and from a previous check.
+    $html = $renderPage('staff/updates', [
+        'currentVersion' => '1.0.1',
+        'check' => null,
+        'plan' => null,
+        'result' => null,
+        'history' => [],
+    ], $admin);
+    assertContains('Updates', $html);
+    assertContains('1.0.1', $html, 'the installed version is stated');
+    assertContains('value="update-check"', $html, 'there is a way to check');
 });
 
 ok('Activity report accounts for every administrator and member', function () use ($renderPage, $admin): void {
@@ -1022,6 +1111,36 @@ ok('Manifest and service worker satisfy the install requirements', function (): 
     assertContains("caches.delete", $sw, 'old caches are removed');
     assertContains("url.pathname.indexOf('/api/')", $sw, 'API responses are never cached');
     assertContains("request.method !== 'GET'", $sw);
+});
+
+ok('Every administrator destination is reachable from the chrome', function (): void {
+    // The complaint that started this: "the admin is yet to be able to manage members". The page
+    // worked and nothing linked to it. A destination with no route to it does not exist.
+    $layout = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Views/layout.php');
+
+    // People is a tab, for administrators only.
+    assertContains("'people'       => ['People'", $layout, 'People is a primary tab for administrators');
+    assertContains("unset(\$navItems['people'])", $layout, 'and only for administrators');
+
+    // Settings, Activity and Updates live in the top bar as words, not glyphs.
+    foreach (['settings' => 'Settings', 'audit' => 'Activity', 'updates' => 'Updates'] as $page => $label) {
+        assertContains("url('" . $page . "')", $layout, $page . ' is linked');
+        assertContains('>' . $label . '</a>', $layout, $page . ' is linked as a word');
+    }
+    assertMissing('aria-label="Updates" title="Updates">⇪', $layout, 'the unlabelled glyph is gone');
+
+    // Administrators do not get a Security tab: it would make seven, and at 360 px the labels
+    // collapse to "Treas…" and "Secur…". It is in the top bar instead, where there is room for the
+    // whole word. Representatives have no top bar, so they keep the tab.
+    assertContains("(string) \$account['role'] === 'csr_rep') {", $layout, 'the Security tab is a representative route');
+    assertMissing("Auth::isAdmin(\$account) || (string) \$account['role'] === 'csr_rep')) {\n    \$tabs[]", $layout,
+        'security is not a tab for administrators');
+
+    // Every admin-only page is also routed, so the link does not 404.
+    $router = (string) file_get_contents(RISE63_TEST_ROOT . '/app/pages.php');
+    foreach (['people', 'settings', 'audit', 'updates'] as $page) {
+        assertTrue(str_contains($router, "case '" . $page . "'"), 'the ' . $page . ' page is routed');
+    }
 });
 
 ok('Every template referenced by the router exists', function (): void {

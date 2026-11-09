@@ -356,6 +356,9 @@ function icon(string $name, string $class = 'icon'): string
         // A stacked-coin mark in place of a currency glyph, which renders as a box on many phones.
         'treasury' => '<circle cx="12" cy="12" r="8.5"/><path d="M9 13.5h4.2a2.1 2.1 0 0 0 0-4.2H9m0 0V7m0 6.5V16"/>',
         // A shield with a tick — "security".
+        // Two heads and a shoulder line — "people". Drawn rather than a text glyph, like the rest.
+        'people' => '<circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.2 2.6-5.6 5.8-5.6s5.8 2.4 5.8 5.6"/>'
+            . '<path d="M15.6 5.2a3.2 3.2 0 0 1 0 5.9"/><path d="M16.8 14.8c2.3.5 4 2.6 4 5.2"/>',
         'security' => '<path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z"/><path d="M9 12l2 2 4-4"/>',
         // A slider pair — "settings".
         'settings' => '<path d="M4 7h9M17 7h3M4 17h4M12 17h8"/><circle cx="15" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>',

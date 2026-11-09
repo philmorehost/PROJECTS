@@ -1,17 +1,25 @@
 {
   "name": "rise63-tests",
   "private": true,
-  "description": "Test tooling only. RISE 63 itself has no JavaScript build step and no runtime dependencies.",
+  "description": "Test tooling only. RISE 63 itself has no JavaScript build step and no runtime dependencies. PGlite is here so tests/e2e.php can run real SQL: php-wasm has no MySQL driver, and the alternative was tests that are written but never executed.",
   "scripts": {
+    "test": "node tests/support/phpwasm-guard.mjs && node tests/support/phpwasm-test.mjs && node tests/support/phpwasm-render.mjs && node tests/support/phpwasm-smoke.mjs && node tests/support/phpwasm-e2e.mjs && node tests/support/phpwasm-pages.mjs && node tests/support/offline-behaviour.mjs && node tests/support/combobox-behaviour.mjs && node tests/support/assets-and-cache.mjs",
     "lint": "node tests/support/phpwasm-lint.mjs",
-    "test": "node tests/support/phpwasm-test.mjs && node tests/support/phpwasm-render.mjs && node tests/support/phpwasm-smoke.mjs && node tests/support/offline-behaviour.mjs && node tests/support/combobox-behaviour.mjs && node tests/support/assets-and-cache.mjs",
+    "guard": "node tests/support/phpwasm-guard.mjs",
+    "test:guard": "node tests/support/phpwasm-guard.mjs",
+    "test:unit": "node tests/support/phpwasm-test.mjs",
+    "test:render": "node tests/support/phpwasm-render.mjs",
     "test:smoke": "node tests/support/phpwasm-smoke.mjs",
+    "test:e2e": "node tests/support/phpwasm-e2e.mjs",
+    "test:pages": "node tests/support/phpwasm-pages.mjs",
     "test:offline": "node tests/support/offline-behaviour.mjs",
+    "test:combobox": "node tests/support/combobox-behaviour.mjs",
     "test:cache": "node tests/support/assets-and-cache.mjs",
-    "preview": "node tests/support/phpwasm-previews.mjs",
-    "test:combobox": "node tests/support/combobox-behaviour.mjs"
+    "assets": "node tests/support/phpwasm-build-assets.mjs",
+    "preview": "node tests/support/phpwasm-previews.mjs && node tests/support/phpwasm-preview-admin.mjs"
   },
   "devDependencies": {
-    "php-wasm": "^0.2.0"
+    "php-wasm": "^0.2.0",
+    "@electric-sql/pglite": "^0.5.15"
   }
 }

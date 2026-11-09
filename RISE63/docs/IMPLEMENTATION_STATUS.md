@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.0.1 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.3 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -22,14 +22,41 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 
 | Suite | Command | Result |
 |---|---|---|
-| Syntax | `node tests/support/phpwasm-lint.mjs` | **78 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
+| Syntax | `node tests/support/phpwasm-lint.mjs` | **80 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
 | Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **65 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **38 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **42 passed, 0 failed** |
+| Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
+| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **19 passed, 0 failed, 1 skipped** — real SQL |
+| **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **9 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
 | Assets & cache | `node tests/support/assets-and-cache.mjs` | **11 passed, 0 failed** |
 | Asset build | `node tests/support/phpwasm-build-assets.mjs` | fingerprint + manifest + shell list regenerated |
+
+`npm test` runs all of the above in one command.
+
+### The database suite is real, and it arrived one release late
+
+Earlier releases said "the database tests need MySQL and cannot run here". That was true of
+`tests/integration.php` and it stopped being true when PGlite was wired in: php-wasm can host an
+in-memory PostgreSQL, so **`tests/e2e.php` runs the actual SQL** — the member lifecycle end to end,
+the pool arithmetic, the audit filters and the keyset pager. `tests/support/pgsql-schema.php` is a
+PostgreSQL rendering of the tables those tests need, kept in step with `database/schema.sql` by hand
+and documented as such.
+
+The one skipped test is `Fund::setPool()`, which persists through `Settings::set()` and therefore
+uses MySQL's `INSERT … ON DUPLICATE KEY UPDATE`. That is a dialect gap, not an application fault, and
+it is reported as SKIP with the reason rather than quietly passing. `tests/integration.php` covers it
+on real MySQL.
+
+**What this cost.** The 1.0.1 release shipped two faults that the 42 view tests and 65 logic tests
+all passed straight over, because neither ever executed the SQL those pages depend on:
+`Audit::page()` and `Members::directory()` called `new Paginator(...)` despite a private
+constructor — a 500 on every load of Settings and People — and reused one named placeholder in three
+positions, which native prepares reject. Both are now covered by a test that would have caught them
+(`The pages that crashed in production build their paginator through the factory`), and by the e2e
+suite that runs the queries for real.
 
 `bin/build-assets.php` needs a PHP CLI, which this sandbox does not have; `phpwasm-build-assets.mjs`
 runs the same file in php-wasm (with the CLI-SAPI guard removed from the staged copy only) and
@@ -65,6 +92,37 @@ What the view suite asserts:
   checks — the tests assert all three.
 * The stylesheet declares 16 px base type, a 48 px touch token, 16 px inputs, both themes, reduced-motion, print, tracker, combobox, offline banner and install prompt — and contains no type below 11 px (0.6875rem), the tab-bar label floor.
 * The manifest is valid JSON with 192/512 any-purpose **and** maskable icons that exist on disk; the service worker versions its cache, deletes old caches, and refuses to cache `/api/` or non-GET requests.
+
+### 2.1a What 1.0.3 fixes — a second 500, and the two checks that now catch it
+
+A second 500 shipped in 1.0.2, and it was **not** the same fault as 1.0.1's. `app/pages.php` calls
+`config_dir()` on the Updates route. `pages.php` sits in the **global** namespace; `config_dir()` is
+declared in `RISE63`. A non-namespaced file has no current namespace to search, so PHP does not fall
+back — it throws
+
+```
+Error: Call to undefined function config_dir()
+```
+
+and every request to `/updates` died as a 500. Settings and People had been fixed; Updates had not,
+and nothing in the suite could see it: the linter parses, the logic tests never require the router,
+the render harness feeds views their data directly, and the e2e suite tests the domain layer.
+
+Two checks now close that gap, and both were **verified to fail before they were allowed to pass**:
+
+| Check | What it does | Proof it bites |
+|---|---|---|
+| `bin/guard-namespaces.php` | Loads the real bootstrap, asks PHP which functions exist in `RISE63`, then tokenises every shipped PHP file and resolves each unqualified call against that set. No database, no network, runs first. | Re-removing `config_dir` from the `use function` line reports `app/pages.php:413 config_dir() [global namespace]`. |
+| `tests/pages.php` | `require`s the **real** `app/pages.php`, once per route, against real SQL. Fails if a page throws, emits PHP error markup, leaks `SQLSTATE`, or renders without its own heading. Filter and pager parameters are varied so the SQL is actually exercised, and the audit `kind` filter is asserted to *narrow* — the trap that made a filtered page look filtered while returning everything. | With the import removed, `Updates renders for an administrator :: Call to undefined function config_dir()`. |
+
+`tests/pages.php` also caught a genuine gap in `tests/support/pgsql-schema.php` while it was being
+written: five tables (`security_ips`, `country_rules`, `manual_access_rules`, `geo_ip_ranges`,
+`firewall_jobs`) were missing, so the harness now covers all seventeen.
+
+Three administrator screens — Dashboard, Treasury and Security — still cannot be rendered under
+PGlite: each builds a `UTC_TIMESTAMP() - INTERVAL n HOUR` expression, which is MySQL syntax that
+PostgreSQL rejects. They are reported as SKIP with that reason, and `tests/render.php` renders all
+three with a stubbed database. This is a dialect limit of the test engine, not a fault in the pages.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 
@@ -632,7 +690,28 @@ migration runner applies in order, re-runs as a no-op, and reports a modified fi
 is a *claim* until it runs on a machine with MySQL — treat a green unit/render run as the weaker signal
 it is. Nothing here has been executed against a database.
 
-### 2.2 What changed in 1.0.1 — the six field requests
+### 2.3l What 1.0.1 got wrong, and what 1.0.2 fixed
+
+The release that added the audit pager and the member lifecycle took three pages down in production.
+This is recorded in full because the failure was in the *testing*, not only in the code.
+
+| Symptom | Cause | Fix | Now covered by |
+|---|---|---|---|
+| `/settings` returned "Something went wrong on our side." | `Audit::page()` built its paginator with `new Paginator(...)`; the constructor is private so every page goes through a validating factory. Fatal on every load, filtered or not. | `Paginator::fromState()` | A test that reads the source of both callers, plus the e2e suite |
+| `/people` ditto, and the member tools were unreachable | Same fault in `Members::directory()` | Same fix | Same |
+| Filtering either page by anything | One named placeholder (`:q`, `:term`) bound into three positions. With `ATTR_EMULATE_PREPARES = false` PDO sends a native prepare, which binds positionally — "Invalid parameter number" | One placeholder per occurrence | A scan of every SQL literal in `app/`, plus e2e searches that run the queries |
+| "The admin is yet to be able to manage members" | The People page worked, the forms worked, and **nothing in the interface linked to it**. Settings and Updates were behind a bare `⇪` glyph | People is a tab for administrators; Settings, Activity, Security and Updates are labelled links in the top bar | Tests that assert each destination is linked and routed |
+
+Two lessons were applied rather than noted:
+
+* **A test that builds its own fixture cannot catch a fault in the code that builds the fixture.**
+  The render tests passed a hand-made `Paginator` into the views, so the line that constructs the
+  real one never ran. The new test reads the source of the callers, which is crude and would have
+  stopped the deploy.
+* **"Written but unverified" has a cost, and it was paid.** The database suite existed and was not
+  runnable; both faults were in SQL-adjacent code. It is runnable now.
+
+### 2.3m What changed in 1.0.1 — the six field requests
 
 | Request | What was actually wrong | What was built | Verified how |
 |---|---|---|---|
