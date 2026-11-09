@@ -152,6 +152,9 @@ RISE63\\Core\\View::render('staff/people', array(
                        'phone' => '08031234567', 'role' => 'youth_member', 'parish_id' => 1,
                        'parish_name_raw' => null, 'created_at' => '2026-09-14 10:00:00'),
     'unlisted' => array(array('parish_name_raw' => 'CHAPEL OF WONDERS PARISH', 'member_count' => 3)),
+    // A healthy schema, so the preview shows the page as it looks once migrations are applied
+    // rather than behind a warning banner that is not the subject of this screen.
+    'schemaGap' => null, 'pendingMigrations' => 0,
 ));`,
   },
   {

@@ -114,10 +114,25 @@ try {
             if (mb_strlen($typed) > 150) {
                 $typed = mb_substr($typed, 0, 150);
             }
+            // `parish_name_raw` is only named when it is being written — see Members::create().
+            // A member whose church is in the directory must be able to save their profile on a
+            // database that has not received migration 0002.
             Database::run(
-                'UPDATE users SET full_name = ?, phone = ?, parish_id = ?, parish_name_raw = ? WHERE id = ?',
-                [$name, $phone === '' ? null : $phone, $parishId, $typed === '' ? null : $typed, (int) $account['id']]
+                'UPDATE users SET full_name = ?, phone = ?, parish_id = ? WHERE id = ?',
+                [$name, $phone === '' ? null : $phone, $parishId, (int) $account['id']]
             );
+            if ($typed !== (string) ($account['parish_name_raw'] ?? '')) {
+                try {
+                    Database::run(
+                        'UPDATE users SET parish_name_raw = ? WHERE id = ?',
+                        [$typed === '' ? null : $typed, (int) $account['id']]
+                    );
+                } catch (\PDOException $error) {
+                    // The column is absent. The name and phone were still saved; a member must not
+                    // lose their correction because one optional column is missing.
+                    error_log('RISE63 profile: parish_name_raw not written: ' . $error->getMessage());
+                }
+            }
             Audit::log((int) $account['id'], 'profile.update', 'user', (string) $account['id'], 'Profile details updated.');
             flash('Your profile has been updated.', 'success');
             $back('profile');
@@ -846,11 +861,25 @@ try {
                     . ($result['sql_failed'] > 0 ? ', ' . $result['sql_failed'] . ' SQL failure(s)' : '')
             );
 
+            // An update replaces files; it does not migrate the database. A release that ships a new
+            // migration therefore leaves this installation running new code against an old schema —
+            // which is exactly how account creation broke after 1.0.1. So the moment the files land,
+            // say whether the schema is now behind, and say it in the same breath.
+            $behind = '';
+            try {
+                $pending = (new RISE63\Core\Migrator(RISE63\ROOT))->pending();
+                if ($pending !== []) {
+                    $behind = ' ' . count($pending) . ' database update(s) are waiting: run php bin/migrate.php.';
+                }
+            } catch (\Throwable $error) {
+                $behind = ' The database update state could not be read: ' . $error->getMessage();
+            }
+
             flash(
                 $result['ok']
-                    ? 'Updated to ' . ($result['version'] !== '' ? $result['version'] : 'the new release') . '.'
+                    ? 'Updated to ' . ($result['version'] !== '' ? $result['version'] : 'the new release') . '.' . $behind
                     : 'The update was not applied. Nothing was changed.',
-                $result['ok'] ? 'success' : 'error'
+                $result['ok'] && $behind === '' ? 'success' : 'error'
             );
             $back('updates');
 
@@ -876,9 +905,25 @@ try {
     flash($error->getMessage(), 'error');
     $back('dashboard');
 } catch (\PDOException $error) {
+    // A database error the operator caused is worth naming; one they cannot act on is not. The
+    // first version of this handler collapsed everything into "The record could not be saved.
+    // Please try again." — which is what a missing migration looked like for three releases: the
+    // cause was one screen away, in Settings → Database updates, and the message pointed nowhere.
     error_log('RISE63 PDO: ' . $error->getMessage());
-    if ($error->getCode() === '23000') {
+    // 42S22 = unknown column, 42S02 = unknown table. Both mean the same thing to an operator: this
+    // database is a migration behind the code.
+    $state = in_array((string) $error->getCode(), ['42S22', '42S02'], true) ? 'missing_schema'
+        : ($error->getCode() === '23000' ? 'duplicate' : 'unknown');
+    if ($state === 'duplicate') {
         flash('That record already exists. Check the parish name, code or e-mail address.', 'error');
+    } elseif ($state === 'missing_schema') {
+        // SQLSTATE 42S22 / 42S02: a column or table the code expects is not in this database.
+        // That is almost always an unapplied migration, and the fix is one command.
+        flash(
+            'This saved nothing: a database update is waiting. Open Settings → Database updates and run '
+            . 'php bin/migrate.php on the server, then try again.',
+            'error'
+        );
     } else {
         flash('The record could not be saved. Please try again.', 'error');
     }

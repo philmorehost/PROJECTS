@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.4 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.5 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -27,8 +27,8 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **44 passed, 0 failed** |
 | Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
-| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **19 passed, 0 failed, 1 skipped** — real SQL |
-| **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **13 passed, 0 failed, 1 skipped** — real router, real SQL |
+| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **21 passed, 0 failed, 1 skipped** — real SQL |
+| **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **14 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
 | Assets & cache | `node tests/support/assets-and-cache.mjs` | **11 passed, 0 failed** |
@@ -174,6 +174,37 @@ and never the password or the mailbox username.
 Two checks guard the secrecy specifically, and both were verified to fail first: making
 `masked()` return the password fails `The Mail panel renders and never echoes the stored password`
 with *THE PASSWORD REACHED THE PAGE*, and the same happens if the template pre-fills the field.
+
+### 2.1d What 1.0.5 fixes — the same missing column, one layer down, and the message that hid it
+
+The operator reported: *"I tried to create a new administrator, but it failed with an error: The
+record could not be saved. Please try again."*
+
+That message is the hander's catch-all branch. The real error was:
+
+```
+SQLSTATE[42S03]: Unknown column 'parish_name_raw' in 'field list'
+```
+
+**The same column as 1.0.4, in a different statement.** 1.0.4 fixed the *read* on the People page.
+`Members::create()` still names `parish_name_raw` in its **INSERT**, so on an installation without
+migration 0002 every account creation failed — administrators, representatives and members alike.
+Reproduced against real SQL by dropping that one column: the healthy path creates the account, the
+degraded path throws exactly the operator's error.
+
+| Fault | Why it mattered | Fix |
+|---|---|---|
+| A write named a column that may not exist | `INSERT`/`UPDATE users` named `parish_name_raw` unconditionally, so any account write needed a migration it might not have | The column is named only when there is a value for it. Creating without a parish, or with one from the directory, works on either schema. The same applies to `Members::update()`, `Registration::create()` and the profile save |
+| The failure named no cause | `catch (PDOException)` collapsed everything into "Please try again", which is what an unapplied migration looked like for three releases | `42S22` (unknown column) and `42S02` (unknown table) now say: *"a database update is waiting — open Settings → Database updates and run `php bin/migrate.php`"* |
+| The operator found out by failing | Nothing warned before the attempt | People now shows a **"Database updates are waiting"** banner above the forms, and applying an update reports pending migrations in the same flash |
+
+**What still genuinely needs the column, and is allowed to fail.** A member who types a church that
+is not in the directory has nowhere else to put it — the typed name *is* `parish_name_raw`. That
+write still fails on an un-migrated database, and now fails with a message that says which command
+fixes it. Pretending otherwise would be a silent data loss: the church name would simply vanish.
+
+The regression test was verified to bite: restoring the unconditional `INSERT` fails with the
+operator's exact SQLSTATE, and passes when the conditional write is restored.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 

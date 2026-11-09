@@ -564,9 +564,15 @@ administrator could not reach any member tool. The page names `users.parish_name
 convenience. In 1.0.4 that card degrades to a notice instead — but the notice is a symptom, not the
 cure: the cure is the migration.
 
-If a page returns "Temporary problem" after an update, the first thing to check is not the log file
-but **Settings → Database updates**. It lists what is applied and what is waiting, and prints the
-exact command. Run `php bin/migrate.php --status`, then `php bin/migrate.php`. Migrations are never
+If a page returns "Temporary problem", or a form says **"The record could not be saved"**, after an
+update, the first thing to check is not the log file but **Settings → Database updates**. It lists
+what is applied and what is waiting, and prints the exact command.
+
+The same column also broke **creating an account**: `Members::create()` named
+`users.parish_name_raw` in its `INSERT`, so "Create another administrator" failed on every
+installation that had not run 0002. In 1.0.5 the column is written only when there is a value for
+it, so creating an account with a listed parish — or none — needs no migration. Typing a church
+that is not in the directory still does, because that name has nowhere else to go. Run `php bin/migrate.php --status`, then `php bin/migrate.php`. Migrations are never
 applied from the browser, on purpose: it is the one operation that can leave a database
 half-modified, and it needs a shell and a backup.
 
