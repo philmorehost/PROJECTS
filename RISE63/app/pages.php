@@ -48,7 +48,18 @@ switch ($page) {
         break;
 
     case 'register':
-        $render('auth/register', ['title' => 'Create account']);
+        // The directory is rendered into the page, not fetched by the picker alone. A member
+        // registering is by definition not signed in, so this is the one place where the list has
+        // to be guaranteed rather than hoped for — see the note in the view. Capped at 200 because
+        // the page is served over 2G; above that the live search takes over.
+        $choosable = [];
+        try {
+            $choosable = ParishDirectory::search('', 200);
+        } catch (\Throwable $error) {
+            // A broken directory must not stop somebody registering: they can still type the name.
+            error_log('RISE63 register: parish list unavailable: ' . $error->getMessage());
+        }
+        $render('auth/register', ['title' => 'Create account', 'parishes' => $choosable]);
         break;
 
     case 'forgot-password':
@@ -367,11 +378,19 @@ switch ($page) {
         break;
 
     case 'profile':
+        $choosable = [];
+        try {
+            $choosable = ParishDirectory::search('', 200);
+        } catch (\Throwable $error) {
+            error_log('RISE63 profile: parish list unavailable: ' . $error->getMessage());
+        }
         $render('member/profile', [
             'title'    => 'My account',
             'devices'  => Auth::devices((int) $user['id']),
             'parish'   => $user['parish_id'] === null ? null : ParishDirectory::parish((int) $user['parish_id']),
             'pinLock'  => Auth::pinLockedFor($user),
+            // Same reason as registration: the picker is an enhancement, the list is the feature.
+            'parishes' => $choosable,
         ]);
         break;
 

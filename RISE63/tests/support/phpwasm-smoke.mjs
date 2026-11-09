@@ -123,8 +123,10 @@ $_REQUEST = ${phpArray({ ...query, ...post })};
 $_FILES = array();
 foreach (${phpArray(env)} as $k => $v) { putenv($k . '=' . $v); }
 chdir('/src');
-require_once '/src/app/bootstrap.php';   // defines the constants once per runtime
-require '${entry}';                // bootstrap.php is required_once there too
+// Only the entry point runs, exactly as the web server does it. Pre-requiring bootstrap here would
+// define every constant twice for entries that require it themselves (api/, install/), and the
+// duplicate-definition warnings look like failures the application never produces.
+require '${entry}';
 `;
   return withRuntime(async (runtime) => {
     if (installed) {
@@ -210,6 +212,66 @@ check('doctor.php does not claim to know whether HTTPS is on from a CLI run',
 const noToken = await request({ method: 'POST', uri: '/', post: { stage: '1' } });
 check('installer POST without a CSRF token is refused', !fatal.test(noToken) && /csrf|security|expired|reload/i.test(noToken),
   noToken.slice(0, 500));
+
+/* 2c. The two anonymous endpoints the registration form depends on.
+   "The registration page did not list the churches" is a symptom with several possible causes, so
+   what is asserted here is the property that must hold whatever the cause: the page still renders
+   and still carries a usable list or a usable explanation. php-wasm has no MySQL, so the directory
+   query cannot succeed — which makes this the worst case, and the right one to pin. */
+{
+  // /register is behind the activation gate in this harness (there is no licence key in a test
+  // copy), so the view is rendered directly — the same View::capture the page controller uses. The
+  // point is the view's behaviour with no database, which is the worst case for the directory.
+  const registerPage = await withRuntime(async (runtime) => {
+    await runtime.writeFile('/src/config/installed.lock', 'test');
+    let out = '';
+    runtime.addEventListener('output', (event) => { out += event.detail[0] ?? ''; });
+    runtime.addEventListener('error', (event) => { out += String(event.detail?.[0] ?? ''); });
+    await runtime.run(`<?php
+$_SERVER = array('REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/register',
+    'HTTP_HOST' => 'buildroom.rccglp63yaya.org.ng', 'HTTPS' => 'on',
+    'REMOTE_ADDR' => '105.112.24.31', 'SCRIPT_NAME' => '/index.php', 'HTTP_USER_AGENT' => 'smoke');
+$_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
+chdir('/src');
+require '/src/app/bootstrap.php';
+$choosable = array();
+try { $choosable = RISE63\\Core\\ParishDirectory::search('', 200); }
+catch (\\Throwable $e) { $choosable = array(); }
+echo RISE63\\Core\\View::capture('/src/app/Views/auth/register.php',
+    array('flashes' => array(), 'page' => 'register', 'parishes' => $choosable), false);
+`);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return out;
+  });
+  check('the registration page renders without a fatal when the directory is unavailable',
+    !fatal.test(registerPage), registerPage.replace(/\s+/g, ' ').slice(0, 400));
+  check('the registration page still offers the manual church field',
+    /name="parish_name_raw"/.test(registerPage), registerPage.slice(0, 400));
+  check('the registration page never renders a bare empty picker with no explanation',
+    /My church is not in the list|The directory is empty/i.test(registerPage),
+    registerPage.replace(/\s+/g, ' ').slice(0, 400));
+
+  // The API must answer JSON with a `parishes` key even when it cannot reach the database, so the
+  // picker shows "could not be loaded" instead of a silent blank.
+  const apiAnonymous = await request({
+    uri: '/api/index.php', query: { q: 'chapel' }, script: '/api/index.php', entry: '/src/api/index.php',
+    installed: true,
+  });
+  check('the anonymous parish API returns JSON with a parishes key',
+    /\{"parishes":/.test(apiAnonymous.replace(/\s+/g, '')), apiAnonymous.slice(0, 300));
+  check('the anonymous parish API does not fatal without a database',
+    !fatal.test(apiAnonymous), apiAnonymous.slice(0, 400));
+
+  // An empty term used to be refused for anonymous callers ("type three characters"), which made
+  // tapping the box show nothing at all. It must now be answered.
+  const apiEmpty = await request({
+    uri: '/api/index.php', query: { q: '' }, script: '/api/index.php', entry: '/src/api/index.php',
+    installed: true,
+  });
+  check('an empty search is answered rather than refused',
+    /"parishes"/.test(apiEmpty) && !/"hint":"Type at least three/.test(apiEmpty.replace(/\s+/g, '')),
+    apiEmpty.replace(/\s+/g, ' ').slice(0, 300));
+}
 
 /* 3. request.php / private directories are not reachable through the front controller. */
 const traversal = await request({ uri: '/', query: { page: '../../config/database' } });

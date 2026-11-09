@@ -113,7 +113,7 @@ const CANDIDATES = [
 ];
 
 /** A page with the registration form's picker, and a controllable search result. */
-function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = null } = {}) {
+function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = null, fail = false } = {}) {
   const combo = element('div', { id: 'parish-combo' });
   combo.dataset = { endpoint };
   const input = element('input', { id: 'parish-search', value: '' });
@@ -133,8 +133,21 @@ function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = 
   combo.appendChild(hidden);
   combo.appendChild(list);
 
+  // The server-rendered list, as the view emits it: a plain <select> with the labels as attributes.
+  const pick = element('select', { id: 'parish-pick' });
+  pick.options = [
+    { value: '', getAttribute: () => null, textContent: 'Choose your church' },
+    ...CANDIDATES.map((c) => ({
+      value: String(c.id),
+      getAttribute: (name) => (name === 'data-label' ? c.label : null),
+      textContent: c.label,
+    })),
+  ];
+  pick.selectedIndex = 0;
+
   const byId = {
     'parish-combo': combo,
+    'parish-pick': pick,
     'parish-search': input,
     'parish-id-field': hidden,
     'parish-list': list,
@@ -151,7 +164,8 @@ function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = 
     getElementById: (id) => byId[id] ?? null,
     querySelector: () => combo,
     querySelectorAll: (selector) => (selector === '[data-combobox]' ? [combo]
-      : selector === '[data-caps]' ? (capsFields || []) : []),
+      : selector === '[data-caps]' ? (capsFields || [])
+      : selector === '[data-parish-pick]' ? [pick] : []),
     addEventListener(type, fn) { (documentListeners[type] = documentListeners[type] || []).push(fn); },
     createElement: (tag) => element(tag),
     createTextNode: () => element('span'),
@@ -164,7 +178,9 @@ function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = 
     addEventListener() {},
     setTimeout, clearTimeout, setInterval, clearInterval,
     AbortController, URLSearchParams,
-    fetch: () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ parishes: results }) }),
+    fetch: () => (fail
+      ? Promise.reject(new Error('network down'))
+      : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ parishes: results }) })),
     document,
     navigator: { onLine: true, userAgent: 'node' },
   };
@@ -179,7 +195,7 @@ function page({ results = CANDIDATES, endpoint = '/api/index.php', capsFields = 
   const options = () => list.children.filter((c) => c.classList.contains('combo-option'));
 
   return {
-    input, hidden, list, manual, manualField, options, capsFields,
+    input, hidden, list, manual, manualField, options, capsFields, pick,
     type(value) { input.value = value; input.dispatch('input'); },
     press(key) { input.dispatch('keydown', { key }); },
     clickOption(index) { const opt = options()[index]; opt.dispatch('mousedown'); },
@@ -288,6 +304,38 @@ const settle = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms));
   church.value = 'pasted lower case';
   church.dispatch('change');
   check('a pasted or autofilled value is capitalised on change', church.value === 'PASTED LOWER CASE');
+}
+
+/* 8. The server-rendered list works on its own, and mirrors into the hidden field. */
+{
+  const p = page();
+  // The fake select has no .value of its own; mirror what a browser does on selection.
+  p.pick.value = '5';
+  p.pick.selectedIndex = 1;
+  p.pick.dispatch('change');
+  check('choosing from the rendered list sets the parish id', p.hidden.value === '5');
+  check('choosing from the rendered list shows the label in the search box',
+    p.input.value === CANDIDATES[0].label);
+
+  // Picking from the list must also clear a name typed before it, or both would be submitted.
+  p.manualField.value = 'SOME TYPED CHURCH';
+  p.pick.selectedIndex = 1;
+  p.pick.value = '5';
+  p.pick.dispatch('change');
+  check('choosing from the rendered list clears a typed church name', p.manualField.value === '');
+}
+
+/* 9. A search that cannot run must say so — not render an empty list, which reads as
+      "your church is not listed". This is the reported symptom, reproduced. */
+{
+  const p = page({ fail: true });
+  p.type('chapel');
+  await settle();
+  check('a failed search still opens the list', p.list.hidden === false);
+  const first = p.list.children[0];
+  check('a failed search explains itself rather than going blank',
+    first && /could not be loaded/i.test(first.textContent), first && first.textContent);
+  check('a failed search still offers the manual route', p.options().length === 1);
 }
 
 console.log('\n' + '─'.repeat(62));

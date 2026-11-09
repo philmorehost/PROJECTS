@@ -141,6 +141,21 @@ Two things to know before a large import:
   ("CONQUERORS CHAPEL ZONE" versus "CONQUERORS CHAPEL AREA"), the paste creates a second one. The
   preview's *new zones* count is the check: if it is higher than you expect, a name is mistyped.
 
+**The parish list is empty on the registration page**
+
+It no longer can be, by design: the list is rendered by PHP into the page, so an empty list means
+the *directory* is empty (or every parish in it is inactive), not that a request failed. Add the
+churches in Parish Connect first — see "Building the parish directory in bulk" above.
+
+If the search box still says the list "could not be loaded", the live search is failing while the
+rendered list underneath still works. Check, in this order:
+
+1. `GET /api/index.php?q=chapel` in the browser. It must return JSON beginning `{"parishes":`.
+   HTML or a 500 means PHP is failing there; the error log will name it.
+2. The browser console for a Content-Security-Policy violation mentioning `connect-src`.
+3. Whether the site is served over HTTPS with a valid certificate — a blocked fetch on a phone
+   looks identical to a search that returned nothing.
+
 **A design change "was not applied"**
 
 Check what the browser actually received before assuming the change is missing. The HTML is served

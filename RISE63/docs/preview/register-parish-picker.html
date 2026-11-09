@@ -683,7 +683,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 
       
       <form method="post" action="/" autocomplete="on">
-        <input type="hidden" name="csrf" value="18776453f423d547479bd4d5053ace08a0ed0ba38b1b538f3c2070540173dccf">        <input type="hidden" name="action" value="register">
+        <input type="hidden" name="csrf" value="c521baaccb6e162abf6e99c78c9ae7d304a7e11130287159bc9d9eaa6aef1746">        <input type="hidden" name="action" value="register">
 
         <div class="field">
           <label for="full_name">Full name</label>
@@ -716,6 +716,25 @@ html.offline-open, html.offline-open body { overflow: hidden; }
             <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
           </div>
 
+                                <div class="field">
+              <label for="parish-pick">Or choose your church from the list</label>
+              <select id="parish-pick" data-parish-pick>
+                <option value="">Choose your church</option>
+                                  <option value="1"
+                          data-label="LIVING WATER PARISH · HOPE AREA · GRACE ZONE">LIVING WATER PARISH · HOPE AREA · GRACE ZONE</option>
+                                  <option value="2"
+                          data-label="GOOD SHEPHERD PARISH · HOPE AREA · GRACE ZONE">GOOD SHEPHERD PARISH · HOPE AREA · GRACE ZONE</option>
+                                  <option value="3"
+                          data-label="CHAPEL OF WONDERS PARISH · CHAPEL OF WONDERS PARISH AREA · CONQUERORS CHAPEL ZONE">CHAPEL OF WONDERS PARISH · CHAPEL OF WONDERS PARISH AREA · CONQUERORS CHAPEL ZONE</option>
+                              </select>
+              <span class="hint">3 churches                in the directory so far.</span>
+            </div>
+            <datalist id="parish-names">
+                              <option value="LIVING WATER PARISH">HOPE AREA · GRACE ZONE</option>
+                              <option value="GOOD SHEPHERD PARISH">HOPE AREA · GRACE ZONE</option>
+                              <option value="CHAPEL OF WONDERS PARISH">CHAPEL OF WONDERS PARISH AREA · CONQUERORS CHAPEL ZONE</option>
+                          </datalist>
+          
           <details id="parish-manual" style="margin-top:4px">
             <summary style="cursor:pointer;min-height:32px;display:flex;align-items:center">My church is not in the list</summary>
             <div class="field" style="margin-top:10px">
@@ -729,14 +748,8 @@ html.offline-open, html.offline-open body { overflow: hidden; }
           </details>
 
           <noscript>
-            <div class="field">
-              <label for="parish_id_fallback">Parish</label>
-              <select name="parish_id" id="parish_id_fallback" aria-label="Your parish">
-                <option value="">I am not sure yet</option>
-              </select>
-              <span class="hint">Searching the list needs JavaScript. You can also type the name
-                below and your representative will add it.</span>
-            </div>
+            <p class="hint">
+              Pick your church in the list above. If it is not there, type its name below.            </p>
             <div class="field">
               <label for="parish_name_raw_ns">Church name, if not listed</label>
               <input type="text" id="parish_name_raw_ns" name="parish_name_raw" maxlength="150">
@@ -993,6 +1006,24 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     showInstall('Tap Share, then “Add to Home Screen” to install RISE 63.');
   }
 
+  /* ── Native parish list (works with no JavaScript at all) ──────────────────── */
+  /* The <select> is rendered by PHP, so the list is on the page before any script runs. This only
+     mirrors a choice into the hidden field the form submits — and from there into the search box,
+     so the member can see what they picked. If this never runs, the select itself still submits. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-parish-pick]'), function (pick) {
+    var input = document.getElementById('parish-search');
+    var hidden = document.getElementById('parish-id-field');
+    pick.addEventListener('change', function () {
+      var option = pick.options[pick.selectedIndex];
+      if (!option) { return; }
+      if (hidden) { hidden.value = pick.value; }
+      if (input && pick.value) { input.value = option.getAttribute('data-label') || option.textContent; }
+      // A choice from the list settles the question: a leftover typed name must not contradict it.
+      var manual = document.getElementById('parish_name_raw');
+      if (manual && pick.value) { manual.value = ''; }
+    });
+  });
+
   /* ── Live-search combobox ──────────────────────────────────────────────────── */
   function initCombobox(combo) {
     var input = combo.querySelector('input[role="combobox"]');
@@ -1115,9 +1146,24 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       }).then(function (data) {
         render(Array.isArray(data.parishes) ? data.parishes : [], term);
       }).catch(function () {
-        if (list.hidden) { return; }
-        close();
+        // The search did not run — offline, a CSP block, a 500. Say so instead of closing the list
+        // and leaving an empty box, which is indistinguishable from "your church is not listed".
+        showUnavailable(term);
       });
+    }
+
+    /* Fail visibly. The member is offered the manual route with their own words, and told why. */
+    function showUnavailable(term) {
+      list.innerHTML = '';
+      options = [];
+      var note = document.createElement('li');
+      note.className = 'combo-empty';
+      note.textContent = 'The parish list could not be loaded just now. Pick from the list on the form, or type your church name below.';
+      list.appendChild(note);
+      offerManual(term);
+      options = Array.prototype.slice.call(list.querySelectorAll('.combo-option'));
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
     }
 
     input.addEventListener('input', function () {
@@ -1150,6 +1196,8 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       }
     });
     input.addEventListener('focus', function () {
+      // An empty term asks the server for the head of the directory, which is the useful answer
+      // when somebody taps the box: fifteen churches, not "type three characters".
       if (list.hidden) { search(input.value.trim()); }
     });
     document.addEventListener('click', function (event) {
