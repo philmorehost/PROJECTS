@@ -126,10 +126,40 @@ try {
 }
 
 if (Mailer::configured()) {
-    $config = @include config_dir() . '/smtp.php';
-    $host   = is_array($config) ? trim((string) ($config['host'] ?? '')) : '';
-    $from   = is_array($config) ? trim((string) ($config['from_email'] ?? '')) : '';
-    $add(true, 'SMTP host', $host . ($from !== '' ? ' — sending as ' . $from : ''));
+    $config     = @include config_dir() . '/smtp.php';
+    $host       = is_array($config) ? trim((string) ($config['host'] ?? '')) : '';
+    $port       = is_array($config) ? (int) ($config['port'] ?? 587) : 587;
+    $encryption = is_array($config) ? strtolower((string) ($config['encryption'] ?? 'tls')) : 'tls';
+    $from       = is_array($config) ? trim((string) ($config['from_email'] ?? '')) : '';
+
+    $add(true, 'SMTP host', $host . ':' . $port . ' ' . strtoupper($encryption)
+        . ($from !== '' ? ' — sending as ' . $from : ''));
+
+    // ── Does mail actually leave this machine?
+    //
+    // The old check stopped at "a host is configured", which is why a broken transport could look
+    // healthy from every screen in the application while every message queued and then failed. This
+    // performs the real handshake — connect, EHLO, STARTTLS, AUTH, QUIT — and sends nothing.
+    //
+    // With --no-net it reports what it would have tried, because a monitoring cron must not depend
+    // on a remote mail server being reachable.
+    if (!$net) {
+        $add(null, 'SMTP connection', 'not tested (--no-net)');
+    } elseif (!Mailer::tlsAvailable()) {
+        // Without the openssl extension every TLS mode fails with a message about a missing socket
+        // transport, which reads like an application bug rather than a PHP build.
+        $add(false, 'SMTP connection',
+            'this PHP has no "ssl" stream transport, so no TLS mail can be sent — enable the openssl extension');
+    } else {
+        try {
+            $mailer = Mailer::fromConfig();
+            $mailer->quit();
+            $add(true, 'SMTP connection', 'connected to ' . $host . ':' . $port
+                . ' and authenticated — mail can leave this server');
+        } catch (Throwable $error) {
+            $add(false, 'SMTP connection', $error->getMessage());
+        }
+    }
 } else {
     $add(false, 'SMTP host', 'config/smtp.php is missing or has no host — mail will queue and never send');
 }

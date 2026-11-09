@@ -920,6 +920,16 @@ ok('Settings offers mail configuration, and a secret never reaches the markup', 
     assertMissing('SHOULD-NEVER-APPEAR', $html, 'THE PASSWORD REACHED THE MARKUP');
     assertContains('Saved — leave blank to keep it', $html, 'the empty field must explain why it is empty');
     assertContains('value="no-reply@rccg63.org"', $html);
+
+    // ── Implicit TLS on 465: the mode that was silently broken. The panel must warn about the
+    // blocked-port case, because "no reply" on 465 is far more often a firewall than a credential.
+    $html = $renderPage('staff/settings', $base + ['smtp' => [
+        'configured' => true, 'has_password' => true, 'host' => 'smtp.gmail.com', 'port' => 465,
+        'encryption' => 'ssl', 'username' => 'alerts@rccg63.org', 'auth' => 'login',
+        'from_email' => 'no-reply@rccg63.org', 'from_name' => 'RISE 63', 'helo' => 'rccg63.org',
+    ]], $admin);
+    assertContains('implicit TLS on 465', $html, 'port 465 must warn about outbound blocking');
+    assertContains('587', $html, 'and must name the port that usually works instead');
 });
 
 ok('Settings shows the database-update state without ever applying one', function () use ($renderPage, $admin): void {

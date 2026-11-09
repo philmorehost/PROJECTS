@@ -107,6 +107,37 @@ Requirements if you enable e-mail reset:
 3. SPF and DKIM published for the sending domain, or the link lands in spam and someone phones you.
 4. Send one real reset to a mailbox you control before announcing the feature.
 
+### Port and encryption must agree — this is the usual failure
+
+| Port | Encryption to choose | Notes |
+|---|---|---|
+| **587** | **STARTTLS** | The safe default. Nearly every provider documents it. |
+| **465** | **Implicit TLS** | Works, but many hosts and corporate networks block outbound 465. |
+| 25 | — | Blocked almost everywhere outbound. Not offered. |
+
+Choosing STARTTLS on 465, or Implicit TLS on 587, does not produce a clear error: the connection
+opens and then nothing happens, because the two sides are waiting for different things. RISE 63
+refuses the pairing in the form, and 1.0.7 reports "the server gave no reply" rather than claiming
+the request was rejected.
+
+**Before you trust the settings, ask the server yourself:**
+
+```sh
+php bin/doctor.php
+```
+
+The `SMTP connection` line performs the real handshake — connect, EHLO, STARTTLS, AUTH, QUIT — and
+sends nothing. If it fails, the message names the cause (`the connection timed out`, `the server
+refused the connection`) and the setting to change. **Settings → Mail → Test the connection** does
+the same thing from the browser.
+
+Two environment problems it will find, both common on shared hosting:
+
+- **openssl missing from PHP.** Every encrypted connection fails with a message about a missing
+  socket transport. Ask the host to enable it; no setting on the page can work around it.
+- **Outbound SMTP blocked.** The connection times out on 587 *and* 465. Ask the host for their relay
+  (often `localhost:25` or an authenticated relay host), or send through a transactional provider.
+
 ## 3b. The licence, start to finish
 
 RISE 63 is licensed per domain. The check is a server-side POST to the provider's API — a browser
@@ -595,6 +626,7 @@ half-modified, and it needs a shell and a backup.
 | "Activation required" page | Key revoked, domain changed, or outbound HTTPS blocked | Run `php bin/license-check.php` — it prints the masked key, the domain, the transport and the manager's answer. Check the domain on your order form matches exactly (no `https://`, no `www.`), and that the server can reach the endpoint. A site that was confirmed in the last 24 hours keeps running while the manager is unreachable. |
 | 503 for everyone | `storage/maintenance.json` present or `maintenance_mode` on | Remove the file / switch the setting off. Administrators are not blocked by maintenance mode. |
 | No e-mails | cron not installed, or SMTP unconfigured | **Settings → Notifications** shows queue state; run `php bin/mail-worker.php --verbose` manually and read the error. |
+| "SMTP rejected the request (no response)" | Fixed in 1.0.7 — it meant Implicit TLS on 465 opened a plain socket. If you still see this text, the release is not deployed | Check `RISE63/VERSION` is `1.0.7` or later. Then run `php bin/doctor.php`: "no reply" points at a blocked port or the wrong encryption, not at the password. |
 | Blank page / 500 | PHP fatal | Read `error_log` in cPanel. `RISE63_DEBUG=1` in the PHP environment adds the exception message to the error page — never leave it on. |
 | Installer says "already installed" | `config/installed.lock` exists | Correct: it is a lock. Do not delete it on a live site. |
 
