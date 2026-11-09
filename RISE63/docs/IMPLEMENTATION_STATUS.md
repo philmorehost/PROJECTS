@@ -505,6 +505,52 @@ miss every church.
 including that picking a parish after typing a name clears the typed name, so the two fields can
 never both carry a value into the same submission.
 
+### 2.3k "The registration page did not list the churches"
+
+The report is one sentence and the cause could have been any of six things — a broken endpoint, a
+Content-Security-Policy block, a session-cookie path, a service-worker cache, an exception in the
+query, or JavaScript not running on the member's phone. **The design was wrong, not just the code:**
+the picker fetched its list, so *every* one of those failures produced the same screen — an empty
+search box that looks exactly like "your church is not listed". The member then typed the name,
+which is a reasonable conclusion from what they were shown.
+
+So the list is no longer something the page hopes to receive. It is rendered by PHP into the page:
+
+- a `<select>` of every church in the directory (capped at 200 for a 2G phone), which needs no
+  script, no network round trip and no CSP allowance, and submits by itself where JavaScript
+  never runs;
+- a native `<datalist>` so the browser's own autocomplete knows the names too;
+- the live-search picker on top, for filtering past 200 and for the "my church is not listed"
+  route.
+
+`app.js` now mirrors a choice from the `<select>` into the hidden `parish_id` field and into the
+search box, so the two controls cannot disagree, and picking from the list clears any half-typed
+name.
+
+**Two real faults were fixed underneath it:**
+
+1. `api/index.php` called `Auth::user()` **without ever starting the session**. For a signed-in
+   caller the front controller has already opened it, so this went unnoticed; for the one caller
+   that matters — a member on the registration page — `$_SESSION` does not exist, `Auth::user()`
+   returns null, and the request proceeds as anonymous. It is now started explicitly, and a
+   failure there degrades to anonymous instead of failing the search.
+2. That endpoint also **echoed an HTML error page with a 500 status** when the query threw. The
+   picker's `response.json()` failed, the `.catch()` closed the list, and the member saw nothing.
+   It now always answers JSON with a `parishes` key — empty, with a `hint`, when it cannot.
+
+The picker's client side follows the same rule: a search that cannot run now *says so*
+("The parish list could not be loaded just now…") and still offers the manual route, rather than
+rendering an empty list. An empty answer and a broken answer used to look identical.
+
+**What is asserted now** — `tests/render.php` requires the churches to be present in the rendered
+HTML with no fetch at all, and requires the empty-directory case to explain itself;
+`tests/support/phpwasm-smoke.mjs` renders the registration view with no database and checks it
+still offers a usable route, and that both API replies (success shape and failure shape) are JSON
+with a `parishes` key; `tests/support/combobox-behaviour.mjs` drives the `<select>` mirroring and
+the failed-search message. That last harness is what caught the `selectedIndex` assumption:
+without a `change` event carrying the new value, a real browser behaves differently from the stub,
+and the stub had to be corrected rather than the assertion relaxed.
+
 ### 2.4 Updates from the licence server
 
 Until now the only way to get a new release onto an installation was to copy files by hand, which

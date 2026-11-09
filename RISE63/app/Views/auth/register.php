@@ -61,6 +61,40 @@ use function RISE63\{e, site_title, url};
             <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
           </div>
 
+          <?php
+            /*
+             * The directory, server-rendered in a native <datalist>.
+             *
+             * This exists because the picker above depends on a fetch, a correct endpoint URL, a
+             * Content-Security-Policy that permits it, a session cookie on the right path, no
+             * service-worker cache in the way and JavaScript actually running. When any one of
+             * those is broken the member sees an empty box, concluded the system does not know
+             * their church, and typed it — which is exactly what was reported. A datalist needs
+             * no network round trip, no script and no CSP allowance, and the browser matches on
+             * the text in the list. app.js upgrades it to the richer picker when it can.
+             */
+            $choosable = $parishes ?? [];
+          ?>
+          <?php if ($choosable !== []): ?>
+            <div class="field">
+              <label for="parish-pick">Or choose your church from the list</label>
+              <select id="parish-pick" data-parish-pick>
+                <option value="">Choose your church</option>
+                <?php foreach ($choosable as $row): ?>
+                  <option value="<?= (int) $row['id'] ?>"
+                          data-label="<?= e($row['label']) ?>"><?= e($row['label']) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <span class="hint"><?= count($choosable) ?> church<?= count($choosable) === 1 ? '' : 'es' ?>
+                <?= count($choosable) >= 200 ? 'shown — use the search above for the rest' : 'in the directory so far' ?>.</span>
+            </div>
+            <datalist id="parish-names">
+              <?php foreach ($choosable as $row): ?>
+                <option value="<?= e($row['parish']) ?>"><?= e($row['area'] . ' · ' . $row['zone']) ?></option>
+              <?php endforeach; ?>
+            </datalist>
+          <?php endif; ?>
+
           <details id="parish-manual" style="margin-top:4px">
             <summary style="cursor:pointer;min-height:32px;display:flex;align-items:center">My church is not in the list</summary>
             <div class="field" style="margin-top:10px">
@@ -74,14 +108,11 @@ use function RISE63\{e, site_title, url};
           </details>
 
           <noscript>
-            <div class="field">
-              <label for="parish_id_fallback">Parish</label>
-              <select name="parish_id" id="parish_id_fallback" aria-label="Your parish">
-                <option value="">I am not sure yet</option>
-              </select>
-              <span class="hint">Searching the list needs JavaScript. You can also type the name
-                below and your representative will add it.</span>
-            </div>
+            <p class="hint">
+              <?= $choosable === []
+                  ? 'The directory is empty, so type your church name below — your representative will add it.'
+                  : 'Pick your church in the list above. If it is not there, type its name below.' ?>
+            </p>
             <div class="field">
               <label for="parish_name_raw_ns">Church name, if not listed</label>
               <input type="text" id="parish_name_raw_ns" name="parish_name_raw" maxlength="150">

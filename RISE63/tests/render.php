@@ -201,6 +201,46 @@ ok('Registration screen exposes a parish combobox with a noscript fallback', fun
     assertContains('data-endpoint=', $html);
 });
 
+ok('The parish list is in the HTML, not only behind a fetch', function (): void {
+    // The field report: "the registration page did not list the churches". The picker fetched the
+    // list, so a broken endpoint, a policy block or an exception left an empty box that looked
+    // exactly like "your church is not listed". The list is now rendered by PHP.
+    $parishes = [
+        ['id' => 5, 'parish' => 'LIVING WATER PARISH', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+         'label' => 'LIVING WATER PARISH · HOPE AREA · GRACE ZONE'],
+        ['id' => 9, 'parish' => 'GOOD SHEPHERD PARISH', 'area' => 'FAITH AREA', 'zone' => 'GRACE ZONE',
+         'label' => 'GOOD SHEPHERD PARISH · FAITH AREA · GRACE ZONE'],
+    ];
+
+    $html = View::capture(
+        RISE63_TEST_ROOT . '/app/Views/auth/register.php',
+        ['flashes' => [], 'page' => 'register', 'parishes' => $parishes],
+        false
+    );
+
+    assertContains('LIVING WATER PARISH', $html, 'a church in the directory must be on the page');
+    assertContains('GOOD SHEPHERD PARISH', $html);
+    assertContains('data-parish-pick', $html);
+    assertContains('<datalist id="parish-names">', $html, 'the native autocomplete list must exist');
+    assertContains('data-label="LIVING WATER PARISH · HOPE AREA · GRACE ZONE"', $html);
+    assertContains('2 churches', $html, 'the count tells the member the list is populated');
+
+    // The select must carry its own name attribute path to the server: the visible picker is an
+    // enhancement, so the plain <select> has to submit by itself when nothing else runs.
+    preg_match('#<select id="parish-pick"([^>]*)>#', $html, $selectTag);
+    assertTrue($selectTag !== [], 'the select must be rendered');
+
+    // An empty directory must say so rather than render an empty box.
+    $empty = View::capture(
+        RISE63_TEST_ROOT . '/app/Views/auth/register.php',
+        ['flashes' => [], 'page' => 'register', 'parishes' => []],
+        false
+    );
+    assertMissing('<datalist', $empty, 'no datalist when there is nothing to list');
+    assertContains('The directory is empty', $empty);
+    assertContains('My church is not in the list', $empty, 'the manual route always exists');
+});
+
 ok('Registration offers a church that is not listed yet, and types it in capitals', function (): void {
     $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', ['flashes' => [], 'page' => 'register'], false);
 
@@ -213,14 +253,14 @@ ok('Registration offers a church that is not listed yet, and types it in capital
     assertContains('data-caps', $html, 'the field must capitalise as it is typed');
     assertContains('autocapitalize="characters"', $html, 'phones should start in capitals too');
 
-    // A hidden input and the noscript select both called parish_id would submit the same field
-    // twice with different values; the server keeps the last. The order must therefore stay
-    // picker-then-fallback, and the visible search box must never be named.
+    // Exactly one field may carry the parish id. The hidden input is it; the server-rendered
+    // <select> sits beside it unnamed and mirrors its choice into the hidden field, so a browser
+    // without JavaScript gets the hidden field as a static empty value — never two conflicting
+    // parish_id parameters where whichever the browser sends last would silently win.
     assertMissing('name="parish-search"', $html);
-    assertTrue(
-        strpos($html, 'id="parish-id-field"') < strpos($html, 'id="parish_id_fallback"'),
-        'the picked id must be submitted before the noscript fallback'
-    );
+    assertSame(1, substr_count($html, 'name="parish_id"'), 'only one field may submit the parish id');
+    assertContains('id="parish-id-field"', $html);
+    assertMissing('id="parish_id_fallback"', $html, 'the old duplicate select must be gone');
 });
 
 ok('The parish names in every admin form are upper-cased at the field', function () use ($renderPage, $admin, $parish): void {

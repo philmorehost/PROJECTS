@@ -206,6 +206,24 @@
     showInstall('Tap Share, then “Add to Home Screen” to install RISE 63.');
   }
 
+  /* ── Native parish list (works with no JavaScript at all) ──────────────────── */
+  /* The <select> is rendered by PHP, so the list is on the page before any script runs. This only
+     mirrors a choice into the hidden field the form submits — and from there into the search box,
+     so the member can see what they picked. If this never runs, the select itself still submits. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-parish-pick]'), function (pick) {
+    var input = document.getElementById('parish-search');
+    var hidden = document.getElementById('parish-id-field');
+    pick.addEventListener('change', function () {
+      var option = pick.options[pick.selectedIndex];
+      if (!option) { return; }
+      if (hidden) { hidden.value = pick.value; }
+      if (input && pick.value) { input.value = option.getAttribute('data-label') || option.textContent; }
+      // A choice from the list settles the question: a leftover typed name must not contradict it.
+      var manual = document.getElementById('parish_name_raw');
+      if (manual && pick.value) { manual.value = ''; }
+    });
+  });
+
   /* ── Live-search combobox ──────────────────────────────────────────────────── */
   function initCombobox(combo) {
     var input = combo.querySelector('input[role="combobox"]');
@@ -328,9 +346,24 @@
       }).then(function (data) {
         render(Array.isArray(data.parishes) ? data.parishes : [], term);
       }).catch(function () {
-        if (list.hidden) { return; }
-        close();
+        // The search did not run — offline, a CSP block, a 500. Say so instead of closing the list
+        // and leaving an empty box, which is indistinguishable from "your church is not listed".
+        showUnavailable(term);
       });
+    }
+
+    /* Fail visibly. The member is offered the manual route with their own words, and told why. */
+    function showUnavailable(term) {
+      list.innerHTML = '';
+      options = [];
+      var note = document.createElement('li');
+      note.className = 'combo-empty';
+      note.textContent = 'The parish list could not be loaded just now. Pick from the list on the form, or type your church name below.';
+      list.appendChild(note);
+      offerManual(term);
+      options = Array.prototype.slice.call(list.querySelectorAll('.combo-option'));
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
     }
 
     input.addEventListener('input', function () {
@@ -363,6 +396,8 @@
       }
     });
     input.addEventListener('focus', function () {
+      // An empty term asks the server for the head of the directory, which is the useful answer
+      // when somebody taps the box: fifteen churches, not "type three characters".
       if (list.hidden) { search(input.value.trim()); }
     });
     document.addEventListener('click', function (event) {

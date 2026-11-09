@@ -335,8 +335,20 @@ $_SERVER = array(
 $_GET = array(); $_POST = array(); $_REQUEST = array(); $_FILES = array();
 chdir('/src');
 require '/src/app/bootstrap.php';
+// The same fixtures the preview's search stub answers with, so the rendered list and the live
+// search agree — otherwise the preview would show the bug it exists to disprove.
+$choosable = array(
+    array('id' => 1, 'parish' => 'LIVING WATER PARISH', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+          'label' => 'LIVING WATER PARISH \u{00b7} HOPE AREA \u{00b7} GRACE ZONE'),
+    array('id' => 2, 'parish' => 'GOOD SHEPHERD PARISH', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+          'label' => 'GOOD SHEPHERD PARISH \u{00b7} HOPE AREA \u{00b7} GRACE ZONE'),
+    array('id' => 3, 'parish' => 'CHAPEL OF WONDERS PARISH', 'area' => 'CHAPEL OF WONDERS PARISH AREA',
+          'zone' => 'CONQUERORS CHAPEL ZONE',
+          'label' => 'CHAPEL OF WONDERS PARISH \u{00b7} CHAPEL OF WONDERS PARISH AREA \u{00b7} CONQUERORS CHAPEL ZONE'),
+);
 echo RISE63\\Core\\View::capture('/src/app/Views/auth/register.php', array(
     'flashes' => array(), 'page' => 'register', 'title' => 'Create account', 'user' => null,
+    'parishes' => $choosable,
 ), false);`);
 
   await new Promise((resolve) => setTimeout(resolve, 1200));

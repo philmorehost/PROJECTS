@@ -47,6 +47,18 @@ $isTreasury = Auth::isTreasurer($account);
         </div>
         <span class="hint">Type to search by parish, area or zone.</span>
       </div>
+      <?php if (($parishes ?? []) !== []): ?>
+        <div class="field">
+          <label for="parish-pick">Or choose from the list</label>
+          <select id="parish-pick" data-parish-pick>
+            <option value="">Choose your church</option>
+            <?php foreach ($parishes as $row): ?>
+              <option value="<?= (int) $row['id'] ?>" data-label="<?= e($row['label']) ?>"
+                      <?= $parish !== null && (int) $parish['id'] === (int) $row['id'] ? 'selected' : '' ?>><?= e($row['label']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      <?php endif; ?>
       <div class="field">
         <label for="parish_name_raw">Church not in the list?</label>
         <input type="text" id="parish_name_raw" name="parish_name_raw" maxlength="150" data-caps
