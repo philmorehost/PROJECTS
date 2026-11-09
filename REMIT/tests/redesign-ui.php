@@ -3,6 +3,7 @@ declare(strict_types=1);
 require __DIR__.'/church-portal.php';require __DIR__.'/../app/UpdateManager.php';
 $dir=$argv[1] ?? sys_get_temp_dir().'/remit-redesign';if(!is_dir($dir))mkdir($dir,0700,true);
 $db->exec('CREATE TABLE security_ips(ip_address TEXT,whitelisted INTEGER,clean_sessions INTEGER,blocked_until TEXT,updated_at TEXT);ALTER TABLE users ADD is_suspended INTEGER DEFAULT 0;UPDATE officer_profiles SET account_ciphertext=\'\'');
+$db->exec("UPDATE remittance_ledgers SET gross_income='100000.00',period_year=2025,period_month=12 WHERE gross_income IS NULL");
 $fixtureRoot=realpath(__DIR__.'/..');$appDir=$fixtureRoot.'/app';mkdir(ROOT);symlink($appDir,ROOT.'/app');$source=file_get_contents($fixtureRoot.'/index.php');
 $start=strpos($source,'<!doctype html',strpos($source,'$flash='));$shell=str_replace('ROOT.','$fixtureRoot.',substr($source,$start));
 $title='TEST PROVINCE — FICTIONAL DATA';$flash='';$error='';$due=10000000;$paid=7500000;$compliance=75;$totals=['reports'=>4,'verified'=>3];$ids=[1];$placeholders='?';$rows=[];$portalReady=true;

@@ -148,23 +148,27 @@ final class ChurchPortal
             $db->commit();return 'Registration '.$decision.'. Notification queued.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }
-    public static function submitPayment(PDO $db,array $user,array $input): string
+    public static function submitPayment(PDO $db,array $user,array $input,?array $upload=null): string
     {
         $ownUnit=remittingUnit($db,$user);
         if(setting($db,'provincial_account_number')==='')throw new RuntimeException('The province has not configured its receiving bank account.');
         $amount=Money::cents(trim($input['amount'] ?? ''));$ref=trim($input['transfer_reference'] ?? '');$date=$input['transfer_date'] ?? '';
         $dt=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
         if($amount<=0 || $ref==='' || strlen($ref)>100 || !$dt || $dt->format('Y-m-d')!==$date || $date>date('Y-m-d') || $date<'2020-01-01')throw new InvalidArgumentException('Provide a positive transferred amount, bank reference and valid transfer date (not in the future).');
+        $proof=null;$hasUpload=$upload!==null && ($upload['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE;
+        if($hasUpload && !PaymentProof::ready($db))throw new RuntimeException('The administrator must enable receipt uploads in Portal settings.');
         $db->beginTransaction();
         try{
             $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=? FOR UPDATE');$s->execute([(int)($input['ledger_id'] ?? 0),$ownUnit]);$row=$s->fetch();
             if(!$row)throw new RuntimeException('Report does not belong to your church.');
             $s=$db->prepare("SELECT COALESCE(SUM(amount),0) FROM payment_notifications WHERE ledger_id=? AND status='pending'");$s->execute([$row['id']]);$pending=Money::cents((string)$s->fetchColumn());
             if($amount+$pending>Money::cents($row['provincial_levy_due'])-Money::cents($row['amount_paid']))throw new RuntimeException('Amount exceeds the outstanding balance after pending notifications.');
+            if($hasUpload)$proof=PaymentProof::store($upload);
             $db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date) VALUES(?,?,?,?,?)')->execute([$row['id'],$user['id'],Money::decimal($amount),$ref,$date]);
+            if($proof){$notificationId=(int)$db->lastInsertId();$db->prepare('INSERT INTO payment_receipts(notification_id,proof_key,byte_size,thumb_bytes,width,height) VALUES(?,?,?,?,?,?)')->execute([$notificationId,$proof['proof_key'],$proof['byte_size'],$proof['thumb_bytes'],$proof['width'],$proof['height']]);}
             notify($db,setting($db,'notification_email'),'Payment notification pending review',$row['payment_reference'].' has a new manual transfer notification. Verify against your bank statement before approval.');
             $db->commit();return 'Payment submitted. Awaiting treasury confirmation.';
-        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($proof)PaymentProof::remove($proof['proof_key']);throw $e;}
     }
     public static function reviewPayment(PDO $db,array $user,array $input): string
     {

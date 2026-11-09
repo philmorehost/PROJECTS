@@ -199,3 +199,49 @@ document.querySelectorAll('[data-church-caps]').forEach(field=>{
  const uppercase=()=>{const start=field.selectionStart,end=field.selectionEnd;const before=field.value;field.value=before.toUpperCase();if(start!==null)field.setSelectionRange(before.slice(0,start).toUpperCase().length,before.slice(0,end).toUpperCase().length);};
  field.addEventListener('input',uppercase);uppercase();
 });
+
+// Receipt files are served only by the authenticated endpoint; no public storage URLs.
+const receiptDialog=document.querySelector('#receipt-dialog');
+if(receiptDialog&&typeof receiptDialog.showModal==='function'){
+ const image=receiptDialog.querySelector('[data-proof-image]'),error=receiptDialog.querySelector('[data-proof-error]');let opener=null;
+ const close=()=>receiptDialog.close();
+ document.addEventListener('click',event=>{const link=event.target.closest('[data-proof-open]');if(!link||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;const url=new URL(link.href,location.href);if(url.origin!==location.origin)return;event.preventDefault();opener=link;error.hidden=true;image.hidden=false;image.src=url.href;if(!receiptDialog.open)receiptDialog.showModal();receiptDialog.querySelector('[data-proof-close]').focus();});
+ receiptDialog.querySelector('[data-proof-close]').addEventListener('click',close);
+ image.addEventListener('error',()=>{image.hidden=true;error.hidden=false;});
+ receiptDialog.addEventListener('click',event=>{if(event.target!==receiptDialog)return;const rect=receiptDialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)close();});
+ receiptDialog.addEventListener('close',()=>{image.removeAttribute('src');if(opener?.isConnected)opener.focus();});
+}
+// Server-filtered financial history: real GET fallback plus debounced progressive refresh.
+const historyRequests=new Map();
+function historyRequestState(id){if(!historyRequests.has(id))historyRequests.set(id,{timer:null,controller:null,seq:0});return historyRequests.get(id);}
+async function refreshFinancialHistory(panel,url){
+ const id=panel.id,state=historyRequestState(id);clearTimeout(state.timer);state.controller?.abort();state.controller=new AbortController();const seq=++state.seq;
+ const active=document.activeElement;const focus=panel.contains(active)&&active.name?{name:active.name,start:active.selectionStart,end:active.selectionEnd}:null;
+ panel.setAttribute('aria-busy','true');
+ try{
+  const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:state.controller.signal});if(!response.ok)throw new Error('History unavailable');
+  const html=new DOMParser().parseFromString(await response.text(),'text/html');const replacement=html.getElementById(id);if(!replacement||!replacement.hasAttribute('data-server-history'))throw new Error('Sign in again');
+  if(seq!==state.seq)return;replacement.open=true;panel.replaceWith(replacement);history.replaceState(null,'',url);
+  if(focus){const field=replacement.querySelector(`[name="${CSS.escape(focus.name)}"]`);if(field){field.focus({preventScroll:true});if(field.type==='search'&&focus.start!==null)field.setSelectionRange(focus.start,focus.end);}}
+ }catch(error){if(error.name==='AbortError')return;location.assign(url.href);}
+ finally{panel.removeAttribute('aria-busy');}
+}
+function financialFilterUrl(form){
+ const panel=form.closest('[data-server-history]'),prefix=panel.id==='reports-history'?'reports':'payments',url=new URL(location.href);
+ for(const [key,value] of new FormData(form))if(key.startsWith(prefix+'_')){if(value)url.searchParams.set(key,value);else url.searchParams.delete(key);}
+ url.searchParams.set('page','remittances');url.searchParams.delete(prefix+'_page');url.hash=panel.id;return url;
+}
+document.addEventListener('submit',event=>{const form=event.target.closest('[data-history-form]');if(!form)return;event.preventDefault();refreshFinancialHistory(form.closest('[data-server-history]'),financialFilterUrl(form));});
+for(const type of ['input','change'])document.addEventListener(type,event=>{
+ const form=event.target.closest('[data-history-form]');if(!form||event.target.type==='hidden')return;
+ if(type==='input'&&event.target.tagName==='SELECT')return;if(type==='change'&&event.target.type==='search')return;
+ const panel=form.closest('[data-server-history]'),state=historyRequestState(panel.id);state.controller?.abort();clearTimeout(state.timer);
+ state.timer=setTimeout(()=>{if(form.reportValidity())refreshFinancialHistory(panel,financialFilterUrl(form));},type==='input'?400:0);
+});
+document.addEventListener('click',event=>{
+ const link=event.target.closest('a[data-history-link]');if(!link||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;const panel=link.closest('[data-server-history]');if(!panel)return;event.preventDefault();
+ const url=new URL(link.href,location.href),other=panel.id==='reports-history'?'payments':'reports',current=new URL(location.href);
+ for(const key of Array.from(url.searchParams.keys()))if(key.startsWith(other+'_'))url.searchParams.delete(key);
+ for(const [key,value] of current.searchParams)if(key.startsWith(other+'_'))url.searchParams.set(key,value);
+ refreshFinancialHistory(panel,url);
+});
