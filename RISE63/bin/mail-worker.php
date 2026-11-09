@@ -42,8 +42,11 @@ try {
 }
 
 Settings::flush();
-$from     = (string) (getenv('RISE63_MAIL_FROM') ?: 'no-reply@' . (parse_url((string) (getenv('RISE63_SITE_URL') ?: 'https://localhost'), PHP_URL_HOST) ?: 'localhost'));
-$fromName = (string) Settings::get('site_title', 'RISE 63');
+// The sender comes from Settings → Mail when it is set there, so the address members see can be
+// changed from the browser. RISE63_MAIL_FROM still wins for an operator who sets it in cron.
+$sender   = Mailer::sender();
+$from     = (string) (getenv('RISE63_MAIL_FROM') ?: $sender['email']);
+$fromName = (string) $sender['name'];
 
 try {
     $mailer = Mailer::fromConfig();

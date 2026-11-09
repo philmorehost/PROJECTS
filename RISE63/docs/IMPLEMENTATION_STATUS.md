@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.3 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.4 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -23,12 +23,12 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Suite | Command | Result |
 |---|---|---|
 | Syntax | `node tests/support/phpwasm-lint.mjs` | **80 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **65 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **42 passed, 0 failed** |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **68 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **44 passed, 0 failed** |
 | Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
 | **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **19 passed, 0 failed, 1 skipped** — real SQL |
-| **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **9 passed, 0 failed, 1 skipped** — real router, real SQL |
+| **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **13 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
 | Assets & cache | `node tests/support/assets-and-cache.mjs` | **11 passed, 0 failed** |
@@ -123,6 +123,57 @@ Three administrator screens — Dashboard, Treasury and Security — still canno
 PGlite: each builds a `UTC_TIMESTAMP() - INTERVAL n HOUR` expression, which is MySQL syntax that
 PostgreSQL rejects. They are reported as SKIP with that reason, and `tests/render.php` renders all
 three with a stubbed database. This is a dialect limit of the test engine, not a fault in the pages.
+
+### 2.1b What 1.0.4 fixes — the People page, and the reason it was never going to work
+
+The operator reported `/people` still returning the 500 page after 1.0.3. It was a different fault
+again, and this one had been there since the page was written:
+
+```
+PDOException: SQLSTATE[42S03]: Unknown column 'parish_name_raw' in 'field list'
+```
+
+`parish_name_raw` is added to `users` by **migration 0002**. The People page is new and names that
+column outright in the "churches members asked for" query. On an installation created by the
+installer before 0002 existed, the column is not there — so the page had never once worked on that
+server. It was reproduced by dropping exactly that one column from a working schema: `/people`
+throws, and Settings, Activity, Updates, Applications and Parish Connect all stay up. One column,
+one page, one cause.
+
+Three things were wrong, and only one of them was the missing column:
+
+| Fault | Why it mattered | Fix |
+|---|---|---|
+| A page of record-keeping died because of one optional card | The queue is a convenience. It must not be able to take the member tools down with it | The query is guarded; the card is replaced by a notice naming the missing column, and the rest of the page renders |
+| Nothing told the operator a migration was waiting | `php bin/migrate.php` is CLI-only, the updater never runs migrations, and no screen mentioned them | **Settings → Database updates**: what is applied, what is waiting, and the exact command. Read-only, deliberately |
+| The failure was invisible | `index.php` logs to the server error log, which is not reachable from a shared host's file manager | The log line now names the query that failed, and the page states its own cause |
+
+**Migrations are still not applied from a web request, and that is a decision, not an omission.** A
+schema change is the one operation that can leave a database half-modified; doing it behind a button
+with no shell, no backup and no way to see the error is how an installation becomes unrecoverable.
+The panel makes the state visible and puts the command in front of the person who needs it.
+
+### 2.1c Mail settings, now in the admin UI
+
+`config/smtp.php` was the one file an operator had to hand-write — in a specific PHP array shape,
+over SSH or FTP — and the only feedback if they got it wrong was that password resets silently never
+arrived. **Settings → Mail** replaces that.
+
+| Concern | How it is handled |
+|---|---|
+| The password never reaches the browser | `Smtp::masked()` removes it before the view sees it; the field renders empty with "Saved — leave blank to keep it". A blank field on save keeps the stored value; removal is a separate explicit control |
+| A typo is caught while the operator is looking at the field | 12 validations, each naming the field. The two that matter most: **STARTTLS on port 465** and **implicit TLS on 587** are refused with the reason, because both hang until the timeout and look like an outage |
+| Proof it works without sending anything | *Test the connection* performs the identical handshake `Mailer` does, then disconnects |
+| Proof that mail is *delivered* | *Send a test message to me* queues a real message — the only way to find out about SPF, DKIM and the spam folder |
+| A credential on disk | Written atomically (temp file + rename) at **0600**; a corrupt or missing file degrades to "not configured" rather than throwing |
+| What members see | `from_email` and `from_name` are configurable, and `Mailer::sender()` falls back to the old derivation, so a hand-written config keeps working |
+
+The audit trail records `settings.smtp` with the transport (`smtp.gmail.com:587 TLS from no-reply@…`)
+and never the password or the mailbox username.
+
+Two checks guard the secrecy specifically, and both were verified to fail first: making
+`masked()` return the password fails `The Mail panel renders and never echoes the stored password`
+with *THE PASSWORD REACHED THE PAGE*, and the same happens if the template pre-fills the field.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 

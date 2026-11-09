@@ -210,6 +210,23 @@ RISE63\\Core\\View::render('staff/settings', array(
     'auditTotal' => 1842,
     'cycleYear' => 2026, 'autoYear' => '2026', 'yearMode' => 'auto',
     'funds' => array(),
+    // Mail is configured in this preview, so the reader sees the populated panel: the password
+    // field is empty with the "saved" hint, which is the state that matters.
+    'smtp' => array(
+        'host' => 'smtp.yourprovider.com', 'port' => 587, 'encryption' => 'tls', 'auth' => 'login',
+        'username' => 'notifications@rccg63.org', 'from_email' => 'no-reply@rccg63.org',
+        'from_name' => 'RISE 63', 'helo' => 'rccg63.org',
+        'configured' => true, 'has_password' => true,
+    ),
+    'schemaState' => array(
+        'known' => true, 'error' => '', 'modified' => array(), 'count' => 3,
+        'pending' => array(),
+        'applied' => array(
+            array('version' => '0001', 'summary' => '0001 — account lifecycle'),
+            array('version' => '0002', 'summary' => '0002 — unlisted parish name'),
+            array('version' => '0003', 'summary' => '0003 — program figures and auto year'),
+        ),
+    ),
 ));`,
   },
   {

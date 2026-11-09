@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace RISE63;
 
-const VERSION        = '1.0.3';
+const VERSION        = '1.0.4';
 const MIN_PHP        = '8.2.0';
 const PRODUCT        = 'RISE 63';
 const ROOT           = __DIR__ . '/..';
@@ -33,11 +33,13 @@ require __DIR__ . '/Core/Applications.php';
 require __DIR__ . '/Core/Ledger.php';
 require __DIR__ . '/Core/Notifier.php';
 require __DIR__ . '/Core/Mailer.php';
+require __DIR__ . '/Core/Smtp.php';
 require __DIR__ . '/Core/View.php';
 require __DIR__ . '/Core/Activation.php';
 require __DIR__ . '/Core/Installer.php';
 require __DIR__ . '/Core/Audit.php';
 require __DIR__ . '/Core/Migrator.php';
+require __DIR__ . '/Core/Schema.php';
 require __DIR__ . '/Core/ZipReader.php';
 require __DIR__ . '/Core/Updater.php';
 require __DIR__ . '/Core/PasswordReset.php';

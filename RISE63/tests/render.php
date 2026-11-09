@@ -877,6 +877,98 @@ ok('Settings screen groups every typed setting', function () use ($renderPage, $
     assertMissing('name="settings[seed_grant_opening_balance_year]"', $html, 'the pool year is written by the ledger, not typed');
 });
 
+ok('Settings offers mail configuration, and a secret never reaches the markup', function () use ($renderPage, $admin): void {
+    // config/smtp.php was the one file an operator had to hand-write, and a mistake in it produced
+    // no error at all — only password resets that never arrived. This panel replaced that, so the
+    // things worth asserting are the fields, the honest empty state, and the absence of the password.
+    $base = [
+        'settings' => ['site_title' => 'RISE 63', 'theme_color' => '#2563eb', 'pwa_install_prompt' => '1',
+                       'maintenance_mode' => '0', 'session_idle_minutes' => '30', 'login_alerts_enabled' => '1',
+                       'cycle_year_mode' => 'auto', 'current_cycle_year' => '2026'],
+        'outbox' => [], 'queue' => ['pending' => 0, 'failed' => 0],
+        'audit' => [], 'auditFilters' => [], 'auditActors' => [], 'auditActions' => [],
+        'auditTotal' => 0, 'cycleYear' => 2026, 'autoYear' => '2026', 'yearMode' => 'auto', 'funds' => [],
+        // A value object, never null: production always hands one over, so a null fixture would be
+        // testing a state that cannot occur.
+        'auditPager' => RISE63\Core\Paginator::fromState(25, null, 0, ['per_page' => '25'], 'settings', false),
+    ];
+
+    // ── Unconfigured: the consequence is stated, not implied.
+    $html = $renderPage('staff/settings', $base + ['smtp' => ['configured' => false, 'has_password' => false]], $admin);
+    assertContains('Mail (SMTP)', $html);
+    assertContains('Not configured', $html);
+    assertContains('Forgot password?', $html, 'the panel must say what an empty config costs');
+    foreach (['smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_auth', 'smtp_username', 'smtp_password',
+              'smtp_from_email', 'smtp_from_name', 'smtp_helo'] as $field) {
+        assertContains('id="' . $field . '"', $html, 'the mail form is missing ' . $field);
+    }
+    assertContains('value="smtp-save"', $html);
+    assertMissing('value="smtp-test"', $html, 'there is nothing to test until it is configured');
+
+    // ── Configured: the actions appear, and the stored password is absent from the HTML.
+    $html = $renderPage('staff/settings', $base + ['smtp' => [
+        'configured' => true, 'has_password' => true, 'host' => 'smtp.gmail.com', 'port' => 587,
+        'encryption' => 'tls', 'username' => 'alerts@rccg63.org', 'auth' => 'login',
+        'from_email' => 'no-reply@rccg63.org', 'from_name' => 'RISE 63', 'helo' => 'rccg63.org',
+        // Deliberately present in the payload: the template must refuse it even if a caller leaks it.
+        'password' => 'SHOULD-NEVER-APPEAR',
+    ]], $admin);
+    assertContains('Configured', $html);
+    assertContains('value="smtp-test"', $html, 'a configured transport must be testable');
+    assertContains('value="smtp-send-test"', $html, 'delivery can only be proven by a message');
+    assertContains('value="smtp-remove"', $html);
+    assertMissing('SHOULD-NEVER-APPEAR', $html, 'THE PASSWORD REACHED THE MARKUP');
+    assertContains('Saved — leave blank to keep it', $html, 'the empty field must explain why it is empty');
+    assertContains('value="no-reply@rccg63.org"', $html);
+});
+
+ok('Settings shows the database-update state without ever applying one', function () use ($renderPage, $admin): void {
+    // The reported 500 had one cause nothing in the interface reported: a pending migration. The
+    // panel states the fact and the command. Applying a schema change from a web request would be
+    // worse than the outage — it is the one operation that can leave a database half-modified.
+    $base = [
+        'settings' => ['site_title' => 'RISE 63', 'theme_color' => '#2563eb', 'pwa_install_prompt' => '1',
+                       'maintenance_mode' => '0', 'session_idle_minutes' => '30', 'login_alerts_enabled' => '1',
+                       'cycle_year_mode' => 'auto', 'current_cycle_year' => '2026'],
+        'outbox' => [], 'queue' => ['pending' => 0, 'failed' => 0],
+        'audit' => [], 'auditFilters' => [], 'auditActors' => [], 'auditActions' => [],
+        'auditTotal' => 0, 'cycleYear' => 2026, 'autoYear' => '2026', 'yearMode' => 'auto', 'funds' => [],
+        // A value object, never null: production always hands one over, so a null fixture would be
+        // testing a state that cannot occur.
+        'auditPager' => RISE63\Core\Paginator::fromState(25, null, 0, ['per_page' => '25'], 'settings', false),
+        'smtp' => ['configured' => false, 'has_password' => false],
+    ];
+
+    $pending = $renderPage('staff/settings', $base + ['schemaState' => [
+        'known' => true, 'error' => '',
+        'pending' => [
+            ['version' => '0001', 'file' => '0001_account_lifecycle.sql', 'summary' => '0001 — account lifecycle'],
+            ['version' => '0002', 'file' => '0002_unlisted_parish_name.sql', 'summary' => '0002 — unlisted parish name'],
+        ],
+        'applied' => [], 'modified' => [], 'count' => 3,
+    ]], $admin);
+    assertContains('Database updates', $pending);
+    assertContains('2 database updates are waiting', $pending);
+    assertContains('php bin/migrate.php --status', $pending, 'the exact command must be shown');
+    assertContains('0002 — unlisted parish name', $pending, 'the problem file must be named in plain words');
+    // It must be instructions, never a button: no form posts a migration.
+    assertMissing('value="run-migrations"', $pending, 'migrations must never be applied from the browser');
+
+    $clean = $renderPage('staff/settings', $base + ['schemaState' => [
+        'known' => true, 'error' => '',
+        'pending' => [], 'applied' => [['version' => '0001', 'summary' => '0001 — account lifecycle']],
+        'modified' => [], 'count' => 1,
+    ]], $admin);
+    assertContains('Up to date', $clean);
+    assertMissing('database updates are waiting', $clean, 'a migrated database must not nag');
+
+    $unreadable = $renderPage('staff/settings', $base + ['schemaState' => [
+        'known' => false, 'error' => 'could not connect', 'pending' => [], 'applied' => [], 'modified' => [], 'count' => 0,
+    ]], $admin);
+    assertContains('could not connect', $unreadable, 'a failure must be reported, not hidden or thrown');
+    assertContains('Database updates', $unreadable, 'the panel must still render');
+});
+
 ok('Academy attendance is recorded by staff and shown to the applicant', function () use ($renderPage, $admin, $member): void {
     $academyApplication = [
         'id' => 21, 'user_id' => 2, 'parish_id' => 5, 'program_type' => 'academy', 'cycle_year' => 2026,

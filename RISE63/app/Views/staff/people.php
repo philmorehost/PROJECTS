@@ -9,6 +9,7 @@ use function RISE63\{e, human_date, relative_time, url};
 $roleLabels = Auth::ROLES;
 $editing    = $editing ?? null;
 $pager      = $pager ?? null;
+$schemaGap  = $schemaGap ?? null;
 ?>
 <section class="card">
   <div class="card-head">
@@ -215,6 +216,21 @@ $pager      = $pager ?? null;
     </button>
   </form>
 </section>
+
+<?php if ($schemaGap !== null): ?>
+  <?php /* The queue below reads a column that a later migration adds. If that migration has not
+           been applied, saying so here is the difference between an operator who can fix it in a
+           minute and one who sees a page that simply does not work. */ ?>
+  <section class="card" style="border-color:var(--warn);background:var(--warn-soft)">
+    <div class="card-head">
+      <div>
+        <h2 style="margin:0">Churches members asked for — unavailable</h2>
+        <p class="muted" style="margin:6px 0 0"><?= e($schemaGap) ?></p>
+      </div>
+      <a class="btn btn-secondary btn-sm" href="<?= e(url('updates')) ?>">Check for updates</a>
+    </div>
+  </section>
+<?php endif; ?>
 
 <?php if (($unlisted ?? []) !== []): ?>
   <section class="card">

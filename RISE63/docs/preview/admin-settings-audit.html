@@ -7,7 +7,7 @@
 <title>Settings · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">
+<meta name="csrf-token" content="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -902,7 +902,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </p>
 
   <form method="post" action="/">
-    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="settings-save">
+    <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">    <input type="hidden" name="action" value="settings-save">
     <input type="hidden" name="group" value="programs">
     <input type="hidden" name="return_to" value="settings">
     <div class="grid grid-2">
@@ -931,7 +931,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Brand &amp; identity</h2>
     <p class="muted">These values appear across the app, the install prompt and the dynamic icon.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="brand">
       <input type="hidden" name="return_to" value="settings">
                                 <div class="field">
@@ -983,7 +983,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Sessions &amp; alerts</h2>
     <p class="muted">How long a session may sit idle and who receives sign-in alerts.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="session">
       <input type="hidden" name="return_to" value="settings">
                                 <div class="field">
@@ -1003,7 +1003,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     <h2>Programs &amp; funds</h2>
     <p class="muted">The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.</p>
     <form method="post" action="/">
-      <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">      <input type="hidden" name="action" value="settings-save">
+      <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">      <input type="hidden" name="action" value="settings-save">
       <input type="hidden" name="group" value="programs">
       <input type="hidden" name="return_to" value="settings">
                                         <div class="field">
@@ -1074,7 +1074,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </div>
   <p class="muted" style="margin-top:12px">Mail is delivered by <code>php bin/mail-worker.php</code> from cron. Queued messages do not leave the server until that worker runs.</p>
   <form method="post" action="/">
-    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="queue-test">
+    <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">    <input type="hidden" name="action" value="queue-test">
     <input type="hidden" name="return_to" value="settings">
     <button class="btn btn-secondary" type="submit">Queue a test message to me</button>
   </form>
@@ -1089,6 +1089,163 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       </li>
           </ul>
 </section>
+
+<section class="card" id="mail">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Mail (SMTP)</h2>
+      <p class="faint" style="margin:2px 0 0">How members receive password-reset links and how sign-in alerts leave the server.</p>
+    </div>
+    <span class="badge badge-ok">
+      Configured    </span>
+  </div>
+
+  
+  <form method="post" action="/" style="margin-top:12px" autocomplete="off">
+    <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">    <input type="hidden" name="action" value="smtp-save">
+    <input type="hidden" name="return_to" value="settings">
+
+    <div class="grid grid-2">
+      <div class="field">
+        <label for="smtp_host">Server address</label>
+        <input type="text" id="smtp_host" name="host" required maxlength="190"
+               value="smtp.yourprovider.com" placeholder="smtp.gmail.com"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+        <span class="hint">A hostname only — no <code>https://</code> and no port. Your provider&rsquo;s documentation calls this the SMTP or outgoing server.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_port">Port</label>
+        <input type="number" id="smtp_port" name="port" required min="1" max="65535" step="1"
+               value="587">
+        <span class="hint">587 for STARTTLS, 465 for implicit TLS.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_encryption">Encryption</label>
+        <select id="smtp_encryption" name="encryption">
+                      <option value="tls" selected>STARTTLS (port 587 — the usual choice)</option>
+                      <option value="ssl" >Implicit TLS (port 465)</option>
+                      <option value="none" >No encryption (localhost only)</option>
+                  </select>
+        <span class="hint">The port has to agree with this choice, or mail never leaves the server.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_auth">Authentication</label>
+        <select id="smtp_auth" name="auth">
+                      <option value="login" selected>AUTH LOGIN (most servers)</option>
+                      <option value="plain" >AUTH PLAIN</option>
+                  </select>
+        <span class="hint">Leave as AUTH LOGIN unless your provider says otherwise.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_username">Username</label>
+        <input type="text" id="smtp_username" name="username" maxlength="190"
+               value="notifications@rccg63.org" placeholder="notifications@yourdomain.org"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+        <span class="hint">Usually the full e-mail address of the sending mailbox.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_password">Password</label>
+        <input type="password" id="smtp_password" name="password" maxlength="255"
+               placeholder="Saved — leave blank to keep it"
+               autocomplete="new-password" spellcheck="false">
+        <span class="hint">
+                                A password is saved and is never shown again. Leave this blank to keep it, or tick
+            <em>remove the saved password</em> below.
+                  </span>
+      </div>
+      <div class="field">
+        <label for="smtp_from_email">Send mail from</label>
+        <input type="email" id="smtp_from_email" name="from_email" required maxlength="150" inputmode="email"
+               value="no-reply@rccg63.org" placeholder="no-reply@yourdomain.org">
+        <span class="hint">Members see this as the sender. It must be a domain you can publish SPF and DKIM for.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_from_name">Sender name</label>
+        <input type="text" id="smtp_from_name" name="from_name" maxlength="120"
+               value="RISE 63" placeholder="RISE 63">
+      </div>
+    </div>
+
+    <details style="margin-top:6px">
+      <summary class="faint" style="cursor:pointer">Advanced</summary>
+      <div class="grid grid-2" style="margin-top:8px">
+        <div class="field">
+          <label for="smtp_helo">EHLO name</label>
+          <input type="text" id="smtp_helo" name="helo" maxlength="190" value="rccg63.org"
+                 autocapitalize="none" placeholder="yourdomain.org">
+          <span class="hint">The name this server introduces itself with. Some relays reject a mismatch with your sending domain.</span>
+        </div>
+      </div>
+    </details>
+
+          <div class="check" style="margin-top:8px">
+        <input type="checkbox" id="smtp_remove_password" name="remove_password" value="1">
+        <label for="smtp_remove_password" style="font-weight:400">Remove the saved password</label>
+      </div>
+    
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-primary" type="submit">Save mail settings</button>
+    </div>
+  </form>
+
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <form method="post" action="/">
+        <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">        <input type="hidden" name="action" value="smtp-test">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-secondary btn-sm" type="submit">Test the connection</button>
+      </form>
+      <form method="post" action="/">
+        <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">        <input type="hidden" name="action" value="smtp-send-test">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-secondary btn-sm" type="submit">Send a test message to me</button>
+      </form>
+      <form method="post" action="/"
+            onsubmit="return confirm('Remove the mail settings? Self-service password reset will stop working until they are entered again.');">
+        <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">        <input type="hidden" name="action" value="smtp-remove">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-quiet btn-sm" type="submit">Remove</button>
+      </form>
+    </div>
+    <p class="faint" style="margin-top:10px">
+      <strong>Test the connection</strong> opens the server, signs in and disconnects without sending anything —
+      it catches a wrong password or port immediately. <strong>Send a test message</strong> proves delivery
+      (and whether it lands in spam), which only a real message can.
+    </p>
+  </section>
+
+<section class="card" id="database-updates">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Database updates</h2>
+      <p class="faint" style="margin:2px 0 0">Schema changes that ship with each release, and whether this server has them.</p>
+    </div>
+          <span class="badge badge-ok">Up to date</span>
+      </div>
+
+  
+          <p class="muted" style="margin-top:10px">
+        All 3 database updates have        been applied to this server.
+      </p>
+      <details>
+        <summary class="faint" style="cursor:pointer">Show what has been applied</summary>
+        <ul class="list-plain" style="margin-top:10px">
+                      <li class="row row-end" style="padding:6px 0;border-bottom:1px solid var(--border)">
+              <span class="faint">0001 — account lifecycle</span>
+              <span class="badge badge-ok">applied</span>
+            </li>
+                      <li class="row row-end" style="padding:6px 0;border-bottom:1px solid var(--border)">
+              <span class="faint">0002 — unlisted parish name</span>
+              <span class="badge badge-ok">applied</span>
+            </li>
+                      <li class="row row-end" style="padding:6px 0;border-bottom:1px solid var(--border)">
+              <span class="faint">0003 — program figures and auto year</span>
+              <span class="badge badge-ok">applied</span>
+            </li>
+                  </ul>
+      </details>
+    
+    
+  </section>
 
 <section class="card">
   <div class="card-head">
@@ -1510,7 +1667,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-label">People</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="b9fb7c8e4a8a4a152c52e134c81010b9f7538d8ff1fea99c7eb2df402498894c">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="3d7ae5fcc8b7cd7b3c1f5452b2cbadc68e8bede932b1eca2bc3f1adb812fab37">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
