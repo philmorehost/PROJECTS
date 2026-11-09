@@ -20,8 +20,8 @@ verify(str_contains($navigation,'aria-expanded="false"'),'menu toggle initial st
 verify(str_contains($navigation,'Sign out securely'),'mobile logout action');
 verify(str_contains($navigation,'Portal settings')===$admin,'settings role visibility');
 verify(str_contains($navigation,'Security centre')===$admin,'security role visibility');
-verify(str_contains($navigation,'My church account')===($role==='parish_officer'),'profile role visibility');
-verify(str_contains($dashboard,'Report an offering')===($role==='parish_officer'),'role-aware dashboard action');
+verify(str_contains($navigation,'My church account')===in_array($role,['parish_officer','area_rep','zonal_rep'],true),'profile role visibility');
+verify(str_contains($dashboard,'Start remittance')===in_array($role,['parish_officer','area_rep','zonal_rep'],true),'role-aware dashboard action');
 verify(str_contains($dashboard,'Manage percentages')===$admin,'admin dashboard shortcut');
 verify(str_contains($dashboard,'quick-actions-title'),'dashboard section labelled');
 if(isset($argv[2])){

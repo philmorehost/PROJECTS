@@ -8,7 +8,7 @@ Initial native PHP implementation. No framework, Composer package or frontend bu
 - PDO prepared statements, persistent connections, InnoDB/foreign-key schema, unique parish/month reports; province-level users have a **nullable hierarchy ID** instead of a fictitious province node.
 - Login with generic errors, session rotation, 30-minute inactivity expiry, HttpOnly/SameSite cookies, rechecking suspension on every request, CSRF on all writes and output escaping.
 - Configurable account and IP failure windows, application IP blocks, suspension scope and privileged-role exceptions, audit log, PIN throttling, recognized-IP green king badge after five clean session logins. Recognition never bypasses security. Unknown accounts trigger IP blocks when IP protection is enabled.
-- Province-wide treasurer/admin views and recursive hierarchy-scoped representative/officer views. Only parish officers submit their own reports. Representatives are read-only.
+- Province-wide treasurer/admin views and recursive hierarchy-scoped representative/officer views. Parish, Area and Zone representatives submit their own church’s reports; Area/Zone representatives also supervise descendant churches.
 - Integer-cent money arithmetic (64-bit required), half-up basis-point allocation, monthly income reports, cumulative bank-confirmed reconciliation under row locks with a transaction PIN and audit entry.
 - Responsive bright dashboard driven by actual database records, ledger filtering, directory builder, atomic/repeatable CSV directory import, officer provisioning, settings and security event views.
 - Transactional notification outbox and firewall work queue (no delivery/execution workers yet).
@@ -370,4 +370,33 @@ Validation: `tests/redesign-ui.php` renders nine actual production page layouts 
 php tests/redesign-ui.php /tmp/remit-redesign
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/redesign-browser.js /tmp/remit-redesign
+```
+
+## 0.8.0 — Remittance for every worshipping church, fewer steps
+
+**Updated policy:** Zones and Areas have their own worshipping members and monthly Youth Service offerings, as do Parishes. Approved `zonal_rep`, `area_rep` and `parish_officer` accounts can now submit **their own assigned church's** monthly offering and notify treasury of its bank transfer. This supersedes earlier release notes that described Area/Zone representatives as read-only. Funds still go directly to the provincial treasury; this is not inter-level fund collection or consolidated reporting.
+
+### Staff flow
+
+1. Tap **Start remittance** on the dashboard (or **Remit** in the footer).
+2. Enter month, year and total offering; retention and provincial amount calculate automatically.
+3. Save the offering. A 303 redirect takes the user straight to the provincial bank/payment section.
+4. Transfer to the displayed provincial account, using the report reference, then **Submit payment** with the actual bank reference.
+5. Treasury independently checks the bank and confirms payment. Fully pending deposits show **Awaiting treasury confirmation** instead of being offered again; partial pending deposits reduce the selectable balance.
+
+The report form identifies the account's church and never offers a church selector. Server checks derive its ID from the authenticated account and validate the role/unit type (`zonal_rep` → Zone, `area_rep` → Area, `parish_officer` → Parish), ignoring posted target IDs. Payment notifications are restricted to that same church. Representatives cannot submit for child/sibling/parent churches or approve payments. Provincial admin/treasurer accounts continue to confirm payments with their transaction PIN. Profiles/contact/bank details are available to all three church-representative roles; they never alter the provincial receiving account.
+
+Financial reads now include the representative's own unit and its descendants; treasury sees all levels. Dashboard totals for Area/Zone representatives are explicitly labelled as own + supervised churches. This preserves supervisory visibility without permitting writes against those descendants. The older `scope()` helper retains parish-only semantics for compatibility; production financial routes use `financialScope()`.
+
+**Shorter pages:** dashboard tasks use concise labels; lengthy guidance is removed; charts, reports and payment history use native collapsible sections. Remittance forms and transfer controls come before report history. Payment options query the account's own reports directly, so a busy supervisory ledger's 100-row display limit cannot hide the account's outstanding reports. PayHub remains explicitly not connected; no automated deposit API is invented.
+
+**No schema migration is required.** The historical `remittance_ledgers.parish_id` column already references `church_hierarchy.id` without a parish-only constraint, and the unique unit/month/year key and allocation snapshots work for every hierarchy level. Column/table names are kept for update compatibility; existing data, IDs, percentages, receipts, history, encryption keys and parish reports are unchanged. Deploy PHP templates and fingerprinted CSS together. Existing feature schema upgrades are still required if not enabled. Existing valid Area/Zone representative accounts gain own-church remittance after deployment; no re-registration is necessary.
+
+Validation adds **52** PHP role/ownership/report/payment/allocation/duplicate/treasury-confirmation assertions plus **164** browser checks across all three representative roles and four widths. The browser flow clicks Start remittance, verifies the live 80/20 calculation, checks own-church payment choices, collapsed history and mobile overflow. Fifteen fictional production fixtures cover the original nine page types plus representative dashboard/remittance routes. Existing 675 page-layout checks, 255 role/mobile checks, directory/registration/autocomplete checks and finance/portal/hierarchy/licensing regressions remain. SQLite compatibility and headless Chromium do not establish production MySQL locking, concurrency, live bank settlement or physical-device acceptance.
+
+```sh
+php tests/representative-remittance.php
+php tests/redesign-ui.php /tmp/remit-redesign
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/representative-remittance-browser.js /tmp/remit-redesign
 ```
