@@ -1,6 +1,6 @@
 <?php
-// PayHub pricing is the gateway's actual Paystack processing cost plus a separately
-// configurable PayHub markup. Webhook-confirmed Paystack fees take precedence over estimates.
+// PayHub pricing is the aggregator's actual processing cost plus a separately
+// configurable PayHub markup. Webhook-confirmed aggregator fees take precedence over estimates.
 require_once 'includes/functions.php';
 
 $local_markup_percent = (float)getConfig('local_markup_percent', '0');
@@ -29,7 +29,7 @@ include 'includes/header.php';
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 class="text-sm font-bold text-indigo-600 uppercase tracking-widest mb-4">Transparent Pricing</h2>
         <h1 class="text-4xl lg:text-6xl font-bold text-slate-900 mb-6">Gateway cost + a clear PayHub markup.</h1>
-        <p class="text-xl text-slate-600 max-w-3xl mx-auto">PayHub passes through Paystack's confirmed processing fee and adds only the markup shown below. Where Paystack returns its actual fee, that confirmed amount is used for the settlement calculation.</p>
+        <p class="text-xl text-slate-600 max-w-3xl mx-auto">PayHub passes through our payment aggregator's confirmed processing fee and adds only the markup shown below. Where our payment aggregator returns its actual fee, that confirmed amount is used for the settlement calculation.</p>
     </div>
 </section>
 
@@ -37,29 +37,29 @@ include 'includes/header.php';
     <div class="max-w-6xl mx-auto px-4 grid md:grid-cols-2 gap-6">
         <article class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 lg:p-10">
             <h2 class="text-2xl font-bold text-slate-900 mb-2">Local collections</h2>
-            <p class="text-slate-500 mb-6">Paystack processing rate, plus PayHub markup</p>
+            <p class="text-slate-500 mb-6">Our Payment Aggregator processing rate, plus PayHub markup</p>
             <div class="space-y-4 mb-8">
                 <div class="p-5 bg-slate-50 rounded-2xl">
                     <h3 class="font-bold text-slate-900">Cards, USSD and standard local payments</h3>
                     <p class="text-indigo-700 font-bold text-lg">1.5% + ₦100</p>
-                    <p class="text-sm text-slate-500">₦100 waived below ₦2,500; Paystack fee capped at ₦2,000.</p>
+                    <p class="text-sm text-slate-500">₦100 waived below ₦2,500; payment aggregator fee capped at ₦2,000.</p>
                 </div>
                 <div class="p-5 bg-slate-50 rounded-2xl">
                     <h3 class="font-bold text-slate-900">Dedicated virtual account (DVA) transfers</h3>
                     <p class="text-indigo-700 font-bold text-lg">1% capped at ₦300</p>
-                    <p class="text-sm text-slate-500">The actual fee reported by Paystack is used when available.</p>
+                    <p class="text-sm text-slate-500">The actual fee reported by our payment aggregator is used when available.</p>
                 </div>
             </div>
             <div class="border-t border-slate-100 pt-5">
                 <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">PayHub markup</p>
                 <p class="text-xl font-bold text-slate-900"><?php echo htmlspecialchars($local_markup, ENT_QUOTES, 'UTF-8'); ?></p>
-                <p class="text-sm text-slate-500 mt-2">Paystack processing fee + this markup is deducted from the merchant's transaction settlement.</p>
+                <p class="text-sm text-slate-500 mt-2">Our Payment Aggregator processing fee + this markup is deducted from the merchant's transaction settlement.</p>
             </div>
         </article>
 
         <article class="bg-slate-900 text-white rounded-3xl shadow-xl p-8 lg:p-10">
             <h2 class="text-2xl font-bold mb-2">International collections</h2>
-            <p class="text-slate-300 mb-8">Paystack rate: <strong class="text-white">3.9% + ₦100</strong>. PayHub markup is <strong class="text-white"><?php echo htmlspecialchars($int_markup, ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
+            <p class="text-slate-300 mb-8">Our Payment Aggregator rate: <strong class="text-white">3.9% + ₦100</strong>. PayHub markup is <strong class="text-white"><?php echo htmlspecialchars($int_markup, ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
             <div class="border-t border-white/10 pt-6">
                 <h3 class="font-bold mb-4">Transfers (payouts)</h3>
                 <ul class="space-y-3 text-slate-200 text-sm">
@@ -72,7 +72,7 @@ include 'includes/header.php';
             <a href="support.php" class="block w-full text-center mt-8 py-4 bg-indigo-500 text-white font-bold rounded-2xl hover:bg-indigo-400 transition-all">Contact Sales</a>
         </article>
     </div>
-    <p class="max-w-5xl mx-auto px-4 mt-8 text-xs text-slate-500">Rates shown are Paystack's published Nigeria rates and may change. Contract-specific or channel-specific fees returned by Paystack take precedence over these estimates. PayHub markup can be adjusted in Platform Configuration.</p>
+    <p class="max-w-5xl mx-auto px-4 mt-8 text-xs text-slate-500">Rates shown are our payment aggregator's published Nigeria rates and may change. Contract-specific or channel-specific fees returned by our payment aggregator take precedence over these estimates. PayHub markup can be adjusted in Platform Configuration.</p>
 </section>
 
 <?php include 'includes/footer.php'; ?>
