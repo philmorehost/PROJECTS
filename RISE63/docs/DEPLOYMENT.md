@@ -189,9 +189,24 @@ Two things to know before a large import:
 
 **The parish list is empty on the registration page**
 
-It no longer can be, by design: the list is rendered by PHP into the page, so an empty list means
-the *directory* is empty (or every parish in it is inactive), not that a request failed. Add the
-churches in Parish Connect first — see "Building the parish directory in bulk" above.
+An empty list means one of four things, and 1.0.9 names which on both the registration page and
+Parish Connect (the notice at the top of that page, and `php bin/doctor.php`):
+
+| State | What you see | Fix |
+|---|---|---|
+| **empty** | "The church directory is empty" | Paste your list in Parish Connect → *Add zones, areas and parishes in bulk* |
+| **inactive** | "All N churches are switched off" | Open one and switch it back on |
+| **orphaned** | "N churches belong to an area or zone that no longer exists" | Re-import the hierarchy; the import recreates what is missing and matches the rest by name |
+| **ok** | the list renders | nothing |
+
+Members are **not** blocked in the first three: the form falls back to a required church-name field,
+and what they type is kept on the account and listed on **People & roles** under *churches members
+asked for*, so it can be added to the directory later. That fallback is the reason an empty
+directory is a setup task rather than an outage.
+
+The old advice — "an empty list means the directory is empty, not that a request failed" — was true
+but useless from the member's side: the picker answered *No parish matches* to every word, which
+reads as a broken search. It now says the directory is empty instead.
 
 If the search box still says the list "could not be loaded", the live search is failing while the
 rendered list underneath still works. Check, in this order:

@@ -55,6 +55,39 @@ require __DIR__ . '/../partials/share.php';
           <p class="hint" style="margin-top:2px">Find your church in the list. If it is not there yet,
             type its name and we will pass it to your parish representative.</p>
 
+          <?php
+            /*
+             * When the directory is empty there is nothing to search, and a search box that answers
+             * "No parish matches" to every word is worse than no search box: the member concludes
+             * the system is broken, or that their church is missing from a list that works for
+             * everyone else. So the picker is replaced by the one field that does work — the typed
+             * name — with the reason stated plainly.
+             *
+             * This is the reported fault: the registration page listed no churches. The page was
+             * rendering correctly; the directory behind it was empty.
+             */
+            // Defined here, not with the datalist below, because this is the first thing to use
+            // it — a view that references a variable before its assignment reads as an empty
+            // directory on every load, which is precisely the bug being fixed.
+            $choosable = $parishes ?? [];
+            $directoryEmpty = $choosable === [];
+          ?>
+
+          <?php if ($directoryEmpty): ?>
+            <div class="notice" style="margin:10px 0" role="status">
+              <strong>The church directory is empty.</strong>
+              Nothing is wrong with this form — no churches have been added yet, so there is no list
+              to choose from. Type your church name below and your representative will add it.
+            </div>
+            <div class="field">
+              <label for="parish_name_raw_only">Your church</label>
+              <input type="text" id="parish_name_raw_only" name="parish_name_raw" maxlength="150"
+                     required data-caps autocapitalize="characters" spellcheck="false"
+                     placeholder="CHAPEL OF WONDERS PARISH">
+              <span class="hint">Write it in full. Capitals are applied automatically.</span>
+            </div>
+          <?php else: ?>
+
           <div class="field" data-combobox id="parish-combo" data-endpoint="<?= e(url('api/index.php')) ?>">
             <label for="parish-search">Search for your church</label>
             <div class="combo">
@@ -79,7 +112,6 @@ require __DIR__ . '/../partials/share.php';
              * no network round trip, no script and no CSP allowance, and the browser matches on
              * the text in the list. app.js upgrades it to the richer picker when it can.
              */
-            $choosable = $parishes ?? [];
           ?>
           <?php if ($choosable !== []): ?>
             <div class="field">
@@ -101,6 +133,9 @@ require __DIR__ . '/../partials/share.php';
             </datalist>
           <?php endif; ?>
 
+          <?php endif; ?>
+
+          <?php if (!$directoryEmpty): ?>
           <details id="parish-manual" style="margin-top:4px">
             <summary style="cursor:pointer;min-height:32px;display:flex;align-items:center">My church is not in the list</summary>
             <div class="field" style="margin-top:10px">
@@ -112,18 +147,20 @@ require __DIR__ . '/../partials/share.php';
                 representative adds it to the directory afterwards.</span>
             </div>
           </details>
+          <?php endif; ?>
 
+          <?php if (!$directoryEmpty): ?>
+          <?php /* Only needed when the picker is present: with an empty directory the plain field
+                   above is already the only route, and a second input with the same name would
+                   submit both and the last one would win. */ ?>
           <noscript>
-            <p class="hint">
-              <?= $choosable === []
-                  ? 'The directory is empty, so type your church name below — your representative will add it.'
-                  : 'Pick your church in the list above. If it is not there, type its name below.' ?>
-            </p>
+            <p class="hint">Pick your church in the list above. If it is not there, type its name below.</p>
             <div class="field">
               <label for="parish_name_raw_ns">Church name, if not listed</label>
               <input type="text" id="parish_name_raw_ns" name="parish_name_raw" maxlength="150">
             </div>
           </noscript>
+          <?php endif; ?>
         </fieldset>
 
         <div class="field">

@@ -11,6 +11,31 @@ $isAdmin = Auth::isAdmin($account);
 <section class="card">
   <h1>Parish Connect</h1>
   <p class="muted">The grassroots network: every parish, its CSR representative and its recorded needs.</p>
+  <?php
+    // The empty state, on the page that fixes it. An empty directory used to be invisible from
+    // inside the application: the counters read 0 and everything else looked normal, while every
+    // member registering saw a search box that matched nothing.
+    $picker = $pickerState ?? ['state' => 'ok', 'message' => '', 'total' => 0, 'inactive' => 0, 'orphaned' => 0];
+  ?>
+  <?php if (($picker['state'] ?? 'ok') !== 'ok'): ?>
+    <div class="notice notice-warn" style="margin-top:12px" role="status" id="directory-empty">
+      <strong><?= e((string) $picker['message']) ?></strong>
+      <?php if ($picker['state'] === 'empty'): ?>
+        Until churches are added, the registration page cannot list them — members can still type
+        their church name, and it waits in the queues below for you to add.
+      <?php elseif ($picker['state'] === 'inactive'): ?>
+        They exist but are switched off, so nobody can pick them. Open one and switch it back on.
+      <?php elseif ($picker['state'] === 'orphaned'): ?>
+        Their area or zone has been removed, so they cannot be reached. Re-import the hierarchy below;
+        the import recreates what is missing and matches the rest by name.
+      <?php endif; ?>
+      <?php if (($picker['total'] ?? 0) === 0): ?>
+        Paste the list into <strong>Add zones, areas and parishes in bulk</strong> below — one church
+        per line as <code>ZONE, AREA, PARISH</code>.
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+
   <div class="grid grid-3" style="margin-top:12px">
     <div class="stat"><b><?= e((string) $totals['parishes']) ?></b><span>Parishes</span></div>
     <div class="stat"><b><?= e((string) $totals['areas']) ?></b><span>Areas</span></div>

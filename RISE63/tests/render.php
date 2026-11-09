@@ -156,6 +156,45 @@ $renderPage = static function (string $view, array $data, ?array $account = null
     return View::capture(RISE63_TEST_ROOT . '/app/Views/' . $view . '.php', $payload, true);
 };
 
+ok('Registration explains an empty directory instead of showing a dead search box', function (): void {
+    // Reported: "The registration page failed to list the churches." The page was rendering
+    // correctly — the directory behind it was empty. But the picker answered "No parish matches"
+    // to every word typed, which reads as a broken search, and there was no field to type a church
+    // into on the page as rendered.
+    //
+    // Rendered both ways here, because the two states need different markup and only one of them
+    // can be checked from the database.
+    $render = static function (array $parishes): string {
+        return View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', [
+            'title' => 'Create account', 'parishes' => $parishes,
+            'user' => null, 'flashes' => [], 'error' => null,
+        ], false);
+    };
+
+    // ── Empty directory.
+    $empty = $render([]);
+    assertContains('church directory is empty', $empty, 'the empty state must be stated, not implied');
+    assertContains('id="parish_name_raw_only"', $empty, 'the member needs a field that works');
+    assertTrue(
+        (bool) preg_match('/id="parish_name_raw_only"[^>]*required/', $empty),
+        'that field must be required, or the member submits no church at all'
+    );
+    assertMissing('data-combobox', $empty, 'a search box that matches nothing must not be shown');
+    assertSame(1, substr_count($empty, 'name="parish_name_raw"'),
+        'exactly one church-name input: two would submit twice and the last would win');
+
+    // ── Populated directory: the picker returns, the notice goes.
+    $rows = [[
+        'id' => 7, 'parish' => 'SANCTUARY OF PEACE', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+        'code' => null, 'label' => 'SANCTUARY OF PEACE · HOPE AREA · GRACE ZONE',
+    ]];
+    $full = $render($rows);
+    assertContains('data-combobox', $full, 'a populated directory gets the live picker');
+    assertContains('SANCTUARY OF PEACE', $full, 'and the church is in the rendered list');
+    assertMissing('church directory is empty', $full, 'no notice when there is nothing to report');
+    assertContains('id="parish-pick"', $full, 'the no-JavaScript select is still rendered');
+});
+
 /* ───────────────────────────── Standalone screens ──────────────────────────── */
 
 ok('Login screen renders with a form, CSRF and no inline script', function (): void {
@@ -206,8 +245,21 @@ ok('Reset and change-password screens never echo the token into visible text', f
     assertContains('data-theme="dark"', $forced);
 });
 
-ok('Registration screen exposes a parish combobox with a noscript fallback', function (): void {
-    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', ['flashes' => [], 'page' => 'register'], false);
+$directoryFixture = static fn (): array => [
+    ['id' => 5, 'parish' => 'LIVING WATER PARISH', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+     'label' => 'LIVING WATER PARISH · HOPE AREA · GRACE ZONE'],
+    ['id' => 9, 'parish' => 'GOOD SHEPHERD PARISH', 'area' => 'FAITH AREA', 'zone' => 'GRACE ZONE',
+     'label' => 'GOOD SHEPHERD PARISH · FAITH AREA · GRACE ZONE'],
+];
+
+ok('Registration screen exposes a parish combobox with a noscript fallback', function () use ($directoryFixture): void {
+    // Rendered WITH a directory on purpose. These three tests used to pass no `parishes` at all,
+    // which is now the empty-directory state — so they were asserting the picker's markup against
+    // a page that deliberately does not contain it. That is the same confusion the field report was
+    // about, in the test suite.
+    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', [
+        'flashes' => [], 'page' => 'register', 'parishes' => $directoryFixture(),
+    ], false);
     assertContains('role="combobox"', $html);
     assertContains('<noscript>', $html);
     assertContains('name="parish_id"', $html);
@@ -250,12 +302,16 @@ ok('The parish list is in the HTML, not only behind a fetch', function (): void 
         false
     );
     assertMissing('<datalist', $empty, 'no datalist when there is nothing to list');
-    assertContains('The directory is empty', $empty);
-    assertContains('My church is not in the list', $empty, 'the manual route always exists');
+    assertMissing('data-combobox', $empty, 'and no search box that matches nothing');
+    assertContains('church directory is empty', $empty, 'the state must be stated, not implied');
+    assertContains('id="parish_name_raw_only"', $empty, 'the manual route is the only route: a field');
+    assertContains('required', $empty, 'and it is required, so no member submits without a church');
 });
 
-ok('Registration offers a church that is not listed yet, and types it in capitals', function (): void {
-    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', ['flashes' => [], 'page' => 'register'], false);
+ok('Registration offers a church that is not listed yet, and types it in capitals', function () use ($directoryFixture): void {
+    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', [
+        'flashes' => [], 'page' => 'register', 'parishes' => $directoryFixture(),
+    ], false);
 
     // The manual path must be reachable without JavaScript: a <details> block the member can open
     // by hand if the picker never loads, not a control that only app.js can reveal.

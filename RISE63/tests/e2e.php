@@ -20,6 +20,8 @@ use RISE63\Core\Database;
 use RISE63\Core\Fund;
 use RISE63\Core\Members;
 use RISE63\Core\Migrator;
+use RISE63\Core\ParishDirectory;
+use RISE63\Core\Registration;
 use RISE63\Core\Money;
 use RISE63\Core\SelfHeal;
 use RISE63\Core\Security;
@@ -683,6 +685,83 @@ ok('A mail server that says nothing is reported as unreachable, not as a rejecti
             'a transport failure must not be reported as a rejection: ' . $message);
         assertTrue(str_contains($message, '127.0.0.1'), 'the message must name what it tried: ' . $message);
     }
+});
+
+/* ───────── The registration page listed no churches (an empty directory) ───────── */
+
+ok('An empty directory is reported as empty, not as an empty search result', function (): void {
+    // Reported: "The registration page failed to list the churches." The page was correct; the
+    // directory behind it was empty. Four states look identical from the outside — nothing added,
+    // everything switched off, rows orphaned from their area or zone, or a working directory — and
+    // they need different fixes, so the app has to say which one it is.
+    $clear = static function (): void {
+        Database::run('DELETE FROM parishes');
+        Database::run('DELETE FROM areas');
+        Database::run('DELETE FROM zones');
+    };
+
+    $clear();
+    $state = ParishDirectory::pickerState();
+    assertSame('empty', $state['state'], 'a directory with no rows is empty');
+    assertSame(0, $state['total']);
+    assertTrue($state['message'] !== '', 'the state must come with something to show a person');
+    assertTrue(ParishDirectory::pickerIsEmpty(), 'and the picker has nothing to offer');
+
+    // Populated: the picker works and there is nothing to report.
+    Database::run('INSERT INTO zones (zone_name) VALUES (?)', ['GRACE ZONE']);
+    $zoneId = Database::id();
+    Database::run('INSERT INTO areas (zone_id, area_name) VALUES (?,?)', [$zoneId, 'HOPE AREA']);
+    $areaId = Database::id();
+    Database::run('INSERT INTO parishes (area_id, parish_name) VALUES (?,?)', [$areaId, 'LIVING WATER PARISH']);
+
+    $state = ParishDirectory::pickerState();
+    assertSame('ok', $state['state'], 'one reachable parish is enough');
+    assertSame(1, $state['active']);
+    assertTrue(!ParishDirectory::pickerIsEmpty(), 'the picker has something to show');
+
+    // Switched off: the rows exist, so "add churches" would be the wrong advice.
+    Database::run('UPDATE parishes SET is_active = 0');
+    $state = ParishDirectory::pickerState();
+    assertSame('inactive', $state['state'], 'all-inactive is a different problem from empty');
+    assertSame(1, $state['inactive']);
+    assertTrue(str_contains($state['message'], 'switched off'), 'the message must name the cure: ' . $state['message']);
+
+    $clear();
+});
+
+ok('A member can register while the directory is empty', function (): void {
+    // The empty-directory form posts a typed church and no parish_id. That path existed before —
+    // migration 0002 added `parish_name_raw` for exactly this — but it was unreachable on the
+    // rendered page at the moment of the report, because the parish field was inside markup that
+    // only appeared when the directory was populated.
+    Database::run('DELETE FROM parishes');
+
+    $result = Registration::create([
+        'full_name' => 'Chidi Okafor',
+        'email'     => 'chidi.reg@example.ng',
+        'phone'     => '',
+        'parish_id' => '',
+        'parish_name_raw' => 'Sanctuary of Peace',
+        'password'  => 'Correct-Horse-Battery-99',
+        'confirm'   => 'Correct-Horse-Battery-99',
+    ]);
+    assertTrue(isset($result['user']['id']) || isset($result['id']), 'registration must succeed');
+
+    $row = Database::one(
+        'SELECT parish_id, parish_name_raw, role FROM users WHERE email = ?',
+        ['chidi.reg@example.ng']
+    );
+    assertTrue($row !== null, 'the account must exist');
+    assertSame(null, $row['parish_id'], 'no parish may be invented when the directory is empty');
+    assertSame('SANCTUARY OF PEACE', $row['parish_name_raw'], 'the typed church must be kept, in capitals');
+    assertSame('youth_member', $row['role']);
+
+    // And the office can see it, which is the whole point of keeping it.
+    $queue = Database::all(
+        "SELECT parish_name_raw FROM users
+          WHERE parish_id IS NULL AND parish_name_raw IS NOT NULL AND parish_name_raw <> ''"
+    );
+    assertTrue(count($queue) >= 1, 'the church the member typed must reach the queue on People');
 });
 
 /* ──────────────────────────────── summary ─────────────────────────────── */

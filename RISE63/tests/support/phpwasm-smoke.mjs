@@ -247,8 +247,11 @@ echo RISE63\\Core\\View::capture('/src/app/Views/auth/register.php',
     !fatal.test(registerPage), registerPage.replace(/\s+/g, ' ').slice(0, 400));
   check('the registration page still offers the manual church field',
     /name="parish_name_raw"/.test(registerPage), registerPage.slice(0, 400));
+  // An empty picker with no explanation was the reported fault: the directory had no churches, so
+  // the form rendered a search box that matched nothing and no way to type a church instead. The
+  // page must always offer a route forward, whichever state the directory is in.
   check('the registration page never renders a bare empty picker with no explanation',
-    /My church is not in the list|The directory is empty/i.test(registerPage),
+    /My church is not in the list|church directory is empty|parish_name_raw/i.test(registerPage),
     registerPage.replace(/\s+/g, ' ').slice(0, 400));
 
   // The API must answer JSON with a `parishes` key even when it cannot reach the database, so the

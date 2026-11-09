@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.8 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.9 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -27,7 +27,7 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **44 passed, 0 failed** |
 | Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
-| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **28 passed, 0 failed, 1 skipped** — real SQL |
+| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **30 passed, 0 failed, 1 skipped** — real SQL |
 | **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **14 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
@@ -383,6 +383,53 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1i What 1.0.9 fixes — the registration page listed no churches
+
+Reported: the registration page showed no churches. Searching for one answered **"No parish matches
+'Sanctuary'."**
+
+**The page was not broken. The directory was empty.** Nothing was added to it on that installation,
+and the code had no way to say so. That is the real defect: four different situations — never added,
+all switched off, rows orphaned from their area, or working — were indistinguishable from the
+outside, and the one message the member did see ("No parish matches") actively pointed at the wrong
+cause.
+
+What changed, and why each part matters:
+
+| Symptom | Before | Now |
+|---|---|---|
+| Nothing in the directory | Seach box matched nothing; member concluded the search was broken | The search box is replaced by a required church-name field and a notice saying the directory is empty |
+| Member cannot pick a church | No field on the rendered page at that moment | The typed name is submitted, kept as `parish_name_raw`, and listed on **People & roles** for the office to add |
+| Administrator cannot see the problem | An empty directory looked normal: counters read 0 | A notice at the top of **Parish Connect** states the state and the cure, next to the bulk-import box that fixes it |
+| Diagnosing it needs a browser | — | `bin/doctor.php` prints `Parish directory: …`, and `GET /api/index.php` returns `directory: "empty" | "inactive" | "orphaned" | "ok"` |
+
+`ParishDirectory::pickerState()` is the single source for that answer. It distinguishes the states
+by query, not by guessing:
+
+- **empty** — no rows in `parishes`.
+- **inactive** — rows exist, none has `is_active = 1`.
+- **orphaned** — rows exist but their `area` (or the area's `zone`) does not, so the picker's inner
+  joins drop them. This is the only state that is genuine corruption, and re-importing repairs it.
+- **ok** — at least one parish is reachable.
+
+**Three smaller defects found while fixing it:**
+
+1. The registration view read `$choosable` *before* the assignment that defines it, so a naive
+   empty-state branch would have fired on every load, populated directory or not. The assignment now
+   precedes its first use.
+2. The `<noscript>` fallback contained a second `name="parish_name_raw"` input. With the picker
+   present that was harmless, but in the empty-directory state it would have submitted two values
+   for one field and the last would win. It is now rendered only alongside the picker.
+3. The live search had no protection against a stale response: `AbortController` is not available
+   everywhere, and without it a slow early request could repaint over a correct later one. Each
+   request now carries a sequence number and a superseded answer is discarded.
+
+**The tests were making the same mistake as the page.** Three registration tests in
+`tests/render.php` rendered the view with no `parishes` key at all — which is now precisely the
+empty-directory state — and asserted that the picker's markup was present. They passed because the
+markup was unconditional; they would have kept passing if the picker had vanished entirely. They now
+pass a populated fixture and assert the empty state separately.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 

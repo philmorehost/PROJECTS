@@ -5,7 +5,7 @@ self.RISE63_SHELL = [
     "./public/icons/icon-192.png",
     "./public/icons/icon-512.png",
     "./public/assets/app.1803fe68.css",
-    "./public/assets/app.6148ab27.js",
+    "./public/assets/app.a91943fd.js",
     "./public/assets/security.613104f8.js"
 ];
-self.RISE63_RELEASE = "1.0.7-af5050c9";
+self.RISE63_RELEASE = "1.0.8-5b192694";

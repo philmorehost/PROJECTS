@@ -284,7 +284,12 @@
       if (!items.length) {
         var empty = document.createElement('li');
         empty.className = 'combo-empty';
-        empty.textContent = term ? 'No parish matches “' + term + '”.' : 'Start typing your parish, area or zone.';
+        /* An empty answer to an empty question means the directory itself is empty, not that the
+           member mistyped. Saying "No parish matches" there is what made an unpopulated directory
+           look like a broken search. */
+        empty.textContent = term
+          ? 'No parish matches “' + term + '”.'
+          : 'No churches have been added to the directory yet — type your church name below.';
         list.appendChild(empty);
         offerManual(term);
       } else {
@@ -332,10 +337,14 @@
       input.setAttribute('aria-activedescendant', options[index].id);
       if (options[index].scrollIntoView) { options[index].scrollIntoView({ block: 'nearest' }); }
     }
+    var sequence = 0;
     function search(term) {
       if (!endpoint) { return; }
       if (controller) { controller.abort(); }
       controller = typeof AbortController === 'function' ? new AbortController() : null;
+      /* A request that has been superseded must not repaint the list. abort() only helps when
+         AbortController exists, so the answer is also tagged with the sequence it belonged to. */
+      var mine = ++sequence;
       fetch(endpoint + '?q=' + encodeURIComponent(term), {
         headers: { Accept: 'application/json' },
         credentials: 'same-origin',
@@ -344,8 +353,10 @@
         if (!response.ok) { throw new Error('search failed'); }
         return response.json();
       }).then(function (data) {
+        if (mine !== sequence) { return; }
         render(Array.isArray(data.parishes) ? data.parishes : [], term);
       }).catch(function () {
+        if (mine !== sequence) { return; }
         // The search did not run — offline, a CSP block, a 500. Say so instead of closing the list
         // and leaving an empty box, which is indistinguishable from "your church is not listed".
         showUnavailable(term);

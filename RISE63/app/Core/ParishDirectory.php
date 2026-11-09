@@ -222,6 +222,86 @@ final class ParishDirectory
     }
 
     /**
+     * How many parishes the public can actually choose, and — when that is none — why.
+     *
+     * Reported: the registration page listed no churches. The page was rendering correctly; the
+     * directory behind it was empty, and nothing anywhere said so. The member saw a picker that
+     * answered "No parish matches" to every word they typed, which reads as a broken search, and
+     * the administrator had no screen that said "you have not added any churches yet".
+     *
+     * This is the one place that answers the question precisely, because "empty" and "populated but
+     * invisible" are different problems with different cures:
+     *
+     *   - **empty**      nothing has been added. Cure: paste the list in Parish Connect.
+     *   - **inactive**   churches exist and every one is switched off. Cure: re-activate them.
+     *   - **orphaned**   parishes exist but their area or zone row is gone. Unreachable, and the
+     *                    only real corruption of the three; the cure is a re-import.
+     *   - **ok**         the picker has something to show.
+     *
+     * Queried defensively: this is used to explain a fault, so it must never be able to become one.
+     *
+     * @return array{state:string, active:int, total:int, inactive:int, orphaned:int, message:string}
+     */
+    public static function pickerState(): array
+    {
+        $out = ['state' => 'ok', 'active' => 0, 'total' => 0, 'inactive' => 0, 'orphaned' => 0, 'message' => ''];
+
+        try {
+            $total = (int) Database::value('SELECT COUNT(*) FROM parishes');
+            $active = (int) Database::value('SELECT COUNT(*) FROM parishes p WHERE p.is_active = 1');
+            // Parishes the picker cannot show because a join drops them.
+            $orphaned = (int) Database::value(
+                'SELECT COUNT(*) FROM parishes p
+                  WHERE NOT EXISTS (SELECT 1 FROM areas a WHERE a.id = p.area_id)
+                     OR EXISTS (SELECT 1 FROM areas a WHERE a.id = p.area_id
+                                AND NOT EXISTS (SELECT 1 FROM zones z WHERE z.id = a.zone_id))'
+            );
+            $reachable = (int) Database::value(
+                'SELECT COUNT(*) FROM parishes p
+                   JOIN areas a ON a.id = p.area_id
+                   JOIN zones z ON z.id = a.zone_id
+                  WHERE p.is_active = 1'
+            );
+        } catch (\Throwable $error) {
+            // A directory that cannot be read must not stop a page rendering; say nothing rather
+            // than claim the directory is empty when it may simply be unavailable.
+            $out['state'] = 'unknown';
+            return $out;
+        }
+
+        $out['total']    = $total;
+        $out['active']   = $active;
+        $out['inactive'] = max(0, $total - $active);
+        $out['orphaned'] = $orphaned;
+
+        if ($reachable > 0) {
+            return $out;                       // a populated picker needs no explanation
+        }
+
+        if ($total === 0) {
+            $out['state']   = 'empty';
+            $out['message'] = 'No churches have been added to the directory yet.';
+        } elseif ($active === 0) {
+            $out['state']   = 'inactive';
+            $out['message'] = 'All ' . $total . ' church(es) in the directory are switched off.';
+        } elseif ($orphaned > 0) {
+            $out['state']   = 'orphaned';
+            $out['message'] = $orphaned . ' church(es) belong to an area or zone that no longer exists.';
+        } else {
+            $out['state']   = 'empty';
+            $out['message'] = 'No church in the directory is reachable by the picker.';
+        }
+
+        return $out;
+    }
+
+    /** True when the public registration picker has nothing to offer. */
+    public static function pickerIsEmpty(): bool
+    {
+        return self::pickerState()['state'] !== 'ok';
+    }
+
+    /**
      * Write a parsed list, creating only what is missing.
      *
      * A repeat is not an error here, and that is the whole point of the format: an area with four
