@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace RISE63;
 
-const VERSION        = '1.0.7';
+const VERSION        = '1.0.8';
 const MIN_PHP        = '8.2.0';
 const PRODUCT        = 'RISE 63';
 const ROOT           = __DIR__ . '/..';
@@ -54,3 +54,4 @@ require __DIR__ . '/Core/Paginator.php';
 require __DIR__ . '/Core/Fund.php';
 require __DIR__ . '/Core/Members.php';
 require __DIR__ . '/Core/SelfHeal.php';
+require __DIR__ . '/Core/Share.php';

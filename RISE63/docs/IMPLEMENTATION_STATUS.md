@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.7 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.8 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -311,6 +311,78 @@ should judge the request, not the machine — a check that depends on the host m
 save or refuse depending on where it runs, and it blocked the unit suite (which has no TLS) the
 first time it was tried. Capability belongs in `test()`, which reports it where the operator is
 looking.
+
+### 2.1g What 1.0.8 fixes — shared links showed raw markup
+
+Reported: pasting the site link into WhatsApp produced the HTML document as text, not a preview.
+
+**Cause.** Every page was served with **no `Content-Type` of its own**, so it inherited PHP's
+`default_mimetype`. On the deployment host that value is `text/plain`. A browser guesses its way to
+a usable page when the type is wrong, which is why nobody ever saw a broken site — but a
+link-preview scraper does not guess, so the whole document rendered as text in the chat window.
+
+The fix is one declaration, in `Security::sendHtmlHeaders()`, called by `sendHeaders()` — which
+every HTML entry point already went through:
+
+```php
+header('Content-Type: text/html; charset=utf-8');
+```
+
+This is the right fix regardless of the host's ini. A page that only works when a server default
+happens to be correct is a page that is broken on the next host.
+
+**Second cause, found while fixing the first: there was nothing to preview.** No `og:` tag existed
+anywhere in the application. Even a correctly-typed page would have produced a bare title and a
+paragraph of body text. Added `RISE63\Core\Share` and `app/Views/partials/share.php`:
+
+| Tag | Value | Why |
+|---|---|---|
+| `og:title`, `og:description` | page title, tagline (≤200 chars) | the two lines a card shows |
+| `og:url`, `rel=canonical` | absolute URL of this page | a relative URL resolves against the scraper's host |
+| `og:image` + width/height | `public/icons/share.jpg`, 1200×630 | the card; declared size reserves space before load |
+| `twitter:card` etc. | `summary_large_image` | X does not read Open Graph reliably |
+| `robots: noindex` | on every signed-in and transactional page | a card for `/treasury` would show figures to strangers |
+
+The card image is **JPEG, 48 KB**. The first version was a palette PNG at 477 KB — a scraper on a
+slow connection gives up long before that, and the declared `1200×630` in the tags did not match the
+`1424×752` the generator actually produced.
+
+**Only pages reachable without signing in get a preview card.** A scraper carries no session, so any
+URL behind the login would render the sign-in page and cache *that* as the image.
+
+## 2.1h Security review (1.0.8)
+
+An audit of the codebase, not a change of posture — the findings were that posture is already sound.
+Recorded so the next review starts from facts rather than starting over.
+
+**SQL injection: none.** A static pass over all 85 PHP files for SQL built by interpolation found
+four sites, all provably closed:
+
+| Site | Value interpolated | Why it is safe |
+|---|---|---|
+| `Auth::pinLockedFor()` | `Settings::int('pin_lock_minutes')` | returns `int` |
+| `BruteForce::failures()` | column name | whitelist `['ip_address','username_attempted']` |
+| `BruteForce::failures()` | `max(1, int)` minutes | `int` |
+| `ParishDirectory::search()` | `max(1, min(200, int))` limit | `int`, clamped |
+
+Everything else parameterises. `Database` uses `ATTR_EMULATE_PREPARES => false`, so parameters are
+bound by the server rather than escaped client-side.
+
+**Also checked and found correct:** CSRF (one `assertPost()` on every POST in the front controller,
+`hash_equals`, plus a same-origin check); XSS (every dynamic `<?=` goes through `e()`, which uses
+`ENT_QUOTES | ENT_SUBSTITUTE`; the ~98 unescaped expressions are literal ternaries, `(int)` casts or
+closed-set CSS class names); session hardening (strict mode, `HttpOnly`, `SameSite=Lax`,
+`Secure` when HTTPS, 48-char ids); password reset (32 random bytes, only the SHA-256 stored,
+single-use, expiring); uploads (extension whitelist *plus* MIME sniffing, random stored name, 0640,
+private directory); document download (pattern-validated name, `realpath` containment, ownership
+check); open redirect (targets stripped to `[a-z0-9-]`); zip-slip (segments rejected, absolute paths
+rejected); SSRF (release downloads pinned to the licence host and scheme); headers (CSP without
+`unsafe-inline`, `frame-ancestors 'none'`, `nosniff`, HSTS on HTTPS).
+
+One genuine latent issue, fixed: `View::render()` concatenated its template name into a path with no
+containment check. No caller passes request input today — the router derives page names through
+`preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
+refuses anything outside `app/Views`.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 
