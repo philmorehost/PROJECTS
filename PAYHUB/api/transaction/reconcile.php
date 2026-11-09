@@ -70,7 +70,8 @@ foreach ($remote_txs as $rtx) {
             $email = $rtx['customer']['email'];
             $channel_type = $rtx['channel'];
             $gatewayFee = isset($rtx['fees']) && is_numeric($rtx['fees']) ? ((float)$rtx['fees'] / 100) : null;
-            $fee = calculate_fees($amount, false, $user['id'], $gatewayFee, $rtx['channel'] ?? '');
+            $isInternational = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $rtx['channel'] ?? '');
+            $fee = calculate_fees($amount, $isInternational, $user['id'], $gatewayFee, $rtx['channel'] ?? '');
             $settled = $amount - $fee;
 
             $db->beginTransaction();

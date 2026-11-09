@@ -60,14 +60,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
+// Add newly-managed pricing defaults to existing installations without overwriting admin values.
+$pricingDefaults = [
+    'aggregator_local_fee_percent' => '1.5', 'aggregator_local_fee_flat' => '100',
+    'aggregator_local_fee_cap' => '2000', 'aggregator_local_flat_waiver_below' => '2500',
+    'aggregator_dva_fee_percent' => '1', 'aggregator_dva_fee_cap' => '300',
+    'aggregator_international_fee_percent' => '3.9', 'aggregator_international_fee_flat' => '100',
+    'local_markup_percent' => '0', 'local_markup_flat' => '0', 'local_markup_cap' => '0',
+    'international_markup_percent' => '0', 'international_markup_flat' => '0', 'international_markup_cap' => '0',
+];
+$seedPricing = $db->prepare("INSERT IGNORE INTO config (`key`, `value`) VALUES (?, ?)");
+foreach ($pricingDefaults as $key => $value) $seedPricing->execute([$key, $value]);
+
 $stmt = $db->query("SELECT * FROM config ORDER BY `key` ASC");
 $config = $stmt->fetchAll();
+$configGroups = [
+    'Payments & Pricing' => ['icon' => 'credit-card', 'description' => 'Gateway credentials, provider costs, and PayHub margins', 'items' => []],
+    'Payouts & Settlements' => ['icon' => 'landmark', 'description' => 'Payout controls, limits, tiers, and duties', 'items' => []],
+    'Email & Webhooks' => ['icon' => 'send', 'description' => 'Notifications and integration endpoints', 'items' => []],
+    'Site & System' => ['icon' => 'settings-2', 'description' => 'Branding and platform-wide preferences', 'items' => []],
+    'Other Settings' => ['icon' => 'sliders-horizontal', 'description' => 'Additional configuration values', 'items' => []],
+];
+foreach ($config as $item) {
+    $key = strtolower((string)$item['key']);
+    if (preg_match('/payout|settlement|stamp_duty|manual_payout|min_payout|max_daily/', $key)) {
+        $group = 'Payouts & Settlements';
+    } elseif (preg_match('/paystack|aggregator|markup|transaction_fee|international_fee|payment|gateway/', $key)) {
+        $group = 'Payments & Pricing';
+    } elseif (preg_match('/smtp|email|webhook/', $key)) {
+        $group = 'Email & Webhooks';
+    } elseif (preg_match('/site_|sys_|logo|name|timezone/', $key)) {
+        $group = 'Site & System';
+    } else {
+        $group = 'Other Settings';
+    }
+    $configGroups[$group]['items'][] = $item;
+}
 
 include '../includes/dashboard-head.php';
 ?>
 <body class="bg-slate-50 text-slate-900 flex h-screen overflow-hidden" x-data>
     <?php include '../includes/sidebar.php'; ?>
-    <main class="flex-1 flex flex-col min-w-0 overflow-hidden" x-data="{ editingKey: '', editingValue: '' }">
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden" x-data="{ editingKey: '', editingValue: '', searchQuery: '' }">
         <?php include '../includes/topbar.php'; ?>
         <div class="flex-1 overflow-y-auto p-4 sm:p-8">
             <?php if (isset($success_msg)): ?>
@@ -80,7 +114,7 @@ include '../includes/dashboard-head.php';
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900 mb-2">Platform Configuration</h1>
                     <p class="text-slate-500">A powerful key-value store to manage global platform settings</p>
-                    <p class="mt-3 max-w-3xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Pricing change:</strong> Paystack processing costs are now passed through separately; confirmed Paystack transaction fees are used where available. Set <code>local_markup_percent</code>, <code>local_markup_flat</code> (and optional <code>local_markup_cap</code>) to define PayHub's margin. International equivalents are <code>international_markup_percent</code>, <code>international_markup_flat</code>, and <code>international_markup_cap</code>. These markup defaults are zero; choose the business margin you want before advertising a profit rate. The old <code>transaction_fee_*</code> / <code>international_fee_*</code> keys are legacy totals and are no longer used for live settlement deductions.</p>
+                    <p class="mt-3 max-w-3xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Pricing change:</strong> Paystack processing costs are now passed through separately; confirmed Paystack transaction fees are used where available. Maintain the <code>aggregator_*</code> rate settings against your current provider agreement, then set <code>local_markup_percent</code>, <code>local_markup_flat</code> (and optional <code>local_markup_cap</code>) to define PayHub's margin. International equivalents are <code>international_markup_percent</code>, <code>international_markup_flat</code>, and <code>international_markup_cap</code>. These markup defaults are zero; choose the business margin you want before advertising a profit rate. The old <code>transaction_fee_*</code> / <code>international_fee_*</code> keys are legacy totals and are no longer used for live settlement deductions.</p>
                 </div>
             </div>
 
@@ -173,19 +207,45 @@ include '../includes/dashboard-head.php';
             <div class="grid lg:grid-cols-3 gap-8 max-w-7xl">
                 <div class="lg:col-span-2 space-y-8">
                     <div class="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-                        <div class="grid md:grid-cols-2 gap-6 mb-12">
-                            <?php foreach ($config as $c): ?>
-                                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 group relative hover:border-indigo-200 transition-all">
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider"><?php echo $c['key']; ?></p>
-                                    <p class="font-mono text-sm text-slate-900 break-all"><?php echo $c['value'] ?: '<span class="text-slate-300 italic">empty</span>'; ?></p>
-                                    <button @click="editingKey = '<?php echo $c['key']; ?>'; editingValue = '<?php echo addslashes($c['value']); ?>'" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all">
-                                        <i data-lucide="settings" class="w-4 h-4"></i>
-                                    </button>
-                                </div>
+                        <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900">Configuration library</h2>
+                                <p class="text-xs text-slate-500">Browse grouped settings or search by key.</p>
+                            </div>
+                            <label class="relative block w-full sm:w-72">
+                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                                <input type="search" x-model="searchQuery" placeholder="Search settings..." class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400">
+                            </label>
+                        </div>
+                        <div class="grid xl:grid-cols-2 gap-5 mb-10">
+                            <?php foreach ($configGroups as $groupName => $group): ?>
+                                <?php if (!$group['items']) continue; ?>
+                                <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                                    <header class="flex items-center gap-3 px-5 py-4 bg-slate-50 border-b border-slate-100">
+                                        <span class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center"><i data-lucide="<?php echo htmlspecialchars($group['icon'], ENT_QUOTES, 'UTF-8'); ?>" class="w-5 h-5"></i></span>
+                                        <div><h3 class="font-bold text-slate-900"><?php echo htmlspecialchars($groupName, ENT_QUOTES, 'UTF-8'); ?></h3><p class="text-[11px] text-slate-500"><?php echo htmlspecialchars($group['description'], ENT_QUOTES, 'UTF-8'); ?></p></div>
+                                        <span class="ml-auto text-xs font-bold text-slate-500 bg-white border border-slate-200 rounded-full px-2.5 py-1"><?php echo count($group['items']); ?></span>
+                                    </header>
+                                    <div class="p-3 space-y-2">
+                                        <?php foreach ($group['items'] as $c): ?>
+                                            <?php
+                                                $keyText = (string)$c['key'];
+                                                $secretSetting = (bool)preg_match('/secret|password|private_key/i', $keyText);
+                                                $displayValue = $secretSetting && !empty($c['value']) ? '••••••••••••' : ($c['value'] !== '' ? $c['value'] : 'Not set');
+                                                $keyJson = htmlspecialchars(json_encode($keyText), ENT_QUOTES, 'UTF-8');
+                                                $valueJson = htmlspecialchars(json_encode((string)$c['value']), ENT_QUOTES, 'UTF-8');
+                                            ?>
+                                            <article x-show="!searchQuery || <?php echo htmlspecialchars(json_encode(strtolower($keyText)), ENT_QUOTES, 'UTF-8'); ?>.includes(searchQuery.toLowerCase())" class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors">
+                                                <div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400"><?php echo htmlspecialchars($keyText, ENT_QUOTES, 'UTF-8'); ?></p><p class="mt-1 text-sm text-slate-800 font-mono break-all"><?php echo htmlspecialchars((string)$displayValue, ENT_QUOTES, 'UTF-8'); ?></p></div>
+                                                <button type="button" @click="editingKey = <?php echo $keyJson; ?>; editingValue = <?php echo $valueJson; ?>; $nextTick(() => document.getElementById('configEditor').scrollIntoView({behavior:'smooth', block:'center'}))" class="shrink-0 inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-colors"><i data-lucide="pencil" class="w-3 h-3"></i> Edit</button>
+                                            </article>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </section>
                             <?php endforeach; ?>
                         </div>
 
-                        <div class="bg-slate-900 p-8 rounded-3xl text-white shadow-xl shadow-indigo-900/20">
+                        <div id="configEditor" class="bg-slate-900 p-8 rounded-3xl text-white shadow-xl shadow-indigo-900/20">
                             <h3 class="font-bold mb-6 flex items-center gap-2">
                                 <i data-lucide="settings" class="text-indigo-400 w-5 h-5"></i>
                                 Update Configuration
@@ -200,7 +260,7 @@ include '../includes/dashboard-head.php';
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold text-slate-400 uppercase mb-2">New Value</label>
-                                        <input type="text" name="value" x-model="editingValue" placeholder="Enter value..." class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono">
+                                        <input :type="/secret|password|private_key/i.test(editingKey) ? 'password' : 'text'" type="text" name="value" x-model="editingValue" placeholder="Enter value..." class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono">
                                     </div>
                                 </div>
                                 <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-all">Update Platform Setting</button>
@@ -261,7 +321,15 @@ include '../includes/dashboard-head.php';
                         <div class="space-y-4">
                             <?php
                             $ref = [
-                                ['key' => 'paystack_secret_key', 'label' => 'Paystack Secret Key', 'desc' => 'API key for payment processing'],
+                                ['key' => 'paystack_secret_key', 'label' => 'Payment Provider Secret Key', 'desc' => 'Private API credential; keep confidential'],
+                                ['key' => 'aggregator_local_fee_percent', 'label' => 'Provider Local Rate (%)', 'desc' => 'Fallback standard local processing rate; verified provider fees take precedence'],
+                                ['key' => 'aggregator_local_fee_flat', 'label' => 'Provider Local Flat Fee', 'desc' => 'Fallback standard local flat fee'],
+                                ['key' => 'aggregator_local_fee_cap', 'label' => 'Provider Local Fee Cap', 'desc' => 'Fallback cap for standard local payments'],
+                                ['key' => 'aggregator_local_flat_waiver_below', 'label' => 'Provider Flat Fee Waiver Threshold', 'desc' => 'Transactions below this amount skip the local flat fee'],
+                                ['key' => 'aggregator_dva_fee_percent', 'label' => 'Provider DVA Rate (%)', 'desc' => 'Fallback dedicated virtual account fee rate'],
+                                ['key' => 'aggregator_dva_fee_cap', 'label' => 'Provider DVA Cap', 'desc' => 'Fallback maximum DVA processing fee'],
+                                ['key' => 'aggregator_international_fee_percent', 'label' => 'Provider International Rate (%)', 'desc' => 'Fallback international card processing rate'],
+                                ['key' => 'aggregator_international_fee_flat', 'label' => 'Provider International Flat Fee', 'desc' => 'Fallback international card flat fee'],
                                 ['key' => 'local_markup_percent', 'label' => 'Local PayHub Markup (%)', 'desc' => 'Your margin, added after Paystack’s actual/estimated processing fee'],
                                 ['key' => 'local_markup_flat', 'label' => 'Local PayHub Markup (Flat)', 'desc' => 'Flat PayHub margin per local transaction'],
                                 ['key' => 'local_markup_cap', 'label' => 'Local PayHub Markup Cap', 'desc' => 'Maximum PayHub margin; use 0 for no cap'],

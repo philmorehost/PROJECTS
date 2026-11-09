@@ -1308,17 +1308,40 @@ function restore_transaction_reversal($transactionId, $reversalReference) {
     }
 }
 
-/** Estimate Paystack's published processing fee if its API did not return the confirmed fee. */
+/** Determine whether a payment is international, including foreign cards settled in NGN. */
+function is_international_payment($currency = 'NGN', $authorization = [], $channel = '') {
+    if (strtoupper((string)$currency) !== 'NGN') return true;
+    $channel = strtolower((string)$channel);
+    if (preg_match('/dedicated|virtual.?account|bank|transfer|ussd|mobile.?money|qr/', $channel)) return false;
+    $hasCardEvidence = preg_match('/card|apple.?pay|google.?pay/', $channel)
+        || (!empty($authorization['card_type']) || !empty($authorization['bin']) || !empty($authorization['brand']));
+    if (!$hasCardEvidence) return false;
+    $country = strtoupper((string)($authorization['country_code'] ?? $authorization['country'] ?? ''));
+    return $country !== '' && !in_array($country, ['NG', 'NGA', 'NIGERIA'], true);
+}
+
+/** Estimate the payment aggregator's published processing fee if its API did not return the confirmed fee. */
 function estimate_paystack_fee($amount, $is_international = false, $channel = '') {
     $amount = max(0, (float)$amount);
     $channel = strtolower((string)$channel);
 
-    // Paystack DVA collections: 1%, capped at NGN 300. This is the channel in the reported loss.
+    // Defaults match the aggregator's published Nigeria pricing; these are editable in admin.
     if (!$is_international && (strpos($channel, 'dedicated') !== false || strpos($channel, 'virtual_account') !== false)) {
-        return min($amount * 0.01, 300);
+        $percent = max(0, (float)getConfig('aggregator_dva_fee_percent', '1'));
+        $cap = max(0, (float)getConfig('aggregator_dva_fee_cap', '300'));
+        $fee = $amount * $percent / 100;
+        return $cap > 0 ? min($fee, $cap) : $fee;
     }
-    if ($is_international) return ($amount * 0.039) + 100;
-    return min(($amount * 0.015) + ($amount < 2500 ? 0 : 100), 2000);
+    if ($is_international) {
+        return ($amount * max(0, (float)getConfig('aggregator_international_fee_percent', '3.9')) / 100)
+            + max(0, (float)getConfig('aggregator_international_fee_flat', '100'));
+    }
+    $percent = max(0, (float)getConfig('aggregator_local_fee_percent', '1.5'));
+    $flat = $amount < max(0, (float)getConfig('aggregator_local_flat_waiver_below', '2500'))
+        ? 0 : max(0, (float)getConfig('aggregator_local_fee_flat', '100'));
+    $cap = max(0, (float)getConfig('aggregator_local_fee_cap', '2000'));
+    $fee = ($amount * $percent / 100) + $flat;
+    return $cap > 0 ? min($fee, $cap) : $fee;
 }
 
 /**

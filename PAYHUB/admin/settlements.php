@@ -12,13 +12,15 @@ $db = Database::connect();
 // Process payout actions with visible feedback and a CSRF-protected, pending-only transition.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'process_payout') {
     $payoutId = filter_var($_POST['payout_id'] ?? null, FILTER_VALIDATE_INT);
-    $status = $_POST['status'] ?? '';
+    $decision = $_POST['decision'] ?? (($_POST['status'] ?? '') === 'processed' ? 'approve' : (($_POST['status'] ?? '') === 'declined' ? 'cancel_refund' : ''));
     $details = trim((string)($_POST['details'] ?? ''));
+    $status = $decision === 'approve' ? 'processed' : 'declined';
+    $refundFunds = $decision !== 'cancel_keep';
 
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_msg = 'Your session security token expired. Refresh the page and try again.';
-    } elseif (!$payoutId || !in_array($status, ['processed', 'declined'], true) || $details === '') {
-        $error_msg = 'Invalid payout action. Choose approve or decline and include internal notes.';
+    } elseif (!$payoutId || !in_array($decision, ['approve', 'cancel_refund', 'cancel_keep'], true) || $details === '') {
+        $error_msg = 'Invalid payout action. Choose approve or one of the cancellation options, and include internal notes.';
     } else {
         $db->beginTransaction();
         try {
@@ -49,16 +51,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
                 $stmt = $db->prepare("UPDATE payouts SET status = 'processed', status_details = ? WHERE id = ? AND status = 'pending'");
                 $stmt->execute([$details, $payoutId]);
             } else {
+                $cancelNote = $refundFunds ? 'Cancelled by admin — funds returned to merchant wallet. ' : 'Cancelled by admin — no wallet refund. ';
                 $stmt = $db->prepare("UPDATE payouts SET status = 'declined', status_details = ? WHERE id = ? AND status = 'pending'");
-                $stmt->execute([$details, $payoutId]);
-                // The original request debited `amount` (amount + fee); return that full hold.
-                $stmt = $db->prepare("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?");
-                $stmt->execute([$payout['amount'], $payout['user_id']]);
-                $stmt = $db->prepare("INSERT INTO ledger (user_id, amount, type, category, description, balance_after) SELECT id, ?, 'credit', 'payout_refund', ?, wallet_balance FROM users WHERE id = ?");
-                $stmt->execute([$payout['amount'], 'Declined payout refund #' . $payoutId, $payout['user_id']]);
+                $stmt->execute([$cancelNote . $details, $payoutId]);
+                if ($refundFunds) {
+                    // The original request debited `amount` (amount + fee); return that full hold.
+                    $stmt = $db->prepare("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?");
+                    $stmt->execute([$payout['amount'], $payout['user_id']]);
+                    $stmt = $db->prepare("INSERT INTO ledger (user_id, amount, type, category, description, balance_after) SELECT id, ?, 'credit', 'payout_refund', ?, wallet_balance FROM users WHERE id = ?");
+                    $stmt->execute([$payout['amount'], 'Admin cancellation refund for payout #' . $payoutId, $payout['user_id']]);
+                }
             }
             $db->commit();
-            $success_msg = $status === 'processed' ? 'Payout approved and sent to Paystack.' : 'Payout declined and the held balance was returned to the merchant.';
+            if ($decision === 'approve') {
+                $success_msg = 'Payout approved and sent to the payment aggregator.';
+            } elseif ($refundFunds) {
+                $success_msg = 'Payout cancelled; the full held amount was returned to the merchant wallet.';
+            } else {
+                $success_msg = 'Payout cancelled without returning funds to the merchant wallet.';
+            }
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
             $error_msg = 'Failed to process payout: ' . $e->getMessage();
@@ -124,8 +135,11 @@ include '../includes/dashboard-head.php';
                                     </td>
                                         <td class="hidden sm:table-cell px-6 py-4">
                                         <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider <?php echo $p['status'] === 'processed' ? 'bg-emerald-100 text-emerald-700' : ($p['status'] === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'); ?>">
-                                            <?php echo $p['status']; ?>
+                                            <?php echo htmlspecialchars($p['status'], ENT_QUOTES, 'UTF-8'); ?>
                                         </span>
+                                        <?php if (!empty($p['status_details'])): ?>
+                                            <div class="mt-1 max-w-xs text-[10px] text-slate-500 break-words"><?php echo htmlspecialchars($p['status_details'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="px-6 py-4">
                                         <?php if ($p['status'] === 'pending'): ?>
@@ -159,9 +173,10 @@ include '../includes/dashboard-head.php';
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Internal Status Details</label>
                             <textarea name="details" required placeholder="Transaction reference, receipt ID, or reason for decline..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none h-24 mb-4"></textarea>
                         </div>
-                        <div class="flex gap-2">
-                            <button type="submit" name="status" value="processed" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Approve</button>
-                            <button type="submit" name="status" value="declined" class="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-xl font-bold">Decline</button>
+                        <div class="grid gap-2">
+                            <button type="submit" name="decision" value="approve" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">Approve &amp; Send</button>
+                            <button type="submit" name="decision" value="cancel_refund" class="w-full bg-amber-50 text-amber-800 border border-amber-200 py-3 rounded-xl font-bold">Cancel &amp; Return Funds</button>
+                            <button type="submit" name="decision" value="cancel_keep" onclick="return confirm('Cancel this payout without returning the held funds to the merchant wallet? This cannot be undone.');" class="w-full bg-rose-50 text-rose-700 border border-rose-200 py-3 rounded-xl font-bold">Cancel Without Refund</button>
                         </div>
                     </form>
                 </div>
