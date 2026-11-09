@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 use RISE63\Core\Security;
 
-use function RISE63\{e, favicon_letter, site_title, title_hue, url};
+use function RISE63\{e, favicon_letter, setting, site_title, title_hue, url};
 
 $letter = favicon_letter();
 $hue    = title_hue(site_title());
@@ -13,6 +13,13 @@ $hue    = title_hue(site_title());
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sign in · <?= e(site_title()) ?></title>
+<?php
+// This is the page a stranger lands on, so it is the page a shared link previews.
+$shareTitle       = 'Sign in';
+$shareDescription = (string) setting('site_tagline', '');
+$shareNoIndex     = false;
+require __DIR__ . '/../partials/share.php';
+?>
 <meta name="theme-color" content="#2563eb">
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>">
 <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">

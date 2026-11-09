@@ -11,6 +11,12 @@ use function RISE63\{e, site_title, url};
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create your account · <?= e(site_title()) ?></title>
+<?php
+// A transactional page: no preview card, and never indexed.
+$shareTitle   = null;
+$shareNoIndex = true;
+require __DIR__ . '/../partials/share.php';
+?>
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>">
 <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">
 <link rel="stylesheet" href="<?= e(RISE63\asset('app.css')) ?>">

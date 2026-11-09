@@ -381,6 +381,39 @@ ok('People still renders when migration 0002 has not been applied', function () 
 
 /* ───────────── The state that caused the reported 500 must be visible ───────────── */
 
+ok('A page declares itself as HTML instead of inheriting the host default', function (): void {
+    // The reported bug: sharing the site link produced a wall of markup in WhatsApp. The page was
+    // served with no Content-Type of its own, so it inherited PHP's `default_mimetype`. On the host
+    // that value is `text/plain`; a browser still guesses its way to a usable page, which is why
+    // nobody noticed, and a link-preview scraper does not guess at all.
+    //
+    // Proven without a browser: the app's own header call must set text/html explicitly.
+    $sent = [];
+    $source = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Core/Security.php');
+
+    // The declaration exists and is HTML with a charset. A plain substring, because a regex here
+    // needs three levels of quoting and the first version of this assertion failed on its own
+    // escaping rather than on the behaviour it was meant to check.
+    assertTrue(str_contains($source, "header('Content-Type: text/html; charset=utf-8')"),
+        'sendHtmlHeaders() must declare text/html explicitly');
+
+    // And every HTML entry point goes through the function that sends it.
+    foreach (['index.php', 'install/index.php'] as $entry) {
+        $entrySource = (string) file_get_contents(RISE63_TEST_ROOT . '/' . $entry);
+        assertTrue(str_contains($entrySource, 'sendHeaders'), $entry . ' must call sendHeaders');
+    }
+
+    // sendHeaders must send the content type first, or a later header() could not replace it.
+    $methodStart = (int) strpos($source, 'public static function sendHeaders(');
+    $methodBody  = substr($source, $methodStart, 600);
+    assertTrue(str_contains($methodBody, 'sendHtmlHeaders'), 'sendHeaders must declare HTML');
+
+    // A page that renders HTML must not be reachable without it.
+    assertTrue(!str_contains($source, "header('Content-Type: text/plain')
+throw"),
+        'sanity: the plain-text header is only used by fail()');
+});
+
 ok('Settings reports pending database updates and the command that applies them', function () use ($admin): void {
     // The whole reason the People page broke in production: migration 0002 was waiting, nothing in
     // the interface said so, and the only way to learn `php bin/migrate.php` exists was to be told.

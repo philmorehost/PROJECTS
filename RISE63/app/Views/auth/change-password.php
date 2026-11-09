@@ -17,6 +17,12 @@ $forced = (bool) ($forced ?? false);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title) ?> · <?= e(RISE63\site_title()) ?></title>
+<?php
+// A transactional page: no preview card, and never indexed.
+$shareTitle   = null;
+$shareNoIndex = true;
+require __DIR__ . '/../partials/share.php';
+?>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>">
 <link rel="stylesheet" href="<?= e(RISE63\asset('app.css')) ?>">

@@ -80,7 +80,13 @@ foreach ($tabs as $index => $tab) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?= e($title ?? 'RISE 63') ?> · <?= e(site_title()) ?></title>
-<meta name="description" content="<?= e(\RISE63\setting('site_tagline', 'RCCG Lagos Province 63 empowerment platform')) ?>">
+<?php
+// Share metadata. An operator-facing page is never indexed and never previewed: a card for
+// /treasury pasted into a chat would show figures to people who are not signed in.
+$shareTitle       = $title ?? null;
+$shareNoIndex     = $account !== null;
+require __DIR__ . '/partials/share.php';
+?>
 <meta name="theme-color" content="<?= e($brand) ?>">
 <meta name="csrf-token" content="<?= e(Security::csrf()) ?>">
 <link rel="icon" type="image/svg+xml" href="<?= e(url('favicon.svg')) ?>?v=<?= e(substr(hash('sha256', $letter . site_title()), 0, 8)) ?>">

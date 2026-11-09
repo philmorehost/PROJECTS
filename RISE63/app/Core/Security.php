@@ -50,8 +50,32 @@ final class Security
         return str_replace("script-src 'self';", "script-src 'self' " . implode(' ', $hashes) . ';', self::CSP);
     }
 
+    /**
+     * Declare the response as HTML.
+     *
+     * The application never did this, and relied instead on PHP's `default_mimetype`. On the
+     * deployment host that default is `text/plain`, so every page was served as
+     *
+     *     Content-Type: text/plain
+     *
+     * A browser still guesses its way to a usable page, so nobody noticed. Anything that trusts the
+     * header instead of guessing — every link-preview scraper, and WhatsApp in particular — renders
+     * the response as plain text, which is why sharing the site pasted raw `<!doctype html>` markup
+     * into a chat window.
+     *
+     * Sending it explicitly is correct regardless of the host's ini: a page that only works when a
+     * server default happens to be right is a page that is broken on the next host.
+     */
+    public static function sendHtmlHeaders(): void
+    {
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+    }
+
     public static function sendHeaders(bool $authenticatedPage = true): void
     {
+        self::sendHtmlHeaders();
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('X-Frame-Options: DENY');

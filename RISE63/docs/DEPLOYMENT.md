@@ -469,6 +469,18 @@ Exit codes are meaningful: the mail worker exits `1` when every attempted delive
 </Directory>
 ```
 
+**Check that PHP's MIME defaults are not doing your content type.** RISE 63 no longer depends on
+them, but a host that serves other applications from the same PHP handler will still be affected:
+
+```sh
+php -i | grep -E 'default_mimetype|default_charset'
+# default_mimetype => text/html      <- correct
+# default_mimetype => text/plain     <- this was the RISE 63 host before 1.0.8
+```
+
+If it reads `text/plain`, set it in `php.ini` or `.user.ini` for the account anyway — defence in
+depth, so a page served by an older release still gets the right type.
+
 Nginx equivalent (if the host uses Nginx in front of PHP-FPM):
 
 ```nginx
@@ -490,6 +502,30 @@ return ['173.245.48.0/20', '103.21.244.0/22', '2400:cb00::/32']; // Cloudflare r
 Until that file exists, the application ignores every `X-Forwarded-*` header and uses `REMOTE_ADDR`. That is why a proxy without this file makes every visitor look like one IP — a self-inflicted brute-force lockout.
 
 ---
+
+### Link previews (sharing the site in WhatsApp, LinkedIn, Slack)
+
+A shared link must produce a preview card, not a wall of markup. Two things are required, and
+1.0.8 makes both automatic:
+
+1. **The page must say it is HTML.** RISE 63 now sends `Content-Type: text/html; charset=utf-8`
+   itself instead of inheriting PHP's `default_mimetype`. A browser guesses its way to a usable page
+   when that default is wrong, which is why the fault went unnoticed for weeks; a link-preview
+   scraper does not guess, so the whole document appeared as text in the chat window.
+2. **The page must describe itself.** `og:` and `twitter:` tags, an absolute canonical URL, and a
+   1200×630 card image at `public/icons/share.jpg`, all emitted by `app/Views/partials/share.php`.
+
+If a preview looks wrong after deploying:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Old title or no image in the preview | The scraper cached the page. WhatsApp caches for up to 30 days | Change the card image version (it is part of the URL) or re-scrape via the provider's debugger |
+| Preview works on one network, not another | The site is only reachable over `http://` and the scraper refuses to follow the redirect | Terminate TLS properly and set `site_url` to the `https://` address |
+| `og:url` shows an internal hostname | `HTTP_HOST` is the internal name behind a proxy | Set the `site_url` setting to the public address; it takes precedence |
+| Image does not load in the preview | `public/` is not being served, or its permissions are wrong | Fetch the image URL directly in a private window; it must load without signing in |
+
+**Never point `og:image` at anything behind the login.** A scraper carries no session — it would
+fetch the sign-in page and cache *that* as the preview image.
 
 ## 7. Country filtering
 

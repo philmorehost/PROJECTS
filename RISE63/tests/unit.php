@@ -1449,6 +1449,34 @@ ok('A mail failure says what is wrong, not "no response"', function (): void {
         '550 must point at the sender address');
 });
 
+ok('The view renderer refuses a template name that escapes app/Views', function (): void {
+    // Latent, not exploitable: nothing passes request input to View::render(). But a renderer that
+    // will `require` any path it is handed is one careless caller away from being a code-execution
+    // primitive, and containment costs one realpath().
+    //
+    // Asserted against templatePath() rather than render(). Calling render('../Core/View') with the
+    // guard removed does not merely resolve — it executes application code, which is a fatal
+    // "cannot redeclare class" that takes the whole suite down. Proving that once was enough.
+    $method = new ReflectionMethod(\RISE63\Core\View::class, 'templatePath');
+    $method->setAccessible(true);
+
+    // '../Core/View' is the case that matters: app/Views/../Core/View.php EXISTS.
+    foreach (['../Core/View', '../bootstrap', 'auth/../../index', '/etc/passwd', 'auth/login\0', '', '../'] as $bad) {
+        $refused = false;
+        try {
+            $method->invoke(null, $bad);
+        } catch (\RuntimeException $error) {
+            $refused = true;
+        }
+        assertTrue($refused, 'the renderer accepted a traversal name: ' . var_export($bad, true));
+    }
+
+    // A legitimate nested name still resolves, inside the tree.
+    $path = (string) $method->invoke(null, 'auth/login');
+    assertTrue(str_ends_with($path, '/app/Views/auth/login.php'), 'a real view must still resolve: ' . $path);
+    assertTrue(!str_contains($path, '..'), 'the resolved path must be normalised');
+});
+
 ok('The mailer sends from the address configured in Settings → Mail', function (): void {
     // The worker used to derive From from the site URL, so the one thing an operator could not
     // change was the address members see — and a From that does not match the authenticated mailbox

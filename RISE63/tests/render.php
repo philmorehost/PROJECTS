@@ -932,6 +932,52 @@ ok('Settings offers mail configuration, and a secret never reaches the markup', 
     assertContains('587', $html, 'and must name the port that usually works instead');
 });
 
+ok('Shared links produce a preview card, not raw markup', function () use ($renderPage): void {
+    // Reported: pasting the site link into WhatsApp showed a wall of HTML. Two causes, and the test
+    // covers both.
+    //
+    // (1) The response had no Content-Type of its own, so it inherited PHP's `default_mimetype`. A
+    //     browser guesses its way to a usable page; a link scraper does not, and renders the body as
+    //     plain text. Asserted in tests/pages.php, where headers can be inspected.
+    // (2) There were no og: tags anywhere, so even a correctly-typed page had nothing to preview.
+    $_SERVER['HTTP_HOST']   = 'buildroom.rccglp63yaya.org.ng';
+    $_SERVER['HTTPS']       = 'on';
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+    $_SERVER['REQUEST_URI'] = '/login';
+
+    // `false` = no layout. The auth screens are standalone documents with their own <head>; going
+    // through the layout would test the layout's tags instead of theirs, which is exactly the
+    // mistake this assertion made the first time it was written.
+    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/login.php', [
+        'title' => 'Sign in', 'user' => null, 'flashes' => [], 'error' => null,
+    ], false);
+
+    foreach ([
+        'og:title', 'og:description', 'og:url', 'og:image',
+        'og:image:width', 'og:image:height', 'og:site_name', 'og:type',
+        'twitter:card', 'twitter:image',
+    ] as $tag) {
+        assertContains($tag, $html, 'the share card is missing ' . $tag);
+    }
+
+    // The URL and image must be absolute: a scraper fetches them from outside the browser session,
+    // so a site-relative path resolves against the scraper's own host and 404s.
+    assertContains('content="https://buildroom.rccglp63yaya.org.ng/login"', $html,
+        'og:url must be absolute, and must be this page');
+    assertContains('https://buildroom.rccglp63yaya.org.ng/public/icons/share.jpg', $html,
+        'og:image must be absolute');
+    assertContains('content="1200"', $html, 'the declared card width');
+    assertContains('content="630"', $html, 'the declared card height');
+    assertContains('rel="canonical"', $html, 'search engines want a canonical URL');
+
+    // A transactional page is not something to preview or index.
+    $forgot = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/forgot-password.php', [
+        'title' => 'Forgotten password', 'user' => null, 'flashes' => [], 'error' => null,
+    ], false);
+    assertContains('noindex', $forgot, 'a password-reset page must not be indexed');
+    assertMissing('og:image', $forgot, 'a password-reset page must not produce a preview card');
+});
+
 ok('Settings shows the database-update state without ever applying one', function () use ($renderPage, $admin): void {
     // The reported 500 had one cause nothing in the interface reported: a pending migration. The
     // panel states the fact and the command. Applying a schema change from a web request would be
