@@ -399,6 +399,26 @@ function setup_database_tables($mysqli) {
         $mysqli->query("ALTER TABLE `orders` ADD `stock_restored` TINYINT(1) NOT NULL DEFAULT 0 AFTER `order_notes`");
     }
 
+    // Add cancelled_at / cancel_reason so the admin can see WHEN and WHY an
+    // order was cancelled (automatically, by the customer, by staff) and the
+    // "do not restock again" audit trail is visible.
+    $result_ca = $mysqli->query("SHOW COLUMNS FROM `orders` LIKE 'cancelled_at'");
+    if($result_ca->num_rows == 0){
+        $mysqli->query("ALTER TABLE `orders` ADD `cancelled_at` DATETIME NULL DEFAULT NULL AFTER `stock_restored`");
+    }
+
+    $result_cr = $mysqli->query("SHOW COLUMNS FROM `orders` LIKE 'cancel_reason'");
+    if($result_cr->num_rows == 0){
+        $mysqli->query("ALTER TABLE `orders` ADD `cancel_reason` VARCHAR(191) NULL DEFAULT NULL AFTER `cancelled_at`");
+    }
+
+    // The automatic cancellation query filters on status + created_at, so give
+    // it an index on installations that have many orders.
+    $result_idx = $mysqli->query("SHOW INDEX FROM `orders` WHERE Key_name = 'status_created_at'");
+    if($result_idx && $result_idx->num_rows == 0){
+        $mysqli->query("ALTER TABLE `orders` ADD INDEX `status_created_at` (`status`, `created_at`)");
+    }
+
     // --- Seed Roles and Permissions ---
     $super_admin_role_id = 0;
     $role_result = $mysqli->query("SELECT id FROM roles WHERE role_name = 'Super Admin'");

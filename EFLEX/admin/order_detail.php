@@ -3,6 +3,7 @@
 include 'includes/admin_header.php';
 require_permission('manage_orders');
 require_once '../includes/send_email.php';
+require_once '../includes/order_stock.php';
 
 // Check if Order ID is provided
 if(!isset($_GET['id']) || empty($_GET['id'])){
@@ -50,80 +51,83 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
     }
 
     if(!empty($new_status) && $new_status !== $old_status){
-        $mysqli->begin_transaction();
-        try {
-            // If the order is being cancelled, restore stock
-            if ($new_status === 'Cancelled') {
-                // Check if stock has already been restored for this order
-                $check_stock_sql = "SELECT stock_restored FROM orders WHERE id = ?";
-                $stmt_check_stock = $mysqli->prepare($check_stock_sql);
-                $stmt_check_stock->bind_param("i", $order_id);
-                $stmt_check_stock->execute();
-                $stock_restored_result = $stmt_check_stock->get_result()->fetch_assoc();
-                $stmt_check_stock->close();
+        // A status change through the dropdown always goes through an
+        // idempotent helper, so nobody can inflate the inventory:
+        //   * -> Cancelled  : stock is returned exactly once (row lock +
+        //                     stock_restored flag checked under that lock).
+        //   * Cancelled ->  : the previously returned stock is reserved again,
+        //                     otherwise re-opening an order would create free
+        //                     stock that could be "cancelled" a second time.
+        $status_blocked = false;
 
-                if (!$stock_restored_result['stock_restored']) {
-                    $sql_items_for_stock = "SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?";
-                    $stmt_items_stock = $mysqli->prepare($sql_items_for_stock);
-                    $stmt_items_stock->bind_param("i", $order_id);
-                $stmt_items_stock->execute();
-                $items_to_restock = $stmt_items_stock->get_result()->fetch_all(MYSQLI_ASSOC);
-                $stmt_items_stock->close();
-
-                foreach ($items_to_restock as $item) {
-                    if (!empty($item['variant_id'])) {
-                        $stmt_update_stock = $mysqli->prepare("UPDATE product_variants SET stock = stock + ? WHERE id = ?");
-                        $stmt_update_stock->bind_param("ii", $item['quantity'], $item['variant_id']);
-                        $stmt_update_stock->execute();
-                        $stmt_update_stock->close();
-                    } else {
-                        $stmt_update_stock = $mysqli->prepare("UPDATE products SET stock = stock + ? WHERE id = ? AND has_variants = 0");
-                        $stmt_update_stock->bind_param("ii", $item['quantity'], $item['product_id']);
-                        $stmt_update_stock->execute();
-                        $stmt_update_stock->close();
+        if ($new_status === 'Cancelled') {
+            // Staff may cancel an order in any status (e.g. refunding a paid one);
+            // the restock itself stays idempotent thanks to the row lock and the
+            // stock_restored flag.
+            $cancel = eflex_cancel_order($mysqli, $order_id, 'Cancelled by the administrator', eflex_admin_cancellable_statuses());
+            if (!empty($cancel['ok'])) {
+                if (!empty($cancel['restocked'])) {
+                    $restock_summary = eflex_restock_summary($cancel['restored']);
+                    $message .= '<div class="alert alert-success">Stock has been restored for the cancelled order'
+                              . ($restock_summary !== '' ? ' (' . htmlspecialchars($restock_summary) . ')' : '')
+                              . '.</div>';
+                } elseif (!empty($cancel['already_restored'])) {
+                    $message .= '<div class="alert alert-info">This order was already cancelled and its stock had already been returned — nothing was added twice.</div>';
+                }
+                if (!empty($cancel['skipped'])) {
+                    $skipped_notes = array();
+                    foreach ($cancel['skipped'] as $skip_row) {
+                        $skipped_notes[] = htmlspecialchars($skip_row['name']) . ' (' . htmlspecialchars($skip_row['reason']) . ')';
                     }
+                    $message .= '<div class="alert alert-warning">Not restocked: ' . implode('; ', $skipped_notes) . '.</div>';
                 }
-
-                // Mark stock as restored
-                $mysqli->query("UPDATE orders SET stock_restored = 1 WHERE id = $order_id");
-
-                $message .= '<div class="alert alert-success">Stock has been restored for the cancelled order.</div>';
-              }
+            } else {
+                $status_blocked = true;
+                $message .= '<div class="alert alert-danger">Order not cancelled: ' . htmlspecialchars($cancel['message']) . '</div>';
             }
-
-            // Stock is now deducted at checkout, so this is no longer needed.
-            // The logic to restore stock on cancellation remains.
-
-        $sql_update = "UPDATE orders SET status = ? WHERE id = ?";
-        if($stmt_update = $mysqli->prepare($sql_update)){
-            $stmt_update->bind_param("si", $new_status, $order_id);
-            if($stmt_update->execute()){
-                $subject = "Your Order Status Has Been Updated";
-                $body = "";
-                $invoice_url = 'http://'.$_SERVER['HTTP_HOST']."/invoice.php?id=" . $order_id;
-
-                if($new_status === 'Completed'){
-                    $subject = "Your Order is Complete & Payment Receipt";
-                    $body = "<h1>Your Order is Complete!</h1>"
-                          . "<p>Hi " . htmlspecialchars($username) . ",</p>"
-                          . "<p>We've finished processing your order #" . $order_id . ". Thank you for your payment.</p>"
-                          . "<p>You can view and print your full invoice and payment receipt here: <a href='" . $invoice_url . "'>" . $invoice_url . "</a></p>";
-                } else {
-                    $body = "<h1>Order Update</h1>"
-                          . "<p>Hi " . htmlspecialchars($username) . ",</p>"
-                          . "<p>The status of your order #" . $order_id . " has been updated to: <strong>" . htmlspecialchars($new_status) . "</strong></p>"
-                          . "<p>You can view your order details here: <a href='http://".$_SERVER['HTTP_HOST']."/my_orders.php'>My Orders</a></p>";
-                }
-
-                send_email($user_email, $subject, $body);
-                $message .= '<div class="alert alert-info">User has been notified of the status change.</div>';
+        } elseif ($old_status === 'Cancelled') {
+            $reopen = eflex_reopen_order($mysqli, $order_id);
+            if (empty($reopen['ok'])) {
+                $status_blocked = true;
+                $message .= '<div class="alert alert-danger">Status not changed: ' . htmlspecialchars($reopen['message']) . '</div>';
+            } elseif (!empty($reopen['changed'])) {
+                $message .= '<div class="alert alert-info">' . htmlspecialchars($reopen['message']) . '</div>';
             }
-            $stmt_update->close();
         }
-        $mysqli->commit();
-    } catch (mysqli_sql_exception $exception) {
-            $mysqli->rollback();
-            $message = '<div class="alert alert-danger">Error updating order status: ' . $exception->getMessage() . '</div>';
+
+        if ($status_blocked) {
+            // The order could not be cancelled / re-opened: leave it untouched and
+            // do not send the customer a misleading "status changed" email.
+            $new_status = $old_status;
+        } else {
+            $sql_update = "UPDATE orders SET status = ? WHERE id = ?";
+            if($stmt_update = $mysqli->prepare($sql_update)){
+                $stmt_update->bind_param("si", $new_status, $order_id);
+                if($stmt_update->execute()){
+                    $subject = "Your Order Status Has Been Updated";
+                    $body = "";
+                    $invoice_url = 'http://'.$_SERVER['HTTP_HOST']."/invoice.php?id=" . $order_id;
+
+                    if($new_status === 'Completed'){
+                        $subject = "Your Order is Complete & Payment Receipt";
+                        $body = "<h1>Your Order is Complete!</h1>"
+                              . "<p>Hi " . htmlspecialchars($username) . ",</p>"
+                              . "<p>We've finished processing your order #" . $order_id . ". Thank you for your payment.</p>"
+                              . "<p>You can view and print your full invoice and payment receipt here: <a href='" . $invoice_url . "'>" . $invoice_url . "</a></p>";
+                    } else {
+                        $body = "<h1>Order Update</h1>"
+                              . "<p>Hi " . htmlspecialchars($username) . ",</p>"
+                              . "<p>The status of your order #" . $order_id . " has been updated to: <strong>" . htmlspecialchars($new_status) . "</strong></p>"
+                              . "<p>You can view your order details here: <a href='http://".$_SERVER['HTTP_HOST']."/my_orders.php'>My Orders</a></p>";
+                    }
+
+                    send_email($user_email, $subject, $body);
+                    $message .= '<div class="alert alert-info">User has been notified of the status change.</div>';
+                } else {
+                    $message .= '<div class="alert alert-danger">Error updating order status.</div>';
+                }
+                $stmt_update->close();
+            }
         }
     } elseif(!empty($new_status) && $new_status === $old_status) {
         //If status is the same, no need to update or send email.
@@ -299,13 +303,31 @@ if($stmt_items = $mysqli->prepare($sql_items)){
             <div class="card-body">
                 <form action="order_detail.php?id=<?php echo $order_id; ?>" method="post">
                     <select name="status" class="form-select">
+                        <option value="Pending" <?php if($order['status'] == 'Pending') echo 'selected'; ?>>Pending</option>
                         <option value="Awaiting Payment" <?php if($order['status'] == 'Awaiting Payment') echo 'selected'; ?>>Awaiting Payment</option>
+                        <option value="Failed" <?php if($order['status'] == 'Failed') echo 'selected'; ?>>Failed</option>
                         <option value="Processing" <?php if($order['status'] == 'Processing') echo 'selected'; ?>>Processing</option>
                         <option value="Completed" <?php if($order['status'] == 'Completed') echo 'selected'; ?>>Completed</option>
                         <option value="Cancelled" <?php if($order['status'] == 'Cancelled') echo 'selected'; ?>>Cancelled</option>
                     </select>
                     <button type="submit" name="update_status" class="btn btn-primary mt-2 w-100">Update Status Manually</button>
                 </form>
+                <?php if($order['status'] !== 'Cancelled'): ?>
+                <form action="order_detail.php?id=<?php echo $order_id; ?>" method="post" class="mt-2">
+                    <input type="hidden" name="status" value="Cancelled">
+                    <button type="submit" name="update_status" class="btn btn-outline-danger w-100" onclick="return confirm('Cancel this order and return its items to stock?');">Cancel &amp; Restock This Order</button>
+                </form>
+                <?php endif; ?>
+                <div class="form-text mt-2">
+                    Cancelling returns the items to stock <strong>once</strong> (the order is locked while it happens, so a double click cannot add them twice).
+                    Moving a cancelled order to another status reserves the stock again.
+                </div>
+                <?php if(!empty($order['stock_restored'])): ?>
+                    <div class="alert alert-secondary py-2 px-3 mt-2 mb-0 small">
+                        Stock for this order has already been returned<?php echo !empty($order['cancelled_at']) ? ' on ' . htmlspecialchars($order['cancelled_at']) : ''; ?><?php echo !empty($order['cancel_reason']) ? ' — ' . htmlspecialchars($order['cancel_reason']) : ''; ?>.
+                        Do not restock it again manually.
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

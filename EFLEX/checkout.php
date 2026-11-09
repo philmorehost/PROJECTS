@@ -13,6 +13,7 @@ require_once 'includes/db_connect.php';
 require_once 'includes/send_email.php';
 require_once 'includes/send_notification.php';
 require_once 'includes/helpers.php';
+require_once 'includes/order_stock.php';
 
 if(empty($_SESSION['cart'])){
     header("location: cart.php");
@@ -155,20 +156,14 @@ if($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['place_order'])){
             $stmt_items->bind_param("iiiid", $order_id, $item['product_id'], $item['variant_id'], $item['quantity'], $item['price']);
             $stmt_items->execute();
 
-            // Decrement stock immediately upon order placement
-            if ($item['is_variant']) {
-                $sql_update_stock = "UPDATE product_variants SET stock = stock - ? WHERE id = ?";
-                $stmt_stock = $mysqli->prepare($sql_update_stock);
-                $stmt_stock->bind_param("ii", $item['quantity'], $item['variant_id']);
-                $stmt_stock->execute();
-                $stmt_stock->close();
-            } else {
-                $sql_update_stock = "UPDATE products SET stock = stock - ? WHERE id = ? AND has_variants = 0";
-                $stmt_stock = $mysqli->prepare($sql_update_stock);
-                $stmt_stock->bind_param("ii", $item['quantity'], $item['product_id']);
-                $stmt_stock->execute();
-                $stmt_stock->close();
-            }
+            // Decrement stock immediately upon order placement.
+            //
+            // The stock is reserved exactly ONE time here; cancelling the order
+            // later returns it (see includes/order_stock.php). The helper refuses
+            // to go below zero, so two customers racing for the last unit cannot
+            // both succeed — previously nothing checked and stock went negative,
+            // which is then "returned" as double stock on cancellation.
+            eflex_deduct_checkout_item($mysqli, $item['product_id'], $item['variant_id'], $item['quantity'], $item['name']);
         }
         $stmt_items->close();
         $stmt_order->close();
@@ -229,6 +224,13 @@ if($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['place_order'])){
         }
         exit();
 
+    } catch (EflexOutOfStockException $out_of_stock) {
+        // Nothing was saved: the transaction is rolled back so the stock of the
+        // other lines is untouched.
+        $mysqli->rollback();
+        $_SESSION['cart_error'] = $out_of_stock->getMessage();
+        header("Location: cart.php");
+        exit();
     } catch (mysqli_sql_exception $exception) {
         $mysqli->rollback();
         die('Order failed. Please try again. Error: ' . $exception->getMessage());
