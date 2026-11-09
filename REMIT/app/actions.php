@@ -31,14 +31,13 @@ function action(PDO $db,array $user,array $ids): string {
   return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
  }
  if ($action==='profile') {
-  requireRole($user,['parish_officer']);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
+  remittingUnit($db,$user);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
   if(!preg_match('/^[+0-9 ()-]{7,25}$/D',$phone))throw new InvalidArgumentException('Enter a valid contact phone number.');
   $db->prepare('INSERT INTO officer_profiles(user_id,phone,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE phone=VALUES(phone),bank_name=VALUES(bank_name),account_name=VALUES(account_name),account_ciphertext=VALUES(account_ciphertext),account_last4=VALUES(account_last4)')->execute([$user['id'],$phone,$bank,$name,ChurchPortal::encrypt($number),substr($number,-4)]);
   return 'Your account details have been saved securely. This does not change the provincial receiving account.';
  }
  if ($action==='report') {
-  requireRole($user,['parish_officer']);
-  $parish=(int)$user['hierarchy_id']; if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid parish scope.');
+  $parish=remittingUnit($db,$user); if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid church scope.');
   $month=filter_var($_POST['month'] ?? '',FILTER_VALIDATE_INT); $year=filter_var($_POST['year'] ?? '',FILTER_VALIDATE_INT);
   if ($month<1 || $month>12 || $year<2020 || $year>(int)date('Y')+1) throw new RuntimeException('Select a valid reporting period.');
   $gross=Money::cents(trim($_POST['gross'] ?? '')); if($gross<=0) throw new RuntimeException('Gross collections must be greater than zero.');
@@ -67,7 +66,7 @@ function action(PDO $db,array $user,array $ids): string {
    $status=$paid===Money::cents($row['provincial_levy_due'])?'verified':'partial';
    $db->prepare('UPDATE remittance_ledgers SET amount_paid=?,status=? WHERE id=?')->execute([Money::decimal($paid),$status,$row['id']]);
    audit($db,'remittance_verified',$user['email'],json_encode(['ledger'=>$row['id'],'amount'=>Money::decimal($paid),'actor'=>$user['id']]));
-   $s=$db->prepare("SELECT email FROM users WHERE hierarchy_id=? AND role='parish_officer'"); $s->execute([$row['parish_id']]); foreach($s->fetchAll(PDO::FETCH_COLUMN) as $email) notify($db,$email,'Remittance confirmed',$row['payment_reference'].' • Confirmed '.Money::decimal($paid).' NGN. Status: '.$status);
+   $s=$db->prepare("SELECT email FROM users WHERE hierarchy_id=? AND role IN ('parish_officer','area_rep','zonal_rep')"); $s->execute([$row['parish_id']]); foreach($s->fetchAll(PDO::FETCH_COLUMN) as $email) notify($db,$email,'Remittance confirmed',$row['payment_reference'].' • Confirmed '.Money::decimal($paid).' NGN. Status: '.$status);
    $db->commit(); return 'Bank-confirmed payment recorded. Notification queued.';
   } catch(Throwable $e) {if($db->inTransaction()) $db->rollBack();throw $e;}
  }

@@ -80,7 +80,7 @@ try{
  $db->exec("UPDATE security_settings SET setting_value='0' WHERE setting_key='levy_basis_points'");$_POST['month']='3';action($db,$officer,[1]);
  check($db->query('SELECT status FROM remittance_ledgers WHERE id=5')->fetchColumn()==='verified','zero payable needs no payment');
  // Render the new production views with strict warning handling and the test database.
- function hiddenAction(string $a):void{echo '<input name="csrf" value="'.e(csrf()).'"><input name="action" value="'.e($a).'">';}
+ function hiddenAction(string $a):void{echo '<input type="hidden" name="csrf" value="'.e(csrf()).'"><input type="hidden" name="action" value="'.e($a).'">';}
  $portalReady=true;$ids=[1];$placeholders='?';$rows=[];$treasurer=false;$user=$officer;
  set_error_handler(function(int $severity,string $message,string $file,int $line):never{throw new ErrorException($message,0,$severity,$file,$line);});
  $page='remittances';ob_start();require __DIR__.'/../app/offering-view.php';$html=ob_get_clean();check(str_contains($html,'id="levy-preview"'),'offering calculator renders payment preview');
