@@ -316,6 +316,24 @@ $groups = [
       it catches a wrong password or port immediately. <strong>Send a test message</strong> proves delivery
       (and whether it lands in spam), which only a real message can.
     </p>
+
+    <?php if (!\RISE63\Core\Mailer::tlsAvailable()): ?>
+      <?php /* Without this, every encrypted connection fails with a message about a missing socket
+               transport, which reads like an application bug rather than a PHP build. */ ?>
+      <p class="notice notice-error" style="margin-top:10px">
+        <strong>This PHP build cannot make TLS connections.</strong> The openssl extension is missing, so no
+        encrypted SMTP server can be reached — not on 587, not on 465. Ask the host to enable openssl, then
+        test again. Until then, queued mail will keep failing and password resets will not arrive.
+      </p>
+    <?php endif; ?>
+
+    <?php if ($smtp['encryption'] === 'ssl' && (int) $smtp['port'] === 465): ?>
+      <p class="faint" style="margin-top:10px">
+        Using <strong>implicit TLS on 465</strong>. If the connection test reports no reply, many hosts and
+        corporate networks block outbound 465 — <strong>STARTTLS on 587</strong> is the better default, and
+        is what most providers document.
+      </p>
+    <?php endif; ?>
   <?php endif; ?>
 </section>
 

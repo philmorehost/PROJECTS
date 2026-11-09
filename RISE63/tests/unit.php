@@ -1403,6 +1403,52 @@ ok('Mail settings keep the stored password and never send it back', function ():
     }
 });
 
+ok('SMTP chooses the transport the encryption mode requires', function (): void {
+    // This is the bug from the field, reduced to its smallest form. Both branches of the expression
+    // that picked a transport were the string 'tcp', so "Implicit TLS (port 465)" opened a *plain*
+    // socket to a server that begins its TLS handshake immediately. The server waited for a
+    // ClientHello, the client waited for a 220 banner, and the operator was told
+    //
+    //     SMTP rejected the request (no response).
+    //
+    // No test caught it because no test ever asked which transport a mode uses — everything stopped
+    // at "the settings validated". Assert the mapping directly.
+    assertSame('ssl', Mailer::transportFor('ssl'), 'implicit TLS must use the ssl:// transport');
+    assertSame('ssl', Mailer::transportFor('SSL'), 'the saved value is case-insensitive');
+    assertSame('tcp', Mailer::transportFor('tls'), 'STARTTLS starts on a plain socket');
+    assertSame('tcp', Mailer::transportFor('none'), 'no encryption is a plain socket');
+    assertSame('tcp', Mailer::transportFor('something-unknown'), 'an unknown mode must fail safe to tcp');
+});
+
+ok('A mail failure says what is wrong, not "no response"', function (): void {
+    // The message the operator saw named neither the cause nor the setting to change. The two
+    // failures it conflated — nothing came back, versus the server said no — are now distinct, and
+    // both name a setting.
+    $connectError = new ReflectionMethod(Mailer::class, 'connectError');
+    $connectError->setAccessible(true);
+
+    $timeout = (string) $connectError->invoke(null, 'smtp.example.com', 587, 'tls', 110, 'Connection timed out');
+    assertTrue(str_contains($timeout, 'smtp.example.com:587'), 'the failure must name what it tried');
+    assertTrue(str_contains($timeout, 'did not answer'), 'a timeout must be described as no answer');
+    assertTrue(str_contains($timeout, 'blocks outbound SMTP'), 'and must suggest the usual cause');
+
+    // Port 465 with STARTTLS has its own, much more specific message — this is the common
+    // misconfiguration, and the one that produced the reported symptom.
+    $wrongPort = (string) $connectError->invoke(null, 'smtp.example.com', 465, 'tls', 110, 'Connection timed out');
+    assertTrue(str_contains($wrongPort, 'implicit TLS'), 'port 465 with STARTTLS must be named as the problem');
+
+    $refused = (string) $connectError->invoke(null, 'smtp.example.com', 587, 'tls', 111, 'Connection refused');
+    assertTrue(str_contains($refused, 'refused'), 'a refusal must be described as a refusal');
+
+    // A rejected credential must point at app passwords, which is what actually causes it.
+    $authHint = new ReflectionMethod(Mailer::class, 'authHint');
+    $authHint->setAccessible(true);
+    assertTrue(str_contains((string) $authHint->invoke(null, 535), 'app password'),
+        '535 must mention app passwords');
+    assertTrue(str_contains((string) $authHint->invoke(null, 550), 'send from'),
+        '550 must point at the sender address');
+});
+
 ok('The mailer sends from the address configured in Settings → Mail', function (): void {
     // The worker used to derive From from the site URL, so the one thing an operator could not
     // change was the address members see — and a From that does not match the authenticated mailbox

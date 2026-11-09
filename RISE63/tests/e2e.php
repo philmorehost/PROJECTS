@@ -653,6 +653,38 @@ ok('A migration the code does not understand is executed, never assumed', functi
         'a CREATE TABLE whose table is absent is not');
 });
 
+/* ──────────── Mail: the transport that was never the one asked for ──────────── */
+
+ok('Implicit TLS and STARTTLS open different kinds of socket', function (): void {
+    // Reported: "SMTP rejected the request (no response)." Cause: connect() computed its transport
+    // with `($encryption === 'ssl' || $encryption === 'none') ? 'tcp' : 'tcp'` — both branches the
+    // same string. A port-465 server starts TLS on connect, so a plain socket produces a silence
+    // that both ends wait out.
+    //
+    // Proven here without a mail server: the transport is a pure function of the mode, and that is
+    // the fact that was wrong.
+    assertSame('ssl', \RISE63\Core\Mailer::transportFor('ssl'), 'ssl mode');
+    assertSame('tcp', \RISE63\Core\Mailer::transportFor('tls'), 'STARTTLS mode');
+});
+
+ok('A mail server that says nothing is reported as unreachable, not as a rejection', function (): void {
+    // The old message — "SMTP rejected the request (no response)" — asserted a rejection while
+    // reporting the absence of any response. This connects to a port that is closed, so the failure
+    // is real, and checks the message distinguishes the two cases.
+    try {
+        \RISE63\Core\Mailer::connect([
+            'host' => '127.0.0.1', 'port' => 1, 'encryption' => 'none',
+            'username' => '', 'password' => '', 'auth' => 'login',
+        ]);
+        assertTrue(false, 'connecting to a closed port must fail');
+    } catch (\RuntimeException $error) {
+        $message = $error->getMessage();
+        assertTrue(!str_contains($message, 'rejected the request'),
+            'a transport failure must not be reported as a rejection: ' . $message);
+        assertTrue(str_contains($message, '127.0.0.1'), 'the message must name what it tried: ' . $message);
+    }
+});
+
 /* ──────────────────────────────── summary ─────────────────────────────── */
 
 fwrite(STDOUT, "\n" . str_repeat('─', 62) . "\n");

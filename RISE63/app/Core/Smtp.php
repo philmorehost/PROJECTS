@@ -168,6 +168,18 @@ final class Smtp
             throw new RuntimeException('Enter the SMTP username. Most providers refuse mail from an unauthenticated sender.');
         }
 
+        // Port 25 is the relay port, blocked almost everywhere. This is a *coherence* check on the
+        // numbers the operator typed — not a capability check. Whether this PHP can actually do TLS
+        // belongs in test(), not here: validation that depends on the machine makes the same form
+        // save or refuse depending on the host, and silently blocks an operator whose host enables
+        // openssl tomorrow.
+        if ($encryption === 'tls' && $port === 25) {
+            throw new RuntimeException(
+                'Port 25 is the relay port, and most providers block it on shared hosting and '
+                . 'outbound from virtual servers. Use STARTTLS on 587 or implicit TLS on 465.'
+            );
+        }
+
         // ── The password: an empty field means "keep what is stored", which is why it is never
         // rendered back to the browser.
         $password = (string) ($input['password'] ?? '');
@@ -298,12 +310,24 @@ final class Smtp
             return ['ok' => false, 'message' => 'Save the server settings first — there is nothing to test yet.'];
         }
 
+        if (!Mailer::tlsAvailable()) {
+            return [
+                'ok' => false,
+                'message' => 'This PHP build has no TLS support (the openssl extension is missing), so no '
+                    . 'encrypted SMTP connection can be made. Ask the host to enable openssl.',
+            ];
+        }
+
         try {
             $mailer = Mailer::fromConfig();
             $mailer->quit();
         } catch (\Throwable $error) {
             // Mailer never puts credentials in its messages; see the note in Mailer::expect().
-            return ['ok' => false, 'message' => $error->getMessage()];
+            return [
+                'ok' => false,
+                'message' => $error->getMessage() . ' (Nothing was sent: this only opens a connection and '
+                    . 'authenticates.)',
+            ];
         }
 
         $settings = self::load();

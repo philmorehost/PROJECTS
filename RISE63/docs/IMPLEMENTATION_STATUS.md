@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.6 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.7 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -27,7 +27,7 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **44 passed, 0 failed** |
 | Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
-| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **26 passed, 0 failed, 1 skipped** — real SQL |
+| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **28 passed, 0 failed, 1 skipped** — real SQL |
 | **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **14 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
@@ -255,6 +255,62 @@ behaviour: `tests/support/pgsql-schema.php` was missing `password_resets` and `s
 And the first version of the existence check used backtick-quoted identifiers, which PostgreSQL
 rejects — the syntax error looked exactly like a missing column, which is why the check now asks
 `information_schema` instead of selecting from an identifier.
+
+### 2.1f What 1.0.7 fixes — SMTP, and the transport that was never the one asked for
+
+Reported: **"SMTP rejected the request (no response)."**
+
+Two bugs, and the message named neither of them.
+
+**The transport was a typo.** `Mailer::connect()` chose its socket like this:
+
+```php
+$transport = ($encryption === 'ssl' || $encryption === 'none') ? 'tcp' : 'tcp';
+```
+
+Both branches are `'tcp'`. So choosing **Implicit TLS** — port 465, the second option in the
+Settings dropdown — opened a *plain* socket to a server that begins its TLS handshake the instant it
+accepts. The server waited for a ClientHello, the client waited for a `220` banner, and neither sent
+anything. That is the "no response".
+
+The fix is one mapping, `Mailer::transportFor()`, now public and unit-tested:
+
+| Setting | Transport | Why |
+|---|---|---|
+| Implicit TLS | `ssl://` | PHP performs the handshake during `stream_socket_client()` |
+| STARTTLS | `tcp://` | plain socket, upgraded later with `stream_socket_enable_crypto()` |
+| None (localhost only) | `tcp://` | nothing to negotiate |
+
+**The message conflated two opposite failures.** `expect()` threw
+`SMTP rejected the request (no response)` — asserting a rejection while reporting that no response
+arrived. Those are different problems with different fixes:
+
+- **No reply at all** → a transport problem: a blocked port, the wrong encryption for the port, or a
+  firewall dropping SMTP. The message now says that, names the endpoint it tried, and says plainly
+  that it is *not* a password problem.
+- **A reply with an unexpected code** → the server refused, and the message quotes what it actually
+  said and names the setting: `535` points at app passwords, `550` at the "send from" address.
+
+`connectError()` covers the connection failures, including the specific case that produces this
+symptom most often — port 465 with STARTTLS selected.
+
+**Three supporting changes, so the next report is not a guess:**
+
+1. **`bin/doctor.php` performs the real handshake** (connect, EHLO, STARTTLS, AUTH, QUIT — sends
+   nothing). It used to stop at "a host is configured", which is how a broken transport looked
+   healthy on every screen while every message queued and failed. `--no-net` skips it for cron.
+2. **The Settings panel checks for the openssl extension.** Without it every TLS mode fails with a
+   message about a missing socket transport, which reads like an application bug rather than a PHP
+   build. Saving a setting is now also refused on port 25 with STARTTLS, which is blocked nearly
+   everywhere.
+3. **`connect()` no longer leaks its socket** when a handshake step fails. `bin/mail-worker.php`
+   exits on that error anyway, but Settings → "Test the connection" catches it and carries on.
+
+Deliberately **not** done: `Smtp::save()` does not check whether this PHP can do TLS. Validation
+should judge the request, not the machine — a check that depends on the host makes the same form
+save or refuse depending on where it runs, and it blocked the unit suite (which has no TLS) the
+first time it was tried. Capability belongs in `test()`, which reports it where the operator is
+looking.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 

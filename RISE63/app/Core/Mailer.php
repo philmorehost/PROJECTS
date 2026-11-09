@@ -14,6 +14,28 @@ use RuntimeException;
  */
 final class Mailer
 {
+    /** Seconds to wait for each response. Mirrors the stream timeout, for messages. */
+    private int $timeout = 20;
+
+    /** The last complete reply, kept so a failure can quote what the server actually said. */
+    private string $lastResponse = '';
+
+    /**
+     * host:port of the connection, so a failure names what it tried.
+     *
+     * A blocked port frequently *connects* — the firewall drops the server's replies rather than
+     * refusing the socket — so "no reply" is exactly the case where the operator most needs to know
+     * which endpoint went quiet.
+     */
+    private string $endpoint = '';
+
+    /** Descriptions for the errno values stream_socket_client() actually produces. */
+    private const CONNECT_ERRORS = [
+        110 => 'the connection timed out',
+        111 => 'the connection was refused',
+        113 => 'no route to the host',
+    ];
+
     /** @param resource $socket */
     private function __construct(private $socket, private array $config)
     {
@@ -97,37 +119,86 @@ final class Mailer
 
     public static function connect(array $config): self
     {
-        $host = (string) ($config['host'] ?? '');
+        $host = trim((string) ($config['host'] ?? ''));
         $port = (int) ($config['port'] ?? 587);
-        $encryption = (string) ($config['encryption'] ?? 'tls');
+        $encryption = strtolower((string) ($config['encryption'] ?? 'tls'));
         $isLocal = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
         if ($encryption === 'none' && !$isLocal) {
             throw new RuntimeException('Refusing to send mail over an unencrypted connection to a remote host.');
         }
-        $transport = ($encryption === 'ssl' || $encryption === 'none') ? 'tcp' : 'tcp';
-        $remote    = $transport . '://' . $host . ':' . $port;
-        $context   = stream_context_create(['ssl' => [
-            'verify_peer'      => true,
-            'verify_peer_name' => true,
-            'peer_name'        => $host,
+
+        // ── Implicit TLS negotiates at connect time, and nothing else does.
+        //
+        // Both branches here used to read `'tcp'` — a typo that made `encryption = ssl` (port 465)
+        // open a *plain* TCP socket to a server that starts its TLS handshake immediately. The
+        // server waits for a ClientHello; this client waits for a `220` banner; neither sends
+        // anything, and the read times out with an empty response. That surfaced to the operator as
+        //
+        //     SMTP rejected the request (no response).
+        //
+        // which named neither the cause nor the setting to change. `ssl://` is what makes PHP do the
+        // handshake during `stream_socket_client()`.
+        $remote = self::transportFor($encryption) . '://' . $host . ':' . $port;
+
+        $connectTimeout = (int) ($config['connect_timeout'] ?? 20) ?: 20;
+        $readTimeout    = (int) ($config['timeout'] ?? 20) ?: 20;
+
+        $context = stream_context_create(['ssl' => [
+            'verify_peer'       => true,
+            'verify_peer_name'  => true,
+            // SNI: a server hosting several mail domains answers with the wrong certificate without
+            // it, which arrives as an unexpected-verification error rather than as a bad hostname.
+            'peer_name'         => $host,
+            'SNI_enabled'       => true,
             'allow_self_signed' => false,
         ]]);
-        $socket = @stream_socket_client($remote, $errno, $errstr, 12, STREAM_CLIENT_CONNECT, $context);
-        if ($socket === false) {
-            throw new RuntimeException('SMTP connection failed: ' . ($errstr !== '' ? $errstr : 'unknown error'));
-        }
-        stream_set_timeout($socket, 15);
-        $mailer = new self($socket, $config);
-        $mailer->expect(220);
-        $hostname = (string) ($config['helo'] ?? (gethostname() ?: 'localhost'));
-        $mailer->command('EHLO ' . self::sanitise($hostname), 250);
 
-        if ($encryption === 'tls') {
-            $mailer->command('STARTTLS', 220);
-            if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                throw new RuntimeException('SMTP STARTTLS negotiation failed.');
-            }
+        $socket = @stream_socket_client($remote, $errno, $errstr, $connectTimeout, STREAM_CLIENT_CONNECT, $context);
+        if ($socket === false) {
+            throw new RuntimeException(self::connectError($host, $port, $encryption, (int) $errno, (string) $errstr));
+        }
+        stream_set_timeout($socket, $readTimeout);
+
+        $mailer = new self($socket, $config);
+        $mailer->timeout  = $readTimeout;
+        $mailer->endpoint = $host . ':' . $port;
+
+        try {
+            $mailer->expect(220);
+            $hostname = (string) ($config['helo'] ?? (gethostname() ?: 'localhost'));
             $mailer->command('EHLO ' . self::sanitise($hostname), 250);
+
+            if ($encryption === 'tls') {
+                // Say what is actually wrong when the server does not offer STARTTLS: on port 465 it
+                // never will, and "SMTP rejected the request (530)" sends the operator looking at
+                // their password instead of at the encryption setting.
+                try {
+                    $mailer->command('STARTTLS', 220);
+                } catch (RuntimeException $error) {
+                    if (!str_contains($mailer->lastResponse, 'STARTTLS')) {
+                        throw new RuntimeException(
+                            'SMTP rejected STARTTLS. Port 465 requires “Implicit TLS” rather than STARTTLS — '
+                            . 'if that is not the problem, the server does not offer STARTTLS on this port.',
+                            0,
+                            $error
+                        );
+                    }
+                    throw $error;
+                }
+                if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                    throw new RuntimeException(
+                        'SMTP STARTTLS negotiation failed: the server accepted the command but the '
+                        . 'TLS handshake did not complete. An outdated TLS configuration on the server, '
+                        . 'or a firewall inspecting the connection, causes this.'
+                    );
+                }
+                $mailer->command('EHLO ' . self::sanitise($hostname), 250);
+            }
+        } catch (RuntimeException $error) {
+            // Do not leak the socket when a handshake step fails: bin/mail-worker.php exits, but
+            // Settings → “Test the connection” catches this and carries on.
+            $mailer->close();
+            throw $error;
         }
 
         $user = (string) ($config['username'] ?? '');
@@ -208,6 +279,18 @@ final class Mailer
         }
     }
 
+    /**
+     * Read one reply and check its code.
+     *
+     * The distinction that matters to the operator: **no reply at all** is a transport problem
+     * (blocked port, wrong encryption, dead server), while a reply with an unexpected code is the
+     * server saying no (bad password, refused sender). Both used to arrive as
+     *
+     *     SMTP rejected the request (no response).
+     *
+     * which is true of neither in a way anyone can act on. The message now says which it was, quotes
+     * the server's own words, and names the setting.
+     */
     private function expect(int|array $expected): string
     {
         $response = '';
@@ -217,12 +300,121 @@ final class Mailer
                 break;
             }
         }
-        $code     = (int) substr($response, 0, 3);
+        $this->lastResponse = $response;
+
         $expected = is_array($expected) ? $expected : [$expected];
-        if ($response === '' || !in_array($code, $expected, true)) {
-            throw new RuntimeException('SMTP rejected the request (' . ($code ?: 'no response') . ').');
+        $wanted   = implode(' or ', $expected);
+
+        // fgets() returning false means end of stream, a timeout, or an error — never a reply.
+        if ($response === '') {
+            $meta = @stream_get_meta_data($this->socket);
+            $why  = !empty($meta['timed_out'])
+                ? 'no reply within ' . $this->timeout . ' seconds'
+                : 'the connection was closed without a reply';
+
+            throw new RuntimeException(
+                'The mail server at ' . $this->endpoint . ' gave no reply: ' . $why
+                . ', expected ' . $wanted . '. This is a connection problem rather than a rejected '
+                . 'password — usually a blocked port, the wrong encryption mode for the port, or a '
+                . 'firewall dropping SMTP.'
+            );
+        }
+
+        $code = (int) substr($response, 0, 3);
+        if (!in_array($code, $expected, true)) {
+            throw new RuntimeException(
+                'The mail server refused the request with “' . trim($response) . '” (expected ' . $wanted . '). '
+                . self::authHint($code)
+            );
         }
         return $response;
+    }
+
+    /**
+     * The usual reason the server says no, named so the operator does not have to know SMTP codes.
+     * Deliberately about settings, never about the password itself.
+     */
+    private static function authHint(int $code): string
+    {
+        return match (true) {
+            // 535/534 is a rejected credential. Name the two things that cause it in practice.
+            $code === 535, $code === 534, $code === 530 =>
+                'That is an authentication failure. Most providers need an app password rather than '
+                . 'the mailbox password — Gmail, Outlook and Yandex all do when 2-step verification is '
+                . 'on. A username that is not the full mailbox address causes it too.',
+            $code === 550, $code === 551, $code === 553 =>
+                'The server rejected the sender or recipient address. The “send from” address must be '
+                . 'one the mailbox is allowed to send as — many providers refuse any other.',
+            $code >= 500 =>
+                'Check the port, the encryption mode and the username.',
+            default => 'Check the settings on this page.',
+        };
+    }
+
+    /** Release the socket without saying goodbye — used when the handshake failed. */
+    private function close(): void
+    {
+        if (is_resource($this->socket)) {
+            @fclose($this->socket);
+        }
+    }
+
+    /**
+     * The PHP stream transport for an encryption mode.
+     *
+     * `ssl` means "negotiate TLS during connect" (implicit TLS, port 465). `tcp` means "plain socket,
+     * upgrade later if at all" (STARTTLS on 587, or none). Getting this wrong is not a subtle bug: a
+     * `tcp` socket to a 465 server deadlocks, because the server waits for a ClientHello while the
+     * client waits for a banner. Public and separate so the unit suite can assert it without a
+     * mail server, which is how the original typo survived.
+     */
+    public static function transportFor(string $encryption): string
+    {
+        return match (strtolower(trim($encryption))) {
+            'ssl' => 'ssl',
+            default => 'tcp',
+        };
+    }
+
+    /** Whether this PHP was built with the TLS socket transport mail needs. */
+    public static function tlsAvailable(): bool
+    {
+        return in_array('ssl', stream_get_transports(), true);
+    }
+
+    /**
+     * Explain a failed connection in the operator's terms.
+     *
+     * The raw message from PHP is `Connection timed out`, which does not say *which* of the three
+     * things is wrong. This maps the common cases to the setting that fixes them, and always names
+     * the host, port and mode that were attempted — the operator is editing those three fields.
+     */
+    private static function connectError(string $host, int $port, string $encryption, int $errno, string $errstr): string
+    {
+        $detail = self::CONNECT_ERRORS[$errno] ?? ($errstr !== '' ? $errstr : 'unknown error');
+
+        $hint = match (true) {
+            $errno === 110 && $encryption === 'tls' && $port === 465 =>
+                'Port 465 uses implicit TLS, not STARTTLS — and many hosts block outbound 465 as well. '
+                . 'Choose “Implicit TLS” for 465, or use STARTTLS on 587.',
+            $errno === 110 =>
+                'The server did not answer. Common causes: this host blocks outbound SMTP (shared '
+                . 'hosting often blocks 25, 465 and 587 — ask the provider, or use their relay), or a '
+                . 'firewall is dropping the connection.',
+            $errno === 111 =>
+                'The server refused the connection. Check the port: 587 for STARTTLS, 465 for implicit TLS.',
+            str_contains($errstr, 'certificate') || str_contains($errstr, 'SSL') =>
+                'The TLS certificate could not be verified. If this server uses a self-signed '
+                . 'certificate, it cannot be used without weakening verification, which this '
+                . 'installation refuses to do.',
+            default => $detail,
+        };
+
+        // The hint for a certificate failure already quotes the reason; do not say it twice.
+        $prefix = 'Could not connect to ' . $host . ':' . $port . ' (' . strtoupper($encryption) . '): ';
+        return str_contains($hint, $detail)
+            ? $prefix . rtrim($hint, '. ') . '.'
+            : $prefix . rtrim($detail, '. ') . '. ' . $hint;
     }
 
     private static function dotStuff(string $data): string
