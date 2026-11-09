@@ -326,3 +326,32 @@ php tests/registration-upgrade.php
 CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
   node tests/officer-registration-browser.js /tmp/remit-registration.html
 ```
+
+## 0.6.0 — Multiline hierarchy entry and automatic CAPS
+
+Admins can now use **Church hierarchy → Add multiple churches** and paste one hierarchy per line:
+
+```text
+GRACE ZONE, HOPE AREA, LIVING HOPE PARISH
+GRACE ZONE, NEW LIFE AREA
+GRACE ZONE, HOPE AREA, GRACE PARISH
+GRACE ZONE
+NEW ZONE
+```
+
+A line can contain **ZONE**, **ZONE, AREA**, or **ZONE, AREA, PARISH**. Blank lines are ignored; a missing Parish creates no placeholder and can be supplied in a later batch. Repeat a Zone/Area to build its other descendants. Matching is CAPS/whitespace-normalized **within the same level and parent**, so repeated paths reuse existing units and preserve their IDs/codes; identical names in different Zones/Areas remain separate. Legacy ambiguous duplicate paths stop the whole batch rather than selecting an arbitrary unit. For an existing direct-Zone church, use `ZONE, , PARISH`. Quote names containing commas, e.g. `"GRACE, EAST ZONE", HOPE AREA`.
+
+The admin/licence/CSRF-protected action accepts up to **5,000 non-empty lines / 2 MB** in one transaction, with the existing structural-write singleton lock. Any invalid row or database failure rolls back the complete batch. New Parishes get unique **AUTO{id}** codes (with collision suffixes), editable afterward via Edit details. Existing parish codes, contacts, officer accounts, registrations, links and financial records are not replaced. Reposting the same paths adds no duplicates. CSV import stays available and now rejects an existing same-parent Parish name with a different code rather than duplicating it; edit its code explicitly if required.
+
+**All church name entry is automatically CAPS**: multiline input, Quick add, editing, Area upgrades, CSV import and unlisted registration names. Browser code changes the actual input value while preserving the caret; PHP independently validates/converts names, including when JavaScript is off. Names are limited to 150 UTF-8 bytes after conversion. A bundled Unicode 14.0 uppercase mapping (generated from Python's Unicode data) supports non-ASCII names and expanding letters without adding an mbstring dependency. Personal names, bank details and existing parish codes are not uppercased.
+
+Existing directory/registration church labels appear in CAPS immediately. **Saving the first successful batch also converts existing stored directory names to CAPS** without merging units or changing IDs, parents or history. No schema migration is needed for this release; the 0.5.0 officer-registration schema upgrade is still required if not previously enabled. Review old ambiguous/invalid directory names if a batch asks for correction. Deletion confirmation accepts the displayed CAPS form of legacy names; all linked-record and explicit-confirmation protections remain.
+
+All newly added **Zones, Areas and Parishes** are returned by the existing public registration directory and can be searched or selected. Similar-name/typo suggestions and native dropdown fallback remain. Unlisted names are converted to CAPS and saved only with the pending application; exact normalized matches reuse existing churches. Admin church linking and affiliation approval are still mandatory before access. No public hierarchy creation is allowed.
+
+Validation adds **34** multiline/Unicode/idempotency/parent-scope/code-collision/rollback/privacy assertions to the existing 44 hierarchy checks. The directory browser suite now has **330** assertions across two roles and six widths, including actual multiline/Quick add CAPS values and read-only visibility; the **125** registration discovery and **27** URL/fallback checks remain. Other finance, portal, CSV, edit/delete, licensing, autocomplete and mobile regressions are retained. SQLite/headless tests do not establish MySQL locking/concurrency, cPanel deployment or physical-device acceptance.
+
+```sh
+php tests/hierarchy-batch.php
+# Use the previously documented fixture commands for directory and registration browser checks.
+```

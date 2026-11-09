@@ -9,9 +9,9 @@ final class HierarchyImporter {
   if(!$stream)throw new RuntimeException('Cannot generate the sample CSV.');
   try {
    $rows=[self::CSV_HEADER,
-    ['Example Zone','Example Area One','Example Parish One','SAMPLE001','Example Officer One','08000000000'],
-    ['Example Zone','Example Area One','Example Parish Two','SAMPLE002','Example Officer Two','08000000000'],
-    ['Example Zone','Example Area Two','Example Parish Three','SAMPLE003','Example Officer Three','08000000000'],
+    ['EXAMPLE ZONE','EXAMPLE AREA ONE','EXAMPLE PARISH ONE','SAMPLE001','Example Officer One','08000000000'],
+    ['EXAMPLE ZONE','EXAMPLE AREA ONE','EXAMPLE PARISH TWO','SAMPLE002','Example Officer Two','08000000000'],
+    ['EXAMPLE ZONE','EXAMPLE AREA TWO','EXAMPLE PARISH THREE','SAMPLE003','Example Officer Three','08000000000'],
    ];
    foreach($rows as $row)if(fputcsv($stream,$row,',','"','',"\r\n")===false)throw new RuntimeException('Cannot generate the sample CSV.');
    rewind($stream);$csv=stream_get_contents($stream);
@@ -32,21 +32,27 @@ final class HierarchyImporter {
     if($row===[null])continue;
     if(++$count>5000 || count($row)!==6) throw new InvalidArgumentException('CSV must contain at most 5,000 rows, each with six columns.');
     [$zone,$area,$parish,$code,$contact,$phone]=array_map('trim',$row);
+    $zone=ChurchNames::normalize($zone);$parish=ChurchNames::normalize($parish);if($area!=='')$area=ChurchNames::normalize($area);
     foreach([$zone,$parish] as $name) if($name==='' || strlen($name)>150)throw new InvalidArgumentException('Invalid church name at row '.($count+1));
     if($code==='' || strlen($code)>20 || strlen($contact)>100 || strlen($phone)>25) throw new InvalidArgumentException('Invalid code or contact fields at row '.($count+1));
     if(strlen($area)>150)throw new InvalidArgumentException('Area name is too long at row '.($count+1));
     $parent=null;
     foreach(['zone'=>$zone,'area'=>$area] as $type=>$name) {
      if($type==='area' && $name==='')continue;
-     $s=$db->prepare('SELECT id FROM church_hierarchy WHERE node_type=? AND node_name=? AND parent_id <=> ?');$s->execute([$type,$name,$parent]);$id=$s->fetchColumn();
+     $s=$db->prepare('SELECT id,node_name FROM church_hierarchy WHERE node_type=? AND parent_id <=> ?');$s->execute([$type,$parent]);$matches=array_values(array_filter($s->fetchAll(),fn(array $unit):bool=>ChurchNames::normalize($unit['node_name'])===$name));if(count($matches)>1)throw new InvalidArgumentException('Ambiguous existing '.$type.' name: '.$name);$id=$matches[0]['id'] ?? null;
      if(!$id){$db->prepare('INSERT INTO church_hierarchy(node_name,node_type,parent_id) VALUES(?,?,?)')->execute([$name,$type,$parent]);$id=$db->lastInsertId();}
+     $db->prepare('UPDATE church_hierarchy SET node_name=? WHERE id=?')->execute([$name,$id]);
      $parent=(int)$id;
     }
     $s=$db->prepare('SELECT * FROM church_hierarchy WHERE parish_code=?');$s->execute([$code]);$existing=$s->fetch();
     if($existing) {
-     if((int)$existing['parent_id']!==$parent || $existing['node_name']!==$parish) throw new InvalidArgumentException('Parish code '.$code.' conflicts with an existing parish.');
-     $db->prepare('UPDATE church_hierarchy SET contact_person=?,phone_number=? WHERE id=?')->execute([$contact,$phone,$existing['id']]);
-    }else $db->prepare("INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code,contact_person,phone_number) VALUES(?,'parish',?,?,?,?)")->execute([$parish,$parent,$code,$contact,$phone]);
+     if((int)$existing['parent_id']!==$parent || ChurchNames::normalize($existing['node_name'])!==$parish) throw new InvalidArgumentException('Parish code '.$code.' conflicts with an existing parish.');
+     $db->prepare('UPDATE church_hierarchy SET node_name=?,contact_person=?,phone_number=? WHERE id=?')->execute([$parish,$contact,$phone,$existing['id']]);
+    }else {
+     $s=$db->prepare("SELECT node_name FROM church_hierarchy WHERE node_type='parish' AND parent_id=?");$s->execute([$parent]);
+     foreach($s->fetchAll(PDO::FETCH_COLUMN) as $existingName)if(ChurchNames::normalize($existingName)===$parish)throw new InvalidArgumentException('Parish '.$parish.' already exists under this parent with another code. Edit its code in the directory rather than importing a duplicate.');
+     $db->prepare("INSERT INTO church_hierarchy(node_name,node_type,parent_id,parish_code,contact_person,phone_number) VALUES(?,'parish',?,?,?,?)")->execute([$parish,$parent,$code,$contact,$phone]);
+    }
    }
    if($count===0)throw new InvalidArgumentException('CSV contains no parishes.');
    $db->commit();return $count;

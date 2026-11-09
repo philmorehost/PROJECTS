@@ -188,8 +188,14 @@ if(registrationSelect){
   matches.forEach(({option})=>{const button=document.createElement('button');button.type='button';button.className='church-suggestion';button.textContent=option.label;button.addEventListener('click',()=>choose(option));target.append(button);});
  };
  search.addEventListener('input',()=>{registrationSelect.value='';render(search.value,suggestions);});
- name.addEventListener('input',()=>{const start=name.selectionStart,end=name.selectionEnd;name.value=name.value.toLocaleUpperCase();name.setSelectionRange(start,end);render(name.value,document.querySelector('#new-church-suggestions'));});
- unlisted.addEventListener('change',()=>{if(unlisted.checked){registrationSelect.value='';if(!name.value)name.value=search.value.toLocaleUpperCase();render(name.value,document.querySelector('#new-church-suggestions'));}sync();});
+ name.addEventListener('input',()=>render(name.value,document.querySelector('#new-church-suggestions')));
+ unlisted.addEventListener('change',()=>{if(unlisted.checked){registrationSelect.value='';if(!name.value)name.value=search.value.toUpperCase();render(name.value,document.querySelector('#new-church-suggestions'));}sync();});
  registrationSelect.addEventListener('change',()=>{if(registrationSelect.value){const option=options.find(o=>o.id===registrationSelect.value);if(option)choose(option);}});
  registrationSelect.form.addEventListener('reset',()=>setTimeout(sync,0));sync();
 }
+
+// Change the submitted value, not just its visual styling; keep the typing caret stable.
+document.querySelectorAll('[data-church-caps]').forEach(field=>{
+ const uppercase=()=>{const start=field.selectionStart,end=field.selectionEnd;const before=field.value;field.value=before.toUpperCase();if(start!==null)field.setSelectionRange(before.slice(0,start).toUpperCase().length,before.slice(0,end).toUpperCase().length);};
+ field.addEventListener('input',uppercase);uppercase();
+});

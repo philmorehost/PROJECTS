@@ -75,11 +75,11 @@ final class ChurchPortal
     /** Public discovery data deliberately excludes contacts, officers and bank details. */
     public static function directory(PDO $db): array
     {
-        return $db->query("SELECT h.id,h.node_name,h.node_type,h.parish_code,p.node_name parent_name,z.node_name zone_name FROM church_hierarchy h LEFT JOIN church_hierarchy p ON h.parent_id=p.id LEFT JOIN church_hierarchy z ON p.parent_id=z.id WHERE h.node_type IN ('parish','area','zone') ORDER BY h.node_name,h.id")->fetchAll();
+        return array_map([ChurchNames::class,'labels'],$db->query("SELECT h.id,h.node_name,h.node_type,h.parish_code,p.node_name parent_name,z.node_name zone_name FROM church_hierarchy h LEFT JOIN church_hierarchy p ON h.parent_id=p.id LEFT JOIN church_hierarchy z ON p.parent_id=z.id WHERE h.node_type IN ('parish','area','zone') ORDER BY h.node_name,h.id")->fetchAll());
     }
     public static function nameKey(string $name): string
     {
-        return preg_replace('/[^\p{L}\p{N}]+/u','',trim($name)) ?? '';
+        return ChurchNames::upper(preg_replace('/[^\p{L}\p{N}]+/u','',trim($name)) ?? '');
     }
     public static function resolveChurch(PDO $db,array $input): array
     {
@@ -97,7 +97,7 @@ final class ChurchPortal
         foreach(self::directory($db) as $unit)if(preg_match('/^'.preg_quote($key,'/').'$/iu',self::nameKey($unit['node_name']))===1)$matches[]=$unit;
         if(count($matches)===1)return [(int)$matches[0]['id'],null,null];
         if(count($matches)>1)throw new InvalidArgumentException('More than one church has this name. Select the correct level and parent from the directory.');
-        $name=preg_replace('/\s+/u',' ',strtoupper($raw));
+        $name=ChurchNames::normalize($raw);
         if(preg_match('/\p{Ll}/u',$name))throw new InvalidArgumentException('Enter the unlisted church name in CAPS.');
         $type=$input['church_type'] ?? '';if(!in_array($type,['parish','area','zone'],true))throw new InvalidArgumentException('Choose whether the unlisted church is a Parish, Area or Zone.');
         return [null,$name,$type];

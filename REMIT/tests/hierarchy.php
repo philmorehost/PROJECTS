@@ -42,11 +42,11 @@ check(str_contains(unitLabel(['id'=>1,'node_type'=>'parish','node_name'=>'Hope',
 require_once __DIR__.'/../app/ChurchPortal.php';
 check(method_exists(ChurchPortal::class,'directory'),'registration discovery query available');
 $directory=ChurchPortal::directory($db);$byCode=[];foreach($directory as $record)if($record['parish_code']!==null)$byCode[$record['parish_code']]=$record;
-check($byCode['DIRECT001']['parent_name']==='Import Zone','registration labels direct zone parish correctly');
-check($byCode['P001']['parent_name']==='Area 3' && $byCode['P001']['zone_name']==='Zone B','registration labels moved parish correctly');
-check($byCode['BABY']['parent_name']==='New Growth Area' && $byCode['BABY']['zone_name']==='Zone A','registration labels upgraded headquarters correctly');
+check($byCode['DIRECT001']['parent_name']==='IMPORT ZONE','registration labels direct zone parish correctly');
+check($byCode['P001']['parent_name']==='AREA 3' && $byCode['P001']['zone_name']==='ZONE B','registration labels moved parish correctly');
+check($byCode['BABY']['parent_name']==='NEW GROWTH AREA' && $byCode['BABY']['zone_name']==='ZONE A','registration labels upgraded headquarters correctly');
 $source=file_get_contents(__DIR__.'/../index.php');preg_match('/\$nodes=\$db->query\("([^\"]+)"\)/',$source,$nodeMatch);check(!empty($nodeMatch[1]),'production directory query found');
 $directory=$db->query($nodeMatch[1])->fetchAll();$byId=[];foreach($directory as $record)$byId[(int)$record['id']]=$record;
-check($byId[$p1]['parent_name']==='Area 3' && $byId[$p1]['zone_name']==='Zone B','directory shows parent and zone after move');
+check($byId[$p1]['parent_name']==='AREA 3' && $byId[$p1]['zone_name']==='ZONE B','directory shows parent and zone after move');
 check($byId[$baby]['parent_type']==='area' && $byId[$newArea]['parent_type']==='zone','directory shows headquarters and upgraded area');
 echo "PASS: $count hierarchy assertions (SQLite compatibility harness, not MySQL concurrency)\n";
