@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Ensure Authorization header is passed to PHP
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Redirect /api/bank/resolve to /api/bank/resolve.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^resolve$ resolve.php [L,QSA]
+
+# Redirect /api/bank/list to /api/bank/list.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^list$ list.php [L,QSA]

@@ -1,0 +1,4 @@
+[15-Sep-2026 10:56:34 UTC] [PayHub] paystack_call refused: no test Paystack secret key configured.
+[15-Sep-2026 22:36:31 UTC] [PayHub] BLOCKED amount mismatch during api/transaction/verify.php: expected 100.00, gateway settled 101.53 for Ref: PH_098701f2407bbea3
+[16-Sep-2026 06:05:22 UTC] [PayHub] BLOCKED amount mismatch during api/transaction/verify.php: expected 100.00, gateway settled 101.53 for Ref: PH_098701f2407bbea3
+[16-Sep-2026 06:08:36 UTC] [PayHub] BLOCKED amount mismatch during api/transaction/verify.php: expected 100.00, gateway settled 101.53 for Ref: PH_649705f347d35665
