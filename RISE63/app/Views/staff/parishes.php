@@ -20,26 +20,25 @@ $isAdmin = Auth::isAdmin($account);
   <?php if (($picker['state'] ?? 'ok') !== 'ok'): ?>
     <div class="notice notice-warn" style="margin-top:12px" role="status" id="directory-empty">
       <strong><?= e((string) $picker['message']) ?></strong>
-      <?php if ($picker['state'] === 'empty'): ?>
-        Until churches are added, the registration page cannot list them — members can still type
-        their church name, and it waits in the queues below for you to add.
-      <?php elseif ($picker['state'] === 'inactive'): ?>
-        They exist but are switched off, so nobody can pick them. Open one and switch it back on.
-      <?php elseif ($picker['state'] === 'orphaned'): ?>
-        Their area or zone has been removed, so they cannot be reached. Re-import the hierarchy below;
-        the import recreates what is missing and matches the rest by name.
-      <?php endif; ?>
-      <?php if (($picker['total'] ?? 0) === 0): ?>
-        Paste the list into <strong>Add zones, areas and parishes in bulk</strong> below — one church
-        per line as <code>ZONE, AREA, PARISH</code>.
-      <?php endif; ?>
+      Until churches are added, the registration page cannot list them — members can still type
+      their church name, and it waits in the queues below for you to add.
+      Paste the list into <strong>Add zones, areas and parishes in bulk</strong> below — one church
+      per line as <code>ZONE, AREA, PARISH</code>. A zone on its own is a church too, so even
+      <code>GRACE ZONE</code> is enough to give members something to choose.
     </div>
   <?php endif; ?>
 
   <div class="grid grid-3" style="margin-top:12px">
-    <div class="stat"><b><?= e((string) $totals['parishes']) ?></b><span>Parishes</span></div>
-    <div class="stat"><b><?= e((string) $totals['areas']) ?></b><span>Areas</span></div>
-    <div class="stat"><b><?= e((string) $totals['zones']) ?></b><span>Zones</span></div>
+    <?php
+      // The heading says "churches" and the three levels are shown separately, because "0 Parishes"
+      // beside 26 areas and 16 zones was read — correctly — as an empty directory. A zone church and
+      // an area church are churches members can register at; the total is what the picker offers.
+      $churchTotal = (int) $totals['parishes'] + (int) $totals['areas'] + (int) $totals['zones'];
+    ?>
+    <div class="stat"><b><?= $churchTotal ?></b><span>Churches members can choose</span></div>
+    <div class="stat"><b><?= e((string) $totals['parishes']) ?></b><span>Parish churches</span></div>
+    <div class="stat"><b><?= e((string) $totals['areas']) ?></b><span>Area churches</span></div>
+    <div class="stat"><b><?= e((string) $totals['zones']) ?></b><span>Zonal churches</span></div>
   </div>
   <form method="get" action="<?= e(url('parishes')) ?>" class="row" style="margin-top:16px" data-combobox data-endpoint="<?= e(url('api/index.php')) ?>">
     <div class="field grow" style="margin:0">
@@ -175,6 +174,24 @@ $isAdmin = Auth::isAdmin($account);
           <?php endif; ?>
         </p>
 
+        <?php if ((int) ($preview['areas_without_church'] ?? 0) > 0): ?>
+          <?php
+            // The signature of the reported problem: a list whose third column was never filled in.
+            // The lines are valid — "ZONE, AREA" legitimately means "add the area, its churches come
+            // later" — so they are not skipped, but the operator must be told that this paste creates
+            // places with no church attached.
+          ?>
+          <div class="flash flash-error" role="alert" style="margin-top:12px">
+            <strong><?= (int) $preview['areas_without_church'] ?> area(s) in this list have no church after them.</strong>
+            <p style="margin:6px 0 0">
+              If you meant to add the churches, each line needs a third column:
+              <code>ZONE, AREA, PARISH</code> — for example
+              <code>GRACE ZONE, HOPE AREA, LIVING WATER PARISH</code>.
+              The areas will still be created, and you can add their churches afterwards.
+            </p>
+          </div>
+        <?php endif; ?>
+
         <?php if (($importSkipped ?? []) !== []): ?>
           <div class="flash flash-error" role="alert" style="margin-top:12px">
             <strong><?= count($importSkipped) ?> line(s) will be skipped:</strong>
@@ -269,7 +286,7 @@ $isAdmin = Auth::isAdmin($account);
   <?php endif; ?>
 <?php endif; ?>
 
-<h2 class="section-title">Directory <span class="faint"><?= count($parishes) ?> shown</span></h2>
+<h2 class="section-title">Directory <span class="faint"><?= count($parishes) ?> church<?= count($parishes) === 1 ? '' : 'es' ?> shown — parishes, area churches and zonal churches</span></h2>
 <div class="grid grid-2">
   <?php foreach ($parishes as $parish): ?>
     <article class="card">
@@ -278,6 +295,13 @@ $isAdmin = Auth::isAdmin($account);
           <h3 style="margin:0"><?= e((string) $parish['parish_name']) ?></h3>
           <p class="faint" style="margin:2px 0 0"><?= e((string) $parish['area_name']) ?> · <?= e((string) $parish['zone_name']) ?></p>
         </div>
+        <?php
+          // A zone or area church is a church, and saying so is the point of this change: before
+          // it, the directory listed parishes only, so a correctly-entered hierarchy read as empty.
+          $level = (string) ($parish['level'] ?? 'parish');
+          $levelLabel = ['parish' => 'Parish', 'area' => 'Area church', 'zone' => 'Zonal church'][$level] ?? 'Parish';
+        ?>
+        <span class="badge badge-info"><?= e($levelLabel) ?></span>
         <?php if (!(int) $parish['is_active']): ?><span class="badge badge-warn">Inactive</span><?php endif; ?>
       </div>
       <ul class="list-plain">
@@ -286,8 +310,20 @@ $isAdmin = Auth::isAdmin($account);
         <li class="row row-end"><span class="muted">Youth</span><span><?= e(number_format((int) $parish['youth_count'])) ?></span></li>
         <li class="row row-end"><span class="muted">Accounts</span><span><?= (int) $parish['account_count'] ?></span></li>
       </ul>
-      <a class="btn btn-secondary btn-sm" style="margin-top:10px" href="<?= e(url('parish', ['id' => (int) $parish['id']])) ?>">Open parish</a>
+      <?php if ($level === 'parish'): ?>
+        <a class="btn btn-secondary btn-sm" style="margin-top:10px" href="<?= e(url('parish', ['id' => (int) $parish['id']])) ?>">Open parish</a>
+      <?php else: ?>
+        <?php /* An area or zone church has no parish record to open; its details live on the
+                 hierarchy itself, which the zone/area forms above edit. */ ?>
+        <p class="faint" style="margin:10px 0 0">Recorded under <?= e((string) $parish['zone_name']) ?>. Members can choose it at registration.</p>
+      <?php endif; ?>
     </article>
   <?php endforeach; ?>
-  <?php if ($parishes === []): ?><p class="muted">No parishes match that search.</p><?php endif; ?>
+  <?php if ($parishes === []): ?>
+    <p class="muted">
+      <?= $term !== ''
+          ? 'No church matches that search. Parishes, area churches and zonal churches are all searched.'
+          : 'No churches yet — paste your list into “Add zones, areas and parishes in bulk” below.' ?>
+    </p>
+  <?php endif; ?>
 </div>

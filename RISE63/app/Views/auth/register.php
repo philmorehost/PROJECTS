@@ -94,7 +94,10 @@ require __DIR__ . '/../partials/share.php';
               <input type="search" id="parish-search" role="combobox" aria-expanded="false"
                      aria-autocomplete="list" aria-controls="parish-list" autocomplete="off"
                      placeholder="Parish, area or zone">
-              <input type="hidden" name="parish_id" id="parish-id-field" value="">
+              <input type="hidden" name="church_level" id="church-level-field" value="parish">
+              <input type="hidden" name="parish_id" id="parish-id-field" data-level="parish" value="">
+              <input type="hidden" name="zone_id" id="zone-id-field" data-level="zone" value="">
+              <input type="hidden" name="area_id" id="area-id-field" data-level="area" value="">
               <ul class="combo-list" id="parish-list" role="listbox" hidden></ul>
             </div>
             <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
@@ -116,15 +119,34 @@ require __DIR__ . '/../partials/share.php';
           <?php if ($choosable !== []): ?>
             <div class="field">
               <label for="parish-pick">Or choose your church from the list</label>
+            <?php /* Parishes, area churches and zonal churches are all offered: people worship at all
+                     three, and offering only parishes is what made a fully-entered hierarchy look
+                     empty. */ ?>
               <select id="parish-pick" data-parish-pick>
                 <option value="">Choose your church</option>
                 <?php foreach ($choosable as $row): ?>
                   <option value="<?= (int) $row['id'] ?>"
-                          data-label="<?= e($row['label']) ?>"><?= e($row['label']) ?></option>
+                          data-label="<?= e($row['label']) ?>"
+                          data-level="<?= e((string) ($row['level'] ?? 'parish')) ?>"><?= e($row['label']) ?></option>
                 <?php endforeach; ?>
               </select>
-              <span class="hint"><?= count($choosable) ?> church<?= count($choosable) === 1 ? '' : 'es' ?>
-                <?= count($choosable) >= 200 ? 'shown — use the search above for the rest' : 'in the directory so far' ?>.</span>
+              <?php
+                // Say what is actually in the list. "26 churches" for 26 areas and no parishes was
+                // misleading in the other direction; naming the levels is the honest version.
+                $byLevel = [];
+                foreach ($choosable as $row) {
+                    $lvl = (string) ($row['level'] ?? 'parish');
+                    $byLevel[$lvl] = ($byLevel[$lvl] ?? 0) + 1;
+                }
+                $parts = [];
+                foreach (['parish' => 'parish', 'area' => 'area', 'zone' => 'zone'] as $key => $word) {
+                    if (($byLevel[$key] ?? 0) > 0) {
+                        $parts[] = $byLevel[$key] . ' ' . $word . ($byLevel[$key] === 1 ? '' : ($key === 'parish' ? 'es' : 's'));
+                    }
+                }
+              ?>
+              <span class="hint"><?= e((string) (implode(', ', $parts) ?: '0 churches')) ?>
+                <?= count($choosable) >= 200 ? 'shown — use the search above for the rest' : 'in the directory — pick the church you worship at' ?>.</span>
             </div>
             <datalist id="parish-names">
               <?php foreach ($choosable as $row): ?>

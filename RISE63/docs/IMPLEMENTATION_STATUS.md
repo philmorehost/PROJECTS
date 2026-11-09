@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.9 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.1.0 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -383,6 +383,40 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1j What 1.1.0 fixes — zones and areas are churches too
+
+Reported: *"I already added zones and areas, but parishes are yet to be added. The registration page
+and the church directory should be able to list the already added zones and Area churches because
+people worship in the zonal and area churches ... As of now, the directory is empty despite having
+multiple churches added via the bulk already."*
+
+The install held 16 zones and 26 areas and no parishes. Both screens counted `parishes` rows only,
+so 42 churches that existed were invisible, the directory read "No parishes match that search", and
+the registration picker offered nothing.
+
+What changed:
+
+* **A church may be a parish, an area church or a zonal church.** `users.zone_id` and `users.area_id`
+  are new nullable columns (migration 0004); exactly one of the three is set, and the registration
+  form, the member's own account page and the admin edit form all post a level beside the id.
+  Deliberately *not* done: synthesising a parish row per zone or area, which would have invented
+  churches nobody chose and duplicated the hierarchy.
+* **The picker offers all three.** Labels say which level a church is (`GRACE ZONE · ZONE CHURCH`),
+  and the hidden field that carries the id is chosen by level, so a zone id is never posted as a
+  parish id.
+* **The directory lists all three**, with a badge per row, and the counters read *Churches members can
+  choose · Parish churches · Area churches · Zonal churches* instead of "0 Parishes" beside 26 areas.
+* **Member rows, the admin edit form and My account show the church at whatever level it is**, rather
+  than a blank where `parish_name` was null.
+* **The import preview warns** when a line creates an area with no church after it. Two-column lines
+  remain valid — they are how a hierarchy is entered before its parishes — but that silence is how
+  this install came to have 42 places and no churches.
+* `pickerState()` has two states, not four: `ok` and `empty`. "All switched off" and "orphaned" can no
+  longer occur once a zone is itself a church, and dead states are dead code.
+
+Migration 0004 is additive and runs itself on the next page load (1.0.6 behaviour); nothing is
+required from the operator.
 
 ### 2.1i What 1.0.9 fixes — the registration page listed no churches
 

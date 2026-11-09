@@ -271,7 +271,7 @@ ok('Every administrator destination renders', function () use ($admin): void {
     // they are checked by tests/render.php instead — see the skip below.
     $routes = [
         'applications' => 'Applications',
-        'parishes'     => 'Parishes',
+        'parishes'     => '<h1>Parish Connect</h1>',
         'people'       => 'People &amp; roles',
         'settings'     => '<h1>Settings</h1>',
         'audit'        => 'Activity report',
@@ -424,8 +424,16 @@ ok('Settings reports pending database updates and the command that applies them'
     $state = \RISE63\Core\Schema::state(RISE63_TEST_ROOT);
     assertTrue($state['known'], 'the migration state must be readable');
     assertSame(0, count($state['applied']), 'nothing is applied on a fresh harness database');
-    assertSame(3, count($state['pending']), 'all three migrations should be pending');
-    assertSame(['0001', '0002', '0003'], array_column($state['pending'], 'version'), 'migrations must be in order');
+    // Counted, not hard-coded: the number of shipped migrations grows with every release, and a
+    // literal here turns adding a migration into a test failure somewhere unrelated.
+    $shipped = count(glob(RISE63_TEST_ROOT . '/database/migrations/*.sql') ?: []);
+    assertSame($shipped, count($state['pending']), 'every shipped migration should be pending');
+    $versions = array_map(
+        static fn (string $file): string => (string) substr(basename($file), 0, 4),
+        glob(RISE63_TEST_ROOT . '/database/migrations/*.sql') ?: []
+    );
+    sort($versions);
+    assertSame($versions, array_column($state['pending'], 'version'), 'migrations must be in order');
     assertSame('0002 — unlisted parish name', $state['pending'][1]['summary'], 'the file name must be explained');
 
     $html = route('settings', [], $admin);
@@ -440,8 +448,10 @@ ok('Settings reports pending database updates and the command that applies them'
 
     // Record them as applied, the way bin/migrate.php would, and the panel must stop nagging.
     try {
-        foreach (['0001', '0002', '0003'] as $version) {
-            $pdo->prepare('INSERT INTO schema_migrations (version, checksum) VALUES (?, NULL)')->execute([$version]);
+        foreach (glob(RISE63_TEST_ROOT . '/database/migrations/*.sql') ?: [] as $file) {
+            preg_match('/^(\d{4})_/', basename($file), $m);
+            $pdo->prepare('INSERT INTO schema_migrations (version, checksum) VALUES (?, NULL)')
+                ->execute([$m[1] ?? basename($file)]);
         }
         $after = route('settings', [], $admin);
         assertTrue(str_contains($after, 'Up to date'), 'a migrated database must read as up to date');
@@ -462,7 +472,11 @@ ok('A missing schema_migrations table does not stop Settings opening', function 
     try {
         $state = \RISE63\Core\Schema::state(RISE63_TEST_ROOT);
         assertTrue($state['known'], 'the state must still be reported as known');
-        assertSame(3, count($state['pending']), 'with no bookkeeping table everything counts as pending');
+        assertSame(
+            count(glob(RISE63_TEST_ROOT . '/database/migrations/*.sql') ?: []),
+            count($state['pending']),
+            'with no bookkeeping table everything counts as pending'
+        );
         assertTrue($state['modified'] !== [], 'the verify problem must be surfaced, not swallowed');
 
         $html = route('settings', [], $admin);
@@ -494,8 +508,9 @@ ok('People warns that a write will fail before the operator tries one', function
 
     // With nothing pending, it must disappear — a permanent warning is wallpaper.
     try {
-        foreach (['0001', '0002', '0003'] as $version) {
-            $pdo->prepare('INSERT INTO schema_migrations (version, checksum) VALUES (?, NULL)')->execute([$version]);
+        foreach (glob(RISE63_TEST_ROOT . '/database/migrations/*.sql') ?: [] as $file) {
+            $pdo->prepare('INSERT INTO schema_migrations (version, checksum) VALUES (?, NULL)')
+                ->execute([substr(basename($file), 0, 4)]);
         }
         $clean = route('people', [], $admin);
         assertTrue(!str_contains($clean, 'Database updates are waiting'), 'a migrated database must not warn');

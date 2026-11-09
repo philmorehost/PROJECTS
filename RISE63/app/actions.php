@@ -89,25 +89,39 @@ try {
             if ($phone !== '' && preg_match('/^\+?[0-9 ()-]{7,25}$/D', $phone) !== 1) {
                 throw new InvalidArgumentException('Enter a valid phone number.');
             }
-            $parishId = null;
+
+            // A church may be a parish, an area church or a zonal church, so the form posts a level
+            // beside the id. Validating only against `parishes` is what made a member who worships at
+            // the zonal church unable to save their own account page.
+            $level = (string) $input('church_level', 'parish');
+            if (!in_array($level, ['parish', 'area', 'zone'], true)) {
+                $level = 'parish';
+            }
+            $churchIds = ['parish' => null, 'area' => null, 'zone' => null];
+            $parishId  = null;
             if ($parish !== null && $parish !== '') {
-                $parishId = (int) $parish;
-                if (ParishDirectory::parish($parishId) === null) {
-                    throw new InvalidArgumentException('Choose your parish from the list.');
+                $candidate = (int) $parish;
+                $found = $level === 'area' ? ParishDirectory::area($candidate)
+                    : ($level === 'zone' ? ParishDirectory::zone($candidate) : ParishDirectory::parish($candidate));
+                if ($found === null) {
+                    throw new InvalidArgumentException('Choose your church from the list.');
                 }
+                $churchIds[$level] = $candidate;
+                $parishId = $level === 'parish' ? $candidate : null;
             }
 
             // Same rule as registration: a chosen parish clears any leftover typed name, and a
             // typed name is kept only when nothing was chosen, so the two can never disagree.
             $typed = RISE63\caps((string) $input('parish_name_raw', ''));
-            if ($parishId !== null) {
+            if ($parishId !== null || $churchIds['area'] !== null || $churchIds['zone'] !== null) {
                 $typed = '';
             } elseif ($typed !== '') {
                 $match = ParishDirectory::findByName($typed);
                 if ($match !== null) {
                     // Their church has been added since they last looked: attach them to it instead
-                    // of leaving a duplicate request behind.
-                    $parishId = (int) $match['id'];
+                    // of leaving a duplicate request behind. The match carries its level.
+                    $churchIds[(string) ($match['level'] ?? 'parish')] = (int) $match['id'];
+                    $parishId = (string) ($match['level'] ?? 'parish') === 'parish' ? (int) $match['id'] : null;
                     $typed    = '';
                 }
             }
@@ -121,6 +135,22 @@ try {
                 'UPDATE users SET full_name = ?, phone = ?, parish_id = ? WHERE id = ?',
                 [$name, $phone === '' ? null : $phone, $parishId, (int) $account['id']]
             );
+
+            // `zone_id`/`area_id` arrive in migration 0004. Written only when one was chosen or the
+            // member is already recorded at one, so a plain "fix my phone number" save never needs
+            // the new columns — the same rule used everywhere else for 0002.
+            $touchesNewColumns = $churchIds['area'] !== null || $churchIds['zone'] !== null
+                || ($account['area_id'] ?? null) !== null || ($account['zone_id'] ?? null) !== null;
+            if ($touchesNewColumns) {
+                try {
+                    Database::run(
+                        'UPDATE users SET zone_id = ?, area_id = ? WHERE id = ?',
+                        [$churchIds['zone'], $churchIds['area'], (int) $account['id']]
+                    );
+                } catch (\PDOException $error) {
+                    error_log('RISE63 profile-save: zone_id/area_id not written: ' . $error->getMessage());
+                }
+            }
             if ($typed !== (string) ($account['parish_name_raw'] ?? '')) {
                 try {
                     Database::run(

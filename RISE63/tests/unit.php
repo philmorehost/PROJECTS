@@ -787,6 +787,37 @@ ok('The preview counts what the paste would create and what already exists', fun
     assertSame(1, $other['new_areas'], 'HOPE AREA under MERCY ZONE must not be treated as existing');
 });
 
+ok('The preview warns when a paste creates areas with no church in them', function (): void {
+    // This is the reported install: 16 zones and 26 areas imported, zero parishes. Two-column lines
+    // are valid — "add the area, its churches come later" — but they are also what an operator
+    // produces by accident when the third column is empty, and nothing used to say so.
+    $twoColumn = DirectoryImport::parse("GRACE ZONE, HOPE AREA\nFAITH ZONE, MERCY AREA");
+    $summary   = DirectoryImport::summarise($twoColumn['lines']);
+    assertSame(2, $summary['areas_without_church'], 'both areas arrive with no church');
+    assertSame(0, $summary['new_parishes'], 'and therefore no parishes are created');
+    assertSame([], $twoColumn['skipped'], 'the lines are valid and must not be skipped');
+
+    // A full three-column paste must not warn: the listing is complete.
+    $full = DirectoryImport::summarise(
+        DirectoryImport::parse("GRACE ZONE, HOPE AREA, LIVING WATER PARISH")['lines']
+    );
+    assertSame(0, $full['areas_without_church'], 'a complete line leaves no area empty');
+
+    // A later line that fills in the area's church clears the warning for that area: the list is
+    // read as a whole, so the operator is told about places that end up with no church at all.
+    $mixed = DirectoryImport::summarise(
+        DirectoryImport::parse("GRACE ZONE, HOPE AREA\nGRACE ZONE, HOPE AREA, GOOD SHEPHERD PARISH")['lines']
+    );
+    assertSame(0, $mixed['areas_without_church'], 'the second line supplies the area its church');
+    assertSame(1, $mixed['new_parishes']);
+
+    // A zone on its own is a church: the zonal church is what members at that level worship at, so
+    // a bare zone line is not an empty area and must not be counted as one.
+    $bareZone = DirectoryImport::summarise(DirectoryImport::parse("MERCY ZONE")['lines']);
+    assertSame(0, $bareZone['areas_without_church'], 'a zone with no area is not an empty area');
+    assertSame(1, $bareZone['new_zones']);
+});
+
 ok('Country seed contains the full ISO list and protects Nigeria', function (): void {
     $countries = ($GLOBALS['dataFile'])('countries.sql');
     preg_match_all("/^\('([A-Z]{2})'/m", $countries, $matches);

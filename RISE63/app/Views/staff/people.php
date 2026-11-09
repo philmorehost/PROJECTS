@@ -86,20 +86,38 @@ $pendingMigrations = (int) ($pendingMigrations ?? 0);
           <input type="tel" id="edit_phone" name="phone" maxlength="30" inputmode="tel" value="<?= e((string) ($editing['phone'] ?? '')) ?>">
         </div>
         <div class="field">
-          <label for="edit_parish">Parish</label>
+          <label for="edit_parish">Church</label>
           <?php /* A plain select rather than the live-search combobox: the directory can be long,
                    but this form is already scoped to one person, and a native picker is one tap on
-                   a phone where the combobox is three. */ ?>
+                   a phone where the combobox is three.
+
+                   Parishes, area churches and zonal churches are all listed, each labelled with its
+                   level, and the option carries the level so the right column is written. */ ?>
           <select id="edit_parish" name="parish_id">
-            <option value="">— no parish on record —</option>
+            <option value="">— no church on record —</option>
             <?php foreach ($parishes ?? [] as $parish): ?>
-              <option value="<?= (int) $parish['id'] ?>" <?= (int) ($editing['parish_id'] ?? 0) === (int) $parish['id'] ? 'selected' : '' ?>>
+              <?php
+                $optLevel = (string) ($parish['level'] ?? 'parish');
+                $optId    = (int) $parish['id'];
+                $recorded = (string) ($editing['church_level'] ?? 'parish');
+                $isMine   = $optLevel === $recorded
+                    && (int) ($editing[$optLevel === 'parish' ? 'parish_id' : ($optLevel === 'area' ? 'area_id' : 'zone_id')] ?? 0) === $optId;
+              ?>
+              <option value="<?= $optId ?>"
+                      data-level="<?= e($optLevel) ?>"
+                      <?= $isMine ? 'selected' : '' ?>>
                 <?= e((string) $parish['parish_name']) ?>
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if (!empty($editing['parish_name_raw'])): ?>
-            <span class="hint">Currently recorded as “<?= e((string) $editing['parish_name_raw']) ?>”, which is not in the directory. Choosing a parish above replaces it.</span>
+          <input type="hidden" name="church_level" id="edit-church-level" value="<?= e((string) ($editing['church_level'] ?? 'parish')) ?>">
+          <?php if (!empty($editing['parish_name_raw']) && empty($editing['church_name'])): ?>
+            <span class="hint">Currently recorded as “<?= e((string) $editing['parish_name_raw']) ?>”, which is not in the directory. Choosing a church above replaces it.</span>
+          <?php elseif (!empty($editing['church_name'])): ?>
+            <span class="hint">Recorded at <?= e((string) $editing['church_name']) ?><?php
+              $lvl = (string) ($editing['church_level'] ?? 'parish');
+              echo $lvl === 'parish' ? '' : (' (' . ($lvl === 'area' ? 'area church' : 'zonal church') . ')');
+            ?>.</span>
           <?php endif; ?>
         </div>
       </div>
@@ -301,12 +319,23 @@ $pendingMigrations = (int) ($pendingMigrations ?? 0);
                 <button class="btn btn-secondary btn-sm" type="submit">Set</button>
               </form>
             </td>
-            <td data-label="Parish">
-              <?php if (!empty($person['parish_name_raw']) && empty($person['parish_name'])): ?>
+            <td data-label="Church">
+              <?php
+                // A member's church may be a parish, an area church or a zonal church. Showing only
+                // `parish_name` printed "—" for anyone who registered at an area or zone church,
+                // which is most of a hierarchy-only install.
+                $church = $person['church_name'] ?? $person['parish_name'] ?? null;
+                $level  = $person['church_level'] ?? null;
+                $levelWord = ['area' => 'Area church', 'zone' => 'Zonal church'][$level] ?? null;
+              ?>
+              <?php if (!empty($person['parish_name_raw']) && empty($church)): ?>
                 <strong><?= e((string) $person['parish_name_raw']) ?></strong><br>
                 <span class="badge badge-warn">Not in the directory</span>
+              <?php elseif ($church !== null && $church !== ''): ?>
+                <?= e((string) $church) ?>
+                <?php if ($levelWord !== null): ?><br><span class="badge badge-info"><?= e($levelWord) ?></span><?php endif; ?>
               <?php else: ?>
-                <?= e((string) ($person['parish_name'] ?? '—')) ?>
+                —
               <?php endif; ?>
             </td>
             <td data-label="Last sign-in"><?= $person['last_login_at'] !== null ? e(relative_time((string) $person['last_login_at'])) : 'Never' ?></td>

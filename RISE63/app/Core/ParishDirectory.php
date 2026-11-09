@@ -49,29 +49,98 @@ final class ParishDirectory
     {
         $term  = trim($term);
         $limit = max(1, min(200, $limit));
-        $sql   = 'SELECT p.id, p.parish_name, p.parish_code, a.area_name, z.zone_name
-                  FROM parishes p JOIN areas a ON a.id = p.area_id JOIN zones z ON z.id = a.zone_id
-                  WHERE p.is_active = 1';
-        $params = [];
-        if ($term !== '') {
-            // UPPER() on both sides so the search works whatever the column collation is, and
-            // whatever case the member types. Names are stored in capitals; people do not type
-            // in capitals.
-            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
-            $sql .= ' AND (UPPER(p.parish_name) LIKE ? OR UPPER(a.area_name) LIKE ? OR UPPER(z.zone_name) LIKE ? OR UPPER(COALESCE(p.parish_code, \'\')) LIKE ?)';
-            $params = [$like, $like, $like, $like];
-        }
-        $sql .= " ORDER BY z.zone_name, a.area_name, p.parish_name LIMIT {$limit}";
-        $rows = Database::all($sql, $params);
 
-        return array_map(static fn (array $row): array => [
-            'id'     => (int) $row['id'],
-            'parish' => (string) $row['parish_name'],
-            'area'   => (string) $row['area_name'],
-            'zone'   => (string) $row['zone_name'],
-            'code'   => $row['parish_code'] === null ? null : (string) $row['parish_code'],
-            'label'  => $row['parish_name'] . ' · ' . $row['area_name'] . ' · ' . $row['zone_name'],
-        ], $rows);
+        // ── A church is not only a parish.
+        //
+        // People worship at the zonal church and at the area church as well as at the parish
+        // church, and the directory only ever offered parishes. An installation with 16 zones and
+        // 26 areas and no parishes showed the member an empty list, even though the whole
+        // hierarchy had been entered correctly.
+        //
+        // So the picker offers all three levels, and the label says which is which — "GRACE ZONE ·
+        // ZONE" is not a mistake, it is a member choosing the zonal church.
+        $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
+
+        $rows = [];
+        $take = static function (array $rows, int $limit): array {
+            return array_slice($rows, 0, $limit);
+        };
+
+        $areaFilter = $term !== '' ? ' AND (UPPER(a.area_name) LIKE ? OR UPPER(z.zone_name) LIKE ?)' : '';
+        $zoneFilter = $term !== '' ? ' AND UPPER(z.zone_name) LIKE ?' : '';
+
+        // 1. Parish churches.
+        $parishSql = 'SELECT p.id, p.parish_name, p.parish_code, a.area_name, z.zone_name
+                      FROM parishes p JOIN areas a ON a.id = p.area_id JOIN zones z ON z.id = a.zone_id
+                      WHERE p.is_active = 1';
+        $parishParams = [];
+        if ($term !== '') {
+            $parishSql .= ' AND (UPPER(p.parish_name) LIKE ? OR UPPER(a.area_name) LIKE ?'
+                . ' OR UPPER(z.zone_name) LIKE ? OR UPPER(COALESCE(p.parish_code, \'\')) LIKE ?)';
+            $parishParams = [$like, $like, $like, $like];
+        }
+        $parishSql .= ' ORDER BY z.zone_name, a.area_name, p.parish_name';
+
+        foreach (Database::all($parishSql, $parishParams) as $row) {
+            $rows[] = [
+                'level'  => 'parish',
+                'id'     => (int) $row['id'],
+                'parish' => (string) $row['parish_name'],
+                'area'   => (string) $row['area_name'],
+                'zone'   => (string) $row['zone_name'],
+                'code'   => $row['parish_code'] === null ? null : (string) $row['parish_code'],
+                'label'  => $row['parish_name'] . ' · ' . $row['area_name'] . ' · ' . $row['zone_name'],
+            ];
+        }
+
+        // 2. Area churches — worshipping at the area headquarters, not at a parish.
+        $areaSql = 'SELECT a.id, a.area_name, z.zone_name FROM areas a JOIN zones z ON z.id = a.zone_id
+                    WHERE 1=1' . $areaFilter . ' ORDER BY z.zone_name, a.area_name';
+        foreach (Database::all($areaSql, $term !== '' ? [$like, $like] : []) as $row) {
+            $rows[] = [
+                'level'  => 'area',
+                'id'     => (int) $row['id'],
+                'parish' => (string) $row['area_name'],
+                'area'   => (string) $row['area_name'],
+                'zone'   => (string) $row['zone_name'],
+                'code'   => null,
+                'label'  => $row['area_name'] . ' · AREA CHURCH · ' . $row['zone_name'],
+            ];
+        }
+
+        // 3. Zone churches — the zonal headquarters.
+        $zoneSql = 'SELECT z.id, z.zone_name FROM zones z WHERE 1=1' . $zoneFilter . ' ORDER BY z.zone_name';
+        foreach (Database::all($zoneSql, $term !== '' ? [$like] : []) as $row) {
+            $rows[] = [
+                'level'  => 'zone',
+                'id'     => (int) $row['id'],
+                'parish' => (string) $row['zone_name'],
+                'area'   => '',
+                'zone'   => (string) $row['zone_name'],
+                'code'   => null,
+                'label'  => $row['zone_name'] . ' · ZONE CHURCH',
+            ];
+        }
+
+        return $take($rows, $limit);
+    }
+
+    /**
+     * One area church, or null. Used to validate a submitted area id before it is written to
+     * `users.area_id`, which is a foreign key — an unvalidated id would fail the whole update.
+     */
+    public static function area(int $id): ?array
+    {
+        return Database::one(
+            'SELECT a.*, z.zone_name FROM areas a JOIN zones z ON z.id = a.zone_id WHERE a.id = ?',
+            [$id]
+        );
+    }
+
+    /** One zonal church, or null. */
+    public static function zone(int $id): ?array
+    {
+        return Database::one('SELECT z.* FROM zones z WHERE z.id = ?', [$id]);
     }
 
     public static function parish(int $id): ?array
@@ -193,22 +262,97 @@ final class ParishDirectory
     /** Directory rows for the Parish Connect grid, scoped for a CSR representative. */
     public static function directory(array $user, string $term = ''): array
     {
-        $sql = 'SELECT p.*, a.area_name, z.zone_name,
-                       (SELECT COUNT(*) FROM users u WHERE u.parish_id = p.id) AS account_count
-                FROM parishes p JOIN areas a ON a.id = p.area_id JOIN zones z ON z.id = a.zone_id WHERE 1=1';
-        $params = [];
-        if ((string) $user['role'] === 'csr_rep' && $user['parish_id'] !== null) {
-            $sql .= ' AND p.id = ?';
-            $params[] = (int) $user['parish_id'];
-        }
+        // ── The directory lists churches, not just parishes.
+        //
+        // Reported: "the directory is empty despite having multiple churches added via the bulk
+        // already" — with 16 zones and 26 areas on screen and zero parishes. Every one of those
+        // zones and areas is a church somebody worships at, and the page said "No parishes match
+        // that search".
+        //
+        // Rows are therefore unioned across the three levels, each carrying its `level` so the
+        // view can say which it is and link to the right record. A parish row keeps every column it
+        // had; an area or zone row fills the address/representative fields with its own.
         $term = trim($term);
-        if ($term !== '') {
-            $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
-            $sql .= ' AND (UPPER(p.parish_name) LIKE ? OR UPPER(a.area_name) LIKE ? OR UPPER(z.zone_name) LIKE ?)';
-            array_push($params, $like, $like, $like);
+        $like = '%' . str_replace(['%', '_'], ['\%', '\_'], \RISE63\caps($term)) . '%';
+        $search = $term !== '';
+
+        $rows = [];
+
+        // 1. Parishes.
+        $parishSql = 'SELECT p.*, a.area_name, a.id AS area_id, z.zone_name, z.id AS zone_id,
+                             (SELECT COUNT(*) FROM users u WHERE u.parish_id = p.id) AS account_count
+                      FROM parishes p JOIN areas a ON a.id = p.area_id JOIN zones z ON z.id = a.zone_id
+                      WHERE 1=1';
+        $parishParams = [];
+        if ((string) $user['role'] === 'csr_rep' && $user['parish_id'] !== null) {
+            $parishSql .= ' AND p.id = ?';
+            $parishParams[] = (int) $user['parish_id'];
         }
-        $sql .= ' ORDER BY z.zone_name, a.area_name, p.parish_name LIMIT 300';
-        return Database::all($sql, $params);
+        if ($search) {
+            $parishSql .= ' AND (UPPER(p.parish_name) LIKE ? OR UPPER(a.area_name) LIKE ? OR UPPER(z.zone_name) LIKE ?)';
+            array_push($parishParams, $like, $like, $like);
+        }
+        foreach (Database::all($parishSql . ' ORDER BY z.zone_name, a.area_name, p.parish_name', $parishParams) as $row) {
+            $row['level'] = 'parish';
+            $rows[] = $row;
+        }
+
+        // 2. Area churches. Not for a csr_rep: their scope is their own parish.
+        if (!((string) $user['role'] === 'csr_rep' && $user['parish_id'] !== null)) {
+            $areaSql = 'SELECT a.id, a.area_name, a.area_code, a.zone_id, z.zone_name,
+                               (SELECT COUNT(*) FROM users u WHERE u.area_id = a.id) AS account_count
+                        FROM areas a JOIN zones z ON z.id = a.zone_id WHERE 1=1';
+            $areaParams = [];
+            if ($search) {
+                $areaSql .= ' AND (UPPER(a.area_name) LIKE ? OR UPPER(z.zone_name) LIKE ?)';
+                $areaParams = [$like, $like];
+            }
+            foreach (Database::all($areaSql . ' ORDER BY z.zone_name, a.area_name', $areaParams) as $row) {
+                $rows[] = [
+                    'level' => 'area', 'id' => (int) $row['id'],
+                    'parish_name' => (string) $row['area_name'] . ' (Area church)',
+                    'parish_code' => $row['area_code'],
+                    'area_id' => (int) $row['id'], 'area_name' => (string) $row['area_name'],
+                    'zone_id' => (int) $row['zone_id'], 'zone_name' => (string) $row['zone_name'],
+                    'worship_address' => null, 'yaya_rep_name' => null, 'yaya_rep_phone' => null,
+                    // Areas and zones have no `is_active` column: they are either in the hierarchy
+                    // or they are not, so a row built from one is always active.
+                    'youth_count' => 0, 'needs_summary' => null, 'is_active' => 1,
+                    'account_count' => (int) $row['account_count'],
+                ];
+            }
+
+            // 3. Zone churches.
+            $zoneSql = 'SELECT z.id, z.zone_name, z.zone_code,
+                               (SELECT COUNT(*) FROM users u WHERE u.zone_id = z.id) AS account_count
+                        FROM zones z WHERE 1=1';
+            $zoneParams = [];
+            if ($search) {
+                $zoneSql .= ' AND UPPER(z.zone_name) LIKE ?';
+                $zoneParams = [$like];
+            }
+            foreach (Database::all($zoneSql . ' ORDER BY z.zone_name', $zoneParams) as $row) {
+                $rows[] = [
+                    'level' => 'zone', 'id' => (int) $row['id'],
+                    'parish_name' => (string) $row['zone_name'] . ' (Zonal church)',
+                    'parish_code' => $row['zone_code'],
+                    'area_id' => null, 'area_name' => '',
+                    'zone_id' => (int) $row['id'], 'zone_name' => (string) $row['zone_name'],
+                    'worship_address' => null, 'yaya_rep_name' => null, 'yaya_rep_phone' => null,
+                    // Areas and zones have no `is_active` column: they are either in the hierarchy
+                    // or they are not, so a row built from one is always active.
+                    'youth_count' => 0, 'needs_summary' => null, 'is_active' => 1,
+                    'account_count' => (int) $row['account_count'],
+                ];
+            }
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return [$a['zone_name'], $a['area_name'], $a['level'], $a['parish_name']]
+               <=> [$b['zone_name'], $b['area_name'], $b['level'], $b['parish_name']];
+        });
+
+        return array_slice($rows, 0, 300);
     }
 
     public static function totals(): array
@@ -232,11 +376,13 @@ final class ParishDirectory
      * This is the one place that answers the question precisely, because "empty" and "populated but
      * invisible" are different problems with different cures:
      *
-     *   - **empty**      nothing has been added. Cure: paste the list in Parish Connect.
-     *   - **inactive**   churches exist and every one is switched off. Cure: re-activate them.
-     *   - **orphaned**   parishes exist but their area or zone row is gone. Unreachable, and the
-     *                    only real corruption of the three; the cure is a re-import.
-     *   - **ok**         the picker has something to show.
+     *   - **ok**      the picker has something to show.
+     *   - **empty**   there is nothing to show, and `message` says why in words.
+     *   - **unknown** the directory could not be read at all.
+     *
+     * "Something to show" means a parish, an area or a zone. All three are churches somebody may
+     * worship at — counting only parishes reported a populated hierarchy as an empty directory, and
+     * is the reason a correctly-imported list looked broken.
      *
      * Queried defensively: this is used to explain a fault, so it must never be able to become one.
      *
@@ -256,12 +402,23 @@ final class ParishDirectory
                      OR EXISTS (SELECT 1 FROM areas a WHERE a.id = p.area_id
                                 AND NOT EXISTS (SELECT 1 FROM zones z WHERE z.id = a.zone_id))'
             );
-            $reachable = (int) Database::value(
+            // A reachable church is a parish, an area or a zone — people worship at all three, and
+            // the picker offers all three (see search()). Counting only parishes is what made an
+            // installation with 16 zones and 26 areas report itself as an empty directory.
+            $parishReachable = (int) Database::value(
                 'SELECT COUNT(*) FROM parishes p
                    JOIN areas a ON a.id = p.area_id
                    JOIN zones z ON z.id = a.zone_id
                   WHERE p.is_active = 1'
             );
+            $areaReachable = (int) Database::value('SELECT COUNT(*) FROM areas');
+            $zoneReachable = (int) Database::value('SELECT COUNT(*) FROM zones');
+            $reachable = $parishReachable + $areaReachable + $zoneReachable;
+            $out['levels'] = [
+                'parish' => $parishReachable,
+                'area'   => $areaReachable,
+                'zone'   => $zoneReachable,
+            ];
         } catch (\Throwable $error) {
             // A directory that cannot be read must not stop a page rendering; say nothing rather
             // than claim the directory is empty when it may simply be unavailable.
@@ -278,19 +435,18 @@ final class ParishDirectory
             return $out;                       // a populated picker needs no explanation
         }
 
+        // With zones and areas counted as churches, "populated but unreachable" cannot arise: a
+        // parish sits under an area, an area sits under a zone, and the zone itself is selectable.
+        // So there are exactly two answers — something to show, or nothing at all — and inventing
+        // further states would be dead code that a test could pretend to exercise.
         if ($total === 0) {
             $out['state']   = 'empty';
-            $out['message'] = 'No churches have been added to the directory yet.';
-        } elseif ($active === 0) {
-            $out['state']   = 'inactive';
-            $out['message'] = 'All ' . $total . ' church(es) in the directory are switched off.';
-        } elseif ($orphaned > 0) {
-            $out['state']   = 'orphaned';
-            $out['message'] = $orphaned . ' church(es) belong to an area or zone that no longer exists.';
+            $out['message'] = 'No churches have been added to the directory yet — no zones, areas or parishes.';
         } else {
             $out['state']   = 'empty';
             $out['message'] = 'No church in the directory is reachable by the picker.';
         }
+
 
         return $out;
     }
@@ -466,8 +622,35 @@ final class ParishDirectory
         if ($name === '') {
             return null;
         }
+        // Parishes first — the most specific record wins if a name is shared — then area churches,
+        // then zonal churches. The returned row carries `level`, because the caller has to write the
+        // id into the matching column: attaching a member to a zone by writing `parish_id` would
+        // point at a parish that does not exist.
         $id = Database::value('SELECT id FROM parishes WHERE UPPER(parish_name) = ? LIMIT 1', [$name]);
-        return $id === null ? null : self::parish((int) $id);
+        if ($id !== null) {
+            $row = self::parish((int) $id);
+            if ($row !== null) {
+                $row['level'] = 'parish';
+            }
+            return $row;
+        }
+        $id = Database::value('SELECT id FROM areas WHERE UPPER(area_name) = ? LIMIT 1', [$name]);
+        if ($id !== null) {
+            $row = self::area((int) $id);
+            if ($row !== null) {
+                $row['level'] = 'area';
+            }
+            return $row;
+        }
+        $id = Database::value('SELECT id FROM zones WHERE UPPER(zone_name) = ? LIMIT 1', [$name]);
+        if ($id !== null) {
+            $row = self::zone((int) $id);
+            if ($row !== null) {
+                $row['level'] = 'zone';
+            }
+            return $row;
+        }
+        return null;
     }
 
     private static function cleanName(string $name, string $what): string

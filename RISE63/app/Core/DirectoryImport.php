@@ -88,6 +88,11 @@ final class DirectoryImport
                 continue;
             }
 
+            // A two-column line legitimately means "add this area, its churches come later" — the
+            // docs promise it and the importer honours it. But it is also what an operator types
+            // when they mean to add the churches and run out of columns: 16 zones and 26 areas
+            // arrive, zero parishes are created, and the directory looks broken. So the line is
+            // accepted AND counted, and the preview says how many places have no church yet.
             $lines[] = [
                 'number' => $number,
                 'raw'    => self::clamp($raw),
@@ -115,7 +120,8 @@ final class DirectoryImport
      *   zones: list<string>, areas: list<array{zone:string, name:string}>,
      *   parishes: list<array{zone:string, area:string, name:string}>,
      *   new_zones:int, new_areas:int, new_parishes:int,
-     *   existing_zones:int, existing_areas:int, existing_parishes:int, duplicates:int
+     *   existing_zones:int, existing_areas:int, existing_parishes:int, duplicates:int,
+     *   areas_without_church:int
      * }
      */
     public static function summarise(
@@ -129,6 +135,10 @@ final class DirectoryImport
         $parishes = [];
         $duplicates = 0;
         $seenParish = [];
+        // Areas this paste creates with no church under them. Legitimate ("the area exists, its
+        // churches come later"), and also the signature of a list whose third column was never
+        // filled in — which is how 26 areas and 0 parishes came to be imported without a warning.
+        $areasWithoutChurch = [];
 
         $knownZones = array_fill_keys(array_map('strval', $existingZones), true);
         $knownAreas = [];
@@ -154,6 +164,11 @@ final class DirectoryImport
 
             if ($area !== '') {
                 $areas[$zone . "\x1f" . $area] = ['zone' => $zone, 'name' => $area];
+                if ($parish === '') {
+                    $areasWithoutChurch[$zone . "\x1f" . $area] = true;
+                } else {
+                    unset($areasWithoutChurch[$zone . "\x1f" . $area]);
+                }
             }
             if ($area !== '' && $parish !== '') {
                 $key = $zone . "\x1f" . $area . "\x1f" . $parish;
@@ -191,6 +206,7 @@ final class DirectoryImport
             'existing_areas'   => count($areas) - count($newAreas),
             'existing_parishes' => count($parishes) - count($newParishes),
             'duplicates'       => $duplicates,
+            'areas_without_church' => count($areasWithoutChurch),
         ];
     }
 

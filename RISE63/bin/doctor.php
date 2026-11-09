@@ -127,20 +127,21 @@ try {
 
 // ── Parish directory.
 //
-// The registration page lists nothing when this is empty, and "empty", "all switched off" and
-// "orphaned from its area" are different problems. The doctor states which, because the member who
-// reports it can only say "the churches are missing".
+// The registration page lists nothing when this is empty. A church is a parish, an area church or a
+// zonal church, so the line counts all three: an install with a full hierarchy and no parishes is not
+// empty, and reporting it as empty (as 1.0.9 and earlier did) sent the operator looking for a fault
+// that did not exist.
 try {
     $directory = \RISE63\Core\ParishDirectory::pickerState();
+    $levels = $directory['levels'] ?? ['parish' => 0, 'area' => 0, 'zone' => 0];
     $detail = $directory['state'] === 'ok'
-        ? $directory['active'] . ' church(es) can be chosen at registration'
+        ? $directory['active'] . ' church(es) can be chosen at registration — '
+            . (int) ($levels['parish'] ?? 0) . ' parish, '
+            . (int) ($levels['area'] ?? 0) . ' area church(es), '
+            . (int) ($levels['zone'] ?? 0) . ' zonal church(es)'
         : $directory['message'];
     if ($directory['state'] === 'empty') {
         $detail .= ' Add them in Parish Connect → Add zones, areas and parishes in bulk.';
-    } elseif ($directory['state'] === 'inactive') {
-        $detail .= ' Re-activate one in Parish Connect.';
-    } elseif ($directory['state'] === 'orphaned') {
-        $detail .= ' Re-import the hierarchy in Parish Connect.';
     }
     $add($directory['state'] === 'ok', 'Parish directory', $detail);
 } catch (Throwable $error) {

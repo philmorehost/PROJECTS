@@ -58,7 +58,11 @@ JOIN zones z ON z.id = a.zone_id;
 
 CREATE TABLE users (
     id                          INT AUTO_INCREMENT PRIMARY KEY,
+    -- A member worships at a parish, an area or a zone church — exactly one of the three is set.
+    -- `parish_id` keeps its meaning; migration 0004 added the other two (see 0004's header).
     parish_id                   INT          NULL,
+    zone_id                     INT          NULL,
+    area_id                     INT          NULL,
     parish_name_raw             VARCHAR(150) NULL,
     full_name                   VARCHAR(150) NOT NULL,
     email                       VARCHAR(150) NOT NULL,
@@ -78,8 +82,12 @@ CREATE TABLE users (
     updated_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_users_email (email),
     KEY idx_users_parish (parish_id),
+    KEY idx_users_zone (zone_id),
+    KEY idx_users_area (area_id),
     KEY idx_users_role (role),
-    CONSTRAINT fk_users_parish FOREIGN KEY (parish_id) REFERENCES parishes (id) ON DELETE SET NULL
+    CONSTRAINT fk_users_parish FOREIGN KEY (parish_id) REFERENCES parishes (id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_zone FOREIGN KEY (zone_id) REFERENCES zones (id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_area FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE program_applications (

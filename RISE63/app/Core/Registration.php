@@ -48,14 +48,40 @@ final class Registration
             throw new InvalidArgumentException('An account with that e-mail address already exists. Try signing in instead.');
         }
 
-        $parishId = self::parishId($input['parish_id']);
+        // ── Which church does this member worship at?
+        //
+        // A member may worship at a parish, at an area church or at the zonal church. The form
+        // posts all three ids and only one of them is set; the level is resolved here rather than in
+        // the view so the server decides what the answer means.
+        $level  = (string) ($input['church_level'] ?? '');
+        $zoneId = null;
+        $areaId = null;
+        $parishId = null;
+
+        if ($level === 'zone') {
+            $zoneId = self::zoneId($input['zone_id'] ?? null);
+        } elseif ($level === 'area') {
+            $areaId = self::areaId($input['area_id'] ?? null);
+        } else {
+            $parishId = self::parishId($input['parish_id']);
+        }
+
+        // A posted id that does not resolve falls back to the plain parish column rather than
+        // failing the registration: a member must not be refused an account because a zone was
+        // renamed between page load and submit.
+        if ($level === 'zone' && $zoneId === null) {
+            $level = '';
+        }
+        if ($level === 'area' && $areaId === null) {
+            $level = '';
+        }
 
         // Picking from the list is the normal path. A church that is not listed yet is typed by
         // hand, in capitals, and kept on the account as "not yet in the directory" so a
         // representative can add it — the alternative was making the member pick the wrong parish
         // or give up on registering.
         $unlisted = null;
-        if ($parishId === null) {
+        if ($parishId === null && $zoneId === null && $areaId === null) {
             $unlisted = self::unlistedParish($input['parish_name_raw'] ?? null);
         }
 
@@ -63,17 +89,30 @@ final class Registration
         // listed. It arrives in migration 0002, and a statement that names a column the database
         // does not have fails entirely — which would have stopped every registration, including the
         // ones that picked a parish from the directory and need no such column.
-        if ($unlisted !== null && $unlisted !== '') {
+        $hash = Security::hashPassword($pass);
+
+        if ($zoneId !== null || $areaId !== null) {
+            // Same reasoning as `parish_name_raw` in 1.0.5: `users.zone_id` and `users.area_id`
+            // arrive in migration 0004, and a statement naming a column the database does not have
+            // fails entirely. Only a member who actually chose a zone or area church takes this
+            // branch, so an installation still waiting for 0004 keeps working for everyone else —
+            // and 1.0.6's automatic healing applies it on the next page load regardless.
+            Database::run(
+                'INSERT INTO users (full_name, email, phone, parish_id, zone_id, area_id, password_hash, role)
+                 VALUES (?,?,?,?,?,?,?,?)',
+                [$name, $email, $phone === '' ? null : $phone, $parishId, $zoneId, $areaId, $hash, 'youth_member']
+            );
+        } elseif ($unlisted !== null && $unlisted !== '') {
             Database::run(
                 'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role)
                  VALUES (?,?,?,?,?,?,?)',
-                [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($pass), 'youth_member']
+                [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, $hash, 'youth_member']
             );
         } else {
             Database::run(
                 'INSERT INTO users (full_name, email, phone, parish_id, password_hash, role)
                  VALUES (?,?,?,?,?,?)',
-                [$name, $email, $phone === '' ? null : $phone, $parishId, Security::hashPassword($pass), 'youth_member']
+                [$name, $email, $phone === '' ? null : $phone, $parishId, $hash, 'youth_member']
             );
         }
         $id = Database::id();
@@ -138,6 +177,26 @@ final class Registration
             Notifier::welcome($user);
         }
         return $user;
+    }
+
+    /** A zone id, or null when it names nothing real. */
+    private static function zoneId(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || $value === '0') {
+            return null;
+        }
+        $id = (int) $value;
+        return Database::value('SELECT id FROM zones WHERE id = ?', [$id]) === null ? null : $id;
+    }
+
+    /** An area id, or null when it names nothing real. */
+    private static function areaId(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || $value === '0') {
+            return null;
+        }
+        $id = (int) $value;
+        return Database::value('SELECT id FROM areas WHERE id = ?', [$id]) === null ? null : $id;
     }
 
     private static function parishId(mixed $value): ?int
