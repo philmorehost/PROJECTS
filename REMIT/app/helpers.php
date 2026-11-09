@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/ChurchNames.php';
+require_once __DIR__.'/PaymentProof.php';
+require_once __DIR__.'/FinancialHistory.php';
 function e(mixed $s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function redirect(string $page): never { header('Location: index.php?page='.rawurlencode($page), true, 303); exit; }
 function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }

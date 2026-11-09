@@ -15,3 +15,10 @@ if ($get('church_portal_schema')===2) {
  $s->execute([date('Y-m-d H:i:s',time()-86400)]);
  echo $s->rowCount()." expired registration rate-limit entries removed.\n";
 }
+
+require ROOT.'/app/PaymentProof.php';
+if($get('payment_proof_schema')===1){
+ // Minimal setting helper for the private-file maintenance task.
+ function setting(PDO $db,string $key,string $default=''): string { $s=$db->prepare('SELECT setting_value FROM security_settings WHERE setting_key=?');$s->execute([$key]);return (string)($s->fetchColumn() ?: $default); }
+ echo PaymentProof::prune($db)." orphan receipt files removed (24-hour grace).\n";
+}
