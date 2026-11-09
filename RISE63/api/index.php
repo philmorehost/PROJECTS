@@ -88,6 +88,15 @@ try {
     if (!$signedIn && mb_strlen($term) < 3 && $term !== '') {
         $payload['hint'] = 'Type at least three characters.';
     }
+
+    // An empty directory and an empty search result are the same JSON without this, and the picker
+    // cannot tell them apart — which is how "we have not added any churches" came to look like
+    // "the search is broken". `directory` states which one it is.
+    $payload['directory'] = ParishDirectory::pickerState()['state'];
+    if ($parishes === [] && $payload['directory'] !== 'ok') {
+        $payload['hint'] = ParishDirectory::pickerState()['message'];
+    }
+
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);
 } catch (\Throwable $error) {
     error_log('RISE63 api: ' . $error->getMessage());

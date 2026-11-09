@@ -125,6 +125,28 @@ try {
     $add(false, 'Database migrations', 'could not be read: ' . $error->getMessage());
 }
 
+// ── Parish directory.
+//
+// The registration page lists nothing when this is empty, and "empty", "all switched off" and
+// "orphaned from its area" are different problems. The doctor states which, because the member who
+// reports it can only say "the churches are missing".
+try {
+    $directory = \RISE63\Core\ParishDirectory::pickerState();
+    $detail = $directory['state'] === 'ok'
+        ? $directory['active'] . ' church(es) can be chosen at registration'
+        : $directory['message'];
+    if ($directory['state'] === 'empty') {
+        $detail .= ' Add them in Parish Connect → Add zones, areas and parishes in bulk.';
+    } elseif ($directory['state'] === 'inactive') {
+        $detail .= ' Re-activate one in Parish Connect.';
+    } elseif ($directory['state'] === 'orphaned') {
+        $detail .= ' Re-import the hierarchy in Parish Connect.';
+    }
+    $add($directory['state'] === 'ok', 'Parish directory', $detail);
+} catch (Throwable $error) {
+    $add(false, 'Parish directory', 'could not be read: ' . $error->getMessage());
+}
+
 if (Mailer::configured()) {
     $config     = @include config_dir() . '/smtp.php';
     $host       = is_array($config) ? trim((string) ($config['host'] ?? '')) : '';

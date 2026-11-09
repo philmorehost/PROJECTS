@@ -195,7 +195,13 @@ switch ($page) {
             }
         }
 
+        // If the public picker has nothing to show, say so here, on the page where the fix lives.
+        // Before this, an empty directory was invisible until a member reported that registration
+        // listed no churches — the administrator had no way to see the problem from inside the app.
+        $pickerState = \RISE63\Core\ParishDirectory::pickerState();
+
         $render('staff/parishes', [
+            'pickerState' => $pickerState,
             'title'         => 'Parish Connect',
             'parishes'      => $rows,
             'term'          => $term,
