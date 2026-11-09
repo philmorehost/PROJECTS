@@ -61,6 +61,11 @@ async function stage(path, contents) {
 for (const [name, contents] of Object.entries(payload)) {
   await stage('/src/' + name, contents);
 }
+
+// The suites write to config/ (the SMTP writer is exercised against the real path, then restored),
+// so the directory has to exist. `public` and `storage` are skipped above; this is the one bit of
+// runtime state the unit run needs.
+await stage('/src/config/.keep', '');
 console.log(`staged ${files.length} source file(s) under /src`);
 
 if (process.env.RISE63_DEBUG_SCRIPT) {

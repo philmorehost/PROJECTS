@@ -708,6 +708,65 @@ try {
             flash('Test message queued. Delivery happens on the next mail worker run.', 'success');
             $back('settings');
 
+        // ── Mail (SMTP) ──────────────────────────────────────────────────────────────
+        // config/smtp.php used to be hand-made over SSH, and a typo in it produced no error at all —
+        // just password resets that never arrived. These handlers validate before writing, keep the
+        // stored password when the field is left blank, and can prove the transport works without
+        // sending anything.
+        case 'smtp-save':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            try {
+                RISE63\Core\Smtp::save($_POST);
+            } catch (\Throwable $error) {
+                flash($error->getMessage(), 'error');
+                $back('settings');
+            }
+            // The audit row names the transport, never the credential or the mailbox username.
+            Audit::log((int) $account['id'], 'settings.smtp', 'config', 'smtp', RISE63\Core\Smtp::summary());
+            BruteForce::log(Security::clientIp(), null, (string) $account['email'], 'settings_changed', 'SMTP saved');
+            flash('Mail settings saved. Use “Test the connection” to confirm the server accepts them.', 'success');
+            $back('settings');
+
+        case 'smtp-test':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $result = RISE63\Core\Smtp::test();
+            flash($result['message'], $result['ok'] ? 'success' : 'error');
+            $back('settings');
+
+        case 'smtp-remove':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            RISE63\Core\Smtp::forget();
+            Audit::log((int) $account['id'], 'settings.smtp', 'config', 'smtp', 'SMTP configuration removed');
+            flash('Mail settings removed. Self-service password reset is now switched off.', 'success');
+            $back('settings');
+
+        case 'smtp-send-test':
+            // A queued message to the signed-in administrator's own address: the point is to test
+            // delivery (SPF, DKIM, spam folder), which a connection test cannot.
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            if (!RISE63\Core\Smtp::configured()) {
+                flash('Save the mail settings first — there is no transport to send through.', 'error');
+                $back('settings');
+            }
+            $to = (string) ($account['email'] ?? '');
+            RISE63\Core\Notifier::queue(
+                $to,
+                'RISE 63 mail test',
+                RISE63\Core\Notifier::wrap(
+                    'Mail is configured',
+                    '<p>This message was sent from Settings → Mail to confirm that RISE 63 can deliver mail.</p>'
+                    . '<p>If you are reading it, the transport works. If it arrived in your spam folder, the sending domain still needs SPF and DKIM records before members will trust reset links.</p>'
+                ),
+                'test'
+            );
+            BruteForce::log(Security::clientIp(), null, (string) $account['email'], 'mail_test', 'Test message queued to ' . $to);
+            flash('A test message is queued for ' . $to . '. It is delivered on the next mail worker run (cron every five minutes).', 'success');
+            $back('settings');
+
         // ── Updates ──────────────────────────────────────────────────────────────────
         // Three steps, deliberately separate: ask what is published, download and inspect it, then
         // apply. The download step is the one that writes a file to disk (under storage/updates/),

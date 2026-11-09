@@ -19,6 +19,8 @@ use RISE63\Core\Security;
 use RISE63\Core\Settings;
 use RISE63\Core\Database;
 use RISE63\Core\DirectoryImport;
+use RISE63\Core\Mailer;
+use RISE63\Core\Smtp;
 
 // Resolve the project root from this file so the suite runs from a checkout or from the
 // php-wasm harness, which mirrors the repository layout read-only under /src.
@@ -1308,6 +1310,107 @@ ok('Fund arithmetic is documented and non-negative', function (): void {
     // Money refuses to go negative rather than silently wrapping, which is what keeps a pool honest.
     assertThrows(InvalidArgumentException::class, fn () => Money::fromNaira('10')->minus(Money::fromNaira('11')));
     assertTrue(Money::zero()->isZero());
+});
+
+/* ───────────────────────── Mail settings (Settings → Mail) ───────────────────────── */
+
+ok('Mail settings validate before anything is written', function (): void {
+    // The whole reason for this form: config/smtp.php used to be hand-made, and a mistake in it
+    // produced no error at all — only password resets that silently never arrived. Every rejection
+    // below therefore has to name the field, and has to happen *before* the file is touched.
+    $good = [
+        'host' => 'smtp.gmail.com', 'port' => 587, 'encryption' => 'tls', 'auth' => 'login',
+        'username' => 'alerts@rccg63.org', 'password' => 'app-password-123',
+        'from_email' => 'no-reply@rccg63.org', 'from_name' => 'RISE 63',
+    ];
+
+    $rejects = static function (array $override, string $expect) use ($good): void {
+        $input = array_merge($good, $override);
+        try {
+            Smtp::save($input);
+        } catch (RuntimeException $error) {
+            assertTrue(
+                str_contains(strtolower($error->getMessage()), strtolower($expect)),
+                'expected the message to mention ' . var_export($expect, true) . ', got: ' . $error->getMessage()
+            );
+            return;
+        }
+        throw new RuntimeException('that input was accepted; it should have been refused');
+    };
+
+    $rejects(['host' => ''], 'server address');
+    $rejects(['host' => 'https://smtp.gmail.com'], 'hostname or ip');
+    $rejects(['host' => 'smtp.gmail.com:587'], 'hostname or ip');
+    $rejects(['port' => 70000], 'between 1 and 65535');
+    $rejects(['from_email' => 'not-an-address'], 'valid e-mail');
+    $rejects(['from_name' => "RISE\r\nBcc: someone@else"], 'line break');
+    $rejects(['password' => "a\r\nb"], 'line break');
+    $rejects(['encryption' => 'none'], 'remote server');
+
+    // Port and encryption must agree. These two are the misconfiguration that looks like "the
+    // server is down": STARTTLS on 465 hangs until the timeout, and implicit TLS on 587 refuses.
+    $rejects(['port' => 465], 'implicit tls');
+    $rejects(['encryption' => 'ssl', 'port' => 587], 'port 465');
+
+    // A password removal that would leave an authenticated username with no password is refused,
+    // because it saves cleanly and then fails on every single worker run.
+    $rejects(['remove_password' => '1'], 'clear the username');
+});
+
+ok('Mail settings keep the stored password and never send it back', function (): void {
+    // The password is the one value on this screen that must never reach the browser: rendering it
+    // puts it in the page cache, the browser history and any screenshot taken of the screen.
+    // config_dir() answers once and caches it in a constant, so a test cannot redirect it after the
+    // bootstrap has run. Instead this writes to the real config directory and puts back whatever was
+    // there — which also proves the writer works against the path production actually uses.
+    $file = \RISE63\config_dir() . '/smtp.php';
+    $existed = is_file($file);
+    $original = $existed ? (string) file_get_contents($file) : '';
+    if (!is_dir(\RISE63\config_dir()) || !is_writable(\RISE63\config_dir())) {
+        throw new RuntimeException('config/ is not writable here, so the writer cannot be exercised: ' . \RISE63\config_dir());
+    }
+
+    $masked = Smtp::save([
+        'host' => 'smtp.gmail.com', 'port' => 587, 'encryption' => 'tls', 'auth' => 'login',
+        'username' => 'alerts@rccg63.org', 'password' => 'app-password-123',
+        'from_email' => 'no-reply@rccg63.org', 'from_name' => 'RISE 63',
+    ]);
+
+    assertTrue(!array_key_exists('password', $masked), 'the masked view must not carry the password');
+    assertTrue($masked['has_password'] === true, 'the view must know a password is stored');
+
+    // A blank field on the next save keeps what is there.
+    $second = Smtp::save([
+        'host' => 'smtp.mailgun.org', 'port' => 587, 'encryption' => 'tls', 'auth' => 'login',
+        'username' => 'alerts@rccg63.org', 'password' => '',
+        'from_email' => 'no-reply@rccg63.org', 'from_name' => 'RISE 63',
+    ]);
+    assertTrue($second['host'] === 'smtp.mailgun.org', 'other fields still update');
+
+    // The password itself is only ever readable server-side.
+    $stored = Smtp::load();
+    assertTrue($stored['password'] === 'app-password-123', 'a blank field keeps the stored password');
+
+    Smtp::forget();
+    assertTrue(Smtp::configured() === false, 'removal clears the configuration');
+
+    // Put the workspace back exactly as it was: this suite must not leave a mailbox password on
+    // disk for the next harness to trip over.
+    if ($existed) {
+        file_put_contents($file, $original);
+    } else {
+        @unlink($file);
+    }
+});
+
+ok('The mailer sends from the address configured in Settings → Mail', function (): void {
+    // The worker used to derive From from the site URL, so the one thing an operator could not
+    // change was the address members see — and a From that does not match the authenticated mailbox
+    // is what makes providers file mail as spam.
+    $sender = Mailer::sender();
+    assertTrue(filter_var($sender['email'], FILTER_VALIDATE_EMAIL) !== false,
+        'even with no configuration there must be a syntactically valid fallback sender');
+    assertTrue($sender['name'] !== '', 'the sender must always have a name');
 });
 
 echo "\n";

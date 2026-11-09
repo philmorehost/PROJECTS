@@ -85,9 +85,24 @@ The password-reset page checks for `config/smtp.php` and reads its `host`. Two h
 Either way, an administrator can issue a temporary password from **People** → *New temporary
 password*. That password is shown **once**, never e-mailed, and forces a change at next sign-in.
 
+**Setting it up no longer needs a shell.** Sign in as a provincial administrator and open
+**Settings → Mail**. Fill in the server, port, encryption, username and password, then press
+*Test the connection* — it opens the server, signs in and disconnects without sending anything, so a
+wrong password or the wrong port is caught while you are looking at the field. Then press
+*Send a test message to me* and check the inbox, including the spam folder.
+
+The two mistakes that look like an outage, both refused by the form with the reason:
+
+- **STARTTLS on port 465** — 465 is implicit TLS, so the connection waits for a greeting that never
+  arrives and times out.
+- **Implicit TLS on port 587** — the server expects a plain greeting first and the handshake fails.
+
+`config/smtp.php` is written atomically at mode `0600`. The password is never displayed again after
+saving; leaving the field blank keeps it.
+
 Requirements if you enable e-mail reset:
 
-1. `config/smtp.php` present, mode `0600`, host reachable from the server.
+1. `config/smtp.php` present, mode `0600`, host reachable from the server (the form does this).
 2. Cron for `bin/mail-worker.php` running (§5) — without it, the link is never delivered.
 3. SPF and DKIM published for the sending domain, or the link lands in spam and someone phones you.
 4. Send one real reset to a mailbox you control before announcing the feature.
@@ -540,6 +555,20 @@ Notes that matter:
   delayed — but until it runs, a member who types a church that is not in the directory is saved
   with no parish at all instead of being queued for the office. Run `php bin/migrate.php` before
   telling anyone about the new registration form.
+
+### Skipping step 3 is what broke People
+
+On an installation created before 0002 existed, **/people returned the 500 page** and an
+administrator could not reach any member tool. The page names `users.parish_name_raw` in its
+"churches members asked for" card, the column was never added, and the whole page died on a
+convenience. In 1.0.4 that card degrades to a notice instead — but the notice is a symptom, not the
+cure: the cure is the migration.
+
+If a page returns "Temporary problem" after an update, the first thing to check is not the log file
+but **Settings → Database updates**. It lists what is applied and what is waiting, and prints the
+exact command. Run `php bin/migrate.php --status`, then `php bin/migrate.php`. Migrations are never
+applied from the browser, on purpose: it is the one operation that can leave a database
+half-modified, and it needs a shell and a backup.
 
 ---
 

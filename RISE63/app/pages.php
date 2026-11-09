@@ -291,6 +291,25 @@ switch ($page) {
     case 'people':
         $requireAdmin();
         $directory = \RISE63\Core\Members::directory($_GET);
+
+        // Two queries here depend on schema that arrived after the first release. They are run
+        // defensively and their failure is surfaced on the page rather than thrown: an operator
+        // who sees "one column is missing, apply the pending migration" can act on it; an operator
+        // who sees "Temporary problem" cannot.
+        $unlisted = [];
+        $schemaGap = null;
+        try {
+            $unlisted = Database::all(
+                'SELECT parish_name_raw, COUNT(*) AS member_count
+                 FROM users
+                 WHERE parish_id IS NULL AND parish_name_raw IS NOT NULL AND parish_name_raw <> \'\'
+                 GROUP BY parish_name_raw ORDER BY member_count DESC, parish_name_raw LIMIT 50'
+            );
+        } catch (\Throwable $error) {
+            $schemaGap = 'The “churches members asked for” queue needs a database update that has not been applied yet (it reads users.parish_name_raw). Everything else on this page still works.';
+            error_log('RISE63 people: unlisted-parish query unavailable: ' . $error->getMessage());
+        }
+
         $render('staff/people', [
             'title'    => 'People & roles',
             'people'   => $directory['rows'],
@@ -316,12 +335,14 @@ switch ($page) {
             ),
             // The queue the "add it later" promise depends on: members who typed a church that is
             // still not in the directory. Without showing it, nobody ever adds them.
-            'unlisted' => Database::all(
-                'SELECT parish_name_raw, COUNT(*) AS member_count
-                 FROM users
-                 WHERE parish_id IS NULL AND parish_name_raw IS NOT NULL AND parish_name_raw <> \'\'
-                 GROUP BY parish_name_raw ORDER BY member_count DESC, parish_name_raw LIMIT 50'
-            ),
+            //
+            // Guarded because this is the only query on the site that names `parish_name_raw`
+            // explicitly, and that column arrives in migration 0002. On an installation created
+            // before 0002 the whole page died with "Unknown column 'parish_name_raw'" — the card
+            // below is a convenience, and a convenience must never be able to take a page of
+            // record-keeping down with it. A missing column now means an empty queue and a notice.
+            'unlisted' => $unlisted ?? [],
+            'schemaGap' => $schemaGap ?? null,
         ]);
         break;
 
@@ -379,6 +400,12 @@ switch ($page) {
             'autoYear'    => Settings::autoCycleYear(),
             'yearMode'    => (string) Settings::get('cycle_year_mode', 'auto'),
             'funds'       => \RISE63\Core\Fund::all(Settings::cycleYear()),
+            // Masked: the password is replaced by a "saved" flag before it ever reaches a template,
+            // so it cannot end up in the page cache, the browser history or a screenshot.
+            'smtp'        => \RISE63\Core\Smtp::masked(),
+            // Read-only: what migrations this database has and has not received. The People page
+            // 500'd in production because migration 0002 was pending and nothing said so.
+            'schemaState' => \RISE63\Core\Schema::state(RISE63\ROOT),
         ]);
         break;
 

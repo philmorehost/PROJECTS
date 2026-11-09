@@ -30,6 +30,58 @@ final class Mailer
         return is_array($config) && trim((string) ($config['host'] ?? '')) !== '';
     }
 
+    /**
+     * The sender identity configured in Settings → Mail.
+     *
+     * The worker used to derive the From address from the site URL and the sender name from the site
+     * title, which meant the one thing an operator could not change was the address members see —
+     * and a From that does not match the authenticated mailbox is exactly what makes providers mark
+     * mail as spam. Falls back to the old behaviour when the fields are absent, so an existing
+     * hand-written config/smtp.php keeps working untouched.
+     *
+     * @return array{email:string,name:string}
+     */
+    public static function sender(): array
+    {
+        $config = self::config();
+        $email  = trim((string) ($config['from_email'] ?? ''));
+        $name   = trim((string) ($config['from_name'] ?? ''));
+
+        if ($email === '') {
+            $host = (string) (parse_url((string) (\RISE63\setting('site_url') ?: ''), PHP_URL_HOST) ?: '');
+            // A bare hostname is not a valid address: `no-reply@localhost` fails every validator and
+            // is refused by `send()` before it reaches the wire. Without configuration nothing sends
+            // anyway (fromConfig() throws), so the fallback only has to be well-formed — but it does
+            // have to be well-formed, or the failure arrives as a transport error instead of the
+            // honest "SMTP is not configured".
+            if (!str_contains($host, '.')) {
+                $host = 'localhost.localdomain';
+            }
+            $email = 'no-reply@' . $host;
+        }
+        if ($name === '') {
+            // \RISE63\setting() swallows a database error and returns the default, so this has to
+            // have a usable default of its own: mail with an empty display name is a spam signal.
+            $name = trim((string) \RISE63\setting('site_title', 'RISE 63'));
+        }
+        if ($name === '') {
+            $name = 'RISE 63';
+        }
+
+        return ['email' => $email, 'name' => $name];
+    }
+
+    /** @return array<string, mixed> the parsed file, or an empty array when there is none. */
+    private static function config(): array
+    {
+        $file = \RISE63\config_dir() . '/smtp.php';
+        if (!is_file($file)) {
+            return [];
+        }
+        $config = @include $file;
+        return is_array($config) ? $config : [];
+    }
+
     public static function fromConfig(): self
     {
         $file = \RISE63\config_dir() . '/smtp.php';

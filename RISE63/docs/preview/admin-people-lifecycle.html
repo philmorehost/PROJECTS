@@ -7,7 +7,7 @@
 <title>People &amp; roles · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">
+<meta name="csrf-token" content="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -913,7 +913,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     </div>
 
     <form method="post" action="/" style="margin-top:12px">
-      <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">      <input type="hidden" name="action" value="user-update">
+      <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">      <input type="hidden" name="action" value="user-update">
       <input type="hidden" name="user_id" value="2">
       <div class="grid grid-2">
         <div class="field">
@@ -984,7 +984,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 <details class="card">
   <summary style="cursor:pointer;font-weight:700;min-height:32px">Create an account</summary>
   <form method="post" action="/" style="margin-top:14px">
-    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">    <input type="hidden" name="action" value="user-create">
+    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">    <input type="hidden" name="action" value="user-create">
     <input type="hidden" name="return_to" value="people">
     <div class="grid grid-2">
       <div class="field">
@@ -1045,7 +1045,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     </div>
   </div>
   <form method="post" action="/" style="margin-top:12px">
-    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">    <input type="hidden" name="action" value="user-admin-create">
+    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">    <input type="hidden" name="action" value="user-admin-create">
     <input type="hidden" name="return_to" value="people">
     <div class="grid grid-2">
       <div class="field">
@@ -1072,6 +1072,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     </button>
   </form>
 </section>
+
 
   <section class="card">
     <div class="card-head">
@@ -1102,7 +1103,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
               <br><span class="faint">08031234567</span>            </td>
             <td data-label="Role">
               <form method="post" action="/" class="row" style="gap:6px">
-                <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                <input type="hidden" name="action" value="user-role">
+                <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                <input type="hidden" name="action" value="user-role">
                 <input type="hidden" name="user_id" value="2">
                 <input type="hidden" name="return_to" value="people">
                 <select name="role" aria-label="Role for CHINEDU EZE" style="min-height:40px;padding:6px 10px">
@@ -1125,7 +1126,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                 <a class="btn btn-quiet btn-sm" href="/people?user=2#edit-account">Edit</a>
 
                                   <form method="post" action="/">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="account-suspend">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="account-suspend">
                     <input type="hidden" name="user_id" value="2">
                     <input type="hidden" name="suspend" value="1">
                     <input type="hidden" name="return_to" value="people">
@@ -1135,21 +1136,21 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 
                   <form method="post" action="/"
                         data-confirm="Issue a temporary password for CHINEDU EZE? Their current password stops working immediately and every device is signed out.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-temporary-password">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-temporary-password">
                     <input type="hidden" name="user_id" value="2">
                     <button class="btn btn-quiet btn-sm" type="submit">New password</button>
                   </form>
 
                                       <form method="post" action="/"
                           data-confirm="Sign in as CHINEDU EZE to see their account as they see it? A banner will stay on screen, and everything you do is recorded against their account.">
-                      <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                      <input type="hidden" name="action" value="user-login-as">
+                      <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                      <input type="hidden" name="action" value="user-login-as">
                       <input type="hidden" name="user_id" value="2">
                       <button class="btn btn-quiet btn-sm" type="submit">Sign in as</button>
                     </form>
                   
                   <form method="post" action="/"
                         data-confirm="Delete CHINEDU EZE permanently? This cannot be undone. If they have any applications or disbursements on file the platform will refuse and tell you to suspend instead.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-delete">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-delete">
                     <input type="hidden" name="user_id" value="2">
                     <button class="btn btn-quiet btn-sm" type="submit">Delete</button>
                   </form>
@@ -1163,7 +1164,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                           </td>
             <td data-label="Role">
               <form method="post" action="/" class="row" style="gap:6px">
-                <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                <input type="hidden" name="action" value="user-role">
+                <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                <input type="hidden" name="action" value="user-role">
                 <input type="hidden" name="user_id" value="3">
                 <input type="hidden" name="return_to" value="people">
                 <select name="role" aria-label="Role for GRACE ADEYEMI" style="min-height:40px;padding:6px 10px">
@@ -1188,7 +1189,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                 <a class="btn btn-quiet btn-sm" href="/people?user=3#edit-account">Edit</a>
 
                                   <form method="post" action="/">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="account-suspend">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="account-suspend">
                     <input type="hidden" name="user_id" value="3">
                     <input type="hidden" name="suspend" value="1">
                     <input type="hidden" name="return_to" value="people">
@@ -1198,21 +1199,21 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 
                   <form method="post" action="/"
                         data-confirm="Issue a temporary password for GRACE ADEYEMI? Their current password stops working immediately and every device is signed out.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-temporary-password">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-temporary-password">
                     <input type="hidden" name="user_id" value="3">
                     <button class="btn btn-quiet btn-sm" type="submit">New password</button>
                   </form>
 
                                       <form method="post" action="/"
                           data-confirm="Sign in as GRACE ADEYEMI to see their account as they see it? A banner will stay on screen, and everything you do is recorded against their account.">
-                      <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                      <input type="hidden" name="action" value="user-login-as">
+                      <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                      <input type="hidden" name="action" value="user-login-as">
                       <input type="hidden" name="user_id" value="3">
                       <button class="btn btn-quiet btn-sm" type="submit">Sign in as</button>
                     </form>
                   
                   <form method="post" action="/"
                         data-confirm="Delete GRACE ADEYEMI permanently? This cannot be undone. If they have any applications or disbursements on file the platform will refuse and tell you to suspend instead.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-delete">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-delete">
                     <input type="hidden" name="user_id" value="3">
                     <button class="btn btn-quiet btn-sm" type="submit">Delete</button>
                   </form>
@@ -1226,7 +1227,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                           </td>
             <td data-label="Role">
               <form method="post" action="/" class="row" style="gap:6px">
-                <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                <input type="hidden" name="action" value="user-role">
+                <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                <input type="hidden" name="action" value="user-role">
                 <input type="hidden" name="user_id" value="4">
                 <input type="hidden" name="return_to" value="people">
                 <select name="role" aria-label="Role for EMEKA NWOSU" style="min-height:40px;padding:6px 10px">
@@ -1249,7 +1250,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                 <a class="btn btn-quiet btn-sm" href="/people?user=4#edit-account">Edit</a>
 
                                   <form method="post" action="/">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="account-suspend">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="account-suspend">
                     <input type="hidden" name="user_id" value="4">
                     <input type="hidden" name="suspend" value="0">
                     <input type="hidden" name="return_to" value="people">
@@ -1259,7 +1260,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
 
                   <form method="post" action="/"
                         data-confirm="Issue a temporary password for EMEKA NWOSU? Their current password stops working immediately and every device is signed out.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-temporary-password">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-temporary-password">
                     <input type="hidden" name="user_id" value="4">
                     <button class="btn btn-quiet btn-sm" type="submit">New password</button>
                   </form>
@@ -1267,7 +1268,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                   
                   <form method="post" action="/"
                         data-confirm="Delete EMEKA NWOSU permanently? This cannot be undone. If they have any applications or disbursements on file the platform will refuse and tell you to suspend instead.">
-                    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                    <input type="hidden" name="action" value="user-delete">
+                    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                    <input type="hidden" name="action" value="user-delete">
                     <input type="hidden" name="user_id" value="4">
                     <button class="btn btn-quiet btn-sm" type="submit">Delete</button>
                   </form>
@@ -1281,7 +1282,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
                           </td>
             <td data-label="Role">
               <form method="post" action="/" class="row" style="gap:6px">
-                <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">                <input type="hidden" name="action" value="user-role">
+                <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">                <input type="hidden" name="action" value="user-role">
                 <input type="hidden" name="user_id" value="1">
                 <input type="hidden" name="return_to" value="people">
                 <select name="role" aria-label="Role for ADAEZE OKONKWO" style="min-height:40px;padding:6px 10px">
@@ -1369,7 +1370,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-label">People</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="205d0cb62150421971d4c349c75b1e3affc58022fc8c6a2dd4c09e42c4c71b1d">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="7a789204e73f9cca2dba89bd7dc352806b678b2b5469f3c6ac303dae52f1d3d3">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>

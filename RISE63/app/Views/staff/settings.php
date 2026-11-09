@@ -6,6 +6,18 @@ use RISE63\Core\Settings;
 
 use function RISE63\{e, human_date, relative_time, url};
 
+/** The SMTP panel's data, defaulted so this template still renders if a caller omits it. */
+$smtp = array_merge([
+    'host' => '', 'port' => 587, 'encryption' => 'tls', 'username' => '', 'auth' => 'login',
+    'from_email' => '', 'from_name' => '', 'helo' => '', 'configured' => false, 'has_password' => false,
+], $smtp ?? []);
+
+/** Migration state, defaulted so the template renders if a caller omits it. */
+$schemaState = array_merge(
+    ['known' => false, 'error' => '', 'pending' => [], 'applied' => [], 'modified' => [], 'count' => 0],
+    $schemaState ?? []
+);
+
 $groups = [
     'brand' => ['Brand &amp; identity', 'These values appear across the app, the install prompt and the dynamic icon.'],
     'session' => ['Sessions &amp; alerts', 'How long a session may sit idle and who receives sign-in alerts.'],
@@ -158,6 +170,239 @@ $groups = [
     <?php endforeach; ?>
     <?php if ($outbox === []): ?><li class="faint">The queue is empty.</li><?php endif; ?>
   </ul>
+</section>
+
+<section class="card" id="mail">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Mail (SMTP)</h2>
+      <p class="faint" style="margin:2px 0 0">How members receive password-reset links and how sign-in alerts leave the server.</p>
+    </div>
+    <span class="badge <?= $smtp['configured'] ? 'badge-ok' : 'badge-warn' ?>">
+      <?= $smtp['configured'] ? 'Configured' : 'Not configured — self-service reset is off' ?>
+    </span>
+  </div>
+
+  <?php if (!$smtp['configured']): ?>
+    <p class="muted" style="margin-top:10px">
+      Until this is filled in, <strong>Forgot password?</strong> tells members to contact the province office
+      instead of e-mailing a link. Nothing is broken by leaving it empty — but self-service reset does not exist.
+    </p>
+  <?php endif; ?>
+
+  <form method="post" action="<?= e(url('')) ?>" style="margin-top:12px" autocomplete="off">
+    <?= Security::csrfField() ?>
+    <input type="hidden" name="action" value="smtp-save">
+    <input type="hidden" name="return_to" value="settings">
+
+    <div class="grid grid-2">
+      <div class="field">
+        <label for="smtp_host">Server address</label>
+        <input type="text" id="smtp_host" name="host" required maxlength="190"
+               value="<?= e((string) $smtp['host']) ?>" placeholder="smtp.gmail.com"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+        <span class="hint">A hostname only — no <code>https://</code> and no port. Your provider&rsquo;s documentation calls this the SMTP or outgoing server.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_port">Port</label>
+        <input type="number" id="smtp_port" name="port" required min="1" max="65535" step="1"
+               value="<?= (int) $smtp['port'] ?>">
+        <span class="hint">587 for STARTTLS, 465 for implicit TLS.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_encryption">Encryption</label>
+        <select id="smtp_encryption" name="encryption">
+          <?php foreach (RISE63\Core\Smtp::ENCRYPTIONS as $value => $label): ?>
+            <option value="<?= e($value) ?>" <?= (string) $smtp['encryption'] === $value ? 'selected' : '' ?>><?= e($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <span class="hint">The port has to agree with this choice, or mail never leaves the server.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_auth">Authentication</label>
+        <select id="smtp_auth" name="auth">
+          <?php foreach (RISE63\Core\Smtp::AUTH_METHODS as $value => $label): ?>
+            <option value="<?= e($value) ?>" <?= (string) $smtp['auth'] === $value ? 'selected' : '' ?>><?= e($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <span class="hint">Leave as AUTH LOGIN unless your provider says otherwise.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_username">Username</label>
+        <input type="text" id="smtp_username" name="username" maxlength="190"
+               value="<?= e((string) $smtp['username']) ?>" placeholder="notifications@yourdomain.org"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+        <span class="hint">Usually the full e-mail address of the sending mailbox.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_password">Password</label>
+        <input type="password" id="smtp_password" name="password" maxlength="255"
+               placeholder="<?= $smtp['has_password'] ? 'Saved — leave blank to keep it' : 'Enter the mailbox password' ?>"
+               autocomplete="new-password" spellcheck="false">
+        <span class="hint">
+          <?php /* Deliberately never rendered. Printing the stored password into HTML puts it in
+                   the page cache, the browser history and any screenshot of this screen. */ ?>
+          <?php if ($smtp['has_password']): ?>
+            A password is saved and is never shown again. Leave this blank to keep it, or tick
+            <em>remove the saved password</em> below.
+          <?php else: ?>
+            Gmail and most providers need an <em>app password</em> here, not your normal login password.
+          <?php endif; ?>
+        </span>
+      </div>
+      <div class="field">
+        <label for="smtp_from_email">Send mail from</label>
+        <input type="email" id="smtp_from_email" name="from_email" required maxlength="150" inputmode="email"
+               value="<?= e((string) $smtp['from_email']) ?>" placeholder="no-reply@yourdomain.org">
+        <span class="hint">Members see this as the sender. It must be a domain you can publish SPF and DKIM for.</span>
+      </div>
+      <div class="field">
+        <label for="smtp_from_name">Sender name</label>
+        <input type="text" id="smtp_from_name" name="from_name" maxlength="120"
+               value="<?= e((string) $smtp['from_name']) ?>" placeholder="RISE 63">
+      </div>
+    </div>
+
+    <details style="margin-top:6px">
+      <summary class="faint" style="cursor:pointer">Advanced</summary>
+      <div class="grid grid-2" style="margin-top:8px">
+        <div class="field">
+          <label for="smtp_helo">EHLO name</label>
+          <input type="text" id="smtp_helo" name="helo" maxlength="190" value="<?= e((string) $smtp['helo']) ?>"
+                 autocapitalize="none" placeholder="yourdomain.org">
+          <span class="hint">The name this server introduces itself with. Some relays reject a mismatch with your sending domain.</span>
+        </div>
+      </div>
+    </details>
+
+    <?php if ($smtp['has_password']): ?>
+      <div class="check" style="margin-top:8px">
+        <input type="checkbox" id="smtp_remove_password" name="remove_password" value="1">
+        <label for="smtp_remove_password" style="font-weight:400">Remove the saved password</label>
+      </div>
+    <?php endif; ?>
+
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn btn-primary" type="submit">Save mail settings</button>
+    </div>
+  </form>
+
+  <?php /* Separate forms: each is one POST with one action, so a browser that re-submits after a
+           test can never accidentally re-save the settings alongside it. */ ?>
+  <?php if ($smtp['configured']): ?>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <form method="post" action="<?= e(url('')) ?>">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="smtp-test">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-secondary btn-sm" type="submit">Test the connection</button>
+      </form>
+      <form method="post" action="<?= e(url('')) ?>">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="smtp-send-test">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-secondary btn-sm" type="submit">Send a test message to me</button>
+      </form>
+      <form method="post" action="<?= e(url('')) ?>"
+            onsubmit="return confirm('Remove the mail settings? Self-service password reset will stop working until they are entered again.');">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="smtp-remove">
+        <input type="hidden" name="return_to" value="settings">
+        <button class="btn btn-quiet btn-sm" type="submit">Remove</button>
+      </form>
+    </div>
+    <p class="faint" style="margin-top:10px">
+      <strong>Test the connection</strong> opens the server, signs in and disconnects without sending anything —
+      it catches a wrong password or port immediately. <strong>Send a test message</strong> proves delivery
+      (and whether it lands in spam), which only a real message can.
+    </p>
+  <?php endif; ?>
+</section>
+
+<section class="card" id="database-updates">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Database updates</h2>
+      <p class="faint" style="margin:2px 0 0">Schema changes that ship with each release, and whether this server has them.</p>
+    </div>
+    <?php if (!$schemaState['known']): ?>
+      <span class="badge badge-warn">Cannot read</span>
+    <?php elseif ($schemaState['pending'] === [] && $schemaState['modified'] === []): ?>
+      <span class="badge badge-ok">Up to date</span>
+    <?php else: ?>
+      <span class="badge badge-warn"><?= count($schemaState['pending']) ?> waiting</span>
+    <?php endif; ?>
+  </div>
+
+  <?php if (!$schemaState['known']): ?>
+    <p class="muted" style="margin-top:10px">
+      The migration state could not be read: <?= e($schemaState['error'] !== '' ? $schemaState['error'] : 'unknown reason') ?>.
+      That is usually a database that cannot be reached from here.
+    </p>
+  <?php else: ?>
+
+    <?php if ($schemaState['pending'] !== []): ?>
+      <?php /* This is the panel that was missing when the People page started returning a 500: the
+               page read a column from migration 0002 and the database had never been given it. */ ?>
+      <p class="muted" style="margin-top:10px">
+        <strong><?= count($schemaState['pending']) ?> database update<?= count($schemaState['pending']) === 1 ? ' is' : 's are' ?> waiting.</strong>
+        Until they run, any page that uses the new columns will fail. This is not applied from the
+        browser on purpose: a schema change is the one operation that can leave a database
+        half-modified, and it needs a shell and a backup. Run it from the server:
+      </p>
+      <pre style="margin:10px 0;padding:10px 12px;overflow-x:auto;background:var(--surface-2,#111827);border-radius:8px"><code>cd <?= e(RISE63\ROOT) ?>
+
+php bin/migrate.php --status
+php bin/migrate.php</code></pre>
+      <p class="faint">Check with <code>--status</code> first, then apply. Each file is applied once and checksummed.</p>
+
+      <ul class="list-plain" style="margin-top:10px">
+        <?php foreach ($schemaState['pending'] as $migration): ?>
+          <li class="row row-end" style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <span><strong><?= e($migration['summary']) ?></strong></span>
+            <span class="badge badge-warn">waiting</span>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php elseif ($schemaState['applied'] !== []): ?>
+      <p class="muted" style="margin-top:10px">
+        All <?= count($schemaState['applied']) ?> database update<?= count($schemaState['applied']) === 1 ? ' has' : 's have' ?>
+        been applied to this server.
+      </p>
+      <details>
+        <summary class="faint" style="cursor:pointer">Show what has been applied</summary>
+        <ul class="list-plain" style="margin-top:10px">
+          <?php foreach ($schemaState['applied'] as $migration): ?>
+            <li class="row row-end" style="padding:6px 0;border-bottom:1px solid var(--border)">
+              <span class="faint"><?= e($migration['summary']) ?></span>
+              <span class="badge badge-ok">applied</span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </details>
+    <?php else: ?>
+      <p class="muted" style="margin-top:10px">
+        No database updates are recorded yet. On a fresh installation the schema is created complete,
+        and the first migration is applied by <code>php bin/migrate.php</code>.
+      </p>
+    <?php endif; ?>
+
+    <?php if ($schemaState['modified'] !== []): ?>
+      <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px">
+        <strong>A shipped migration file no longer matches what this database recorded.</strong>
+        <p class="muted" style="margin:6px 0 0">
+          The migration runner refuses to continue in this state, because the code would then assume a
+          schema nobody applied. Do not edit an applied migration — add the next number instead.
+        </p>
+        <ul class="list-plain" style="margin-top:8px">
+          <?php foreach ($schemaState['modified'] as $problem): ?>
+            <li class="faint"><?= e($problem) ?></li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    <?php endif; ?>
+
+  <?php endif; ?>
 </section>
 
 <section class="card">

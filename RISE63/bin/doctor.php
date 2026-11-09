@@ -44,6 +44,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use RISE63\Core\Activation;
 use RISE63\Core\Database;
 use RISE63\Core\Mailer;
+use RISE63\Core\Migrator;
 use RISE63\Core\Security;
 
 use function RISE63\config_dir;
@@ -109,10 +110,26 @@ if (is_file($keyFile)) {
     $add(false, 'Licence key file', 'missing: ' . Activation::KEY_FILE . ' in config/');
 }
 
+// Migration state: the failure this check exists for was a People page that read a column from
+// migration 0002 on a database that had never received it. Nothing said so; the page just 500'd.
+try {
+    $migrations = (new Migrator(RISE63\ROOT))->pending();
+    $add(
+        $migrations === [],
+        'Database migrations',
+        $migrations === []
+            ? 'all applied'
+            : count($migrations) . ' pending — run: php bin/migrate.php'
+    );
+} catch (Throwable $error) {
+    $add(false, 'Database migrations', 'could not be read: ' . $error->getMessage());
+}
+
 if (Mailer::configured()) {
     $config = @include config_dir() . '/smtp.php';
     $host   = is_array($config) ? trim((string) ($config['host'] ?? '')) : '';
-    $add(true, 'SMTP host', $host);
+    $from   = is_array($config) ? trim((string) ($config['from_email'] ?? '')) : '';
+    $add(true, 'SMTP host', $host . ($from !== '' ? ' — sending as ' . $from : ''));
 } else {
     $add(false, 'SMTP host', 'config/smtp.php is missing or has no host — mail will queue and never send');
 }

@@ -235,6 +235,12 @@ function pgsql_create_schema(\PDO $pdo): void
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )',
 
+        'CREATE TABLE schema_migrations (
+            version VARCHAR(40) PRIMARY KEY,
+            checksum CHAR(64) NULL,
+            applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )',
+
         'CREATE TABLE sessions (
             id VARCHAR(128) PRIMARY KEY,
             user_id INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
