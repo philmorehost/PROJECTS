@@ -71,6 +71,10 @@ function action(PDO $db,array $user,array $ids): string {
    $db->commit(); return 'Bank-confirmed payment recorded. Notification queued.';
   } catch(Throwable $e) {if($db->inTransaction()) $db->rollBack();throw $e;}
  }
+ if ($action==='hierarchy_batch') {
+  require_once __DIR__.'/HierarchyBatch.php';$result=HierarchyBatch::add($db,$user,$_POST['hierarchy_lines'] ?? null);
+  return $result['lines'].' hierarchy lines processed: '.$result['created'].' units added, '.$result['reused'].' existing units reused. All directory names are now CAPS. Officer accounts and reports were preserved.';
+ }
  if ($action==='import') {
   requireRole($user,['provincial_admin']);
   $file=$_FILES['csv'] ?? [];

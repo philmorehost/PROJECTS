@@ -13,7 +13,7 @@ try{
  await page.goBack();await page.waitForFunction(()=>document.querySelector('#directory-page-counter').textContent==='Page 2 of 2');checks++;
  await page.goForward();await page.waitForFunction(()=>document.querySelector('#directory-page-counter').textContent==='Page 1 of 2');checks++;
  await page.locator('#directory-pagination-controls>a').last().click();await page.locator('#directory-type').selectOption('parish');assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 2');assert(new URL(page.url()).searchParams.get('directory_page')==='1');checks+=2;
- await page.locator('#directory-zone').selectOption('Zone Beta');await page.locator('#directory-size').selectOption('12');assert.equal(await page.locator('#directory-list>article').count(),8);assert(new URL(page.url()).searchParams.get('directory_size')==='12');checks+=2;
+ await page.locator('#directory-zone').selectOption('ZONE BETA');await page.locator('#directory-size').selectOption('12');assert.equal(await page.locator('#directory-list>article').count(),8);assert(new URL(page.url()).searchParams.get('directory_size')==='12');checks+=2;
  await page.locator('#directory-search').fill('No matches');assert.equal(await page.locator('#directory-list>article').count(),0);assert.equal(await page.locator('#directory-page-counter').textContent(),'Page 1 of 1');assert.equal(await page.locator('#directory-pagination-controls>.is-disabled').count(),2);checks+=3;
  assert.deepEqual(errors,[]);checks++;await page.close();
  // Verify filtered server-rendered results before loading any production JavaScript.

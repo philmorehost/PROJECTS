@@ -15,7 +15,7 @@ final class HierarchyManager
     public static function create(PDO $db,array $user,array $input): string
     {
         requireRole($user,['provincial_admin']);
-        $name=trim($input['node_name'] ?? '');$type=$input['node_type'] ?? '';$parent=(int)($input['parent_id'] ?? 0);$code=trim($input['parish_code'] ?? '');
+        $name=ChurchNames::normalize($input['node_name'] ?? '');$type=$input['node_type'] ?? '';$parent=(int)($input['parent_id'] ?? 0);$code=trim($input['parish_code'] ?? '');
         $contact=trim($input['contact_person'] ?? '');$phone=trim($input['phone_number'] ?? '');
         if(strlen($contact)>100 || strlen($phone)>25)throw new InvalidArgumentException('Contact name is limited to 100 characters and phone to 25.');
         if($name==='' || strlen($name)>150 || !in_array($type,['zone','area','parish'],true) || strlen($code)>20 || ($type==='parish' && $code===''))throw new InvalidArgumentException('Provide a unit name, valid level and a unique parish code for parishes.');
@@ -31,7 +31,7 @@ final class HierarchyManager
     public static function edit(PDO $db,array $user,array $input): string
     {
         requireRole($user,['provincial_admin']);
-        $id=(int)($input['unit_id'] ?? 0);$name=trim($input['node_name'] ?? '');$code=trim($input['parish_code'] ?? '');
+        $id=(int)($input['unit_id'] ?? 0);$name=ChurchNames::normalize($input['node_name'] ?? '');$code=trim($input['parish_code'] ?? '');
         $contact=trim($input['contact_person'] ?? '');$phone=trim($input['phone_number'] ?? '');
         if($name==='' || strlen($name)>150 || strlen($code)>20 || strlen($contact)>100 || strlen($phone)>25)throw new InvalidArgumentException('Check the unit name, parish code and contact field lengths.');
         $db->beginTransaction();
@@ -59,7 +59,7 @@ final class HierarchyManager
         try{
             self::lock($db);$s=$db->prepare('SELECT * FROM church_hierarchy WHERE id=? FOR UPDATE');$s->execute([$id]);$unit=$s->fetch();
             if(!$unit)throw new RuntimeException('Church unit no longer exists.');
-            if((string)($input['confirm_name'] ?? '')!==$unit['node_name'])throw new InvalidArgumentException('Type the exact current unit name to confirm deletion.');
+            if(!is_string($input['confirm_name'] ?? null) || ChurchNames::upper($input['confirm_name'])!==ChurchNames::upper($unit['node_name']))throw new InvalidArgumentException('Type the exact current unit name to confirm deletion.');
             $checks=[['church_hierarchy','parent_id','Move or remove its child units first.'],['users','hierarchy_id','This unit has officer accounts. It cannot be deleted.'],['remittance_ledgers','parish_id','This unit has financial records. Deletion is blocked to preserve history.']];
             if(setting($db,'church_portal_schema')==='2')$checks[]=['church_registrations','parish_id','This unit has church registration records. It cannot be deleted.'];
             foreach($checks as [$table,$column,$message]){$s=$db->prepare("SELECT id FROM $table WHERE $column=? LIMIT 1");$s->execute([$id]);if($s->fetchColumn())throw new RuntimeException($message);}
@@ -101,7 +101,7 @@ final class HierarchyManager
     }
     public static function upgrade(PDO $db,array $user,array $input): string
     {
-        requireRole($user,['provincial_admin']);$name=trim($input['area_name'] ?? '');$id=(int)($input['parish_id'] ?? 0);
+        requireRole($user,['provincial_admin']);$name=ChurchNames::normalize($input['area_name'] ?? '');$id=(int)($input['parish_id'] ?? 0);
         if($name==='' || strlen($name)>150)throw new InvalidArgumentException('Enter the new area name (up to 150 characters).');
         $db->beginTransaction();
         try{
