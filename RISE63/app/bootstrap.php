@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace RISE63;
 
-const VERSION        = '1.0.0';
+const VERSION        = '1.0.1';
 const MIN_PHP        = '8.2.0';
 const PRODUCT        = 'RISE 63';
 const ROOT           = __DIR__ . '/..';
@@ -48,3 +48,6 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 require __DIR__ . '/Core/Registration.php';
 require __DIR__ . '/Core/DirectoryImport.php';
+require __DIR__ . '/Core/Paginator.php';
+require __DIR__ . '/Core/Fund.php';
+require __DIR__ . '/Core/Members.php';

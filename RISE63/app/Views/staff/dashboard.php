@@ -59,10 +59,11 @@ use function RISE63\{e, human_date, relative_time, url};
     <ul class="list-plain">
       <li class="row row-end"><span class="muted">Disbursed</span><strong class="money"><?= e($ledger['disbursed']->format()) ?></strong></li>
       <li class="row row-end"><span class="muted">Awaiting confirmation</span><strong class="money"><?= e($ledger['pending']->format()) ?></strong></li>
-      <li class="row row-end"><span class="muted">Seed grant pool remaining</span><strong class="money"><?= e($ledger['pool']->format()) ?></strong></li>
+      <li class="row row-end"><span class="muted">Seed grant pool remaining <span class="faint">(set in Treasury)</span></span><strong class="money"><?= e($ledger['pool']->format()) ?></strong></li>
     </ul>
     <?php if (\RISE63\Core\Auth::isTreasurer($account)): ?>
       <a class="btn btn-secondary btn-sm" style="margin-top:12px" href="<?= e(url('treasury')) ?>">Open treasury</a>
+      <a class="btn btn-quiet btn-sm" style="margin-top:12px" href="<?= e(url('treasury')) ?>#funds">Set the Seed Grant pool</a>
     <?php endif; ?>
   </section>
 </div>
@@ -71,6 +72,7 @@ use function RISE63\{e, human_date, relative_time, url};
   <div class="card-head">
     <h2 style="margin:0">Latest security events</h2>
     <?php if (\RISE63\Core\Auth::isAdmin($account)): ?>
+      <a class="btn btn-secondary btn-sm" href="<?= e(url('audit')) ?>">All activity</a>
       <a class="btn btn-secondary btn-sm" href="<?= e(url('security')) ?>">Security centre</a>
     <?php endif; ?>
   </div>

@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.0.0 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.0.1 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -22,10 +22,20 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 
 | Suite | Command | Result |
 |---|---|---|
-| Syntax | `node tests/support/phpwasm-lint.mjs` | **64 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
-| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **40 passed, 0 failed** |
-| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **29 passed, 0 failed** |
-| Requests | `node tests/support/phpwasm-smoke.mjs` | **20 passed, 0 failed** |
+| Syntax | `node tests/support/phpwasm-lint.mjs` | **78 files parsed cleanly** with `token_get_all(TOKEN_PARSE)` |
+| Logic | `node tests/support/phpwasm-test.mjs` (`tests/unit.php`) | **65 passed, 0 failed** |
+| Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **38 passed, 0 failed** |
+| Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
+| Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
+| Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
+| Assets & cache | `node tests/support/assets-and-cache.mjs` | **11 passed, 0 failed** |
+| Asset build | `node tests/support/phpwasm-build-assets.mjs` | fingerprint + manifest + shell list regenerated |
+
+`bin/build-assets.php` needs a PHP CLI, which this sandbox does not have; `phpwasm-build-assets.mjs`
+runs the same file in php-wasm (with the CLI-SAPI guard removed from the staged copy only) and
+copies the fingerprinted output back into `public/assets/`. Without that step the manifest points at
+the previous build and the browser serves the old stylesheet from its immutable cache — which looks
+exactly like "the CSS change did nothing".
 
 What the logic suite actually asserts:
 
@@ -622,6 +632,17 @@ migration runner applies in order, re-runs as a no-op, and reports a modified fi
 is a *claim* until it runs on a machine with MySQL — treat a green unit/render run as the weaker signal
 it is. Nothing here has been executed against a database.
 
+### 2.2 What changed in 1.0.1 — the six field requests
+
+| Request | What was actually wrong | What was built | Verified how |
+|---|---|---|---|
+| Paginate the audit trail responsively | `Audit::recent(30)` with a hard `LIMIT 30` and no paging at all | `Paginator` (keyset, not OFFSET: the trail is written while it is read, so OFFSET repeats rows), a wrapping `pager` partial that works with JavaScript off, and filters for actor / action / kind / free text | View + unit tests; the preview `admin-settings-audit.html` |
+| Automate the current year | `current_cycle_year` was a plain int; the fallback only applied when the key was *absent*, so a December visit kept filing last year's cycle all year | `Settings::cycleYear()` + `rolloverCycleYear()` called once per request; automatic by default, with an explicit "hold a year" mode | Unit tests on the resolver; migration seeds `auto` |
+| Does "Programs & funds" match the blueprint? | **No.** Three defects: the graduation gate was documented at 80% but defaulted to 50%; the ₦100,000/month pool defaulted to **0.00**; and the pool field could not be saved at all — a `money` definition with no bounds rejected every value, so the first time an operator tried to set the documented figure they got "Enter a valid amount." | Declared defaults are now honoured (80%, ₦100,000, ₦100,000 ceiling), `money` validation enforces real bounds, four program pools exist, and the disbursement path takes a named advisory lock so two treasurers cannot overdraw the same pool | Unit tests; the accounting change is in the ledger code |
+| Where does the admin set "Seed grant pool left"? | Nowhere. The figure was derived from the calendar and had no writer; `pool_deposit` was an unused enum value | **Treasury → Program funds.** An administrator sets the year's total with a reason (audited); a treasurer can record money received as a deposit (ledgered) | View + unit tests; preview `admin-treasury-funds.html` |
+| Add / edit / delete / suspend / reinstate / log in as | Only role change, temporary password and suspend existed; there was no way to correct a name or remove a mistake | `Members` core class + a rebuilt People screen; deletion is refused once an account has history and says to suspend instead; impersonation is members-only, bannered and audited | View + unit tests; preview `admin-people-lifecycle.html` |
+| Create another admin, report all activity | `provincial_admin` existed but there was no creation flow and no consolidated report | "Create another administrator" on People; a new **Activity report** page (`/audit`) with per-person totals and a filterable, paged event log | View tests; preview `admin-activity-report.html` |
+
 ---
 
 ## 4. Deliberate design decisions (and the trade-offs)
@@ -633,7 +654,10 @@ it is. Nothing here has been executed against a database.
 | Country "unknown" defaults to allow | Most Nigerian mobile traffic is CGNAT; denying unknown countries would lock out real members | Blacklisting therefore only acts on *resolved* countries. |
 | Firewall work is queued, never executed in a request | Running privileged shell commands from a web request is the classic privilege-escalation path | Blocks are application-level until the worker is installed and configured. |
 | Members cannot apply twice to the same program per cycle | The ₦100,000 pool is small; duplicates would silently consume it | Repeat applications need a new cycle year (or an admin withdrawal). |
-| Seed Grant pool is reserved monthly, not annually | Matches "₦100,000 monthly pool" | Mid-year disbursements cannot borrow against future months. |
+| A pool is a *set* balance, not a calendar derivation | ₦100,000/month ÷ 12 accrual could not be set by anyone and moved on its own at the turn of the year | The monthly allowance still accrues, but only as the *default* until an administrator sets the year's figure. |
+| Restating a pool is audited, not ledgered | The ledger records money moving (deposits, disbursements); a budget decision is not an event | "Why is the pool this number" is answered by the audit trail, not the ledger; the two are read together on Treasury. |
+| Disbursement confirmation takes a named advisory lock | Two treasurers confirming two different grants both passed the balance check and overdrew the pool | A 5-second `GET_LOCK` timeout can refuse a confirmation with "try again in a moment" during a genuine collision. |
+| Impersonation is bounded | "Sign in as" is the fastest way to reproduce a member's problem, and the fastest way to act invisibly | Members only (never another administrator), banner cannot be dismissed, both parties recorded. |
 | Education Bridge pays the school | The blueprint says "direct school payments" | The payee field rejects the applicant's own name for that program. |
 | Password reset is human-mediated | No mail delivery is guaranteed yet, and a reset link is a second authentication path | An officer must be reachable. Self-service reset is a listed gap. |
 | Persistent PDO connections opt-in | A crashed FPM request can leave a connection mid-transaction | Slightly higher connect cost per request. |

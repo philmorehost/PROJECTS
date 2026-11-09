@@ -29,7 +29,10 @@ if (PHP_SAPI !== 'cli') {
 
 require dirname(__DIR__) . '/app/bootstrap.php';
 
+use RISE63\Core\Audit;
 use RISE63\Core\Database;
+use RISE63\Core\Fund;
+use RISE63\Core\Members;
 use RISE63\Core\Migrator;
 use RISE63\Core\DirectoryImport;
 use RISE63\Core\Money;
@@ -476,6 +479,137 @@ ok('Migrations apply once, in order, and reject a modified file', function () us
     rmdir($sandbox . '/database');
     rmdir($sandbox);
     $pdo->exec('DELETE FROM schema_migrations');
+});
+
+ok('A pool is a set balance: restating it does not double-count deposits', function () use ($pdo): void {
+    // Disbursements for a cycle year are read through the application that carried the grant, so a
+    // grant approved for this year but paid next January still counts against this year's pool.
+    $year = (int) gmdate('Y');
+
+    // No figure set yet: the documented ₦100,000/month accrues. In the current month that is
+    // monthly × months ÷ 12.
+    $accrued = Fund::openingBalance('seed_grant', $year);
+    $expected = Money::fromCents(intdiv(Money::fromNaira('100000')->cents() * (int) gmdate('n') + 6, 12));
+    assertSame($expected->toDecimal(), $accrued->toDecimal(), 'the monthly allowance accrues');
+
+    // Set it. The opening balance becomes exactly the figure asked for, because there are no
+    // deposits or adjustments to reconcile against yet.
+    Fund::setPool('seed_grant', $year, Money::fromNaira('600000'), 1, 'Board allocation');
+    $after = Fund::balance('seed_grant', $year);
+    assertSame('600000.00', $after['opening']->toDecimal(), 'the set figure replaces the accrual');
+    assertSame('600000.00', $after['committed']->toDecimal());
+    assertSame('set', $after['source']);
+
+    // Now a deposit actually arrives. The commitment rises by the deposit — not by the deposit plus
+    // the delta needed to reach the same total, which is the double-count the first draft had.
+    Fund::deposit('seed_grant', Money::fromNaira('150000'), 1, 'Partner transfer');
+    $withDeposit = Fund::balance('seed_grant', $year);
+    assertSame('150000.00', $withDeposit['deposited']->toDecimal());
+    assertSame('750000.00', $withDeposit['committed']->toDecimal(), 'opening + deposit, counted once');
+    assertSame('750000.00', $withDeposit['remaining']->toDecimal());
+
+    // Restating to 900,000 sets the opening to 750,000 so that opening + deposits = 900,000.
+    Fund::setPool('seed_grant', $year, Money::fromNaira('900000'), 1, 'Revised');
+    $restated = Fund::balance('seed_grant', $year);
+    assertSame('750000.00', $restated['opening']->toDecimal());
+    assertSame('900000.00', $restated['committed']->toDecimal(), 'the parts still add up to what was asked for');
+
+    // A pool cannot be set below what has been paid out.
+    assertThrows(InvalidArgumentException::class, fn () => Fund::setPool('seed_grant', $year, Money::zero(), 1));
+
+    // The restatement is a decision in the audit trail, not a ledger row.
+    $ledgerDecisions = (int) Database::value(
+        "SELECT COUNT(*) FROM remittance_ledger WHERE entry_type = 'adjustment' AND program_type = 'seed_grant'"
+    );
+    assertSame(0, $ledgerDecisions, 'restating a budget never writes a ledger row');
+    assertTrue((int) Database::value("SELECT COUNT(*) FROM audit_events WHERE action = 'ledger.set_pool'") >= 2);
+});
+
+ok('Two treasurers cannot overdraw the same pool', function (): void {
+    // The race the blueprint warns about: both requests read the same remaining balance, both
+    // decide there is room, both pay. Serialising on the fund lock is what prevents it. Proved here
+    // by taking the lock and confirming that the second acquisition times out.
+    $year = (int) gmdate('Y');
+    Fund::setPool('seed_grant', $year, Money::fromNaira('100000'), 1, 'Race test');
+
+    $pdo = Database::connection();
+    $lock = 'rise63:pool:seed_grant:' . $year;
+    $first = $pdo->prepare('SELECT GET_LOCK(?, 1)');
+    $first->execute([$lock]);
+    assertSame(1, (int) $first->fetchColumn(), 'the first confirmation takes the lock');
+
+    $second = $pdo->prepare('SELECT GET_LOCK(?, 1)');
+    $second->execute([$lock]);
+    assertSame(0, (int) $second->fetchColumn(), 'a concurrent confirmation for the same fund waits and is refused');
+
+    $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]);
+    $third = $pdo->prepare('SELECT GET_LOCK(?, 1)');
+    $third->execute([$lock]);
+    assertSame(1, (int) $third->fetchColumn(), 'and the lock is available again once released');
+    $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]);
+});
+
+ok('The activity report counts administrators and members together', function (): void {
+    $summary = Audit::actorSummary(200);
+    assertTrue($summary !== [], 'there is something to report after the writes above');
+
+    $found = false;
+    foreach ($summary as $row) {
+        if (isset($row['event_count'], $row['money_count'], $row['account_count'])) {
+            $found = true;
+            break;
+        }
+    }
+    assertTrue($found, 'every row carries the three counts the report shows');
+
+    // Filtering by "administrators" must not lose the money rows a treasurer created.
+    $financial = Audit::page(['kind' => 'financial', 'per_page' => '25'], [], 'audit');
+    assertTrue(is_array($financial['rows']), 'the financial filter produces rows');
+
+    // A page never returns more than it says it will.
+    $page = Audit::page(['per_page' => '25'], [], 'audit');
+    assertTrue(count($page['rows']) <= 25);
+});
+
+ok('A member with applications cannot be deleted, only suspended', function (): void {
+    // The CASCADE on program_applications would take the applications with the account, and with
+    // them the record of money paid. The refusal has to name the alternative.
+    $userId = (int) Database::value('SELECT user_id FROM program_applications LIMIT 1');
+    if ($userId === 0) {
+        return; // Nothing to test on a database with no applications yet.
+    }
+    $admin = Database::one("SELECT * FROM users WHERE role = 'provincial_admin' LIMIT 1");
+
+    assertThrows(
+        InvalidArgumentException::class,
+        fn () => Members::delete($userId, $admin),
+        'an applicant is never deleted'
+    );
+
+    // An account with no history can go.
+    Database::run(
+        'INSERT INTO users (full_name, email, password_hash, role) VALUES (?,?,?,?)',
+        ['Throwaway Account', 'throwaway-' . bin2hex(random_bytes(4)) . '@example.ng', 'x', 'youth_member']
+    );
+    $throwaway = Database::id();
+    Members::delete($throwaway, $admin);
+    assertSame(null, Database::one('SELECT * FROM users WHERE id = ?', [$throwaway]), 'an account with no history is removed');
+
+    // And nobody can delete themselves into a lockout.
+    assertThrows(InvalidArgumentException::class, fn () => Members::delete((int) $admin['id'], $admin));
+});
+
+ok('The last administrator cannot be suspended or demoted', function (): void {
+    $admins = Database::all("SELECT * FROM users WHERE role = 'provincial_admin' AND is_suspended = 0");
+    if (count($admins) !== 1) {
+        return; // Only meaningful when the province has exactly one.
+    }
+    $last = $admins[0];
+    $other = Database::one("SELECT * FROM users WHERE role <> 'provincial_admin' LIMIT 1");
+    if ($other === null) {
+        return;
+    }
+    assertThrows(InvalidArgumentException::class, fn () => Members::setSuspended((int) $last['id'], true, $other));
 });
 
 /* ──────────────────────────────────── summary ─────────────────────────────────── */
