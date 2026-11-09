@@ -691,9 +691,13 @@ ok('A mail server that says nothing is reported as unreachable, not as a rejecti
 
 ok('An empty directory is reported as empty, not as an empty search result', function (): void {
     // Reported: "The registration page failed to list the churches." The page was correct; the
-    // directory behind it was empty. Four states look identical from the outside — nothing added,
-    // everything switched off, rows orphaned from their area or zone, or a working directory — and
-    // they need different fixes, so the app has to say which one it is.
+    // directory behind it was empty. Nothing added and a working directory look identical from the
+    // outside, so the app has to say which one it is.
+    //
+    // Since 1.1.0 there are only those two: a zone is a church in its own right, and every parish
+    // hangs from an area that hangs from a zone, so if any row exists something is reachable. The
+    // "all switched off" and "orphaned from its area" states this test used to assert are gone —
+    // they described a world where only parishes counted.
     $clear = static function (): void {
         Database::run('DELETE FROM parishes');
         Database::run('DELETE FROM areas');
@@ -719,12 +723,18 @@ ok('An empty directory is reported as empty, not as an empty search result', fun
     assertSame(1, $state['active']);
     assertTrue(!ParishDirectory::pickerIsEmpty(), 'the picker has something to show');
 
-    // Switched off: the rows exist, so "add churches" would be the wrong advice.
+    // Switched off: one parish disabled does not empty the directory, because its area and its
+    // zone are churches too and members may worship at either. This is the reason there is no
+    // "inactive" state any more: with three levels, "nothing reachable" always means "nothing at
+    // all". The counts still report the disabled parish.
     Database::run('UPDATE parishes SET is_active = 0');
     $state = ParishDirectory::pickerState();
-    assertSame('inactive', $state['state'], 'all-inactive is a different problem from empty');
-    assertSame(1, $state['inactive']);
-    assertTrue(str_contains($state['message'], 'switched off'), 'the message must name the cure: ' . $state['message']);
+    assertSame('ok', $state['state'], 'an area and a zone are still churches');
+    assertSame(1, $state['inactive'], 'the disabled parish is still counted');
+    assertSame(0, $state['levels']['parish'] ?? 0, 'a disabled parish is not offered by the picker');
+    // ...but the level it hangs from is, which is why the picker is not empty.
+    assertSame(1, $state['levels']['area'], 'the area church is still offered');
+    assertSame(1, $state['levels']['zone'], 'and so is the zonal church');
 
     $clear();
 });
@@ -762,6 +772,104 @@ ok('A member can register while the directory is empty', function (): void {
           WHERE parish_id IS NULL AND parish_name_raw IS NOT NULL AND parish_name_raw <> ''"
     );
     assertTrue(count($queue) >= 1, 'the church the member typed must reach the queue on People');
+});
+
+/* ───── A hierarchy with zones and areas is a directory of churches ───── */
+
+ok('Zones and areas are churches, so a hierarchy with no parishes is not empty', function (): void {
+    // Reported: "the directory is empty despite having multiple churches added via the bulk
+    // already" — 16 zones, 26 areas, 0 parishes. People worship at the zonal and area churches.
+    // Counting only `parishes` reported a correctly-entered hierarchy as an empty directory, and
+    // the picker offered the member nothing.
+    Database::run('DELETE FROM parishes');
+    Database::run('DELETE FROM areas');
+    Database::run('DELETE FROM zones');
+
+    Database::run('INSERT INTO zones (zone_name) VALUES (?)', ['GRACE ZONE']);
+    $grace = Database::id();
+    Database::run('INSERT INTO zones (zone_name) VALUES (?)', ['FAITH ZONE']);
+    Database::run('INSERT INTO areas (zone_id, area_name) VALUES (?,?)', [$grace, 'HOPE AREA']);
+
+    $state = ParishDirectory::pickerState();
+    assertSame('ok', $state['state'], 'two zones and one area is a directory with churches in it');
+    assertSame(2, $state['levels']['zone'], 'both zones are offered');
+    assertSame(1, $state['levels']['area'], 'and the area church');
+    assertSame(0, $state['levels']['parish'], 'there are no parishes yet');
+
+    $all = ParishDirectory::search('', 200);
+    assertSame(3, count($all), 'the picker offers all three churches');
+
+    $levels = array_count_values(array_column($all, 'level'));
+    assertSame(2, $levels['zone'] ?? 0);
+    assertSame(1, $levels['area'] ?? 0);
+
+    // Every entry says which kind it is, because "GRACE ZONE" alone does not tell a member that
+    // they are choosing the zonal church rather than a parish.
+    $labels = implode(' | ', array_column($all, 'label'));
+    assertTrue(str_contains($labels, 'ZONE CHURCH'), 'zone labels must name the level: ' . $labels);
+    assertTrue(str_contains($labels, 'AREA CHURCH'), 'area labels must name the level: ' . $labels);
+});
+
+ok('A member can register against a zone or area church', function (): void {
+    // Before migration 0004 the only way to record a church was `users.parish_id`, so a member who
+    // worshipped at the zonal church had no way to say so — and the account would have pointed at
+    // the wrong place.
+    $zoneId = (int) Database::value("SELECT id FROM zones ORDER BY zone_name LIMIT 1");
+    $areaId = (int) Database::value('SELECT id FROM areas LIMIT 1');
+
+    Registration::create([
+        'full_name' => 'Zonal Member', 'email' => 'zonal@example.ng', 'phone' => '',
+        'church_level' => 'zone', 'zone_id' => (string) $zoneId, 'parish_id' => '',
+        'password' => 'Correct-Horse-Battery-99', 'confirm' => 'Correct-Horse-Battery-99',
+    ]);
+    $zonal = Database::one('SELECT parish_id, zone_id, area_id FROM users WHERE email = ?', ['zonal@example.ng']);
+    assertTrue($zonal !== null, 'the zonal member was not created');
+    assertSame($zoneId, (int) $zonal['zone_id'], 'the zone must be recorded');
+    assertSame(null, $zonal['parish_id'], 'and no parish invented');
+    assertSame(null, $zonal['area_id'], 'and no area');
+
+    Registration::create([
+        'full_name' => 'Area Member', 'email' => 'area-member@example.ng', 'phone' => '',
+        'church_level' => 'area', 'area_id' => (string) $areaId, 'parish_id' => '',
+        'password' => 'Correct-Horse-Battery-99', 'confirm' => 'Correct-Horse-Battery-99',
+    ]);
+    $area = Database::one('SELECT parish_id, zone_id, area_id FROM users WHERE email = ?', ['area-member@example.ng']);
+    assertTrue($area !== null, 'the area member was not created');
+    assertSame($areaId, (int) $area['area_id'], 'the area must be recorded');
+    assertSame(null, $area['parish_id'], 'and no parish');
+    assertSame(null, $area['zone_id'], 'and no zone: exactly one of the three is set');
+
+    // An id that names nothing must not fail the registration — it falls back to "no church
+    // chosen", which is the pre-existing behaviour for a member who leaves it blank.
+    Registration::create([
+        'full_name' => 'Nowhere Member', 'email' => 'nowhere@example.ng', 'phone' => '',
+        'church_level' => 'zone', 'zone_id' => '999999', 'parish_id' => '',
+        'parish_name_raw' => 'Church By The Road',
+        'password' => 'Correct-Horse-Battery-99', 'confirm' => 'Correct-Horse-Battery-99',
+    ]);
+    $nowhere = Database::one('SELECT parish_id, zone_id, area_id, parish_name_raw FROM users WHERE email = ?', ['nowhere@example.ng']);
+    assertTrue($nowhere !== null, 'a stale zone id must not block registration');
+    assertSame(null, $nowhere['zone_id'], 'a zone id that names nothing is not stored');
+    assertSame('CHURCH BY THE ROAD', $nowhere['parish_name_raw'], 'the typed name is kept instead');
+});
+
+ok('The admin directory lists churches at every level, not only parishes', function (): void {
+    // The reported page showed "Directory — 0 shown / No parishes match that search" beside
+    // counters reading 26 areas and 16 zones. Every one of those is a church.
+    $admin = ['id' => 1, 'role' => 'provincial_admin', 'parish_id' => null];
+    $rows = ParishDirectory::directory($admin, '');
+
+    $levels = array_count_values(array_column($rows, 'level'));
+    assertTrue(($levels['zone'] ?? 0) > 0, 'zones must appear in the directory');
+    assertTrue(($levels['area'] ?? 0) > 0, 'areas must appear in the directory');
+
+    $names = implode(' | ', array_column($rows, 'parish_name'));
+    assertTrue(str_contains($names, 'Zonal church'), 'a zone row must say what it is: ' . $names);
+    assertTrue(str_contains($names, 'Area church'), 'an area row must say what it is');
+
+    // Searching still narrows across all three levels.
+    $found = ParishDirectory::directory($admin, 'grace');
+    assertTrue($found !== [], 'a search for a zone name must find its churches');
 });
 
 /* ──────────────────────────────── summary ─────────────────────────────── */

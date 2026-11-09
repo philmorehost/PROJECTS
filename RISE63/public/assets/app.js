@@ -216,7 +216,19 @@
     pick.addEventListener('change', function () {
       var option = pick.options[pick.selectedIndex];
       if (!option) { return; }
-      if (hidden) { hidden.value = pick.value; }
+
+      /* The option names its level, so the choice lands in the right hidden field and the form
+         posts exactly one id. Parishes, area churches and zonal churches are all offered. */
+      var level = option.getAttribute('data-level') || 'parish';
+      var target = document.querySelector('input[type="hidden"][data-level="' + level + '"]');
+      Array.prototype.forEach.call(document.querySelectorAll('input[type="hidden"][data-level]'),
+        function (other) { other.value = ''; });
+      if (target) { target.value = pick.value; }
+      else if (hidden) { hidden.value = pick.value; }
+
+      var levelField = document.getElementById('church-level-field');
+      if (levelField) { levelField.value = level; }
+
       if (input && pick.value) { input.value = option.getAttribute('data-label') || option.textContent; }
       // A choice from the list settles the question: a leftover typed name must not contradict it.
       var manual = document.getElementById('parish_name_raw');
@@ -269,8 +281,17 @@
       // at the end of render(), and an early push would make the arrow keys see a one-item list
       // while the screen showed fifteen parishes.
     }
+    /* Clearing one field was enough when the only church was a parish. With three levels a member
+       can pick a zonal church and then type something else, and the stale zone id would be posted
+       beside the search text — the form would claim a church the member had moved away from. */
+    function clearChoice() {
+      Array.prototype.forEach.call(document.querySelectorAll('input[type="hidden"][data-level]'),
+        function (field) { field.value = ''; });
+      var levelField = document.getElementById('church-level-field');
+      if (levelField) { levelField.value = 'parish'; }
+    }
     function chooseManual(term) {
-      if (hidden) { hidden.value = ''; }
+      clearChoice();
       input.value = '';
       manual.open = true;
       manualField.value = term.toUpperCase();
@@ -300,6 +321,9 @@
           li.setAttribute('role', 'option');
           li.dataset.id = item.id;
           li.dataset.label = item.label;
+          /* A church is a parish, an area or a zone. The level decides which hidden field this
+             choice fills — see church_level in the registration form. */
+          li.dataset.level = item.level || 'parish';
           li.innerHTML = '<strong></strong><small></small>';
           li.querySelector('strong').textContent = item.parish;
           li.querySelector('small').textContent = item.area + ' · ' + item.zone;
@@ -323,7 +347,20 @@
       // "undefined"; it is routed to its own handler instead.
       if (item && item.manual) { chooseManual(item.term); return; }
       input.value = item.label;
-      if (hidden) { hidden.value = item.id; }
+
+      // Exactly one of the three id fields may carry a value. A member worships at one church, and
+      // sending two ids would make the server choose — which is how an account ends up attached to
+      // the wrong place.
+      var level = (item && item.level) || 'parish';
+      var field = combo.querySelector('input[type="hidden"][data-level=' + level + ']');
+      Array.prototype.forEach.call(combo.querySelectorAll('input[type="hidden"][data-level]'),
+        function (other) { other.value = ''; });
+      if (field) { field.value = item.id; }
+      else if (hidden) { hidden.value = item.id; }
+
+      var levelField = combo.querySelector('input[type="hidden"][name="church_level"]');
+      if (levelField) { levelField.value = level; }
+
       // Picking from the list settles the question, so a half-typed church name must not ride
       // along and contradict it.
       if (manualField) { manualField.value = ''; }
@@ -378,7 +415,8 @@
     }
 
     input.addEventListener('input', function () {
-      if (hidden) { hidden.value = ''; }
+      // Typing a new search invalidates the previous choice, whatever level it was.
+      clearChoice();
       var term = input.value.trim();
       window.clearTimeout(timer);
       timer = window.setTimeout(function () { search(term); }, 120);
@@ -399,7 +437,11 @@
           if (options[active].classList.contains('combo-option-manual')) {
             chooseManual(input.value.trim());
           } else {
-            choose({ id: options[active].dataset.id, label: options[active].dataset.label });
+            choose({
+              id: options[active].dataset.id,
+              label: options[active].dataset.label,
+              level: options[active].dataset.level
+            });
           }
         }
       } else if (event.key === 'Escape') {

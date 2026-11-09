@@ -341,15 +341,37 @@ switch ($page) {
             // filtered out of the page in the template, so an id outside this page still works.
             'editing'  => isset($_GET['user'])
                 ? Database::one(
-                    'SELECT u.*, p.parish_name FROM users u LEFT JOIN parishes p ON p.id = u.parish_id WHERE u.id = ?',
+                    'SELECT u.*, COALESCE(p.parish_name, ua.area_name, uz.zone_name) AS church_name,
+                            CASE WHEN p.id IS NOT NULL THEN \'parish\'
+                                 WHEN ua.id IS NOT NULL THEN \'area\'
+                                 WHEN uz.id IS NOT NULL THEN \'zone\' END AS church_level
+                       FROM users u
+                       LEFT JOIN parishes p ON p.id = u.parish_id
+                       LEFT JOIN areas ua ON ua.id = u.area_id
+                       LEFT JOIN zones uz ON uz.id = u.zone_id
+                      WHERE u.id = ?',
                     [(int) $_GET['user']]
                   )
                 : null,
             // The parish list for the edit form. Scoped to active parishes; the combobox on the
             // create form does live search, but this form is for one person, where a native picker
             // is one tap rather than three.
+            // A member's church may be a parish, an area church or a zonal church, so the edit form
+            // offers all three. Listing only parishes meant an admin could not correct a member who
+            // had registered at the zonal church: the form showed their church as "no parish on
+            // record" and the only alternative was to overwrite it with a parish they do not attend.
+            // Only parishes carry `is_active`; a zone or area has no switched-off state, because the
+            // hierarchy itself is the thing the church belongs to.
             'parishes' => Database::all(
-                'SELECT p.id, p.parish_name FROM parishes p WHERE p.is_active = 1 ORDER BY p.parish_name'
+                "SELECT p.id, p.parish_name, 'parish' AS level, 0 AS sort_order
+                   FROM parishes p WHERE p.is_active = 1
+                 UNION ALL
+                 SELECT a.id, CONCAT(a.area_name, ' (Area church)'), 'area', 1
+                   FROM areas a
+                 UNION ALL
+                 SELECT z.id, CONCAT(z.zone_name, ' (Zonal church)'), 'zone', 2
+                   FROM zones z
+                 ORDER BY sort_order, parish_name"
             ),
             // The queue the "add it later" promise depends on: members who typed a church that is
             // still not in the directory. Without showing it, nobody ever adds them.
@@ -480,10 +502,26 @@ switch ($page) {
         } catch (\Throwable $error) {
             error_log('RISE63 profile: parish list unavailable: ' . $error->getMessage());
         }
+        // The church on My account may be a parish, an area church or a zonal church — the same
+        // three the picker offers. Resolving only `parish_id` left a member who registered at the
+        // zonal church with a blank church on their own account page.
+        $myChurch = null;
+        $myLevel  = null;
+        if (($user['parish_id'] ?? null) !== null) {
+            $myChurch = ParishDirectory::parish((int) $user['parish_id']);
+            $myLevel  = 'parish';
+        } elseif (($user['area_id'] ?? null) !== null) {
+            $myChurch = ParishDirectory::area((int) $user['area_id']);
+            $myLevel  = 'area';
+        } elseif (($user['zone_id'] ?? null) !== null) {
+            $myChurch = ParishDirectory::zone((int) $user['zone_id']);
+            $myLevel  = 'zone';
+        }
         $render('member/profile', [
             'title'    => 'My account',
             'devices'  => Auth::devices((int) $user['id']),
-            'parish'   => $user['parish_id'] === null ? null : ParishDirectory::parish((int) $user['parish_id']),
+            'parish'   => $myChurch,
+            'churchLevel' => $myLevel,
             'pinLock'  => Auth::pinLockedFor($user),
             // Same reason as registration: the picker is an enhancement, the list is the feature.
             'parishes' => $choosable,

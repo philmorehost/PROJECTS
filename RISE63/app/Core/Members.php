@@ -71,7 +71,8 @@ final class Members
             throw new InvalidArgumentException('That e-mail address is already registered.');
         }
 
-        [$parishId, $unlisted] = self::resolveParish($input);
+        [$churchIds, $unlisted] = self::resolveChurch($input);
+        $parishId = $churchIds['parish'];
 
         // `parish_name_raw` is written only when there is a name to write. It arrived in migration
         // 0002, and naming a column that a database does not have fails the whole statement — which
@@ -158,6 +159,26 @@ final class Members
             'UPDATE users SET full_name = ?, email = ?, phone = ?, parish_id = ? WHERE id = ?',
             [$name, $email, $phone === '' ? null : $phone, $parishId, $userId]
         );
+
+        // `zone_id`/`area_id` arrive in migration 0004. Naming them unconditionally would break
+        // every edit on an installation that has not applied it — and this is the page an admin uses
+        // to fix an account, so it must never be the thing that fails. Written only when the chosen
+        // church is not a parish, and only on a database that has the columns.
+        $wantsZoneOrArea = $churchIds['zone'] !== null || $churchIds['area'] !== null
+            || (string) ($target['zone_id'] ?? null) !== null || (string) ($target['area_id'] ?? null) !== null;
+        if ($wantsZoneOrArea) {
+            try {
+                Database::run(
+                    'UPDATE users SET zone_id = ?, area_id = ? WHERE id = ?',
+                    [$churchIds['zone'], $churchIds['area'], $userId]
+                );
+            } catch (\PDOException $error) {
+                // Pre-0004 database, or a member already recorded at a zone/area church that this
+                // schema cannot move. The name/e-mail/phone edit above has been saved; say so in the
+                // log rather than throwing away the operator's correction.
+                error_log('RISE63 Members::update: zone_id/area_id not written: ' . $error->getMessage());
+            }
+        }
         if ($newRaw !== $currentRaw) {
             try {
                 Database::run('UPDATE users SET parish_name_raw = ? WHERE id = ?', [$newRaw === '' ? null : $newRaw, $userId]);
@@ -175,8 +196,15 @@ final class Members
                 $changes[] = $field . ': "' . $before . '" → "' . $after . '"';
             }
         }
-        if ((int) ($target['parish_id'] ?? 0) !== (int) ($parishId ?? 0) || (string) ($target['parish_name_raw'] ?? '') !== (string) ($unlisted ?? '')) {
-            $changes[] = 'parish updated';
+        // The audit line says "church", not "parish": three levels are now possible, and a trail that
+        // called a zonal church a parish would misdescribe the change it is recording. The columns
+        // are read with ?? because they are absent before migration 0004.
+        $churchChanged = (int) ($target['parish_id'] ?? 0) !== (int) ($parishId ?? 0)
+            || (string) ($target['parish_name_raw'] ?? '') !== (string) ($unlisted ?? '')
+            || (int) ($target['area_id'] ?? 0) !== (int) ($churchIds['area'] ?? 0)
+            || (int) ($target['zone_id'] ?? 0) !== (int) ($churchIds['zone'] ?? 0);
+        if ($churchChanged) {
+            $changes[] = 'church updated';
         }
 
         Audit::log(
@@ -369,22 +397,57 @@ final class Members
     }
 
     /**
-     * Turn the submitted parish fields into (id, unlisted-name).
+     * Turn the submitted church fields into (parish-id, unlisted-name).
+     *
+     * The level decides which column the id belongs in; see resolveChurch() for the three-column
+     * form. This wrapper keeps the older two-value contract for callers that only handle parishes.
      *
      * @param array<string, mixed> $input
      * @return array{0: ?int, 1: ?string}
      */
     private static function resolveParish(array $input): array
     {
+        [$id, $unlisted] = self::resolveChurch($input);
+        return [$id['parish'], $unlisted];
+    }
+
+    /**
+     * Turn the submitted church fields into the three ids plus the unlisted name.
+     *
+     * A member's church may be a parish, an area church or a zonal church, so the form posts a level
+     * beside the id. Exactly one id is returned non-null. An id that names nothing is dropped rather
+     * than written — the pre-existing behaviour for a parish, extended to the other two levels
+     * because `users.parish_id` is a foreign key and an invented id would fail the whole update.
+     *
+     * @param array<string, mixed> $input
+     * @return array{0: array{parish: ?int, area: ?int, zone: ?int}, 1: ?string}
+     */
+    private static function resolveChurch(array $input): array
+    {
+        $ids   = ['parish' => null, 'area' => null, 'zone' => null];
+        $level = (string) ($input['church_level'] ?? 'parish');
+        if (!isset($ids[$level])) {
+            $level = 'parish';
+        }
+
         $id = $input['parish_id'] ?? null;
         if ($id !== null && $id !== '' && $id !== '0') {
-            $parishId = (int) $id;
-            if (ParishDirectory::parish($parishId) !== null) {
-                return [$parishId, null];
+            $candidate = (int) $id;
+            if ($level === 'parish' && ParishDirectory::parish($candidate) !== null) {
+                $ids['parish'] = $candidate;
+            } elseif ($level === 'area' && ParishDirectory::area($candidate) !== null) {
+                $ids['area'] = $candidate;
+            } elseif ($level === 'zone' && ParishDirectory::zone($candidate) !== null) {
+                $ids['zone'] = $candidate;
             }
         }
-        $raw = \RISE63\caps((string) ($input['parish_name_raw'] ?? ''));
-        return [null, $raw === '' ? null : mb_substr($raw, 0, 150)];
+
+        if ($ids['parish'] === null && $ids['area'] === null && $ids['zone'] === null) {
+            $raw = \RISE63\caps((string) ($input['parish_name_raw'] ?? ''));
+            return [$ids, $raw === '' ? null : mb_substr($raw, 0, 150)];
+        }
+
+        return [$ids, null];
     }
 
     /**
@@ -455,9 +518,28 @@ final class Members
             $params['cursor'] = $before;
         }
 
-        $sql = 'SELECT u.*, p.parish_name, a.area_name, z.zone_name
+        // A member's church may be a parish, an area church or a zonal church. Joining only through
+        // `parish_id` left a member who registered at the zonal church with no church at all on
+        // their row — they showed as "—" beside the typed-name fallback that they never used.
+        // `church_name` is the single field the views print, so a list cannot show a blank while the
+        // database holds the answer.
+        $sql = 'SELECT u.*,
+                       p.parish_name,
+                       COALESCE(u.area_id, p.area_id) AS effective_area_id,
+                       COALESCE(u.zone_id, ua.zone_id, a.zone_id) AS effective_zone_id,
+                       ua.area_name AS own_area_name,
+                       uz.zone_name AS own_zone_name,
+                       a.area_name,
+                       z.zone_name,
+                       COALESCE(p.parish_name, ua.area_name, uz.zone_name) AS church_name,
+                       CASE WHEN p.id IS NOT NULL THEN \'parish\'
+                            WHEN ua.id IS NOT NULL THEN \'area\'
+                            WHEN uz.id IS NOT NULL THEN \'zone\'
+                            ELSE NULL END AS church_level
                 FROM users u
                 LEFT JOIN parishes p ON p.id = u.parish_id
+                LEFT JOIN areas ua ON ua.id = u.area_id
+                LEFT JOIN zones uz ON uz.id = u.zone_id
                 LEFT JOIN areas a ON a.id = p.area_id
                 LEFT JOIN zones z ON z.id = a.zone_id';
         if ($conditions !== []) {

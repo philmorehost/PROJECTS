@@ -195,6 +195,49 @@ ok('Registration explains an empty directory instead of showing a dead search bo
     assertContains('id="parish-pick"', $full, 'the no-JavaScript select is still rendered');
 });
 
+ok('The registration picker offers zones, areas and parishes alike', function (): void {
+    // Reported: "people worship in the zonal and area churches ... members should be able to see and
+    // select any of the churches in the list from zone, area and parishes." The form rendered a list
+    // of parishes only, so an install that had entered its hierarchy and no parishes offered nothing.
+    $render = static function (array $parishes): string {
+        return View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', [
+            'title' => 'Create account', 'parishes' => $parishes,
+            'user' => null, 'flashes' => [], 'error' => null,
+        ], false);
+    };
+
+    $rows = [
+        ['id' => 3, 'level' => 'zone', 'parish' => 'GRACE ZONE', 'area' => '', 'zone' => 'GRACE ZONE',
+         'code' => null, 'label' => 'GRACE ZONE · ZONE CHURCH'],
+        ['id' => 8, 'level' => 'area', 'parish' => 'HOPE AREA', 'area' => 'HOPE AREA', 'zone' => 'GRACE ZONE',
+         'code' => null, 'label' => 'HOPE AREA · AREA CHURCH · GRACE ZONE'],
+        ['id' => 15, 'level' => 'parish', 'parish' => 'LIVING WATER PARISH', 'area' => 'HOPE AREA',
+         'zone' => 'GRACE ZONE', 'code' => null, 'label' => 'LIVING WATER PARISH · HOPE AREA · GRACE ZONE'],
+    ];
+    $html = $render($rows);
+
+    // All three are in the no-JavaScript list, each labelled with its level.
+    assertContains('GRACE ZONE · ZONE CHURCH', $html, 'the zonal church must be offered');
+    assertContains('HOPE AREA · AREA CHURCH · GRACE ZONE', $html, 'the area church must be offered');
+    assertContains('LIVING WATER PARISH · HOPE AREA · GRACE ZONE', $html, 'and the parish');
+    // Once on the <option>, once on its hidden input: the option says what it is, the field says
+    // where the id goes. Both are needed, so both are asserted rather than counted to a literal.
+    assertTrue(substr_count($html, 'data-level="zone"') >= 2, 'the zone level must be marked on the option and the field');
+    assertTrue(substr_count($html, 'data-level="area"') >= 2);
+    assertTrue(substr_count($html, 'data-level="parish"') >= 2);
+
+    // Three id fields and a level, so the form can post exactly one id and say which it is.
+    assertContains('name="church_level"', $html, 'the form must say which level was chosen');
+    assertContains('name="parish_id"', $html);
+    assertContains('name="zone_id"', $html, 'a zonal church needs its own field');
+    assertContains('name="area_id"', $html, 'and an area church');
+
+    // The summary names the levels rather than claiming "3 churches" with no idea what they are.
+    assertContains('1 parish', $html, 'the count must name the levels: ' . $html);
+    assertContains('1 area', $html);
+    assertContains('1 zone', $html);
+});
+
 /* ───────────────────────────── Standalone screens ──────────────────────────── */
 
 ok('Login screen renders with a form, CSRF and no inline script', function (): void {
@@ -288,7 +331,10 @@ ok('The parish list is in the HTML, not only behind a fetch', function (): void 
     assertContains('data-parish-pick', $html);
     assertContains('<datalist id="parish-names">', $html, 'the native autocomplete list must exist');
     assertContains('data-label="LIVING WATER PARISH · HOPE AREA · GRACE ZONE"', $html);
-    assertContains('2 churches', $html, 'the count tells the member the list is populated');
+    assertContains('data-level="parish"', $html, 'each option must say which level it is');
+    // The summary now names the levels, because "2 churches" said nothing about whether a member
+    // could pick the zonal church they actually worship at.
+    assertContains('2 parishes', $html, 'the count tells the member the list is populated');
 
     // The select must carry its own name attribute path to the server: the visible picker is an
     // enhancement, so the plain <select> has to submit by itself when nothing else runs.
@@ -330,6 +376,40 @@ ok('Registration offers a church that is not listed yet, and types it in capital
     assertSame(1, substr_count($html, 'name="parish_id"'), 'only one field may submit the parish id');
     assertContains('id="parish-id-field"', $html);
     assertMissing('id="parish_id_fallback"', $html, 'the old duplicate select must be gone');
+});
+
+ok('The admin directory shows area and zone churches, not only parishes', function () use ($renderPage, $admin): void {
+    // Reported: "the directory is empty despite having multiple churches added via the bulk already",
+    // beside counters reading 26 areas and 16 zones. The list rendered parishes only, so a
+    // hierarchy-only install printed "No parishes match that search" over 42 existing churches.
+    $rows = [
+        ['level' => 'zone', 'id' => 1, 'parish_name' => 'GRACE ZONE (Zonal church)', 'parish_code' => null,
+         'area_name' => '', 'zone_name' => 'GRACE ZONE', 'worship_address' => null, 'yaya_rep_name' => null,
+         'yaya_rep_phone' => null, 'youth_count' => 0, 'needs_summary' => null, 'is_active' => 1, 'account_count' => 2],
+        ['level' => 'area', 'id' => 2, 'parish_name' => 'HOPE AREA (Area church)', 'parish_code' => null,
+         'area_name' => 'HOPE AREA', 'zone_name' => 'GRACE ZONE', 'worship_address' => null, 'yaya_rep_name' => null,
+         'yaya_rep_phone' => null, 'youth_count' => 0, 'needs_summary' => null, 'is_active' => 1, 'account_count' => 5],
+        ['level' => 'parish', 'id' => 3, 'parish_name' => 'LIVING WATER PARISH', 'parish_code' => null,
+         'area_name' => 'HOPE AREA', 'zone_name' => 'GRACE ZONE', 'worship_address' => null, 'yaya_rep_name' => null,
+         'yaya_rep_phone' => null, 'youth_count' => 0, 'needs_summary' => null, 'is_active' => 1, 'account_count' => 9],
+    ];
+    $html = $renderPage('staff/parishes', [
+        'parishes' => $rows, 'term' => '', 'zones' => [], 'areas' => [], 'canEdit' => false,
+        'totals' => ['zones' => 1, 'areas' => 1, 'parishes' => 1, 'youth' => 0],
+        'pickerState' => ['state' => 'ok', 'message' => '', 'total' => 3, 'inactive' => 0, 'orphaned' => 0],
+    ], $admin);
+
+    assertContains('GRACE ZONE (Zonal church)', $html, 'the zonal church must be listed');
+    assertContains('HOPE AREA (Area church)', $html, 'the area church must be listed');
+    assertContains('Zonal church', $html, 'and its badge must say what it is');
+    assertContains('Area church', $html);
+    assertContains('3 churches shown', $html, 'the count must describe churches, not parishes');
+    assertMissing('No parishes match that search', $html, 'that message was the reported symptom');
+
+    // The counters must add up to churches members can choose, or "0 Parishes" reads as empty.
+    assertContains('Churches members can choose', $html, 'the headline counter must be the total');
+    assertContains('Zonal churches', $html);
+    assertContains('Area churches', $html);
 });
 
 ok('The parish names in every admin form are upper-cased at the field', function () use ($renderPage, $admin, $parish): void {

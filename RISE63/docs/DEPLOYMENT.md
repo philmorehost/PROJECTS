@@ -173,10 +173,21 @@ POST https://manager.pmhserver.name.ng/api.php
 **Building the parish directory in bulk**
 
 Parish Connect → *Add zones, areas and parishes in bulk* takes one church per line:
-`ZONE, AREA, PARISH`. A two-column line (`ZONE, AREA`) creates the area and leaves its parishes for
-later. Press **Preview changes** first — it counts what would be created and writes nothing — then
-**Add to directory**. Everything is stored in capitals and matched case-insensitively, so pasting
-the same list twice creates nothing the second time.
+`ZONE, AREA, PARISH`. A two-column line (`ZONE, AREA`) creates the area and leaves its churches for
+later; a bare `ZONE` line creates the zonal church on its own. Press **Preview changes** first — it
+counts what would be created and writes nothing — then **Add to directory**. Everything is stored in
+capitals and matched case-insensitively, so pasting the same list twice creates nothing the second
+time.
+
+**A church is a parish, an area church or a zonal church.** From 1.1.0 all three appear in the
+registration picker and in the Parish Connect directory, and a member registers against whichever
+one they worship at. This matters for the way the hierarchy is usually entered first: importing
+16 zones and 26 areas with no parishes still gives members 42 churches to choose from, where 1.0.9
+offered none and the directory read "0 Parishes".
+
+The preview warns when a line creates an area with no church attached. That warning almost always
+means the third column was left empty — the cause of a directory that looks populated on the zone
+and area counters but lists no parishes.
 
 Two things to know before a large import:
 
@@ -189,17 +200,22 @@ Two things to know before a large import:
 
 **The parish list is empty on the registration page**
 
-An empty list means one of four things, and 1.0.9 names which on both the registration page and
-Parish Connect (the notice at the top of that page, and `php bin/doctor.php`):
+An empty list means one thing: nothing at all has been entered — no zones, areas or parishes.
+Since 1.1.0 the picker counts all three levels, so a hierarchy-only install is never reported as
+empty, and there is no longer a "churches exist but none is reachable" state: a parish belongs to an
+area which belongs to a zone, and the zone itself is a church, so if anything exists something is
+reachable. The registration page and Parish Connect say so (the notice at the top of that page, and
+`php bin/doctor.php`).
 
 | State | What you see | Fix |
 |---|---|---|
 | **empty** | "The church directory is empty" | Paste your list in Parish Connect → *Add zones, areas and parishes in bulk* |
-| **inactive** | "All N churches are switched off" | Open one and switch it back on |
-| **orphaned** | "N churches belong to an area or zone that no longer exists" | Re-import the hierarchy; the import recreates what is missing and matches the rest by name |
-| **ok** | the list renders | nothing |
+| **ok** | the list renders, counting parishes, area churches and zonal churches | nothing |
 
-Members are **not** blocked in the first three: the form falls back to a required church-name field,
+A parish that has been switched off is still counted separately on that page; it does not empty the
+directory, because its area church and its zonal church remain selectable.
+
+Members are **not** blocked when the directory is empty: the form falls back to a required church-name field,
 and what they type is kept on the account and listed on **People & roles** under *churches members
 asked for*, so it can be added to the directory later. That fallback is the reason an empty
 directory is a setup task rather than an outage.

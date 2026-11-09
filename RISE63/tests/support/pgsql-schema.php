@@ -69,6 +69,8 @@ function pgsql_create_schema(\PDO $pdo): void
         'CREATE TABLE users (
             id SERIAL PRIMARY KEY,
             parish_id INT NULL REFERENCES parishes (id) ON DELETE SET NULL,
+            zone_id INT NULL REFERENCES zones (id) ON DELETE SET NULL,
+            area_id INT NULL REFERENCES areas (id) ON DELETE SET NULL,
             parish_name_raw VARCHAR(150) NULL,
             full_name VARCHAR(150) NOT NULL,
             email VARCHAR(150) NOT NULL UNIQUE,

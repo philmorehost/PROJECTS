@@ -15,7 +15,16 @@ $isTreasury = Auth::isTreasurer($account);
       <h1 style="margin:0;font-size:1.375rem"><?= e((string) $account['full_name']) ?></h1>
       <p class="faint" style="margin:2px 0 0">
         <?= e(Auth::ROLES[(string) $account['role']] ?? (string) $account['role']) ?>
-        <?= $parish !== null ? ' · ' . e((string) $parish['parish_name']) : '' ?>
+        <?php
+          // Their church may be a parish, an area church or a zonal church; naming it correctly is
+          // the whole point of this page.
+          $churchName = null;
+          if ($parish !== null) {
+              $churchName = (string) ($parish['parish_name'] ?? $parish['area_name'] ?? $parish['zone_name'] ?? '');
+          }
+          $lvl = (string) ($churchLevel ?? 'parish');
+        ?>
+        <?= $churchName !== null && $churchName !== '' ? ' · ' . e($churchName) : '' ?>
       </p>
     </div>
   </div>
@@ -37,15 +46,23 @@ $isTreasury = Auth::isTreasurer($account);
         <input type="tel" id="phone" name="phone" maxlength="25" value="<?= e((string) ($account['phone'] ?? '')) ?>" autocomplete="tel">
       </div>
       <div class="field" data-combobox data-endpoint="<?= e(url('api/index.php')) ?>">
-        <label for="parish-search">My parish</label>
+        <label for="parish-search">My church</label>
         <div class="combo">
           <input type="search" id="parish-search" role="combobox" aria-expanded="false" aria-autocomplete="list"
                  aria-controls="parish-list-profile" autocomplete="off"
-                 value="<?= $parish !== null ? e($parish['parish_name'] . ' · ' . $parish['area_name'] . ' · ' . $parish['zone_name']) : '' ?>">
-          <input type="hidden" name="parish_id" value="<?= $parish !== null ? (int) $parish['id'] : '' ?>">
+                 value="<?= $churchName !== null && $churchName !== '' ? e($churchName) : '' ?>">
+          <?php /* One id field per level, as on the registration form: a zone id must never be posted
+                   as a parish id, and exactly one may carry a value. */ ?>
+          <input type="hidden" name="church_level" id="church-level-field" value="<?= e($lvl) ?>">
+          <input type="hidden" name="parish_id" id="parish-id-field" data-level="parish"
+                 value="<?= $lvl === 'parish' && $parish !== null ? (int) $parish['id'] : '' ?>">
+          <input type="hidden" name="area_id" id="area-id-field" data-level="area"
+                 value="<?= $lvl === 'area' && $parish !== null ? (int) $parish['id'] : '' ?>">
+          <input type="hidden" name="zone_id" id="zone-id-field" data-level="zone"
+                 value="<?= $lvl === 'zone' && $parish !== null ? (int) $parish['id'] : '' ?>">
           <ul class="combo-list" id="parish-list-profile" role="listbox" hidden></ul>
         </div>
-        <span class="hint">Type to search by parish, area or zone.</span>
+        <span class="hint">Type to search by parish, area church or zonal church.</span>
       </div>
       <?php if (($parishes ?? []) !== []): ?>
         <div class="field">
@@ -54,7 +71,9 @@ $isTreasury = Auth::isTreasurer($account);
             <option value="">Choose your church</option>
             <?php foreach ($parishes as $row): ?>
               <option value="<?= (int) $row['id'] ?>" data-label="<?= e($row['label']) ?>"
-                      <?= $parish !== null && (int) $parish['id'] === (int) $row['id'] ? 'selected' : '' ?>><?= e($row['label']) ?></option>
+                      data-level="<?= e((string) ($row['level'] ?? 'parish')) ?>"
+                      <?= $parish !== null && (int) $parish['id'] === (int) $row['id']
+                          && (string) ($row['level'] ?? 'parish') === $lvl ? 'selected' : '' ?>><?= e($row['label']) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -65,7 +84,7 @@ $isTreasury = Auth::isTreasurer($account);
                autocapitalize="characters" spellcheck="false"
                value="<?= e((string) ($account['parish_name_raw'] ?? '')) ?>"
                placeholder="TYPE IT IN FULL">
-        <span class="hint">Leave this blank if you chose a parish above. Capitals are applied for you;
+        <span class="hint">Leave this blank if you chose a church above. Capitals are applied for you;
           your representative adds it to the directory.</span>
       </div>
       <div class="field">

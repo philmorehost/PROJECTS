@@ -73,6 +73,9 @@ try {
     if (!$signedIn) {
         $parishes = array_map(static fn (array $row): array => [
             'id'     => $row['id'],
+            // The level tells the picker which hidden field the choice belongs in: a zone id must
+            // not be posted as a parish id.
+            'level'  => $row['level'] ?? 'parish',
             'label'  => $row['label'],
             'parish' => $row['parish'],
             'area'   => $row['area'],
