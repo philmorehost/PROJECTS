@@ -11,7 +11,7 @@ ob_start();require __DIR__.'/../app/dashboard-actions.php';$dashboard=ob_get_cle
 ob_start();require __DIR__.'/../app/mobile-navigation.php';$navigation=ob_get_clean();
 $checks=0;
 function verify(bool $condition,string $label):void{global $checks;$checks++;if(!$condition)throw new RuntimeException('FAIL: '.$label);}
-verify(str_contains($navigation,'aria-label="Mobile primary navigation"'),'named bottom navigation');
+verify(str_contains($navigation,'aria-label="Primary footer navigation"'),'named bottom navigation');
 verify(str_contains($navigation,'aria-current="page"'),'current page announced');
 verify(str_contains($navigation,'aria-labelledby="mobile-menu-title"'),'named modal');
 verify(str_contains($navigation,'data-menu-close'),'visible close button');
