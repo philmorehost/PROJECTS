@@ -1,6 +1,14 @@
 <?php
 // Include the new admin header
 include 'includes/admin_header.php';
+require_once '../includes/order_stock.php';
+require_once '../includes/order_cancellation.php';
+
+// Keep the shop tidy: cancel unpaid orders past the configured window (at most
+// once every 15 minutes, see Site Settings -> Order Automation).
+$auto_cancel_sweep = eflex_run_auto_cancel_if_due($mysqli, $settings);
+$auto_cancel_config = eflex_cancel_settings($mysqli, $settings);
+$auto_cancel_overdue = eflex_count_overdue_orders($mysqli, $settings);
 
 // --- Data Fetching for Dashboard ---
 
@@ -68,6 +76,24 @@ $recent_orders = $recent_orders_result->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <h1 class="mb-4">Admin Dashboard</h1>
+
+<?php if (!empty($auto_cancel_sweep['cancelled'])): ?>
+<div class="alert alert-success">
+    <i class="fas fa-clock me-1"></i>
+    <?php echo (int)$auto_cancel_sweep['cancelled']; ?> unpaid order(s) older than <?php echo htmlspecialchars($auto_cancel_sweep['label']); ?>
+    were cancelled automatically and their stock returned.
+    <a href="manage_orders.php" class="alert-link">Review the orders</a>.
+</div>
+<?php endif; ?>
+
+<?php if (!empty($auto_cancel_config['enabled']) && $auto_cancel_overdue > 0): ?>
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle me-1"></i>
+    <?php echo (int)$auto_cancel_overdue; ?> unpaid order(s) are already past the
+    <?php echo htmlspecialchars($auto_cancel_config['label']); ?> window and will be cancelled on the next automatic run.
+    <a href="manage_orders.php" class="alert-link">Cancel them now</a>.
+</div>
+<?php endif; ?>
 
 <!-- Statistics Cards -->
 <div class="row">

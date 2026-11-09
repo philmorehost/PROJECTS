@@ -14,83 +14,62 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true){
 include 'includes/header.php';
 require_once 'includes/db_connect.php';
 require_once 'includes/send_email.php';
+require_once 'includes/order_stock.php';
 
 $user_id = $_SESSION['id'];
 $message = "";
 
 // Handle Cancel Order
+//
+// Only ONE cancellation may return stock. The old code read `stock_restored`,
+// added the quantities back and then flipped the flag, so a double click (or the
+// admin cancelling at the same moment) added the stock twice — that is the
+// "each cancel returns double to stock" bug. eflex_cancel_order() locks the
+// order row (SELECT ... FOR UPDATE), checks the flag under the lock and makes
+// the stock_restored 0->1 flip part of the same transaction, so a second
+// attempt is a no-op.
 if($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['cancel_order'])){
-    $order_id_to_cancel = $_POST['order_id'];
+    $order_id_to_cancel = (int)($_POST['order_id'] ?? 0);
 
-    // --- Begin transaction
-    $mysqli->begin_transaction();
+    // Make sure the order belongs to the signed-in customer (and get its status).
+    $owns_order = false;
+    $current_status = '';
+    if ($order_id_to_cancel > 0) {
+        $stmt_own = $mysqli->prepare("SELECT status FROM orders WHERE id = ? AND user_id = ?");
+        $stmt_own->bind_param("ii", $order_id_to_cancel, $user_id);
+        $stmt_own->execute();
+        $own_row = $stmt_own->get_result()->fetch_assoc();
+        $stmt_own->close();
+        if ($own_row) {
+            $owns_order = true;
+            $current_status = $own_row['status'];
+        }
+    }
 
-    try {
-        // Fetch status AND stock_restored together: only a cancellable order may be
-        // restocked. Previously the restock loop ran for *any* order with
-        // stock_restored = 0 (including Completed ones), so POSTing cancel_order for
-        // a completed order silently inflated inventory.
-        $check_stock_sql = "SELECT status, stock_restored FROM orders WHERE id = ? AND user_id = ?";
-        $stmt_check_stock = $mysqli->prepare($check_stock_sql);
-        $stmt_check_stock->bind_param("ii", $order_id_to_cancel, $user_id);
-        $stmt_check_stock->execute();
-        $stock_restored_result = $stmt_check_stock->get_result()->fetch_assoc();
-        $stmt_check_stock->close();
+    if (!$owns_order) {
+        $message = '<div class="alert alert-warning">Order not found.</div>';
+    } else {
+        // Customers may cancel anything that is still unpaid; Processing means a
+        // payment proof is waiting for review, so it is not cancellable here.
+        $cancellable = eflex_unpaid_order_statuses();
 
-        $can_cancel = $stock_restored_result
-            && in_array($stock_restored_result['status'], ['Pending', 'Awaiting Payment'], true);
-
-        if (!$can_cancel) {
-            $mysqli->rollback();
+        if (!in_array($current_status, $cancellable, true)) {
             $message = '<div class="alert alert-warning">This order can no longer be cancelled.</div>';
         } else {
-            $restocked = false;
+            $cancel = eflex_cancel_order($mysqli, $order_id_to_cancel, 'Cancelled by the customer');
 
-            if (!$stock_restored_result['stock_restored']) {
-                // Fetch the items from the order to be cancelled
-                $sql_items = "SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?";
-                $stmt_items = $mysqli->prepare($sql_items);
-                $stmt_items->bind_param("i", $order_id_to_cancel);
-                $stmt_items->execute();
-                $items_to_restock = $stmt_items->get_result()->fetch_all(MYSQLI_ASSOC);
-                $stmt_items->close();
-
-                // Loop through items and restore stock
-                foreach ($items_to_restock as $item) {
-                    if (!empty($item['variant_id'])) {
-                        $sql_update_stock = "UPDATE product_variants SET stock = stock + ? WHERE id = ?";
-                        $stmt_stock = $mysqli->prepare($sql_update_stock);
-                        $stmt_stock->bind_param("ii", $item['quantity'], $item['variant_id']);
-                        $stmt_stock->execute();
-                        $stmt_stock->close();
-                    } else {
-                        $sql_update_stock = "UPDATE products SET stock = stock + ? WHERE id = ? AND has_variants = 0";
-                        $stmt_stock = $mysqli->prepare($sql_update_stock);
-                        $stmt_stock->bind_param("ii", $item['quantity'], $item['product_id']);
-                        $stmt_stock->execute();
-                        $stmt_stock->close();
-                    }
-                }
-                $restocked = true;
+            if (!empty($cancel['ok'])) {
+                $restocked = !empty($cancel['restocked']);
+                $summary = $restocked ? eflex_restock_summary($cancel['restored']) : '';
+                $message = '<div class="alert alert-info">Order #' . $order_id_to_cancel . ' has been cancelled'
+                         . ($restocked ? ' and its stock has been restored' : '')
+                         . ($summary !== '' ? ' (' . htmlspecialchars($summary) . ')' : '')
+                         . '.</div>';
+            } else {
+                $reason = $cancel['message'] !== '' ? $cancel['message'] : 'This order can no longer be cancelled.';
+                $message = '<div class="alert alert-warning">' . htmlspecialchars($reason) . '</div>';
             }
-
-            // Mark stock as restored and update status
-            $sql_cancel = "UPDATE orders SET status = 'Cancelled', stock_restored = 1 WHERE id = ? AND user_id = ? AND (status = 'Pending' OR status = 'Awaiting Payment')";
-            $stmt_cancel = $mysqli->prepare($sql_cancel);
-            $stmt_cancel->bind_param("ii", $order_id_to_cancel, $user_id);
-            $stmt_cancel->execute();
-            $stmt_cancel->close();
-
-            // --- If everything is fine, commit the transaction
-            $mysqli->commit();
-            $message = '<div class="alert alert-info">Order #' . $order_id_to_cancel . ' has been cancelled'
-                     . ($restocked ? ' and stock has been restored.' : '.') . '</div>';
         }
-
-    } catch (Exception $e) {
-        // --- An error occurred, roll back the transaction
-        $mysqli->rollback();
-        $message = '<div class="alert alert-danger">There was an error cancelling your order. Please try again.</div>';
     }
 }
 
@@ -161,26 +140,37 @@ if($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_proof'])){
 }
 
 
+// Automatic cancellation of unpaid orders (runs at most once every 15 minutes,
+// independent of any cron job, so the setting also works on shared hosting).
+// The customer's own cancellation above always wins: the order row is locked
+// and stock is only returned once.
+require_once 'includes/order_cancellation.php';
+eflex_run_auto_cancel_if_due($mysqli, isset($settings) && is_array($settings) ? $settings : null);
+
 // Pagination and fetching orders logic...
 // ... (same as before) ...
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $records_per_page = 5;
 $offset = ($page - 1) * $records_per_page;
 $sql_total = "SELECT COUNT(*) FROM orders WHERE user_id = ?";
+$total_records = 0;
 if($stmt_total = $mysqli->prepare($sql_total)){
     $stmt_total->bind_param("i", $user_id);
     $stmt_total->execute();
-    $total_records = $stmt_total->get_result()->fetch_row()[0];
+    $count_row = $stmt_total->get_result()->fetch_row();
+    $total_records = $count_row ? (int)$count_row[0] : 0;
     $stmt_total->close();
 }
-$total_pages = ceil($total_records / $records_per_page);
+$total_pages = $total_records > 0 ? (int)ceil($total_records / $records_per_page) : 1;
 $sql = "SELECT id, created_at, total_amount, status, transaction_id FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
 $orders = [];
 if($stmt = $mysqli->prepare($sql)){
     $stmt->bind_param("iii", $user_id, $records_per_page, $offset);
     $stmt->execute();
     $result = $stmt->get_result();
-    $orders = $result->fetch_all(MYSQLI_ASSOC);
+    if ($result) {
+        $orders = $result->fetch_all(MYSQLI_ASSOC);
+    }
     $stmt->close();
 }
 ?>
@@ -188,6 +178,19 @@ if($stmt = $mysqli->prepare($sql)){
 <div class="container mt-5">
     <h2>My Orders</h2>
     <?php echo $message; ?>
+    <?php
+    // Explain the automatic cancellation rule to the customer up front, so an
+    // order that disappears is not a surprise.
+    $customer_cancel_config = eflex_cancel_settings($mysqli, isset($settings) && is_array($settings) ? $settings : null);
+    if (!empty($customer_cancel_config['enabled'])):
+    ?>
+    <div class="alert alert-secondary small">
+        <i class="fas fa-clock"></i>
+        Unpaid orders (Pending / Awaiting Payment) are cancelled automatically after
+        <strong><?php echo htmlspecialchars($customer_cancel_config['label']); ?></strong> and the items are returned to stock.
+        Pay or upload your payment proof before then to keep your order.
+    </div>
+    <?php endif; ?>
     <div class="table-responsive">
         <table class="table table-striped">
             <thead>
