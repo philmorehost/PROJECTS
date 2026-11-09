@@ -21,12 +21,13 @@ const {chromium}=require('playwright');
     assert(layout.body>=16);assert(layout.input>=16);assert(!layout.overflow,`${role} at ${width}: page overflow`);checks+=3;
     if(width<=900){
      assert.equal(layout.sidebar,'none');assert.equal(layout.nav,'grid');checks+=2;
+     assert(await page.locator('.mobile-bottom-nav span').first().evaluate(e=>getComputedStyle(e).position==='absolute'));checks++;
      const more=page.getByRole('button',{name:'More',exact:true});const box=await more.boundingBox();assert(box.width>=44&&box.height>=44);checks++;
      await more.click();assert.equal(await more.getAttribute('aria-expanded'),'true');assert(await page.getByRole('dialog').isVisible());checks+=2;
      await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('.mobile-bottom-nav button').getAttribute('aria-expanded')==='false');assert(!(await page.getByRole('dialog').isVisible()));assert.equal(await more.getAttribute('aria-expanded'),'false');assert(await more.evaluate(e=>document.activeElement===e));checks+=3;
      await page.getByRole('button',{name:'Open navigation menu'}).click();await page.getByRole('button',{name:'Close navigation menu'}).click();await page.waitForFunction(()=>document.querySelector('.mobile-bottom-nav button').getAttribute('aria-expanded')==='false');assert(!(await page.getByRole('dialog').isVisible()));checks++;
      if(width<=600){assert.equal(await page.locator('#ledger td').first().evaluate(e=>getComputedStyle(e).display),'block');checks++;}
-    }else{assert.equal(layout.nav,'none');checks++;}
+    }else{assert.equal(layout.nav,'flex');assert.equal(layout.sidebar,'none');assert(await page.locator('.mobile-bottom-nav span').first().evaluate(e=>getComputedStyle(e).position==='static'));checks+=3;}
     await page.locator('#ledger-status').selectOption('verified');assert.equal(await page.locator('#ledger tr[data-status]:visible').count(),1);checks++;
     await page.locator('#ledger-search').fill('pending');assert.equal(await page.locator('#ledger tr[data-status]:visible').count(),0);assert(await page.locator('#ledger-no-results').isVisible());checks+=2;
     await page.locator('#ledger-search').fill('');await page.locator('#ledger-status').selectOption('');assert.equal(await page.locator('#ledger tr[data-status]:visible').count(),2);checks++;

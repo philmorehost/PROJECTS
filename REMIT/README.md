@@ -355,3 +355,19 @@ Validation adds **34** multiline/Unicode/idempotency/parent-scope/code-collision
 php tests/hierarchy-batch.php
 # Use the previously documented fixture commands for directory and registration browser checks.
 ```
+
+## 0.7.0 — Mobile-first fintech redesign and persistent footer navigation
+
+All shared workspace and public page layouts now use a simpler mobile-first visual system: light neutral surfaces, deep teal actions, readable forms, softer borders and rounded panels. Dashboard stat cards have subtle blue, sage, amber and lavender backgrounds. The desktop sidebar is no longer displayed; the content uses the available width and a centered reading layout. Forms stack on phones and expand to paired columns where space permits. Existing directory tools, CAPS/bulk entry, pagination, allocation previews, bank/payment controls, settings, security and role scoping remain functional.
+
+The **persistent bottom menu** is fixed to the viewport and reserves document space so final form actions are not obscured, including safe-area padding. Phones/tablets show **icons only**, with accessible names, current-page state and 48px targets. **More** opens the existing keyboard-accessible dialog for profile/settings/security and logout; native no-JavaScript links remain available when enhancement is unavailable. At desktop widths (901px+), the footer uses **text links**, including permitted profile/settings/security destinations directly. Public sign-in, registration and installer pages have their own fixed Sign in/Register footer (icons on phones, text on desktop). No authenticated/private destinations are added to public navigation. Sign out remains available in the workspace header as well as the mobile dialog.
+
+The redesign covers dashboard, remittances/offering/payment, hierarchy, profile, settings/licensing, security, login, officer registration and setup. It preserves native form semantics, focus outlines, SVG accessible-name handling and reduced-motion preferences. Data tables keep contained horizontal scrolling where card conversion is unsuitable. No finance, permission, migration or payment-integration behavior changed. **No new database migration is needed**; deploy all PHP templates and fingerprinted assets together. Prior feature upgrades remain required if not already enabled.
+
+Validation: `tests/redesign-ui.php` renders nine actual production page layouts with fictional data and SQLite compatibility fixtures; `tests/redesign-browser.js` runs **675** layout/navigation checks across nine pages at 320, 390, 768, 1024 and 1440 pixels, including mobile icon-only/desktop text presentation, footer persistence, touch targets, no page overflow, non-overlapping final actions and stat backgrounds. The role/mobile suite now has **255** browser assertions plus 39 PHP role checks. Existing directory 330, registration 125, URL/fallback 27 and autocomplete 40 browser checks pass, along with finance, hierarchy, CSV, licensing and portal regressions. These headless checks do not replace physical-device, screen-reader or live cPanel/MySQL acceptance.
+
+```sh
+php tests/redesign-ui.php /tmp/remit-redesign
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/redesign-browser.js /tmp/remit-redesign
+```
