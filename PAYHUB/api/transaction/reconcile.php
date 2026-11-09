@@ -69,7 +69,8 @@ foreach ($remote_txs as $rtx) {
             $amount = $rtx['amount'] / 100;
             $email = $rtx['customer']['email'];
             $channel_type = $rtx['channel'];
-            $fee = calculate_fees($amount, false, $user['id']);
+            $gatewayFee = isset($rtx['fees']) && is_numeric($rtx['fees']) ? ((float)$rtx['fees'] / 100) : null;
+            $fee = calculate_fees($amount, false, $user['id'], $gatewayFee, $rtx['channel'] ?? '');
             $settled = $amount - $fee;
 
             $db->beginTransaction();

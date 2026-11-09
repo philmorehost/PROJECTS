@@ -1,103 +1,124 @@
 <?php
-// php-version/includes/payout-cron.php
+// Daily automated merchant payouts. Configure the host cron for 10:00 AM Africa/Lagos (WAT).
 require_once __DIR__ . '/functions.php';
 
-/**
- * This script should be set to run daily at 12 PM via Cron Job
- */
+date_default_timezone_set('Africa/Lagos');
 
-function is_holiday($date) {
-    // Basic check for weekends
-    $day = date('N', strtotime($date));
-    if ($day >= 6) return true; // Saturday or Sunday
+function payhub_payout_is_holiday($date) {
+    $day = (int)date('N', strtotime($date));
+    if ($day >= 6) return true;
 
-    // Fixed public holidays for Nigeria (Example)
-    $holidays = [
-        '2024-01-01', // New Year
-        '2024-05-01', // Workers Day
-        '2024-10-01', // Independence Day
-        '2024-12-25', // Christmas
-        '2024-12-26', // Boxing Day
-    ];
-    return in_array(date('Y-m-d', strtotime($date)), $holidays);
+    // Fixed-date Nigerian public holidays. Variable-date holidays should be managed by the
+    // operator's published holiday calendar rather than hard-coded to an obsolete year.
+    $fixedHolidays = ['01-01', '05-01', '10-01', '12-25', '12-26'];
+    return in_array(date('m-d', strtotime($date)), $fixedHolidays, true);
 }
 
-if (is_holiday(date('Y-m-d'))) {
-    exit("Today is a weekend or holiday. No payouts today.");
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("CLI only.\n");
 }
-
-if (getConfig('payout_enabled', '1') !== '1') {
-    exit("Global payout service is disabled.");
-}
+if (payhub_payout_is_holiday(date('Y-m-d'))) exit("Today is a weekend or fixed public holiday. No payouts today.\n");
+if (getConfig('payout_enabled', '1') !== '1') exit("Global payout service is disabled.\n");
 
 $db = Database::connect();
+$minimum = max(0, (float)getConfig('min_payout_amount', '1000'));
+$stmt = $db->prepare("SELECT id FROM users WHERE role = 'merchant' AND payout_method = 'automated' AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0 ORDER BY id");
+$stmt->execute([$minimum]);
+$merchantIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+$runMarker = 'AUTOMATED ' . date('Y-m-d');
+$globalReviewRequired = getConfig('global_payout_review', '0') === '1';
 
-// Fetch merchants with automated payout and balance > min_payout_amount
-$min_payout = (float)getConfig('min_payout_amount', '1000');
+foreach ($merchantIds as $merchantId) {
+    $payoutId = null;
+    $merchant = null;
+    $gross = 0.0;
+    $fee = 0.0;
+    $net = 0.0;
 
-$stmt = $db->prepare("SELECT * FROM users WHERE role = 'merchant' AND payout_method = 'automated' AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0");
-$stmt->execute([$min_payout]);
-$merchants = $stmt->fetchAll();
+    try {
+        // Reserve this merchant's balance and create today's idempotency record atomically.
+        $db->beginTransaction();
+        $stmt = $db->prepare("SELECT * FROM users WHERE id = ? FOR UPDATE");
+        $stmt->execute([$merchantId]);
+        $merchant = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$merchant || $merchant['payout_method'] !== 'automated' || $merchant['payout_method_status'] !== 'active'
+            || (int)$merchant['is_test_mode'] === 1 || (int)$merchant['is_suspended'] === 1) {
+            $db->rollBack();
+            continue;
+        }
 
-foreach ($merchants as $m) {
-    // Logic: Global Review ON -> All need review.
-    // Global Review OFF -> Individual Review setting applies.
-    $needs_review = (getConfig('global_payout_review') == '1') || ($m['require_payout_review'] == 1);
+        $stmt = $db->prepare("SELECT id FROM payouts WHERE user_id = ? AND request_date >= CURDATE() AND status_details LIKE ? LIMIT 1");
+        $stmt->execute([$merchantId, $runMarker . '%']);
+        if ($stmt->fetchColumn()) {
+            $db->rollBack();
+            continue; // safe to rerun the cron; never submit today's transfer twice
+        }
 
-    if ($needs_review) {
-        // Skip for automated settlement, needs manual approval by admin in Settlements tab
-        continue;
-    }
+        $gross = (float)$merchant['wallet_balance'];
+        if ($gross < $minimum) {
+            $db->rollBack();
+            continue;
+        }
+        if (empty($merchant['settlement_account_number']) || empty($merchant['settlement_bank_code'])) {
+            $db->rollBack();
+            error_log('[PayHub payouts] Automated payout skipped for merchant ' . (int)$merchantId . ': settlement bank details are incomplete.');
+            continue;
+        }
 
-    // Total wallet balance
-    $amount = (float)$m['wallet_balance'];
+        $fee = calculate_payout_fee($gross);
+        $net = round($gross - $fee, 2);
+        if ($net <= 0) {
+            $db->rollBack();
+            error_log('[PayHub payouts] Automated payout skipped for merchant ' . (int)$merchantId . ': fees exceed available balance.');
+            continue;
+        }
 
-    // Logic: Received in USD can be paid in NGN/USD.
-    // For simplicity, we check if they have a non-NGN transaction history.
-    // In a real system, we'd have sub-wallets.
-    // Here we enforce settlement currency from user settings.
+        $stmt = $db->prepare("INSERT INTO payouts (user_id, amount, fee_amount, net_amount, status, bank_name, account_number, status_details) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)");
+        $stmt->execute([$merchantId, $gross, $fee, $net, $merchant['settlement_bank'], $merchant['settlement_account_number'], $runMarker . ' — transfer submission pending']);
+        $payoutId = (int)$db->lastInsertId();
+        log_ledger_entry($merchantId, $gross, 'debit', 'payout', 'Automated payout reserve #' . $payoutId);
+        $db->commit();
 
-    $fee = calculate_payout_fee($amount);
-    $net = $amount - $fee;
+        // Preserve the platform's review controls: queue and reserve the payout for an admin
+        // instead of sending it to Paystack when either global or merchant review is enabled.
+        if ($globalReviewRequired || !empty($merchant['require_payout_review'])) {
+            $stmt = $db->prepare("UPDATE payouts SET status_details = ? WHERE id = ? AND status = 'pending'");
+            $stmt->execute([$runMarker . ' — awaiting admin approval', $payoutId]);
+            echo "Queued automated payout #$payoutId for merchant $merchantId for admin review.\n";
+            continue;
+        }
 
-    if ($net <= 0) continue;
-
-    // Process via Paystack Transfer API
-    // 1. Create Transfer Recipient (if not exists, or store recipient_code in DB)
-    // 2. Initiate Transfer
-
-    $recipient_res = paystack_call('transferrecipient', 'POST', [
-        'type' => 'nuban',
-        'name' => $m['business_name'],
-        'account_number' => $m['settlement_account_number'],
-        'bank_code' => $m['settlement_bank_code'],
-        'currency' => $m['settlement_currency']
-    ]);
-
-    if ($recipient_res['status']) {
-        $recipient_code = $recipient_res['data']['recipient_code'];
-
-        $transfer_res = paystack_call('transfer', 'POST', [
-            'source' => 'balance',
-            'amount' => $net * 100,
-            'recipient' => $recipient_code,
-            'reason' => 'Automated Payout from Payhub'
+        $transfer = paystack_payout((int)$merchantId, $net, 'Automated PayHub payout #' . $payoutId, [
+            'bank_name' => $merchant['settlement_bank'],
+            'bank_code' => $merchant['settlement_bank_code'],
+            'account_number' => $merchant['settlement_account_number'],
+            'account_name' => $merchant['settlement_account_name'] ?: $merchant['business_name']
         ]);
 
-        if ($transfer_res['status']) {
+        if ($transfer && !empty($transfer['status'])) {
+            $transferRef = $transfer['data']['transfer_code'] ?? $transfer['data']['reference'] ?? 'submitted';
+            $stmt = $db->prepare("UPDATE payouts SET status = 'processed', status_details = ? WHERE id = ? AND status = 'pending'");
+            $stmt->execute([$runMarker . ' — Paystack transfer ' . $transferRef, $payoutId]);
+            echo "Processed automated payout #$payoutId for merchant $merchantId.\n";
+        } else {
+            $reason = $transfer['message'] ?? 'Paystack returned no successful transfer response.';
+            // A failed transfer returns the complete reserved amount to the merchant.
             $db->beginTransaction();
-            try {
-                // Deduct balance and log ledger
-                log_ledger_entry($m['id'], $amount, 'debit', 'payout', 'Automated Payout processed via Paystack');
-
-                // Record payout
-                $stmt = $db->prepare("INSERT INTO payouts (user_id, amount, fee_amount, net_amount, status, bank_name, account_number, status_details) VALUES (?, ?, ?, ?, 'processed', ?, ?, ?)");
-                $stmt->execute([$m['id'], $amount, $fee, $net, $m['settlement_bank'], $m['settlement_account_number'], 'Transfer ID: ' . $transfer_res['data']['transfer_code']]);
-
-                $db->commit();
-            } catch (Exception $e) {
-                $db->rollBack();
+            $stmt = $db->prepare("SELECT status FROM payouts WHERE id = ? FOR UPDATE");
+            $stmt->execute([$payoutId]);
+            if ($stmt->fetchColumn() === 'pending') {
+                $stmt = $db->prepare("UPDATE payouts SET status = 'failed', status_details = ? WHERE id = ?");
+                $stmt->execute([$runMarker . ' — transfer failed: ' . $reason, $payoutId]);
+                log_ledger_entry($merchantId, $gross, 'credit', 'payout_refund', 'Automated payout refund #' . $payoutId);
             }
+            $db->commit();
+            error_log('[PayHub payouts] Automated payout #' . $payoutId . ' failed: ' . $reason);
         }
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('[PayHub payouts] Merchant ' . (int)$merchantId . ' payout error: ' . $e->getMessage());
+        // If the transfer was already submitted, keep its pending record reserved for manual
+        // reconciliation instead of blindly retrying and risking a duplicate bank transfer.
     }
 }

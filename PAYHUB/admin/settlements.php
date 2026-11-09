@@ -9,49 +9,59 @@ $pageTitle = 'Settlements - Admin Hub';
 
 $db = Database::connect();
 
-// Handle Actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    if ($_POST['action'] === 'process_payout') {
-        $payoutId = (int)$_POST['payout_id'];
-        $status = sanitize($_POST['status']);
-        $details = sanitize($_POST['details']);
+// Process payout actions with visible feedback and a CSRF-protected, pending-only transition.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'process_payout') {
+    $payoutId = filter_var($_POST['payout_id'] ?? null, FILTER_VALIDATE_INT);
+    $status = $_POST['status'] ?? '';
+    $details = trim((string)($_POST['details'] ?? ''));
 
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        $error_msg = 'Your session security token expired. Refresh the page and try again.';
+    } elseif (!$payoutId || !in_array($status, ['processed', 'declined'], true) || $details === '') {
+        $error_msg = 'Invalid payout action. Choose approve or decline and include internal notes.';
+    } else {
         $db->beginTransaction();
         try {
-            // If approved, attempt Paystack payout
+            $stmt = $db->prepare("SELECT p.*, u.settlement_bank_code, u.settlement_account_name FROM payouts p JOIN users u ON p.user_id = u.id WHERE p.id = ? FOR UPDATE");
+            $stmt->execute([$payoutId]);
+            $payout = $stmt->fetch();
+            if (!$payout) throw new RuntimeException('Payout request was not found. Refresh the list and try again.');
+            if ($payout['status'] !== 'pending') throw new RuntimeException('This payout is no longer pending and cannot be processed again.');
+
             if ($status === 'processed') {
-                $stmt = $db->prepare("SELECT user_id, amount, net_amount FROM payouts WHERE id = ?");
-                $stmt->execute([$payoutId]);
-                $p = $stmt->fetch();
-
-                // Fallback to full amount if net_amount wasn't set (legacy)
-                $payout_amount = (float)($p['net_amount'] > 0 ? $p['net_amount'] : $p['amount']);
-
-                $res = paystack_payout($p['user_id'], $payout_amount);
-                if (!$res || !$res['status']) {
-                    // Log error but allow admin to see what happened
-                    file_put_contents(BASE_PATH . 'payout_debug.log', "[" . date('Y-m-d H:i:s') . "] Payout Approval Failed for ID $payoutId: " . json_encode($res) . PHP_EOL, FILE_APPEND);
-                    throw new Exception("Paystack Payout Error: " . ($res['message'] ?? 'Unknown gateway error'));
+                $payoutAmount = (float)$payout['net_amount'];
+                if ($payoutAmount <= 0) $payoutAmount = (float)$payout['amount']; // Legacy requests
+                if (empty($payout['settlement_bank_code']) || empty($payout['account_number'])) {
+                    throw new RuntimeException('The merchant settlement bank details are incomplete. Ask the merchant to update their bank account.');
                 }
-                $details .= " | Paystack Ref: " . ($res['data']['reference'] ?? 'N/A');
-            }
-
-            $stmt = $db->prepare("UPDATE payouts SET status = ?, status_details = ? WHERE id = ?");
-            $stmt->execute([$status, $details, $payoutId]);
-
-            if ($status === 'declined') {
-                // Refund wallet balance
-                $stmt = $db->prepare("SELECT user_id, amount FROM payouts WHERE id = ?");
-                $stmt->execute([$payoutId]);
-                $payout = $stmt->fetch();
+                $res = paystack_payout((int)$payout['user_id'], $payoutAmount, 'PayHub payout approval #' . $payoutId, [
+                    'bank_name' => $payout['bank_name'],
+                    'bank_code' => $payout['settlement_bank_code'],
+                    'account_number' => $payout['account_number'],
+                    'account_name' => $payout['settlement_account_name'] ?: $payout['bank_name']
+                ]);
+                if (!$res || empty($res['status'])) {
+                    $gatewayMessage = $res['message'] ?? 'Paystack did not return a successful transfer response.';
+                    file_put_contents(BASE_PATH . 'payout_debug.log', "[" . date('Y-m-d H:i:s') . "] Payout Approval Failed for ID $payoutId: " . json_encode($res) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    throw new RuntimeException('Paystack transfer failed: ' . $gatewayMessage);
+                }
+                $details .= ' | Paystack transfer: ' . ($res['data']['transfer_code'] ?? $res['data']['reference'] ?? 'initiated');
+                $stmt = $db->prepare("UPDATE payouts SET status = 'processed', status_details = ? WHERE id = ? AND status = 'pending'");
+                $stmt->execute([$details, $payoutId]);
+            } else {
+                $stmt = $db->prepare("UPDATE payouts SET status = 'declined', status_details = ? WHERE id = ? AND status = 'pending'");
+                $stmt->execute([$details, $payoutId]);
+                // The original request debited `amount` (amount + fee); return that full hold.
                 $stmt = $db->prepare("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?");
                 $stmt->execute([$payout['amount'], $payout['user_id']]);
+                $stmt = $db->prepare("INSERT INTO ledger (user_id, amount, type, category, description, balance_after) SELECT id, ?, 'credit', 'payout_refund', ?, wallet_balance FROM users WHERE id = ?");
+                $stmt->execute([$payout['amount'], 'Declined payout refund #' . $payoutId, $payout['user_id']]);
             }
             $db->commit();
-            $success_msg = "Payout request processed.";
-        } catch (Exception $e) {
-            $db->rollBack();
-            $error_msg = "Failed to process payout: " . $e->getMessage();
+            $success_msg = $status === 'processed' ? 'Payout approved and sent to Paystack.' : 'Payout declined and the held balance was returned to the merchant.';
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            $error_msg = 'Failed to process payout: ' . $e->getMessage();
         }
     }
 }
@@ -66,9 +76,14 @@ include '../includes/dashboard-head.php';
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden" x-data="{ showProcess: false, payout: {} }">
         <?php include '../includes/topbar.php'; ?>
         <div class="flex-1 overflow-y-auto p-4 sm:p-8">
-            <?php if (isset($success_msg)): ?>
-                <div class="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
-                    <?php echo $success_msg; ?>
+            <?php if (!empty($success_msg)): ?>
+                <div role="status" class="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
+                    <?php echo htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($error_msg)): ?>
+                <div role="alert" class="mb-6 p-4 bg-rose-50 text-rose-700 rounded-2xl border border-rose-200 font-medium">
+                    <?php echo htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?>
                 </div>
             <?php endif; ?>
 
@@ -138,6 +153,7 @@ include '../includes/dashboard-head.php';
                     <p class="text-sm font-medium text-slate-500 mb-6">Process payout of <span class="text-indigo-600 font-bold" x-text="'₦'+payout.amount"></span> to <span class="text-slate-900 font-bold" x-text="payout.business_name"></span></p>
                     <form method="POST">
                         <input type="hidden" name="action" value="process_payout">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="payout_id" :value="payout.id">
                         <div class="mb-4">
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Internal Status Details</label>

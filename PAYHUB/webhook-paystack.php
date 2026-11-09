@@ -82,10 +82,58 @@ $event_map = [
     'refund.processed'       => 'refund_processed',
     'refund.pending'         => 'refund_pending',
     'refund.failed'          => 'refund_failed',
+    'transfer.success'       => 'transfer_success',
+    'transfer.failed'        => 'transfer_failed',
+    'transfer.reversed'      => 'transfer_reversed',
 ];
 $event_type = $event_map[strtolower((string)($event['event'] ?? ''))] ?? null;
 
 $db = Database::connect();
+
+// Confirm asynchronous transfer outcomes. A delayed failure/reversal returns the reserved
+// payout amount exactly once; matching uses Paystack's transfer code/reference saved in details.
+if (in_array($event_type, ['transfer_success', 'transfer_failed', 'transfer_reversed'], true)) {
+    $data = $event['data'] ?? [];
+    $transferCode = (string)($data['transfer_code'] ?? '');
+    $transferReference = (string)($data['reference'] ?? '');
+    $match = $transferCode !== '' ? $transferCode : $transferReference;
+    if ($match === '') {
+        http_response_code(400);
+        exit('Missing transfer reference');
+    }
+
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("SELECT * FROM payouts WHERE status_details LIKE ? FOR UPDATE");
+        $stmt->execute(['%' . $match . '%']);
+        $payout = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$payout) {
+            $db->rollBack();
+            http_response_code(200);
+            exit('Transfer is not a PayHub payout');
+        }
+
+        if ($event_type === 'transfer_success') {
+            if ($payout['status'] === 'pending') {
+                $stmt = $db->prepare("UPDATE payouts SET status = 'processed', status_details = CONCAT(COALESCE(status_details, ''), ' | Paystack confirmed success') WHERE id = ? AND status = 'pending'");
+                $stmt->execute([$payout['id']]);
+            }
+        } elseif (in_array($payout['status'], ['pending', 'processed'], true)) {
+            $reason = $event_type === 'transfer_reversed' ? 'Paystack transfer reversed' : 'Paystack transfer failed';
+            $stmt = $db->prepare("UPDATE payouts SET status = 'failed', status_details = CONCAT(COALESCE(status_details, ''), ' | ', ?) WHERE id = ? AND status IN ('pending', 'processed')");
+            $stmt->execute([$reason, $payout['id']]);
+            log_ledger_entry((int)$payout['user_id'], (float)$payout['amount'], 'credit', 'payout_refund', $reason . ' for payout #' . $payout['id']);
+        }
+        $db->commit();
+        http_response_code(200);
+        exit('Transfer event processed');
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('[PayHub] Transfer webhook processing failed: ' . $e->getMessage());
+        http_response_code(500);
+        exit('Transfer event processing failed');
+    }
+}
 
 if ($event_type === 'charge_success') {
     $data = $event['data'];
@@ -249,7 +297,8 @@ if ($event_type === 'charge_success') {
 
             // Calculate fees
             $is_intl = ($currency !== 'NGN');
-            $fee = calculate_fees($amount, $is_intl, $tx['user_id']);
+            $gatewayFee = isset($data['fees']) && is_numeric($data['fees']) ? ((float)$data['fees'] / 100) : null;
+            $fee = calculate_fees($amount, $is_intl, $tx['user_id'], $gatewayFee, $data['channel'] ?? '');
             $settled = $amount - $fee;
 
             $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, payment_method = ? WHERE id = ?");

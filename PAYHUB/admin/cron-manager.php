@@ -13,8 +13,8 @@ $php_path = PHP_BINARY ?: '/usr/local/bin/php';
 $cron_jobs = [
     [
         'name' => 'Automated Settlements',
-        'desc' => 'Processes next-day automated payouts for eligible merchants.',
-        'schedule' => '0 12 * * *',
+        'desc' => 'Submits eligible automated payouts at 10:00 AM Africa/Lagos (WAT) on working days. Set the server cron timezone to Africa/Lagos; reruns are idempotent per merchant per day.',
+        'schedule' => '0 10 * * *',
         'command' => $php_path . ' ' . $base_path . '/includes/payout-cron.php'
     ],
     [

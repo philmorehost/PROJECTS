@@ -80,6 +80,7 @@ include '../includes/dashboard-head.php';
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900 mb-2">Platform Configuration</h1>
                     <p class="text-slate-500">A powerful key-value store to manage global platform settings</p>
+                    <p class="mt-3 max-w-3xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Pricing change:</strong> Paystack processing costs are now passed through separately; confirmed Paystack transaction fees are used where available. Set <code>local_markup_percent</code>, <code>local_markup_flat</code> (and optional <code>local_markup_cap</code>) to define PayHub's margin. International equivalents are <code>international_markup_percent</code>, <code>international_markup_flat</code>, and <code>international_markup_cap</code>. These markup defaults are zero; choose the business margin you want before advertising a profit rate. The old <code>transaction_fee_*</code> / <code>international_fee_*</code> keys are legacy totals and are no longer used for live settlement deductions.</p>
                 </div>
             </div>
 
@@ -261,11 +262,12 @@ include '../includes/dashboard-head.php';
                             <?php
                             $ref = [
                                 ['key' => 'paystack_secret_key', 'label' => 'Paystack Secret Key', 'desc' => 'API key for payment processing'],
-                                ['key' => 'transaction_fee_percent', 'label' => 'Local Fee (%)', 'desc' => 'Percentage fee on local collections'],
-                                ['key' => 'transaction_fee_flat', 'label' => 'Local Fee (Flat)', 'desc' => 'Flat fee on local collections'],
-                                ['key' => 'transaction_fee_cap', 'label' => 'Local Fee Cap', 'desc' => 'Maximum fee for local transactions'],
-                                ['key' => 'international_fee_percent', 'label' => 'Intl. Fee (%)', 'desc' => 'Percentage fee on international collections'],
-                                ['key' => 'international_fee_flat', 'label' => 'Intl. Fee (Flat)', 'desc' => 'Flat fee on international collections'],
+                                ['key' => 'local_markup_percent', 'label' => 'Local PayHub Markup (%)', 'desc' => 'Your margin, added after Paystack’s actual/estimated processing fee'],
+                                ['key' => 'local_markup_flat', 'label' => 'Local PayHub Markup (Flat)', 'desc' => 'Flat PayHub margin per local transaction'],
+                                ['key' => 'local_markup_cap', 'label' => 'Local PayHub Markup Cap', 'desc' => 'Maximum PayHub margin; use 0 for no cap'],
+                                ['key' => 'international_markup_percent', 'label' => 'International Markup (%)', 'desc' => 'PayHub margin on international payments, in addition to Paystack cost'],
+                                ['key' => 'international_markup_flat', 'label' => 'International Markup (Flat)', 'desc' => 'Flat PayHub margin on international payments'],
+                                ['key' => 'international_markup_cap', 'label' => 'International Markup Cap', 'desc' => 'Maximum international PayHub margin; use 0 for no cap'],
                                 ['key' => 'payout_tier1_max', 'label' => 'Payout Tier 1 Max', 'desc' => 'Maximum amount for the first tier of payout fees'],
                                 ['key' => 'payout_tier1_fee', 'label' => 'Payout Tier 1 Fee', 'desc' => 'Fee for payouts within Tier 1'],
                                 ['key' => 'payout_tier2_max', 'label' => 'Payout Tier 2 Max', 'desc' => 'Maximum amount for the second tier of payout fees'],
@@ -273,7 +275,8 @@ include '../includes/dashboard-head.php';
                                 ['key' => 'payout_tier3_fee', 'label' => 'Payout Tier 3 Fee', 'desc' => 'Fee for payouts above Tier 2'],
                                 ['key' => 'stamp_duty_threshold', 'label' => 'Stamp Duty Threshold', 'desc' => 'Threshold for government stamp duty (Tax Act 2025)'],
                                 ['key' => 'stamp_duty_fee', 'label' => 'Stamp Duty Fee', 'desc' => 'Government stamp duty amount'],
-                                ['key' => 'payout_markup', 'label' => 'Payout Markup', 'desc' => 'Extra markup fee for PayHub profit'],
+                                ['key' => 'payout_markup_percent', 'label' => 'Payout Markup (%)', 'desc' => 'Percentage margin added to Paystack transfer costs'],
+                                ['key' => 'payout_markup', 'label' => 'Payout Markup (Flat)', 'desc' => 'Flat PayHub margin added to payout fees'],
                                 ['key' => 'min_payout_amount', 'label' => 'Min Payout Amount', 'desc' => 'Minimum amount a merchant can request for payout'],
                                 ['key' => 'max_daily_payout_requests', 'label' => 'Max Daily Payouts', 'desc' => 'Max times a merchant can request payout per day'],
                                 ['key' => 'smtp_host', 'label' => 'SMTP Host', 'desc' => 'Email server address']
