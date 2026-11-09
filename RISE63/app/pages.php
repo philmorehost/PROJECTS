@@ -310,6 +310,18 @@ switch ($page) {
             error_log('RISE63 people: unlisted-parish query unavailable: ' . $error->getMessage());
         }
 
+        // This is the page an administrator comes to in order to create an account, so it is the
+        // page that must warn when the schema is behind — a failed save here is how the operator
+        // found out last time, and the cause was three clicks away.
+        $pendingMigrations = 0;
+        if ($schemaGap === null) {
+            try {
+                $pendingMigrations = count((new \RISE63\Core\Migrator(RISE63\ROOT))->pending());
+            } catch (\Throwable $error) {
+                error_log('RISE63 people: migration state unreadable: ' . $error->getMessage());
+            }
+        }
+
         $render('staff/people', [
             'title'    => 'People & roles',
             'people'   => $directory['rows'],
@@ -343,6 +355,7 @@ switch ($page) {
             // record-keeping down with it. A missing column now means an empty queue and a notice.
             'unlisted' => $unlisted ?? [],
             'schemaGap' => $schemaGap ?? null,
+            'pendingMigrations' => $pendingMigrations,
         ]);
         break;
 

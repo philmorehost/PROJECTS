@@ -472,6 +472,78 @@ ok('The audit trail pages and filters against real rows', function () use ($admi
     }
 });
 
+/* ────── Writing an account on a database that is a migration behind ────── */
+
+ok('Creating and editing accounts works when migration 0002 has not been applied', function () use ($pdo, $admin): void {
+    // The operator reported "I tried to create a new administrator, but it failed with an error:
+    // The record could not be saved. Please try again." The cause was that Members::create() named
+    // users.parish_name_raw in its INSERT. That column arrives in migration 0002, so on an
+    // installation created before 0002 every account creation failed — and the handler collapsed it
+    // into a message that named no cause at all.
+    //
+    // A write must only name that column when it actually has a name to put in it. This test uses a
+    // real database, drops the column, and asserts the paths an operator actually takes.
+    $pdo->exec('ALTER TABLE users DROP COLUMN parish_name_raw');
+    try {
+        // An administrator with no parish at all — the reported case, and the default on the form.
+        $created = Members::create([
+            'full_name' => 'Ngozi Bello', 'email' => 'ngozi.bello@example.ng', 'phone' => '',
+            'role' => 'provincial_admin', 'password' => 'Str0ng-Temp-Pass-99',
+        ], $admin);
+        assertSame('provincial_admin', (string) $created['user']['role'], 'the second administrator was created');
+        assertTrue($created['password'] !== '', 'a temporary password is returned once, for handing over');
+
+        // An administrator attached to a parish that is in the directory.
+        $pdo->exec("INSERT INTO zones (zone_name) VALUES ('Migration Zone')");
+        $zone = (int) $pdo->lastInsertId();
+        $pdo->exec("INSERT INTO areas (zone_id, area_name) VALUES (" . $zone . ", 'Migration Area')");
+        $area = (int) $pdo->lastInsertId();
+        $pdo->exec("INSERT INTO parishes (area_id, parish_name) VALUES (" . $area . ", 'Grace Chapel')");
+        $parish = (int) $pdo->lastInsertId();
+
+        $withParish = Members::create([
+            'full_name' => 'Chidi Obi', 'email' => 'chidi.obi@example.ng', 'phone' => '',
+            'role' => 'csr_rep', 'password' => 'Str0ng-Temp-Pass-99', 'parish_id' => (string) $parish,
+        ], $admin);
+        assertSame($parish, (int) $withParish['user']['parish_id'], 'the chosen parish was saved');
+
+        // Editing: a name and phone correction must save. The typed church cannot, and must not
+        // take the correction down with it.
+        Members::update((int) $created['user']['id'], [
+            'full_name' => 'Ngozi Bello-Cole', 'email' => 'ngozi.bello@example.ng', 'phone' => '08031234567',
+        ], $admin);
+        $edited = $pdo->query("SELECT full_name, phone FROM users WHERE email = 'ngozi.bello@example.ng'")->fetch();
+        assertSame('Ngozi Bello-Cole', (string) $edited['full_name'], 'the name correction was saved');
+        assertSame('08031234567', (string) $edited['phone'], 'the phone number was saved');
+
+        Members::update((int) $created['user']['id'], [
+            'full_name' => 'Ngozi Bello-Cole', 'email' => 'ngozi.bello@example.ng', 'phone' => '08031234567',
+            'parish_name_raw' => 'A Church Not Yet In The Directory',
+        ], $admin);
+
+        // A typed church genuinely needs the column. It must still fail, and it must fail with a
+        // SQLSTATE the POST handler can recognise — otherwise the operator gets the same silent
+        // message that started this.
+        assertThrows(\PDOException::class, fn () => Members::create([
+            'full_name' => 'Ada Eze', 'email' => 'ada.eze@example.ng', 'phone' => '',
+            'role' => 'csr_rep', 'password' => 'Str0ng-Temp-Pass-99',
+            'parish_name_raw' => 'A Church Not Yet In The Directory',
+        ], $admin));
+    } finally {
+        $pdo->exec('ALTER TABLE users ADD COLUMN parish_name_raw VARCHAR(150) NULL');
+    }
+});
+
+ok('The write handler names an unapplied migration instead of hiding it', function (): void {
+    // The message the operator saw was the catch-all branch. A missing column is an operator-actionable
+    // fault: it has one cause and one fix, and both are on a screen they can reach.
+    $source = (string) file_get_contents(RISE63_TEST_ROOT . '/app/actions.php');
+    assertTrue(str_contains($source, "'42S22'"), 'the handler must recognise an unknown column');
+    assertTrue(str_contains($source, "'42S02'"), 'and an unknown table');
+    assertTrue(str_contains($source, 'Database updates'), 'the message must point at the screen that explains it');
+    assertTrue(str_contains($source, 'bin/migrate.php'), 'and at the command that fixes it');
+});
+
 /* ──────────────────────────────── summary ─────────────────────────────── */
 
 fwrite(STDOUT, "\n" . str_repeat('─', 62) . "\n");

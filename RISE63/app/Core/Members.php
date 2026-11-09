@@ -73,11 +73,23 @@ final class Members
 
         [$parishId, $unlisted] = self::resolveParish($input);
 
-        Database::run(
-            'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role, must_change_password)
-             VALUES (?,?,?,?,?,?,?,?)',
-            [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($password), $role, 1]
-        );
+        // `parish_name_raw` is written only when there is a name to write. It arrived in migration
+        // 0002, and naming a column that a database does not have fails the whole statement — which
+        // is how "create an administrator" died with a message that named no cause at all. Every
+        // account created with a parish from the directory, or with none, now works on both schemas.
+        if ($unlisted !== null && $unlisted !== '') {
+            Database::run(
+                'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role, must_change_password)
+                 VALUES (?,?,?,?,?,?,?,?)',
+                [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($password), $role, 1]
+            );
+        } else {
+            Database::run(
+                'INSERT INTO users (full_name, email, phone, parish_id, password_hash, role, must_change_password)
+                 VALUES (?,?,?,?,?,?,?)',
+                [$name, $email, $phone === '' ? null : $phone, $parishId, Security::hashPassword($password), $role, 1]
+            );
+        }
         $id = Database::id();
 
         Audit::log(
@@ -137,10 +149,24 @@ final class Members
 
         [$parishId, $unlisted] = self::resolveParish($input);
 
+        // Same rule as create(): do not name a column that may not exist. Only touch
+        // `parish_name_raw` when the value is actually changing, so a plain "fix the phone number"
+        // edit needs nothing from migration 0002 either.
+        $currentRaw = (string) ($target['parish_name_raw'] ?? '');
+        $newRaw     = (string) ($unlisted ?? '');
         Database::run(
-            'UPDATE users SET full_name = ?, email = ?, phone = ?, parish_id = ?, parish_name_raw = ? WHERE id = ?',
-            [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, $userId]
+            'UPDATE users SET full_name = ?, email = ?, phone = ?, parish_id = ? WHERE id = ?',
+            [$name, $email, $phone === '' ? null : $phone, $parishId, $userId]
         );
+        if ($newRaw !== $currentRaw) {
+            try {
+                Database::run('UPDATE users SET parish_name_raw = ? WHERE id = ?', [$newRaw === '' ? null : $newRaw, $userId]);
+            } catch (\PDOException $error) {
+                // The column is absent (migration 0002 not applied). The rest of the edit has been
+                // saved; refusing the whole thing would lose the operator's correction.
+                error_log('RISE63 Members::update: parish_name_raw not written: ' . $error->getMessage());
+            }
+        }
 
         $changes = [];
         foreach (['full_name' => $name, 'email' => $email, 'phone' => $phone] as $field => $after) {

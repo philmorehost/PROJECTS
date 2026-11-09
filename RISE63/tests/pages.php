@@ -436,6 +436,37 @@ ok('A missing schema_migrations table does not stop Settings opening', function 
     }
 });
 
+ok('People warns that a write will fail before the operator tries one', function () use ($admin): void {
+    // The operator found out about the pending migration by trying to create an administrator and
+    // reading a message that named no cause. The warning belongs on the page where accounts are
+    // created, above the forms, not three clicks away in Settings.
+    $pdo = Database::connection();
+
+    // The harness database starts with an empty schema_migrations, so everything is pending.
+    $html = route('people', [], $admin);
+    assertClean('people (pending migrations)', $html, 'People &amp; roles');
+    assertTrue(str_contains($html, 'Database updates are waiting'), 'People must warn before a save fails');
+    assertTrue(str_contains($html, 'bin/migrate.php'), 'the banner must name the fix');
+    assertTrue(str_contains($html, 'See what is pending'), 'it must link to the detail');
+
+    // The banner must sit above the create form, or it is read after the failure rather than before.
+    assertTrue(
+        strpos($html, 'Database updates are waiting') < strpos($html, 'Create another administrator'),
+        'the warning must come before the form it protects'
+    );
+
+    // With nothing pending, it must disappear — a permanent warning is wallpaper.
+    try {
+        foreach (['0001', '0002', '0003'] as $version) {
+            $pdo->prepare('INSERT INTO schema_migrations (version, checksum) VALUES (?, NULL)')->execute([$version]);
+        }
+        $clean = route('people', [], $admin);
+        assertTrue(!str_contains($clean, 'Database updates are waiting'), 'a migrated database must not warn');
+    } finally {
+        $pdo->exec('DELETE FROM schema_migrations');
+    }
+});
+
 /* ─────────────────────────────── summary ─────────────────────────────── */
 
 fwrite(STDOUT, "\n");

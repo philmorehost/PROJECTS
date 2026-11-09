@@ -10,6 +10,7 @@ $roleLabels = Auth::ROLES;
 $editing    = $editing ?? null;
 $pager      = $pager ?? null;
 $schemaGap  = $schemaGap ?? null;
+$pendingMigrations = (int) ($pendingMigrations ?? 0);
 ?>
 <section class="card">
   <div class="card-head">
@@ -30,6 +31,26 @@ $schemaGap  = $schemaGap ?? null;
     with applications, or the last administrator — is refused, and the refusal says what to do instead.
   </p>
 </section>
+
+<?php if ($pendingMigrations > 0): ?>
+  <?php /* Placed here, above the forms, because this is the page where a failed save looks like a
+           bug in the form. It is not: the database is behind the code. */ ?>
+  <section class="card" style="border-color:var(--warn);background:var(--warn-soft)">
+    <div class="card-head">
+      <div>
+        <h2 style="margin:0">Database updates are waiting</h2>
+        <p class="muted" style="margin:6px 0 0">
+          <?= $pendingMigrations ?> database update<?= $pendingMigrations === 1 ? '' : 's' ?> shipped with a
+          release but has not been applied to this server. Creating or editing an account may fail until
+          it runs — and the failure will not say why.
+        </p>
+        <p class="faint" style="margin:8px 0 0">On the server: <code>php bin/migrate.php</code></p>
+      </div>
+      <a class="btn btn-secondary btn-sm" href="<?= e(url('settings')) ?>#database-updates">See what is pending</a>
+    </div>
+  </section>
+<?php endif; ?>
+
 
 <?php if ($editing !== null): ?>
   <?php /* Edit one account. A dedicated card rather than a row of inline inputs: editing an e-mail

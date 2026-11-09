@@ -59,11 +59,23 @@ final class Registration
             $unlisted = self::unlistedParish($input['parish_name_raw'] ?? null);
         }
 
-        Database::run(
-            'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role)
-             VALUES (?,?,?,?,?,?,?)',
-            [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($pass), 'youth_member']
-        );
+        // `parish_name_raw` is named only when the member actually typed a church that was not
+        // listed. It arrives in migration 0002, and a statement that names a column the database
+        // does not have fails entirely — which would have stopped every registration, including the
+        // ones that picked a parish from the directory and need no such column.
+        if ($unlisted !== null && $unlisted !== '') {
+            Database::run(
+                'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role)
+                 VALUES (?,?,?,?,?,?,?)',
+                [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($pass), 'youth_member']
+            );
+        } else {
+            Database::run(
+                'INSERT INTO users (full_name, email, phone, parish_id, password_hash, role)
+                 VALUES (?,?,?,?,?,?)',
+                [$name, $email, $phone === '' ? null : $phone, $parishId, Security::hashPassword($pass), 'youth_member']
+            );
+        }
         $id = Database::id();
         Audit::log(
             $id,

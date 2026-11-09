@@ -6,6 +6,7 @@
     "test": "node tests/support/phpwasm-guard.mjs && node tests/support/phpwasm-test.mjs && node tests/support/phpwasm-render.mjs && node tests/support/phpwasm-smoke.mjs && node tests/support/phpwasm-e2e.mjs && node tests/support/phpwasm-pages.mjs && node tests/support/offline-behaviour.mjs && node tests/support/combobox-behaviour.mjs && node tests/support/assets-and-cache.mjs",
     "lint": "node tests/support/phpwasm-lint.mjs",
     "guard": "node tests/support/phpwasm-guard.mjs",
+    "probe": "node tests/support/phpwasm-probe.mjs",
     "test:guard": "node tests/support/phpwasm-guard.mjs",
     "test:unit": "node tests/support/phpwasm-test.mjs",
     "test:render": "node tests/support/phpwasm-render.mjs",
@@ -19,7 +20,7 @@
     "preview": "node tests/support/phpwasm-previews.mjs && node tests/support/phpwasm-preview-admin.mjs"
   },
   "devDependencies": {
-    "php-wasm": "^0.2.0",
-    "@electric-sql/pglite": "^0.5.16"
+    "@electric-sql/pglite": "^0.5.16",
+    "php-wasm": "^0.2.0"
   }
 }
