@@ -59,6 +59,7 @@ JOIN zones z ON z.id = a.zone_id;
 CREATE TABLE users (
     id                          INT AUTO_INCREMENT PRIMARY KEY,
     parish_id                   INT          NULL,
+    parish_name_raw             VARCHAR(150) NULL,
     full_name                   VARCHAR(150) NOT NULL,
     email                       VARCHAR(150) NOT NULL,
     phone                       VARCHAR(30)  NULL,

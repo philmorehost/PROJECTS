@@ -44,22 +44,50 @@ use function RISE63\{e, site_title, url};
           <input type="tel" id="phone" name="phone" maxlength="25" autocomplete="tel" inputmode="tel">
         </div>
 
-        <div class="field" data-combobox id="parish-combo" data-endpoint="<?= e(url('api/index.php')) ?>">
-          <label for="parish-search">Your parish</label>
-          <div class="combo">
-            <input type="search" id="parish-search" role="combobox" aria-expanded="false"
-                   aria-autocomplete="list" aria-controls="parish-list" autocomplete="off"
-                   placeholder="Type a parish, area or zone name">
-            <input type="hidden" name="parish_id" value="">
-            <ul class="combo-list" id="parish-list" role="listbox" hidden></ul>
+        <fieldset class="field" style="border:0;padding:0;margin:0 0 16px">
+          <legend style="font-weight:700;font-size:var(--t-base);padding:0">Your parish</legend>
+          <p class="hint" style="margin-top:2px">Find your church in the list. If it is not there yet,
+            type its name and we will pass it to your parish representative.</p>
+
+          <div class="field" data-combobox id="parish-combo" data-endpoint="<?= e(url('api/index.php')) ?>">
+            <label for="parish-search">Search for your church</label>
+            <div class="combo">
+              <input type="search" id="parish-search" role="combobox" aria-expanded="false"
+                     aria-autocomplete="list" aria-controls="parish-list" autocomplete="off"
+                     placeholder="Parish, area or zone">
+              <input type="hidden" name="parish_id" id="parish-id-field" value="">
+              <ul class="combo-list" id="parish-list" role="listbox" hidden></ul>
+            </div>
+            <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
           </div>
-          <span class="hint">Start typing — the list filters as you type. You can change this later.</span>
+
+          <details id="parish-manual" style="margin-top:4px">
+            <summary style="cursor:pointer;min-height:32px;display:flex;align-items:center">My church is not in the list</summary>
+            <div class="field" style="margin-top:10px">
+              <label for="parish_name_raw">Church name</label>
+              <input type="text" id="parish_name_raw" name="parish_name_raw" maxlength="150"
+                     data-caps autocapitalize="characters" spellcheck="false"
+                     placeholder="CHAPEL OF WONDERS PARISH">
+              <span class="hint">Write it in full. Capitals are applied automatically, and your
+                representative adds it to the directory afterwards.</span>
+            </div>
+          </details>
+
           <noscript>
-            <select name="parish_id" aria-label="Your parish">
-              <option value="">I am not sure yet</option>
-            </select>
+            <div class="field">
+              <label for="parish_id_fallback">Parish</label>
+              <select name="parish_id" id="parish_id_fallback" aria-label="Your parish">
+                <option value="">I am not sure yet</option>
+              </select>
+              <span class="hint">Searching the list needs JavaScript. You can also type the name
+                below and your representative will add it.</span>
+            </div>
+            <div class="field">
+              <label for="parish_name_raw_ns">Church name, if not listed</label>
+              <input type="text" id="parish_name_raw_ns" name="parish_name_raw" maxlength="150">
+            </div>
           </noscript>
-        </div>
+        </fieldset>
 
         <div class="field">
           <label for="password">Password</label>

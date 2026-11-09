@@ -535,6 +535,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-option small { display: block; color: var(--text-muted); }
 .combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
 /* ── Offline modal ─────────────────────────────────────────────────────────────── */
@@ -757,6 +766,6 @@ html.offline-open, html.offline-open body { overflow: hidden; }
     RISE 63 · RCCG Lagos Province 63 · <a href="/">sign-in</a>
   </p>
 </main>
-<script src="/public/assets/app.js?v=2a50a162" defer></script>
+<script src="/public/assets/app.js?v=a95d9a3b" defer></script>
 </body>
 </html>

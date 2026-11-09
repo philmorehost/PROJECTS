@@ -18,6 +18,7 @@ use RISE63\Core\Program;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
 use RISE63\Core\Database;
+use RISE63\Core\DirectoryImport;
 
 // Resolve the project root from this file so the suite runs from a checkout or from the
 // php-wasm harness, which mirrors the repository layout read-only under /src.
@@ -680,6 +681,108 @@ ok('Schema enforces the invariants described in the blueprint', function (): voi
     assertTrue(str_contains($schema, 'uniq_application_idempotency'), 'idempotency constraint present');
     assertTrue(!str_contains($schema, 'CREATE TABLE `?parish_structure'), 'the denormalised draft table must be gone');
     assertTrue(str_contains($schema, 'CREATE VIEW parish_directory'), 'the flat reporting view replaces it');
+});
+
+/* ──────────────────── Directory: capitals and the pasted list ──────────────── */
+
+ok('Every church name is normalised to capitals with single spacing', function (): void {
+    assertSame('GRACE ZONE', RISE63\caps('grace zone'));
+    assertSame('GRACE ZONE', RISE63\caps("  Grace   Zone \t"));
+    assertSame('HOPE AREA', RISE63\caps("HOPE\u{00A0}AREA"), 'a non-breaking space is a space');
+    assertSame('OBÁ LUKA PARISH', RISE63\caps('obá luka parish'), 'accented letters upper-case too');
+    assertSame('', RISE63\caps('   '), 'whitespace alone is empty, not a one-space name');
+
+    // The reason it exists: a paste with a trailing tab and a double space must not become a
+    // second row beside the same name typed cleanly.
+    assertSame(RISE63\caps('GRACE ZONE'), RISE63\caps("grace  zone\t"));
+});
+
+ok('The paragraph box parses one church per line', function (): void {
+    $text = "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+          . "GRACE ZONE, HOPE AREA\n"
+          . "grace zone, faith area, good shepherd parish\n"
+          . "\n"
+          . "# exported sheet header\n"
+          . "CONQUERORS CHAPEL ZONE, CHAPEL OF WONDERS PARISH AREA, CHAPEL OF WONDERS PARISH\n";
+
+    $parsed = DirectoryImport::parse($text);
+    // Six physical lines minus one blank and one comment.
+    assertSame(4, count($parsed['lines']), 'blank and comment lines are not churches');
+    assertSame([], $parsed['skipped']);
+
+    assertSame('GRACE ZONE', $parsed['lines'][0]['zone']);
+    assertSame('HOPE AREA', $parsed['lines'][0]['area']);
+    assertSame('LIVING WATER PARISH', $parsed['lines'][0]['parish']);
+
+    // "ZONE, AREA" is the documented way to say "the parishes come later".
+    assertSame('', $parsed['lines'][1]['parish'], 'a two-column line has no parish yet');
+
+    // Lower case in, capitals out — the same rule applies to the paste as to a typed field.
+    assertSame('GRACE ZONE', $parsed['lines'][2]['zone']);
+    assertSame('GOOD SHEPHERD PARISH', $parsed['lines'][2]['parish']);
+});
+
+ok('A pasted sheet accepts tabs, semicolons and a trailing separator', function (): void {
+    $tabbed = DirectoryImport::parse("GRACE ZONE\tHOPE AREA\tLIVING WATER PARISH");
+    assertSame('LIVING WATER PARISH', $tabbed['lines'][0]['parish'], 'an Excel paste is tab separated');
+
+    $semicolon = DirectoryImport::parse('GRACE ZONE; HOPE AREA; LIVING WATER PARISH');
+    assertSame('HOPE AREA', $semicolon['lines'][0]['area']);
+
+    $trailing = DirectoryImport::parse('GRACE ZONE, HOPE AREA,');
+    assertSame(1, count($trailing['lines']));
+    assertSame('', $trailing['lines'][0]['parish'], 'a trailing comma means "no parish yet"');
+
+    $pipes = DirectoryImport::parse('GRACE ZONE|HOPE AREA|LIVING WATER PARISH');
+    assertSame('LIVING WATER PARISH', $pipes['lines'][0]['parish']);
+
+    // Windows and old-Mac line endings are common from a shared spreadsheet.
+    $crlf = DirectoryImport::parse("GRACE ZONE, HOPE AREA\r\nGRACE ZONE, FAITH AREA\r");
+    assertSame(2, count($crlf['lines']));
+});
+
+ok('A line with too many columns is reported, never guessed at', function (): void {
+    $parsed = DirectoryImport::parse('GRACE ZONE, HOPE AREA, LIVING WATER PARISH, EXTRA');
+    assertSame(0, count($parsed['lines']));
+    assertSame(1, count($parsed['skipped']));
+    assertTrue(str_contains($parsed['skipped'][0]['reason'], 'More than three columns'));
+
+    $long = DirectoryImport::parse('GRACE ZONE, HOPE AREA, ' . str_repeat('X', 400));
+    assertSame(1, count($long['skipped']), 'an absurd line is refused, not truncated silently');
+});
+
+ok('The preview counts what the paste would create and what already exists', function (): void {
+    $lines = DirectoryImport::parse(
+        "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+        . "GRACE ZONE, HOPE AREA, GOOD SHEPHERD PARISH\n"
+        . "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+        . "GRACE ZONE, FAITH AREA\n"
+        . "MERCY ZONE\n"
+    )['lines'];
+
+    $summary = DirectoryImport::summarise(
+        $lines,
+        ['GRACE ZONE'],
+        [['zone_name' => 'GRACE ZONE', 'area_name' => 'HOPE AREA']],
+        [['zone_name' => 'GRACE ZONE', 'area_name' => 'HOPE AREA', 'parish_name' => 'LIVING WATER PARISH']]
+    );
+
+    assertSame(1, $summary['new_zones'], 'MERCY ZONE is the only new zone');
+    assertSame(1, $summary['new_areas'], 'FAITH AREA is new; HOPE AREA is not');
+    assertSame(1, $summary['new_parishes'], 'GOOD SHEPHERD is new; LIVING WATER exists');
+    assertSame(1, $summary['duplicates'], 'the third line repeats the first');
+    assertSame(1, $summary['existing_zones']);
+    assertSame(1, $summary['existing_areas']);
+    assertSame(1, $summary['existing_parishes']);
+
+    // The same area name under a different zone is a different area.
+    $other = DirectoryImport::summarise(
+        DirectoryImport::parse("MERCY ZONE, HOPE AREA, FIRST PARISH")['lines'],
+        ['GRACE ZONE'],
+        [['zone_name' => 'GRACE ZONE', 'area_name' => 'HOPE AREA']],
+        []
+    );
+    assertSame(1, $other['new_areas'], 'HOPE AREA under MERCY ZONE must not be treated as existing');
 });
 
 ok('Country seed contains the full ISO list and protects Nigeria', function (): void {

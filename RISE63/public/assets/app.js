@@ -225,13 +225,50 @@
       active = -1;
       options = [];
     }
+    /* The picker's escape hatch. When nothing matches — or the member simply cannot see their
+       church — the last row offers to file it as "not listed yet" and reveals the typed-name field
+       that registration already submits. Without this the only way forward was to leave the
+       question blank, which is exactly what the office was unable to act on. */
+    var manual = document.getElementById('parish-manual');
+    var manualField = document.getElementById('parish_name_raw');
+    function offerManual(term) {
+      // Three characters, matching the server's own floor for an anonymous search. Offering the
+      // escape hatch after one keystroke would invite people past a list that had barely loaded.
+      if (!manual || !manualField || !term || term.length < 3) { return; }
+      var li = document.createElement('li');
+      li.className = 'combo-option combo-option-manual';
+      li.id = combo.id + '-manual';
+      li.setAttribute('role', 'option');
+      li.innerHTML = '<strong></strong><small></small>';
+      li.querySelector('strong').textContent = 'My church is not listed';
+      li.querySelector('small').textContent = 'Add “' + term.toUpperCase() + '” and tell my representative';
+      li.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+        chooseManual(term);
+      });
+      list.appendChild(li);
+      // Deliberately not pushed onto `options` here: that array is rebuilt from the finished list
+      // at the end of render(), and an early push would make the arrow keys see a one-item list
+      // while the screen showed fifteen parishes.
+    }
+    function chooseManual(term) {
+      if (hidden) { hidden.value = ''; }
+      input.value = '';
+      manual.open = true;
+      manualField.value = term.toUpperCase();
+      close();
+      manualField.focus();
+      manualField.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     function render(items, term) {
       list.innerHTML = '';
+      options = [];
       if (!items.length) {
         var empty = document.createElement('li');
         empty.className = 'combo-empty';
         empty.textContent = term ? 'No parish matches “' + term + '”.' : 'Start typing your parish, area or zone.';
         list.appendChild(empty);
+        offerManual(term);
       } else {
         items.forEach(function (item, index) {
           var li = document.createElement('li');
@@ -249,14 +286,24 @@
           });
           list.appendChild(li);
         });
+        offerManual(term);
       }
+      // Always rebuilt, in DOM order, so arrow keys, Enter and the highlight all address the
+      // same nodes the member can see — including the manual row at the end.
       options = Array.prototype.slice.call(list.querySelectorAll('.combo-option'));
       list.hidden = false;
       input.setAttribute('aria-expanded', 'true');
     }
     function choose(item) {
+      // The manual row is an option in the same listbox, so it arrives here too. Sending it
+      // through the normal path would set both fields to "undefined" and post a parish_id of
+      // "undefined"; it is routed to its own handler instead.
+      if (item && item.manual) { chooseManual(item.term); return; }
       input.value = item.label;
       if (hidden) { hidden.value = item.id; }
+      // Picking from the list settles the question, so a half-typed church name must not ride
+      // along and contradict it.
+      if (manualField) { manualField.value = ''; }
       close();
       input.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -305,7 +352,11 @@
       } else if (event.key === 'Enter') {
         if (!list.hidden && active >= 0 && options[active]) {
           event.preventDefault();
-          choose({ id: options[active].dataset.id, label: options[active].dataset.label });
+          if (options[active].classList.contains('combo-option-manual')) {
+            chooseManual(input.value.trim());
+          } else {
+            choose({ id: options[active].dataset.id, label: options[active].dataset.label });
+          }
         }
       } else if (event.key === 'Escape') {
         close();
@@ -457,6 +508,28 @@
       }
     });
   }
+
+  /* ── Capitals as you type ──────────────────────────────────────────────────── */
+  /* Every church name in the directory is stored in capitals, and the server applies that rule
+     regardless. Doing it in the field too is not redundancy for its own sake: the member sees the
+     value that will be saved, so a name typed in lower case never looks like it was accepted and
+     then silently comes back shouting. The caret is preserved by rewriting only the value and
+     putting the selection back where it was, or fast typing would jump to the end. */
+  function upperCaseField(field) {
+    var start = field.selectionStart;
+    var end = field.selectionEnd;
+    var upper = field.value.toUpperCase();
+    if (upper === field.value) { return; }
+    field.value = upper;
+    try {
+      if (start !== null && end !== null) { field.setSelectionRange(start, end); }
+    } catch (e) { /* type=email has no selection API; nothing to restore */ }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-caps]'), function (field) {
+    field.addEventListener('input', function () { upperCaseField(field); });
+    // A browser autofill or a paste does not always fire input; catch the value on blur too.
+    field.addEventListener('change', function () { upperCaseField(field); });
+  });
 
   /* ── Boot the small behaviours ─────────────────────────────────────────────── */
   initConfirm();

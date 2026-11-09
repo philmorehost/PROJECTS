@@ -124,6 +124,23 @@ POST https://manager.pmhserver.name.ng/api.php
   `config/activation-key.php`. Earlier builds forced a fresh check when the administrator form was
   submitted; a rate-limited or briefly unreachable manager then blocked a key it had just accepted.
 
+**Building the parish directory in bulk**
+
+Parish Connect → *Add zones, areas and parishes in bulk* takes one church per line:
+`ZONE, AREA, PARISH`. A two-column line (`ZONE, AREA`) creates the area and leaves its parishes for
+later. Press **Preview changes** first — it counts what would be created and writes nothing — then
+**Add to directory**. Everything is stored in capitals and matched case-insensitively, so pasting
+the same list twice creates nothing the second time.
+
+Two things to know before a large import:
+
+* Lines are split on commas, tabs, semicolons and pipes. A parish whose real name contains a comma
+  will be split into four columns and reported as a skipped line — rename it in the sheet, or use
+  tabs.
+* The import does not overwrite. If a zone or area already exists with a slightly different name
+  ("CONQUERORS CHAPEL ZONE" versus "CONQUERORS CHAPEL AREA"), the paste creates a second one. The
+  preview's *new zones* count is the check: if it is higher than you expect, a name is mistyped.
+
 **A design change "was not applied"**
 
 Check what the browser actually received before assuming the change is missing. The HTML is served
@@ -495,6 +512,10 @@ Notes that matter:
   "Reload" toast instead of running a stale shell.
 * Take the site out of maintenance only after step 5 succeeds; otherwise refresh the sign-in page
   in a private window and confirm you get a login form rather than an error page.
+* Migration **0002** adds `users.parish_name_raw`. It is nullable, so nothing breaks if it is
+  delayed — but until it runs, a member who types a church that is not in the directory is saved
+  with no parish at all instead of being queued for the office. Run `php bin/migrate.php` before
+  telling anyone about the new registration form.
 
 ---
 

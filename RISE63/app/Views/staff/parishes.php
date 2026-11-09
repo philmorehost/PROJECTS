@@ -35,7 +35,8 @@ $isAdmin = Auth::isAdmin($account);
       <div class="grid grid-2">
         <div class="field">
           <label for="parish_name">Parish name</label>
-          <input type="text" id="parish_name" name="parish_name" required maxlength="150">
+          <input type="text" id="parish_name" name="parish_name" required maxlength="150" data-caps
+                 autocapitalize="characters" spellcheck="false">
         </div>
         <div class="field">
           <label for="area_id">Area</label>
@@ -79,8 +80,127 @@ $isAdmin = Auth::isAdmin($account);
   </details>
 
   <?php if ($isAdmin): ?>
+    <?php
+      // The hierarchy is maintained as a list, because that is the shape it already has in the
+      // office's spreadsheet. Three fields per church, one church per line, repeats allowed.
+      $sample = "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+              . "GRACE ZONE, HOPE AREA, GOOD SHEPHERD PARISH\n"
+              . "GRACE ZONE, FAITH AREA\n"
+              . "CONQUERORS CHAPEL ZONE, CHAPEL OF WONDERS PARISH AREA, CHAPEL OF WONDERS PARISH";
+    ?>
+    <details class="card" <?= ($importPreview ?? null) !== null ? 'open' : '' ?>>
+      <summary style="cursor:pointer;font-weight:700;min-height:32px">Add zones, areas and parishes in bulk</summary>
+      <form method="post" action="<?= e(url('')) ?>" style="margin-top:14px">
+        <?= Security::csrfField() ?>
+        <input type="hidden" name="action" value="directory-import">
+        <input type="hidden" name="return_to" value="parishes">
+        <div class="field">
+          <label for="hierarchy">One church per line — <span class="faint" style="font-weight:400">zone, area, parish</span></label>
+          <textarea id="hierarchy" name="hierarchy" rows="8" maxlength="300000" spellcheck="false"
+                    autocapitalize="characters" autocomplete="off" style="min-height:180px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace"
+                    placeholder="<?= e($sample) ?>"><?= e((string) ($importText ?? '')) ?></textarea>
+          <span class="hint">
+            Separate the three parts with a comma or a tab. Names are converted to CAPITALS for you.
+          </span>
+        </div>
+
+        <div class="notice" style="margin-bottom:14px">
+          <strong>How to write it</strong>
+          <ul class="list-plain" style="margin-top:8px;list-style:disc;padding-left:20px">
+            <li><code>ZONE, AREA, PARISH</code> — the usual line: creates whatever is missing.</li>
+            <li><code>ZONE, AREA</code> — creates the area and leaves its parishes for later. Add them
+              by adding a line with the same zone and area and a parish name.</li>
+            <li><code>ZONE</code> — creates just the zone.</li>
+            <li>Repeat a zone or area on as many lines as it has children. That is how the hierarchy
+              is set: three lines starting <code>GRACE ZONE, HOPE AREA,</code> are three parishes in
+              one area, not three areas.</li>
+            <li>Anything that already exists is matched and left alone — case does not matter, so a
+              re-paste never duplicates a church.</li>
+            <li>Lines starting with <code>#</code> are ignored, so an exported sheet header can be
+              left in place.</li>
+          </ul>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" type="submit" name="mode" value="preview">Preview changes</button>
+          <button class="btn btn-secondary" type="submit" name="mode" value="apply"
+                  onclick="return confirm('Add these churches to the directory? Existing rows are not changed.')">
+            Add to directory
+          </button>
+        </div>
+      </form>
+    </details>
+
+    <?php if (($importPreview ?? null) !== null): ?>
+      <?php $preview = $importPreview; ?>
+      <section class="card">
+        <div class="card-head">
+          <h2 style="margin:0">Preview — nothing has been saved yet</h2>
+        </div>
+        <div class="grid grid-3" style="margin-top:12px">
+          <div class="stat"><b><?= (int) $preview['new_zones'] ?></b><span>New zones</span></div>
+          <div class="stat"><b><?= (int) $preview['new_areas'] ?></b><span>New areas</span></div>
+          <div class="stat"><b><?= (int) $preview['new_parishes'] ?></b><span>New parishes</span></div>
+        </div>
+        <p class="muted" style="margin-top:10px">
+          <?= (int) $preview['existing_zones'] ?> zone(s), <?= (int) $preview['existing_areas'] ?> area(s) and
+          <?= (int) $preview['existing_parishes'] ?> parish(es) are already in the directory and will be left alone.
+          <?php if ((int) $preview['duplicates'] > 0): ?>
+            <?= (int) $preview['duplicates'] ?> line(s) repeat an earlier line and are counted once.
+          <?php endif; ?>
+        </p>
+
+        <?php if (($importSkipped ?? []) !== []): ?>
+          <div class="flash flash-error" role="alert" style="margin-top:12px">
+            <strong><?= count($importSkipped) ?> line(s) will be skipped:</strong>
+            <ul class="list-plain" style="margin-top:8px;list-style:disc;padding-left:20px">
+              <?php foreach ($importSkipped as $skip): ?>
+                <li>Line <?= (int) $skip['number'] ?> — <?= e((string) $skip['reason']) ?>
+                  <span class="faint block"><?= e((string) $skip['raw']) ?></span></li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+        <?php endif; ?>
+
+        <?php if ($preview['new_zones'] > 0 || $preview['new_areas'] > 0 || $preview['new_parishes'] > 0): ?>
+          <div class="table-wrap" style="margin-top:14px">
+            <table class="table-stack">
+              <thead><tr><th>Zone</th><th>Area</th><th>Parish</th><th>Status</th></tr></thead>
+              <tbody>
+                <?php foreach (array_slice($preview['parishes'], 0, 200) as $row): ?>
+                  <tr>
+                    <td data-label="Zone"><?= e((string) $row['zone']) ?></td>
+                    <td data-label="Area"><?= e((string) $row['area']) ?></td>
+                    <td data-label="Parish"><?= e((string) $row['name']) ?></td>
+                    <td data-label="Status"><span class="badge badge-info">New parish</span></td>
+                  </tr>
+                <?php endforeach; ?>
+                <?php foreach (array_slice($preview['areas'], 0, 100) as $row): ?>
+                  <tr>
+                    <td data-label="Zone"><?= e((string) $row['zone']) ?></td>
+                    <td data-label="Area"><?= e((string) $row['name']) ?></td>
+                    <td data-label="Parish" class="faint">— no parish yet</td>
+                    <td data-label="Status"><span class="badge badge-warn">New area</span></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+
+        <form method="post" action="<?= e(url('')) ?>" style="margin-top:14px">
+          <?= Security::csrfField() ?>
+          <input type="hidden" name="action" value="directory-import">
+          <input type="hidden" name="return_to" value="parishes">
+          <input type="hidden" name="mode" value="apply">
+          <textarea name="hierarchy" hidden><?= e((string) ($importText ?? '')) ?></textarea>
+          <button class="btn btn-primary" type="submit">Add these to the directory</button>
+        </form>
+      </section>
+    <?php endif; ?>
+
     <details class="card">
-      <summary style="cursor:pointer;font-weight:700">Manage zones and areas</summary>
+      <summary style="cursor:pointer;font-weight:700;min-height:32px">Add a single zone or area</summary>
       <div class="grid grid-2" style="margin-top:14px">
         <form method="post" action="<?= e(url('')) ?>">
           <?= Security::csrfField() ?>
@@ -88,7 +208,7 @@ $isAdmin = Auth::isAdmin($account);
           <input type="hidden" name="return_to" value="parishes">
           <div class="field">
             <label for="zone_name">New zone</label>
-            <input type="text" id="zone_name" name="zone_name" required maxlength="150">
+            <input type="text" id="zone_name" name="zone_name" required maxlength="150" data-caps>
           </div>
           <div class="field">
             <label for="zone_code">Zone code <span class="faint">(optional)</span></label>
@@ -111,7 +231,7 @@ $isAdmin = Auth::isAdmin($account);
           </div>
           <div class="field">
             <label for="area_name">New area</label>
-            <input type="text" id="area_name" name="area_name" required maxlength="150">
+            <input type="text" id="area_name" name="area_name" required maxlength="150" data-caps>
           </div>
           <div class="field">
             <label for="area_code">Area code <span class="faint">(optional)</span></label>

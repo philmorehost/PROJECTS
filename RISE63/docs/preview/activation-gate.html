@@ -533,6 +533,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-option small { display: block; color: var(--text-muted); }
 .combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
 /* ── Offline modal ─────────────────────────────────────────────────────────────── */
@@ -705,7 +714,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
         <li><a href="https://manager.pmhserver.name.ng/user/login.php" target="_blank" rel="noopener noreferrer">Sign in to copy or move your key</a></li>
       </ul>
       <form method="post" action="/" style="margin-top:16px">
-        <input type="hidden" name="csrf" value="e8f5597324379e9bde63a3cc8fc5eb7abf2c0b6766ec5fac2a729dffd642ca7b">        <input type="hidden" name="action" value="activation-retry">
+        <input type="hidden" name="csrf" value="e131720ac0d58c97bb7d74b046e9244564732c8fa594ee6ea84defbf2d07980a">        <input type="hidden" name="action" value="activation-retry">
         <button class="btn btn-secondary btn-block" type="submit">Try again now</button>
       </form>
       <p class="hint">Re-checks now instead of waiting for the 6-hour cache to expire. Nothing else on

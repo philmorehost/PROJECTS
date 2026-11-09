@@ -201,6 +201,109 @@ ok('Registration screen exposes a parish combobox with a noscript fallback', fun
     assertContains('data-endpoint=', $html);
 });
 
+ok('Registration offers a church that is not listed yet, and types it in capitals', function (): void {
+    $html = View::capture(RISE63_TEST_ROOT . '/app/Views/auth/register.php', ['flashes' => [], 'page' => 'register'], false);
+
+    // The manual path must be reachable without JavaScript: a <details> block the member can open
+    // by hand if the picker never loads, not a control that only app.js can reveal.
+    assertContains('id="parish-manual"', $html);
+    assertContains('<details', $html);
+    assertContains('My church is not in the list', $html);
+    assertContains('name="parish_name_raw"', $html, 'the typed name must reach the server');
+    assertContains('data-caps', $html, 'the field must capitalise as it is typed');
+    assertContains('autocapitalize="characters"', $html, 'phones should start in capitals too');
+
+    // A hidden input and the noscript select both called parish_id would submit the same field
+    // twice with different values; the server keeps the last. The order must therefore stay
+    // picker-then-fallback, and the visible search box must never be named.
+    assertMissing('name="parish-search"', $html);
+    assertTrue(
+        strpos($html, 'id="parish-id-field"') < strpos($html, 'id="parish_id_fallback"'),
+        'the picked id must be submitted before the noscript fallback'
+    );
+});
+
+ok('The parish names in every admin form are upper-cased at the field', function () use ($renderPage, $admin, $parish): void {
+    $directory = $renderPage('staff/parishes', [
+        'parishes' => [],
+        'term'     => '',
+        'zones'    => [],
+        'areas'    => [],
+        'totals'   => ['zones' => 0, 'areas' => 0, 'parishes' => 0, 'youth' => 0],
+        'canEdit'  => true,
+    ], $admin);
+    assertContains('id="parish_name"', $directory);
+    assertContains('data-caps', $directory, 'the single-parish form must capitalise too');
+
+    $detail = $renderPage('staff/parish', [
+        'parish'  => $parish,
+        'areas'   => [['id' => 2, 'area_name' => 'HOPE AREA', 'zone_name' => 'GRACE ZONE']],
+        'members' => [],
+        'apps'    => [],
+    ], $admin);
+    assertContains('data-caps', $detail);
+});
+
+ok('The bulk paste box explains its own format and previews before writing', function () use ($renderPage, $admin): void {
+    $empty = $renderPage('staff/parishes', [
+        'parishes' => [], 'term' => '', 'zones' => [], 'areas' => [],
+        'totals' => ['zones' => 0, 'areas' => 0, 'parishes' => 0, 'youth' => 0], 'canEdit' => true,
+    ], $admin);
+
+    assertContains('name="hierarchy"', $empty);
+    assertContains('action" value="directory-import"', $empty);
+    assertContains('value="preview"', $empty);
+    assertContains('value="apply"', $empty);
+    // The three shapes the operator is told to use, spelled out on the page.
+    assertContains('ZONE, AREA, PARISH', $empty);
+    assertContains('ZONE, AREA', $empty);
+    assertMissing('Preview — nothing has been saved yet', $empty, 'no preview before there is a paste');
+
+    // With a parked preview the text comes back into the box and the counts are shown, so the
+    // operator can compare them with the sheet before pressing the second button.
+    $previewing = $renderPage('staff/parishes', [
+        'parishes' => [], 'term' => '', 'zones' => [], 'areas' => [],
+        'totals' => ['zones' => 0, 'areas' => 0, 'parishes' => 0, 'youth' => 0], 'canEdit' => true,
+        'importText' => "GRACE ZONE, HOPE AREA, LIVING WATER PARISH",
+        'importPreview' => [
+            'zones' => ['GRACE ZONE'], 'areas' => [['zone' => 'GRACE ZONE', 'name' => 'HOPE AREA']],
+            'parishes' => [['zone' => 'GRACE ZONE', 'area' => 'HOPE AREA', 'name' => 'LIVING WATER PARISH']],
+            'new_zones' => 1, 'new_areas' => 1, 'new_parishes' => 1,
+            'existing_zones' => 0, 'existing_areas' => 0, 'existing_parishes' => 0, 'duplicates' => 0,
+        ],
+        'importSkipped' => [['number' => 4, 'raw' => 'A, B, C, D', 'reason' => 'More than three columns.']],
+    ], $admin);
+
+    assertContains('Preview — nothing has been saved yet', $previewing);
+    assertContains('LIVING WATER PARISH', $previewing, 'the pasted text is still in the box');
+    assertContains('New zones', $previewing);
+    assertContains('New parishes', $previewing);
+    assertContains('Line 4', $previewing, 'a skipped line must be named by its number');
+    assertContains('More than three columns.', $previewing);
+});
+
+ok('A member can name a church that is not in the directory, and admins see the queue', function () use ($renderPage, $admin, $member): void {
+    $profile = $renderPage('member/profile', [
+        'devices' => [], 'pinLock' => 0, 'parish' => null,
+    ], $member);
+    assertContains('name="parish_name_raw"', $profile);
+    assertContains('data-caps', $profile);
+
+    // "Add it later" is only honest if somebody is told what to add.
+    $people = $renderPage('staff/people', [
+        'people' => [], 'term' => '', 'roles' => RISE63\Core\Auth::ROLES,
+        'unlisted' => [['parish_name_raw' => 'CHAPEL OF WONDERS PARISH', 'member_count' => 3]],
+    ], $admin);
+    assertContains('Churches members asked for', $people);
+    assertContains('CHAPEL OF WONDERS PARISH', $people);
+    assertContains('3 member(s)', $people);
+
+    $nothing = $renderPage('staff/people', [
+        'people' => [], 'term' => '', 'roles' => RISE63\Core\Auth::ROLES, 'unlisted' => [],
+    ], $admin);
+    assertMissing('Churches members asked for', $nothing, 'an empty queue is not a section');
+});
+
 ok('Error, maintenance and gate screens are self-contained', function (): void {
     $error = View::capture(RISE63_TEST_ROOT . '/app/Views/error.php', ['title' => 'Temporary problem', 'message' => XSS], false);
     assertMissing('<script>alert', $error, 'message must be escaped');

@@ -31,7 +31,9 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 
 use RISE63\Core\Database;
 use RISE63\Core\Migrator;
+use RISE63\Core\DirectoryImport;
 use RISE63\Core\Money;
+use RISE63\Core\ParishDirectory;
 use RISE63\Core\PasswordReset;
 use RISE63\Core\Security;
 
@@ -314,6 +316,136 @@ ok('Reset tokens expire and are single use against real DATETIME arithmetic', fu
         ->execute([hash('sha256', $token)]);
     $live->execute([hash('sha256', $token)]);
     assertSame(0, (int) $live->fetchColumn(), 'a used token must not resolve');
+});
+
+/* ──────────────── Zone → Area → Parish: the pasted list, on real MySQL ──────────────── */
+
+ok('A pasted hierarchy creates itself once and can be re-pasted safely', function () use ($pdo): void {
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach (['parishes', 'areas', 'zones'] as $table) {
+        $pdo->exec('DELETE FROM ' . $table);
+    }
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+    // The list from the field report, lower-cased on two lines to prove the canonical form is
+    // applied on the way in: one zone with two areas, one area still waiting for parishes, and a
+    // repeated line that must not become a second row.
+    $text = "joyful assembly prov. hqtr zone, conquerors chapel zone, chapel of wonders parish area\n"
+          . "JOYFUL ASSEMBLY PROV. HQTR ZONE, CONQUERORS CHAPEL ZONE, CONQUERORS CHAPEL AREA\n"
+          . "JOYFUL ASSEMBLY PROV. HQTR ZONE, CONQUERORS CHAPEL ZONE\n"
+          . "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+          . "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n";
+
+    $parsed = DirectoryImport::parse($text);
+    $tally  = ParishDirectory::importLines($parsed['lines'], null);
+
+    assertSame(2, (int) $pdo->query('SELECT COUNT(*) FROM zones')->fetchColumn(), 'two zones');
+    assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM areas')->fetchColumn(), 'three areas');
+    assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM parishes')->fetchColumn(),
+        'the repeated line must not create a second parish');
+
+    // Everything is stored in the canonical form, including the two lines pasted in lower case.
+    $names = $pdo->query('SELECT zone_name FROM zones ORDER BY zone_name')->fetchAll(PDO::FETCH_COLUMN);
+    assertSame(['GRACE ZONE', 'JOYFUL ASSEMBLY PROV. HQTR ZONE'], $names);
+
+    // "ZONE, AREA" with no parish is a real area, not a zone with a stray name on it.
+    $waiting = $pdo->query(
+        "SELECT COUNT(*) FROM areas a JOIN zones z ON z.id = a.zone_id
+         WHERE z.zone_name = 'JOYFUL ASSEMBLY PROV. HQTR ZONE' AND a.area_name = 'CONQUERORS CHAPEL ZONE'"
+    )->fetchColumn();
+    assertSame(1, (int) $waiting, 'the two-column line must create the area');
+
+    // Re-pasting the identical list is a no-op, which is the whole point of matching names.
+    $again = ParishDirectory::importLines(DirectoryImport::parse($text)['lines'], null);
+    assertSame(0, (int) $again['created'], 'a second paste creates nothing');
+    assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM parishes')->fetchColumn());
+
+    // And a paste that differs only in case is still the same list.
+    $mixed = ParishDirectory::importLines(DirectoryImport::parse(
+        "grace zone, hope area, living water parish\nGRACE ZONE, FAITH AREA\n"
+    )['lines'], null);
+    assertSame(1, (int) $mixed['created'], 'only FAITH AREA is new');
+    $hopeAreas = $pdo->query(
+        "SELECT COUNT(*) FROM areas a JOIN zones z ON z.id = a.zone_id
+         WHERE z.zone_name = 'GRACE ZONE' AND a.area_name = 'HOPE AREA'"
+    )->fetchColumn();
+    assertSame(1, (int) $hopeAreas, 'a lower-case repeat must not create a second HOPE AREA');
+
+    // The same area name under a different zone is a different area — the unique key is
+    // (zone_id, area_name), not area_name alone.
+    $other = ParishDirectory::importLines(DirectoryImport::parse(
+        "MERCY ZONE, HOPE AREA, FIRST PARISH"
+    )['lines'], null);
+    assertSame(3, (int) $other['created'], 'a new zone, a new area under it, and a new parish');
+
+    // The search must find a lower-case query against upper-case data whatever the collation is.
+    $found = ParishDirectory::search('living water');
+    assertSame(1, count($found), 'search is case-insensitive');
+    assertSame('LIVING WATER PARISH', $found[0]['parish']);
+
+    $byName = ParishDirectory::findByName('grace zone parish');
+    assertSame(null, $byName, 'an unknown name resolves to nothing rather than a near match');
+    assertSame('LIVING WATER PARISH', ParishDirectory::findByName('living water parish')['parish_name'] ?? null,
+        'a typed name resolves to the real row');
+});
+
+ok('A failed paste rolls back, so a half-applied hierarchy is impossible', function () use ($pdo): void {
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach (['parishes', 'areas', 'zones'] as $table) {
+        $pdo->exec('DELETE FROM ' . $table);
+    }
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+    // A name longer than the column is refused by MySQL while the page is mid-run. The first two
+    // lines are valid, so the test only means anything on a server in strict mode — which is the
+    // default on MySQL 8 and the mode docs/DEPLOYMENT.md asks for. Say so rather than pass quietly.
+    $strict = (string) $pdo->query('SELECT @@sql_mode')->fetchColumn();
+    if (!str_contains($strict, 'STRICT_')) {
+        fwrite(STDOUT, "SKIP rollback: the server is not in a STRICT sql_mode, so MySQL truncates instead of failing\n");
+        return;
+    }
+
+    $lines = DirectoryImport::parse(
+        "GRACE ZONE, HOPE AREA, LIVING WATER PARISH\n"
+        . "MERCY ZONE, FAITH AREA, GRACE CHAPEL PARISH\n"
+        . "TRINITY ZONE, " . str_repeat('X', 200) . ", A PARISH"
+    )['lines'];
+
+    expectFailure(static fn () => ParishDirectory::importLines($lines, null), 'the oversized line must fail');
+
+    assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM zones')->fetchColumn(),
+        'the transaction must roll back the valid lines too');
+});
+
+ok('The single create forms refuse a duplicate instead of hitting the unique key', function () use ($pdo): void {
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach (['parishes', 'areas', 'zones'] as $table) {
+        $pdo->exec('DELETE FROM ' . $table);
+    }
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+    $zoneId = ParishDirectory::createZone('grace zone', null, null);
+    assertSame('GRACE ZONE', (string) $pdo->query('SELECT zone_name FROM zones WHERE id = ' . $zoneId)->fetchColumn(),
+        'a zone typed in lower case is stored in capitals');
+
+    // The old behaviour surfaced this as a PDO 23000 ("That record already exists. Check the
+    // parish name…") after the fact. Naming the record is more useful than naming the table.
+    expectFailure(static fn () => ParishDirectory::createZone('Grace Zone', null, null));
+    expectFailure(static fn () => ParishDirectory::createZone('GRACE ZONE', null, null));
+
+    $areaId = ParishDirectory::createArea($zoneId, 'hope area', null, null);
+    expectFailure(static fn () => ParishDirectory::createArea($zoneId, 'HOPE AREA', null, null),
+        'a duplicate area under the same zone must be refused');
+
+    ParishDirectory::createParish(['parish_name' => 'living water parish', 'area_id' => $areaId], null);
+    expectFailure(
+        static fn () => ParishDirectory::createParish(['parish_name' => 'LIVING WATER PARISH', 'area_id' => $areaId], null),
+        'a duplicate parish under the same area must be refused'
+    );
+
+    // Same area name under a second zone is allowed: the hierarchy is what makes it unique.
+    $second = ParishDirectory::createZone('MERCY ZONE', null, null);
+    ParishDirectory::createArea($second, 'HOPE AREA', null, null);
 });
 
 ok('Migrations apply once, in order, and reject a modified file', function () use ($pdo): void {

@@ -61,6 +61,27 @@ use function RISE63\{e, human_date, relative_time, url};
   </form>
 </details>
 
+<?php if (($unlisted ?? []) !== []): ?>
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2 style="margin:0">Churches members asked for</h2>
+        <p class="faint" style="margin:2px 0 0">Typed at registration because the picker did not have them.
+          Add each one in Parish Connect — the members attached to it are then ready to be linked.</p>
+      </div>
+    </div>
+    <ul class="list-plain" style="margin-top:10px">
+      <?php foreach ($unlisted as $row): ?>
+        <li class="row row-end" style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <span><strong><?= e((string) $row['parish_name_raw']) ?></strong></span>
+          <span class="faint"><?= (int) $row['member_count'] ?> member(s)</span>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+    <a class="btn btn-secondary btn-sm" style="margin-top:12px" href="<?= e(url('parishes')) ?>">Open Parish Connect</a>
+  </section>
+<?php endif; ?>
+
 <section class="card card-flat" style="padding:0">
   <div class="table-wrap" style="border:0">
     <table class="table-stack">
@@ -86,7 +107,14 @@ use function RISE63\{e, human_date, relative_time, url};
                 <button class="btn btn-secondary btn-sm" type="submit">Set</button>
               </form>
             </td>
-            <td data-label="Parish"><?= e((string) ($person['parish_name'] ?? '—')) ?></td>
+            <td data-label="Parish">
+              <?php if (!empty($person['parish_name_raw']) && empty($person['parish_name'])): ?>
+                <strong><?= e((string) $person['parish_name_raw']) ?></strong><br>
+                <span class="badge badge-warn">Not in the directory</span>
+              <?php else: ?>
+                <?= e((string) ($person['parish_name'] ?? '—')) ?>
+              <?php endif; ?>
+            </td>
             <td data-label="Last sign-in"><?= $person['last_login_at'] !== null ? e(relative_time((string) $person['last_login_at'])) : 'Never' ?></td>
             <td data-label="Status">
               <?php if ((int) $person['is_suspended'] === 1): ?>

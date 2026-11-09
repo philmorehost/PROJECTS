@@ -15,7 +15,8 @@ use InvalidArgumentException;
 final class Registration
 {
     /**
-     * @param array{full_name:string, email:string, phone:string, parish_id:?string, password:string, confirm:string} $input
+     * @param array{full_name:string, email:string, phone:string, parish_id:?string,
+     *              parish_name_raw?:string, password:string, confirm:string} $input
      * @return array<string, mixed>
      */
     public static function create(array $input): array
@@ -49,12 +50,30 @@ final class Registration
 
         $parishId = self::parishId($input['parish_id']);
 
+        // Picking from the list is the normal path. A church that is not listed yet is typed by
+        // hand, in capitals, and kept on the account as "not yet in the directory" so a
+        // representative can add it — the alternative was making the member pick the wrong parish
+        // or give up on registering.
+        $unlisted = null;
+        if ($parishId === null) {
+            $unlisted = self::unlistedParish($input['parish_name_raw'] ?? null);
+        }
+
         Database::run(
-            'INSERT INTO users (full_name, email, phone, parish_id, password_hash, role) VALUES (?,?,?,?,?,?)',
-            [$name, $email, $phone === '' ? null : $phone, $parishId, Security::hashPassword($pass), 'youth_member']
+            'INSERT INTO users (full_name, email, phone, parish_id, parish_name_raw, password_hash, role)
+             VALUES (?,?,?,?,?,?,?)',
+            [$name, $email, $phone === '' ? null : $phone, $parishId, $unlisted, Security::hashPassword($pass), 'youth_member']
         );
         $id = Database::id();
-        Audit::log($id, 'user.register', 'user', (string) $id, 'Self-service registration.');
+        Audit::log(
+            $id,
+            'user.register',
+            'user',
+            (string) $id,
+            $unlisted === null
+                ? 'Self-service registration.'
+                : 'Self-service registration; church not yet in the directory: ' . $unlisted . '.'
+        );
 
         $user = Database::one('SELECT * FROM users WHERE id = ?', [$id]) ?? [];
         if ($user !== []) {
@@ -116,5 +135,35 @@ final class Registration
         }
         $id = (int) $value;
         return ParishDirectory::parish($id) === null ? null : $id;
+    }
+
+    /**
+     * A church name typed by a member because the picker did not have it.
+     *
+     * Stored upper-case, like everything else in the directory, and matched against the directory
+     * first: if the church was added by an admin between the member opening the form and submitting
+     * it, the typed name should attach to that parish rather than become a second "unlisted" copy.
+     */
+    private static function unlistedParish(mixed $value): ?string
+    {
+        $name = \RISE63\caps((string) ($value ?? ''));
+        if ($name === '') {
+            return null;
+        }
+        if (mb_strlen($name) > 150) {
+            throw new InvalidArgumentException('Enter your church name in 150 characters or fewer.');
+        }
+        if (preg_match('/[\x00-\x1F<>]/', $name) === 1) {
+            throw new InvalidArgumentException('That church name contains characters that are not allowed.');
+        }
+
+        $match = ParishDirectory::findByName($name);
+        if ($match !== null) {
+            // Belt and braces: the caller only reaches here when no id was chosen, but the
+            // directory may have gained the church while the form was open.
+            return null;
+        }
+
+        return $name;
     }
 }

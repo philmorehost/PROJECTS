@@ -6,7 +6,7 @@
 <title>Dashboard · RISE 63</title>
 <meta name="description" content="">
 <meta name="theme-color" content="">
-<meta name="csrf-token" content="37728b6694b3258c2368aae3fca85cbc50f8a1ffa470da029427f63f024cc2bd">
+<meta name="csrf-token" content="ffaef759aabed5f2eccdb362c0feca66084a7cc9a760a0f8b3508dffa46b2ace">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=f96b27c4">
 <link rel="apple-touch-icon" href="/public/icons/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -536,6 +536,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .combo-option small { display: block; color: var(--text-muted); }
 .combo-option[aria-selected="true"], .combo-option:hover { background: var(--brand-soft); }
 .combo-empty { padding: 12px; color: var(--text-muted); font-size: var(--t-sm); }
+/* The "my church is not listed" row. It is separated from real matches on purpose: one tap files
+   a name instead of selecting a record, and the two must not look interchangeable. */
+.combo-option-manual {
+  margin-top: 4px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.combo-option-manual strong { color: var(--brand); }
+.combo-option-manual small { font-size: var(--t-sm); }
 
 /* ── Offline / install ────────────────────────────────────────────────────────── */
 /* ── Offline modal ─────────────────────────────────────────────────────────────── */
@@ -806,7 +815,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
       <span class="nav-label">Settings</span>
           </a>
     <form method="post" action="/" class="nav-logout">
-    <input type="hidden" name="csrf" value="37728b6694b3258c2368aae3fca85cbc50f8a1ffa470da029427f63f024cc2bd">    <input type="hidden" name="action" value="logout">
+    <input type="hidden" name="csrf" value="ffaef759aabed5f2eccdb362c0feca66084a7cc9a760a0f8b3508dffa46b2ace">    <input type="hidden" name="action" value="logout">
     <button type="submit" class="nav-tab">
       <span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 8V5.5H5.5v13H14V16"/><path d="M10.5 12H21"/><path d="m17.5 8.5 3.5 3.5-3.5 3.5"/></svg></span>
       <span class="nav-label">Sign out</span>
@@ -830,7 +839,7 @@ html.offline-open, html.offline-open body { overflow: hidden; }
   </div>
 </div>
 
-<script src="/public/assets/app.js?v=2a50a162" defer></script>
+<script src="/public/assets/app.js?v=a95d9a3b" defer></script>
 <style>
   /* For the screenshot only: open the modal the way app.js would, without a network probe. */
   .offline-modal { display: flex !important; }
