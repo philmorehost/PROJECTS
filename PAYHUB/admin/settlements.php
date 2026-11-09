@@ -51,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
                 $stmt = $db->prepare("UPDATE payouts SET status = 'processed', status_details = ? WHERE id = ? AND status = 'pending'");
                 $stmt->execute([$details, $payoutId]);
             } else {
-                $cancelNote = $refundFunds ? 'Cancelled by admin — funds returned to merchant wallet. ' : 'Cancelled by admin — no wallet refund. ';
+                $cancelNote = $refundFunds
+                    ? 'Cancelled by admin — funds returned to merchant wallet. '
+                    : 'Cancelled without wallet reversal — manual offline resolution required. ';
                 $stmt = $db->prepare("UPDATE payouts SET status = 'declined', status_details = ? WHERE id = ? AND status = 'pending'");
                 $stmt->execute([$cancelNote . $details, $payoutId]);
                 if ($refundFunds) {
@@ -68,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
             } elseif ($refundFunds) {
                 $success_msg = 'Payout cancelled; the full held amount was returned to the merchant wallet.';
             } else {
-                $success_msg = 'Payout cancelled without returning funds to the merchant wallet.';
+                $success_msg = 'Payout cancelled without wallet reversal. It is marked for manual offline resolution; funds remain debited.';
             }
         } catch (\Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();
@@ -143,7 +145,25 @@ include '../includes/dashboard-head.php';
                                     </td>
                                     <td class="px-6 py-4">
                                         <?php if ($p['status'] === 'pending'): ?>
-                                            <button @click="showProcess = true; payout = <?php echo htmlspecialchars(json_encode($p)); ?>" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-100">Process</button>
+                                            <div class="min-w-[190px] space-y-2">
+                                                <button @click="showProcess = true; payout = <?php echo htmlspecialchars(json_encode($p)); ?>" class="w-full bg-indigo-600 text-white px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-100">Approve / Process</button>
+                                                <form method="POST" onsubmit="return confirm('Cancel this payout and reverse the held amount to the merchant wallet?');">
+                                                    <input type="hidden" name="action" value="process_payout">
+                                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <input type="hidden" name="payout_id" value="<?php echo (int)$p['id']; ?>">
+                                                    <input type="hidden" name="details" value="Admin cancelled request and returned held funds to wallet.">
+                                                    <input type="hidden" name="decision" value="cancel_refund">
+                                                    <button type="submit" class="w-full bg-amber-50 text-amber-800 border border-amber-200 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-amber-100">Cancel &amp; Reverse</button>
+                                                </form>
+                                                <form method="POST" onsubmit="return confirm('Cancel without reversing funds to the wallet? The funds will remain debited and this payout will be marked for manual offline resolution.');">
+                                                    <input type="hidden" name="action" value="process_payout">
+                                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <input type="hidden" name="payout_id" value="<?php echo (int)$p['id']; ?>">
+                                                    <input type="hidden" name="details" value="Manual offline resolution required; no wallet reversal requested.">
+                                                    <input type="hidden" name="decision" value="cancel_keep">
+                                                    <button type="submit" class="w-full bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-rose-100">Cancel Without Reverse <span class="block text-[10px] font-medium">Manual offline resolution</span></button>
+                                                </form>
+                                            </div>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -173,11 +193,8 @@ include '../includes/dashboard-head.php';
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Internal Status Details</label>
                             <textarea name="details" required placeholder="Transaction reference, receipt ID, or reason for decline..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none h-24 mb-4"></textarea>
                         </div>
-                        <div class="grid gap-2">
-                            <button type="submit" name="decision" value="approve" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">Approve &amp; Send</button>
-                            <button type="submit" name="decision" value="cancel_refund" class="w-full bg-amber-50 text-amber-800 border border-amber-200 py-3 rounded-xl font-bold">Cancel &amp; Return Funds</button>
-                            <button type="submit" name="decision" value="cancel_keep" onclick="return confirm('Cancel this payout without returning the held funds to the merchant wallet? This cannot be undone.');" class="w-full bg-rose-50 text-rose-700 border border-rose-200 py-3 rounded-xl font-bold">Cancel Without Refund</button>
-                        </div>
+                        <button type="submit" name="decision" value="approve" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">Approve &amp; Send</button>
+                        <p class="mt-3 text-xs text-slate-500">To cancel instead, use one of the two clearly labeled cancellation actions directly in this payout row.</p>
                     </form>
                 </div>
             </div>
