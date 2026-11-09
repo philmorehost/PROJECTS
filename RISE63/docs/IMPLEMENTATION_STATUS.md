@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-09 · version 1.0.5 · review this file before any launch decision.
+Updated: 2026-11-09 · version 1.0.6 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -27,7 +27,7 @@ The sandbox has no PHP binary, MySQL or curl (`apt` sources are unreachable, `re
 | Views | `node tests/support/phpwasm-render.mjs` (`tests/render.php`) | **44 passed, 0 failed** |
 | Namespaces | `node tests/support/phpwasm-guard.mjs` (`bin/guard-namespaces.php`) | **25 functions, every call site resolves** |
 | Requests | `node tests/support/phpwasm-smoke.mjs` | **38 passed, 0 failed** |
-| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **21 passed, 0 failed, 1 skipped** — real SQL |
+| **Database** | `node tests/support/phpwasm-e2e.mjs` (`tests/e2e.php`) | **26 passed, 0 failed, 1 skipped** — real SQL |
 | **Pages** | `node tests/support/phpwasm-pages.mjs` (`tests/pages.php`) | **14 passed, 0 failed, 1 skipped** — real router, real SQL |
 | Offline shell | `node tests/support/offline-behaviour.mjs` | **15 passed, 0 failed** |
 | Parish combobox | `node tests/support/combobox-behaviour.mjs` | **31 passed, 0 failed** |
@@ -205,6 +205,56 @@ fixes it. Pretending otherwise would be a silent data loss: the church name woul
 
 The regression test was verified to bite: restoring the unconditional `INSERT` fails with the
 operator's exact SQLSTATE, and passes when the conditional write is restored.
+
+### 2.1e What 1.0.6 fixes — the database now heals itself
+
+Reported, with a screenshot of the shell:
+
+```
+$ php bin/migrate.php
+! The schema_migrations table is missing — is this a RISE 63 database?
+Refusing to migrate. Fix the inconsistency above first.
+```
+
+That is a deadlock, not a diagnosis. The runner refused to continue because it could not record
+anything in a bookkeeping table that was not there — so the only command that could repair the
+database was the one command it blocked. There was no way forward from the shell at all.
+
+**The fix is structural, not another instruction.** The manual step is gone:
+
+| Before | Now |
+|---|---|
+| `php bin/migrate.php` refused when `schema_migrations` was missing | `Migrator::ensureLedger()` creates it, with exactly the columns `schema.sql` declares |
+| Every migration looked pending, so the existing ones were re-run and failed on a duplicate column | `Migrator::reconcile()` adopts a migration **only when information_schema proves its effect is already present**. Anything unprovable runs |
+| An operator had to know the command existed, and to run it after every release | `SelfHeal::run()` does it on the first request after a release, before any page reads the schema |
+
+Why "on the first request after a release" and not on every request: the check is stamped with
+`VERSION` in `config/schema-stamp.php`, so a normal page load costs one row read and the schema work
+happens once per version. A failed attempt is remembered for five minutes so a broken database is
+not hammered.
+
+What it deliberately does **not** do:
+
+- **It does not decide anything.** Adoption is proved by reading `information_schema` — a table
+  exists, a column exists. A statement shape the code does not understand is treated as *not*
+  applied and runs normally. Guessing here would be a silent, permanent divergence.
+- **It does not run inside a transaction.** MySQL commits DDL implicitly, so running it mid-way
+  through somebody else's transaction would commit work they expected to roll back.
+- **It is never fatal.** A failure is logged, stamped, and shown on Settings → Database updates. A
+  schema problem must not be able to turn a page into a 500 — 1.0.1 through 1.0.5 were exactly that.
+- **It still refuses a real inconsistency.** A migration file that changed after it was applied is
+  a genuine divergence and only a person can decide what to do. That refusal now says so, with the
+  remedy, instead of dead-ending.
+
+The same healing runs from `php bin/migrate.php` — which now heals *before* it verifies, so the
+command that failed in the screenshot works. `--status`, `--dry-run` and `--verify` still write
+nothing, and say what the plain command will do.
+
+**Two bugs in the test double were found by this work**, both of which had been hiding the real
+behaviour: `tests/support/pgsql-schema.php` was missing `password_resets` and `schema_migrations`.
+And the first version of the existence check used backtick-quoted identifiers, which PostgreSQL
+rejects — the syntax error looked exactly like a missing column, which is why the check now asks
+`information_schema` instead of selecting from an identifier.
 
 ### 2.2 Static SQL consistency audit (no database needed)
 

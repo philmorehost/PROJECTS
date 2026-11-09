@@ -325,7 +325,11 @@ $groups = [
       <h2 style="margin:0">Database updates</h2>
       <p class="faint" style="margin:2px 0 0">Schema changes that ship with each release, and whether this server has them.</p>
     </div>
-    <?php if (!$schemaState['known']): ?>
+    <?php if (($schemaState['selfHeal'] ?? '') !== ''): ?>
+    <p class="faint" style="margin:0 0 10px"><?= e((string) $schemaState['selfHeal']) ?></p>
+  <?php endif; ?>
+
+  <?php if (!$schemaState['known']): ?>
       <span class="badge badge-warn">Cannot read</span>
     <?php elseif ($schemaState['pending'] === [] && $schemaState['modified'] === []): ?>
       <span class="badge badge-ok">Up to date</span>
@@ -346,15 +350,12 @@ $groups = [
                page read a column from migration 0002 and the database had never been given it. */ ?>
       <p class="muted" style="margin-top:10px">
         <strong><?= count($schemaState['pending']) ?> database update<?= count($schemaState['pending']) === 1 ? ' is' : 's are' ?> waiting.</strong>
-        Until they run, any page that uses the new columns will fail. This is not applied from the
-        browser on purpose: a schema change is the one operation that can leave a database
-        half-modified, and it needs a shell and a backup. Run it from the server:
+        These are applied automatically, once per release, before the first page that needs them —
+        see the note below. If they have stayed here after a page load, the automatic check could not
+        run, and the command underneath is the manual fallback.
       </p>
-      <pre style="margin:10px 0;padding:10px 12px;overflow-x:auto;background:var(--surface-2,#111827);border-radius:8px"><code>cd <?= e(RISE63\ROOT) ?>
-
-php bin/migrate.php --status
-php bin/migrate.php</code></pre>
-      <p class="faint">Check with <code>--status</code> first, then apply. Each file is applied once and checksummed.</p>
+      <pre style="margin:10px 0;padding:10px 12px;overflow-x:auto;background:var(--surface-2,#111827);border-radius:8px"><code>php <?= e(RISE63\ROOT) ?>/bin/migrate.php</code></pre>
+      <p class="faint">That command heals as it goes: it creates the bookkeeping table if it is missing, records migrations whose effect is already present, and applies the rest. The web app does the same thing once per release.</p>
 
       <ul class="list-plain" style="margin-top:10px">
         <?php foreach ($schemaState['pending'] as $migration): ?>
@@ -367,7 +368,8 @@ php bin/migrate.php</code></pre>
     <?php elseif ($schemaState['applied'] !== []): ?>
       <p class="muted" style="margin-top:10px">
         All <?= count($schemaState['applied']) ?> database update<?= count($schemaState['applied']) === 1 ? ' has' : 's have' ?>
-        been applied to this server.
+        been applied to this server. New ones are applied automatically on the first page load after
+        a release, so there is nothing to run by hand.
       </p>
       <details>
         <summary class="faint" style="cursor:pointer">Show what has been applied</summary>

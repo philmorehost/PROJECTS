@@ -528,10 +528,10 @@ Treat every update as a five-minute maintenance window, even when the release lo
 ```sh
 # 1. Back up first. No exceptions.   (§10)
 # 2. Upload the new files over the old ones. Never delete config/ or storage/.
-# 3. Check what the schema will do — this changes nothing:
+# 3. Open the site once. The schema is brought up to date automatically on the first request
+#    after a release — no command needed. (This is new in 1.0.6; before it, step 4 was mandatory.)
+# 4. Optional: confirm what happened, or force it from the shell:
 php bin/migrate.php --status
-php bin/migrate.php --dry-run
-# 4. Apply, once the output above has been read:
 php bin/migrate.php
 # 5. Housekeeping, so expired locks and leases are cleared under the new code:
 php bin/maintenance.php
@@ -539,10 +539,19 @@ php bin/maintenance.php
 php bin/build-assets.php
 ```
 
+**The schema migrates itself.** On the first request after a version change, RISE 63 creates the
+`schema_migrations` table if it is missing, records any migration whose effect is already present in
+the database, and applies the rest. It runs once per version, never inside a transaction, and never
+fatally — a failure is logged and shown on **Settings → Database updates**. `php bin/migrate.php`
+does exactly the same thing and heals as it goes, so it can no longer be blocked by the table it is
+supposed to create.
+
 Notes that matter:
 
-* `bin/migrate.php` exits **3** when a migration file changed after being applied. Do not work
-  around that; the fix is a new migration file, not an edited one.
+* `bin/migrate.php` exits **3** only for a genuine divergence — a migration file that changed after
+  being applied, or one recorded whose file is gone. Do not work around that; the fix is a new
+  migration file, not an edited one. A missing `schema_migrations` table is **not** a divergence any
+  more: the command creates it.
 * Migrations are not one atomic unit: MySQL commits DDL immediately, so a failure part-way through
   a single file leaves that file half applied and *not* recorded. The message says so. Read the
   file, finish what is missing by hand, then insert its version into `schema_migrations` yourself
