@@ -19,7 +19,9 @@ use RISE63\Core\Audit;
 use RISE63\Core\Database;
 use RISE63\Core\Fund;
 use RISE63\Core\Members;
+use RISE63\Core\Migrator;
 use RISE63\Core\Money;
+use RISE63\Core\SelfHeal;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
 
@@ -542,6 +544,113 @@ ok('The write handler names an unapplied migration instead of hiding it', functi
     assertTrue(str_contains($source, "'42S02'"), 'and an unknown table');
     assertTrue(str_contains($source, 'Database updates'), 'the message must point at the screen that explains it');
     assertTrue(str_contains($source, 'bin/migrate.php'), 'and at the command that fixes it');
+});
+
+/* ─────────── The database heals itself (the command that would not run) ─────────── */
+
+ok('A missing schema_migrations table is created instead of blocking every migration', function () use ($pdo): void {
+    // Reported from the field, verbatim:
+    //
+    //   $ php bin/migrate.php
+    //   ! The schema_migrations table is missing — is this a RISE 63 database?
+    //   Refusing to migrate. Fix the inconsistency above first.
+    //
+    // A deadlock: the runner refused because it could not record into a table that was not there,
+    // so the only command that could repair the database was the one command it blocked.
+    $pdo->exec('DROP TABLE schema_migrations');
+
+    $migrator = new Migrator(RISE63_TEST_ROOT);
+    assertTrue($migrator->verify() !== [], 'verify should report the missing table before healing');
+
+    $created = $migrator->ensureLedger();
+    assertTrue($created, 'the ledger must be created when it is missing');
+    assertTrue($migrator->ensureLedger() === false, 'and creating it twice is a no-op');
+});
+
+ok('Migrations whose effect is already present are adopted, not re-run', function () use ($pdo): void {
+    // Re-running 0001 would fail on a duplicate column and leave the operator where they started.
+    // Adoption is decided by reading information_schema — never by assuming.
+    $migrator = new Migrator(RISE63_TEST_ROOT);
+    $migrator->ensureLedger();
+    $pdo->exec('DELETE FROM schema_migrations');
+
+    // The harness schema already has must_change_password, parish_name_raw and password_resets.
+    $adopted = $migrator->reconcile();
+    assertTrue(in_array('0001', $adopted, true), '0001 should be adopted: its column and table exist');
+    assertTrue(in_array('0002', $adopted, true), '0002 should be adopted: its column exists');
+
+    // A migration whose effect is *absent* must never be adopted.
+    $pdo->exec('ALTER TABLE users DROP COLUMN parish_name_raw');
+    $pdo->exec('DELETE FROM schema_migrations');
+    try {
+        $adoptedAgain = $migrator->reconcile();
+        assertTrue(!in_array('0002', $adoptedAgain, true),
+            '0002 must not be adopted once its column is gone');
+    } finally {
+        $pdo->exec('ALTER TABLE users ADD COLUMN parish_name_raw VARCHAR(150) NULL');
+    }
+});
+
+ok('Healing reports exactly what it did, and is idempotent', function () use ($pdo): void {
+    $migrator = new Migrator(RISE63_TEST_ROOT);
+    $pdo->exec('DELETE FROM schema_migrations');
+
+    $first  = $migrator->heal();
+    assertTrue($first['ledger_created'] === false, 'the ledger already exists by now');
+    assertTrue($first['adopted'] !== [], 'it should adopt the migrations already present');
+    assertTrue($first['applied'] === [], 'and apply nothing: everything is already there');
+
+    $second = $migrator->heal();
+    assertSame([], $second['adopted'], 'a healed database adopts nothing the second time');
+    assertSame([], $second['applied'], 'and applies nothing');
+});
+
+ok('The automatic check runs once per version, not on every request', function (): void {
+    // A schema check on every page load would be a per-request cost on shared hosting for no gain.
+    // The stamp is keyed by VERSION, so a release triggers exactly one check.
+    $file = \RISE63\config_dir() . '/' . SelfHeal::STAMP;
+    $existed = is_file($file);
+    $original = $existed ? (string) file_get_contents($file) : '';
+    try {
+        @unlink($file);
+        assertTrue(SelfHeal::shouldRun('9.9.9') === true, 'a fresh installation must be checked');
+
+        SelfHeal::run(RISE63_TEST_ROOT, '9.9.9');
+        assertTrue(SelfHeal::shouldRun('9.9.9') === false, 'the same version must not be checked again');
+        assertTrue(SelfHeal::shouldRun('9.9.10') === true, 'a new version must be checked');
+
+        $summary = SelfHeal::summary();
+        assertTrue($summary !== '', 'the Settings screen needs a human-readable summary');
+        assertTrue(str_contains($summary, '9.9.10') || str_contains($summary, '9.9.9'),
+            'the summary must name the version it describes');
+    } finally {
+        if ($existed) {
+            file_put_contents($file, $original);
+        } else {
+            @unlink($file);
+        }
+    }
+});
+
+ok('A migration the code does not understand is executed, never assumed', function (): void {
+    // The safety rule that makes adoption trustworthy: anything not provably already applied runs.
+    $root = sys_get_temp_dir() . '/rise63-adopt-' . bin2hex(random_bytes(4));
+    @mkdir($root . '/database/migrations', 0777, true);
+    file_put_contents(
+        $root . '/database/migrations/0001_custom.sql',
+        "-- an UPDATE is not something adoption can prove\nUPDATE users SET phone = 'x';\n"
+    );
+
+    $reflected = new \ReflectionMethod(Migrator::class, 'isSatisfied');
+    $reflected->setAccessible(true);
+    assertSame(false, $reflected->invoke(null, (string) file_get_contents($root . '/database/migrations/0001_custom.sql')),
+        'an UPDATE must never be treated as already applied');
+
+    // A CREATE TABLE for a table that does exist IS provable.
+    assertSame(true, $reflected->invoke(null, 'CREATE TABLE users (id INT);'),
+        'a CREATE TABLE whose table exists is satisfied');
+    assertSame(false, $reflected->invoke(null, 'CREATE TABLE not_a_real_table (id INT);'),
+        'a CREATE TABLE whose table is absent is not');
 });
 
 /* ──────────────────────────────── summary ─────────────────────────────── */

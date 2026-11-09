@@ -8,4 +8,4 @@ self.RISE63_SHELL = [
     "./public/assets/app.6148ab27.js",
     "./public/assets/security.613104f8.js"
 ];
-self.RISE63_RELEASE = "1.0.5-af5050c9";
+self.RISE63_RELEASE = "1.0.6-af5050c9";

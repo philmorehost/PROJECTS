@@ -30,7 +30,10 @@ final class Schema
      */
     public static function state(string $root): array
     {
-        $out = ['known' => false, 'error' => '', 'pending' => [], 'applied' => [], 'modified' => [], 'count' => 0];
+        $out = [
+            'known' => false, 'error' => '', 'pending' => [], 'applied' => [], 'modified' => [],
+            'count' => 0, 'selfHeal' => SelfHeal::summary(),
+        ];
 
         try {
             $migrator = new Migrator($root);
@@ -69,6 +72,10 @@ final class Schema
         } catch (\Throwable $error) {
             $out['modified'][] = $error->getMessage();
         }
+
+        // What the automatic check did on the last request, so an operator can see the healing
+        // happened rather than take it on faith.
+        $out['selfHeal'] = SelfHeal::summary();
 
         return $out;
     }

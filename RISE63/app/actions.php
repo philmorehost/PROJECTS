@@ -920,8 +920,9 @@ try {
         // SQLSTATE 42S22 / 42S02: a column or table the code expects is not in this database.
         // That is almost always an unapplied migration, and the fix is one command.
         flash(
-            'This saved nothing: a database update is waiting. Open Settings → Database updates and run '
-            . 'php bin/migrate.php on the server, then try again.',
+            'This saved nothing: a database update is waiting. Reload this page — RISE 63 applies it '
+            . 'automatically on the first load after a release, so the reload may fix it. If it does not, '
+            . 'open Settings → Database updates.',
             'error'
         );
     } else {

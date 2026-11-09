@@ -63,6 +63,29 @@ if (!$activationState['valid']) {
 
 Settings::flush();
 
+// ── Keep the database in step with the code ───────────────────────────────────────────────
+// Once per code version, before any page reads it: create the migration bookkeeping table if it is
+// missing, record migrations whose effect is already present, and apply the rest. This is what
+// makes "we shipped a new table" take effect on deploy instead of needing a shell command that, in
+// the field, refused to run at all (see RISE63\Core\SelfHeal).
+//
+// Deliberately after the activation gate and the maintenance check: a broken licence or a site in
+// maintenance must not trigger schema writes. Deliberately before the router: pages must never be
+// the thing that discovers the schema is behind.
+try {
+    $selfHeal = RISE63\Core\SelfHeal::run(RISE63\ROOT, RISE63\VERSION);
+    if ($selfHeal['ran']) {
+        error_log('RISE63 self-heal: ' . ($selfHeal['error'] !== ''
+            ? 'failed: ' . $selfHeal['error']
+            : 'ok: ' . json_encode($selfHeal['report'])));
+        Settings::flush();
+    }
+} catch (\Throwable $error) {
+    // A schema check must never be the reason a page fails. It is logged and reported on Settings,
+    // and the request continues with whatever schema the database actually has.
+    error_log('RISE63 self-heal unavailable: ' . $error->getMessage());
+}
+
 // ── Routing ───────────────────────────────────────────────────────────────────────────
 // The page comes from ?page= when the rewrite in .htaccess supplied it, and from the URL path
 // otherwise. Both are supported on purpose: /login must work as a path segment (every link and

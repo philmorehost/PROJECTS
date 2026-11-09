@@ -398,8 +398,12 @@ ok('Settings reports pending database updates and the command that applies them'
     $html = route('settings', [], $admin);
     assertClean('settings (pending migrations)', $html, '<h1>Settings</h1>');
     assertTrue(str_contains($html, 'Database updates'), 'Settings has no database-updates panel');
-    assertTrue(str_contains($html, 'bin/migrate.php --status'), 'the panel must name the command');
     assertTrue(str_contains($html, 'database updates are waiting'), 'the panel must say how many are waiting');
+    // The panel leads with the fact that they are applied automatically, and offers the command only
+    // as the fallback. Telling an operator to run a command that is now unnecessary was the previous
+    // wording, and it was the wording that failed in the field.
+    assertTrue(str_contains($html, 'applied automatically'), 'the panel must say they heal automatically');
+    assertTrue(str_contains($html, 'bin/migrate.php'), 'the manual fallback must still be documented');
 
     // Record them as applied, the way bin/migrate.php would, and the panel must stop nagging.
     try {

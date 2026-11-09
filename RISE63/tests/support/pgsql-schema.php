@@ -235,6 +235,16 @@ function pgsql_create_schema(\PDO $pdo): void
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )',
 
+        'CREATE TABLE password_resets (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            token_hash CHAR(64) NOT NULL UNIQUE,
+            ip_address VARCHAR(45) NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used_at TIMESTAMP NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )',
+
         'CREATE TABLE schema_migrations (
             version VARCHAR(40) PRIMARY KEY,
             checksum CHAR(64) NULL,

@@ -949,7 +949,8 @@ ok('Settings shows the database-update state without ever applying one', functio
     ]], $admin);
     assertContains('Database updates', $pending);
     assertContains('2 database updates are waiting', $pending);
-    assertContains('php bin/migrate.php --status', $pending, 'the exact command must be shown');
+    assertContains('bin/migrate.php', $pending, 'the manual fallback must be shown');
+    assertContains('applied automatically', $pending, 'the panel must say the healing is automatic');
     assertContains('0002 — unlisted parish name', $pending, 'the problem file must be named in plain words');
     // It must be instructions, never a button: no form posts a migration.
     assertMissing('value="run-migrations"', $pending, 'migrations must never be applied from the browser');
