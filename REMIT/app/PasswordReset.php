@@ -93,7 +93,10 @@ final class PasswordReset
             $db->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([$newHash,$user['id']]);
             $db->prepare('UPDATE password_resets SET code_hash=NULL,password_stamp=NULL WHERE email=?')->execute([$email]);
             audit($db,'password_reset',$email,'Password reset by email OTP; existing sessions invalidated.');
-            $db->commit();return true;
+            $db->commit();
+            // Session-only, account-scoped recovery; never clear a shared IP's block.
+            $_SESSION['reset_login_permit']=['user_id'=>(int)$user['id'],'email'=>$email,'ip'=>Security::ip(),'password_stamp'=>hash('sha256',$newHash),'expires'=>$now+600,'attempts'=>0];
+            return true;
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }
 }
