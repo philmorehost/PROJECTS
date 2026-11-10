@@ -512,3 +512,35 @@ Session IDs and CSRF tokens rotate at start/return. Nested impersonation, privil
 ### Deployment / verification
 
 Deploy the complete PHP release and fingerprinted JS/CSS assets together. **No new database migration is introduced**; the existing officer registration schema must already be enabled (the new page links to settings when it is not). Back up the database before deployment. The SQLite compatibility tests exercise management CRUD/protection, approval/resubmission/rate boundaries, rollback and real session rotation. Browser tests cover mobile/desktop management, menus, disabled write forms and return availability; existing finance, recovery and registration suites remain in place. These harnesses do not prove live MySQL locking/concurrency, real mail delivery or a deployed server's registration settings/licence; verify those in staging.
+
+## 0.12.1 — Shared-connection login lockout repair and hosting recovery
+
+The old login policy could reject **every account on an IP** before checking a password. A single unknown-email attempt could also queue a day-long IP ban, and password mistakes could permanently suspend representatives. This can affect an entire church Wi-Fi/NAT or a deployment where the server reports a reverse proxy's address for every user. The v0.11.2 OTP exception helped one account for one login, but did not repair this broader policy. A generic login error alone still does not prove the state of a particular live server.
+
+The default is now **Shared-connection safe** policy, including when upgrading an installation without a `login_lock_mode` setting:
+
+- Historical blanket application IP blocks no longer veto every unrelated account. No new whole-IP firewall jobs are created by failed logins in this mode.
+- Failed guesses are counted per **email + connection**, and (when configured) per email across connections. They are temporary cooldowns, capped at 15 minutes, not permanent `is_suspended` writes. The existing policy thresholds, local-address scope and privileged-account protection options still apply. A valid login, OTP reset or explicit hosting recovery establishes a new account failure boundary without deleting audit history.
+- A separate **60 attempts per IP per minute** flood limit remains. Throttled requests do not add more attempt rows or extend that minute indefinitely. A valid OTP recovery permit retains its account/IP/password/expiry/attempt restrictions. Neither ordinary login nor recovery overrides an actual suspended account.
+- Login distinguishes a generic temporary-limit response from the generic credential/access failure, without disclosing whether an email exists. Account suspension still needs authorized review; no deployment automatically unsuspends all users.
+
+Portal settings now offers **Login lock policy**. `legacy` preserves the previous strict, day-long IP-ban and automatic-suspension behavior if an operator explicitly chooses it; it is not recommended behind shared connections. In shared-safe mode, the displayed account/IP windows are capped at 15 minutes for login enforcement. Existing IP records and failure history remain visible for investigation. External firewalls/CSF/Cloudflare/hosting bans and already-applied firewall jobs are not undone by PHP; have hosting support review those separately. Configure trusted proxies at the **web-server** layer if needed; REMIT does not trust arbitrary forwarded headers.
+
+### When the admin is already locked out
+
+1. Back up and upload the complete 0.12.1 release. Existing deployments without an explicit legacy setting use the safer policy immediately; no database migration or password reset is required for an active account with a correct password.
+2. In cPanel Terminal/SSH, `cd` to the deployed REMIT directory and run read-only diagnosis using the actual installation email:
+   ```sh
+   php bin/login-recovery.php --email=admin@your-domain.example
+   ```
+   It reports the matching account's role/suspension, login policy, recent failures and recorded application IP blocks; it never prints a password, hash or OTP. A missing email/account, suspension or retained strict policy can therefore be distinguished without guessing passwords.
+3. If the hosting owner confirms this is their admin account and wants it unlocked:
+   ```sh
+   php bin/login-recovery.php --email=admin@your-domain.example --unlock-admin --confirm=UNLOCK --use-scoped
+   ```
+   The CLI-only command rechecks/locks the account, permits **only provincial admins**, clears that admin's suspension, resets its cooldown boundary via an audit marker, and selects shared-safe policy. It **does not change the password**, modify transaction PINs or unsuspend other accounts. Sign in with the current password, or complete an email OTP reset if the password is unknown. Review individual suspended representatives in Church representatives after regaining access.
+4. To clear one specifically verified legacy application IP block and cancel its still-pending firewall jobs, append `--ip=ACTUAL_CLIENT_IP` to the confirmed command. Already-applied external firewall rules require hosting review. Do not guess the address or clear all blocks indiscriminately.
+
+This is a **hosting-owner tool, not a public recovery endpoint**. HTTP execution is rejected, and existing private-directory rules must remain enabled. Without terminal access, ask hosting support to run it from the installation directory; do not send anyone your password or OTP. No secret is required in the command line. Diagnosis is read-only unless the unlock and exact confirmation flags are supplied.
+
+Validation: `tests/shared-login.php` reproduces old blanket block rows, unknown-email mistakes, account-specific cooldowns, another rep signing in on the same blocked IP, manual suspension, cooldown expiry, recovery boundaries and one-minute flood protection using real password/session checks in the SQLite compatibility harness. The prior OTP/legacy-strict regression is retained with explicit legacy mode. Full PHP/browser suites are not proof of live server block state, MySQL concurrency or hosting CLI/mail/firewall integration; perform those deployment checks before production acceptance.
