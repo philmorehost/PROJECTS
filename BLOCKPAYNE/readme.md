@@ -1,191 +1,54 @@
-# Ultimate Comprehensive Architectural Blueprint: Modern Non-Custodial Crypto Payment Gateway (Advanced Blockonomics Clone)
+# BLOCKPAYNE — Non-Custodial Crypto Payment Gateway
 
-This master blueprint consolidates all core architecture, non-custodial cryptographic logic, the cPHulk/Imunify360-grade security engine, the 4-stage dynamic web installer, and modern Single-Page Application (SPA) UX enhancements into a single unified implementation reference.
+A fast, simple, mobile-first **Blockonomics-enhanced** non-custodial cryptocurrency payment gateway built in self-contained **PHP 8.2+ & MySQL 8.0+**. No Composer runtime or build step is required on cPanel, LiteSpeed, Apache, or Nginx hosting.
 
----
+## Highlights
 
-## 1. Executive Summary & Core Philosophy
-
-The platform is engineered as a lightning-fast, highly secure, non-custodial cryptocurrency payment gateway.
-
-* **Zero Fund Custody:** Crypto payments route directly from buyers to merchant external wallets via deterministic `xPub` address derivation.
-* **Prefund Accounting Model:** Gateway operational fees (e.g., 1%) are deducted from an internal database credit balance prefunded by the merchant.
-* **Frictionless SPA Experience:** Built with Laravel and Livewire/Alpine.js to eliminate full-page reloads, featuring a Command Palette (`Ctrl+K`), real-time WebSockets, and a mobile-first sticky bottom navigation bar.
-
----
-
-## 2. Technology Stack & Directory Architecture
-
-```text
-/app
-├── Http/
-│   ├── Controllers/
-│   │   ├── InstallController.php       # Manages 4-stage setup wizard
-│   │   ├── GatewayController.php      # xPub derivation & invoice handling
-│   │   └── SecurityController.php     # cPHulk firewall & brute-force monitoring
-│   ├── Middleware/
-│   │   ├── CheckInstalled.php         # Intercepts requests for root installer
-│   │   └── BruteForceProtection.php   # IP/Account rate limiting & lockout rules
-├── Livewire/
-│   └── DashboardManager.php           # SPA reactive dashboard navigation container
-├── Services/
-│   ├── BitcoinHDWalletService.php     # BIP44/xPub address generation engine
-│   └── BlockchainNodeService.php      # QuickNode/Alchemy/BlockBee API polling
-
-```
-
-* **Backend:** Laravel 10/11 (PHP 8.2+), MySQL 8.0+, Redis.
-* **Frontend:** Tailwind CSS v3/v4, Alpine.js, Laravel Livewire (for reactive SPA navigation without page refreshes).
-* **Cryptographic & Blockchain Libs:** `kornrunner/secp256k1`, `bitwasp/bitcoin-php`, GuzzleHttp.
+- **100% Live Non-Custodial (`xPub` & Direct Wallet):** Derives unique buyer deposit addresses per invoice in pure PHP (`secp256k1` BIP32/BIP44/BIP49/BIP84) for **BTC** (`zpub`/`ypub`/`xpub` -> `bc1q...`/`3...`/`1...`), **LTC** (`ltc1q...`/`L...`), **BCH** (`bitcoincash:q...`), **ETH** (`0x...` EIP-55), **USDT-TRC20** (`T...`), and **USDT-ERC20** (`0x...`). Also supports optional live **BlockBee / CryptAPI** forwarding (`api.blockbee.io`).
+- **Live Multi-Source Market Rates & Node Polling:** Automatic exchange-rate failover across **CoinGecko**, **Binance**, and **Coinbase** + direct 0-conf mempool & confirmation polling across **Mempool.space**, **Blockstream**, **Litecoinspace**, **Blockchair**, **TronGrid**, and **Ethereum JSON-RPC**.
+- **Prefund Credit Model (1% Fee):** Buyer payments route directly to the merchant's wallet. Operational fees are deducted from the merchant's USD prefund credit balance, topped up via live **Payhub** (Card/Bank NGN + signed `X-Payhub-Signature` webhook), **Live Crypto Deposit**, or **Admin Credit**.
+- **Multi-Language Merchant API & 10 Official Platform Plugins (`/api-docs`):**
+  - Interactive developer reference in **8 programming languages** (**PHP**, **Node.js / TypeScript**, **Python**, **cURL**, **Go**, **C# / .NET**, **Ruby**, and **Java 17+**) + **all PHP frameworks** (**Universal PHP SDK**, **Laravel**, **Symfony**, **CodeIgniter 4**, **Vanilla PHP**).
+  - **1-Click `.zip` Downloadable Plugins & Bridges** (`/integrations/download/{slug}`) for **WHMCS**, **WordPress / WooCommerce**, **FOSSBilling**, **PrestaShop**, **Joomla (VirtueMart & HikaShop/J2Store)**, **Shopify**, **Wix (Velo)**, **Invoice Ninja v5**, **Telegram Shop Bot (PHP cPanel & Python)**, and **PHP SDK**.
+  - Supports `"currency": "AUTO"` (buyer multi-coin switcher on `/pay/{id}`), custom `metadata` JSON round-tripping, and zero-cURL HMAC-signed HTML form redirects (`POST /pay/hosted`).
+- **Dynamic 4-Stage Web Installer:** Automatically intercepts `/` when `storage/installed` is absent -> verifies PHP 8.2+ & License Manager (`https://manager.pmhserver.name.ng/api.php`) -> connects MySQL & writes `.env` (`0600`) -> creates Super Admin & generates dynamic **First-Letter SVG Logo/Favicon** -> locks `storage/installed`.
+- **cPHulk / Imunify360-Grade Security Engine:**
+  - **250-Country ISO Firewall** with instant live search (`Whitelisted`, `Not Specified`, `Blacklisted`).
+  - **Account & IP Brute-Force Protection** with configurable window, failure thresholds, Privilege Exception toggle (`admin`/`administrator`), and `1_day` / `1_week` / `1_month` / `1_year` IP blocks.
+  - **Smart 5-Session Whitelisting:** Clean logins across 5 distinct sessions automatically whitelist the IP and display the **King Crown Icon with Green Marking** in Security Monitor logs.
 
 ---
 
-## 3. Dynamic 4-Stage Web Installer
+## Live Production Deployment (cPanel / Apache / LiteSpeed)
 
-Accessing the root directory automatically invokes the installer if the `storage/installed` lock file is missing.
-
-* **Stage 1 (System & License):** Validates PHP version (`>=8.2`), extensions (`BCMath`, `OpenSSL`, `PDO`, `cURL`, `Mbstring`, `Redis`), and verifies the license key against `[https://manager.pmhserver.name.ng/api-docs.php](https://manager.pmhserver.name.ng/api-docs.php)`.
-* **Stage 2 (Database Connection):** Collects MySQL credentials, tests connection, auto-writes the `.env` file, and executes database migrations.
-* **Stage 3 (Super Admin & Branding):** Creates the primary administrator account and dynamically generates the SVG/CSS Favicon and Logo using the **First Letter of the Site Title**.
-* **Stage 4 (Completion):** Generates the `storage/installed` lock file, provides Cron setup instructions (`* * * * * php artisan schedule:run`), and redirects to the admin panel.
-
----
-
-## 4. Advanced cPHulk / Imunify360-Grade Security Engine
-
-### A. IP & Country Firewall
-
-* **Global Country Control:** Database table storing ISO countries with status options: `Whitelisted`, `Blacklisted`, or `Not Specified` (Default).
-* **Live Search Filter:** Instant JavaScript filtering in the admin panel. Blacklisted countries or IPs are blocked at the firewall level instantly.
-
-### B. Account & IP Brute-Force Protection
-
-* **Configurable Parameters (Admin Managed):**
-* Brute Force Protection Period (in minutes).
-* Maximum Failures by Account & IP Address.
-* Privilege Exception: Toggle whether username protection locks default administrative accounts (`admin`, `administrator`).
-
-
-* **Lockout Actions:** Suspend user accounts on repeated login failures; automatically block attacking IPs at the firewall level (1-day, 1-week, 1-month, or 1-year blocks).
-
-### C. Smart Whitelisting & King Icon Logging
-
-* Successful logins without failed attempts increment a session counter.
-* After **5 successful logins from different sessions**, the IP is automatically whitelisted.
-* **UI Indicator:** In the Admin Login History & Security Monitor logs, recognized/whitelisted IPs display a distinct **King Icon with a Green Marking**.
-* **Notifications:** Real-time email alerts dispatched for successful admin logins from unknown IPs, netblock matches, or brute-force user attempts. Users can toggle personal alerts in their profile settings.
+1. Upload the `BLOCKPAYNE/` directory contents to your domain or subdomain document root.
+2. Create an empty MySQL 8.0+ (or MariaDB 10.6+) database and user in cPanel.
+3. Ensure `storage/` and root `.env` path are writable by PHP, then visit `https://yourdomain.com/` to complete the **4-Stage Setup Wizard**.
+4. Add the 1-minute Cron job in cPanel:
+   ```cron
+   * * * * * php /home/cpaneluser/public_html/artisan schedule:run >> /dev/null 2>&1
+   ```
+5. In **Admin -> Gateway Setup**, configure your live **Payhub** keys (`payhub_public_key`, `payhub_secret_key`), optional **BlockBee API Key**, and **Admin Live Crypto Treasury Addresses** (`BTC`, `LTC`, `BCH`, `USDT-TRC20`, `ETH`).
 
 ---
 
-## 5. Unified Database Schema Blueprint
+## Automated Tests
 
-```sql
--- Core Settings & Configuration Table
-CREATE TABLE `settings` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `key_name` VARCHAR(191) UNIQUE NOT NULL,
-  `key_value` LONGTEXT NULL,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Users & Merchants Table
-CREATE TABLE `users` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `name` VARCHAR(255) NOT NULL,
-  `email` VARCHAR(255) UNIQUE NOT NULL,
-  `password` VARCHAR(255) NOT NULL,
-  `role` ENUM('admin', 'merchant') DEFAULT 'merchant',
-  `status` ENUM('active', 'suspended', 'locked') DEFAULT 'active',
-  `enable_login_notifications` BOOLEAN DEFAULT TRUE,
-  `failed_login_attempts` INT DEFAULT 0,
-  `last_failed_login` TIMESTAMP NULL,
-  `remember_token` VARCHAR(100) NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Merchant xPub Wallets
-CREATE TABLE `merchant_wallets` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL,
-  `coin_symbol` VARCHAR(20) NOT NULL,
-  `xpub_key` TEXT NOT NULL,
-  `derived_index` INT DEFAULT 0,
-  `status` ENUM('active', 'inactive') DEFAULT 'active',
-  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-);
-
--- Prefund Internal Ledger Balances
-CREATE TABLE `merchant_balances` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL,
-  `currency` VARCHAR(20) DEFAULT 'USD',
-  `balance` DECIMAL(18,8) DEFAULT 0.00000000,
-  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-);
-
--- Transactions & Fee Ledger
-CREATE TABLE `transactions` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL,
-  `type` ENUM('prefund_deposit', 'fee_debit', 'withdrawal') NOT NULL,
-  `amount` DECIMAL(18,8) NOT NULL,
-  `currency` VARCHAR(20) NOT NULL,
-  `tx_hash` VARCHAR(255) NULL,
-  `status` ENUM('pending', 'confirmed', 'failed') DEFAULT 'pending',
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-);
-
--- Invoices Table
-CREATE TABLE `invoices` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL,
-  `invoice_id` VARCHAR(100) UNIQUE NOT NULL,
-  `order_id` VARCHAR(100) NULL,
-  `crypto_amount` DECIMAL(18,8) NOT NULL,
-  `fiat_amount` DECIMAL(18,2) NOT NULL,
-  `currency` VARCHAR(20) NOT NULL,
-  `deposit_address` VARCHAR(255) NOT NULL,
-  `status` ENUM('pending', 'detected', 'confirmed', 'expired') DEFAULT 'pending',
-  `confirmations` INT DEFAULT 0,
-  `callback_url` TEXT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-);
-
--- Security Logs & Brute-Force Tracking
-CREATE TABLE `security_logs` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `ip_address` VARCHAR(45) NOT NULL,
-  `username_attempted` VARCHAR(255) NULL,
-  `event_type` ENUM('failed_login', 'account_lock', 'ip_block', 'whitelisted_success', 'admin_alert') NOT NULL,
-  `details` TEXT NULL,
-  `country_code` VARCHAR(5) NULL,
-  `is_whitelisted` BOOLEAN DEFAULT FALSE,
-  `success_session_count` INT DEFAULT 0,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Country Firewall Rules Table
-CREATE TABLE `country_firewall` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `country_code` VARCHAR(5) NOT NULL,
-  `country_name` VARCHAR(100) NOT NULL,
-  `action` ENUM('Whitelisted', 'Not Specified', 'Blacklisted') DEFAULT 'Not Specified',
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
+```bash
+cd BLOCKPAYNE
+npm install
+npm test   # Runs PHP 8.4 syntax lint, JS lint, BIP84/Keccak unit suite & full SQL e2e suite
 ```
 
 ---
 
-## 6. Frontend UI/UX & Single-Page Application (SPA) Enhancements
+## Merchant REST API v1 (`/api-docs`)
 
-* **Zero-Reload SPA Navigation:** Powered by Laravel Livewire / Alpine.js, allowing merchants to switch between Invoices, Wallets, and Settings instantly without full-page reloads.
-* **Command Palette (`Ctrl+K`):** Spotlight-style keyboard search modal enabling merchants to execute quick navigation or trigger actions instantly.
-* **Real-Time WebSockets (Laravel Reverb / Pusher):** Instant invoice payment status updates and toast notifications without manual page refreshes.
-* **Mobile-First Design & Sticky Footer:** Styled with dark-themed cards (`bg-slate-900 border border-slate-800 text-slate-100`) and a modern fintech bottom navigation bar equipped with quick-access buttons.
-* **Dynamic Logo & Favicon:** Automatically renders a styled badge using the first letter of the site title if no custom logo image has been uploaded by the admin.
+Authenticate with `Authorization: Bearer bp_live_...` (or `X-API-Key: bp_live_...`):
 
----
+- `POST /api/v1/invoices` — Create a non-custodial crypto invoice (`amount`, `fiat_currency`, `currency`, `order_id`, `title`, `buyer_email`, `callback_url`, `redirect_url`).
+- `GET /api/v1/invoices/{invoice_id}` — Poll live invoice status, confirmations, `tx_hash`, and `explorer_url`.
+- `GET /api/v1/invoices` — List/filter merchant invoices (`status`, `order_id`, `limit`).
+- `GET /api/v1/rates` — Live USD & fiat crypto conversion rates.
+- `GET /api/v1/balance` — Merchant USD prefund credit balance & active non-custodial wallets.
+- **Signed Webhooks:** `X-BlockPayne-Event` (`invoice.detected` | `invoice.confirmed`) and `X-BlockPayne-Signature: HMAC-SHA256(raw_json_body, webhook_secret)`.

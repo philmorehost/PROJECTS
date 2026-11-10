@@ -1,0 +1,15 @@
+{
+  "name": "blockpayne-dev",
+  "private": true,
+  "description": "Development & verification harness (php-wasm + PGlite) for BLOCKPAYNE. Production deployment requires only PHP 8.2+ and MySQL 8.0+ with zero Node/Composer dependencies.",
+  "type": "module",
+  "scripts": {
+    "lint": "node tests/support/phpwasm-lint.mjs",
+    "test": "node tests/support/phpwasm-lint.mjs && node tests/support/phpwasm-test.mjs",
+    "preview": "node tests/support/preview-server.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "php-wasm": "^0.2.0"
+  }
+}
