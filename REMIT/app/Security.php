@@ -16,6 +16,9 @@ final class Security {
   audit($db,'ip_blocked',$email,'Application block applied; firewall job queued.');
   notify($db,setting($db,'notification_email'),'Security: IP blocked',self::ip().' blocked until '.$until);
  }
+ public static function sessionPasswordMatches(array $user,array $session): bool {
+  return is_string($session['password_stamp'] ?? null) && hash_equals(hash('sha256',$user['password_hash']),$session['password_stamp']);
+ }
  public static function login(PDO $db,string $email,string $password): ?array {
   $ip=self::ip();
   $db->beginTransaction();
@@ -48,7 +51,7 @@ final class Security {
    if ((int)$state['clean_sessions']===0) notify($db,setting($db,'notification_email'),'Security: unrecognized IP login',$email.' signed in from '.$ip);
    $db->prepare('UPDATE users SET successful_sessions_count=successful_sessions_count+1 WHERE id=?')->execute([$user['id']]);
    audit($db,'success',$email); $db->commit();
-   session_regenerate_id(true); $_SESSION['user_id']=$user['id']; $_SESSION['counted_login']=true; $_SESSION['last_activity']=time(); $_SESSION['csrf']=bin2hex(random_bytes(32)); return $user;
+   session_regenerate_id(true); $_SESSION['user_id']=$user['id']; $_SESSION['password_stamp']=hash('sha256',$user['password_hash']); $_SESSION['counted_login']=true; $_SESSION['last_activity']=time(); $_SESSION['csrf']=bin2hex(random_bytes(32)); return $user;
   } catch(Throwable $e) { if($db->inTransaction()) $db->rollBack(); throw $e; }
  }
  public static function verifyPin(PDO $db,array $user,string $pin): bool {
