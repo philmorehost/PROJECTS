@@ -2,6 +2,8 @@
 declare(strict_types=1);
 function action(PDO $db,array $user,array $ids): string {
  checkCsrf(); $action=$_POST['action'] ?? '';
+ if($action==='impersonation_return'){if(!Impersonation::active())throw new RuntimeException('No impersonation session.');Impersonation::refresh($db,true);return 'Returned to admin.';}
+ if(Impersonation::active() && $action!=='logout')throw new RuntimeException('Impersonation is read-only. Return to admin to make changes.');
  if ($action==='logout') { $_SESSION=[]; session_regenerate_id(true); redirect('login'); }
  if (in_array($action, ['license_save','license_recheck','update_check','update_pull','update_install'], true)) {
   requireRole($user, ['provincial_admin']);
@@ -16,6 +18,8 @@ function action(PDO $db,array $user,array $ids): string {
   return $updates->install();
  }
  if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
+ if($action==='representative_manage')return RepresentativeManager::manage($db,$user,$_POST);
+ if($action==='impersonate'){Impersonation::start($db,$user,(int)($_POST['rep_id']??0),(string)($_POST['pin']??''));return 'Viewing representative in read-only mode.';}
  if($action==='password_reset_settings'){
   requireRole($user,['provincial_admin']);$sender=PasswordReset::email($_POST['password_reset_sender'] ?? '');
   if($sender!==''&&!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid sender email address, or leave it blank to use the installation email.');

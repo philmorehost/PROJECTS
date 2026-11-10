@@ -258,3 +258,11 @@ document.querySelectorAll('[data-welcome-guide]').forEach(guide=>{
 // Deep links should reveal the native history disclosure without requiring another tap.
 function revealFinancialHistory(){const id=location.hash.slice(1);if(!['payments-history','reports-history'].includes(id))return;const panel=document.getElementById(id);if(panel)panel.open=true;}
 revealFinancialHistory();window.addEventListener('hashchange',revealFinancialHistory);
+
+// Convenience only: the server independently rejects ALL writes while impersonating.
+if(document.querySelector('[data-impersonation]'))document.querySelectorAll('form[method="post"]').forEach(form=>{
+ const action=form.querySelector('[name="action"]')?.value;
+ if(['impersonation_return','logout'].includes(action))return;
+ form.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=true);
+ form.setAttribute('aria-label','Read-only while viewing as a representative');
+});
