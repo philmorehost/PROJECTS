@@ -480,3 +480,35 @@ This does **not** remove a shared IP's block, whitelist an address, unsuspend a 
 For an already affected installation: deploy the complete 0.11.2 release, request a **new** OTP reset (prior resets cannot create the new permit), then manually enter the new password on the login page in the same browser within 10 minutes. Avoid browser autofill of the previous password. No database migration is required. Hosting-level IP blocks and account suspension still require authorized operator review; the generic screenshot error alone does not establish which condition exists on a live installation.
 
 `tests/password-reset-login.php` covers failed-attempt IP blocking, reset-to-login success, session rotation/stamp validity, password/IP/account/expiry/attempt binding, single-use behavior, suspension, retained shared-IP restrictions, auditing and ordinary unblocked sign-in. It uses the SQLite compatibility harness and mocked mail, not live MySQL concurrency or a hosting mail/firewall test.
+
+## 0.12.0 — Representative registration and account management
+
+### Registration fixes
+
+Multiple representatives using one church Wi-Fi/NAT can now submit applications without exhausting the old five-attempt shared-IP limit. Registration remains bounded to **30 attempts per IP per hour and five per normalized email per hour**, including valid-format email attempts that later fail form validation. The email counter is serialized using the existing installation settings lock and audit records; the maintenance task removes these counter events after one day. No arbitrary forwarded IP headers are trusted.
+
+A rejected applicant can now correct details and reapply for independent admin approval, instead of receiving a generic success while their application stays rejected. Pending applications cannot be overwritten by someone who merely knows the email. Already-active accounts are not overwritten, and a previously approved application may be resubmitted if its account was safely deleted. Reapplication retains the application ID and records the previous status/reviewer in audit history. No public request creates a church, assigns a privileged role, or bypasses approval. Unlisted churches still require admin linking to the correct church before approval. Invalid null-byte passwords are rejected cleanly.
+
+Registration closure, missing registration-schema upgrade and licence problems remain enforced; the public page now gives a more actionable reason. In particular, this update **does not silently reopen intentionally closed registration or bypass licence validation**. Check **Portal settings → Public officer registration**, perform the existing officer-registration upgrade if required, and approve pending applications under the new Church representatives page. Approval emails remain queued by the existing outbox (there is no mail delivery worker for those notifications); applicants can sign in after approval with their chosen password.
+
+### Admin: Church representatives
+
+Use **More → Church representatives** on mobile or **Church reps** in the desktop footer. This dedicated admin-only page includes searchable/paginated registered accounts, active/suspended filters, pending applications and these controls:
+
+- **Add** a rep with name, email, phone, church and initial password. Roles are derived from the church level, never submitted privilege choices.
+- **Edit** name/email/phone/church assignment and optionally replace the password. Blank keeps an existing password; passwords are never displayed or emailed. Share initial/replacement credentials through a trusted channel. Bank-profile values and financial history are not rewritten by this editor.
+- **Suspend / unsuspend** an account. Suspension is enforced by existing authentication/session checks. Unsuspending does not clear unrelated IP blocks or change the password.
+- **Delete** an unused account after typing `DELETE`. Payment/review history blocks deletion; suspend those accounts instead. The profile and account deletion are transactional, protected by existing foreign keys, and audited. Church reports remain associated with the church, not removed with a rep.
+- **View as representative (read-only)** after verifying the admin transaction PIN. This is support impersonation, not permission to submit money movements or change the rep's profile.
+
+All new management mutations and impersonation starts require the current admin's transaction PIN, CSRF token and active licence. Privileged accounts cannot be targeted through this tool. Password changes invalidate old password-stamped sessions; normal suspension/licence/role checks remain in effect. Management events identify the admin actor and target ID without logging passwords or PINs.
+
+### Safe impersonation and return
+
+A conspicuous **Viewing as … · Read-only** banner appears on every impersonated workspace page, with a POST/CSRF-protected **Return to admin** button. The target's normal church read scope is used. **Every write action except return or sign-out is rejected server-side**, even if controls are re-enabled manually or JavaScript is disabled. The interface also disables write forms as a convenience. Sign-out ends the whole session, not just impersonation.
+
+Session IDs and CSRF tokens rotate at start/return. Nested impersonation, privileged/suspended targets and non-admin initiators are refused. The original admin's current role, suspension, password stamp and absolute 30-minute impersonation expiry are checked on every request. If the target is deleted, suspended, changes role or changes password, the valid original admin is restored automatically. If the admin is invalidated or the impersonation expires, the session is signed out instead of restoring authority. Return remains available if the licence expires mid-session, so the admin can address it; licence restrictions still apply to subsequent mutations. Start/end events record both identities in the audit log.
+
+### Deployment / verification
+
+Deploy the complete PHP release and fingerprinted JS/CSS assets together. **No new database migration is introduced**; the existing officer registration schema must already be enabled (the new page links to settings when it is not). Back up the database before deployment. The SQLite compatibility tests exercise management CRUD/protection, approval/resubmission/rate boundaries, rollback and real session rotation. Browser tests cover mobile/desktop management, menus, disabled write forms and return availability; existing finance, recovery and registration suites remain in place. These harnesses do not prove live MySQL locking/concurrency, real mail delivery or a deployed server's registration settings/licence; verify those in staging.

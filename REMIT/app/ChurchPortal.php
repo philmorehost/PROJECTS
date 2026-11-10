@@ -111,19 +111,37 @@ final class ChurchPortal
             $ip=Security::ip();$db->prepare('INSERT IGNORE INTO registration_limits(ip_address,window_started) VALUES(?,NOW())')->execute([$ip]);
             $s=$db->prepare('SELECT * FROM registration_limits WHERE ip_address=? FOR UPDATE');$s->execute([$ip]);$limit=$s->fetch();
             if(strtotime($limit['window_started'])<time()-3600){$db->prepare('UPDATE registration_limits SET attempts=0,window_started=NOW() WHERE ip_address=?')->execute([$ip]);$limit['attempts']=0;}
-            if((int)$limit['attempts']>=5){$db->commit();throw new RuntimeException('Too many registration attempts. Please try again in an hour.');}
+            if((int)$limit['attempts']>=30){$db->commit();throw new RuntimeException('Too many registration attempts. Please try again in an hour.');}
+            $address=is_string($input['email']??null)?strtolower(trim($input['email'])):'';
+            if(filter_var($address,FILTER_VALIDATE_EMAIL)&&strlen($address)<=150){
+                $db->query("SELECT id FROM security_settings WHERE setting_key='site_title' FOR UPDATE")->fetch();
+                $s=$db->prepare("SELECT COUNT(*) FROM security_audit_logs WHERE event_type='registration_attempt' AND username_attempted=? AND created_at>=?");$s->execute([$address,date('Y-m-d H:i:s',time()-3600)]);
+                if((int)$s->fetchColumn()>=5){$db->commit();throw new RuntimeException('Too many attempts for this email. Please try again in an hour.');}
+                audit($db,'registration_attempt',$address,'Public officer registration attempt.');
+            }
             $db->prepare('UPDATE registration_limits SET attempts=attempts+1 WHERE ip_address=?')->execute([$ip]);$db->commit();
         } catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
         foreach(['full_name','email','phone','password','password_confirm'] as $field)if(!is_string($input[$field] ?? null))throw new InvalidArgumentException('Provide valid officer account details.');
         $name=trim($input['full_name'] ?? '');$email=strtolower(trim($input['email'] ?? ''));$phone=trim($input['phone'] ?? '');$password=$input['password'] ?? '';
-        if($name==='' || strlen($name)>100 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($email)>150 || !preg_match('/^[+0-9 ()-]{7,25}$/D',$phone) || strlen($password)<12 || strlen($password)>72 || $password!==($input['password_confirm'] ?? '')) throw new InvalidArgumentException('Check your name, email and phone. Use a 12–72 byte password and matching confirmation.');
+        if($name==='' || strlen($name)>100 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($email)>150 || !preg_match('/^[+0-9 ()-]{7,25}$/D',$phone) || strlen($password)<12 || strlen($password)>72 || str_contains($password,"\0") || $password!==($input['password_confirm'] ?? '')) throw new InvalidArgumentException('Check your name, email and phone. Use a 12–72 byte password and matching confirmation.');
         // No public request ever creates a church. Resolve exact normalized names server-side,
         // even if JavaScript was bypassed; ambiguous/fuzzy names require a human choice.
         [$unit,$requested,$type]=self::resolveChurch($db,$input);
         $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn())return;
-        $s=$db->prepare('INSERT IGNORE INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
-        $s->execute([$unit,$requested,$type,$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),'','','','']);
-        if($s->rowCount())notify($db,setting($db,'notification_email'),'Officer registration awaiting review','A new officer registration is awaiting church affiliation verification in the church directory.');
+        $db->beginTransaction();
+        try{
+            $s=$db->prepare('SELECT * FROM church_registrations WHERE email=? FOR UPDATE');$s->execute([$email]);$existing=$s->fetch();
+            $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn()){$db->commit();return;}
+            if($existing && $existing['status']==='pending'){$db->commit();return;}
+            $values=[$unit,$requested,$type,$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),'','','',''];
+            if($existing){
+                $db->prepare("UPDATE church_registrations SET parish_id=?,requested_church_name=?,requested_church_type=?,full_name=?,email=?,phone=?,password_hash=?,bank_name=?,account_name=?,account_ciphertext=?,account_last4=?,status='pending',reviewed_by=NULL WHERE id=?")->execute([...$values,$existing['id']]);
+                audit($db,'registration_reapplied',$email,json_encode(['application'=>$existing['id'],'previous_status'=>$existing['status'],'previous_reviewer'=>$existing['reviewed_by']]));
+            }else $db->prepare('INSERT INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute($values);
+            notify($db,setting($db,'notification_email'),'Officer registration awaiting review','A new officer registration is awaiting church affiliation verification in Church representatives.');
+            $db->commit();
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+
     }
     public static function reviewRegistration(PDO $db,array $admin,int $id,string $decision,int $resolvedUnit=0): string
     {

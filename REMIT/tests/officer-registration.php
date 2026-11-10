@@ -4,7 +4,7 @@ declare(strict_types=1);
 require __DIR__.'/church-portal.php';
 $checks=0;
 $db->exec("INSERT INTO church_hierarchy(id,node_name,node_type,parent_id,parish_code) VALUES(10,'Living Hope Parish','parish',11,'LHP'),(11,'Hope Area','area',3,NULL),(12,'NEW LIFE ZONE','zone',NULL,NULL)");
-function applyOfficer(array $changes):void{global $db,$input;$db->exec('UPDATE registration_limits SET attempts=0');ChurchPortal::register($db,array_replace($input,['bank_name'=>'','account_name'=>'','account_number'=>''],$changes));}
+function applyOfficer(array $changes):void{global $db,$input;$db->exec("UPDATE registration_limits SET attempts=0;DELETE FROM security_audit_logs WHERE event_type='registration_attempt'");ChurchPortal::register($db,array_replace($input,['bank_name'=>'','account_name'=>'','account_number'=>''],$changes));}
 function registration(string $email):array{global $db;$s=$db->prepare('SELECT * FROM church_registrations WHERE email=?');$s->execute([$email]);return $s->fetch()?:[];}
 $total=(int)$db->query('SELECT COUNT(*) FROM church_hierarchy')->fetchColumn();
 applyOfficer(['email'=>'existing@example.org','parish_id'=>10]);$row=registration('existing@example.org');check((int)$row['parish_id']===10 && $row['requested_church_name']===null,'existing parish reused');check($row['account_ciphertext']==='' && $row['account_last4']==='','bank not needed or stored');

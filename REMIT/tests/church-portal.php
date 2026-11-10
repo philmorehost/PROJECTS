@@ -48,7 +48,7 @@ try{
  ChurchPortal::register($db,$input);check((int)$db->query('SELECT COUNT(*) FROM church_registrations')->fetchColumn()===1,'duplicate does not create account');
  $other=$input;$other['email']='second@example.org';$other['parish_id']='999';refuses(fn()=>ChurchPortal::register($db,$other),'cannot select a missing church');
  $other['parish_id']='2';ChurchPortal::register($db,$other);ChurchPortal::reviewRegistration($db,$admin,2,'rejected');check((int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn()===1,'rejection does not create login');
- $db->exec("UPDATE registration_limits SET attempts=5");refuses(fn()=>ChurchPortal::register($db,$input),'registration throttling');
+ $db->exec("UPDATE registration_limits SET attempts=30");refuses(fn()=>ChurchPortal::register($db,$input),'registration throttling');
  $db->exec("INSERT INTO remittance_ledgers(id,parish_id,provincial_levy_due,amount_paid,status,payment_reference) VALUES(1,1,'80000.00','0.00','pending','RMT-TEST'),(2,2,'10000.00','0.00','pending','RMT-OTHER')");
  $payment=['ledger_id'=>1,'amount'=>'30000.00','transfer_reference'=>'BANK-ONE','transfer_date'=>date('Y-m-d')];
  ChurchPortal::submitPayment($db,$officer,$payment);check($db->query('SELECT amount_paid FROM remittance_ledgers WHERE id=1')->fetchColumn()==='0.00','submission is not settlement');

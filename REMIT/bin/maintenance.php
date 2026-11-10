@@ -27,3 +27,5 @@ if($get('password_reset_schema')===1){
  $cutoff=date('Y-m-d H:i:s',time()-86400);
  foreach(['password_resets'=>'expires_at','password_reset_limits'=>'window_started'] as $table=>$column){$s=$db->prepare("DELETE FROM $table WHERE $column < ?");$s->execute([$cutoff]);echo $s->rowCount()." expired $table records removed.\n";}
 }
+
+$s=$db->prepare("DELETE FROM security_audit_logs WHERE event_type='registration_attempt' AND created_at < ?");$s->execute([date('Y-m-d H:i:s',time()-86400)]);echo $s->rowCount()." expired registration attempt counters removed.\n";
