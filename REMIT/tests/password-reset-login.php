@@ -6,7 +6,7 @@ CREATE TABLE security_ips(ip_address TEXT PRIMARY KEY,blocked_until TEXT,whiteli
 CREATE TABLE firewall_jobs(id INTEGER PRIMARY KEY,ip_address TEXT,blocked_until TEXT,status TEXT DEFAULT 'pending');
 CREATE TABLE password_resets(email TEXT PRIMARY KEY,user_id INTEGER,request_key TEXT,code_hash TEXT,password_stamp TEXT,expires_at TEXT,sent_at TEXT,attempts INTEGER DEFAULT 0);
 CREATE TABLE password_reset_limits(bucket_key TEXT PRIMARY KEY,window_started TEXT,hits INTEGER DEFAULT 0);
-INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_schema','1'),('password_reset_sender','no-reply@example.org'),('ip_protection','1'),('ip_window','15'),('ip_max','10'),('username_protection','1'),('protect_privileged','0'),('account_window','15'),('account_max','5'),('block_days','1');
+INSERT INTO security_settings(setting_key,setting_value) VALUES('login_lock_mode','legacy'),('password_reset_schema','1'),('password_reset_sender','no-reply@example.org'),('ip_protection','1'),('ip_window','15'),('ip_max','10'),('username_protection','1'),('protect_privileged','0'),('account_window','15'),('account_max','5'),('block_days','1');
 DELETE FROM security_audit_logs WHERE event_type='failed_login';UPDATE users SET role='provincial_admin' WHERE id=1");
 $email='officer@example.org';$password='new-recovered-password-123';$ip=Security::ip();
 $db->prepare('UPDATE users SET password_hash=? WHERE email=?')->execute([password_hash('old-admin-password',PASSWORD_DEFAULT),$email]);

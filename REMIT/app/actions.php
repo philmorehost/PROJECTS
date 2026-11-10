@@ -41,7 +41,7 @@ function action(PDO $db,array $user,array $ids): string {
   [$bank,$name,$number]=ChurchPortal::bank($_POST);
   $enabled=$_POST['registration_enabled'] ?? '';if(!in_array($enabled,['0','1'],true))throw new InvalidArgumentException('Invalid registration setting.');
   $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled];
-  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
+  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('login_lock_mode',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$mode]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
   return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
  }
  if ($action==='profile') {
@@ -113,6 +113,7 @@ function action(PDO $db,array $user,array $ids): string {
  if ($action==='settings') {
   requireRole($user,['provincial_admin']);
   $rules=['username_protection'=>[0,1],'protect_privileged'=>[0,1],'local_only'=>[0,1],'ip_protection'=>[0,1],'block_days'=>[1,7,30,365],'log_retention'=>[5,10,15,60]];
+  $mode=$_POST['login_lock_mode']??'scoped';if(!in_array($mode,['scoped','legacy'],true))throw new RuntimeException('Invalid login lock mode.');
   $values=[];
   foreach($rules as $key=>$allowed) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || !in_array($v,$allowed,true)) throw new RuntimeException('Invalid security setting.');$values[$key]=(string)$v; }
   foreach(['account_window','ip_window','account_max','ip_max'] as $key) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || $v<1 || $v>1440) throw new RuntimeException('Setting outside allowed range.');$values[$key]=(string)$v; }
