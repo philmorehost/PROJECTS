@@ -7,6 +7,7 @@ session_start();
 $step = isset($_GET['step']) ? (int)$_GET['step'] : 1;
 $error = '';
 $success = '';
+$activationCodeInput = '';
 
 // If already installed, don't allow re-installation
 if (file_exists('../func/db-json.php') && $step < 4) {
@@ -26,48 +27,87 @@ if (file_exists('../func/db-json.php') && $step < 4) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($step === 1) {
-        $code = trim($_POST['activation_code'] ?? '');
-        if (empty($code)) {
-            $error = "Please enter your Activation Code.";
+        $code = trim((string)($_POST['activation_code'] ?? ''));
+        $activationCodeInput = $code;
+        if ($code === '') {
+            $error = 'Please enter your Activation Code.';
         } else {
-            $domain = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            if (strpos($domain, ':') !== false) {
-                $domain = explode(':', $domain)[0];
-            }
-            $ch = curl_init('https://manager.pmhserver.name.ng/api.php');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-                'key' => $code,
-                'domain' => $domain
-            ]));
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            $response = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($response !== false && $http_code === 200) {
-                $res = @json_decode($response, true);
-                $res_status = $res['status'] ?? '';
-                $is_valid = ($res_status === 'active' || $res_status === 'valid' || (int)$res_status === 1);
-                if (isset($res['status']) && $is_valid) {
-                    include_once('../func/bc-levelup.php');
-                    if (bc_write_activation($code)) {
-                        // Keep the validated license key/domain in the session so step 3 can
-                        // persist it into sas_super_admin_options (the DB doesn't exist yet here).
-                        $_SESSION['install_license_key'] = $code;
-                        $_SESSION['install_license_domain'] = $domain;
-                        header("Location: ?step=2");
-                        exit;
-                    } else {
-                        $error = "Failed to write activation file. Check folder permissions.";
-                    }
-                } else {
-                    $error = "Invalid activation code for this domain.";
-                }
+            $hostHeader = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $domain = parse_url('http://' . $hostHeader, PHP_URL_HOST);
+            $domain = strtolower(rtrim((string)($domain ?: preg_replace('/:\d+$/', '', $hostHeader)), '.'));
+            if ($domain === '' || $domain === 'localhost') {
+                $error = 'Could not determine this installation domain. Open the installer using the site domain, then try again.';
             } else {
-                $error = "Unable to connect to the activation server. Please try again.";
+                try {
+                    $endpoint = 'https://manager.pmhserver.name.ng/api.php';
+                    $ch = curl_init($endpoint);
+                    if ($ch === false) {
+                        throw new RuntimeException('The server could not initialize cURL. Confirm the cURL extension is enabled.');
+                    }
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => http_build_query(['key' => $code, 'domain' => $domain]),
+                        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+                        CURLOPT_CONNECTTIMEOUT => 5,
+                        CURLOPT_TIMEOUT => 15,
+                        CURLOPT_SSL_VERIFYPEER => true,
+                        CURLOPT_SSL_VERIFYHOST => 2,
+                        CURLOPT_USERAGENT => 'DGV7-SaaS-Installer/' . PHP_VERSION,
+                    ]);
+                    $response = curl_exec($ch);
+                    $curl_errno = curl_errno($ch);
+                    $curl_error = curl_error($ch);
+                    $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    if ($response === false) {
+                        error_log('[DGV7 installer] License verification transport error ' . $curl_errno . ': ' . $curl_error);
+                        $error = 'Could not contact the activation server (connection error ' . $curl_errno . '). ' . ($curl_error ?: 'Check outbound HTTPS/DNS and try again.');
+                    } elseif ($http_code < 200 || $http_code >= 300) {
+                        error_log('[DGV7 installer] License server returned HTTP ' . $http_code . ' for domain ' . $domain);
+                        $error = 'The activation server returned HTTP ' . $http_code . '. Please check the activation service and try again.';
+                    } else {
+                        $res = json_decode((string)$response, true);
+                        if (!is_array($res)) {
+                            error_log('[DGV7 installer] License server returned invalid JSON (HTTP ' . $http_code . ').');
+                            $error = 'The activation server returned an unreadable response. Please try again later or contact support.';
+                        } else {
+                            $statusValue = $res['status'] ?? ($res['data']['status'] ?? null);
+                            $validFlag = $res['valid'] ?? ($res['data']['valid'] ?? false);
+                            $normalizedStatus = strtolower(trim((string)$statusValue));
+                            $is_valid = in_array($normalizedStatus, ['active', 'valid', 'success', 'ok', '1', 'true'], true)
+                                || filter_var($validFlag, FILTER_VALIDATE_BOOLEAN);
+
+                            if ($is_valid) {
+                                try {
+                                    include_once('../func/bc-levelup.php');
+                                    if (!function_exists('bc_write_activation')) {
+                                        throw new RuntimeException('Activation support could not be loaded.');
+                                    }
+                                    if (!bc_write_activation($code)) {
+                                        throw new RuntimeException('Could not write the activation file. Check write permissions for the func/ folder.');
+                                    }
+                                    $_SESSION['install_license_key'] = $code;
+                                    $_SESSION['install_license_domain'] = $domain;
+                                    header('Location: ?step=2');
+                                    exit;
+                                } catch (Throwable $activationError) {
+                                    error_log('[DGV7 installer] Valid key could not be persisted: ' . $activationError->getMessage());
+                                    $error = 'The key was verified, but could not be saved on this server. Check that func/ is writable and that OpenSSL is enabled. Details: ' . $activationError->getMessage();
+                                }
+                            } else {
+                                $apiMessage = $res['message'] ?? ($res['data']['message'] ?? 'The activation service did not approve this key for the submitted domain.');
+                                $apiMessage = trim(substr(strip_tags((string)$apiMessage), 0, 300));
+                                $error = $apiMessage !== '' ? $apiMessage : 'The activation key was not accepted for ' . $domain . '.';
+                                error_log('[DGV7 installer] License verification rejected for domain ' . $domain . ': ' . $error);
+                            }
+                        }
+                    }
+                } catch (Throwable $verificationError) {
+                    error_log('[DGV7 installer] License verification failed: ' . $verificationError->getMessage());
+                    $error = 'License verification could not be completed. ' . $verificationError->getMessage();
+                }
             }
         }
     } elseif ($step === 2) {
@@ -196,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="installer-body">
         <?php if (!empty($error)): ?>
-            <div class="alert error"><i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($error) ?></div>
+            <div id="activationFeedback" class="alert error" role="alert" aria-live="assertive"><i class="bi bi-exclamation-triangle"></i><span><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></span></div>
         <?php endif; ?>
 
         <?php if ($step === 1): ?>
@@ -207,7 +247,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $curl_ok = extension_loaded('curl');
             $json_ok = extension_loaded('json');
             $mbstring_ok = extension_loaded('mbstring');
-            $all_ok = $php_ok && $mysqli_ok && $curl_ok && $json_ok && $mbstring_ok;
+            $openssl_ok = extension_loaded('openssl');
+            $all_ok = $php_ok && $mysqli_ok && $curl_ok && $json_ok && $mbstring_ok && $openssl_ok;
             ?>
             <ul class="requirements-list">
                 <li>PHP Version >= 7.4 <span class="badge <?= $php_ok ? 'success' : 'fail' ?>"><?= $php_ok ? 'Yes' : 'No' ?></span></li>
@@ -215,13 +256,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <li>cURL Extension <span class="badge <?= $curl_ok ? 'success' : 'fail' ?>"><?= $curl_ok ? 'Yes' : 'No' ?></span></li>
                 <li>JSON Extension <span class="badge <?= $json_ok ? 'success' : 'fail' ?>"><?= $json_ok ? 'Yes' : 'No' ?></span></li>
                 <li>Mbstring Extension <span class="badge <?= $mbstring_ok ? 'success' : 'fail' ?>"><?= $mbstring_ok ? 'Yes' : 'No' ?></span></li>
+                <li>OpenSSL Extension <span class="badge <?= $openssl_ok ? 'success' : 'fail' ?>"><?= $openssl_ok ? 'Yes' : 'No' ?></span></li>
                 <li>func/ Folder Writable <span class="badge <?= is_writable('../func') ? 'success' : 'fail' ?>"><?= is_writable('../func') ? 'Yes' : 'No' ?></span></li>
             </ul>
             
             <form method="POST">
                 <div class="form-group mt-4" style="text-align: left;">
                     <label style="display: block; font-weight: 600; margin-bottom: 8px;">Activation Code</label>
-                    <input type="text" name="activation_code" placeholder="Enter your Activation Code" required autocomplete="off">
+                    <input type="text" name="activation_code" value="<?= htmlspecialchars($activationCodeInput, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your Activation Code" required autocomplete="off" aria-describedby="activationFeedback">
                 </div>
                 
                 <?php if ($all_ok && is_writable('../func')): ?>
