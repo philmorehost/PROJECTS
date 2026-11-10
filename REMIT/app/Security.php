@@ -25,8 +25,14 @@ final class Security {
   try {
    $db->prepare('INSERT IGNORE INTO security_ips(ip_address) VALUES(?)')->execute([$ip]);
    $s=$db->prepare('SELECT * FROM security_ips WHERE ip_address=? FOR UPDATE'); $s->execute([$ip]); $state=$s->fetch();
-   if ($state['blocked_until'] && strtotime($state['blocked_until'])>time()) { $db->commit(); return null; }
+   $blocked=$state['blocked_until'] && strtotime($state['blocked_until'])>time();
+   $permit=$_SESSION['reset_login_permit'] ?? null;
+   $candidate=is_array($permit) && ($permit['email'] ?? null)===$email && ($permit['ip'] ?? null)===$ip && ($permit['expires'] ?? 0)>time() && ($permit['attempts'] ?? 5)<5;
+   if($blocked && !$candidate){$db->commit();return null;}
    $s=$db->prepare('SELECT * FROM users WHERE email=? FOR UPDATE'); $s->execute([$email]); $user=$s->fetch();
+   $recovery=$candidate && $user && (int)$permit['user_id']===(int)$user['id'] && hash_equals($permit['password_stamp'],hash('sha256',$user['password_hash']));
+   if($candidate)$_SESSION['reset_login_permit']['attempts']++;
+   if($blocked && !$recovery){$db->commit();return null;}
    // Valid fixed bcrypt hash equalizes password-check work for unknown users.
    $valid=password_verify($password,$user['password_hash'] ?? '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi');
    if (!$user || !$valid || $user['is_suspended']) {
@@ -50,7 +56,9 @@ final class Security {
    }
    if ((int)$state['clean_sessions']===0) notify($db,setting($db,'notification_email'),'Security: unrecognized IP login',$email.' signed in from '.$ip);
    $db->prepare('UPDATE users SET successful_sessions_count=successful_sessions_count+1 WHERE id=?')->execute([$user['id']]);
+   if($recovery)audit($db,'password_reset_login',$email,'One-time OTP-verified recovery sign-in; shared IP protections unchanged.');
    audit($db,'success',$email); $db->commit();
+   unset($_SESSION['reset_login_permit']);
    session_regenerate_id(true); $_SESSION['user_id']=$user['id']; $_SESSION['password_stamp']=hash('sha256',$user['password_hash']); $_SESSION['counted_login']=true; $_SESSION['last_activity']=time(); $_SESSION['csrf']=bin2hex(random_bytes(32)); return $user;
   } catch(Throwable $e) { if($db->inTransaction()) $db->rollBack(); throw $e; }
  }
