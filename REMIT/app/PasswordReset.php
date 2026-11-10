@@ -4,7 +4,22 @@ final class PasswordReset
 {
     public const MESSAGE='If an eligible account exists, a reset code will be emailed. Check your inbox and spam folder. Codes expire in 10 minutes; please wait before requesting another.';
     public static function ready(PDO $db): bool { return setting($db,'password_reset_schema')==='1'; }
-    public static function enabled(PDO $db): bool { return self::ready($db) && (bool)filter_var(setting($db,'password_reset_sender'),FILTER_VALIDATE_EMAIL); }
+    /** Only fixed database configuration is used; never derive a sender from the request Host. */
+    public static function sender(PDO $db): string
+    {
+        foreach(['password_reset_sender','notification_email'] as $key){
+            $email=self::email(setting($db,$key));if(filter_var($email,FILTER_VALIDATE_EMAIL))return $email;
+        }
+        $email=self::email($db->query("SELECT email FROM users WHERE role='provincial_admin' ORDER BY id LIMIT 1")->fetchColumn());
+        return filter_var($email,FILTER_VALIDATE_EMAIL)?$email:'';
+    }
+    public static function enabled(PDO $db): bool { return self::ready($db) && setting($db,'password_reset_enabled')!=='0' && self::sender($db)!==''; }
+    /** Allows already-installed, locked-out administrators to upgrade recovery without logging in. */
+    public static function initialize(PDO $db): void
+    {
+        if(setting($db,'password_reset_enabled')==='0')return;
+        if(!self::ready($db))self::migrate($db);
+    }
     public static function migrate(PDO $db): void
     {
         if((int)$db->query("SELECT GET_LOCK('remit_password_reset_migration',5)")->fetchColumn()!==1)throw new RuntimeException('Another upgrade is running. Try again shortly.');
@@ -57,7 +72,7 @@ final class PasswordReset
     }
     private static function deliver(PDO $db,string $to,string $subject,string $body): bool
     {
-        $from=setting($db,'password_reset_sender');
+        $from=self::sender($db);
         if(strlen($from)>150||str_contains($from,"\r")||str_contains($from,"\n")||!filter_var($from,FILTER_VALIDATE_EMAIL))return false;
         return @mail($to,$subject,$body,['From'=>$from,'MIME-Version'=>'1.0','Content-Type'=>'text/plain; charset=UTF-8']);
     }
