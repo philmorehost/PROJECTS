@@ -16,6 +16,13 @@ function action(PDO $db,array $user,array $ids): string {
   return $updates->install();
  }
  if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
+ if($action==='password_reset_settings'){
+  requireRole($user,['provincial_admin']);$sender=PasswordReset::email($_POST['password_reset_sender'] ?? '');
+  if($sender!==''&&!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid sender email address, or leave it blank to disable password reset.');
+  PasswordReset::migrate($db);
+  $db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_sender',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$sender]);
+  return 'Password reset settings saved. Send a test reset from the login page to verify email delivery.';
+ }
  if($action==='receipt_migrate'){requireRole($user,['provincial_admin']);PaymentProof::migrate($db);return 'Receipt uploads enabled.';}
  if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Officer registration and payment schema enabled. Existing records and percentages are unchanged.'; }
  if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');

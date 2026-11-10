@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
    $db=Database::connect($config);
    if ($db->query('SHOW TABLES')->fetchColumn()) throw new RuntimeException('Use an empty database dedicated to REMIT.');
    foreach(explode(';',file_get_contents(ROOT.'/database/schema.sql')) as $sql) if(trim($sql)!=='') $db->exec($sql);
-   ChurchPortal::migrate($db);PaymentProof::migrate($db);
+   ChurchPortal::migrate($db);PaymentProof::migrate($db);PasswordReset::migrate($db);
    $path=ROOT.'/config/database.php';
    if (file_put_contents($path,"<?php\nreturn ".var_export($config,true).";\n",LOCK_EX)===false) throw new RuntimeException('Cannot save configuration.');
    chmod($path,0600); $_SESSION['install_step']=3;

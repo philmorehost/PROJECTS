@@ -22,3 +22,8 @@ if($get('payment_proof_schema')===1){
  function setting(PDO $db,string $key,string $default=''): string { $s=$db->prepare('SELECT setting_value FROM security_settings WHERE setting_key=?');$s->execute([$key]);return (string)($s->fetchColumn() ?: $default); }
  echo PaymentProof::prune($db)." orphan receipt files removed (24-hour grace).\n";
 }
+
+if($get('password_reset_schema')===1){
+ $cutoff=date('Y-m-d H:i:s',time()-86400);
+ foreach(['password_resets'=>'expires_at','password_reset_limits'=>'window_started'] as $table=>$column){$s=$db->prepare("DELETE FROM $table WHERE $column < ?");$s->execute([$cutoff]);echo $s->rowCount()." expired $table records removed.\n";}
+}
