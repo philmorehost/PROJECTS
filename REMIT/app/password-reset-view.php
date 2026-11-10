@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
-$resetEnabled=PasswordReset::enabled($db);$resetError='';$resetMessage=(string)($_SESSION['reset_message'] ?? '');unset($_SESSION['reset_message']);
+$initializationFailed=false;
+try{PasswordReset::initialize($db);}catch(Throwable $e){$initializationFailed=true;error_log('REMIT password reset schema initialization failed. Check database DDL permissions.');}
+$resetEnabled=!$initializationFailed && PasswordReset::enabled($db);$resetError='';$resetMessage=(string)($_SESSION['reset_message'] ?? '');unset($_SESSION['reset_message']);
 $resetSuccess=!empty($_SESSION['reset_success']);unset($_SESSION['reset_success']);
 $email=PasswordReset::email($_SESSION['reset_email'] ?? '');
 if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -20,7 +22,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password · REMIT</title><link rel="stylesheet" href="public/assets/app.86930353.css"><?php require __DIR__.'/pwa-head.php'; ?></head><body class="setup"><main class="setup-card login">
 <a class="brand" href="index.php"><span class="brand-icon">R</span>remit<span class="brand-dot">.</span></a><p class="eyebrow">ACCOUNT RECOVERY</p><h1>Reset your password.</h1>
 <?php if($resetSuccess): ?><div class="notice" role="status">Your password has been changed. Sign in with your new password. Other sessions have been signed out.</div>
-<?php elseif(!$resetEnabled): ?><div class="notice">Email password reset is not enabled yet. Please contact your administrator.</div>
+<?php elseif(!$resetEnabled): ?><div class="notice"><?= $initializationFailed?'Password recovery could not initialize. Ask your hosting support to check database CREATE TABLE privileges, then retry.':'Email recovery is disabled or no installation email is available. Contact your hosting administrator.' ?></div>
 <?php else: ?>
 <p class="muted">Request a code at your registered email, then use it to choose a new password.</p>
 <?php if($resetError): ?><div class="alert" role="alert"><?= e($resetError) ?></div><?php endif ?>

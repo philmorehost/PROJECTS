@@ -21,8 +21,10 @@ foreach(['parish_officer'=>1,'area_rep'=>10,'zonal_rep'=>3] as $role=>$unit){
 $page='register';$enabled=true;$submitted=false;$churches=ChurchPortal::directory($db);$publicSource=file_get_contents($appDir.'/register.php');$htmlSource=str_replace('__DIR__','$appDir',substr($publicSource,strpos($publicSource,'<!doctype html')));ob_start();eval('?>'.$htmlSource);file_put_contents($dir.'/register.html',ob_get_clean());
 $page='login';$start=strpos($source,'<!doctype html');$end=strpos($source,'</html>',$start)+7;$login=str_replace('ROOT.','$fixtureRoot.',substr($source,$start,$end-$start));ob_start();eval('?>'.$login);file_put_contents($dir.'/login.html',ob_get_clean());
 ob_start();require $appDir.'/installer.php';file_put_contents($dir.'/setup.html',ob_get_clean());
+$db->exec("INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_enabled','0')");
 $page='reset-password';$_SESSION=[];ob_start();require $appDir.'/password-reset-view.php';file_put_contents($dir.'/reset-disabled.html',ob_get_clean());
 $db->exec("INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_schema','1'),('password_reset_sender','no-reply@example.org')");
+$db->exec("UPDATE security_settings SET setting_value='1' WHERE setting_key='password_reset_enabled'");
 $_SESSION['reset_email']='officer@example.org';$_SESSION['reset_message']=PasswordReset::MESSAGE;ob_start();require $appDir.'/password-reset-view.php';file_put_contents($dir.'/reset-password.html',ob_get_clean());
 $_SESSION['reset_success']=true;ob_start();require $appDir.'/password-reset-view.php';file_put_contents($dir.'/reset-success.html',ob_get_clean());
 unlink(ROOT.'/app');rmdir(ROOT);

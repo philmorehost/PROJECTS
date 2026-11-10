@@ -18,9 +18,11 @@ function action(PDO $db,array $user,array $ids): string {
  if (!(new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? '')['valid']) throw new RuntimeException('Activate a valid licence before changing portal records.');
  if($action==='password_reset_settings'){
   requireRole($user,['provincial_admin']);$sender=PasswordReset::email($_POST['password_reset_sender'] ?? '');
-  if($sender!==''&&!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid sender email address, or leave it blank to disable password reset.');
+  if($sender!==''&&!filter_var($sender,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid sender email address, or leave it blank to use the installation email.');
+  $enabled=($_POST['password_reset_enabled'] ?? '1')==='0'?'0':'1';
   PasswordReset::migrate($db);
   $db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_sender',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$sender]);
+  $db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_enabled',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$enabled]);
   return 'Password reset settings saved. Send a test reset from the login page to verify email delivery.';
  }
  if($action==='receipt_migrate'){requireRole($user,['provincial_admin']);PaymentProof::migrate($db);return 'Receipt uploads enabled.';}
