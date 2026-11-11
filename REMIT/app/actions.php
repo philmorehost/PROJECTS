@@ -35,6 +35,7 @@ function action(PDO $db,array $user,array $ids): string {
  if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''),(int)($_POST['resolved_unit_id'] ?? 0));
  if ($action==='payment_submit') return ChurchPortal::submitPayment($db,$user,$_POST,$_FILES['payment_proof'] ?? null);
  if ($action==='payment_review') return ChurchPortal::reviewPayment($db,$user,$_POST);
+ if ($action==='delete_reports') {$count=ChurchPortal::deletePendingReports($db,$user,$_POST);return $count.' pending remittance'.($count===1?'':'s').' deleted. Representatives can now resubmit those periods.';}
  if ($action==='allocation_settings') {
   requireRole($user,['provincial_admin']);
   $retained=ChurchPortal::percentage(trim($_POST['retained_percentage'] ?? ''));

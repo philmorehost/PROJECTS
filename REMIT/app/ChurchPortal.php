@@ -189,6 +189,27 @@ final class ChurchPortal
             $db->commit();return 'Payment submitted. Awaiting treasury confirmation.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($proof)PaymentProof::remove($proof['proof_key']);throw $e;}
     }
+    public static function deletePendingReports(PDO $db,array $user,array $input): int
+    {
+        requireRole($user,['provincial_admin','provincial_treasurer']);
+        $ids=array_values(array_unique(array_map('intval',(array)($input['report_ids']??[]))));
+        if(!$ids)throw new InvalidArgumentException('Select at least one pending remittance to delete.');
+        $marks=implode(',',array_fill(0,count($ids),'?'));$params=$ids;
+        $check=$db->prepare("SELECT COUNT(*) FROM remittance_ledgers WHERE id IN ($marks) AND status='pending'");$check->execute($params);if((int)$check->fetchColumn()!==count($ids))throw new RuntimeException('Only pending remittances can be deleted. Refresh and try again.');
+        $db->beginTransaction();
+        try{
+            if(PaymentProof::ready($db)){
+              $proofs=$db->prepare("SELECT r.proof_key FROM payment_receipts r JOIN payment_notifications n ON n.id=r.notification_id WHERE n.ledger_id IN ($marks)");$proofs->execute($params);
+              foreach($proofs->fetchAll(PDO::FETCH_COLUMN) as $key)PaymentProof::remove($key);
+              $db->prepare("DELETE FROM payment_receipts WHERE notification_id IN (SELECT id FROM payment_notifications WHERE ledger_id IN ($marks))")->execute($params);
+            }
+            $db->prepare("DELETE FROM payment_notifications WHERE ledger_id IN ($marks)")->execute($params);
+            $db->prepare("DELETE FROM report_allocations WHERE ledger_id IN ($marks)")->execute($params);
+            $db->prepare("DELETE FROM remittance_ledgers WHERE id IN ($marks)")->execute($params);
+            audit($db,'remittance_reports_deleted',$user['email'],json_encode(['ids'=>$ids,'actor'=>$user['id']]));
+            $db->commit();return count($ids);
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+    }
     public static function reviewPayment(PDO $db,array $user,array $input): string
     {
         $auto=($input['auto']??'')==='1';

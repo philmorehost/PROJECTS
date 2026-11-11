@@ -306,4 +306,11 @@ if(payhubForm){
  if(launch)launch.addEventListener('click',startPayhub);
  payhubForm.addEventListener('submit',event=>{event.preventDefault();startPayhub(event);},true);
 }
-const save=document.getElementById('income-form');if(save){save.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},100);});if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),120);}}
+const save=document.getElementById('income-form');if(save){save.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},100);});if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),120);}}const deleteForm=document.getElementById('delete-reports-form');
+if(deleteForm){
+ const checks=Array.from(deleteForm.querySelectorAll('.report-delete-check'));const all=deleteForm.querySelector('[data-select-all-reports]');const btn=deleteForm.querySelector('button[type=submit]');
+ const update=()=>{const selected=checks.filter(c=>c.checked).length;if(all){all.checked=selected>0&&selected===checks.length;all.indeterminate=selected>0&&selected<checks.length;}btn.disabled=selected===0;btn.textContent=selected?`Delete ${selected} pending`+' →':'Delete selected pending →';};
+ checks.forEach(c=>c.addEventListener('change',update));all?.addEventListener('change',()=>{checks.forEach(c=>{if(!c.disabled)c.checked=all.checked;});update();});
+ deleteForm.addEventListener('submit',event=>{if(!deleteForm.dataset.confirmMessage)return;if(!confirm(deleteForm.dataset.confirmMessage))event.preventDefault();});
+ update();
+}

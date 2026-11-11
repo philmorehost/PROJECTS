@@ -545,7 +545,7 @@ This is a **hosting-owner tool, not a public recovery endpoint**. HTTP execution
 
 Validation: `tests/shared-login.php` reproduces old blanket block rows, unknown-email mistakes, account-specific cooldowns, another rep signing in on the same blocked IP, manual suspension, cooldown expiry, recovery boundaries and one-minute flood protection using real password/session checks in the SQLite compatibility harness. The prior OTP/legacy-strict regression is retained with explicit legacy mode. Full PHP/browser suites are not proof of live server block state, MySQL concurrency or hosting CLI/mail/firewall integration; perform those deployment checks before production acceptance.
 
-## 0.16.1 — Pending-first representative workspace and admin alerts
+## 0.16.2 — Pending-first representative workspace and admin alerts
 
 **Church reps** now opens with a pending-count shortcut and the **pending approval cards first**, rather than putting the queue below account creation and the registered list. Cards stack on phones, use two columns from 760px and three from 1180px. Approve/reject controls stay on each card; unlisted churches still require linking to an independently verified church before approval. The queue now queries/paginates all pending applications in 12-card pages instead of silently limiting access to the first 100. Approval remains a CSRF-protected POST using the existing atomic review/role-assignment logic—there are no email auto-approval links or bulk approval shortcuts that bypass checks.
 
@@ -567,4 +567,6 @@ The CLI worker sends at most 25 pending approval messages per run. A database ad
 
 Deploy the complete release with fingerprinted CSS/JS assets and set up the cron. Test a controlled new application and verify an actual admin mailbox/spam folder. Tests mock mail transport and exercise recipient selection/deduplication, bounded retries, stale-alert skipping and advisory-lock contention; responsive browser tests check 15 pending fixtures, 12-card pages, top-of-page ordering, columns and per-card POST/CSRF actions across five widths. These do not prove live mail delivery or MySQL concurrency; verify those on hosting.
 
-- 0.16.1: prevent accidental native form submission from exposing PayHub JSON session data; PayHub button is explicit button-driven with AJAX guard and graceful fallback, no secret keys displayed. Added signed-in administrator PIN reset without old PIN; PIN shown only as masked status.
+- 0.16.2: prevent accidental native form submission from exposing PayHub JSON session data; PayHub button is explicit button-driven with AJAX guard and graceful fallback, no secret keys displayed. Added signed-in administrator PIN reset without old PIN; PIN shown only as masked status.
+
+- 0.16.2: admin bulk permanent delete for pending remittances in Remittance history, removing associated pending payment notifications and receipts so representatives can resubmit those periods; verified history preserved.
