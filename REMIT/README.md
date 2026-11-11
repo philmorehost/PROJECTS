@@ -578,3 +578,5 @@ Deploy the complete release with fingerprinted CSS/JS assets and set up the cron
 - 0.16.7: removed inline PayHub checkout dependency, switched to virtual-account-first PayHub flow, fixed hosted-checkout amount display, automatically displays default PayHub virtual bank account and generated payment reference/details.
 
 - 0.16.8: fixed PayHub return verification (`payhub_ref` GET flow) no longer triggering false CSRF session-expired errors or page reload loops, guarded `app/actions.php` (`function_exists` + `require_once`) to eliminate `Cannot redeclare action()` fatals, fixed DVA webhook vs cached session invalidation and same-URL payment refresh, and surfaced `storage/logs/payhub.log` path in Portal settings.
+
+- 0.16.9: removed the `YOUTH THANKSGIVING SERVICE` / `Start remittance` intro card from the remittances offering panel, placed Step 1 offering entry side-by-side with Step 2 PayHub/bank payment (`remittance-grid`), and refined mobile-first responsive rules across all viewports.

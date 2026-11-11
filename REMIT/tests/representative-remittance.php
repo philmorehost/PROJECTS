@@ -27,7 +27,7 @@ foreach(['zonal_rep'=>3,'area_rep'=>10,'parish_officer'=>11] as $role=>$unit){
  $db->exec("UPDATE security_settings SET setting_value='0' WHERE setting_key='levy_basis_points'");
  // Production views expose the form, short CTA and profile for each representative.
  $user=$rep;$admin=false;$treasurer=false;$page='remittances';$rows=[$ledger];$placeholders=implode(',',array_fill(0,count($ids),'?'));$portalReady=true;
- ob_start();require __DIR__.'/../app/offering-view.php';$form=ob_get_clean();check(str_contains($form,'id="income-form"') && str_contains($form,'Start remittance'),'all representative types get offering form');
+ ob_start();require __DIR__.'/../app/offering-view.php';$form=ob_get_clean();check(str_contains($form,'id="income-form"') && !str_contains($form,'offering-intro') && !str_contains($form,'YOUTH THANKSGIVING SERVICE'),'all representative types get offering form without Start remittance intro card');
  ob_start();require __DIR__.'/../app/payments-view.php';$payments=ob_get_clean();check(str_contains($payments,'Awaiting treasury confirmation') && !str_contains($payments,'name="ledger_id"'),'fully pending own payment is not offered twice');
  ob_start();require __DIR__.'/../app/dashboard-actions.php';$dashboard=ob_get_clean();check(str_contains($dashboard,'Start remittance'),'start remittance visible on dashboard');
  $nid=(int)$db->query('SELECT id FROM payment_notifications WHERE ledger_id='.(int)$ledger['id'].' ORDER BY id DESC LIMIT 1')->fetchColumn();
