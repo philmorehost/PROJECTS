@@ -286,20 +286,24 @@ if(payhubForm){
   payhubForm.querySelector('.payhub-button')?.setAttribute('disabled','disabled');
   try{
    const form=new FormData(payhubForm);
-   const res=await fetch(payhubForm.action||location.href,{method:'POST',body:form,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});
+   const res=await fetch(payhubForm.getAttribute('action')||location.pathname+location.search,{method:'POST',body:form,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',redirect:'manual'});
    const text=await res.text();let data=null;try{data=JSON.parse(text);}catch{}
+   if(res.type==='opaqueredirect'){throw new Error('JavaScript session request was blocked or redirected. Refresh and try again.');}
+   const text=await res.text();let data=null;try{data=JSON.parse(text);}catch{throw new Error('Unexpected server response. Refresh and retry PayHub.');}
    if(!res.ok||!data||!data.reference){throw new Error(data?.message||'Could not start PayHub checkout. Confirm your keys and network.');}
    const vaBox=document.getElementById('payhub-virtual-account');const vaBank=document.getElementById('payhub-virtual-bank');const vaNum=document.getElementById('payhub-virtual-number');const vaName=document.getElementById('payhub-virtual-name');const statusBox=document.getElementById('payhub-status');
-   if(vaBox&&Array.isArray(data.virtual_accounts)&&data.virtual_accounts.length){const acct=data.virtual_accounts[0];vaBank.textContent=acct.bank_name||'PayHub Virtual Bank';vaNum.textContent=acct.account_number||'—';vaName.textContent=acct.account_name||'REMIT Remittance';vaBox.hidden=false;if(statusBox){statusBox.hidden=false;statusBox.textContent='Virtual account generated. Transfer the exact amount to approve automatically.';}}else if(vaBox){vaBox.hidden=true;}
+   if(vaBox&&Array.isArray(data.virtual_accounts)&&data.virtual_accounts.length){const acct=data.virtual_accounts[0];vaBank.textContent=acct.bank_name||'PayHub Virtual Bank';vaNum.textContent=acct.account_number||'—';vaName.textContent=acct.account_name||'REMIT Remittance';vaBox.hidden=false;setStatus('Virtual account generated. Transfer the exact amount to approve automatically.');}else if(vaBox){vaBox.hidden=true;setStatus('Checkout opened. Complete payment in PayHub.');}
    const successRef=data.reference;const poll=async()=>{try{const u=new URL(location.href);u.searchParams.set('payhub_ref',successRef);const r=await fetch(u,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});const t=await r.text();if(t.includes('payment confirmed')||t.includes('automatically approved')){location.href=u.toString();return;}}catch{}setTimeout(poll,8000);};
-   if(typeof PayhubPop==='undefined'){window.open('https://merchant.payhub.com.ng/checkout.php?ref='+encodeURIComponent(data.reference),'_blank','noopener');poll();return;}
+   if(typeof PayhubPop==='undefined'){window.location.href=data.checkout_url||('https://merchant.payhub.com.ng/checkout.php?ref='+encodeURIComponent(data.reference));poll();return;}
    const handler=PayhubPop.setup({
     key:data.public_key||key,email:data.email||email,amount:Number(data.amount_kobo)||Math.round(raw*100),ref:data.reference,currency:'NGN',
-    onClose(){payhubForm.querySelector('.payhub-button')?.removeAttribute('disabled');poll();},
+    onClose(){launch?.removeAttribute('disabled');poll();},
     callback:function(response){if(response&&response.reference){const url=new URL(location.href);url.searchParams.set('payhub_ref',response.reference);location.href=url.toString();}}
    });
    handler.openIframe();poll();
-  }catch(e){showError(e.message||'PayHub checkout failed.');payhubForm.querySelector('.payhub-button')?.removeAttribute('disabled');}
- });
+  }catch(e){showError(e.message||'PayHub checkout failed.');launch?.removeAttribute('disabled');setStatus('');}
+ };
+ if(launch)launch.addEventListener('click',startPayhub);
+ payhubForm.addEventListener('submit',event=>{event.preventDefault();startPayhub(event);},true);
 }
 const save=document.getElementById('income-form');if(save){save.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},100);});if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),120);}}

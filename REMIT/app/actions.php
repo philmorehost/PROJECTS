@@ -56,15 +56,18 @@ function action(PDO $db,array $user,array $ids): string {
  }
  if ($action==='payhub_session') {
   requireRole($user,['parish_officer','area_rep','zonal_rep']);
+  $ajax=(($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest')||(($_POST['format']??'')==='json')||(($_SERVER['HTTP_ACCEPT']??'')==='application/json');
   $unit=remittingUnit($db,$user);$ledgerId=(int)($_POST['ledger_id']??0);$amount=trim((string)($_POST['amount']??''));
-  $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=?');$s->execute([$ledgerId,$unit]);$ledger=$s->fetch();if(!$ledger)throw new RuntimeException('Choose your own outstanding offering report.');
+  $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=?');$s->execute([$ledgerId,$unit]);$ledger=$s->fetch();if(!$ledger){if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>'Choose your own outstanding offering report.']);exit;}throw new RuntimeException('Choose your own outstanding offering report.');}
   $remaining=Money::cents($ledger['provincial_levy_due'])-Money::cents($ledger['amount_paid']);
   $pend=$db->prepare("SELECT COALESCE(SUM(amount),0) FROM payment_notifications WHERE ledger_id=? AND status='pending'");$pend->execute([$ledgerId]);$remaining-=Money::cents((string)$pend->fetchColumn());
-  $kobo=$amount===''?$remaining:Money::cents($amount);if($kobo<10000||$kobo>$remaining)throw new InvalidArgumentException('PayHub amount must be between 100.00 NGN and the remaining balance.');
+  $kobo=$amount===''?$remaining:Money::cents($amount);if($kobo<10000||$kobo>$remaining){$msg='PayHub amount must be between 100.00 NGN and the remaining balance.';if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>$msg]);exit;}throw new InvalidArgumentException($msg);}
   $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
   $_SESSION['payhub_reference']=$session['reference'];
-  header('Content-Type: application/json');echo json_encode(['reference'=>$session['reference'],'checkout_url'=>PayHub::checkoutUrl($session['reference']),'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>setting($db,'payhub_public_key'),'virtual_accounts'=>PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)]);exit;
+  $payload=['reference'=>$session['reference'],'checkout_url'=>PayHub::checkoutUrl($session['reference']),'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>setting($db,'payhub_public_key'),'virtual_accounts'=>PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)];
+  if(!$ajax){$_SESSION['flash']='Use the PayHub button on the payment page to continue.';header('Location: index.php?page=remittances&pay=payhub#payment-options',true,303);exit;}
+  header('Content-Type: application/json');echo json_encode($payload);exit;
  }
  if ($action==='payhub_verify') {
   $ref=(string)($_GET['payhub_ref']??($_POST['payhub_ref']??$_SESSION['payhub_reference']??''));if($ref==='')throw new RuntimeException('No PayHub reference found.');
@@ -87,7 +90,25 @@ function action(PDO $db,array $user,array $ids): string {
   remittingUnit($db,$user);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
   if(!preg_match('/^[+0-9 ()-]{7,25}$/D',$phone))throw new InvalidArgumentException('Enter a valid contact phone number.');
   $db->prepare('INSERT INTO officer_profiles(user_id,phone,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE phone=VALUES(phone),bank_name=VALUES(bank_name),account_name=VALUES(account_name),account_ciphertext=VALUES(account_ciphertext),account_last4=VALUES(account_last4)')->execute([$user['id'],$phone,$bank,$name,ChurchPortal::encrypt($number),substr($number,-4)]);
+  $newPin=trim((string)($_POST['new_pin']??''));$confirmPin=trim((string)($_POST['confirm_pin']??''));
+  if($newPin!==''||$confirmPin!==''){
+   if($admin){
+    if(!preg_match('/^[0-9]{4}$/D',$newPin))throw new InvalidArgumentException('New transaction PIN must be exactly four digits.');
+    if($newPin!==$confirmPin)throw new InvalidArgumentException('PIN confirmation does not match.');
+    $db->prepare('UPDATE users SET transaction_pin_hash=? WHERE id=?')->execute([password_hash($newPin,PASSWORD_DEFAULT),$user['id']]);$_SESSION['pin_stamp']=hash('sha256',password_hash($newPin,PASSWORD_DEFAULT));
+    return 'Your account details and transaction PIN were updated.';
+   }
+   throw new RuntimeException('Only administrators can reset their PIN from this page.');
+  }
   return 'Your account details have been saved securely. This does not change the provincial receiving account.';
+ }
+ if ($action==='admin_reset_pin') {
+  requireRole($user,['provincial_admin']);
+  $newPin=trim((string)($_POST['new_pin']??''));$confirmPin=trim((string)($_POST['confirm_pin']??''));
+  if(!preg_match('/^[0-9]{4}$/D',$newPin))throw new InvalidArgumentException('New transaction PIN must be exactly four digits.');
+  if($newPin!==$confirmPin)throw new InvalidArgumentException('PIN confirmation does not match.');
+  $db->prepare('UPDATE users SET transaction_pin_hash=? WHERE id=?')->execute([password_hash($newPin,PASSWORD_DEFAULT),$user['id']]);
+  return 'Administrator transaction PIN reset successfully.';
  }
  if ($action==='report') {
   $parish=remittingUnit($db,$user); if (!in_array($parish,$ids,true)) throw new RuntimeException('Invalid church scope.');
