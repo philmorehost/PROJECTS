@@ -70,11 +70,14 @@ final class PasswordReset
             error_log('REMIT password reset mail was not accepted by the mail transport. Check server mail configuration.');
         }
     }
-    private static function deliver(PDO $db,string $to,string $subject,string $body): bool
+    private static function deliver(PDO $db,string $to,string $subject,string $body,string $html=''): bool
     {
         $from=self::sender($db);
         if(strlen($from)>150||str_contains($from,"\r")||str_contains($from,"\n")||!filter_var($from,FILTER_VALIDATE_EMAIL))return false;
-        return @mail($to,$subject,$body,['From'=>$from,'MIME-Version'=>'1.0','Content-Type'=>'text/plain; charset=UTF-8']);
+        if($html==='')return @mail($to,$subject,$body,['From'=>$from,'MIME-Version'=>'1.0','Content-Type'=>'text/plain; charset=UTF-8']);
+        $boundary='----=_Part_'.bin2hex(random_bytes(8));$nl="\r\n";
+        $message='--'.$boundary.$nl.'Content-Type: text/plain; charset=UTF-8'.$nl.'Content-Transfer-Encoding: quoted-printable'.$nl.$nl.str_replace("\n",$nl,$body).$nl.'--'.$boundary.$nl.'Content-Type: text/html; charset=UTF-8'.$nl.'Content-Transfer-Encoding: quoted-printable'.$nl.$nl.str_replace("\n",$nl,$html).$nl.'--'.$boundary.'--';
+        return @mail($to,$subject,$message,['From'=>$from,'MIME-Version'=>'1.0','Content-Type'=>'multipart/alternative; boundary="'.$boundary.'"']);
     }
     public static function complete(PDO $db,string $email,string $code,string $password,string $confirmation,?int $clock=null): bool
     {
