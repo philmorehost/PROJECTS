@@ -23,11 +23,11 @@ try{
  $db=new CompatPDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);$db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE,PDO::FETCH_ASSOC);
  $db->exec("CREATE TABLE security_settings(id INTEGER,setting_key TEXT PRIMARY KEY,setting_value TEXT);INSERT INTO security_settings(setting_key,setting_value) VALUES('church_portal_schema','2'),('officer_registration_schema','1'),('registration_enabled','1'),('notification_email','treasury@example.org'),('provincial_account_number','0123456789'),('levy_basis_points','8000');
  CREATE TABLE church_hierarchy(id INTEGER PRIMARY KEY,node_name TEXT,node_type TEXT,parent_id INTEGER,parish_code TEXT);INSERT INTO church_hierarchy(id,node_name,node_type) VALUES(1,'Hope Parish','parish'),(2,'Grace Parish','parish'),(3,'A zone','zone');
- CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT,hierarchy_id INTEGER,full_name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,transaction_pin_hash TEXT);
+ CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT,hierarchy_id INTEGER,full_name TEXT,email TEXT UNIQUE,password_hash TEXT,role TEXT,transaction_pin_hash TEXT,is_suspended INTEGER DEFAULT 0);
  CREATE TABLE officer_profiles(user_id INTEGER PRIMARY KEY,phone TEXT,bank_name TEXT,account_name TEXT,account_ciphertext TEXT,account_last4 TEXT);
  CREATE TABLE church_registrations(id INTEGER PRIMARY KEY AUTOINCREMENT,parish_id INTEGER,requested_church_name TEXT,requested_church_type TEXT,full_name TEXT,email TEXT UNIQUE,phone TEXT,password_hash TEXT,bank_name TEXT,account_name TEXT,account_ciphertext TEXT,account_last4 TEXT,status TEXT DEFAULT 'pending',reviewed_by INTEGER,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE registration_limits(ip_address TEXT PRIMARY KEY,attempts INTEGER DEFAULT 0,window_started TEXT);
- CREATE TABLE notification_outbox(id INTEGER PRIMARY KEY,recipient TEXT,subject TEXT,body TEXT);
+ CREATE TABLE notification_outbox(id INTEGER PRIMARY KEY,recipient TEXT,subject TEXT,body TEXT,status TEXT DEFAULT 'pending',attempts INTEGER DEFAULT 0);
  CREATE TABLE security_audit_logs(id INTEGER PRIMARY KEY,ip_address TEXT,username_attempted TEXT,event_type TEXT,details TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE remittance_ledgers(id INTEGER PRIMARY KEY AUTOINCREMENT,parish_id INTEGER,provincial_levy_due TEXT,amount_paid TEXT DEFAULT '0.00',status TEXT,payment_reference TEXT UNIQUE,gross_income TEXT,period_month INTEGER,period_year INTEGER,UNIQUE(parish_id,period_month,period_year));
  CREATE TABLE report_allocations(ledger_id INTEGER PRIMARY KEY,payable_basis_points INTEGER,retained_amount TEXT);

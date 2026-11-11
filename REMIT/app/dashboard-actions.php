@@ -7,6 +7,6 @@
 <a class="quick-action" href="?page=profile"><span class="quick-icon" aria-hidden="true">♙</span><div><strong>My church details</strong></div><b aria-hidden="true">→</b></a>
 <?php else: ?>
 <a class="quick-action primary-action" href="?page=remittances"><span class="quick-icon" aria-hidden="true">⇄</span><div><strong>Review remittances</strong></div><b aria-hidden="true">→</b></a>
-<?php if($admin): ?><a class="quick-action" href="?page=settings"><span class="quick-icon" aria-hidden="true">⚙</span><div><strong>Manage percentages</strong></div><b aria-hidden="true">→</b></a><?php endif ?>
+<?php if($admin): $pendingRepCount=$portalReady?(int)$db->query("SELECT COUNT(*) FROM church_registrations WHERE status='pending'")->fetchColumn():0; ?><a class="quick-action" href="?page=representatives#pending-reps"><span class="quick-icon" aria-hidden="true">♙</span><div><strong>Pending representatives · <?= $pendingRepCount ?></strong><span>Review applications →</span></div></a><a class="quick-action" href="?page=settings"><span class="quick-icon" aria-hidden="true">⚙</span><div><strong>Manage percentages</strong></div><b aria-hidden="true">→</b></a><?php endif ?>
 <?php endif ?>
 </div></section>

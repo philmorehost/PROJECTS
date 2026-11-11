@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 ob_start();require __DIR__.'/church-portal.php';ob_end_clean();
-$db->exec("ALTER TABLE users ADD is_suspended INTEGER DEFAULT 0;
+$db->exec("
 CREATE TABLE password_resets(email TEXT PRIMARY KEY,user_id INTEGER,request_key TEXT,code_hash TEXT,password_stamp TEXT,expires_at TEXT,sent_at TEXT,attempts INTEGER DEFAULT 0);
 CREATE TABLE password_reset_limits(bucket_key TEXT PRIMARY KEY,window_started TEXT,hits INTEGER DEFAULT 0);
 INSERT INTO security_settings(setting_key,setting_value) VALUES('password_reset_schema','1'),('password_reset_sender','no-reply@example.org')");

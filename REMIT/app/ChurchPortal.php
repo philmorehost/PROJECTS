@@ -137,8 +137,9 @@ final class ChurchPortal
             if($existing){
                 $db->prepare("UPDATE church_registrations SET parish_id=?,requested_church_name=?,requested_church_type=?,full_name=?,email=?,phone=?,password_hash=?,bank_name=?,account_name=?,account_ciphertext=?,account_last4=?,status='pending',reviewed_by=NULL WHERE id=?")->execute([...$values,$existing['id']]);
                 audit($db,'registration_reapplied',$email,json_encode(['application'=>$existing['id'],'previous_status'=>$existing['status'],'previous_reviewer'=>$existing['reviewed_by']]));
-            }else $db->prepare('INSERT INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute($values);
-            notify($db,setting($db,'notification_email'),'Officer registration awaiting review','A new officer registration is awaiting church affiliation verification in Church representatives.');
+            }else {$db->prepare('INSERT INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute($values);}
+            $applicationId=$existing?(int)$existing['id']:(int)$db->lastInsertId();
+            ApprovalNotifications::queue($db,$applicationId);
             $db->commit();
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 
