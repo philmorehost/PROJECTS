@@ -54,9 +54,11 @@ final class PayHub
         if($errno)throw new RuntimeException('Could not connect to PayHub. Check logs and try manual transfer if needed.');
         $json=json_decode((string)$response,true);
         if(!is_array($json)||empty($json['status'])||!is_array($json['data']??null)||empty($json['data']['reference'])||empty($json['data']['authorization_url']))throw new RuntimeException('PayHub did not return a valid checkout session. Check PayHub logs.');
-        $virtual=[];foreach((array)($json['data']['virtual_accounts']??$json['data']['dedicated_account']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$virtual[]=['bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance')];}
-        if(!$virtual)$virtual=self::virtualAccounts($db);
-        return ['reference'=>(string)$json['data']['reference'],'authorization_url'=>(string)$json['data']['authorization_url'],'virtual_accounts'=>$virtual,'public_key'=>trim(setting($db,'payhub_public_key'))];
+        $payhubReference=(string)$json['data']['reference'];$authUrl=(string)$json['data']['authorization_url'];
+        parse_str((string)parse_url($authUrl,PHP_URL_QUERY),$urlQuery);if(!empty($urlQuery['ref']))$payhubReference=(string)$urlQuery['ref'];
+        $virtual=[];foreach((array)($json['data']['virtual_accounts']??$json['data']['dedicated_account']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$virtual[]=['bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance'),'reference'=>(string)($ac['reference']??$payhubReference)];}
+        if(!$virtual)$virtual=self::virtualAccounts($db);if($virtual&&empty($virtual[0]['reference']))$virtual[0]['reference']=$payhubReference;
+        return ['reference'=>(string)$json['data']['reference'],'payhub_reference'=>$payhubReference,'authorization_url'=>$authUrl,'virtual_accounts'=>$virtual,'public_key'=>trim(setting($db,'payhub_public_key'))];
     }
     public static function verify(PDO $db,string $reference): ?array
     {
@@ -93,8 +95,11 @@ final class PayHub
                 if($ledgerId<=0)return ['status'=>'ignored','message'=>'Unknown reference'];
                 $ledger=$db->prepare('SELECT l.*,h.node_name,h.id parish_id FROM remittance_ledgers l JOIN church_hierarchy h ON h.id=l.parish_id WHERE l.id=?');$ledger->execute([$ledgerId]);$l=$ledger->fetch();
                 if(!$l)return ['status'=>'ignored','message'=>'Ledger not found'];
-                $kobo=(int)($data['amount']??0);$amount=Money::decimal((int)floor($kobo/100*100));
-                $db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date,status,payhub_reference,payhub_channel,payhub_paid_at,gateway_payload,review_note) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$ledgerId,$userId?:null,$amount,$ref,date('Y-m-d',strtotime((string)($data['paid_at']??'now'))),'pending',$ref,(string)($data['channel']??'card'),date('Y-m-d H:i:s',strtotime((string)($data['paid_at']??'now'))),json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),'PayHub charge.success · '.$source.' · awaiting treasury review.']);
+                $expected=Money::cents($l['provincial_levy_due'])-Money::cents($l['amount_paid']);$rawAmount=($data['amount']??0);$kobo=is_numeric($rawAmount)?(int)$rawAmount:0;
+                if($kobo>0 && $kobo>$expected*2){$kobo=(int)floor($kobo/100);}
+                if($kobo<=0||$kobo>$expected){$kobo=$expected;}
+                $amount=Money::decimal($kobo);
+                $db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date,status,payhub_reference,payhub_channel,payhub_paid_at,gateway_payload,review_note) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$ledgerId,$userId?:null,$amount,$ref,date('Y-m-d',strtotime((string)($data['paid_at']??'now'))),'pending',$ref,(string)($data['channel']??'virtual_account'),date('Y-m-d H:i:s',strtotime((string)($data['paid_at']??'now'))),json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),'PayHub confirmed · '.$source.' · virtual account/card payment.']);
                 return ['status'=>'queued','message'=>'Payment notification created from PayHub webhook'];
             }
             if($row['status']==='pending'){

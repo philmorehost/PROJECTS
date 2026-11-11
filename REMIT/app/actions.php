@@ -65,8 +65,10 @@ function action(PDO $db,array $user,array $ids): string {
   $kobo=$amount===''?$remaining:Money::cents($amount);if($kobo<10000||$kobo>$remaining){$msg='PayHub amount must be between 100.00 NGN and the remaining balance.';if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>$msg]);exit;}throw new InvalidArgumentException($msg);}
   $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
-  $_SESSION['payhub_reference']=$session['reference'];
-  $payload=['reference'=>$session['reference'],'checkout_url'=>$session['authorization_url'],'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']??PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)];
+  $payhubReference=(string)($session['payhub_reference']??$session['reference']);
+  $_SESSION['payhub_reference']=$payhubReference;
+  $checkoutUrl=PayHub::checkoutUrl($payhubReference);
+  $payload=['reference'=>$session['reference'],'payhub_reference'=>$payhubReference,'checkout_url'=>$checkoutUrl,'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']??PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)];
   PayHub::log($db,'payhub_session_created',$payload);
   if(!$ajax){$_SESSION['flash']='Use the PayHub button on the payment page to continue.';header('Location: index.php?page=remittances&pay=payhub#payment-options',true,303);exit;}
   header('Content-Type: application/json');echo json_encode($payload);exit;

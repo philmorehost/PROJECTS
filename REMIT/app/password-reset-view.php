@@ -19,7 +19,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  }catch(InvalidArgumentException|RuntimeException $e){$resetError=$e instanceof PDOException?'Password reset is temporarily unavailable. Contact your administrator.':$e->getMessage();if($e instanceof PDOException)error_log('REMIT password reset database operation failed.');}
 }
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password · REMIT</title><link rel="stylesheet" href="public/assets/app.92c6f32a.css"><?php require __DIR__.'/pwa-head.php'; ?></head><body class="setup"><main class="setup-card login">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password · REMIT</title><link rel="stylesheet" href="public/assets/app.f99713ab.css"><?php require __DIR__.'/pwa-head.php'; ?></head><body class="setup"><main class="setup-card login">
 <a class="brand" href="index.php"><span class="brand-icon">R</span>remit<span class="brand-dot">.</span></a><p class="eyebrow">ACCOUNT RECOVERY</p><h1>Reset your password.</h1>
 <?php if($resetSuccess): ?><div class="notice" role="status">Your password has been changed. Sign in with your new password in this browser within 10 minutes. Other sessions have been signed out.</div>
 <?php elseif(!$resetEnabled): ?><div class="notice"><?= $initializationFailed?'Password recovery could not initialize. Ask your hosting support to check database CREATE TABLE privileges, then retry.':'Email recovery is disabled or no installation email is available. Contact your hosting administrator.' ?></div>
