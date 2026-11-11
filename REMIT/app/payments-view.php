@@ -23,7 +23,7 @@ if($canRemitNow){
 $payTab=($_GET['pay']??($payhubReady?'payhub':'bank'));if(!in_array($payTab,['bank','payhub'],true))$payTab=$payhubReady?'payhub':'bank';
 if(!$canRemitNow){ ?><div class="notice">Approved parishes and representatives can start remittances here.</div><?php return; }
 $defaultVirtual=null;
-if($payhubReady && $payTab==='payhub' && !$awaiting){try{$all=PayHub::virtualAccounts($db);$defaultVirtual=$all[0]??null;}catch(Throwable $e){PayHub::log($db,'virtual_accounts_list_error',['error'=>$e->getMessage(),'user'=>$user['email']??'']);}}
+if($payhubReady && $payTab==='payhub' && !$awaiting){try{$all=PayHub::virtualAccounts($db,(string)($user['email']??''));$defaultVirtual=$all[0]??null;}catch(Throwable $e){PayHub::log($db,'virtual_accounts_list_error',['error'=>$e->getMessage(),'user'=>$user['email']??'']);}}
 ?><div class="payment-layout" id="payment-options"><section class="panel form-panel payment-method-panel"><div class="section-kicker">STEP 2 · <?= $payTab==='bank'?'MANUAL BANK TRANSFER':'PAYHUB VIRTUAL ACCOUNT OR CHECKOUT' ?></div><h2>Complete payment</h2><p class="muted small"><?= $payTab==='bank'?'Transfer the exact amount due to the provincial church account below, then submit your transfer details for treasury confirmation.':'Transfer the exact amount to the PayHub virtual account below or pay online for instant confirmation.' ?></p>
 <?php if($flash && ($_GET['pay']??'')==='payhub'): ?><div class="alert success"><?= e((string)$flash) ?></div><?php elseif($error): ?><div class="alert"><?= e((string)$error) ?></div><?php endif; ?>
 <div role="tablist" aria-label="Payment methods" class="payment-tabs"><a role="tab" aria-selected="<?= $payTab==='payhub'?'true':'false' ?>" class="payment-tab <?= $payTab==='payhub'?'active':'' ?>" href="?page=remittances&pay=payhub#payment-options"><span class="method-icon">₦</span><div><strong>PayHub Checkout & Virtual Account</strong><small><?= $payhubReady?'Automatic Instant Approval':'Configure in settings' ?></small></div></a><a role="tab" aria-selected="<?= $payTab==='bank'?'true':'false' ?>" class="payment-tab <?= $payTab==='bank'?'active':'' ?>" href="?page=remittances&pay=bank#payment-options"><span class="method-icon">⇄</span><div><strong>Bank Transfer</strong><small>Manual approval</small></div></a></div>
@@ -71,15 +71,18 @@ document.addEventListener('click',e=>{
 });
 syncPayhub();syncBankTransfer();
 function setVirtualAccount(acct){
- const bank=document.getElementById('payhub-virtual-bank'),num=document.getElementById('payhub-virtual-number'),name=document.getElementById('payhub-virtual-name'),note=document.getElementById('payhub-virtual-note');
+ const bank=document.getElementById('payhub-virtual-bank'),num=document.getElementById('payhub-virtual-number'),name=document.getElementById('payhub-virtual-name'),note=document.getElementById('payhub-virtual-note'),copy=document.getElementById('copy-va-btn');
  const use=acct||window.REMITPayHub.defaultVirtual;
- if(use&&bank&&num&&name){
+ if(use&&use.account_number&&bank&&num&&name){
   if(use.bank_name)bank.textContent=use.bank_name;
-  if(use.account_number)num.textContent=use.account_number;
+  num.textContent=use.account_number;
   if(use.account_name)name.textContent=use.account_name;
+  if(copy)copy.hidden=false;
   if(note)note.textContent='Transfer the exact amount shown above to this virtual account. When received, payment is confirmed automatically.';
- }else if(num&&num.textContent.trim()==='Generating...'){
+ }else if(num){
   num.textContent='Use online checkout below';
+  if(copy)copy.hidden=true;
+  if(note)note.textContent='Save a contact phone number in My church account to generate a dedicated virtual account, or click Pay online via card or mobile bank below.';
  }
 }
 function showSession(data){

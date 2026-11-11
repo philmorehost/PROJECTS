@@ -26,6 +26,8 @@ if (!$merchant) {
     exit;
 }
 
+ensure_payment_schema();
+
 /**
  * GET /api/virtual-accounts.php
  * Fetch virtual accounts for the authenticated merchant.
@@ -47,38 +49,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $response = paystack_call("transaction?" . $params, 'GET', [], $is_test);
 
         $reconciled = [];
-        if ($response && $response['status']) {
-            $vaRowStmt = $db->prepare("SELECT metadata FROM virtual_accounts WHERE user_id = ? AND account_number = ? LIMIT 1");
-            $vaRowStmt->execute([$merchant['id'], $account_number]);
+        if ($response && $response['status'] && is_array($response['data'] ?? null)) {
+            $cleanAcc = ltrim($account_number, '0');
+            $vaRowStmt = $db->prepare("SELECT metadata, customer_email FROM virtual_accounts WHERE user_id = ? AND (account_number = ? OR account_number = ? OR account_number = ?) LIMIT 1");
+            $vaRowStmt->execute([$merchant['id'], $account_number, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
             $vaRow = $vaRowStmt->fetch();
             $vaMeta = normalize_metadata_array($vaRow['metadata'] ?? null);
 
             foreach ($response['data'] as $rtx) {
                 $ref = $rtx['reference'];
-                $remote_acc = $rtx['dedicated_account']['account_number']
+                $remote_acc = (string)($rtx['dedicated_account']['account_number']
                     ?? ($rtx['authorization']['receiver_bank_account_number']
                     ?? ($rtx['receiver_bank_account_number']
-                    ?? ($rtx['metadata']['receiver_account_number'] ?? '')));
+                    ?? ($rtx['metadata']['receiver_account_number'] ?? ''))));
 
-                if ($remote_acc === $account_number) {
+                if ($remote_acc !== '' && ltrim($remote_acc, '0') === $cleanAcc) {
                     // Check if already in our DB
                     $stmt = $db->prepare("SELECT id FROM transactions WHERE reference = ?");
                     $stmt->execute([$ref]);
                     if (!$stmt->fetch()) {
                         $amount = $rtx['amount'] / 100;
-                        $cust_email = $rtx['customer']['email'];
+                        $cust_email = $rtx['customer']['email'] ?? ($vaRow['customer_email'] ?? '');
                         $channelType = $rtx['channel'] ?? 'dedicated_account';
-                        $gatewayFee = isset($rtx['fees']) && is_numeric($rtx['fees']) ? ((float)$rtx['fees'] / 100) : null;
+                        $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
+                            ? ((float)$rtx['fees'] / 100)
+                            : null;
                         $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
                         $fee = calculate_fees($amount, $isIntl, $merchant['id'], $gatewayFee, $channelType);
-                        $settled = $amount - $fee;
+                        $settled = round(max(0.0, $amount - $fee), 2);
                         $txMetaJson = json_encode(array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta));
 
                         $db->beginTransaction();
                         try {
-                            $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'success', ?, ?, ?, ?, ?, ?, ?)");
+                            $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)");
                             $stmt->execute([$merchant['id'], $ref, $amount, $cust_email, $channelType, $is_test ? 1 : 0, $fee, $settled, $rtx['id'], $txMetaJson]);
+                            if ($stmt->rowCount() !== 1) {
+                                $db->rollBack();
+                                continue;
+                            }
                             $t_id = $db->lastInsertId();
+                            if (!claim_transaction_for_fulfilment($t_id)) {
+                                $db->rollBack();
+                                continue;
+                            }
 
                             // The amount came straight from the gateway list response, so
                             // record it as the verified figure this row was created from.

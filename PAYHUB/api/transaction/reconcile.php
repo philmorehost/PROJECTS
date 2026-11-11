@@ -25,6 +25,8 @@ if (!$user) {
     exit;
 }
 
+ensure_payment_schema();
+
 // Handle input
 $input = get_api_input();
 $date = sanitize($input['date'] ?? date('Y-m-d'));
@@ -58,8 +60,9 @@ foreach ($remote_txs as $rtx) {
         ?? ($rtx['receiver_bank_account_number']
         ?? ($rtx['metadata']['receiver_account_number'] ?? '')));
     if (!$is_mine && $acc_num !== '') {
-        $stmt = $db->prepare("SELECT user_id, metadata FROM virtual_accounts WHERE account_number = ? LIMIT 1");
-        $stmt->execute([$acc_num]);
+        $cleanAcc = ltrim($acc_num, '0');
+        $stmt = $db->prepare("SELECT user_id, metadata FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ? LIMIT 1");
+        $stmt->execute([$acc_num, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
         $vacc = $stmt->fetch();
         if ($vacc && $vacc['user_id'] == $user['id']) {
             $is_mine = true;
@@ -74,17 +77,29 @@ foreach ($remote_txs as $rtx) {
             $amount = $rtx['amount'] / 100;
             $email = $rtx['customer']['email'];
             $channel_type = $rtx['channel'];
-            $gatewayFee = isset($rtx['fees']) && is_numeric($rtx['fees']) ? ((float)$rtx['fees'] / 100) : null;
+            $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
+                ? ((float)$rtx['fees'] / 100)
+                : null;
             $isInternational = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $rtx['channel'] ?? '');
             $fee = calculate_fees($amount, $isInternational, $user['id'], $gatewayFee, $rtx['channel'] ?? '');
-            $settled = $amount - $fee;
+            $settled = round(max(0.0, $amount - $fee), 2);
             $txMetaJson = json_encode(array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaccMeta));
 
             $db->beginTransaction();
             try {
-                $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'success', ?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$user['id'], $ref, $amount, $email, $channel_type, $is_test ? 1 : 0, $fee, $settled, $rtx['id'], $txMetaJson]);
+                if ($stmt->rowCount() !== 1) {
+                    $db->rollBack();
+                    $already_exists++;
+                    continue;
+                }
                 $t_id = $db->lastInsertId();
+                if (!claim_transaction_for_fulfilment($t_id)) {
+                    $db->rollBack();
+                    $already_exists++;
+                    continue;
+                }
 
                 // The amount came straight from the gateway list response, so record
                 // it as the verified figure this row was created from.

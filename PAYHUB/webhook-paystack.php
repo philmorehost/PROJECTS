@@ -290,9 +290,11 @@ if ($event_type === 'charge_success') {
 
             // Calculate fees
             $is_intl = is_international_payment($currency, $data['authorization'] ?? [], $data['channel'] ?? '');
-            $gatewayFee = isset($data['fees']) && is_numeric($data['fees']) ? ((float)$data['fees'] / 100) : null;
+            $gatewayFee = (isset($data['fees']) && is_numeric($data['fees']) && (float)$data['fees'] > 0)
+                ? ((float)$data['fees'] / 100)
+                : null;
             $fee = calculate_fees($amount, $is_intl, $tx['user_id'], $gatewayFee, $data['channel'] ?? '');
-            $settled = $amount - $fee;
+            $settled = round(max(0.0, $amount - $fee), 2);
 
             $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, payment_method = ? WHERE id = ?");
             $stmt->execute([$fee, $settled, $data['channel'] ?? $tx['payment_method'], $tx['id']]);

@@ -57,6 +57,9 @@ if (!$email || ($amount <= 0 && empty($phone))) {
 
 $ref = 'PH_' . bin2hex(random_bytes(8));
 
+// Prime schema before querying/creating transactions or virtual accounts (MySQL commits on DDL).
+ensure_payment_schema();
+
 // Determine if it's test mode based on the Secret Key used
 $is_test = (strpos($sk, 'sk_test_') === 0);
 
@@ -70,7 +73,6 @@ $is_test = (strpos($sk, 'sk_test_') === 0);
  * server-side - velocity has to be measured here, at initialize time.
  */
 if ($amount > 0 && !$is_test) {
-    ensure_payment_schema();
     $max_open = max(1, (int)getConfig('max_open_pending_per_customer', '5'));
     $window_minutes = max(1, (int)getConfig('pending_velocity_window_minutes', '15'));
 
@@ -88,30 +90,17 @@ if ($amount > 0 && !$is_test) {
     }
 }
 
-// Only create a transaction if amount is greater than 0
 $vaMetaArr = $metaArray;
 if ($amount > 0) {
-    // The callback_url column is added here rather than relying on the card-testing guard below,
-    // because that guard is skipped in test mode (`!$is_test`) and a test-mode initialize still
-    // writes a transaction. ensure_column() is idempotent and cached, so this costs one SHOW COLUMNS.
-    ensure_payment_schema();
     $vaMetaArr['checkout_reference'] = $ref;
-    $txMetaJson = json_encode($vaMetaArr);
-
-    // Create transaction in pending state
-    $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, customer_email, customer_name, status, is_test, metadata, callback_url) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)");
-    $stmt->execute([$user['id'], $ref, $amount, $email, $name, $is_test ? 1 : 0, $txMetaJson, $callback_url !== '' ? $callback_url : null]);
-    $txId = $db->lastInsertId();
-
-    log_transaction_event($txId, 'initiated', "Transaction initiated via API");
 }
 
-// Attempt to automate Virtual Account generation if requested or possible
+// Attempt to automate Virtual Account lookup/generation (existing customer VAs still refresh metadata even if phone is omitted)
 $va_data = null;
 $va_error = null;
-if (!empty($name) && !empty($phone)) {
+if (!empty($email)) {
     $res = ensure_virtual_account($user['id'], $email, [
-        'full_name' => $name,
+        'full_name' => $name ?: 'Customer',
         'phone' => $phone
     ], $is_test, json_encode($vaMetaArr));
     if ($res['status']) {
@@ -119,6 +108,22 @@ if (!empty($name) && !empty($phone)) {
     } else {
         $va_error = $res['message'] ?? 'Unknown VA error';
     }
+}
+
+// Only create a transaction if amount is greater than 0
+if ($amount > 0) {
+    $txMetaArr = $vaMetaArr;
+    if (!empty($va_data['account_number'])) {
+        $txMetaArr['virtual_account_number'] = $va_data['account_number'];
+    }
+    $txMetaJson = json_encode($txMetaArr);
+
+    // Create transaction in pending state
+    $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, customer_email, customer_name, status, is_test, metadata, callback_url) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)");
+    $stmt->execute([$user['id'], $ref, $amount, $email, $name, $is_test ? 1 : 0, $txMetaJson, $callback_url !== '' ? $callback_url : null]);
+    $txId = $db->lastInsertId();
+
+    log_transaction_event($txId, 'initiated', "Transaction initiated via API");
 }
 
 if ($amount > 0) {

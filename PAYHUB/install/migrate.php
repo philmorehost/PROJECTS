@@ -238,7 +238,9 @@ function run_migrations() {
                 'gateway_reference' => "VARCHAR(100)",
                 'payment_method' => "VARCHAR(50) DEFAULT 'card'",
                 'is_test' => "TINYINT DEFAULT 0",
-                'invoice_id' => "INT DEFAULT NULL"
+                'invoice_id' => "INT DEFAULT NULL",
+                'metadata' => "TEXT",
+                'callback_url' => "VARCHAR(255) DEFAULT NULL"
             ],
             'payouts' => [
                 'fee_amount' => "DECIMAL(15, 2) DEFAULT 0.00",
@@ -262,7 +264,8 @@ function run_migrations() {
                 'bank_name' => "VARCHAR(255)",
                 'account_number' => "VARCHAR(50)",
                 'account_name' => "VARCHAR(255)",
-                'customer_email' => "VARCHAR(255)"
+                'customer_email' => "VARCHAR(255)",
+                'metadata' => "TEXT"
             ],
             'invoices' => [
                 'reference' => "VARCHAR(100)",

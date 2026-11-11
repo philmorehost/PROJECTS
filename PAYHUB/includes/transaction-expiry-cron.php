@@ -60,6 +60,11 @@ $still_open = 0;
 $unreachable = 0;
 
 foreach ($rows as $tx) {
+    // Do not mark a pending PH_... checkout expired if it was already settled via DVA transfer.
+    if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, false)) {
+        continue;
+    }
+
     $is_test = ((int)$tx['is_test'] === 1);
 
     // Verify against the mode's OWN key - never the other mode's account.
@@ -101,8 +106,13 @@ foreach ($rows as $tx) {
             }
 
             $currency = $data['currency'] ?? $tx['currency'];
-            $fee = calculate_fees($settled, ($currency !== 'NGN'), $tx['user_id']);
-            $net = $settled - $fee;
+            $channelType = $data['channel'] ?? ($tx['payment_method'] ?? 'card');
+            $gatewayFee = (isset($data['fees']) && is_numeric($data['fees']) && (float)$data['fees'] > 0)
+                ? ((float)$data['fees'] / 100)
+                : null;
+            $isIntl = is_international_payment($currency, $data['authorization'] ?? [], $channelType);
+            $fee = calculate_fees($settled, $isIntl, $tx['user_id'], $gatewayFee, $channelType);
+            $net = round(max(0.0, $settled - $fee), 2);
 
             $db->prepare("UPDATE transactions SET currency = ?, gateway_reference = ?, fee_amount = ?, settled_amount = ?, payment_method = ? WHERE id = ?")
                ->execute([
@@ -110,7 +120,7 @@ foreach ($rows as $tx) {
                    $data['id'] ?? $tx['gateway_reference'],
                    $fee,
                    $net,
-                   $data['channel'] ?? $tx['payment_method'],
+                   $channelType,
                    $tx['id'],
                ]);
 

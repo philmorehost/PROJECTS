@@ -38,6 +38,27 @@ check($dvaLedgerRow['status']==='verified' && Money::cents((string)$dvaLedgerRow
 $cardAmt=PayHub::extractAmounts(['amount'=>10153,'requested_amount'=>10000,'gateway_amount'=>10153,'fee_amount'=>153,'settled_amount'=>10000],10000);
 check($cardAmt['credit_kobo']===10000 && $cardAmt['fee_kobo']===153 && $cardAmt['net_kobo']===10000,'fee-on-top card payment preserves 100.00 NGN credit and 100.00 NGN net settlement');
 
+// Test .00 Naira decimal strings and 'fee' alias in extractAmounts() (never turns 1.00/100.00 into 1/100 kobo)
+$decAmt=PayHub::extractAmounts(['amount'=>'100.00','fee'=>'1.00','settled_amount'=>'99.00'],10000);
+check($decAmt['gross_kobo']===10000 && $decAmt['fee_kobo']===100 && $decAmt['net_kobo']===9900,'extractAmounts parses .00 Naira strings and fee alias as 10000/100/9900 kobo');
+
+// Test email-fallback matching when payer paid fee on top without ledger_id metadata
+$db->prepare('INSERT INTO remittance_ledgers(parish_id,provincial_levy_due,amount_paid,status,payment_reference,gross_income,period_month,period_year) VALUES(1,?,?,?,?,?,?,?)')->execute(['150.00','0.00','pending','RMT-EMAIL-TOP','300.00',8,2025]);$topLedger=(int)$db->lastInsertId();
+PayHub::recordSuccessfulCharge($db,'PH_TOP_EMAIL',['reference'=>'PH_TOP_EMAIL','amount'=>15225,'requested_amount'=>15000,'gateway_amount'=>15225,'fee_amount'=>225,'settled_amount'=>15000,'status'=>'success','domain'=>'test','channel'=>'card','paid_at'=>date('c'),'customer'=>['email'=>'officer@example.org']],'test');
+PayHub::autoApproveIfEnabled($db,'PH_TOP_EMAIL','test');
+$topRow=$db->query('SELECT status,amount_paid FROM remittance_ledgers WHERE id='.$topLedger)->fetch();
+check($topRow['status']==='verified'&&Money::cents((string)$topRow['amount_paid'])===15000,'email fallback matches open ledger using requested/credit amount when fee is paid on top');
+
+// Test zero payhub_net_amount guard never displays 0.00 net settled on a paid remittance
+$db->prepare('INSERT INTO remittance_ledgers(parish_id,provincial_levy_due,amount_paid,status,payment_reference,gross_income,period_month,period_year) VALUES(1,?,?,?,?,?,?,?)')->execute(['200.00','0.00','pending','RMT-NET-GUARD','400.00',7,2025]);$guardLedger=(int)$db->lastInsertId();
+$db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date,status,payhub_reference,payhub_channel,payhub_fee,payhub_net_amount) VALUES(?,?,?,?,?,?,?,?,?,?)')->execute([$guardLedger,1,'200.00','PH_ZERO_NET',date('Y-m-d'),'approved','PH_ZERO_NET','card','3.00','0.00']);
+$db->prepare("UPDATE remittance_ledgers SET amount_paid='200.00',status='verified' WHERE id=?")->execute([$guardLedger]);
+$guardRows=$db->query("SELECT l.*,h.node_name,h.parish_code FROM remittance_ledgers l JOIN church_hierarchy h ON h.id=l.parish_id WHERE l.id=$guardLedger")->fetchAll();
+PayHub::attachLedgerFees($db,$guardRows);
+check($guardRows[0]['payhub_fee_total']==='3.00'&&$guardRows[0]['net_settled_total']==='197.00','attachLedgerFees falls back from 0.00 net to amount minus fee');
+$db->exec("DELETE FROM payment_notifications WHERE payhub_reference IN ('PH_TOP_EMAIL','PH_ZERO_NET')");
+$db->exec("DELETE FROM remittance_ledgers WHERE id IN ($topLedger,$guardLedger)");
+
 // Test sandbox charge rejection under sk_live_ key
 $db->exec("UPDATE security_settings SET setting_value='sk_live_prod' WHERE setting_key='payhub_secret_key'");
 $liveReject=PayHub::recordSuccessfulCharge($db,'PH_SANDBOX_DROP',['reference'=>'PH_SANDBOX_DROP','amount'=>10000,'domain'=>'test','metadata'=>['ledger_id'=>$dvaLedger]],'test');
@@ -89,5 +110,9 @@ check(str_contains($bankHtml,'Zenith Bank')&&str_contains($bankHtml,'RCCG Youth 
 $_GET['pay']='payhub';
 $page='remittances';$portalReady=true;ob_start();require __DIR__.'/../app/offering-view.php';$offerHtml=ob_get_clean();check(str_contains($offerHtml,'id="income-form"')&&!str_contains($offerHtml,'offering-intro')&&!str_contains($offerHtml,'YOUTH THANKSGIVING SERVICE'),'offering panel renders Step 1 form without Start remittance intro card');
 $cssContent=(string)file_get_contents(__DIR__.'/../public/assets/app.f99713ab.css');check(str_contains($cssContent,'.remittance-grid')&&str_contains((string)file_get_contents(__DIR__.'/../index.php'),'class="remittance-grid"'),'remittances page wraps offering form and Step 2 payment card in responsive side-by-side grid');
+$payhubSrc=(string)file_get_contents(__DIR__.'/../app/PayHub.php');
+$payViewSrc=(string)file_get_contents(__DIR__.'/../app/payments-view.php');
+$actionsSrc=(string)file_get_contents(__DIR__.'/../app/actions.php');
+check(str_contains($payhubSrc,'reconcileVirtualAccount')&&str_contains($payhubSrc,'?email=')&&str_contains($payViewSrc,'PayHub::virtualAccounts($db,(string)($user[\'email\']??\'\'))')&&str_contains($actionsSrc,'church_registrations')&&str_contains($actionsSrc,'PayHub::reconcileVirtualAccount'),'PayHub VA scoping, church_registrations phone fallback and DVA reconciliation wired across PayHub/actions/payments-view');
 if(is_dir(ROOT.'/storage')){foreach([ROOT.'/storage/logs/payhub.log',ROOT.'/storage/logs/.htaccess'] as $lf)if(is_file($lf))@unlink($lf);@rmdir(ROOT.'/storage/logs');@rmdir(ROOT.'/storage');@rmdir(ROOT);}
 echo "PASS: $checks combined portal/PayHub assertions (SQLite harness; mocked gateway)\n";

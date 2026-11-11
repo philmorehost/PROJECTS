@@ -48,11 +48,15 @@ if ($tx) {
     }
 }
 
-// For sandbox-simulated transactions that are already 'success' in our DB,
-// trust the local record and skip the real Paystack network call.
+// For sandbox-simulated transactions or already-settled / DVA-superseded transactions,
+// resolve cleanly without leaving the payer in an infinite verification refresh loop.
 if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
     $status = 'success';
     $amount = (float)$tx['amount'];
+} elseif ($tx && in_array($tx['status'], ['superseded', 'failed'], true) && empty($tx['failure_reason'])
+    && ($matchedDva = reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, false))) {
+    $status = 'success';
+    $amount = (float)($matchedDva['gateway_amount'] ?: $matchedDva['amount']);
 } else {
     // Call Paystack to verify
     $res = paystack_call("transaction/verify/" . $ref, 'GET', [], $is_test_mode);
@@ -147,7 +151,10 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
             }
         }
 
-        if ($amount_verified && $tx && $tx['status'] === 'pending') {
+        if ($amount_verified && $tx && $tx['status'] === 'success') {
+            $status = 'success';
+            $amount = $res['data']['amount'] / 100;
+        } elseif ($amount_verified && $tx && $tx['status'] === 'pending') {
             $status = 'success';
             $amount = $res['data']['amount'] / 100;
 
@@ -170,9 +177,11 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
                     // Calculate fees
                     $channel = $res['data']['channel'] ?? ($tx['payment_method'] ?? 'card');
                     $is_intl = is_international_payment($res['data']['currency'] ?? 'NGN', $res['data']['authorization'] ?? [], $channel);
-                    $gatewayFee = isset($res['data']['fees']) && is_numeric($res['data']['fees']) ? ((float)$res['data']['fees'] / 100) : null;
+                    $gatewayFee = (isset($res['data']['fees']) && is_numeric($res['data']['fees']) && (float)$res['data']['fees'] > 0)
+                        ? ((float)$res['data']['fees'] / 100)
+                        : null;
                     $fee = calculate_fees($amount, $is_intl, $tx['user_id'], $gatewayFee, $channel);
-                    $settled = $amount - $fee;
+                    $settled = round(max(0.0, $amount - $fee), 2);
 
                     $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, payment_method = ? WHERE id = ?");
                     $stmt->execute([$fee, $settled, $channel, $tx['id']]);
@@ -313,7 +322,10 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
             }
         }
     } else {
-        if ($res && isset($res['data']['status']) && $res['data']['status'] === 'failed') {
+        if ($tx && $tx['status'] === 'pending' && ($matchedDva = reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true))) {
+            $status = 'success';
+            $amount = (float)($matchedDva['gateway_amount'] ?: $matchedDva['amount']);
+        } elseif ($res && isset($res['data']['status']) && $res['data']['status'] === 'failed') {
             $status = 'failed';
         }
     }
