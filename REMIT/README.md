@@ -574,3 +574,5 @@ Deploy the complete release with fingerprinted CSS/JS assets and set up the cron
 - 0.16.5: redesigned remittance payment flow with reliable offering calculator, fixed PayHub inline checkout/button, automatic payment selection after saving, quick Pay Now actions, and safer pending-payment handling.
 
 - 0.16.5: hotfix for fatal undefined ChurchPortal::ownOutstanding on remittances page; restores remittance page rendering.
+
+- 0.16.7: removed inline PayHub checkout dependency, switched to virtual-account-first PayHub flow, fixed hosted-checkout amount display, automatically displays default PayHub virtual bank account and generated payment reference/details.
