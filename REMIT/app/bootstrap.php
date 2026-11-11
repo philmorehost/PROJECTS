@@ -9,7 +9,7 @@ session_start();
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
-header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self' https://merchant.payhub.com.ng 'unsafe-inline'; img-src 'self' data:; frame-src https://merchant.payhub.com.ng; connect-src 'self' https://merchant.payhub.com.ng; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
 require __DIR__.'/Database.php';
 require __DIR__.'/Money.php';
 require __DIR__.'/ChurchPortal.php';

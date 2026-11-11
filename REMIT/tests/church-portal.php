@@ -31,7 +31,7 @@ try{
  CREATE TABLE security_audit_logs(id INTEGER PRIMARY KEY,ip_address TEXT,username_attempted TEXT,event_type TEXT,details TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE remittance_ledgers(id INTEGER PRIMARY KEY AUTOINCREMENT,parish_id INTEGER,provincial_levy_due TEXT,amount_paid TEXT DEFAULT '0.00',status TEXT,payment_reference TEXT UNIQUE,gross_income TEXT,period_month INTEGER,period_year INTEGER,UNIQUE(parish_id,period_month,period_year));
  CREATE TABLE report_allocations(ledger_id INTEGER PRIMARY KEY,payable_basis_points INTEGER,retained_amount TEXT);
- CREATE TABLE payment_notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,ledger_id INTEGER,submitted_by INTEGER,amount TEXT,transfer_reference TEXT UNIQUE,transfer_date TEXT,status TEXT DEFAULT 'pending',review_note TEXT,reviewed_by INTEGER,reviewed_at TEXT);");
+ CREATE TABLE payment_notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,ledger_id INTEGER,submitted_by INTEGER,amount TEXT,transfer_reference TEXT UNIQUE,transfer_date TEXT,status TEXT DEFAULT 'pending',review_note TEXT,reviewed_by INTEGER,reviewed_at TEXT,payhub_reference TEXT UNIQUE,payhub_channel TEXT,payhub_paid_at TEXT,gateway_payload TEXT);");
  $_SERVER['REMOTE_ADDR']='192.0.2.25';
  $input=['full_name'=>'Hope Officer','email'=>'officer@example.org','phone'=>'08012345678','password'=>'test-password-1234','password_confirm'=>'test-password-1234','parish_id'=>'1','bank_name'=>'Example Bank','account_name'=>'Hope Church','account_number'=>'0123456789'];
  ChurchPortal::register($db,$input);check((int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn()===0,'registration cannot log in before approval');
@@ -85,7 +85,7 @@ try{
  set_error_handler(function(int $severity,string $message,string $file,int $line):never{throw new ErrorException($message,0,$severity,$file,$line);});
  $page='remittances';ob_start();require __DIR__.'/../app/offering-view.php';$html=ob_get_clean();check(str_contains($html,'id="levy-preview"'),'offering calculator renders payment preview');
  ob_start();require __DIR__.'/../app/profile-view.php';$html=ob_get_clean();check(str_contains($html,'0123456789'),'own profile renders decrypted account');
- ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'Automated deposit · PayHub'),'payment page renders explicit gateway state');
+ ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'PayHub inline checkout'),'payment page renders explicit gateway state');
 
  $user=$admin;ob_start();require __DIR__.'/../app/registrations-view.php';$html=ob_get_clean();check(str_contains($html,'Officer registrations'),'admin approval queue renders');
  ob_start();require __DIR__.'/../app/portal-settings.php';$html=ob_get_clean();check(str_contains($html,'Church retention / deduction (%)'),'admin uses human readable percentages');

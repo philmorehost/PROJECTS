@@ -545,7 +545,7 @@ This is a **hosting-owner tool, not a public recovery endpoint**. HTTP execution
 
 Validation: `tests/shared-login.php` reproduces old blanket block rows, unknown-email mistakes, account-specific cooldowns, another rep signing in on the same blocked IP, manual suspension, cooldown expiry, recovery boundaries and one-minute flood protection using real password/session checks in the SQLite compatibility harness. The prior OTP/legacy-strict regression is retained with explicit legacy mode. Full PHP/browser suites are not proof of live server block state, MySQL concurrency or hosting CLI/mail/firewall integration; perform those deployment checks before production acceptance.
 
-## 0.14.0 — Pending-first representative workspace and admin alerts
+## 0.15.0 — Pending-first representative workspace and admin alerts
 
 **Church reps** now opens with a pending-count shortcut and the **pending approval cards first**, rather than putting the queue below account creation and the registered list. Cards stack on phones, use two columns from 760px and three from 1180px. Approve/reject controls stay on each card; unlisted churches still require linking to an independently verified church before approval. The queue now queries/paginates all pending applications in 12-card pages instead of silently limiting access to the first 100. Approval remains a CSRF-protected POST using the existing atomic review/role-assignment logic—there are no email auto-approval links or bulk approval shortcuts that bypass checks.
 

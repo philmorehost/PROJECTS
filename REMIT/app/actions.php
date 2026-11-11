@@ -31,7 +31,7 @@ function action(PDO $db,array $user,array $ids): string {
  }
  if($action==='receipt_migrate'){requireRole($user,['provincial_admin']);PaymentProof::migrate($db);return 'Receipt uploads enabled.';}
  if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Officer registration and payment schema enabled. Existing records and percentages are unchanged.'; }
- if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
+ if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review','payhub_checkout','payhub_verify'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
  if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''),(int)($_POST['resolved_unit_id'] ?? 0));
  if ($action==='payment_submit') return ChurchPortal::submitPayment($db,$user,$_POST,$_FILES['payment_proof'] ?? null);
  if ($action==='payment_review') return ChurchPortal::reviewPayment($db,$user,$_POST);
@@ -43,6 +43,33 @@ function action(PDO $db,array $user,array $ids): string {
   $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled];
   $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('login_lock_mode',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$mode]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
   return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
+ }
+ if ($action==='payhub_settings') {
+  requireRole($user,['provincial_admin']);PayHub::migrate($db);
+  $pub=trim((string)($_POST['payhub_public_key']??''));$secret=trim((string)($_POST['payhub_secret_key']??''));
+  $enabled=($_POST['payhub_enabled']??'0')==='1'?'1':'0';$va=($_POST['payhub_virtual_accounts']??'1')==='0'?'0':'1';
+  if($enabled==='1'&&($pub===''||$secret===''))throw new InvalidArgumentException('Add both PayHub public and secret keys before enabling the gateway.');
+  if(strlen($pub)>150||strlen($secret)>200)throw new InvalidArgumentException('PayHub keys are too long. Paste the exact keys from your PayHub dashboard.');
+  $values=['payhub_enabled'=>$enabled,'payhub_public_key'=>$pub,'payhub_secret_key'=>$secret,'payhub_virtual_accounts'=>$va];
+  $s=$db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES(?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");foreach($values as $k=>$v)$s->execute([$k,$v]);
+  return 'PayHub settings saved. Add the webhook URL in your PayHub dashboard to confirm successful payments automatically.';
+ }
+ if ($action==='payhub_checkout') {
+  $unit=remittingUnit($db,$user);$ledgerId=(int)($_POST['ledger_id']??0);$amount=trim((string)($_POST['amount']??''));
+  $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=?');$s->execute([$ledgerId,$unit]);$ledger=$s->fetch();if(!$ledger)throw new RuntimeException('Choose your own outstanding offering report.');
+  $remaining=Money::cents($ledger['provincial_levy_due'])-Money::cents($ledger['amount_paid']);
+  $pend=$db->prepare("SELECT COALESCE(SUM(amount),0) FROM payment_notifications WHERE ledger_id=? AND status='pending'");$pend->execute([$ledgerId]);$remaining-=Money::cents((string)$pend->fetchColumn());
+  $kobo=Money::cents($amount);if($kobo<10000||$kobo>$remaining)throw new InvalidArgumentException('Enter a PayHub amount between 100.00 NGN and the remaining balance.');
+  $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
+  $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
+  $_SESSION['payhub_reference']=$session['reference'];
+  header('Location: '.$session['authorization_url']);exit;
+ }
+ if ($action==='payhub_verify') {
+  $unit=remittingUnit($db,$user);$ref=(string)($_SESSION['payhub_reference']??($_GET['payhub_ref']??''));if($ref==='')throw new RuntimeException('No PayHub reference found.');
+  $verify=PayHub::verify($db,$ref);$ledgerId=0;
+  if($verify&&PayHub::isPaid($verify)){$result=PayHub::recordSuccessfulCharge($db,$ref,$verify['data']??[],'return');$ledgerId=(int)(($verify['data']['metadata']['ledger_id']??0));unset($_SESSION['payhub_reference']);return 'PayHub payment confirmed. Treasury will complete final verification.';}
+  throw new RuntimeException('PayHub payment was not confirmed. Use manual transfer if checkout was not completed.');
  }
  if ($action==='profile') {
   remittingUnit($db,$user);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
