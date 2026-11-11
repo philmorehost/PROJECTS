@@ -1,5 +1,91 @@
 <?php
 declare(strict_types=1);
+function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='return',bool $throwIfUnpaid=true,int $ledgerIdHint=0): array {
+ if(!ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
+ $ref=trim($ref);
+ if($ref===''){
+  if($throwIfUnpaid)throw new RuntimeException('No PayHub reference found.');
+  return ['paid'=>false,'message'=>'No PayHub reference found.'];
+ }
+ $unit=remittingUnit($db,$user);
+ // Fast path: webhook/DVA handler may already have recorded/approved this checkout reference or linked ledger.
+ $localChk=$db->prepare('SELECT n.*,l.parish_id FROM payment_notifications n JOIN remittance_ledgers l ON l.id=n.ledger_id WHERE n.payhub_reference=? LIMIT 1');
+ $localChk->execute([$ref]);
+ $localNote=$localChk->fetch();
+ if($localNote){
+  if((int)$localNote['parish_id']!==$unit)throw new RuntimeException('This PayHub payment does not belong to your church.');
+  if($localNote['status']==='pending' && PayHub::autoApproveEnabled($db)){
+   PayHub::autoApproveIfEnabled($db,$ref,$source.'_local');
+   $localChk->execute([$ref]);$localNote=$localChk->fetch();
+  }
+  if($localNote && $localNote['status']==='approved'){
+   unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][(int)$localNote['ledger_id']]);
+   return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
+  }
+  if($localNote && $localNote['status']==='pending'){
+   unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][(int)$localNote['ledger_id']]);
+   return ['paid'=>true,'message'=>'PayHub payment confirmed. Treasury will complete final verification.'];
+  }
+ }
+ if($ledgerIdHint>0){
+  $lChk=$db->prepare('SELECT status,parish_id FROM remittance_ledgers WHERE id=?');$lChk->execute([$ledgerIdHint]);$lRow=$lChk->fetch();
+  if($lRow && (int)$lRow['parish_id']===$unit){
+   if($lRow['status']==='verified'){
+    unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
+    return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
+   }
+   $lastNotifId=(int)($_SESSION['payhub_sessions'][$ledgerIdHint]['last_notif_id']??0);
+   $nLedger=$db->prepare("SELECT status,payhub_reference FROM payment_notifications WHERE ledger_id=? AND payhub_reference IS NOT NULL AND id>? ORDER BY id DESC LIMIT 1");
+   $nLedger->execute([$ledgerIdHint,$lastNotifId]);$nHit=$nLedger->fetch();
+   if($nHit){
+    if($nHit['status']==='pending' && PayHub::autoApproveEnabled($db)){
+     PayHub::autoApproveIfEnabled($db,(string)$nHit['payhub_reference'],$source.'_ledger');
+     unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
+     return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
+    }
+    if(in_array($nHit['status'],['pending','approved'],true)){
+     unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
+     return ['paid'=>true,'message'=>'PayHub payment confirmed.'.($nHit['status']==='approved'?' Payment automatically approved.':' Treasury will complete final verification.')];
+    }
+   }
+  }
+ }
+ $verify=PayHub::verify($db,$ref);
+ if(!$verify||!PayHub::isPaid($verify)){
+  if($throwIfUnpaid)throw new RuntimeException('PayHub payment was not confirmed. Use manual transfer if checkout was not completed.');
+  return ['paid'=>false];
+ }
+ $data=is_array($verify['data']??null)?$verify['data']:[];
+ $verifiedRef=trim((string)($data['reference']??$ref)) ?: $ref;
+ $meta=PayHub::decodeMetadata($data['metadata']??[]);
+ $ledgerId=(int)($meta['ledger_id']??$ledgerIdHint);
+ if($ledgerId<=0){
+  $nChk=$db->prepare('SELECT ledger_id FROM payment_notifications WHERE payhub_reference IN (?,?) ORDER BY id DESC LIMIT 1');$nChk->execute([$verifiedRef,$ref]);
+  $ledgerId=(int)$nChk->fetchColumn();
+ }
+ if($ledgerId<=0 && isset($_SESSION['payhub_sessions']) && is_array($_SESSION['payhub_sessions'])){
+  foreach($_SESSION['payhub_sessions'] as $k=>$entry){
+   if(($entry['payload']['payhub_reference']??'')===$ref || ($entry['payload']['reference']??'')===$ref || ($entry['payload']['payhub_reference']??'')===$verifiedRef){$ledgerId=(int)$k;break;}
+  }
+ }
+ if($ledgerId<=0)throw new RuntimeException('This PayHub payment could not be matched to a church ledger.');
+ $chk=$db->prepare('SELECT parish_id FROM remittance_ledgers WHERE id=?');$chk->execute([$ledgerId]);$ledgerUnit=(int)$chk->fetchColumn();if($ledgerUnit!==$unit)throw new RuntimeException('This PayHub payment does not belong to your church.');
+ $meta['ledger_id']=$ledgerId;
+ $meta['user_id']=(int)($meta['user_id']??$user['id']);
+ if($verifiedRef!==$ref && empty($meta['checkout_reference']))$meta['checkout_reference']=$ref;
+ $data['metadata']=$meta;
+ PayHub::recordSuccessfulCharge($db,$verifiedRef,$data,$source);
+ $approved=PayHub::autoApproveIfEnabled($db,$verifiedRef,$source);
+ unset($_SESSION['payhub_reference']);
+ if(isset($_SESSION['payhub_sessions']) && is_array($_SESSION['payhub_sessions'])){
+  if($ledgerId>0)unset($_SESSION['payhub_sessions'][$ledgerId]);
+  foreach($_SESSION['payhub_sessions'] as $k=>$entry){
+   $pRef=$entry['payload']['payhub_reference']??'';$rRef=$entry['payload']['reference']??'';
+   if($pRef===$ref||$rRef===$ref||$pRef===$verifiedRef||$rRef===$verifiedRef)unset($_SESSION['payhub_sessions'][$k]);
+  }
+ }
+ return ['paid'=>true,'message'=>'PayHub payment confirmed.'.($approved?' Payment automatically approved.':(PayHub::autoApproveEnabled($db)?'':' Treasury will complete final verification.'))];
+}
 function action(PDO $db,array $user,array $ids): string {
  checkCsrf(); $action=$_POST['action'] ?? '';
  if($action==='impersonation_return'){if(!Impersonation::active())throw new RuntimeException('No impersonation session.');Impersonation::refresh($db,true);return 'Returned to admin.';}
@@ -31,7 +117,7 @@ function action(PDO $db,array $user,array $ids): string {
  }
  if($action==='receipt_migrate'){requireRole($user,['provincial_admin']);PaymentProof::migrate($db);return 'Receipt uploads enabled.';}
  if ($action==='church_migrate') { requireRole($user,['provincial_admin']); ChurchPortal::migrate($db); return 'Officer registration and payment schema enabled. Existing records and percentages are unchanged.'; }
- if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review','payhub_checkout','payhub_verify'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
+ if(in_array($action,['allocation_settings','registration_review','profile','payment_submit','payment_review','payhub_checkout','payhub_session','payhub_verify'],true) && !ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
  if ($action==='registration_review') return ChurchPortal::reviewRegistration($db,$user,(int)($_POST['registration_id'] ?? 0),(string)($_POST['decision'] ?? ''),(int)($_POST['resolved_unit_id'] ?? 0));
  if ($action==='payment_submit') return ChurchPortal::submitPayment($db,$user,$_POST,$_FILES['payment_proof'] ?? null);
  if ($action==='payment_review') return ChurchPortal::reviewPayment($db,$user,$_POST);
@@ -41,8 +127,8 @@ function action(PDO $db,array $user,array $ids): string {
   $retained=ChurchPortal::percentage(trim($_POST['retained_percentage'] ?? ''));
   [$bank,$name,$number]=ChurchPortal::bank($_POST);
   $enabled=$_POST['registration_enabled'] ?? '';if(!in_array($enabled,['0','1'],true))throw new InvalidArgumentException('Invalid registration setting.');
-  $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled,'login_lock_mode'=>(string)($_POST['login_lock_mode'] ?? 'scoped')];
-  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
+  $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled];
+  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
   return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
  }
  if ($action==='payhub_settings') {
@@ -57,38 +143,37 @@ function action(PDO $db,array $user,array $ids): string {
  }
  if ($action==='payhub_session') {
   requireRole($user,['parish_officer','area_rep','zonal_rep']);
-  $ajax=(($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest')||(($_POST['format']??'')==='json')||(($_SERVER['HTTP_ACCEPT']??'')==='application/json');
+  $ajax=(($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest')||(($_POST['format']??'')==='json')||str_contains((string)($_SERVER['HTTP_ACCEPT']??''),'application/json');
   $unit=remittingUnit($db,$user);$ledgerId=(int)($_POST['ledger_id']??0);$amount=trim((string)($_POST['amount']??''));
   $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=?');$s->execute([$ledgerId,$unit]);$ledger=$s->fetch();if(!$ledger){if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>'Choose your own outstanding offering report.']);exit;}throw new RuntimeException('Choose your own outstanding offering report.');}
   $remaining=Money::cents($ledger['provincial_levy_due'])-Money::cents($ledger['amount_paid']);
   $pend=$db->prepare("SELECT COALESCE(SUM(amount),0) FROM payment_notifications WHERE ledger_id=? AND status='pending'");$pend->execute([$ledgerId]);$remaining-=Money::cents((string)$pend->fetchColumn());
   $kobo=$amount===''?$remaining:Money::cents($amount);if($kobo<10000||$kobo>$remaining){$msg='PayHub amount must be between 100.00 NGN and the remaining balance.';if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>$msg]);exit;}throw new InvalidArgumentException($msg);}
+  $cached=$_SESSION['payhub_sessions'][$ledgerId]??null;
+  if(is_array($cached) && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference'])){
+   $cachedRef=(string)($cached['payload']['payhub_reference']??$cached['payload']['reference']);
+   $seen=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? LIMIT 1');$seen->execute([$cachedRef]);
+   if(!$seen->fetchColumn()){
+    $_SESSION['payhub_reference']=$cachedRef;
+    if(!$ajax){$_SESSION['flash']='Use the PayHub button on the payment page to continue.';header('Location: index.php?page=remittances&pay=payhub#payment-options',true,303);exit;}
+    header('Content-Type: application/json');echo json_encode($cached['payload']);exit;
+   }
+  }
   $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
   $payhubReference=(string)($session['payhub_reference']??$session['reference']);
   $_SESSION['payhub_reference']=$payhubReference;
   $checkoutUrl=PayHub::checkoutUrl($payhubReference);
   $payload=['reference'=>$session['reference'],'payhub_reference'=>$payhubReference,'checkout_url'=>$checkoutUrl,'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']??PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)];
+  $lastNotifStmt=$db->prepare('SELECT COALESCE(MAX(id),0) FROM payment_notifications WHERE ledger_id=?');$lastNotifStmt->execute([$ledgerId]);$lastNotifId=(int)$lastNotifStmt->fetchColumn();
+  $_SESSION['payhub_sessions'][$ledgerId]=['unit'=>$unit,'kobo'=>$kobo,'created_at'=>time(),'last_notif_id'=>$lastNotifId,'payload'=>$payload];
   PayHub::log($db,'payhub_session_created',$payload);
   if(!$ajax){$_SESSION['flash']='Use the PayHub button on the payment page to continue.';header('Location: index.php?page=remittances&pay=payhub#payment-options',true,303);exit;}
   header('Content-Type: application/json');echo json_encode($payload);exit;
  }
  if ($action==='payhub_verify') {
-  $ref=(string)($_GET['payhub_ref']??($_POST['payhub_ref']??$_SESSION['payhub_reference']??''));if($ref==='')throw new RuntimeException('No PayHub reference found.');
-  $verify=PayHub::verify($db,$ref);
-  if($verify&&PayHub::isPaid($verify)){
-   $data=$verify['data']??[];$meta=is_array($data['metadata']??null)?$data['metadata']:[];$ledgerId=(int)($meta['ledger_id']??0);$unit=remittingUnit($db,$user);
-   if($ledgerId>0){$chk=$db->prepare('SELECT parish_id FROM remittance_ledgers WHERE id=?');$chk->execute([$ledgerId]);$ledgerUnit=(int)$chk->fetchColumn();if($ledgerUnit!==$unit)throw new RuntimeException('This PayHub payment does not belong to your church.');}
-   $result=PayHub::recordSuccessfulCharge($db,$ref,$data,'return');
-   if(PayHub::autoApproveEnabled($db)){
-    $s=$db->prepare('SELECT * FROM payment_notifications WHERE payhub_reference=?');$s->execute([$ref]);$note=$s->fetch();if($note && $note['status']==='pending'){
-     $adminId=(int)$db->query("SELECT id FROM users WHERE role='provincial_admin' AND is_suspended=0 ORDER BY id LIMIT 1")->fetchColumn();
-     if($adminId>0){$reviewer=['id'=>$adminId,'role'=>'provincial_admin','email'=>'system@remit.local'];ChurchPortal::reviewPayment($db,$reviewer,['notification_id'=>(int)$note['id'],'decision'=>'approved','review_note'=>'Auto-approved by PayHub verified charge/virtual account.','pin'=>'skip','auto'=>'1']);}
-    }
-   }
-   unset($_SESSION['payhub_reference']);return 'PayHub payment confirmed.'.(PayHub::autoApproveEnabled($db)?' Payment automatically approved.':' Treasury will complete final verification.');
-  }
-  throw new RuntimeException('PayHub payment was not confirmed. Use manual transfer if checkout was not completed.');
+  $ref=(string)($_GET['payhub_ref']??($_POST['payhub_ref']??$_SESSION['payhub_reference']??''));
+  return payhubVerifyAndProcess($db,$user,$ref,'return',true)['message'];
  }
  if ($action==='profile') {
   remittingUnit($db,$user);[$bank,$name,$number]=ChurchPortal::bank($_POST);$phone=trim($_POST['phone'] ?? '');
@@ -178,10 +263,10 @@ function action(PDO $db,array $user,array $ids): string {
   requireRole($user,['provincial_admin']);
   $rules=['username_protection'=>[0,1],'protect_privileged'=>[0,1],'local_only'=>[0,1],'ip_protection'=>[0,1],'block_days'=>[1,7,30,365],'log_retention'=>[5,10,15,60]];
   $mode=$_POST['login_lock_mode']??'scoped';if(!in_array($mode,['scoped','legacy'],true))throw new RuntimeException('Invalid login lock mode.');
-  $values=[];
+  $values=['login_lock_mode'=>$mode];
   foreach($rules as $key=>$allowed) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || !in_array($v,$allowed,true)) throw new RuntimeException('Invalid security setting.');$values[$key]=(string)$v; }
   foreach(['account_window','ip_window','account_max','ip_max'] as $key) { $v=filter_var($_POST[$key] ?? null,FILTER_VALIDATE_INT);if($v===false || $v<1 || $v>1440) throw new RuntimeException('Setting outside allowed range.');$values[$key]=(string)$v; }
-  $db->beginTransaction(); try {$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();} catch(Throwable $e){$db->rollBack();throw $e;} return 'Settings saved. Existing account and IP locks are retained.';
+  $db->beginTransaction(); try {$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();} catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;} return 'Settings saved. Existing account and IP locks are retained.';
  }
  if ($action==='unsuspend') {
   requireRole($user,['provincial_admin']);$db->prepare('UPDATE users SET is_suspended=0 WHERE id=?')->execute([(int)($_POST['user_id'] ?? 0)]);return 'Account suspension cleared. Failed-attempt history is retained.';

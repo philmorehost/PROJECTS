@@ -48,9 +48,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $reconciled = [];
         if ($response && $response['status']) {
+            $vaRowStmt = $db->prepare("SELECT metadata FROM virtual_accounts WHERE user_id = ? AND account_number = ? LIMIT 1");
+            $vaRowStmt->execute([$merchant['id'], $account_number]);
+            $vaRow = $vaRowStmt->fetch();
+            $vaMeta = normalize_metadata_array($vaRow['metadata'] ?? null);
+
             foreach ($response['data'] as $rtx) {
                 $ref = $rtx['reference'];
-                $remote_acc = $rtx['dedicated_account']['account_number'] ?? '';
+                $remote_acc = $rtx['dedicated_account']['account_number']
+                    ?? ($rtx['authorization']['receiver_bank_account_number']
+                    ?? ($rtx['receiver_bank_account_number']
+                    ?? ($rtx['metadata']['receiver_account_number'] ?? '')));
 
                 if ($remote_acc === $account_number) {
                     // Check if already in our DB
@@ -59,13 +67,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     if (!$stmt->fetch()) {
                         $amount = $rtx['amount'] / 100;
                         $cust_email = $rtx['customer']['email'];
-                        $fee = calculate_fees($amount, false, $merchant['id']);
+                        $channelType = $rtx['channel'] ?? 'dedicated_account';
+                        $gatewayFee = isset($rtx['fees']) && is_numeric($rtx['fees']) ? ((float)$rtx['fees'] / 100) : null;
+                        $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
+                        $fee = calculate_fees($amount, $isIntl, $merchant['id'], $gatewayFee, $channelType);
                         $settled = $amount - $fee;
+                        $txMetaJson = json_encode(array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta));
 
                         $db->beginTransaction();
                         try {
-                            $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference) VALUES (?, ?, ?, 'success', ?, 'dedicated_account', ?, ?, ?, ?)");
-                            $stmt->execute([$merchant['id'], $ref, $amount, $cust_email, $is_test ? 1 : 0, $fee, $settled, $rtx['id']]);
+                            $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'success', ?, ?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$merchant['id'], $ref, $amount, $cust_email, $channelType, $is_test ? 1 : 0, $fee, $settled, $rtx['id'], $txMetaJson]);
                             $t_id = $db->lastInsertId();
 
                             // The amount came straight from the gateway list response, so
@@ -77,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                             $db->commit();
                             trigger_merchant_webhook($t_id);
-                            $reconciled[] = ['reference' => $ref, 'amount' => $amount, 'status' => 'reconciled'];
+                            $reconciled[] = ['reference' => $ref, 'amount' => $amount, 'fee' => $fee, 'settled_amount' => $settled, 'status' => 'reconciled'];
                         } catch (Exception $e) {
                             $db->rollBack();
                         }

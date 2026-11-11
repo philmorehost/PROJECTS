@@ -52,13 +52,18 @@ foreach ($remote_txs as $rtx) {
     $ref = $rtx['reference'];
 
     $is_mine = ($remote_merchant_id == $user['id']);
-    if (!$is_mine && isset($rtx['dedicated_account'])) {
-        $acc_num = $rtx['dedicated_account']['account_number'];
-        $stmt = $db->prepare("SELECT user_id FROM virtual_accounts WHERE account_number = ?");
+    $vaccMeta = [];
+    $acc_num = $rtx['dedicated_account']['account_number']
+        ?? ($rtx['authorization']['receiver_bank_account_number']
+        ?? ($rtx['receiver_bank_account_number']
+        ?? ($rtx['metadata']['receiver_account_number'] ?? '')));
+    if (!$is_mine && $acc_num !== '') {
+        $stmt = $db->prepare("SELECT user_id, metadata FROM virtual_accounts WHERE account_number = ? LIMIT 1");
         $stmt->execute([$acc_num]);
         $vacc = $stmt->fetch();
         if ($vacc && $vacc['user_id'] == $user['id']) {
             $is_mine = true;
+            $vaccMeta = normalize_metadata_array($vacc['metadata'] ?? null);
         }
     }
 
@@ -73,11 +78,12 @@ foreach ($remote_txs as $rtx) {
             $isInternational = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $rtx['channel'] ?? '');
             $fee = calculate_fees($amount, $isInternational, $user['id'], $gatewayFee, $rtx['channel'] ?? '');
             $settled = $amount - $fee;
+            $txMetaJson = json_encode(array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaccMeta));
 
             $db->beginTransaction();
             try {
-                $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference) VALUES (?, ?, ?, 'success', ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$user['id'], $ref, $amount, $email, $channel_type, $is_test ? 1 : 0, $fee, $settled, $rtx['id']]);
+                $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'success', ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$user['id'], $ref, $amount, $email, $channel_type, $is_test ? 1 : 0, $fee, $settled, $rtx['id'], $txMetaJson]);
                 $t_id = $db->lastInsertId();
 
                 // The amount came straight from the gateway list response, so record

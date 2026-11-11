@@ -180,12 +180,13 @@ include 'includes/header.php';
                 <span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg font-bold text-[10px] sm:text-xs">POST</span>
                 <h2 class="text-xl sm:text-2xl font-bold text-slate-900">Initialize Transaction</h2>
             </div>
-            <p class="text-slate-600 mb-8 leading-relaxed">Start a transaction from your server to get a checkout URL. Optionally provide customer details to automate Virtual Account generation. <strong>Amount is in kobo</strong> (e.g. <code>500000</code> = ₦5,000).</p>
+            <p class="text-slate-600 mb-8 leading-relaxed">Start a transaction from your server to get a checkout URL. Optionally provide customer details to automate Virtual Account generation. <strong>Amount defaults to Naira</strong> (pass <code>amount_unit="kobo"</code> if supplying minor units, e.g. <code>500000</code> = ₦5,000).</p>
             <div class="bg-slate-900 rounded-2xl p-6 sm:p-8 text-slate-300 font-mono text-xs sm:text-sm overflow-x-auto">
                 <pre>curl <?php echo BASE_URL; ?>api/transaction/initialize \
 -H "Authorization: Bearer YOUR_SECRET_KEY" \
 -d email="customer@email.com" \
--d amount=500000 \
+-d amount=5000 \
+-d amount_unit="naira" \
 -d name="John Doe" \
 -d phone="08012345678"</pre>
             </div>
@@ -194,9 +195,11 @@ include 'includes/header.php';
   "status": true,
   "message": "Transaction initialized",
   "data": {
-    "authorization_url": "https://merchant.payhub.com.ng/checkout.php?ref=PH_abc&amount=500000&email=customer@email.com",
+    "authorization_url": "https://merchant.payhub.com.ng/checkout.php?ref=PH_abc&amount=5000&email=customer@email.com",
     "access_code": "PH_abc123",
-    "reference": "PH_abc123"
+    "reference": "PH_abc123",
+    "amount": 5000,
+    "amount_kobo": 500000
   }
 }</pre>
             </div>
@@ -318,6 +321,9 @@ include 'includes/header.php';
     "id": 1,
     "reference": "PH_abc123",
     "amount": 10000,
+    "gateway_amount": 10000,
+    "fee_amount": 160,
+    "settled_amount": 9840,
     "status": "success",
     "currency": "NGN",
     "customer": { "email": "customer@email.com" },

@@ -168,12 +168,14 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
                     $stmt->execute([$res['data']['id'], $tx['id']]);
 
                     // Calculate fees
-                    $is_intl = ($res['data']['currency'] !== 'NGN');
-                    $fee = calculate_fees($amount, $is_intl, $tx['user_id']);
+                    $channel = $res['data']['channel'] ?? ($tx['payment_method'] ?? 'card');
+                    $is_intl = is_international_payment($res['data']['currency'] ?? 'NGN', $res['data']['authorization'] ?? [], $channel);
+                    $gatewayFee = isset($res['data']['fees']) && is_numeric($res['data']['fees']) ? ((float)$res['data']['fees'] / 100) : null;
+                    $fee = calculate_fees($amount, $is_intl, $tx['user_id'], $gatewayFee, $channel);
                     $settled = $amount - $fee;
 
-                    $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ? WHERE id = ?");
-                    $stmt->execute([$fee, $settled, $tx['id']]);
+                    $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, payment_method = ? WHERE id = ?");
+                    $stmt->execute([$fee, $settled, $channel, $tx['id']]);
 
                     // Persist the gateway-confirmed figure so the merchant webhook
                     // can validate the amount it is about to announce.
@@ -227,20 +229,31 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
                     $webhook_url = $webhook_owner['webhook_url'] ?? '';
 
                     if ($webhook_url) {
+                        $txMeta = normalize_metadata_array($tx['metadata'] ?? null);
+                        $resMeta = normalize_metadata_array($res['data']['metadata'] ?? null);
+                        $finalMeta = array_merge($resMeta, $txMeta);
+
                         $payload = [
                             'event' => 'charge.success',
                             'data' => [
                                 'id' => $tx['id'],
                                 'reference' => $tx['reference'],
                                 'amount' => $tx['amount'],
+                                'amount_kobo' => to_minor_units($tx['amount']),
+                                'requested_amount' => to_minor_units($tx['amount']),
+                                'gateway_amount' => to_minor_units($gateway_amount),
+                                'fee_amount' => to_minor_units($fee),
+                                'settled_amount' => to_minor_units($settled),
                                 'status' => 'success',
+                                'channel' => $channel,
+                                'paid_at' => $res['data']['paid_at'] ?? ($tx['created_at'] ?? date('c')),
                                 // Lets the merchant's script refuse to credit a sandbox payment.
                                 'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
                                 'customer' => [
                                     'email' => $tx['customer_email'],
                                     'name' => $tx['customer_name']
                                 ],
-                                'metadata' => $res['data']['metadata'] ?? []
+                                'metadata' => $finalMeta
                             ]
                         ];
 
@@ -262,8 +275,30 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
                         curl_setopt($ch, CURLOPT_POSTFIELDS, $webhook_body);
                         curl_setopt($ch, CURLOPT_HTTPHEADER, $webhook_headers);
                         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-                        curl_exec($ch);
+                        $whRes = curl_exec($ch);
+                        $whCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        $whErr = curl_error($ch);
                         curl_close($ch);
+
+                        $whResText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$whRes), 0, 180));
+                        @file_put_contents(
+                            BASE_PATH . 'webhook_debug.log',
+                            '[' . date('Y-m-d H:i:s') . '] Verify page webhook tx=' . $tx['reference']
+                            . ' url=' . $webhook_url . ' algo=sha256 http=' . $whCode . ' fee=' . $fee
+                            . ' settled=' . $settled . ($whErr !== '' ? ' err=' . $whErr : '') . PHP_EOL,
+                            FILE_APPEND
+                        );
+                        try {
+                            $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
+                            $stmtLog->execute([
+                                $tx['id'],
+                                (($whCode >= 200 && $whCode < 300) ? 'success' : 'failed'),
+                                $webhook_body,
+                                'HTTP ' . $whCode . ($whErr !== '' ? ' | ' . $whErr : ($whResText !== '' ? ' | ' . $whResText : ''))
+                            ]);
+                        } catch (\Throwable $t) {
+                            error_log('[PayHub] verify webhook_logs write failed: ' . $t->getMessage());
+                        }
                     }
 
                     $db->commit();

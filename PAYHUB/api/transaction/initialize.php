@@ -28,11 +28,15 @@ if (!$user) {
 $input = get_api_input();
 
 $email = sanitize($input['email'] ?? '');
-$amount = (float)($input['amount'] ?? 0);
+$rawAmount = (float)($input['amount'] ?? 0);
+$amountUnit = strtolower(trim((string)($input['amount_unit'] ?? ($input['currency_unit'] ?? ''))));
+// Preserve historical Naira behavior by default (e.g. VTU sends 100 / 101.6), while
+// supporting explicit kobo/minor units when callers specify amount_unit=kobo.
+$amount = in_array($amountUnit, ['kobo', 'minor'], true) ? round($rawAmount / 100, 2) : $rawAmount;
 $name = sanitize($input['name'] ?? '');
 $phone = sanitize($input['phone'] ?? '');
-$metadata = $input['metadata'] ?? '';
-if (is_array($metadata)) $metadata = json_encode($metadata);
+$metaArray = normalize_metadata_array($input['metadata'] ?? '');
+$metadata = !empty($metaArray) ? json_encode($metaArray) : '';
 
 /*
  * Optional: where to return the payer once the payment is settled.
@@ -85,15 +89,18 @@ if ($amount > 0 && !$is_test) {
 }
 
 // Only create a transaction if amount is greater than 0
+$vaMetaArr = $metaArray;
 if ($amount > 0) {
     // The callback_url column is added here rather than relying on the card-testing guard below,
     // because that guard is skipped in test mode (`!$is_test`) and a test-mode initialize still
     // writes a transaction. ensure_column() is idempotent and cached, so this costs one SHOW COLUMNS.
     ensure_payment_schema();
+    $vaMetaArr['checkout_reference'] = $ref;
+    $txMetaJson = json_encode($vaMetaArr);
 
     // Create transaction in pending state
     $stmt = $db->prepare("INSERT INTO transactions (user_id, reference, amount, customer_email, customer_name, status, is_test, metadata, callback_url) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)");
-    $stmt->execute([$user['id'], $ref, $amount, $email, $name, $is_test ? 1 : 0, $metadata, $callback_url !== '' ? $callback_url : null]);
+    $stmt->execute([$user['id'], $ref, $amount, $email, $name, $is_test ? 1 : 0, $txMetaJson, $callback_url !== '' ? $callback_url : null]);
     $txId = $db->lastInsertId();
 
     log_transaction_event($txId, 'initiated', "Transaction initiated via API");
@@ -106,7 +113,7 @@ if (!empty($name) && !empty($phone)) {
     $res = ensure_virtual_account($user['id'], $email, [
         'full_name' => $name,
         'phone' => $phone
-    ], $is_test, $metadata);
+    ], $is_test, json_encode($vaMetaArr));
     if ($res['status']) {
         $va_data = $res['data'];
     } else {
@@ -124,6 +131,8 @@ if ($amount > 0) {
             'authorization_url' => $checkoutUrl,
             'access_code' => $ref,
             'reference' => $ref,
+            'amount' => $amount,
+            'amount_kobo' => to_minor_units($amount),
             // Echoed back so a merchant can see whether its return URL was accepted - and, when it was
             // rejected by safe_callback_url(), that it was rejected rather than silently dropped.
             'callback_url' => $callback_url
@@ -145,5 +154,7 @@ if ($va_data) {
 if ($va_error && !$va_data) {
     $responseData['data']['va_error'] = $va_error;
 }
+
+error_log(sprintf('[PayHub] api/transaction/initialize user=%s ref=%s amount=%s unit=%s va=%s', $user['id'], $ref, $amount, $amountUnit ?: 'naira', $va_data ? 'ok' : ($va_error ?: 'none')));
 
 echo json_encode($responseData);
