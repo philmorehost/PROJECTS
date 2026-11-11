@@ -85,7 +85,7 @@ try{
  set_error_handler(function(int $severity,string $message,string $file,int $line):never{throw new ErrorException($message,0,$severity,$file,$line);});
  $page='remittances';ob_start();require __DIR__.'/../app/offering-view.php';$html=ob_get_clean();check(str_contains($html,'id="levy-preview"'),'offering calculator renders payment preview');
  ob_start();require __DIR__.'/../app/profile-view.php';$html=ob_get_clean();check(str_contains($html,'0123456789'),'own profile renders decrypted account');
- ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'PayHub inline checkout'),'payment page renders explicit gateway state');
+ ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'PayHub Checkout & Virtual Account'),'payment page renders explicit gateway state');
 
  $user=$admin;ob_start();require __DIR__.'/../app/registrations-view.php';$html=ob_get_clean();check(str_contains($html,'Officer registrations'),'admin approval queue renders');
  ob_start();require __DIR__.'/../app/portal-settings.php';$html=ob_get_clean();check(str_contains($html,'Church retention / deduction (%)'),'admin uses human readable percentages');

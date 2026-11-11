@@ -13,12 +13,24 @@ final class PayHub
             "ALTER TABLE payment_notifications ADD COLUMN gateway_payload MEDIUMTEXT NULL",
             "ALTER TABLE payment_notifications ADD UNIQUE KEY unq_payhub_reference (payhub_reference)",
         ] as $sql){try{$db->exec($sql);}catch(Throwable){}}
-        foreach(['payhub_enabled'=>'0','payhub_public_key'=>'','payhub_secret_key'=>'','payhub_virtual_accounts'=>'1'] as $k=>$v){try{$db->prepare('INSERT INTO security_settings(setting_key,setting_value) VALUES(?,?)')->execute([$k,$v]);}catch(Throwable){}}
+        foreach(['payhub_enabled'=>'0','payhub_public_key'=>'','payhub_secret_key'=>'','payhub_virtual_accounts'=>'1','payhub_auto_approve'=>'1'] as $k=>$v){try{$db->prepare('INSERT INTO security_settings(setting_key,setting_value) VALUES(?,?)')->execute([$k,$v]);}catch(Throwable){}}
     }
     public static function enabled(PDO $db): bool { return self::ready($db) && setting($db,'payhub_enabled')==='1'; }
     public static function ready(PDO $db): bool { return trim(setting($db,'payhub_public_key'))!=='' && trim(setting($db,'payhub_secret_key'))!==''; }
     public static function webhookUrl(): string { return 'https://'.($_SERVER['HTTP_HOST']??'your-domain.example').'/index.php?payhub_webhook=1'; }
     public static function checkoutUrl(string $ref): string { return self::BASE.'/checkout.php?ref='.rawurlencode($ref); }
+    public static function autoApproveEnabled(PDO $db): bool { return setting($db,'payhub_virtual_accounts')!=='0'; }
+    /** @return array<int,array<string,string>> */
+    public static function virtualAccounts(PDO $db): array
+    {
+        if(!self::enabled($db))return [];
+        $secret=trim(setting($db,'payhub_secret_key'));
+        $ch=curl_init(self::BASE.'/api/virtual-accounts');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret],CURLOPT_TIMEOUT=>20,CURLOPT_CONNECTTIMEOUT=>10]);
+        $response=curl_exec($ch);curl_close($ch);
+        $json=json_decode((string)$response,true);$list=[];
+        foreach((array)($json['data']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$list[]=['bank_name'=>(string)($ac['bank_name']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??'REMIT Remittance'),'reference'=>(string)($ac['reference']??'')];}
+        return $list;
+    }
     /** @return array{reference:string,authorization_url:string} */
     public static function initializeTransaction(PDO $db,int $ledgerId,array $user,int $kobo,string $email,string $name,string $phone): array
     {

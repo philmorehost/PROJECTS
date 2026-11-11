@@ -191,11 +191,18 @@ final class ChurchPortal
     }
     public static function reviewPayment(PDO $db,array $user,array $input): string
     {
-        requireRole($user,['provincial_admin','provincial_treasurer']);$decision=$input['decision'] ?? '';if(!in_array($decision,['approved','rejected'],true))throw new InvalidArgumentException('Invalid review decision.');
+        $auto=($input['auto']??'')==='1';
+        if(!$auto)requireRole($user,['provincial_admin','provincial_treasurer']);
+        else requireRole($user,['provincial_admin','provincial_treasurer','parish_officer','area_rep','zonal_rep']);
+        $decision=$input['decision'] ?? '';if(!in_array($decision,['approved','rejected'],true))throw new InvalidArgumentException('Invalid review decision.');
         $db->beginTransaction();
         try{
             $s=$db->prepare('SELECT * FROM users WHERE id=? FOR UPDATE');$s->execute([$user['id']]);$fresh=$s->fetch();
-            if(!Security::verifyPin($db,$fresh,(string)($input['pin'] ?? ''))){$db->commit();throw new RuntimeException('PIN invalid or temporarily locked.');}
+            if(!$auto){
+              if(!Security::verifyPin($db,$fresh,(string)($input['pin'] ?? ''))){$db->commit();throw new RuntimeException('PIN invalid or temporarily locked.');}
+            }else{
+              if(!in_array($fresh['role'],['provincial_admin','provincial_treasurer'],true))throw new RuntimeException('Automatic PayHub approval requires an administrator reviewer.');
+            }
             $s=$db->prepare('SELECT * FROM payment_notifications WHERE id=? FOR UPDATE');$s->execute([(int)($input['notification_id'] ?? 0)]);$payment=$s->fetch();
             if(!$payment || $payment['status']!=='pending')throw new RuntimeException('Notification is no longer pending.');
             $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? FOR UPDATE');$s->execute([$payment['ledger_id']]);$row=$s->fetch();

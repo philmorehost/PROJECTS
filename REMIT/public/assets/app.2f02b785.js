@@ -271,7 +271,10 @@ if(document.querySelector('[data-impersonation]'))document.querySelectorAll('for
 function revealRepresentativeEditor(){if(location.hash==='#representative-editor'){const editor=document.querySelector('#representative-editor');const disclosure=editor?.closest('details');if(disclosure)disclosure.open=true;}}
 revealRepresentativeEditor();window.addEventListener('hashchange',revealRepresentativeEditor);
 document.querySelectorAll('.copy-button[data-copy-target]').forEach(button=>button.addEventListener('click',async()=>{const target=document.getElementById(button.dataset.copyTarget);if(!target)return;try{await navigator.clipboard.writeText(target.value);button.textContent='Copied';setTimeout(()=>button.textContent='Copy webhook',1600);}catch{target.select();document.execCommand('copy');button.textContent='Copied';setTimeout(()=>button.textContent='Copy webhook',1600);}}));
+
+const guideModal=document.getElementById('quick-guide-modal');document.querySelectorAll('[data-guide-open]').forEach(btn=>btn.addEventListener('click',()=>{if(guideModal&&typeof guideModal.showModal==='function')guideModal.showModal();}));document.querySelectorAll('[data-guide-close]').forEach(btn=>btn.addEventListener('click',()=>{guideModal?.close();}));if(guideModal){guideModal.addEventListener('click',event=>{if(event.target===guideModal)guideModal.close();});}
 const payhubForm=document.getElementById('payhub-form');
+
 if(payhubForm){
  const ledger=payhubForm.querySelector('#payhub-ledger');const amount=payhubForm.querySelector('#payhub-amount');const errorBox=document.getElementById('payhub-error');
  const showError=msg=>{if(errorBox){errorBox.hidden=false;errorBox.textContent=msg;}else alert(msg);};
@@ -282,17 +285,21 @@ if(payhubForm){
   const key=payhubForm.dataset.payhubKey;const email=payhubForm.dataset.payhubEmail;const name=payhubForm.dataset.payhubName;const raw=Number(amount.value);if(!raw||raw<100){showError('Enter an amount of at least 100.00 NGN.');return;}
   payhubForm.querySelector('.payhub-button')?.setAttribute('disabled','disabled');
   try{
-   const form=new FormData(payhubForm);form.set('format','json');
+   const form=new FormData(payhubForm);
    const res=await fetch(payhubForm.action||location.href,{method:'POST',body:form,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});
    const text=await res.text();let data=null;try{data=JSON.parse(text);}catch{}
    if(!res.ok||!data||!data.reference){throw new Error(data?.message||'Could not start PayHub checkout. Confirm your keys and network.');}
-   if(typeof PayhubPop==='undefined'){window.location.href='https://merchant.payhub.com.ng/checkout.php?ref='+encodeURIComponent(data.reference);return;}
+   const vaBox=document.getElementById('payhub-virtual-account');const vaBank=document.getElementById('payhub-virtual-bank');const vaNum=document.getElementById('payhub-virtual-number');const vaName=document.getElementById('payhub-virtual-name');const statusBox=document.getElementById('payhub-status');
+   if(vaBox&&Array.isArray(data.virtual_accounts)&&data.virtual_accounts.length){const acct=data.virtual_accounts[0];vaBank.textContent=acct.bank_name||'PayHub Virtual Bank';vaNum.textContent=acct.account_number||'—';vaName.textContent=acct.account_name||'REMIT Remittance';vaBox.hidden=false;if(statusBox){statusBox.hidden=false;statusBox.textContent='Virtual account generated. Transfer the exact amount to approve automatically.';}}else if(vaBox){vaBox.hidden=true;}
+   const successRef=data.reference;const poll=async()=>{try{const u=new URL(location.href);u.searchParams.set('payhub_ref',successRef);const r=await fetch(u,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});const t=await r.text();if(t.includes('payment confirmed')||t.includes('automatically approved')){location.href=u.toString();return;}}catch{}setTimeout(poll,8000);};
+   if(typeof PayhubPop==='undefined'){window.open('https://merchant.payhub.com.ng/checkout.php?ref='+encodeURIComponent(data.reference),'_blank','noopener');poll();return;}
    const handler=PayhubPop.setup({
     key:data.public_key||key,email:data.email||email,amount:Number(data.amount_kobo)||Math.round(raw*100),ref:data.reference,currency:'NGN',
-    onClose(){payhubForm.querySelector('.payhub-button')?.removeAttribute('disabled');},
+    onClose(){payhubForm.querySelector('.payhub-button')?.removeAttribute('disabled');poll();},
     callback:function(response){if(response&&response.reference){const url=new URL(location.href);url.searchParams.set('payhub_ref',response.reference);location.href=url.toString();}}
    });
-   handler.openIframe();
+   handler.openIframe();poll();
   }catch(e){showError(e.message||'PayHub checkout failed.');payhubForm.querySelector('.payhub-button')?.removeAttribute('disabled');}
  });
 }
+const save=document.getElementById('income-form');if(save){save.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},100);});if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),120);}}
