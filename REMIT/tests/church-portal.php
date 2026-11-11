@@ -27,7 +27,7 @@ try{
  CREATE TABLE officer_profiles(user_id INTEGER PRIMARY KEY,phone TEXT,bank_name TEXT,account_name TEXT,account_ciphertext TEXT,account_last4 TEXT);
  CREATE TABLE church_registrations(id INTEGER PRIMARY KEY AUTOINCREMENT,parish_id INTEGER,requested_church_name TEXT,requested_church_type TEXT,full_name TEXT,email TEXT UNIQUE,phone TEXT,password_hash TEXT,bank_name TEXT,account_name TEXT,account_ciphertext TEXT,account_last4 TEXT,status TEXT DEFAULT 'pending',reviewed_by INTEGER,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE registration_limits(ip_address TEXT PRIMARY KEY,attempts INTEGER DEFAULT 0,window_started TEXT);
- CREATE TABLE notification_outbox(id INTEGER PRIMARY KEY,recipient TEXT,subject TEXT,body TEXT,status TEXT DEFAULT 'pending',attempts INTEGER DEFAULT 0);
+ CREATE TABLE notification_outbox(id INTEGER PRIMARY KEY,recipient TEXT,subject TEXT,body TEXT,body_html TEXT NOT NULL DEFAULT '',status TEXT DEFAULT 'pending',attempts INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE security_audit_logs(id INTEGER PRIMARY KEY,ip_address TEXT,username_attempted TEXT,event_type TEXT,details TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE remittance_ledgers(id INTEGER PRIMARY KEY AUTOINCREMENT,parish_id INTEGER,provincial_levy_due TEXT,amount_paid TEXT DEFAULT '0.00',status TEXT,payment_reference TEXT UNIQUE,gross_income TEXT,period_month INTEGER,period_year INTEGER,UNIQUE(parish_id,period_month,period_year));
  CREATE TABLE report_allocations(ledger_id INTEGER PRIMARY KEY,payable_basis_points INTEGER,retained_amount TEXT);
@@ -86,6 +86,7 @@ try{
  $page='remittances';ob_start();require __DIR__.'/../app/offering-view.php';$html=ob_get_clean();check(str_contains($html,'id="levy-preview"'),'offering calculator renders payment preview');
  ob_start();require __DIR__.'/../app/profile-view.php';$html=ob_get_clean();check(str_contains($html,'0123456789'),'own profile renders decrypted account');
  ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'Automated deposit · PayHub'),'payment page renders explicit gateway state');
+
  $user=$admin;ob_start();require __DIR__.'/../app/registrations-view.php';$html=ob_get_clean();check(str_contains($html,'Officer registrations'),'admin approval queue renders');
  ob_start();require __DIR__.'/../app/portal-settings.php';$html=ob_get_clean();check(str_contains($html,'Church retention / deduction (%)'),'admin uses human readable percentages');
  $_SERVER['REQUEST_METHOD']='GET';ob_start();require __DIR__.'/../app/register.php';$html=ob_get_clean();check(str_contains($html,'name="parish_id"'),'public registration includes parish selection');
