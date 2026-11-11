@@ -440,12 +440,169 @@ th,.parish-cell small,.panel-foot,.login-footer,.directory-unit dt,input[readonl
 #payhub-form .payhub-showcase {
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr) !important;
-  gap: 20px !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important;
+  gap: 18px !important;
+}
+
+/* Side-by-side offering + payment workspace & mobile responsiveness */
+.main:has(.remittance-grid) {
+  max-width: 1380px;
+}
+
+.remittance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.remittance-grid > * {
+  min-width: 0;
+}
+
+.remittance-grid .offering-panel {
+  display: block;
+  grid-template-columns: none;
+  margin-bottom: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: var(--rccg-card-shadow);
+}
+
+.remittance-grid .offering-form {
+  padding: 26px;
+}
+
+.offering-form-head {
+  margin-bottom: 18px;
+}
+
+.offering-form-head h2 {
+  font-size: 1.45rem;
+  font-weight: 750;
+  color: var(--rccg-blue);
+  margin: 0 0 6px;
+}
+
+.offering-form-head p {
+  margin: 0;
+}
+
+.remittance-grid .payment-layout {
+  max-width: none;
+  margin: 0;
+  width: 100%;
+}
+
+.remittance-grid .payment-method-panel {
+  padding: 26px;
+  margin-bottom: 0;
+}
+
+.remittance-grid .session-info-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.remittance-grid .hosted-link {
+  width: 100%;
+}
+
+.va-copy-wrapper {
+  flex-wrap: wrap;
+}
+
+.va-number {
+  font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
+
+.hero-amount-value {
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  overflow-wrap: anywhere;
+}
+
+.hero-ref-badge {
+  overflow-wrap: anywhere;
+}
+
+.alt-payment-cta {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (min-width: 1024px) {
+  .remittance-grid {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.32fr);
+    gap: 22px;
+  }
+  .remittance-grid .va-number {
+    font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+    letter-spacing: 1.2px;
+  }
+  .remittance-grid .hero-amount-value {
+    font-size: clamp(1.35rem, 2vw, 1.85rem);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .remittance-grid #payhub-form .payhub-showcase {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .remittance-grid .payment-method-panel .payment-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
 }
 
 @media (max-width: 760px) {
   #payhub-form .payhub-showcase {
     grid-template-columns: 1fr !important;
+  }
+  .remittance-grid .offering-form,
+  .remittance-grid .payment-method-panel {
+    padding: 20px 18px;
+  }
+  .payhub-virtual-box {
+    padding: 18px 16px;
+  }
+  .hero-amount-card,
+  .virtual-account-display-card {
+    padding: 18px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .remittance-grid {
+    gap: 16px;
+  }
+  .remittance-grid .offering-form,
+  .remittance-grid .payment-method-panel {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+  .offering-form-head h2,
+  .payment-method-panel h2 {
+    font-size: 1.25rem;
+  }
+  .payment-tab {
+    padding: 13px 14px;
+    gap: 12px;
+  }
+  .payhub-virtual-box {
+    padding: 14px 12px;
+  }
+  .va-number {
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+  }
+  .copy-btn {
+    min-height: 44px;
+    width: 100%;
+  }
+  .alt-payment-cta {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 14px;
   }
 }
