@@ -3,6 +3,7 @@ declare(strict_types=1);
 const ROOT = __DIR__ . '/..';
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
+ini_set('session.gc_maxlifetime', '1800');
 session_name('remit_session');
 session_set_cookie_params(['httponly'=>true, 'secure'=>!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite'=>'Lax', 'path'=>rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/']);
 session_start();

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if(!function_exists('payhubVerifyAndProcess')){
 function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='return',bool $throwIfUnpaid=true,int $ledgerIdHint=0): array {
  if(!ChurchPortal::ready($db))throw new RuntimeException('The administrator must enable the church portal schema in Portal settings first.');
  $ref=trim($ref);
@@ -35,7 +36,7 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
     return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
    }
    $lastNotifId=(int)($_SESSION['payhub_sessions'][$ledgerIdHint]['last_notif_id']??0);
-   $nLedger=$db->prepare("SELECT status,payhub_reference FROM payment_notifications WHERE ledger_id=? AND payhub_reference IS NOT NULL AND id>? ORDER BY id DESC LIMIT 1");
+   $nLedger=$db->prepare("SELECT id,status,payhub_reference FROM payment_notifications WHERE ledger_id=? AND payhub_reference IS NOT NULL AND id>? ORDER BY id DESC LIMIT 1");
    $nLedger->execute([$ledgerIdHint,$lastNotifId]);$nHit=$nLedger->fetch();
    if($nHit){
     if($nHit['status']==='pending' && PayHub::autoApproveEnabled($db)){
@@ -86,6 +87,8 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
  }
  return ['paid'=>true,'message'=>'PayHub payment confirmed.'.($approved?' Payment automatically approved.':(PayHub::autoApproveEnabled($db)?'':' Treasury will complete final verification.'))];
 }
+}
+if(!function_exists('action')){
 function action(PDO $db,array $user,array $ids): string {
  checkCsrf(); $action=$_POST['action'] ?? '';
  if($action==='impersonation_return'){if(!Impersonation::active())throw new RuntimeException('No impersonation session.');Impersonation::refresh($db,true);return 'Returned to admin.';}
@@ -152,7 +155,8 @@ function action(PDO $db,array $user,array $ids): string {
   $cached=$_SESSION['payhub_sessions'][$ledgerId]??null;
   if(is_array($cached) && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference'])){
    $cachedRef=(string)($cached['payload']['payhub_reference']??$cached['payload']['reference']);
-   $seen=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? LIMIT 1');$seen->execute([$cachedRef]);
+   $cachedLastNotifId=(int)($cached['last_notif_id']??0);
+   $seen=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? OR (ledger_id=? AND id>?) LIMIT 1');$seen->execute([$cachedRef,$ledgerId,$cachedLastNotifId]);
    if(!$seen->fetchColumn()){
     $_SESSION['payhub_reference']=$cachedRef;
     if(!$ajax){$_SESSION['flash']='Use the PayHub button on the payment page to continue.';header('Location: index.php?page=remittances&pay=payhub#payment-options',true,303);exit;}
@@ -272,4 +276,5 @@ function action(PDO $db,array $user,array $ids): string {
   requireRole($user,['provincial_admin']);$db->prepare('UPDATE users SET is_suspended=0 WHERE id=?')->execute([(int)($_POST['user_id'] ?? 0)]);return 'Account suspension cleared. Failed-attempt history is retained.';
  }
  throw new RuntimeException('Unknown action.');
+}
 }
