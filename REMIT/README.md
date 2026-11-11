@@ -571,4 +571,6 @@ Deploy the complete release with fingerprinted CSS/JS assets and set up the cron
 
 - 0.16.2: admin bulk permanent delete for pending remittances in Remittance history, removing associated pending payment notifications and receipts so representatives can resubmit those periods; verified history preserved.
 
-- 0.16.4: redesigned remittance payment flow with reliable offering calculator, fixed PayHub inline checkout/button, automatic payment selection after saving, quick Pay Now actions, and safer pending-payment handling.
+- 0.16.5: redesigned remittance payment flow with reliable offering calculator, fixed PayHub inline checkout/button, automatic payment selection after saving, quick Pay Now actions, and safer pending-payment handling.
+
+- 0.16.5: hotfix for fatal undefined ChurchPortal::ownOutstanding on remittances page; restores remittance page rendering.
