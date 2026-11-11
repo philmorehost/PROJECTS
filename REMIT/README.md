@@ -570,3 +570,5 @@ Deploy the complete release with fingerprinted CSS/JS assets and set up the cron
 - 0.16.2: prevent accidental native form submission from exposing PayHub JSON session data; PayHub button is explicit button-driven with AJAX guard and graceful fallback, no secret keys displayed. Added signed-in administrator PIN reset without old PIN; PIN shown only as masked status.
 
 - 0.16.2: admin bulk permanent delete for pending remittances in Remittance history, removing associated pending payment notifications and receipts so representatives can resubmit those periods; verified history preserved.
+
+- 0.16.4: redesigned remittance payment flow with reliable offering calculator, fixed PayHub inline checkout/button, automatic payment selection after saving, quick Pay Now actions, and safer pending-payment handling.
