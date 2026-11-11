@@ -163,8 +163,21 @@ th,.parish-cell small,.panel-foot,.login-footer,.directory-unit dt,input[readonl
 
 .payhub-header-bar {
   border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.bank-card .va-copy-wrapper {
+  margin: 8px 0 6px;
+}
+
+.bank-copy-btn {
+  background: #146a63;
+  color: #ffffff;
+}
+
+.bank-copy-btn:hover {
+  background: #105a54;
 }
 
 .payhub-header-bar .badge.verified {
