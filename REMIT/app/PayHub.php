@@ -20,6 +20,14 @@ final class PayHub
     public static function webhookUrl(): string { return 'https://'.($_SERVER['HTTP_HOST']??'your-domain.example').'/index.php?payhub_webhook=1'; }
     public static function checkoutUrl(string $ref): string { return self::BASE.'/checkout.php?ref='.rawurlencode($ref); }
     public static function autoApproveEnabled(PDO $db): bool { return setting($db,'payhub_virtual_accounts')!=='0'; }
+    public static function log(PDO $db,string $event,array $payload=[]): void
+    {
+        try{
+            $dir=ROOT.'/storage/logs';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))return;
+            $line=json_encode(['time'=>date('c'),'event'=>$event,'payload'=>$payload],JSON_UNESCAPED_SLASHES);
+            @file_put_contents($dir.'/payhub.log',$line."\n",FILE_APPEND|LOCK_EX);
+        }catch(Throwable){}
+    }
     /** @return array<int,array<string,string>> */
     public static function virtualAccounts(PDO $db): array
     {
@@ -39,12 +47,16 @@ final class PayHub
         $secret=trim(setting($db,'payhub_secret_key'));
         $ref='RMT-'.date('YmdHis').'-'.$ledgerId.'-'.bin2hex(random_bytes(3));
         $payload=['email'=>$email,'amount'=>(string)$kobo,'name'=>$name,'phone'=>$phone,'reference'=>$ref,'metadata'=>['ledger_id'=>$ledgerId,'user_id'=>(int)$user['id']]];
-        $ch=curl_init(self::BASE.'/api/transaction/initialize');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$payload,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret],CURLOPT_TIMEOUT=>20,CURLOPT_CONNECTTIMEOUT=>10]);
-        $response=curl_exec($ch);$errno=curl_errno($ch);$error=curl_error($ch);curl_close($ch);
-        if($errno)throw new RuntimeException('Could not connect to PayHub. Try again later or use manual transfer.');
+        if(setting($db,'payhub_virtual_accounts')!=='0')$payload['channels']=['card','bank_transfer','virtual_account'];
+        $ch=curl_init(self::BASE.'/api/transaction/initialize');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($payload),CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret,'Content-Type: application/json','Accept: application/json'],CURLOPT_TIMEOUT=>30,CURLOPT_CONNECTTIMEOUT=>15]);
+        $response=curl_exec($ch);$http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$errno=curl_errno($ch);$error=curl_error($ch);curl_close($ch);
+        self::log($db,'initialize_request',['reference'=>$ref,'kobo'=>$kobo,'http'=>$http,'curl_error'=>$error,'response'=>(string)$response]);
+        if($errno)throw new RuntimeException('Could not connect to PayHub. Check logs and try manual transfer if needed.');
         $json=json_decode((string)$response,true);
-        if(!is_array($json)||empty($json['status'])||!is_array($json['data']??null)||empty($json['data']['reference'])||empty($json['data']['authorization_url']))throw new RuntimeException('PayHub did not return a valid checkout session.');
-        return ['reference'=>(string)$json['data']['reference'],'authorization_url'=>(string)$json['data']['authorization_url']];
+        if(!is_array($json)||empty($json['status'])||!is_array($json['data']??null)||empty($json['data']['reference'])||empty($json['data']['authorization_url']))throw new RuntimeException('PayHub did not return a valid checkout session. Check PayHub logs.');
+        $virtual=[];foreach((array)($json['data']['virtual_accounts']??$json['data']['dedicated_account']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$virtual[]=['bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance')];}
+        if(!$virtual)$virtual=self::virtualAccounts($db);
+        return ['reference'=>(string)$json['data']['reference'],'authorization_url'=>(string)$json['data']['authorization_url'],'virtual_accounts'=>$virtual,'public_key'=>trim(setting($db,'payhub_public_key'))];
     }
     public static function verify(PDO $db,string $reference): ?array
     {
