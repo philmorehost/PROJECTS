@@ -59,13 +59,28 @@ $treasurer=false;$user=['id'=>1,'role'=>'parish_officer','hierarchy_id'=>1,'emai
 ob_start();require __DIR__.'/../app/ledger-table.php';$repHtml=ob_get_clean();
 check(!str_contains($repHtml,'GATEWAY FEES')&&!str_contains($repHtml,'NET SETTLED')&&!str_contains($repHtml,'1.60')&&!str_contains($repHtml,'98.40'),'representative ledger table strictly hides gateway fees');
 
+// Test double-inclusion guard on app/actions.php and GET return verification without CSRF failure
+require __DIR__.'/../app/actions.php';
+check(function_exists('action')&&function_exists('payhubVerifyAndProcess'),'re-requiring app/actions.php does not cause Cannot redeclare action()');
+$_SESSION['user_id']=1;$_SESSION['csrf']='valid-session-csrf';$_POST=[];$_GET=['page'=>'remittances','pay'=>'payhub','payhub_ref'=>'PH_AUTO'];
+$retVerify=payhubVerifyAndProcess($db,$officer,'PH_AUTO','return',true);
+check(!empty($retVerify['paid'])&&str_contains($retVerify['message'],'PayHub payment confirmed'),'GET payhub_ref return verifies without CSRF session-expired error');
+
+// Test cached session invalidation when a newer DVA notification exists on the ledger
+$db->prepare('INSERT INTO remittance_ledgers(parish_id,provincial_levy_due,amount_paid,status,payment_reference,gross_income,period_month,period_year) VALUES(1,?,?,?,?,?,?,?)')->execute(['50000.00','0.00','pending','RMT-CACHE-DVA','100000.00',10,2025]);$cacheLedger=(int)$db->lastInsertId();
+$_SESSION['payhub_sessions'][$cacheLedger]=['unit'=>1,'kobo'=>5000000,'created_at'=>time(),'last_notif_id'=>0,'payload'=>['reference'=>'RMT-OLD-CACHE','payhub_reference'=>'PH_OLD_CACHE']];
+PayHub::recordSuccessfulCharge($db,'VA_NEW_99',['reference'=>'VA_NEW_99','amount'=>1000000,'gateway_amount'=>1000000,'fee_amount'=>15000,'settled_amount'=>985000,'status'=>'success','domain'=>'test','channel'=>'dedicated_nuban','paid_at'=>date('c'),'customer'=>['email'=>'officer@example.org'],'metadata'=>['ledger_id'=>$cacheLedger]],'test');
+$_GET=['payhub_ref'=>'VA_NEW_99'];
+$pollHit=payhubVerifyAndProcess($db,$officer,'RMT-OLD-CACHE','poll',false,$cacheLedger);
+check(!empty($pollHit['paid'])&&!isset($_SESSION['payhub_sessions'][$cacheLedger]),'DVA notification on ledger clears stale cached session cleanly');
+
 // Test log redaction & portal settings log panel
 PayHub::log($db,'unit_test_secret',['authorization'=>'Bearer sk_live_SECRET123456','ref'=>'RMT-TEST']);
 $logs=PayHub::recentLogs(10);
 check(!empty($logs)&&str_contains((string)json_encode($logs),'[REDACTED]')&&!str_contains((string)json_encode($logs),'sk_live_SECRET123456'),'PayHub log redacts secret keys');
 
-$user=$admin;ob_start();require __DIR__.'/../app/portal-settings.php';$html=ob_get_clean();check(str_contains($html,'payhub_auto_approve')&&str_contains($html,'Copy webhook')&&str_contains($html,'Recent PayHub activity logs'),'portal settings renders auto-approval, webhook copy and redacted PayHub logs');
+$user=$admin;ob_start();require __DIR__.'/../app/portal-settings.php';$html=ob_get_clean();check(str_contains($html,'payhub_auto_approve')&&str_contains($html,'Copy webhook')&&str_contains($html,'Recent PayHub activity logs')&&str_contains($html,'storage/logs/payhub.log'),'portal settings renders auto-approval, webhook copy and redacted PayHub logs with file path');
 $user=['id'=>1,'role'=>'parish_officer','hierarchy_id'=>1,'email'=>'officer@example.org','full_name'=>'Hope Officer'];ob_start();require __DIR__.'/../app/welcome-guide.php';$guide=ob_get_clean();check(str_contains($guide,'quick-guide-modal')&&str_contains($guide,'data-guide-open'),'quick guide rendered as modal launcher');
-ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'payment-tabs')&&str_contains($html,'Bank Transfer')&&str_contains($html,'PayHub Checkout & Virtual Account')&&str_contains($html,'payhub-virtual-box'),'payment page renders tabs and virtual account panel');
+ob_start();require __DIR__.'/../app/payments-view.php';$html=ob_get_clean();check(str_contains($html,'payment-tabs')&&str_contains($html,'Bank Transfer')&&str_contains($html,'PayHub Checkout & Virtual Account')&&str_contains($html,'payhub-virtual-box')&&str_contains($html,'stopPolling')&&!str_contains($html,"includes('automatically approved')"),'payment page renders tabs, virtual account panel, and loop-free JSON poller');
 if(is_dir(ROOT.'/storage')){foreach([ROOT.'/storage/logs/payhub.log',ROOT.'/storage/logs/.htaccess'] as $lf)if(is_file($lf))@unlink($lf);@rmdir(ROOT.'/storage/logs');@rmdir(ROOT.'/storage');@rmdir(ROOT);}
 echo "PASS: $checks combined portal/PayHub assertions (SQLite harness; mocked gateway)\n";

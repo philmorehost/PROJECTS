@@ -52,7 +52,6 @@ function updateOffering(){
 }
 ['input','change','keyup','blur'].forEach(ev=>document.addEventListener(ev,e=>{if(e.target&&e.target.id==='gross')updateOffering();}));
 setTimeout(updateOffering,30);setTimeout(updateOffering,200);setTimeout(updateOffering,600);window.addEventListener('load',updateOffering);
-const offerForm=document.getElementById('income-form');if(offerForm){offerForm.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},400);});}
 function payHubDue(sel){const opt=sel?.selectedOptions?.[0];return opt?BigInt(opt.dataset.amount||0):0n;}
 function syncPayhub(){const sel=document.getElementById('payhub-ledger'),amt=document.getElementById('payhub-amount'),heroAmt=document.getElementById('payhub-hero-amount'),heroRef=document.getElementById('payhub-hero-ref');if(!sel)return;const opt=sel.selectedOptions?.[0];const due=payHubDue(sel);if(heroAmt)heroAmt.textContent=money(due);if(heroRef)heroRef.textContent='Reference: '+(opt?.dataset.ref||'—');if(amt){amt.value=due?decimalFromKobo(due):'';}}
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='payhub-ledger'){syncPayhub();autoGeneratePayhub();}});
@@ -88,21 +87,43 @@ function showSession(data){
  setVirtualAccount(data.virtual_accounts&&data.virtual_accounts[0]?data.virtual_accounts[0]:null);
  payhubLog('session_displayed',{reference:data.reference||'',payhub_reference:checkoutRef||'',amount:data.amount||''});
 }
+function showPayhubError(message,showRefreshLink){
+ const err=document.getElementById('payhub-error');
+ if(!err)return;
+ err.textContent=message||'';
+ if(showRefreshLink){
+  const sep=document.createTextNode(' ');
+  const a=document.createElement('a');
+  a.className='text-link';
+  a.href='index.php?page=remittances&pay=payhub#payment-options';
+  a.textContent='Refresh page';
+  err.append(sep,a);
+ }
+ err.hidden=false;
+}
 let isGenerating=false,pendingRegenerate=false,pollTimer=null,activePollRef=null;
+function stopPolling(){activePollRef=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}}
 function startPolling(ref,ledgerId){
- if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
+ stopPolling();
  activePollRef=ref;
  const poll=async()=>{
   if(activePollRef!==ref)return;
   try{
    const q='index.php?payhub_status=1&payhub_ref='+encodeURIComponent(ref)+(ledgerId?('&ledger_id='+encodeURIComponent(ledgerId)):'');
    const r=await fetch(q,{credentials:'same-origin',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'}});
-   if(r.status===401||r.status===403){activePollRef=null;return;}
+   if(r.status===401||r.status===403){
+    stopPolling();
+    const d=await r.json().catch(()=>null);
+    showPayhubError(d?.message||'Your session expired. Refresh and try again.',true);
+    return;
+   }
    const d=await r.json().catch(()=>null);
    if(r.ok&&d&&d.paid===true){
-    activePollRef=null;
+    stopPolling();
     payhubLog('payhub_confirmed_poll',{ref,ledgerId:ledgerId||''});
-    location.href='index.php?page=remittances&pay=payhub#payment-options';
+    const target=new URL('index.php?page=remittances&pay=payhub#payment-options',location.href);
+    if(target.pathname+target.search===location.pathname+location.search){location.reload();}
+    else{location.href=target.href;}
     return;
    }
   }catch(e){payhubLog('payhub_poll_error',{ref,error:e.message});}
@@ -123,17 +144,30 @@ async function autoGeneratePayhub(){
   const res=await fetch('index.php?page=remittances&pay=payhub',{method:'POST',body:fd,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});
   const text=await res.text();let data=null;
   try{data=JSON.parse(text);}catch{throw new Error(res.ok?'Invalid response from payment server.':'Payment server returned HTTP '+res.status+'. Please refresh and try again.');}
+  if(res.status===401||res.status===403){stopPolling();showPayhubError(data?.message||'Your session expired. Refresh and try again.',true);return;}
   if(!res.ok||!data?.reference)throw new Error(data?.message||'Could not generate PayHub virtual account.');
   showSession(data);
   startPolling(data.payhub_reference||data.reference,ledgerId);
  }catch(e){
-  if(err){err.hidden=false;err.textContent=e.message||'Failed to automatically generate PayHub session.';}
+  showPayhubError(e.message||'Failed to automatically generate PayHub session.',false);
   payhubLog('payhub_auto_error',{message:e.message});
  }finally{
   isGenerating=false;
   if(pendingRegenerate){pendingRegenerate=false;autoGeneratePayhub();}
  }
 }
+window.addEventListener('pageshow',e=>{
+ if(!e.persisted)return;
+ stopPolling();
+ try{
+  const key='remit-bfcache-reload:'+location.pathname;
+  const last=Number(sessionStorage.getItem(key)||0);
+  if(!Number.isFinite(last)||Date.now()-last>=30000){
+   sessionStorage.setItem(key,String(Date.now()));
+   location.reload();
+  }
+ }catch{}
+});
 const copyBtn=document.getElementById('copy-va-btn');if(copyBtn){copyBtn.addEventListener('click',()=>{const num=document.getElementById('payhub-virtual-number');if(num&&num.textContent){navigator.clipboard?.writeText(num.textContent.trim()).then(()=>{const orig=copyBtn.textContent;copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent=orig,2000);}).catch(()=>{});}});}
 if(document.getElementById('payhub-virtual-box')){setTimeout(autoGeneratePayhub,300);}
 });

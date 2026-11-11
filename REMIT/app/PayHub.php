@@ -55,12 +55,13 @@ final class PayHub
     }
     public static function log(PDO $db,string $event,array $payload=[]): void
     {
+        $line=json_encode(['time'=>date('c'),'event'=>$event,'payload'=>self::redact($payload)],JSON_UNESCAPED_SLASHES);
         try{
-            $dir=ROOT.'/storage/logs';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))return;
+            $dir=ROOT.'/storage/logs';
+            if(!is_dir($dir)&&!@mkdir($dir,0700,true)&&!is_dir($dir)){error_log('REMIT PayHub ['.$event.']: '.($line?:'{}'));return;}
             if(!is_file($dir.'/.htaccess'))@file_put_contents($dir.'/.htaccess',"Require all denied\n");
-            $line=json_encode(['time'=>date('c'),'event'=>$event,'payload'=>self::redact($payload)],JSON_UNESCAPED_SLASHES);
-            @file_put_contents($dir.'/payhub.log',$line."\n",FILE_APPEND|LOCK_EX);
-        }catch(Throwable){}
+            if(@file_put_contents($dir.'/payhub.log',($line?:'{}')."\n",FILE_APPEND|LOCK_EX)===false){error_log('REMIT PayHub ['.$event.']: '.($line?:'{}'));}
+        }catch(Throwable){error_log('REMIT PayHub ['.$event.']: '.($line?:'{}'));}
     }
     /** @return array<int,array{time:string,event:string,payload:array<string,mixed>}> */
     public static function recentLogs(int $limit=40): array

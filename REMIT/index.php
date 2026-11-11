@@ -15,7 +15,8 @@ if (isset($_GET['payhub_webhook'])) {
 }
 if(!is_file(ROOT.'/config/installed.lock')) {require ROOT.'/app/installer.php';exit;}
 $error='';$page=$_GET['page'] ?? 'overview';
-$wantsJson=(($_GET['payhub_status']??'')==='1')||(($_GET['payhub_log']??'')==='1')||($_SERVER['REQUEST_METHOD']==='POST' && (($_POST['action']??'')==='payhub_session'));
+$isAjaxRequest=(($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='XMLHttpRequest')||(($_POST['format']??'')==='json')||str_contains((string)($_SERVER['HTTP_ACCEPT']??''),'application/json');
+$wantsJson=(($_GET['payhub_status']??'')==='1')||(($_GET['payhub_log']??'')==='1')||($_SERVER['REQUEST_METHOD']==='POST' && (($_POST['action']??'')==='payhub_session') && $isAjaxRequest);
 try {
  $db=Database::get();
  Impersonation::refresh($db);
@@ -78,6 +79,7 @@ try {
   if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action'] ?? '')!=='login') {
    require_once ROOT.'/app/actions.php';
    $isPayhubSession=($_POST['action']??'')==='payhub_session';
+   $isPayhubSessionJson=$isPayhubSession && $isAjaxRequest;
    try { if($isPayhubSession){action($db,$user,$ids);exit;} $_SESSION['flash']=action($db,$user,$ids);if(($_POST['action']??'')==='impersonation_return')redirect('representatives');if(($_POST['action']??'')==='impersonate')redirect('overview');if(($_POST['action'] ?? '')==='report'){$payMethod=PayHub::enabled($db)?'payhub':'bank';header('Location: index.php?page=remittances&pay='.$payMethod.'#payment-options',true,303);exit;}redirect(in_array($page,['overview','remittances','hierarchy','security','settings','profile','representatives'],true)?$page:'overview'); }
    catch(PDOException $ex) {
     error_log('REMIT action: ' . $ex->getMessage());
@@ -90,14 +92,14 @@ try {
     } else {
       $error = 'This record could not be saved. Check for duplicate report periods, church codes, emails or bank transfer references.';
     }
-    if($isPayhubSession){http_response_code(500);header('Content-Type: application/json');echo json_encode(['message'=>'Could not initialize PayHub session. Please try again.']);exit;}
+    if($isPayhubSessionJson){http_response_code(500);header('Content-Type: application/json');echo json_encode(['message'=>'Could not initialize PayHub session. Please try again.']);exit;}
    }
    catch(RuntimeException|InvalidArgumentException $ex) {
     $error=$ex->getMessage();
-    if($isPayhubSession){if(http_response_code()<400)http_response_code(400);header('Content-Type: application/json');echo json_encode(['message'=>$error]);exit;}
+    if($isPayhubSessionJson){if(http_response_code()<400)http_response_code(400);header('Content-Type: application/json');echo json_encode(['message'=>$error]);exit;}
    }
    catch(Throwable $ex) {
-    if($isPayhubSession){error_log('REMIT payhub_session: '.$ex->getMessage());http_response_code(500);header('Content-Type: application/json');echo json_encode(['message'=>$ex->getMessage()]);exit;}
+    if($isPayhubSessionJson){error_log('REMIT payhub_session: '.$ex->getMessage());http_response_code(500);header('Content-Type: application/json');echo json_encode(['message'=>$ex->getMessage()]);exit;}
     throw $ex;
    }
    if (empty($GLOBALS['remit_request_lock'])) {
