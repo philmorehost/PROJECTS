@@ -1,4 +1,6 @@
-<?php declare(strict_types=1); ?>
+<?php declare(strict_types=1);
+$payhubReady = $payhubReady ?? (isset($db) && $db instanceof PDO && class_exists('PayHub') ? PayHub::enabled($db) : false);
+?>
 <div class="table-wrap"><table id="ledger"><caption class="sr-only">Church offering reports, allocations, confirmed amounts and payment status</caption><thead><tr><?php if($treasurer): ?><th><span class="sr-only">Select</span></th><?php endif; ?><th>CHURCH / REFERENCE</th><th>PERIOD</th><th>TOTAL OFFERING · 100%</th><th>CHURCH RETAINS</th><th>AMOUNT TO PAY</th><th>CONFIRMED</th><th>STATUS</th><?php if(canRemit($user)): ?><th>PAY</th><?php endif; ?></tr></thead><tbody><?php foreach($ledgerRows as $row):
 $outstanding=Money::cents($row['provincial_levy_due'])-Money::cents($row['amount_paid']);
 $canPayNow=$outstanding>0 && in_array($row['status'],['pending','partial'],true);
