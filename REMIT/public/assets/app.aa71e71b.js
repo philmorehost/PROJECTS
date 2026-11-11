@@ -270,3 +270,12 @@ if(document.querySelector('[data-impersonation]'))document.querySelectorAll('for
 // Opening a deep link must not leave the manual representative form collapsed.
 function revealRepresentativeEditor(){if(location.hash==='#representative-editor'){const editor=document.querySelector('#representative-editor');const disclosure=editor?.closest('details');if(disclosure)disclosure.open=true;}}
 revealRepresentativeEditor();window.addEventListener('hashchange',revealRepresentativeEditor);
+document.querySelectorAll('.copy-button[data-copy-target]').forEach(button=>button.addEventListener('click',async()=>{const target=document.getElementById(button.dataset.copyTarget);if(!target)return;try{await navigator.clipboard.writeText(target.value);button.textContent='Copied';setTimeout(()=>button.textContent='Copy webhook',1600);}catch{target.select();document.execCommand('copy');button.textContent='Copied';setTimeout(()=>button.textContent='Copy webhook',1600);}}));
+const payhubForm=document.getElementById('payhub-form');
+if(payhubForm){
+ const ledger=payhubForm.querySelector('#payhub-ledger');const amount=payhubForm.querySelector('#payhub-amount');
+ ledger?.addEventListener('change',()=>{const opt=ledger.selectedOptions[0];if(opt?.dataset.amount){const max=Number(opt.dataset.amount)/100;amount.max=max.toFixed(2);if(!amount.value||Number(amount.value)>max)amount.value=max.toFixed(2);}});
+ payhubForm.addEventListener('submit',event=>{
+  if(typeof PayhubPop==='undefined')return;event.preventDefault();const key=payhubForm.dataset.payhubKey;const email=payhubForm.dataset.payhubEmail;const name=payhubForm.dataset.payhubName;const raw=Number(amount.value);if(!raw||raw<100)return;const handler=PayhubPop.setup({key,email,amount:Math.round(raw*100),ref:'',onClose(){},callback:response=>{if(response&&response.reference){const url=new URL(location.href);url.searchParams.set('payhub_ref',response.reference);location.href=url.toString();}}});handler.openIframe();
+ });
+}

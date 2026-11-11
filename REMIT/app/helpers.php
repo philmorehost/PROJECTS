@@ -7,6 +7,7 @@ require_once __DIR__.'/PasswordReset.php';
 require_once __DIR__.'/RepresentativeManager.php';
 require_once __DIR__.'/Impersonation.php';
 require_once __DIR__.'/EmailTemplates.php';
+require_once __DIR__.'/PayHub.php';
 require_once __DIR__.'/ApprovalNotifications.php';
 function e(mixed $s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function redirect(string $page): never { header('Location: index.php?page='.rawurlencode($page), true, 303); exit; }
