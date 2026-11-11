@@ -12,15 +12,21 @@ function filterLedger(){
 search?.addEventListener('input',filterLedger);statusFilter?.addEventListener('change',filterLedger);filterLedger();
 document.querySelectorAll('[data-percent]').forEach(bar=>{bar.style.width=`${Math.max(0,Math.min(100,Number(bar.dataset.percent)))}%`;});
 function currency(cents){return `₦${(cents/100n).toLocaleString('en-NG')}.${(cents%100n).toString().padStart(2,'0')}`;}
-const form=document.querySelector('#income-form');
-form?.addEventListener('input',()=>{
- const raw=document.querySelector('#gross').value;
- if(!/^\d{1,13}(?:\.\d{1,2})?$/.test(raw)){document.querySelector('#levy-preview').textContent='—';document.querySelector('#retained-preview').textContent='—';return;}
+const offeringForm=document.querySelector('#income-form');
+const grossInput=document.querySelector('#gross');
+const levyPreview=document.querySelector('#levy-preview');const retainedPreview=document.querySelector('#retained-preview');
+function updateOfferingPreview(){
+ if(!offeringForm||!grossInput)return;
+ const raw=grossInput.value.trim().replace(/,/g,'');
+ if(!raw||!/^\d{1,13}(?:\.\d{1,2})?$/.test(raw)){if(levyPreview){levyPreview.textContent='₦0.00';levyPreview.dataset.kobo='0';}if(retainedPreview){retainedPreview.textContent='₦0.00';retainedPreview.dataset.kobo='0';}return;}
  const [whole,fraction='']=raw.split('.');const cents=BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0'));
- const due=(cents*BigInt(form.dataset.rate)+5000n)/10000n;
- document.querySelector('#levy-preview').textContent=currency(due);
- document.querySelector('#retained-preview').textContent=currency(cents-due);
-});
+ const rate=BigInt(offeringForm.dataset.rate||'5000');const due=(cents*rate+5000n)/10000n;
+ if(levyPreview){levyPreview.textContent=currency(due);levyPreview.dataset.kobo=String(due);}
+ if(retainedPreview){retainedPreview.textContent=currency(cents-due);retainedPreview.dataset.kobo=String(cents-due);}
+}
+['input','change','keyup','blur','focus'].forEach(ev=>grossInput?.addEventListener(ev,updateOfferingPreview));
+document.addEventListener('DOMContentLoaded',updateOfferingPreview);updateOfferingPreview();
+offeringForm?.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},80);});
 const retention=document.querySelector('#retained-percentage');
 retention?.addEventListener('input',()=>{
  const raw=retention.value;const output=document.querySelector('#payable-percentage');
@@ -306,7 +312,7 @@ if(payhubForm){
  if(launch)launch.addEventListener('click',startPayhub);
  payhubForm.addEventListener('submit',event=>{event.preventDefault();startPayhub(event);},true);
 }
-const save=document.getElementById('income-form');if(save){save.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},100);});if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),120);}}const deleteForm=document.getElementById('delete-reports-form');
+if(location.hash==='#payment-options'){setTimeout(()=>document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth',block:'start'}),220);}const deleteForm=document.getElementById('delete-reports-form');
 if(deleteForm){
  const checks=Array.from(deleteForm.querySelectorAll('.report-delete-check'));const all=deleteForm.querySelector('[data-select-all-reports]');const btn=deleteForm.querySelector('button[type=submit]');
  const update=()=>{const selected=checks.filter(c=>c.checked).length;if(all){all.checked=selected>0&&selected===checks.length;all.indeterminate=selected>0&&selected<checks.length;}btn.disabled=selected===0;btn.textContent=selected?`Delete ${selected} pending`+' →':'Delete selected pending →';};
