@@ -10,19 +10,23 @@ if($canRemitNow){
  $s->execute([(int)$user['hierarchy_id']]);$ownRows=$s->fetchAll();
  foreach($ownRows as &$r){$due=Money::cents($r['provincial_levy_due'])-Money::cents($r['amount_paid']);$r['available_kobo']=max(0,$due);$r['available_amount']=Money::decimal(max(0,$due));}unset($r);
  $ps=$db->prepare("SELECT COUNT(*) FROM payment_notifications n JOIN remittance_ledgers l ON l.id=n.ledger_id WHERE l.parish_id=? AND n.status='pending'");$ps->execute([(int)$user['hierarchy_id']]);$awaiting=(int)$ps->fetchColumn()>0;
- if(!$awaiting){$ls=$db->prepare("SELECT * FROM remittance_ledgers WHERE parish_id=? AND status IN ('pending','partial') ORDER BY id DESC LIMIT 1");$ls->execute([(int)$user['hierarchy_id']]);$latestLedger=$ls->fetch()?:null;}
+ $requestedLedgerId=(int)($_GET['ledger_id']??0);
+ if(!$awaiting){
+  if($requestedLedgerId>0){$ls=$db->prepare("SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=? AND status IN ('pending','partial') LIMIT 1");$ls->execute([$requestedLedgerId,(int)$user['hierarchy_id']]);$latestLedger=$ls->fetch()?:null;}
+  if(!$latestLedger){$ls=$db->prepare("SELECT * FROM remittance_ledgers WHERE parish_id=? AND status IN ('pending','partial') ORDER BY id DESC LIMIT 1");$ls->execute([(int)$user['hierarchy_id']]);$latestLedger=$ls->fetch()?:null;}
+ }
  foreach($ownRows as $r){if($latestLedger && (int)$r['id']===(int)$latestLedger['id']){$latestPendingKobo=(int)$r['available_kobo'];break;}}
 }
 $payTab=($_GET['pay']??($payhubReady?'payhub':'bank'));if(!in_array($payTab,['bank','payhub'],true))$payTab=$payhubReady?'payhub':'bank';
 if(!$canRemitNow){ ?><div class="notice">Approved parishes and representatives can start remittances here.</div><?php return; }
 $defaultVirtual=null;
-if($payhubReady){try{$all=PayHub::virtualAccounts($db);$defaultVirtual=$all[0]??null;}catch(Throwable $e){PayHub::log($db,'virtual_accounts_list_error',['error'=>$e->getMessage(),'user'=>$user['email']??'']);}}
+if($payhubReady && $payTab==='payhub' && !$awaiting){try{$all=PayHub::virtualAccounts($db);$defaultVirtual=$all[0]??null;}catch(Throwable $e){PayHub::log($db,'virtual_accounts_list_error',['error'=>$e->getMessage(),'user'=>$user['email']??'']);}}
 ?><div class="payment-layout" id="payment-options"><section class="panel form-panel payment-method-panel"><div class="section-kicker">STEP 2 · PAY WITH PAYHUB VIRTUAL ACCOUNT OR RECORD TRANSFER</div><h2>Complete payment</h2><p class="muted small">PayHub generates a unique payment reference and amount. Transfer the exact amount to the PayHub virtual bank account shown below. REMIT confirms automatically when PayHub marks the payment successful.</p>
 <?php if($flash && ($_GET['pay']??'')==='payhub'): ?><div class="alert success"><?= e((string)$flash) ?></div><?php elseif($error): ?><div class="alert"><?= e((string)$error) ?></div><?php endif; ?>
 <div role="tablist" aria-label="Payment methods" class="payment-tabs"><a role="tab" aria-selected="<?= $payTab==='payhub'?'true':'false' ?>" class="payment-tab <?= $payTab==='payhub'?'active':'' ?>" href="?page=remittances&pay=payhub#payment-options"><span class="method-icon">₦</span><div><strong>PayHub Checkout & Virtual Account</strong><small><?= $payhubReady?'Automatic Instant Approval':'Configure in settings' ?></small></div></a><a role="tab" aria-selected="<?= $payTab==='bank'?'true':'false' ?>" class="payment-tab <?= $payTab==='bank'?'active':'' ?>" href="?page=remittances&pay=bank#payment-options"><span class="method-icon">⇄</span><div><strong>Bank Transfer</strong><small>Manual approval</small></div></a></div>
 <?php if($awaiting): ?><div class="empty"><h3>Awaiting treasury confirmation</h3><p>Your pending payment is being reviewed. You do not need to submit another payment for the same offering until it is approved or rejected.</p></div><?php else: ?>
 <?php if($payTab==='payhub'): ?><div class="payhub-virtual-box" id="payhub-virtual-box"><div class="payhub-header-bar"><span class="badge verified">Instant Approval</span><h3 class="payhub-title">PayHub Virtual Bank Transfer</h3><p class="muted small">A dedicated virtual bank account is ready for this report. Transfer the exact amount shown below using your mobile banking app or USSD.</p></div>
-<form method="post" class="form-grid payhub-form-card" id="payhub-form" novalidate><?php hiddenAction('payhub_session') ?><label class="full-width">Select pending offering report<select name="ledger_id" id="payhub-ledger" required><?php if(!$ownRows): ?><option value="">No pending reports</option><?php else: ?><?php foreach($ownRows as $r):?><option value="<?= (int)$r['id'] ?>" data-amount="<?= (int)$r['available_kobo'] ?>" data-ref="<?= e($r['payment_reference']) ?>" <?= $latestLedger && (int)$latestLedger['id']===(int)$r['id']?'selected':'' ?>><?= e($r['period_month'].'/'.$r['period_year'].' · Ref: '.$r['payment_reference'].' · Due '.Money::display($r['available_amount'])) ?></option><?php endforeach; endif; ?></select></label><input type="hidden" name="amount" id="payhub-amount" value="<?= $latestPendingKobo?Money::decimal($latestPendingKobo):'' ?>">
+<form method="post" action="index.php?page=remittances&amp;pay=payhub#payment-options" class="payhub-form-card" id="payhub-form" novalidate><?php hiddenAction('payhub_session') ?><label class="full-width">Select pending offering report<select name="ledger_id" id="payhub-ledger" required><?php if(!$ownRows): ?><option value="">No pending reports</option><?php else: ?><?php foreach($ownRows as $r):?><option value="<?= (int)$r['id'] ?>" data-amount="<?= (int)$r['available_kobo'] ?>" data-ref="<?= e($r['payment_reference']) ?>" <?= $latestLedger && (int)$latestLedger['id']===(int)$r['id']?'selected':'' ?>><?= e($r['period_month'].'/'.$r['period_year'].' · Ref: '.$r['payment_reference'].' · Due '.Money::display($r['available_amount'])) ?></option><?php endforeach; endif; ?></select></label><input type="hidden" name="amount" id="payhub-amount" value="<?= $latestPendingKobo?Money::decimal($latestPendingKobo):'' ?>">
 <div class="payhub-showcase"><div class="hero-amount-card"><span class="hero-amount-label">Amount to be Paid</span><div class="hero-amount hero-amount-value" id="payhub-hero-amount"><?= $latestPendingKobo?Money::display(Money::decimal($latestPendingKobo)):'₦0.00' ?></div><div class="hero-reference hero-ref-badge" id="payhub-hero-ref">Reference: <?= $latestLedger?e($latestLedger['payment_reference']):'—' ?></div><div class="hero-tag hero-status-pill">✓ Instant Auto-Approval on Bank Transfer</div></div>
 <div class="virtual-account-display-card" id="payhub-virtual-account"><div class="va-header"><span class="va-badge">Official PayHub Virtual Account</span><span class="va-live-pulse">● Active</span></div><div class="va-row"><span class="va-label">Bank Name</span><strong class="va-value" id="payhub-virtual-bank"><?= e($defaultVirtual['bank_name']??'PayHub Virtual Bank') ?></strong></div><div class="va-row va-account-number-box"><span class="va-label">Virtual Account Number</span><div class="va-copy-wrapper"><span class="va-number" id="payhub-virtual-number"><?= e($defaultVirtual['account_number']??'Generating...') ?></span><button type="button" class="copy-btn" id="copy-va-btn" title="Copy account number">Copy</button></div></div><div class="va-row"><span class="va-label">Account Name</span><span class="va-value" id="payhub-virtual-name"><?= e($defaultVirtual['account_name']??'REMIT RCCG LP 63 YAYA') ?></span></div><div class="va-instructions"><small id="payhub-virtual-note">Transfer the exact amount above to this virtual account. Payment is automatically detected &amp; approved immediately once received.</small></div></div></div>
 <div id="payhub-session-details" class="payhub-session-details" hidden><div class="session-info-grid"><div class="session-cell"><span>Generated PayHub Reference</span><strong id="payhub-session-ref">—</strong></div><div class="session-cell"><span>Exact Amount Payable</span><strong id="payhub-session-amount" class="text-green">₦0.00</strong></div><div class="session-cell"><a class="primary hosted-link" id="payhub-hosted-link" href="#" target="_blank" rel="noopener">Pay online via card or mobile bank →</a></div></div><p class="small muted" id="payhub-session-note">REMIT monitors this transaction in real-time. Once your bank transfer is received, this page will update automatically.</p></div><p class="payhub-error alert" id="payhub-error" hidden></p><p class="payhub-status alert success" id="payhub-status" hidden></p><div class="alt-payment-cta"><span>Prefer direct church bank deposit?</span><a class="alt-bank-link" href="?page=remittances&pay=bank#payment-options">Switch to Manual Bank Transfer</a></div></form></div><?php else: ?>
@@ -30,8 +34,15 @@ if($payhubReady){try{$all=PayHub::virtualAccounts($db);$defaultVirtual=$all[0]??
 </section></div>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
+if(window.history&&window.history.replaceState&&location.search){
+ const cleanUrl=new URL(location.href);
+ let changed=false;
+ ['payhub_ref','reference','trxref','status'].forEach(k=>{if(cleanUrl.searchParams.has(k)){cleanUrl.searchParams.delete(k);changed=true;}});
+ if(changed){window.history.replaceState(null,'',cleanUrl.pathname+(cleanUrl.searchParams.toString()?('?'+cleanUrl.searchParams.toString()):'')+cleanUrl.hash);}
+}
 window.REMITPayHub={ready:<?= $payhubReady?'true':'false' ?>,base:'https://merchant.payhub.com.ng',defaultVirtual:<?= json_encode($defaultVirtual) ?>};
 function money(k){if(typeof k!=='bigint')k=BigInt(k||0);const n=k/100n,c=k%100n;return '₦'+n.toLocaleString('en-NG')+'.'+c.toString().padStart(2,'0');}
+function decimalFromKobo(k){if(typeof k!=='bigint')k=BigInt(k||0);return (k/100n).toString()+'.'+(k%100n).toString().padStart(2,'0');}
 function koboFromDecimal(raw){raw=(raw||'').toString().trim().replace(/,/g,'');if(!raw||!/^\d{1,13}(?:\.\d{1,2})?$/.test(raw))return 0n;const [w,f='']=raw.split('.');return BigInt(w)*100n+BigInt(f.padEnd(2,'0'));}
 async function payhubLog(event,payload){try{await fetch('index.php?payhub_log=1',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({event,payload,url:location.href}),keepalive:true});}catch(e){}}
 function updateOffering(){
@@ -43,13 +54,86 @@ function updateOffering(){
 setTimeout(updateOffering,30);setTimeout(updateOffering,200);setTimeout(updateOffering,600);window.addEventListener('load',updateOffering);
 const offerForm=document.getElementById('income-form');if(offerForm){offerForm.addEventListener('submit',()=>{setTimeout(()=>{location.hash='#payment-options';},400);});}
 function payHubDue(sel){const opt=sel?.selectedOptions?.[0];return opt?BigInt(opt.dataset.amount||0):0n;}
-function syncPayhub(){const sel=document.getElementById('payhub-ledger'),amt=document.getElementById('payhub-amount'),heroAmt=document.getElementById('payhub-hero-amount'),heroRef=document.getElementById('payhub-hero-ref');if(!sel)return;const opt=sel.selectedOptions?.[0];const due=payHubDue(sel);if(heroAmt)heroAmt.textContent=money(due);if(heroRef)heroRef.textContent='Reference: '+(opt?.dataset.ref||'—');if(amt){amt.value=due?(Number(due)/100).toFixed(2):'';}}
+function syncPayhub(){const sel=document.getElementById('payhub-ledger'),amt=document.getElementById('payhub-amount'),heroAmt=document.getElementById('payhub-hero-amount'),heroRef=document.getElementById('payhub-hero-ref');if(!sel)return;const opt=sel.selectedOptions?.[0];const due=payHubDue(sel);if(heroAmt)heroAmt.textContent=money(due);if(heroRef)heroRef.textContent='Reference: '+(opt?.dataset.ref||'—');if(amt){amt.value=due?decimalFromKobo(due):'';}}
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='payhub-ledger'){syncPayhub();autoGeneratePayhub();}});
+document.addEventListener('click',e=>{
+ const btn=e.target?.closest?.('[data-pay-now]');if(!btn)return;
+ const lid=btn.dataset.payNow;if(!lid)return;
+ const sel=document.getElementById('payhub-ledger');
+ if(sel){if([...sel.options].some(o=>o.value===lid)){sel.value=lid;syncPayhub();autoGeneratePayhub();}document.getElementById('payment-options')?.scrollIntoView({behavior:'smooth'});}
+ else{location.href='index.php?page=remittances&pay=payhub&ledger_id='+encodeURIComponent(lid)+'#payment-options';}
+});
 syncPayhub();
-function setVirtualAccount(acct){const bank=document.getElementById('payhub-virtual-bank'),num=document.getElementById('payhub-virtual-number'),name=document.getElementById('payhub-virtual-name'),note=document.getElementById('payhub-virtual-note');const use=acct||window.REMITPayHub.defaultVirtual;if(use&&bank&&num&&name){if(use.bank_name)bank.textContent=use.bank_name;if(use.account_number)num.textContent=use.account_number;if(use.account_name)name.textContent=use.account_name;if(note)note.textContent='Transfer the exact amount shown above to this virtual account. When received, payment is automatically approved instantly.';}}
-function showSession(data){const details=document.getElementById('payhub-session-details'),ref=document.getElementById('payhub-session-ref'),amt=document.getElementById('payhub-session-amount'),link=document.getElementById('payhub-hosted-link');if(!details)return;if(ref)ref.textContent=data.reference||'—';if(amt)amt.textContent=data.amount?('₦'+Number(data.amount).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2})):'₦0.00';const checkoutRef=data.payhub_reference||data.reference;if(link&&checkoutRef){link.href=window.REMITPayHub.base+'/checkout.php?ref='+encodeURIComponent(checkoutRef);link.hidden=false;}details.hidden=false;if(data.virtual_accounts&&data.virtual_accounts[0])setVirtualAccount(data.virtual_accounts[0]);payhubLog('session_displayed',data);}
-let isGenerating=false;
-async function autoGeneratePayhub(){const form=document.getElementById('payhub-form'),ledger=document.getElementById('payhub-ledger'),amount=document.getElementById('payhub-amount'),err=document.getElementById('payhub-error');if(!window.REMITPayHub.ready||!ledger||!ledger.value||isGenerating)return;const due=payHubDue(ledger);if(!due||due<10000n)return;isGenerating=true;if(err){err.hidden=true;err.textContent='';}try{const fd=new FormData(form);fd.set('amount',(Number(due)/100).toFixed(2));const res=await fetch(form.getAttribute('action')||(location.pathname+location.search),{method:'POST',body:fd,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});const text=await res.text();let data=null;try{data=JSON.parse(text);}catch{throw new Error('Unexpected response format.');}if(!res.ok||!data?.reference)throw new Error(data?.message||'Could not generate PayHub virtual account.');showSession(data);const ref=data.payhub_reference||data.reference;const poll=async()=>{try{const u=new URL(location.href);u.searchParams.set('payhub_ref',ref);u.hash='payment-options';u.searchParams.set('pay','payhub');const r=await fetch(u.toString(),{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});const t=await r.text();if(t.includes('payment confirmed')||t.includes('automatically approved')){payhubLog('payhub_confirmed_poll',{ref});location.href=u.toString();return;}}catch(e){payhubLog('payhub_poll_error',{ref,error:e.message});}setTimeout(poll,10000);};poll();}catch(e){if(err){err.hidden=false;err.textContent=e.message||'Failed to automatically generate PayHub session.';}payhubLog('payhub_auto_error',{message:e.message});}finally{isGenerating=false;}}
+function setVirtualAccount(acct){
+ const bank=document.getElementById('payhub-virtual-bank'),num=document.getElementById('payhub-virtual-number'),name=document.getElementById('payhub-virtual-name'),note=document.getElementById('payhub-virtual-note');
+ const use=acct||window.REMITPayHub.defaultVirtual;
+ if(use&&bank&&num&&name){
+  if(use.bank_name)bank.textContent=use.bank_name;
+  if(use.account_number)num.textContent=use.account_number;
+  if(use.account_name)name.textContent=use.account_name;
+  if(note)note.textContent='Transfer the exact amount shown above to this virtual account. When received, payment is confirmed automatically.';
+ }else if(num&&num.textContent.trim()==='Generating...'){
+  num.textContent='Use online checkout below';
+ }
+}
+function showSession(data){
+ const details=document.getElementById('payhub-session-details'),ref=document.getElementById('payhub-session-ref'),amt=document.getElementById('payhub-session-amount'),link=document.getElementById('payhub-hosted-link');
+ if(!details)return;
+ if(ref)ref.textContent=data.reference||'—';
+ if(amt)amt.textContent=data.amount?('₦'+Number(data.amount).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2})):'₦0.00';
+ const checkoutRef=data.payhub_reference||data.reference;
+ const checkoutUrl=(typeof data.checkout_url==='string'&&data.checkout_url.startsWith(window.REMITPayHub.base+'/'))?data.checkout_url:(checkoutRef?(window.REMITPayHub.base+'/checkout.php?ref='+encodeURIComponent(checkoutRef)):'');
+ if(link&&checkoutUrl){link.href=checkoutUrl;link.hidden=false;}
+ details.hidden=false;
+ setVirtualAccount(data.virtual_accounts&&data.virtual_accounts[0]?data.virtual_accounts[0]:null);
+ payhubLog('session_displayed',{reference:data.reference||'',payhub_reference:checkoutRef||'',amount:data.amount||''});
+}
+let isGenerating=false,pendingRegenerate=false,pollTimer=null,activePollRef=null;
+function startPolling(ref,ledgerId){
+ if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
+ activePollRef=ref;
+ const poll=async()=>{
+  if(activePollRef!==ref)return;
+  try{
+   const q='index.php?payhub_status=1&payhub_ref='+encodeURIComponent(ref)+(ledgerId?('&ledger_id='+encodeURIComponent(ledgerId)):'');
+   const r=await fetch(q,{credentials:'same-origin',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'}});
+   if(r.status===401||r.status===403){activePollRef=null;return;}
+   const d=await r.json().catch(()=>null);
+   if(r.ok&&d&&d.paid===true){
+    activePollRef=null;
+    payhubLog('payhub_confirmed_poll',{ref,ledgerId:ledgerId||''});
+    location.href='index.php?page=remittances&pay=payhub#payment-options';
+    return;
+   }
+  }catch(e){payhubLog('payhub_poll_error',{ref,error:e.message});}
+  if(activePollRef===ref)pollTimer=setTimeout(poll,10000);
+ };
+ pollTimer=setTimeout(poll,10000);
+}
+async function autoGeneratePayhub(){
+ const form=document.getElementById('payhub-form'),ledger=document.getElementById('payhub-ledger'),err=document.getElementById('payhub-error');
+ if(!window.REMITPayHub.ready||!form||!ledger||!ledger.value)return;
+ const due=payHubDue(ledger);if(!due||due<10000n)return;
+ if(isGenerating){pendingRegenerate=true;return;}
+ isGenerating=true;pendingRegenerate=false;
+ if(err){err.hidden=true;err.textContent='';}
+ try{
+  const ledgerId=ledger.value;
+  const fd=new FormData(form);fd.set('amount',decimalFromKobo(due));
+  const res=await fetch('index.php?page=remittances&pay=payhub',{method:'POST',body:fd,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});
+  const text=await res.text();let data=null;
+  try{data=JSON.parse(text);}catch{throw new Error(res.ok?'Invalid response from payment server.':'Payment server returned HTTP '+res.status+'. Please refresh and try again.');}
+  if(!res.ok||!data?.reference)throw new Error(data?.message||'Could not generate PayHub virtual account.');
+  showSession(data);
+  startPolling(data.payhub_reference||data.reference,ledgerId);
+ }catch(e){
+  if(err){err.hidden=false;err.textContent=e.message||'Failed to automatically generate PayHub session.';}
+  payhubLog('payhub_auto_error',{message:e.message});
+ }finally{
+  isGenerating=false;
+  if(pendingRegenerate){pendingRegenerate=false;autoGeneratePayhub();}
+ }
+}
 const copyBtn=document.getElementById('copy-va-btn');if(copyBtn){copyBtn.addEventListener('click',()=>{const num=document.getElementById('payhub-virtual-number');if(num&&num.textContent){navigator.clipboard?.writeText(num.textContent.trim()).then(()=>{const orig=copyBtn.textContent;copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent=orig,2000);}).catch(()=>{});}});}
 if(document.getElementById('payhub-virtual-box')){setTimeout(autoGeneratePayhub,300);}
 });

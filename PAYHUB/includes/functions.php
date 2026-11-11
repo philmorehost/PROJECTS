@@ -677,6 +677,27 @@ function paystack_call($endpoint, $method = 'GET', $data = [], $is_test = null) 
 }
 
 /**
+ * Normalizes a metadata column or payload field (JSON string, double-encoded string, array, or empty) into an array.
+ */
+function normalize_metadata_array($raw): array {
+    if (is_array($raw)) {
+        return $raw;
+    }
+    if (!is_string($raw)) {
+        return [];
+    }
+    $trimmed = trim($raw);
+    if ($trimmed === '') {
+        return [];
+    }
+    $decoded = json_decode($trimmed, true);
+    if (is_string($decoded)) {
+        $decoded = json_decode($decoded, true);
+    }
+    return is_array($decoded) ? $decoded : [];
+}
+
+/**
  * Ensures a customer has a virtual account and is registered locally.
  */
 function ensure_virtual_account($userId, $email, $customerData = [], $is_test = null, $metadata = '') {
@@ -700,12 +721,28 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
         }
         $log("VA request for merchant userId=$userId, email=$email, is_test=" . ($is_test ? 'YES' : 'NO'));
 
+        $incomingMeta = normalize_metadata_array($metadata);
+        $metadataJson = !empty($incomingMeta) ? json_encode($incomingMeta) : (is_string($metadata) ? $metadata : '');
+
         $stmt = $db->prepare("SELECT * FROM virtual_accounts WHERE user_id = ? AND customer_email = ?");
         $stmt->execute([$userId, $email]);
         $existing = $stmt->fetch();
 
         if ($existing && !empty($existing['account_number']) && $existing['account_number'] !== '0000000000') {
-            $log("Existing VA found: " . $existing['account_number']);
+            if (!empty($incomingMeta)) {
+                $mergedMeta = array_merge(normalize_metadata_array($existing['metadata'] ?? null), $incomingMeta);
+                $mergedJson = json_encode($mergedMeta);
+                if ($mergedJson !== false && $mergedJson !== ($existing['metadata'] ?? '')) {
+                    $db->prepare("UPDATE virtual_accounts SET metadata = ? WHERE id = ?")
+                       ->execute([$mergedJson, $existing['id']]);
+                    $existing['metadata'] = $mergedJson;
+                    $log("Existing VA found: " . $existing['account_number'] . " | Refreshed metadata keys: " . implode(',', array_keys($mergedMeta)));
+                } else {
+                    $log("Existing VA found: " . $existing['account_number']);
+                }
+            } else {
+                $log("Existing VA found: " . $existing['account_number']);
+            }
             return ['status' => true, 'message' => 'Account exists', 'data' => $existing];
         }
 
@@ -775,7 +812,7 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
 
             if (!empty($number)) {
                 $stmt = $db->prepare("INSERT INTO virtual_accounts (user_id, bank_name, account_number, account_name, customer_email, metadata) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE account_number = VALUES(account_number), metadata = VALUES(metadata)");
-                $stmt->execute([$userId, $bank, $number, $accName, $email, $metadata]);
+                $stmt->execute([$userId, $bank, $number, $accName, $email, $metadataJson]);
                 $log("SUCCESS: VA created - Bank=$bank, Number=$number, Name=$accName");
                 return ['status' => true, 'message' => 'VA generated', 'data' => ['account_number' => $number, 'bank_name' => $bank, 'account_name' => $accName]];
             }
@@ -1405,6 +1442,12 @@ function trigger_merchant_webhook($transactionId) {
                 return;
             }
 
+            $metaArr = normalize_metadata_array($tx['metadata'] ?? null);
+            $settledAmount = (isset($tx['settled_amount']) && is_numeric($tx['settled_amount'])) ? (float)$tx['settled_amount'] : null;
+            $feeAmount = (isset($tx['fee_amount']) && is_numeric($tx['fee_amount'])) ? (float)$tx['fee_amount'] : 0.0;
+            $grossPaid = $paid !== null ? $paid : (float)$tx['amount'];
+            $computedNet = $settledAmount !== null ? $settledAmount : max(0.0, $grossPaid - $feeAmount);
+
             $payload = [
                 'event' => 'charge.success',
                 'data' => [
@@ -1412,7 +1455,11 @@ function trigger_merchant_webhook($transactionId) {
                     'reference' => $tx['reference'],
                     // Report what actually settled. `amount` is merchant-supplied
                     // and must never be trusted as evidence of payment.
-                    'amount' => to_minor_units($paid !== null ? $paid : $tx['amount']),
+                    'amount' => to_minor_units($grossPaid),
+                    'requested_amount' => to_minor_units($tx['amount']),
+                    'gateway_amount' => to_minor_units($grossPaid),
+                    'fee_amount' => to_minor_units($feeAmount),
+                    'settled_amount' => to_minor_units($computedNet),
                     'status' => 'success',
                     // Tell the merchant whether this was real money. Paystack's own
                     // webhooks carry this field; without it a sandbox payment is
@@ -1421,7 +1468,7 @@ function trigger_merchant_webhook($transactionId) {
                     'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
                     'currency' => $tx['currency'],
                     'customer' => ['email' => $tx['customer_email']],
-                    'metadata' => json_decode($tx['metadata'] ?? '[]', true),
+                    'metadata' => $metaArr,
                     'channel' => $tx['payment_method'],
                     'paid_at' => $tx['created_at']
                 ]
@@ -1450,8 +1497,18 @@ function trigger_merchant_webhook($transactionId) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_TIMEOUT, 10);
             $res = curl_exec($ch);
-            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
             curl_close($ch);
+
+            @file_put_contents(
+                BASE_PATH . 'webhook_debug.log',
+                '[' . date('Y-m-d H:i:s') . '] Outbound merchant webhook (trigger_merchant_webhook) tx='
+                . ($tx['reference'] ?? $tx['id']) . ' url=' . $tx['webhook_url']
+                . ' algo=sha256 http=' . $code . ($curlErr !== '' ? ' curl_err=' . $curlErr : '')
+                . ' res=' . substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200) . PHP_EOL,
+                FILE_APPEND
+            );
 
             // Record the delivery attempt in the schema admin/webhooks.php reads
             // (transaction_id, status, attempt_count, last_attempt_at, payload, response).
@@ -1459,12 +1516,14 @@ function trigger_merchant_webhook($transactionId) {
             // do not exist in webhook_logs - inside a swallowed catch, so *every* outbound
             // merchant webhook went unlogged and the admin page was permanently empty.
             try {
+                $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 180));
+                $logResponse = 'HTTP ' . $code . ($curlErr !== '' ? ' | ' . $curlErr : ($resText !== '' ? ' | ' . $resText : ''));
                 $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
                 $stmtLog->execute([
                     $tx['id'],
                     (($code >= 200 && $code < 300) ? 'success' : 'failed'),
-                    json_encode($payload),
-                    'HTTP ' . (int)$code
+                    $body,
+                    $logResponse
                 ]);
             } catch (\Throwable $t) {
                 error_log('[PayHub] webhook_logs write failed: ' . $t->getMessage());

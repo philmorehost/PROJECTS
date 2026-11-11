@@ -183,17 +183,10 @@ if ($event_type === 'charge_success') {
                 $is_test_va = $mode_ambiguous ? ($data['domain'] === 'test') : ($verified_with === 'test');
 
                 // Recover metadata if missing or lacks custom fields
-                $va_meta = json_decode($va['metadata'] ?? '[]', true);
-                if (!is_array($va_meta)) {
-                    $va_meta = [];
-                }
-                $rtx_meta = $data['metadata'] ?? [];
-                if (!is_array($rtx_meta)) {
-                    $rtx_meta = [];
-                }
-                // Merge, prioritizing rtx_meta for gateway fields but keeping VA's custom fields
-                $recovered_metadata = array_merge($va_meta, $rtx_meta);
-                if (is_array($recovered_metadata)) $recovered_metadata = json_encode($recovered_metadata);
+                $va_meta = normalize_metadata_array($va['metadata'] ?? null);
+                $rtx_meta = normalize_metadata_array($data['metadata'] ?? null);
+                // Merge, prioritizing VA custom fields unless gateway overrides while keeping VA context
+                $recovered_metadata = json_encode(array_merge($rtx_meta, $va_meta));
 
                 // Create a pending transaction for this VA payment
                 // Using INSERT IGNORE in case webhook is retried quickly
@@ -333,36 +326,59 @@ if ($event_type === 'charge_success') {
  
                 // Forward Webhook to Merchant Site
                 if (!empty($m['webhook_url'])) {
-                    // Recover metadata for payload - merge what we have in DB with what came in
-                    $db_meta = json_decode($tx['metadata'] ?? '[]', true);
-                    $final_metadata = array_merge($db_meta, $data['metadata'] ?? []);
- 
+                    // Recover metadata for payload - merge what we have in DB with what came in (null-safe)
+                    $db_meta = normalize_metadata_array($tx['metadata'] ?? null);
+                    $in_meta = normalize_metadata_array($data['metadata'] ?? null);
+                    $final_metadata = array_merge($in_meta, $db_meta);
+
                     $payload = [
                         'event' => 'charge.success',
                         'data' => array_merge($data, [
+                            'reference' => $tx['reference'],
+                            'amount' => to_minor_units($amount),
+                            'requested_amount' => to_minor_units($tx['amount']),
+                            'gateway_amount' => to_minor_units($amount),
+                            'fee_amount' => to_minor_units($fee),
+                            'settled_amount' => to_minor_units($settled),
+                            'domain' => $is_test_tx ? 'test' : 'live',
+                            'channel' => $data['channel'] ?? $tx['payment_method'],
                             'metadata' => $final_metadata
                         ])
                     ];
- 
-                    $webhook_secret = ($tx['is_test'] == 1) ? ($m['test_secret_key'] ?? '') : ($m['secret_key'] ?? '');
+
+                    $body = json_encode($payload);
+                    $webhook_secret = ((int)$tx['is_test'] === 1) ? ($m['test_secret_key'] ?? '') : ($m['secret_key'] ?? '');
                     if (empty($webhook_secret)) {
                         $webhook_secret = getConfig('payhub_webhook_secret', 'secret');
                     }
-                    $signature = hash_hmac('sha512', json_encode($payload), $webhook_secret);
- 
+                    // SECURITY: matches trigger_merchant_webhook() and PayHub API docs (HMAC-SHA256).
+                    $signature = $webhook_secret !== '' ? hash_hmac('sha256', $body, $webhook_secret) : '';
+
                     $ch = curl_init();
                     curl_setopt($ch, CURLOPT_URL, $m['webhook_url']);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                     curl_setopt($ch, CURLOPT_POST, true);
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                        'Content-Type: application/json',
-                        'X-Payhub-Signature: ' . $signature
-                    ]);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                    $headers = ['Content-Type: application/json'];
+                    if ($signature !== '') {
+                        $headers[] = 'X-Payhub-Signature: ' . $signature;
+                    }
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
                     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
                     $res = curl_exec($ch);
-                    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlErr = curl_error($ch);
                     curl_close($ch);
+
+                    $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200));
+                    file_put_contents(
+                        'webhook_debug.log',
+                        "[" . date('Y-m-d H:i:s') . "] Forwarded webhook ref=$ref url=" . $m['webhook_url']
+                        . " algo=sha256 http=$code fee=$fee settled=$settled"
+                        . ($curlErr !== '' ? " curl_err=$curlErr" : '')
+                        . ($resText !== '' ? " res=$resText" : '') . PHP_EOL,
+                        FILE_APPEND
+                    );
 
                     // Record the delivery attempt in the schema admin/webhooks.php reads.
                     // The previous insert named columns that do not exist in webhook_logs
@@ -373,8 +389,8 @@ if ($event_type === 'charge_success') {
                         $stmtLog->execute([
                             $tx['id'],
                             (($code >= 200 && $code < 300) ? 'success' : 'failed'),
-                            json_encode($payload),
-                            'HTTP ' . (int)$code
+                            $body,
+                            'HTTP ' . $code . ($curlErr !== '' ? ' | ' . $curlErr : ($resText !== '' ? ' | ' . $resText : ''))
                         ]);
                     } catch (\Throwable $t) {
                         error_log('[PayHub] webhook_logs write failed: ' . $t->getMessage());

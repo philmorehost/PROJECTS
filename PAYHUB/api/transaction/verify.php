@@ -133,6 +133,24 @@ if ($tx['status'] !== 'success') {
         } catch (Exception $e) {
             $db->rollBack();
         }
+    } elseif ($tx['status'] !== 'success') {
+        // Dedicated Virtual Account transfers receive Paystack's transfer reference rather than
+        // the initialized PH_... checkout reference. Match an already-settled DVA transaction linked
+        // to this checkout session via virtual_accounts.metadata.checkout_reference without double-crediting.
+        try {
+            $candStmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? AND customer_email = ? AND is_test = ? AND status = 'success' AND payment_method IN ('bank_transfer','dedicated_account','dedicated_nuban') AND created_at >= DATE_SUB(?, INTERVAL 5 MINUTE) ORDER BY id DESC LIMIT 20");
+            $candStmt->execute([$user['id'], $tx['customer_email'], $tx['is_test'], $tx['created_at']]);
+            foreach ($candStmt->fetchAll() as $cand) {
+                $candMeta = normalize_metadata_array($cand['metadata'] ?? null);
+                $candPaid = trusted_paid_amount($cand);
+                if (($candMeta['checkout_reference'] ?? '') === $tx['reference'] && $candPaid !== null && amount_covers($tx['amount'], $candPaid)) {
+                    $tx = $cand;
+                    break;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[PayHub] api/transaction/verify DVA match error: ' . $e->getMessage());
+        }
     }
 }
 
@@ -146,7 +164,7 @@ echo json_encode([
         'payment_status' => $tx['status'],                  // alias for clarity
         'paid' => ($tx['status'] === 'success'),            // boolean mirror of the above
         'reference' => $tx['reference'],
-        'amount' => $tx['amount'] * 100,                    // amount in KOBO
+        'amount' => to_minor_units($tx['amount']),          // amount in KOBO
         'currency' => 'NGN',
         // Lets an integrating script refuse to credit sandbox payments.
         'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
@@ -167,7 +185,8 @@ echo json_encode([
         ],
         'gateway_response' => $tx['status'] === 'success' ? 'Successful' : ($response['data']['status'] ?? 'Pending'),
         'channel' => $tx['payment_method'],
+        'paid_at' => $tx['created_at'],
         'created_at' => $tx['created_at'],
-        'metadata' => json_decode($tx['metadata'] ?? '[]', true)
+        'metadata' => normalize_metadata_array($tx['metadata'] ?? null)
     ]
 ]);

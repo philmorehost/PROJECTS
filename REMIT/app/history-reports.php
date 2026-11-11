@@ -16,9 +16,11 @@
 <label class="bulk-select-all"><input type="checkbox" data-select-all-reports> Select all pending on this page</label>
 <button type="submit" class="secondary danger-button" disabled>Delete selected pending →</button>
 </div>
-<?php endif; 
+<?php endif;
 require __DIR__.'/history-controls.php';
 $ledgerRows=$history->items;
+$portalReady=$portalReady??ChurchPortal::ready($db);
+if(!empty($treasurer)&&$portalReady&&$ledgerRows&&class_exists('PayHub'))PayHub::attachLedgerFees($db,$ledgerRows);
 require __DIR__.'/ledger-table.php';
 require __DIR__.'/history-pagination.php'; 
 if($treasurer||$user['role']==='provincial_admin'||$user['role']==='provincial_treasurer'): ?>
