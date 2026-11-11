@@ -15,6 +15,13 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
  $localNote=$localChk->fetch();
  if($localNote){
   if((int)$localNote['parish_id']!==$unit)throw new RuntimeException('This PayHub payment does not belong to your church.');
+  if(PayHub::ready($db)&&$source==='return'&&Money::cents((string)($localNote['payhub_fee']??'0'))===0&&Money::cents((string)($localNote['amount']??'0'))>0){
+   $backfill=PayHub::verify($db,$ref);
+   if(is_array($backfill)&&PayHub::isPaid($backfill)&&is_array($backfill['data']??null)){
+    PayHub::recordSuccessfulCharge($db,$ref,$backfill['data'],$source);
+    $localChk->execute([$ref]);$localNote=$localChk->fetch();
+   }
+  }
   if($localNote['status']==='pending' && PayHub::autoApproveEnabled($db)){
    PayHub::autoApproveIfEnabled($db,$ref,$source.'_local');
    $localChk->execute([$ref]);$localNote=$localChk->fetch();
@@ -28,30 +35,76 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
    return ['paid'=>true,'message'=>'PayHub payment confirmed. Treasury will complete final verification.'];
   }
  }
- if($ledgerIdHint>0){
+ if($ledgerIdHint<=0 && isset($_SESSION['payhub_sessions']) && is_array($_SESSION['payhub_sessions'])){
+  foreach($_SESSION['payhub_sessions'] as $k=>$entry){
+   if(($entry['payload']['payhub_reference']??'')===$ref || ($entry['payload']['reference']??'')===$ref){$ledgerIdHint=(int)$k;break;}
+  }
+ }
+ $checkLedgerNotif=static function() use ($db,$unit,$ledgerIdHint,$source): ?array {
+  if($ledgerIdHint<=0)return null;
   $lChk=$db->prepare('SELECT status,parish_id FROM remittance_ledgers WHERE id=?');$lChk->execute([$ledgerIdHint]);$lRow=$lChk->fetch();
-  if($lRow && (int)$lRow['parish_id']===$unit){
-   if($lRow['status']==='verified'){
+  if(!$lRow || (int)$lRow['parish_id']!==$unit)return null;
+  if($lRow['status']==='verified'){
+   unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
+   return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
+  }
+  $lastNotifId=(int)($_SESSION['payhub_sessions'][$ledgerIdHint]['last_notif_id']??0);
+  $nLedger=$db->prepare("SELECT id,status,payhub_reference FROM payment_notifications WHERE ledger_id=? AND payhub_reference IS NOT NULL AND id>? ORDER BY id DESC LIMIT 1");
+  $nLedger->execute([$ledgerIdHint,$lastNotifId]);$nHit=$nLedger->fetch();
+  if($nHit){
+   if($nHit['status']==='pending' && PayHub::autoApproveEnabled($db)){
+    PayHub::autoApproveIfEnabled($db,(string)$nHit['payhub_reference'],$source.'_ledger');
     unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
     return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
    }
-   $lastNotifId=(int)($_SESSION['payhub_sessions'][$ledgerIdHint]['last_notif_id']??0);
-   $nLedger=$db->prepare("SELECT id,status,payhub_reference FROM payment_notifications WHERE ledger_id=? AND payhub_reference IS NOT NULL AND id>? ORDER BY id DESC LIMIT 1");
-   $nLedger->execute([$ledgerIdHint,$lastNotifId]);$nHit=$nLedger->fetch();
-   if($nHit){
-    if($nHit['status']==='pending' && PayHub::autoApproveEnabled($db)){
-     PayHub::autoApproveIfEnabled($db,(string)$nHit['payhub_reference'],$source.'_ledger');
-     unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
-     return ['paid'=>true,'message'=>'PayHub payment confirmed. Payment automatically approved.'];
+   if(in_array($nHit['status'],['pending','approved'],true)){
+    unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
+    return ['paid'=>true,'message'=>'PayHub payment confirmed.'.($nHit['status']==='approved'?' Payment automatically approved.':' Treasury will complete final verification.')];
+   }
+  }
+  return null;
+ };
+ if($early=$checkLedgerNotif())return $early;
+ $verify=PayHub::verify($db,$ref);
+ if((!$verify||!PayHub::isPaid($verify))&&PayHub::enabled($db)){
+  $sessionVa='';
+  if($ledgerIdHint>0 && !empty($_SESSION['payhub_sessions'][$ledgerIdHint]['payload']['virtual_accounts'][0]['account_number'])){
+   $sessionVa=(string)$_SESSION['payhub_sessions'][$ledgerIdHint]['payload']['virtual_accounts'][0]['account_number'];
+  }elseif(isset($_SESSION['payhub_sessions']) && is_array($_SESSION['payhub_sessions'])){
+   foreach($_SESSION['payhub_sessions'] as $entry){
+    if((($entry['payload']['payhub_reference']??'')===$ref || ($entry['payload']['reference']??'')===$ref) && !empty($entry['payload']['virtual_accounts'][0]['account_number'])){
+     $sessionVa=(string)$entry['payload']['virtual_accounts'][0]['account_number'];break;
     }
-    if(in_array($nHit['status'],['pending','approved'],true)){
-     unset($_SESSION['payhub_reference'],$_SESSION['payhub_sessions'][$ledgerIdHint]);
-     return ['paid'=>true,'message'=>'PayHub payment confirmed.'.($nHit['status']==='approved'?' Payment automatically approved.':' Treasury will complete final verification.')];
+   }
+  }
+  if($sessionVa==='' && !empty($user['email'])){
+   $vas=PayHub::virtualAccounts($db,(string)$user['email']);
+   $sessionVa=(string)($vas[0]['account_number']??'');
+  }
+  if($sessionVa!==''){
+   $reconciled=PayHub::reconcileVirtualAccount($db,$sessionVa,gmdate('Y-m-d'));
+   if(!$reconciled && gmdate('Y-m-d')!==date('Y-m-d')){
+    $reconciled=PayHub::reconcileVirtualAccount($db,$sessionVa,date('Y-m-d'));
+   }
+   if($afterHook=$checkLedgerNotif())return $afterHook;
+   $verify=PayHub::verify($db,$ref);
+   if((!$verify||!PayHub::isPaid($verify))&&$reconciled){
+    $latestRec=end($reconciled);
+    $recRef=is_array($latestRec)?trim((string)($latestRec['reference']??'')):'';
+    if($recRef!==''){
+     $recVerify=PayHub::verify($db,$recRef);
+     if(is_array($recVerify)&&PayHub::isPaid($recVerify)){
+      $verify=$recVerify;
+     }elseif(is_array($latestRec)&&(float)($latestRec['amount']??0)>0){
+      $recAmtKobo=(int)round(((float)$latestRec['amount'])*100);
+      $recFeeKobo=(int)round(((float)($latestRec['fee']??0))*100);
+      $recNetKobo=(int)round(((float)($latestRec['settled_amount']??max(0,(float)$latestRec['amount']-(float)($latestRec['fee']??0))))*100);
+      $verify=['paid'=>true,'data'=>['reference'=>$recRef,'amount'=>$recAmtKobo,'gateway_amount'=>$recAmtKobo,'fee_amount'=>$recFeeKobo,'settled_amount'=>$recNetKobo,'status'=>'success','channel'=>'dedicated_account','paid_at'=>date('c'),'customer'=>['email'=>(string)($user['email']??'')], 'metadata'=>['ledger_id'=>$ledgerIdHint,'checkout_reference'=>$ref]]];
+     }
     }
    }
   }
  }
- $verify=PayHub::verify($db,$ref);
  if(!$verify||!PayHub::isPaid($verify)){
   if($throwIfUnpaid)throw new RuntimeException('PayHub payment was not confirmed. Use manual transfer if checkout was not completed.');
   return ['paid'=>false];
@@ -152,8 +205,16 @@ function action(PDO $db,array $user,array $ids): string {
   $remaining=Money::cents($ledger['provincial_levy_due'])-Money::cents($ledger['amount_paid']);
   $pend=$db->prepare("SELECT COALESCE(SUM(amount),0) FROM payment_notifications WHERE ledger_id=? AND status='pending'");$pend->execute([$ledgerId]);$remaining-=Money::cents((string)$pend->fetchColumn());
   $kobo=$amount===''?$remaining:Money::cents($amount);if($kobo<10000||$kobo>$remaining){$msg='PayHub amount must be between 100.00 NGN and the remaining balance.';if($ajax){http_response_code(400);header('Content-Type:application/json');echo json_encode(['message'=>$msg]);exit;}throw new InvalidArgumentException($msg);}
+  $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
+  if($phone==='' && !empty($user['email'])){
+   try{
+    $regPhone=$db->prepare('SELECT phone FROM church_registrations WHERE LOWER(email)=LOWER(?) AND phone IS NOT NULL AND phone<>"" ORDER BY id DESC LIMIT 1');
+    $regPhone->execute([(string)$user['email']]);
+    $phone=preg_replace('/[^0-9+]/','',(string)($regPhone->fetchColumn()??''));
+   }catch(Throwable){}
+  }
   $cached=$_SESSION['payhub_sessions'][$ledgerId]??null;
-  if(is_array($cached) && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference'])){
+  if(is_array($cached) && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference']) && (!empty($cached['payload']['virtual_accounts']) || $phone==='')){
    $cachedRef=(string)($cached['payload']['payhub_reference']??$cached['payload']['reference']);
    $cachedLastNotifId=(int)($cached['last_notif_id']??0);
    $seen=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? OR (ledger_id=? AND id>?) LIMIT 1');$seen->execute([$cachedRef,$ledgerId,$cachedLastNotifId]);
@@ -163,12 +224,11 @@ function action(PDO $db,array $user,array $ids): string {
     header('Content-Type: application/json');echo json_encode($cached['payload']);exit;
    }
   }
-  $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
   $payhubReference=(string)($session['payhub_reference']??$session['reference']);
   $_SESSION['payhub_reference']=$payhubReference;
   $checkoutUrl=PayHub::checkoutUrl($payhubReference);
-  $payload=['reference'=>$session['reference'],'payhub_reference'=>$payhubReference,'checkout_url'=>$checkoutUrl,'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']??PayHub::virtualAccounts($db),'auto_approve'=>PayHub::autoApproveEnabled($db)];
+  $payload=['reference'=>$session['reference'],'payhub_reference'=>$payhubReference,'checkout_url'=>$checkoutUrl,'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']?:PayHub::virtualAccounts($db,(string)$user['email']),'auto_approve'=>PayHub::autoApproveEnabled($db)];
   $lastNotifStmt=$db->prepare('SELECT COALESCE(MAX(id),0) FROM payment_notifications WHERE ledger_id=?');$lastNotifStmt->execute([$ledgerId]);$lastNotifId=(int)$lastNotifStmt->fetchColumn();
   $_SESSION['payhub_sessions'][$ledgerId]=['unit'=>$unit,'kobo'=>$kobo,'created_at'=>time(),'last_notif_id'=>$lastNotifId,'payload'=>$payload];
   PayHub::log($db,'payhub_session_created',$payload);

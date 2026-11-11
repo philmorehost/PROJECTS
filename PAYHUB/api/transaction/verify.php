@@ -51,7 +51,17 @@ if (!$tx) {
 
 $response = null; // gateway verification response (set below only when a live check runs)
 
-// If local status is not success, check the gateway directly (Real-time reconciliation)
+// If local status is not success, check Paystack or linked DVA transfer (Real-time reconciliation)
+if ($tx['status'] !== 'success') {
+    $matchedDva = null;
+    if (in_array($tx['status'], ['superseded', 'failed'], true) && empty($tx['failure_reason'])) {
+        $matchedDva = reconcile_dva_for_checkout($db, (int)$user['id'], $tx, false);
+        if ($matchedDva) {
+            $tx = $matchedDva;
+        }
+    }
+}
+
 if ($tx['status'] !== 'success') {
     $is_test = (bool)$tx['is_test'];
     $response = paystack_call("transaction/verify/" . urlencode($ref), 'GET', [], $is_test);
@@ -94,10 +104,13 @@ if ($tx['status'] !== 'success') {
             ));
         }
 
-        $gatewayFee = isset($data['fees']) && is_numeric($data['fees']) ? ((float)$data['fees'] / 100) : null;
-        $isInternational = is_international_payment($data['currency'] ?? 'NGN', $data['authorization'] ?? [], $data['channel'] ?? '');
-        $fee = calculate_fees($amount, $isInternational, $user['id'], $gatewayFee, $data['channel'] ?? '');
-        $settled = $amount - $fee;
+        $channel = $data['channel'] ?? ($tx['payment_method'] ?? 'card');
+        $gatewayFee = (isset($data['fees']) && is_numeric($data['fees']) && (float)$data['fees'] > 0)
+            ? ((float)$data['fees'] / 100)
+            : null;
+        $isInternational = is_international_payment($data['currency'] ?? 'NGN', $data['authorization'] ?? [], $channel);
+        $fee = calculate_fees($amount, $isInternational, $user['id'], $gatewayFee, $channel);
+        $settled = round(max(0.0, $amount - $fee), 2);
 
         $db->beginTransaction();
         try {
@@ -108,8 +121,8 @@ if ($tx['status'] !== 'success') {
             if (!claim_transaction_for_fulfilment($tx['id'])) {
                 $db->rollBack();
             } else {
-                $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, gateway_reference = ? WHERE id = ?");
-                $stmt->execute([$fee, $settled, $data['id'], $tx['id']]);
+                $stmt = $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ?, gateway_reference = ?, payment_method = ? WHERE id = ?");
+                $stmt->execute([$fee, $settled, $data['id'], $channel, $tx['id']]);
 
                 // Persist the gateway-confirmed figure so downstream consumers (the
                 // merchant webhook, admin reporting) work from evidence.
@@ -135,18 +148,12 @@ if ($tx['status'] !== 'success') {
         }
     } elseif ($tx['status'] !== 'success') {
         // Dedicated Virtual Account transfers receive Paystack's transfer reference rather than
-        // the initialized PH_... checkout reference. Match an already-settled DVA transaction linked
-        // to this checkout session via virtual_accounts.metadata.checkout_reference without double-crediting.
+        // the initialized PH_... checkout reference. Match locally settled DVA transfers or
+        // reconcile missed DVA transfers from Paystack without double-counting GTV.
         try {
-            $candStmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? AND customer_email = ? AND is_test = ? AND status = 'success' AND payment_method IN ('bank_transfer','dedicated_account','dedicated_nuban') AND created_at >= DATE_SUB(?, INTERVAL 5 MINUTE) ORDER BY id DESC LIMIT 20");
-            $candStmt->execute([$user['id'], $tx['customer_email'], $tx['is_test'], $tx['created_at']]);
-            foreach ($candStmt->fetchAll() as $cand) {
-                $candMeta = normalize_metadata_array($cand['metadata'] ?? null);
-                $candPaid = trusted_paid_amount($cand);
-                if (($candMeta['checkout_reference'] ?? '') === $tx['reference'] && $candPaid !== null && amount_covers($tx['amount'], $candPaid)) {
-                    $tx = $cand;
-                    break;
-                }
+            $matchedDva = reconcile_dva_for_checkout($db, (int)$user['id'], $tx, true);
+            if ($matchedDva) {
+                $tx = $matchedDva;
             }
         } catch (Throwable $e) {
             error_log('[PayHub] api/transaction/verify DVA match error: ' . $e->getMessage());

@@ -93,10 +93,12 @@ if ($stage === 2 && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 checkout_token VARCHAR(64) DEFAULT NULL,
                 fee_amount DECIMAL(15, 2) DEFAULT 0.00,
                 settled_amount DECIMAL(15, 2) DEFAULT 0.00,
-                status ENUM('pending', 'success', 'failed', 'refunded') DEFAULT 'pending',
+                status VARCHAR(20) DEFAULT 'pending',
                 customer_email VARCHAR(255),
                 customer_name VARCHAR(255),
                 currency VARCHAR(10) DEFAULT 'NGN',
+                metadata TEXT,
+                callback_url VARCHAR(255) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             ) ENGINE=InnoDB;
@@ -131,6 +133,7 @@ if ($stage === 2 && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 bank_name VARCHAR(255) NOT NULL,
                 account_name VARCHAR(255) NOT NULL,
                 customer_email VARCHAR(255),
+                metadata TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             ) ENGINE=InnoDB;

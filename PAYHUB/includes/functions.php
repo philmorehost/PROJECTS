@@ -728,6 +728,8 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
         $stmt->execute([$userId, $email]);
         $existing = $stmt->fetch();
 
+        ensure_column('virtual_accounts', 'metadata', 'TEXT');
+
         if ($existing && !empty($existing['account_number']) && $existing['account_number'] !== '0000000000') {
             if (!empty($incomingMeta)) {
                 $mergedMeta = array_merge(normalize_metadata_array($existing['metadata'] ?? null), $incomingMeta);
@@ -746,22 +748,50 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
             return ['status' => true, 'message' => 'Account exists', 'data' => $existing];
         }
 
-        $fullName = $customerData['full_name'] ?? 'Customer';
-        $phone = $customerData['phone'] ?? '';
+        $fullName = trim((string)($customerData['full_name'] ?? ''));
+        $phone = trim((string)($customerData['phone'] ?? ''));
+
+        // Fall back to saved customer profile details if initialize omitted phone/name
+        if ($phone === '' || $fullName === '') {
+            try {
+                $custStmt = $db->prepare("SELECT full_name, phone FROM customers WHERE user_id = ? AND email = ? LIMIT 1");
+                $custStmt->execute([$userId, $email]);
+                $custRow = $custStmt->fetch();
+                if ($custRow) {
+                    if ($phone === '' && !empty($custRow['phone'])) {
+                        $phone = trim((string)$custRow['phone']);
+                    }
+                    if ($fullName === '' && !empty($custRow['full_name'])) {
+                        $fullName = trim((string)$custRow['full_name']);
+                    }
+                }
+            } catch (\Throwable $e) { /* non-fatal */ }
+        }
+        if ($fullName === '') {
+            $fullName = 'Customer';
+        }
         $log("Creating Paystack customer: name=$fullName, phone=$phone, email=$email");
 
         // Insert or update customer in local database so they show in Customer Directory
-        $stmt = $db->prepare("INSERT INTO customers (user_id, full_name, email, phone) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone)");
-        $stmt->execute([$userId, $fullName, $email, $phone]);
+        if ($phone !== '') {
+            $stmt = $db->prepare("INSERT INTO customers (user_id, full_name, email, phone) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone)");
+            $stmt->execute([$userId, $fullName, $email, $phone]);
+        } else {
+            $stmt = $db->prepare("INSERT INTO customers (user_id, full_name, email, phone) VALUES (?, ?, ?, '') ON DUPLICATE KEY UPDATE full_name = VALUES(full_name)");
+            $stmt->execute([$userId, $fullName, $email]);
+        }
 
         // Paystack Customer logic
-        $paystackCustomer = paystack_call('customer', 'POST', [
+        $customerPayload = [
             'email' => $email,
             'first_name' => explode(' ', $fullName)[0],
             'last_name' => explode(' ', $fullName)[1] ?? 'Merchant',
-            'phone' => $phone,
             'metadata' => ['merchant_id' => $userId]
-        ], $is_test);
+        ];
+        if ($phone !== '') {
+            $customerPayload['phone'] = $phone;
+        }
+        $paystackCustomer = paystack_call('customer', 'POST', $customerPayload, $is_test);
 
         $log("Paystack customer response: " . json_encode($paystackCustomer));
 
@@ -774,7 +804,14 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
 
         // Paystack Gotcha: If customer already existed on Paystack, calling POST customer returns the customer
         // but does NOT update their phone number if it was missing. We must explicitly update it.
-        $paystackPhone = $paystackCustomer['data']['phone'] ?? '';
+        $paystackPhone = trim((string)($paystackCustomer['data']['phone'] ?? ''));
+        if ($phone === '' && $paystackPhone !== '') {
+            $phone = $paystackPhone;
+            try {
+                $db->prepare("UPDATE customers SET phone = ? WHERE user_id = ? AND email = ? AND (phone IS NULL OR phone = '')")
+                   ->execute([$phone, $userId, $email]);
+            } catch (\Throwable $e) { /* non-fatal */ }
+        }
         if (empty($paystackPhone) && !empty($phone)) {
             $log("Customer phone is empty on Paystack. Updating customer profile for $customerCode with phone $phone");
             $updateRes = paystack_call('customer/' . $customerCode, 'PUT', [
@@ -783,6 +820,11 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
                 'last_name' => explode(' ', $fullName)[1] ?? 'Merchant'
             ], $is_test);
             $log("Paystack customer update response: " . json_encode($updateRes));
+        }
+
+        if ($phone === '') {
+            $log("SKIP DVA: Customer phone number is required to assign a dedicated virtual account for $email");
+            return ['status' => false, 'message' => 'Customer phone number is required to generate a virtual account'];
         }
 
         $log("Requesting dedicated virtual account for customer: $customerCode");
@@ -811,10 +853,10 @@ function ensure_virtual_account($userId, $email, $customerData = [], $is_test = 
             $accName = $acc['account_name'] ?? $merchant['business_name'];
 
             if (!empty($number)) {
-                $stmt = $db->prepare("INSERT INTO virtual_accounts (user_id, bank_name, account_number, account_name, customer_email, metadata) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE account_number = VALUES(account_number), metadata = VALUES(metadata)");
+                $stmt = $db->prepare("INSERT INTO virtual_accounts (user_id, bank_name, account_number, account_name, customer_email, metadata) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE bank_name = VALUES(bank_name), account_number = VALUES(account_number), account_name = VALUES(account_name), metadata = VALUES(metadata)");
                 $stmt->execute([$userId, $bank, $number, $accName, $email, $metadataJson]);
                 $log("SUCCESS: VA created - Bank=$bank, Number=$number, Name=$accName");
-                return ['status' => true, 'message' => 'VA generated', 'data' => ['account_number' => $number, 'bank_name' => $bank, 'account_name' => $accName]];
+                return ['status' => true, 'message' => 'VA generated', 'data' => ['account_number' => $number, 'bank_name' => $bank, 'account_name' => $accName, 'customer_email' => $email, 'metadata' => $metadataJson]];
             }
             $log("ERROR: DVA response was successful but account_number is empty");
         } else {
@@ -1132,7 +1174,7 @@ function claim_transaction_for_fulfilment($transactionId) {
     // already fulfilled this". A database error has to propagate so the caller
     // rolls back rather than being told the payment was handled.
     $db = Database::connect();
-    $stmt = $db->prepare("UPDATE transactions SET status = 'success' WHERE id = ? AND (status IS NULL OR status <> 'success')");
+    $stmt = $db->prepare("UPDATE transactions SET status = 'success' WHERE id = ? AND (status IS NULL OR status NOT IN ('success', 'superseded'))");
     $stmt->execute([$transactionId]);
     return $stmt->rowCount() === 1;
 }
@@ -1173,6 +1215,7 @@ function ensure_table($table, $ddl) {
  * calls this first so the columns are guaranteed to exist by the time money moves.
  */
 function ensure_payment_schema() {
+    static $statusWidened = false;
     ensure_column('transactions', 'gateway_amount', 'DECIMAL(15,2) DEFAULT NULL');
     ensure_column('transactions', 'failure_reason', 'VARCHAR(50) DEFAULT NULL');
     ensure_column('transactions', 'card_bin', 'VARCHAR(20) DEFAULT NULL');
@@ -1180,10 +1223,28 @@ function ensure_payment_schema() {
     ensure_column('transactions', 'card_type', 'VARCHAR(40) DEFAULT NULL');
     ensure_column('transactions', 'card_country', 'VARCHAR(8) DEFAULT NULL');
     ensure_column('transactions', 'checkout_token', 'VARCHAR(64) DEFAULT NULL');
+    ensure_column('transactions', 'metadata', 'TEXT');
     // Where the merchant asked the payer to be returned to. Held on the transaction because the
     // return happens after a full Paystack round trip, on a different request, from
     // checkout.php/verify.php - the query string that carried the parameter is long gone by then.
     ensure_column('transactions', 'callback_url', 'VARCHAR(255) DEFAULT NULL');
+    ensure_column('virtual_accounts', 'metadata', 'TEXT');
+
+    if (!$statusWidened) {
+        try {
+            $db = Database::connect();
+            if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' && !$db->inTransaction()) {
+                $col = $db->query("SHOW COLUMNS FROM `transactions` LIKE 'status'")->fetch();
+                $colType = (string)($col['Type'] ?? '');
+                if ($colType !== '' && stripos($colType, 'enum(') !== false && stripos($colType, 'superseded') === false) {
+                    $db->exec("ALTER TABLE `transactions` MODIFY COLUMN `status` VARCHAR(20) DEFAULT 'pending'");
+                }
+            }
+            $statusWidened = true;
+        } catch (\Throwable $e) {
+            // Non-fatal on read-only DB users; supersede fallback still preserves integrity.
+        }
+    }
 
     ensure_table('transaction_reversals', "CREATE TABLE IF NOT EXISTS transaction_reversals (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1388,7 +1449,7 @@ function estimate_paystack_fee($amount, $is_international = false, $channel = ''
  */
 function calculate_fees($amount, $is_international = false, $userId = null, $gatewayFee = null, $channel = '') {
     $amount = max(0, (float)$amount);
-    $providerFee = (is_numeric($gatewayFee) && (float)$gatewayFee >= 0)
+    $providerFee = (is_numeric($gatewayFee) && (float)$gatewayFee > 0)
         ? (float)$gatewayFee
         : estimate_paystack_fee($amount, $is_international, $channel);
 
@@ -1418,6 +1479,237 @@ function calculate_fees($amount, $is_international = false, $userId = null, $gat
     }
 
     return round($providerFee + $markup, 2);
+}
+
+/**
+ * Checks whether a settled DVA transaction has already been bound to another checkout reference.
+ */
+function is_dva_tx_already_linked($db, $userId, $settledReference, $excludeCheckoutRef = '') {
+    $settledReference = (string)$settledReference;
+    if ($settledReference === '') return false;
+    $stmt = $db->prepare("SELECT reference, metadata FROM transactions WHERE user_id = ? AND status IN ('superseded', 'failed') AND reference <> ? AND metadata LIKE ?");
+    $stmt->execute([$userId, $excludeCheckoutRef, '%' . $settledReference . '%']);
+    foreach ($stmt->fetchAll() as $row) {
+        $meta = normalize_metadata_array($row['metadata'] ?? null);
+        if (($meta['settled_reference'] ?? '') === $settledReference) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Marks a pending PH_... checkout row as superseded by a settled DVA transaction without
+ * double-counting GTV (`status = 'success'`) or triggering integrity alerts (`failure_reason`).
+ */
+function supersede_checkout_transaction($db, array $tx, array $settledTx) {
+    $txMeta = normalize_metadata_array($tx['metadata'] ?? null);
+    $txMeta['settled_reference'] = $settledTx['reference'];
+    $txMetaJson = json_encode($txMeta);
+
+    try {
+        $stmt = $db->prepare("UPDATE transactions SET status = 'superseded', fee_amount = 0.00, settled_amount = 0.00, metadata = ? WHERE id = ? AND status = 'pending'");
+        $stmt->execute([$txMetaJson, $tx['id']]);
+    } catch (\Throwable $e) {
+        // Fallback if a restricted DB user could not alter an older ENUM('pending','success','failed','refunded') column.
+        $stmt = $db->prepare("UPDATE transactions SET status = 'failed', failure_reason = NULL, fee_amount = 0.00, settled_amount = 0.00, metadata = ? WHERE id = ? AND status = 'pending'");
+        $stmt->execute([$txMetaJson, $tx['id']]);
+    }
+
+    log_transaction_event($tx['id'], 'settled_via_dva', 'Superseded by DVA payment Ref: ' . $settledTx['reference']);
+}
+
+/**
+ * Resolves a checkout transaction (PH_...) that was paid via Dedicated Virtual Account transfer.
+ * Matches locally settled DVA transfers first, and optionally queries Paystack directly when
+ * a Paystack DVA webhook was delayed or missed. Returns the settled DVA transaction row or null.
+ */
+function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup = true) {
+    $txMeta = normalize_metadata_array($tx['metadata'] ?? null);
+    $settledRef = trim((string)($txMeta['settled_reference'] ?? ''));
+
+    // Already linked to a settled DVA transaction
+    if ($settledRef !== '' && in_array($tx['status'] ?? '', ['superseded', 'failed'], true) && empty($tx['failure_reason'])) {
+        $stmt = $db->prepare("SELECT * FROM transactions WHERE reference = ? AND user_id = ? LIMIT 1");
+        $stmt->execute([$settledRef, $userId]);
+        $resolved = $stmt->fetch();
+        if ($resolved && $resolved['status'] === 'success') {
+            return $resolved;
+        }
+    }
+
+    if (($tx['status'] ?? '') !== 'pending') {
+        return null;
+    }
+
+    $createdTs = strtotime((string)($tx['created_at'] ?? 'now')) ?: time();
+    $windowStart = date('Y-m-d H:i:s', $createdTs - 3600);
+    $nearStartTs = $createdTs - 300;
+    $isTestInt = ((int)($tx['is_test'] ?? 0) === 1) ? 1 : 0;
+    $expectedLedgerId = (int)($txMeta['ledger_id'] ?? 0);
+
+    $findLocalMatch = function() use ($db, $userId, $tx, $isTestInt, $windowStart, $nearStartTs, $expectedLedgerId) {
+        $candStmt = $db->prepare(
+            "SELECT * FROM transactions
+              WHERE user_id = ? AND is_test = ? AND status = 'success'
+                AND payment_method IN ('bank_transfer', 'dedicated_account', 'dedicated_nuban')
+                AND created_at >= ?
+              ORDER BY id DESC LIMIT 40"
+        );
+        $candStmt->execute([$userId, $isTestInt, $windowStart]);
+        $candidates = $candStmt->fetchAll();
+
+        $ledgerMatch = null;
+        $timeMatch = null;
+
+        foreach ($candidates as $cand) {
+            $candMeta = normalize_metadata_array($cand['metadata'] ?? null);
+            $candPaid = trusted_paid_amount($cand);
+            if ($candPaid === null) {
+                $candPaid = (float)$cand['amount'];
+            }
+            if (!amount_covers($tx['amount'], $candPaid)) {
+                continue;
+            }
+
+            if (($candMeta['checkout_reference'] ?? '') === $tx['reference']
+                && !is_dva_tx_already_linked($db, $userId, $cand['reference'], $tx['reference'])) {
+                return $cand;
+            }
+
+            if (strcasecmp((string)$cand['customer_email'], (string)$tx['customer_email']) !== 0) {
+                continue;
+            }
+            if (is_dva_tx_already_linked($db, $userId, $cand['reference'], $tx['reference'])) {
+                continue;
+            }
+
+            if ($expectedLedgerId > 0 && (int)($candMeta['ledger_id'] ?? 0) === $expectedLedgerId && $ledgerMatch === null) {
+                $ledgerMatch = $cand;
+            }
+            $candTs = strtotime((string)($cand['created_at'] ?? 'now')) ?: 0;
+            if ($candTs >= $nearStartTs && $timeMatch === null) {
+                $timeMatch = $cand;
+            }
+        }
+
+        return $ledgerMatch ?: $timeMatch;
+    };
+
+    $matched = $findLocalMatch();
+    if ($matched) {
+        supersede_checkout_transaction($db, $tx, $matched);
+        return $matched;
+    }
+
+    if (!$allowGatewayLookup) {
+        return null;
+    }
+
+    // Pull missed/delayed DVA transfers from Paystack for this customer's Virtual Account
+    try {
+        $va = null;
+        $vaNumMeta = trim((string)($txMeta['virtual_account_number'] ?? ''));
+        if ($vaNumMeta !== '') {
+            $stmt = $db->prepare("SELECT * FROM virtual_accounts WHERE user_id = ? AND account_number = ? LIMIT 1");
+            $stmt->execute([$userId, $vaNumMeta]);
+            $va = $stmt->fetch() ?: null;
+        }
+        if (!$va && !empty($tx['customer_email'])) {
+            $stmt = $db->prepare("SELECT * FROM virtual_accounts WHERE user_id = ? AND customer_email = ? LIMIT 1");
+            $stmt->execute([$userId, $tx['customer_email']]);
+            $va = $stmt->fetch() ?: null;
+        }
+        if (!$va || empty($va['account_number'])) {
+            return null;
+        }
+
+        $targetAccClean = ltrim((string)$va['account_number'], '0');
+        $from = gmdate('Y-m-d\T00:00:00\Z', $createdTs - 3600);
+        $to = gmdate('Y-m-d\T23:59:59\Z', time() + 3600);
+        $response = paystack_call("transaction?from=" . urlencode($from) . "&to=" . urlencode($to) . "&status=success", 'GET', [], ($isTestInt === 1));
+        if (!$response || empty($response['status']) || !is_array($response['data'] ?? null)) {
+            return null;
+        }
+
+        $vaMeta = normalize_metadata_array($va['metadata'] ?? null);
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $insertSql = ($driver === 'sqlite')
+            ? "INSERT OR IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)"
+            : "INSERT IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)";
+
+        foreach ($response['data'] as $rtx) {
+            if (($rtx['status'] ?? '') !== 'success') continue;
+            $remoteAcc = (string)(
+                $rtx['dedicated_account']['account_number']
+                ?? ($rtx['authorization']['receiver_bank_account_number']
+                ?? ($rtx['receiver_bank_account_number']
+                ?? ($rtx['metadata']['receiver_account_number'] ?? '')))
+            );
+            if ($remoteAcc === '' || ltrim($remoteAcc, '0') !== $targetAccClean) {
+                continue;
+            }
+
+            $rtxRef = (string)($rtx['reference'] ?? '');
+            if ($rtxRef === '') continue;
+
+            $existsStmt = $db->prepare("SELECT id FROM transactions WHERE reference = ? LIMIT 1");
+            $existsStmt->execute([$rtxRef]);
+            if (!$existsStmt->fetch()) {
+                $amount = (float)$rtx['amount'] / 100;
+                $custEmail = (string)($rtx['customer']['email'] ?? ($va['customer_email'] ?? $tx['customer_email']));
+                $channelType = (string)($rtx['channel'] ?? 'dedicated_account');
+                $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
+                    ? ((float)$rtx['fees'] / 100)
+                    : null;
+                $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
+                $fee = calculate_fees($amount, $isIntl, $userId, $gatewayFee, $channelType);
+                $settled = round(max(0.0, $amount - $fee), 2);
+                $rtxMeta = array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta);
+                if (empty($rtxMeta['checkout_reference'])) {
+                    $rtxMeta['checkout_reference'] = $tx['reference'];
+                }
+                if ($expectedLedgerId > 0 && empty($rtxMeta['ledger_id'])) {
+                    $rtxMeta['ledger_id'] = $expectedLedgerId;
+                }
+                $txMetaJson = json_encode($rtxMeta);
+
+                $db->beginTransaction();
+                try {
+                    $insStmt = $db->prepare($insertSql);
+                    $insStmt->execute([$userId, $rtxRef, $amount, $amount, $custEmail, $channelType, $isTestInt, $rtx['id'] ?? null, $txMetaJson]);
+                    if ($insStmt->rowCount() === 1) {
+                        $tId = $db->lastInsertId();
+                        if (claim_transaction_for_fulfilment($tId)) {
+                            $db->prepare("UPDATE transactions SET fee_amount = ?, settled_amount = ? WHERE id = ?")
+                               ->execute([$fee, $settled, $tId]);
+                            record_gateway_amount($tId, $amount);
+                            log_transaction_event($tId, 'reconciled', 'Payment reconciled via DVA verification check.');
+                            log_ledger_entry($userId, $settled, 'credit', 'payment', "Reconciled VA Payment: $rtxRef", ($isTestInt === 1));
+                            $db->commit();
+                            trigger_merchant_webhook($tId);
+                        } else {
+                            $db->rollBack();
+                        }
+                    } else {
+                        $db->rollBack();
+                    }
+                } catch (\Throwable $e) {
+                    if ($db->inTransaction()) $db->rollBack();
+                }
+            }
+        }
+
+        $matched = $findLocalMatch();
+        if ($matched) {
+            supersede_checkout_transaction($db, $tx, $matched);
+            return $matched;
+        }
+    } catch (\Throwable $e) {
+        error_log('[PayHub] reconcile_dva_for_checkout error: ' . $e->getMessage());
+    }
+
+    return null;
 }
 
 /**

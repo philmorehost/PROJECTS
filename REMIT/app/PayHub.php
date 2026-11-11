@@ -35,7 +35,14 @@ final class PayHub
     }
     public static function enabled(PDO $db): bool { return self::ready($db) && setting($db,'payhub_enabled')==='1'; }
     public static function ready(PDO $db): bool { return trim(setting($db,'payhub_public_key'))!=='' && trim(setting($db,'payhub_secret_key'))!==''; }
-    public static function webhookUrl(): string { return 'https://'.($_SERVER['HTTP_HOST']??'your-domain.example').'/index.php?payhub_webhook=1'; }
+    private static function indexPath(): string
+    {
+        $script=(string)($_SERVER['SCRIPT_NAME']??'');
+        if($script===''||$script==='/index.php')return '/index.php';
+        $dir=rtrim(str_replace('\\','/',dirname($script)),'/');
+        return ($dir===''?'':$dir).'/index.php';
+    }
+    public static function webhookUrl(): string { return 'https://'.($_SERVER['HTTP_HOST']??'your-domain.example').self::indexPath().'?payhub_webhook=1'; }
     public static function callbackUrl(int $ledgerId=0): string
     {
         $host=trim((string)($_SERVER['HTTP_HOST']??''));
@@ -43,7 +50,7 @@ final class PayHub
         $scheme=(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')||strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO']??''))==='https'?'https':'https';
         $qs=['page'=>'remittances','pay'=>'payhub'];
         if($ledgerId>0)$qs['ledger_id']=$ledgerId;
-        return $scheme.'://'.$host.'/index.php?'.http_build_query($qs);
+        return $scheme.'://'.$host.self::indexPath().'?'.http_build_query($qs);
     }
     public static function checkoutUrl(string $ref): string { return self::BASE.'/checkout.php?ref='.rawurlencode($ref); }
     public static function autoApproveEnabled(PDO $db): bool { return setting($db,'payhub_auto_approve')!=='0'; }
@@ -87,11 +94,13 @@ final class PayHub
         return is_array($d)?$d:[];
     }
     /** @return array<int,array<string,string>> */
-    public static function virtualAccounts(PDO $db): array
+    public static function virtualAccounts(PDO $db,string $email=''): array
     {
         if(!self::enabled($db)||!function_exists('curl_init'))return [];
         $secret=trim(setting($db,'payhub_secret_key'));
-        $ch=curl_init(self::BASE.'/api/virtual-accounts');
+        $email=strtolower(trim($email));
+        $url=self::BASE.'/api/virtual-accounts'.($email!==''?'?email='.rawurlencode($email):'');
+        $ch=curl_init($url);
         if($ch===false)return [];
         curl_setopt_array($ch,[
             CURLOPT_RETURNTRANSFER=>true,
@@ -105,27 +114,58 @@ final class PayHub
         $error=curl_error($ch);
         curl_close($ch);
         self::log($db,'virtual_accounts_request',[
-            'http'=>$http,'curl_error'=>(string)$error,'response'=>(string)$response
+            'email'=>$email,'http'=>$http,'curl_error'=>(string)$error,'response'=>(string)$response
         ]);
         if($errno||$http!==200){
-            return []; // Logged above, return empty so UI shows "Generating..." or fallback
+            return [];
         }
         $json=json_decode((string)$response,true);
         $list=[];
         if(is_array($json)&&isset($json['data'])&&is_array($json['data'])){
             $accounts=isset($json['data']['account_number'])?[$json['data']]:$json['data'];
             foreach($accounts as $ac){
-                if(is_array($ac)&&!empty($ac['account_number'])){
-                    $list[]=[
-                        'bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),
-                        'account_number'=>(string)$ac['account_number'],
-                        'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance'),
-                        'reference'=>(string)($ac['reference']??'')
-                    ];
-                }
+                if(!is_array($ac)||empty($ac['account_number']))continue;
+                $acEmail=strtolower(trim((string)($ac['customer_email']??'')));
+                if($email!==''&&$acEmail!==''&&$acEmail!==$email)continue;
+                $list[]=[
+                    'bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),
+                    'account_number'=>(string)$ac['account_number'],
+                    'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance'),
+                    'customer_email'=>$acEmail,
+                    'reference'=>(string)($ac['reference']??'')
+                ];
             }
         }
         return $list;
+    }
+    /** @return array<int,array<string,mixed>> */
+    public static function reconcileVirtualAccount(PDO $db,string $accountNumber,string $date=''): array
+    {
+        $accountNumber=trim($accountNumber);
+        if($accountNumber===''||!self::enabled($db)||!function_exists('curl_init'))return [];
+        $secret=trim(setting($db,'payhub_secret_key'));
+        $queryDate=$date!==''?$date:gmdate('Y-m-d');
+        $url=self::BASE.'/api/virtual-accounts?'.http_build_query(['account_number'=>$accountNumber,'date'=>$queryDate]);
+        $ch=curl_init($url);
+        if($ch===false)return [];
+        curl_setopt_array($ch,[
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret,'Content-Type: application/json','Accept: application/json'],
+            CURLOPT_TIMEOUT=>20,
+            CURLOPT_CONNECTTIMEOUT=>10
+        ]);
+        $response=curl_exec($ch);
+        $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        $errno=curl_errno($ch);
+        $error=curl_error($ch);
+        curl_close($ch);
+        $json=json_decode((string)$response,true);
+        $reconciled=(is_array($json)&&is_array($json['reconciled']??null))?$json['reconciled']:[];
+        self::log($db,'va_reconcile_request',[
+            'account_number'=>$accountNumber,'date'=>$queryDate,'http'=>$http,'curl_error'=>(string)$error,'reconciled_count'=>count($reconciled)
+        ]);
+        if($errno||$http!==200)return [];
+        return $reconciled;
     }
     /** @return array{reference:string,payhub_reference:string,authorization_url:string,virtual_accounts:array<int,array<string,string>>,public_key:string} */
     public static function initializeTransaction(PDO $db,int $ledgerId,array $user,int $kobo,string $email,string $name,string $phone): array
@@ -200,9 +240,9 @@ final class PayHub
             }
         }
 
-        if(empty($virtual)){
-            // Fallback to existing virtual accounts if the initialization didn't return specific ones for this session
-            $virtual=self::virtualAccounts($db);
+        if(empty($virtual)&&$email!==''){
+            // Fallback only to virtual accounts owned by this exact customer email
+            $virtual=self::virtualAccounts($db,$email);
             if($virtual&&empty($virtual[0]['reference']))$virtual[0]['reference']=$payhubReference;
         }
 
@@ -245,13 +285,12 @@ final class PayHub
             if($val===null||$val===''||!is_numeric($val))return 0;
             $s=trim((string)$val);
             if(str_contains($s,'.')){
-                $f=(float)$s;
-                return round($f)!=$f ? (int)round($f*100) : (int)round($f);
+                return (int)round((float)$s*100);
             }
             return (int)$s;
         };
         $gatewayKobo=$parseMinor($data['gateway_amount']??null);
-        $feeKobo=max(0,$parseMinor($data['fee_amount']??null));
+        $feeKobo=max(0,$parseMinor($data['fee_amount']??($data['fee']??null)));
         $netKobo=max(0,$parseMinor($data['settled_amount']??null));
         $requestedKobo=max(0,$parseMinor($data['requested_amount']??null));
 
@@ -366,12 +405,12 @@ final class PayHub
     {
         $ref=trim($ref);if($ref==='')return ['status'=>'ignored','message'=>'Empty reference'];
         self::ensureFeeColumns($db);
-        if($source==='webhook'&&!array_key_exists('fee_amount',$data)&&!array_key_exists('settled_amount',$data)&&self::ready($db)){
+        if($source==='webhook'&&self::ready($db)&&(!array_key_exists('fee_amount',$data)||!array_key_exists('settled_amount',$data)||(float)($data['fee_amount']??0)<=0||(float)($data['settled_amount']??0)<=0)){
             $verifyRes=self::verify($db,$ref);
             if(is_array($verifyRes)&&self::isPaid($verifyRes)&&is_array($verifyRes['data']??null)){
                 $vData=$verifyRes['data'];
                 foreach(['gateway_amount','fee_amount','settled_amount','requested_amount','domain','channel','paid_at'] as $k){
-                    if(isset($vData[$k])&&!isset($data[$k]))$data[$k]=$vData[$k];
+                    if(isset($vData[$k])&&(!isset($data[$k])||(in_array($k,['fee_amount','settled_amount','gateway_amount'],true)&&(float)$data[$k]<=0&&(float)$vData[$k]>0)))$data[$k]=$vData[$k];
                 }
             }
         }
@@ -399,7 +438,10 @@ final class PayHub
                             $openStmt=$db->prepare("SELECT id,provincial_levy_due,amount_paid FROM remittance_ledgers WHERE parish_id=? AND status IN ('pending','partial') ORDER BY id DESC");
                             $openStmt->execute([(int)$uMatch['hierarchy_id']]);$openLedgers=$openStmt->fetchAll();
                             $probeAmounts=self::extractAmounts($data,0);
-                            $exactMatches=array_values(array_filter($openLedgers,fn($ol)=>(Money::cents($ol['provincial_levy_due'])-Money::cents($ol['amount_paid']))===$probeAmounts['gross_kobo']));
+                            $exactMatches=array_values(array_filter($openLedgers,static function($ol) use ($probeAmounts): bool {
+                                $dueCents=Money::cents($ol['provincial_levy_due'])-Money::cents($ol['amount_paid']);
+                                return $dueCents>0&&in_array($dueCents,[$probeAmounts['credit_kobo'],$probeAmounts['requested_kobo'],$probeAmounts['gross_kobo']],true);
+                            }));
                             if(count($exactMatches)===1)$ledgerId=(int)$exactMatches[0]['id'];
                             elseif(count($openLedgers)===1)$ledgerId=(int)$openLedgers[0]['id'];
                             if($ledgerId>0)self::log($db,'charge_ledger_fallback_matched',['reference'=>$ref,'ledger_id'=>$ledgerId,'email'=>$custEmail]);
@@ -428,11 +470,12 @@ final class PayHub
             $amounts=self::extractAmounts($data,0);
             $feeDecimal=Money::decimal($amounts['fee_kobo']);$netDecimal=Money::decimal($amounts['net_kobo']);
             $existingFeeCents=Money::cents((string)($row['payhub_fee']??'0'));
+            $existingNetCents=Money::cents((string)($row['payhub_net_amount']??'0'));
             $paidTs=strtotime((string)($data['paid_at']??($row['payhub_paid_at']??'now')))?:time();
             if($row['status']==='pending'){
                 $db->prepare('UPDATE payment_notifications SET payhub_channel=COALESCE(?,payhub_channel),payhub_paid_at=COALESCE(?,payhub_paid_at),gateway_payload=?,review_note=?,payhub_fee=CASE WHEN ?>0 THEN ? ELSE payhub_fee END,payhub_net_amount=CASE WHEN ?>0 THEN ? ELSE payhub_net_amount END WHERE id=?')->execute([(string)($data['channel']??$row['payhub_channel']),date('Y-m-d H:i:s',$paidTs),json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),'PayHub confirmed · '.$source.'. Treasury may verify statement before approval.',$amounts['fee_kobo'],$feeDecimal,$amounts['net_kobo'],$netDecimal,(int)$row['id']]);
-            }elseif($existingFeeCents===0&&$amounts['fee_kobo']>0){
-                $db->prepare('UPDATE payment_notifications SET payhub_fee=?,payhub_net_amount=?,gateway_payload=? WHERE id=?')->execute([$feeDecimal,$netDecimal,json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),(int)$row['id']]);
+            }elseif(($existingFeeCents===0&&$amounts['fee_kobo']>0)||($existingNetCents===0&&$amounts['net_kobo']>0)){
+                $db->prepare('UPDATE payment_notifications SET payhub_fee=CASE WHEN ?>0 THEN ? ELSE payhub_fee END,payhub_net_amount=CASE WHEN ?>0 THEN ? ELSE payhub_net_amount END,gateway_payload=? WHERE id=?')->execute([$amounts['fee_kobo'],$feeDecimal,$amounts['net_kobo'],$netDecimal,json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),(int)$row['id']]);
             }
             self::log($db,'charge_updated',['reference'=>$ref,'notification_id'=>(int)$row['id'],'status'=>$row['status'],'fee'=>$feeDecimal,'net'=>$netDecimal,'source'=>$source]);
             return ['status'=>'updated','message'=>'PayHub webhook recorded'];
@@ -461,7 +504,9 @@ final class PayHub
             if(!isset($byLedger[$lid]))$byLedger[$lid]=['fee'=>0,'gross'=>0,'net'=>0,'count'=>0];
             $amtCents=self::parseMoneyCents($n['amount']??0);
             $feeCents=self::parseMoneyCents($n['payhub_fee']??0);
-            $netCents=($n['payhub_net_amount']!==null&&$n['payhub_net_amount']!=='')?self::parseMoneyCents($n['payhub_net_amount']):$amtCents;
+            $netRaw=$n['payhub_net_amount']??null;
+            $netParsed=($netRaw!==null&&$netRaw!=='')?self::parseMoneyCents($netRaw):0;
+            $netCents=$netParsed>0?$netParsed:max(0,$amtCents-$feeCents);
             $byLedger[$lid]['fee']+=$feeCents;
             $byLedger[$lid]['gross']+=$amtCents;
             $byLedger[$lid]['net']+=$netCents;
@@ -492,7 +537,9 @@ final class PayHub
         foreach($s->fetchAll() as $n){
             $amtCents=self::parseMoneyCents($n['amount']??0);
             $fCents=self::parseMoneyCents($n['payhub_fee']??0);
-            $nCents=($n['payhub_net_amount']!==null&&$n['payhub_net_amount']!=='')?self::parseMoneyCents($n['payhub_net_amount']):$amtCents;
+            $netRaw=$n['payhub_net_amount']??null;
+            $netParsed=($netRaw!==null&&$netRaw!=='')?self::parseMoneyCents($netRaw):0;
+            $nCents=$netParsed>0?$netParsed:max(0,$amtCents-$fCents);
             $feeCents+=$fCents;$notifGrossCents+=$amtCents;$notifNetCents+=$nCents;
             if(!empty($n['payhub_reference'])){$payhubCount++;$payhubGrossCents+=$amtCents;$payhubNetCents+=$nCents;}
         }
