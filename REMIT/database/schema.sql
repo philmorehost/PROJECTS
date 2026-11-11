@@ -1,4 +1,4 @@
-CREATE TABLE church_hierarchy (
+CREATE TABLE IF NOT EXISTS church_hierarchy (
  id INT AUTO_INCREMENT PRIMARY KEY,
  node_name VARCHAR(150) NOT NULL,
  node_type ENUM('zone','area','parish') NOT NULL,
@@ -10,7 +10,7 @@ CREATE TABLE church_hierarchy (
  FOREIGN KEY(parent_id) REFERENCES church_hierarchy(id) ON DELETE RESTRICT,
  INDEX(parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
  id INT AUTO_INCREMENT PRIMARY KEY,
  hierarchy_id INT NULL,
  full_name VARCHAR(100) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE users (
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  FOREIGN KEY(hierarchy_id) REFERENCES church_hierarchy(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE remittance_ledgers (
+CREATE TABLE IF NOT EXISTS remittance_ledgers (
  id INT AUTO_INCREMENT PRIMARY KEY,
  parish_id INT NOT NULL,
  period_month TINYINT NOT NULL,
@@ -40,12 +40,12 @@ CREATE TABLE remittance_ledgers (
  CHECK(period_month BETWEEN 1 AND 12),
  CHECK(gross_income >= 0 AND provincial_levy_due >= 0 AND amount_paid >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE security_settings (
+CREATE TABLE IF NOT EXISTS security_settings (
  id INT AUTO_INCREMENT PRIMARY KEY,
  setting_key VARCHAR(100) UNIQUE NOT NULL,
  setting_value TEXT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE security_audit_logs (
+CREATE TABLE IF NOT EXISTS security_audit_logs (
  id BIGINT AUTO_INCREMENT PRIMARY KEY,
  ip_address VARCHAR(45) NOT NULL,
  username_attempted VARCHAR(150) NULL,
@@ -55,21 +55,21 @@ CREATE TABLE security_audit_logs (
  INDEX(ip_address,event_type,created_at),
  INDEX(username_attempted,event_type,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE security_ips (
+CREATE TABLE IF NOT EXISTS security_ips (
  ip_address VARCHAR(45) PRIMARY KEY,
  clean_sessions INT NOT NULL DEFAULT 0,
  whitelisted TINYINT(1) NOT NULL DEFAULT 0,
  blocked_until DATETIME NULL,
  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE firewall_jobs (
+CREATE TABLE IF NOT EXISTS firewall_jobs (
  id BIGINT AUTO_INCREMENT PRIMARY KEY,
  ip_address VARCHAR(45) NOT NULL,
  blocked_until DATETIME NOT NULL,
  status ENUM('pending','applied','failed') NOT NULL DEFAULT 'pending',
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE notification_outbox (
+CREATE TABLE IF NOT EXISTS notification_outbox (
  id BIGINT AUTO_INCREMENT PRIMARY KEY,
  recipient VARCHAR(150) NOT NULL,
  subject VARCHAR(200) NOT NULL,
@@ -78,8 +78,14 @@ CREATE TABLE notification_outbox (
  attempts INT NOT NULL DEFAULT 0,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-INSERT INTO security_settings(setting_key,setting_value) VALUES
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES
  ('site_title','RCCG Youth Province'),('notification_email',''),('levy_basis_points','1000'),
  ('username_protection','1'),('account_window','15'),('account_max','5'),
  ('protect_privileged','0'),('local_only','0'),('ip_protection','1'),
  ('ip_window','15'),('ip_max','10'),('block_days','1'),('log_retention','60');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('church_portal_schema','2');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('registration_enabled','1');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('provincial_bank_name','');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('provincial_account_name','');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('provincial_account_number','');
+INSERT IGNORE INTO security_settings(setting_key,setting_value) VALUES ('login_lock_mode','scoped');

@@ -41,8 +41,8 @@ function action(PDO $db,array $user,array $ids): string {
   $retained=ChurchPortal::percentage(trim($_POST['retained_percentage'] ?? ''));
   [$bank,$name,$number]=ChurchPortal::bank($_POST);
   $enabled=$_POST['registration_enabled'] ?? '';if(!in_array($enabled,['0','1'],true))throw new InvalidArgumentException('Invalid registration setting.');
-  $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled];
-  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->prepare("INSERT INTO security_settings(setting_key,setting_value) VALUES('login_lock_mode',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")->execute([$mode]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
+  $values=['levy_basis_points'=>(string)(10000-$retained),'provincial_bank_name'=>$bank,'provincial_account_name'=>$name,'provincial_account_number'=>$number,'registration_enabled'=>$enabled,'login_lock_mode'=>(string)($_POST['login_lock_mode'] ?? 'scoped')];
+  $db->beginTransaction();try{$s=$db->prepare('UPDATE security_settings SET setting_value=? WHERE setting_key=?');foreach($values as $key=>$value)$s->execute([$value,$key]);$db->commit();}catch(Throwable $e){$db->rollBack();throw $e;}
   return 'Offering split and provincial receiving account saved. Existing reports retain their original allocation.';
  }
  if ($action==='payhub_settings') {
