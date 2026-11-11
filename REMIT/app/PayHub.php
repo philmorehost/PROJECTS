@@ -33,10 +33,73 @@ final class PayHub
     {
         if(!self::enabled($db))return [];
         $secret=trim(setting($db,'payhub_secret_key'));
-        $ch=curl_init(self::BASE.'/api/virtual-accounts');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret],CURLOPT_TIMEOUT=>20,CURLOPT_CONNECTTIMEOUT=>10]);
-        $response=curl_exec($ch);curl_close($ch);
-        $json=json_decode((string)$response,true);$list=[];
-        foreach((array)($json['data']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$list[]=['bank_name'=>(string)($ac['bank_name']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??'REMIT Remittance'),'reference'=>(string)($ac['reference']??'')];}
+        $ch=curl_init(self::BASE.'/api/virtual-accounts');
+        curl_setopt_array($ch,[
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret,'Content-Type: application/json','Accept: application/json'],
+            CURLOPT_TIMEOUT=>20,
+            CURLOPT_CONNECTTIMEOUT=>10
+        ]);
+        $response=curl_exec($ch);
+        $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        $errno=curl_errno($ch);
+        $error=curl_error($ch);
+        curl_close($ch);
+        PayHub::log($db,'virtual_accounts_request',[
+            'http'=>$http,'curl_error'=>(string)$error,'response'=>(string)$response
+        ]);
+        if($errno||$http!==200) {
+            return []; // Logged above, return empty so UI shows "Generating..." or fallback
+        }
+        $json=json_decode((string)$response,true);
+        $list=[];
+        // Check if data is an array and contains account_number
+        if(is_array($json)&&isset($json['data'])&&is_array($json['data'])) {
+            foreach($json['data'] as $ac){
+                if(is_array($ac)&&!empty($ac['account_number'])) {
+                    $list[]=[
+                        'bank_name'=>(string)($ac['bank_name']??'PayHub Virtual Bank'),
+                        'account_number'=>(string)$ac['account_number'],
+                        'account_name'=>(string)($ac['account_name']??'REMIT Remittance'),
+                        'reference'=>(string)($ac['reference']??'')
+    /** @return array<int,array<string,string>> */
+    public static function virtualAccounts(PDO $db): array
+    {
+        if(!self::enabled($db))return [];
+        $secret=trim(setting($db,'payhub_secret_key'));
+        $ch=curl_init(self::BASE.'/api/virtual-accounts');
+        curl_setopt_array($ch,[
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_HTTPHEADER=>['Authorization: Bearer '.trim($secret),'Content-Type: application/json','Accept: application/json'],
+            CURLOPT_TIMEOUT=>20,
+            CURLOPT_CONNECTTIMEOUT=>10
+        ]);
+        $response=curl_exec($ch);
+        $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        $errno=curl_errno($ch);
+        $error=curl_error($ch);
+        curl_close($ch);
+        PayHub::log($db,'virtual_accounts_request',[
+            'http'=>(string)$http,'curl_error'=>(string)$error,'response'=>(string)$response
+        ]);
+        if($errno||$http!==200) {
+            return []; // Logged above, return empty so UI shows "Generating..." or fallback
+        }
+        $json=json_decode((string)$response,true);
+        $list=[];
+        // Check if data is an array and contains account_number
+        if(is_array($json)&&isset($json['data'])&&is_array($json['data'])) {
+            foreach($json['data'] as $ac){
+                if(is_array($ac)&&!empty($ac['account_number'])) {
+                    $list[]=[
+                        'bank_name'=>(string)($ac['bank_name']??'PayHub Virtual Bank'),
+                        'account_number'=>(string)$ac['account_number'],
+                        'account_name'=>(string)($ac['account_name']??'REMIT Remittance'),
+                        'reference'=>(string)($ac['reference']??'')
+                    ];
+                }
+            }
+        }
         return $list;
     }
     /** @return array{reference:string,authorization_url:string} */
@@ -46,24 +109,51 @@ final class PayHub
         if($kobo<10000)throw new InvalidArgumentException('Online payments require a minimum amount of 100.00 NGN.');
         $secret=trim(setting($db,'payhub_secret_key'));
         $ref='RMT-'.date('YmdHis').'-'.$ledgerId.'-'.bin2hex(random_bytes(3));
-        $payload=['email'=>$email,'amount'=>(string)$kobo,'name'=>$name,'phone'=>$phone,'reference'=>$ref,'metadata'=>['ledger_id'=>$ledgerId,'user_id'=>(int)$user['id']]];
+        $payload=['email'=>$email,'amount'=>(string)$kobo,'name'=>$name,'phone'=>$phone,'reference'=>$ref,'metadata'=>['ledger_id'=>(int)$ledgerId,'user_id'=>(int)$user['id']]];
         if(setting($db,'payhub_virtual_accounts')!=='0')$payload['channels']=['card','bank_transfer','virtual_account'];
-        $ch=curl_init(self::BASE.'/api/transaction/initialize');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($payload),CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret,'Content-Type: application/json','Accept: application/json'],CURLOPT_TIMEOUT=>30,CURLOPT_CONNECTTIMEOUT=>15]);
-        $response=curl_exec($ch);$http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$errno=curl_errno($ch);$error=curl_error($ch);curl_close($ch);
-        self::log($db,'initialize_request',['reference'=>$ref,'kobo'=>$kobo,'http'=>$http,'curl_error'=>$error,'response'=>(string)$response]);
-        if($errno)throw new RuntimeException('Could not connect to PayHub. Check logs and try manual transfer if needed.');
+        $ch=curl_init(self::BASE.'/api/transaction/initialize');
+        curl_setopt_array($ch,[
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_POST=>true,
+            CURLOPT_POSTFIELDS=>json_encode($payload),
+            CURLOPT_HTTPHEADER=>['Authorization: Bearer '.trim($secret),'Content-Type: application/json','Accept: application/json'],
+            CURLOPT_TIMEOUT=>30,
+            CURLOPT_CONNECTTIMEOUT=>15
+        ]);
+        $response=curl_exec($ch);
+        $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        $errno=curl_errno($ch);
+        $error=curl_error($ch);
+        curl_close($ch);
+        PayHub::log($db,'initialize_request',[
+            'reference'=>(string)$ref,'kobo'=>(string)$kobo,'http'=>(string)$http,'curl_error'=>(string)$error,'response'=>(string)$response
+        ]);
+        if($errno||$http<200||$http>=300) {
+            throw new RuntimeException('Could not connect to PayHub (HTTP '.($http?:'0').'). Check logs and try manual transfer if needed. Error: '.($error?:'Unknown'));
+        }
         $json=json_decode((string)$response,true);
-        if(!is_array($json)||empty($json['status'])||!is_array($json['data']??null)||empty($json['data']['reference'])||empty($json['data']['authorization_url']))throw new RuntimeException('PayHub did not return a valid checkout session. Check PayHub logs.');
-        $payhubReference=(string)$json['data']['reference'];$authUrl=(string)$json['data']['authorization_url'];
-        parse_str((string)parse_url($authUrl,PHP_URL_QUERY),$urlQuery);if(!empty($urlQuery['ref']))$payhubReference=(string)$urlQuery['ref'];
-        $virtual=[];foreach((array)($json['data']['virtual_accounts']??$json['data']['dedicated_account']??[]) as $ac){if(is_array($ac)&&!empty($ac['account_number']))$virtual[]=['bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),'account_number'=>(string)$ac['account_number'],'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance'),'reference'=>(string)($ac['reference']??$payhubReference)];}
-        if(!$virtual)$virtual=self::virtualAccounts($db);if($virtual&&empty($virtual[0]['reference']))$virtual[0]['reference']=$payhubReference;
-        return ['reference'=>(string)$json['data']['reference'],'payhub_reference'=>$payhubReference,'authorization_url'=>$authUrl,'virtual_accounts'=>$virtual,'public_key'=>trim(setting($db,'payhub_public_key'))];
-    }
+        if(!is_array($json)||empty($json['status'])||!is_array($json['data']??null)||empty($json['data']['reference'])||empty($json['data']['authorization_url'])) {
+            PayHub::log($db,'initialize_error',[
+                'reference'=>(string)$ref,'kobo'=>(string)$kobo,'http'=>(string)$http,'response'=>(string)$response,'json'=>(string)json_encode($json)
+            ]);
+            throw new RuntimeException('PayHub did not return a valid checkout session. Check PayHub logs.');
+        }
+        $payhubReference=(string)$json['data']['reference'];
+        $authUrl=(string)$json['data']['authorization_url'];
+        parse_str((string)parse_url($authUrl,PHP_URL_QUERY),$urlQuery);
+        if(!empty($urlQuery['ref']))$payhubReference=(string)$urlQuery['ref'];
+        
+        $virtual=[];
+        // Handle both 'virtual_accounts' (list) and 'dedicated_account' (single) from PayHub API
+        $vaList = (array)($json['data']['virtual_accounts']??[]);
+        if(empty($vaList) && isset($json['data']['dedicated_account'])) {
+            $vaList = [(array)$json['data']['dedicated_account']];
+        }
+        
+        foreach($vaList as $ac){
+            if(is_array($ac)&&!empty($ac['account_number'])) {
+                $virtual[]=[\n                    'bank_name'=>(string)($ac['bank_name']??$ac['bank']??'PayHub Virtual Bank'),\n                    'account_number'=>(string)$ac['account_number'],\n                    'account_name'=>(string)($ac['account_name']??$ac['customer_name']??'REMIT Remittance'),\n                    'reference'=>(string)($ac['reference']??$payhubReference)\n                ];\n            }\n        }\n        \n        if(empty($virtual)) {\n            // Fallback to existing virtual accounts if the initialization didn't return specific ones for this session\n            $virtual=self::virtualAccounts($db);\n            if($virtual&&empty($virtual[0]['reference']))$virtual[0]['reference']=$$payhubReference;\n        }\n        \n        return [\n            'reference'=>(string)$json['data']['reference'],\n            'payhub_reference'=>(string)$payhubReference,\n            'authorization_url'=>(string)$authUrl,\n            'virtual_accounts'=>$virtual,\n            'public_key'=>(string)trim(setting($db,'payhub_public_key'))\n        ];\n    }
     public static function verify(PDO $db,string $reference): ?array
-    {
-        if(!self::ready($db))return null;
-        $secret=trim(setting($db,'payhub_secret_key'));
         $ch=curl_init(self::BASE.'/api/transaction/verify/'.rawurlencode($reference));curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$secret],CURLOPT_TIMEOUT=>20,CURLOPT_CONNECTTIMEOUT=>10]);
         $response=curl_exec($ch);curl_close($ch);
         $json=json_decode((string)$response,true);
@@ -81,31 +171,3 @@ final class PayHub
         if(!is_array($event)||($event['event']??'')!=='charge.success'||!is_array($event['data']??null))return ['status'=>'ignored','message'=>'Unhandled event'];
         $data=$event['data'];$ref=(string)($data['reference']??'');
         if($ref==='')return ['status'=>'ignored','message'=>'Missing reference'];
-        return self::recordSuccessfulCharge($db,$ref,$data,'webhook');
-    }
-    /** @return array{status:string,message:string} */
-    public static function recordSuccessfulCharge(PDO $db,string $ref,array $data,string $source): array
-    {
-        $ref=trim($ref);if($ref==='')return ['status'=>'ignored','message'=>'Empty reference'];
-        try{$lock=$db->query("SELECT GET_LOCK('remit_payhub_charge',5)")->fetchColumn();if((int)$lock!==1)return ['status'=>'busy','message'=>'Retry later'];}catch(Throwable){return ['status'=>'busy','message'=>'Retry later'];}
-        try{
-            $s=$db->prepare('SELECT * FROM payment_notifications WHERE payhub_reference=? FOR UPDATE');$s->execute([$ref]);$row=$s->fetch();
-            if(!$row){
-                $meta=is_array($data['metadata']??null)?$data['metadata']:[];$ledgerId=(int)($meta['ledger_id']??0);$userId=(int)($meta['user_id']??0);
-                if($ledgerId<=0)return ['status'=>'ignored','message'=>'Unknown reference'];
-                $ledger=$db->prepare('SELECT l.*,h.node_name,h.id parish_id FROM remittance_ledgers l JOIN church_hierarchy h ON h.id=l.parish_id WHERE l.id=?');$ledger->execute([$ledgerId]);$l=$ledger->fetch();
-                if(!$l)return ['status'=>'ignored','message'=>'Ledger not found'];
-                $expected=Money::cents($l['provincial_levy_due'])-Money::cents($l['amount_paid']);$rawAmount=($data['amount']??0);$kobo=is_numeric($rawAmount)?(int)$rawAmount:0;
-                if($kobo>0 && $kobo>$expected*2){$kobo=(int)floor($kobo/100);}
-                if($kobo<=0||$kobo>$expected){$kobo=$expected;}
-                $amount=Money::decimal($kobo);
-                $db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date,status,payhub_reference,payhub_channel,payhub_paid_at,gateway_payload,review_note) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$ledgerId,$userId?:null,$amount,$ref,date('Y-m-d',strtotime((string)($data['paid_at']??'now'))),'pending',$ref,(string)($data['channel']??'virtual_account'),date('Y-m-d H:i:s',strtotime((string)($data['paid_at']??'now'))),json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),'PayHub confirmed · '.$source.' · virtual account/card payment.']);
-                return ['status'=>'queued','message'=>'Payment notification created from PayHub webhook'];
-            }
-            if($row['status']==='pending'){
-                $db->prepare('UPDATE payment_notifications SET payhub_channel=COALESCE(?,payhub_channel),payhub_paid_at=COALESCE(?,payhub_paid_at),gateway_payload=?,review_note=? WHERE id=?')->execute([(string)($data['channel']??$row['payhub_channel']),date('Y-m-d H:i:s',strtotime((string)($data['paid_at']??($row['payhub_paid_at']??'now')))),json_encode(['source'=>$source,'event'=>$data],JSON_UNESCAPED_SLASHES),'PayHub confirmed · '.$source.'. Treasury may verify statement before approval.',(int)$row['id']]);
-            }
-            return ['status'=>'updated','message'=>'PayHub webhook recorded'];
-        }finally{$db->query("SELECT RELEASE_LOCK('remit_payhub_charge')");}
-    }
-}
