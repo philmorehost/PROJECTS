@@ -1,21 +1,65 @@
 <?php
-header('Content-Type: application/json');
+require_once __DIR__ . '/includes/security.php';
+lm_security_headers();
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 require_once('db.php');
 
-// Function to log debug messages
+/**
+ * Log without writing licence keys to disk.
+ *
+ * The old helper appended every key to api_debug.log inside the web root;
+ * any misconfigured server that served .log files leaked the whole licence
+ * table. Keys are now shown as a short prefix only.
+ *
+ * @param string $message
+ * @return void
+ */
 function api_log($message) {
-    file_put_contents('api_debug.log', date('[Y-m-d H:i:s] ') . $message . "\n", FILE_APPEND);
+    lm_log('api', preg_replace('/\b([A-Z]{2,10}-)[A-Z0-9]{6,}\b/', '$1…', (string) $message));
 }
 
-api_log("--- New API Request ---");
+/**
+ * A licence key as it may appear in a log line.
+ *
+ * api_log() masks the generated VALID-… shape, but the key here comes from the
+ * request body: an attacker can send anything, and older/imported keys are not
+ * guaranteed to match the pattern. Masking the value itself is format-agnostic.
+ *
+ * @param mixed $key
+ * @return string
+ */
+function api_key_label($key) {
+    $key = (string) $key;
+    if ($key === '') {
+        return '(empty)';
+    }
+    if (strlen($key) <= 8) {
+        return str_repeat('*', strlen($key));
+    }
+    return substr($key, 0, 4) . str_repeat('*', max(4, strlen($key) - 8)) . substr($key, -4);
+}
+
+api_log('--- New API Request ---');
+
+// A licence check is cheap, but unlimited requests are not: cap per address.
+$apiLimit = lm_rate_limit(lm_rate_limit_ip('api-check'), 120, 60, true);
+if (!$apiLimit['allowed']) {
+    http_response_code(429);
+    header('Retry-After: ' . (int) $apiLimit['retry_after']);
+    echo json_encode(array('status' => 0, 'message' => 'Too many requests. Try again shortly.'));
+    exit;
+}
 
 $response = ['status' => 0, 'message' => 'Invalid license key or domain.'];
 
 if (isset($_POST['key']) && isset($_POST['domain'])) {
     $key = $_POST['key'];
     $domain = $_POST['domain'];
-    api_log("Received key: {$key}, domain: {$domain}");
+    $key_label = api_key_label($key);
+    api_log('Received key for domain ' . preg_replace('/[^a-z0-9.\-]/i', '', (string) $domain));
 
     try {
         $stmt = $pdo->prepare("SELECT * FROM licenses WHERE license_key = ?");
@@ -26,11 +70,11 @@ if (isset($_POST['key']) && isset($_POST['domain'])) {
             if ($license['status'] === 'suspended') {
                 $response['status'] = 'suspended';
                 $response['message'] = 'This license has been suspended by the administrator.';
-                api_log("FAILURE: License key '{$key}' is suspended.");
+                api_log("FAILURE: License key '{$key_label}' is suspended.");
             } elseif ($license['status'] !== 'active') {
                 $response['status'] = 0;
                 $response['message'] = 'This license is inactive.';
-                api_log("FAILURE: License key '{$key}' is inactive. Status: {$license['status']}");
+                api_log("FAILURE: License key '{$key_label}' is inactive. Status: {$license['status']}");
             } else {
                 $license_type = $license['license_type'] ?? 'standard';
                 // Check domains in licensed_domains normalized table
@@ -55,16 +99,16 @@ if (isset($_POST['key']) && isset($_POST['domain'])) {
                         $register_stmt->execute([$license['id'], $domain]);
                         $response['status'] = 1;
                         $response['message'] = 'License is valid (Domain registered).';
-                        api_log("SUCCESS: Registered and validated domain '{$domain}' for key '{$key}'.");
+                        api_log("SUCCESS: Registered and validated domain '{$domain}' for key '{$key_label}'.");
                     } else {
                         $response['status'] = 0;
                         $response['message'] = 'Domain not authorized. Limit exceeded.';
-                        api_log("FAILURE: Domain '{$domain}' not authorized for key '{$key}'. Limit is {$max_domains}.");
+                        api_log("FAILURE: Domain '{$domain}' not authorized for key '{$key_label}'. Limit is {$max_domains}.");
                     }
                 }
             }
         } else {
-            api_log("FAILURE: License key '{$key}' does not exist.");
+            api_log("FAILURE: License key '{$key_label}' does not exist.");
         }
     } catch (PDOException $e) {
         $response['message'] = 'A database error occurred.';
@@ -72,7 +116,8 @@ if (isset($_POST['key']) && isset($_POST['domain'])) {
     }
 } else {
     $response['message'] = 'Missing key or domain parameter.';
-    api_log("ERROR: Missing key or domain in POST request. Data: " . json_encode($_POST));
+    api_log("ERROR: Missing key or domain in POST request. Fields present: "
+        . implode(',', array_map('strval', array_keys($_POST))));
 }
 
 api_log("Responding with: " . json_encode($response));

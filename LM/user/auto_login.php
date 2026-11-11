@@ -1,6 +1,17 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 require_once('../db.php');
+
+// The token is a bearer credential: throttle guessing and cap its lifetime.
+$throttle = lm_rate_limit(lm_rate_limit_ip('auto-login'), 20, 900);
+if (!$throttle['allowed']) {
+    http_response_code(429);
+    echo 'Too many attempts. Please use the sign-in form.';
+    exit;
+}
 
 // Accept token via POST or GET
 $token = $_POST['token'] ?? $_GET['token'] ?? '';
@@ -49,6 +60,11 @@ try {
         echo "License not found";
         exit;
     }
+
+    // Privilege change: new session id, fresh CSRF token.
+    lm_session_start(true);
+    unset($_SESSION['lm_csrf']);
+    lm_csrf_token();
 
     // Set session
     $_SESSION['user_email'] = $license['customer_email'];

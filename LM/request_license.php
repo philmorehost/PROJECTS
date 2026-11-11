@@ -1,8 +1,25 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 require_once('db.php');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: order.php');
+    exit();
+}
+
+if (!lm_verify_csrf()) {
+    $_SESSION['error'] = 'Your session expired. Please submit the form again.';
+    header('Location: order.php');
+    exit();
+}
+
+// A public form must not be able to spray requests.
+$throttle = lm_rate_limit(lm_rate_limit_ip('license-request'), 5, 3600);
+if (!$throttle['allowed']) {
+    $_SESSION['error'] = 'Too many requests from this address. Please try again later.';
     header('Location: order.php');
     exit();
 }
@@ -51,9 +68,14 @@ try {
         $q->execute([$admin_email, $subject, $body]);
     }
 
-    // Auto-login the user and redirect to dashboard
-    $_SESSION['user_email'] = $email;
-    header('Location: user/index.php');
+    /*
+     * Never sign the visitor in here.
+     *
+     * The e-mail address in this form is unverified, so trusting it would let
+     * anyone type a known customer's address and land in their dashboard.
+     * The request goes to an admin for approval instead.
+     */
+    header('Location: success_manual.php?ref=' . urlencode($ref));
     exit();
 } catch (Exception $e) {
     error_log('Failed to create license request: ' . $e->getMessage());

@@ -1,342 +1,429 @@
 <?php
-// Database configuration for the license manager
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'pmhmanager_license');
-define('DB_USER', 'pmhmanager_license');
-define('DB_PASS', 'pmhmanager_license');
+/**
+ * Database bootstrap for the License Manager.
+ *
+ * IMPORTANT: no schema changes run inline here any more. All DDL lives in
+ * includes/migrations.php and executes exactly once (guarded by the
+ * schema_migrations table + a MySQL advisory lock). This is what fixes the
+ * 1213 "Deadlock found" error that was logged on every request by the
+ * "migrate existing domains" INSERT … SELECT.
+ */
+
+/*
+ * Connection details.
+ *
+ * The constants below keep existing cPanel installs working, but they are
+ * overridable without editing code: set DB_HOST / DB_NAME / DB_USER / DB_PASS
+ * in the environment (or in a sibling db.local.php that stays out of git).
+ * Credentials in source are one `git push` away from being public, so
+ * db.local.php is the recommended place for a real password.
+ */
+if (is_file(__DIR__ . '/db.local.php')) {
+    require __DIR__ . '/db.local.php';
+}
+
+if (!defined('DB_HOST')) {
+    define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+}
+if (!defined('DB_NAME')) {
+    define('DB_NAME', getenv('DB_NAME') ?: 'pmhmanager_license');
+}
+if (!defined('DB_USER')) {
+    define('DB_USER', getenv('DB_USER') ?: 'pmhmanager_license');
+}
+if (!defined('DB_PASS')) {
+    define('DB_PASS', getenv('DB_PASS') !== false ? (string) getenv('DB_PASS') : 'pmhmanager_license');
+}
+
+require_once __DIR__ . '/includes/lm_config.php';
+require_once __DIR__ . '/includes/migrations.php';
+
+// Baseline response headers for every page that touches the database. The
+// helper is a no-op once output has started, so late includes stay safe.
+if (PHP_SAPI !== 'cli') {
+    lm_security_headers();
+}
+
+if (!function_exists('lm_pdo_problem')) {
+    /**
+     * Why PDO cannot be used, or '' when it is fine.
+     *
+     * Two different faults, two different fixes, so they must not be reported
+     * as one:
+     *   'missing'  the PDO extension is not loaded at all — "Class 'PDO' not
+     *              found", which is a fatal Error and cannot be caught as a
+     *              PDOException. This is what a cPanel PHP switch does when the
+     *              new version has no pdo package, or the account's PHP Selector
+     *              has the extension switched off.
+     *   'no_mysql' PDO is there but the MySQL driver is not — the connection
+     *              fails with "could not find driver".
+     *
+     * The arguments exist so a test can describe a host it is not running on.
+     *
+     * @param bool|null  $classExists null = inspect this runtime
+     * @param array|null $drivers     null = inspect this runtime
+     * @return string
+     */
+    function lm_pdo_problem($classExists = null, $drivers = null)
+    {
+        if ($classExists === null) {
+            $classExists = class_exists('PDO');
+        }
+        if (!$classExists) {
+            return 'missing';
+        }
+
+        if ($drivers === null) {
+            $drivers = PDO::getAvailableDrivers();
+        }
+        $drivers = is_array($drivers) ? $drivers : array();
+
+        return in_array('mysql', $drivers, true) ? '' : 'no_mysql';
+    }
+}
+
+if (!function_exists('lm_request_expects_json')) {
+    /**
+     * Whether the caller is a fetch()/XHR rather than a browser navigation.
+     *
+     * An endpoint that prints an HTML error into a JSON request produces the
+     * useless "Unexpected server response" toast, so it gets JSON instead.
+     *
+     * @return bool
+     */
+    function lm_request_expects_json()
+    {
+        $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($requestedWith === 'xmlhttprequest') {
+            return true;
+        }
+
+        if (stripos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false) {
+            return true;
+        }
+
+        $script = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+
+        return strpos($script, 'ajax_') === 0 || strpos($script, 'api') === 0;
+    }
+}
+
+if (!function_exists('lm_db_unavailable_html')) {
+    /**
+     * A standalone page for "this hosting cannot reach MySQL", with the fix.
+     *
+     * Deliberately free of includes: this must render when the panel cannot.
+     * It names no database credential.
+     *
+     * @param string $kind   'missing' | 'no_mysql' | 'failed'
+     * @param string $detail Technical line for support (already truncated).
+     * @return string
+     */
+    function lm_db_unavailable_html($kind = 'missing', $detail = '')
+    {
+        $php = htmlspecialchars(PHP_VERSION, ENT_QUOTES, 'UTF-8');
+        $sapi = htmlspecialchars(PHP_SAPI, ENT_QUOTES, 'UTF-8');
+        $ini = php_ini_loaded_file();
+        $ini = $ini === false ? 'none — extensions are compiled in or set per directory' : $ini;
+        $ini = htmlspecialchars($ini, ENT_QUOTES, 'UTF-8');
+        $detail = trim((string) $detail);
+
+        $hasMysqli = class_exists('mysqli');
+        $loaded = function_exists('get_loaded_extensions') ? count(get_loaded_extensions()) : 0;
+        $drivers = class_exists('PDO') ? PDO::getAvailableDrivers() : array();
+
+        if ($kind === 'no_mysql') {
+            $headline = 'PDO is loaded, but its MySQL driver is not.';
+            $explain = 'The panel connects through PDO, and this PHP build has no <code>pdo_mysql</code> driver. '
+                . 'PDO itself is present (' . count($drivers) . ' driver(s): '
+                . htmlspecialchars(implode(', ', $drivers), ENT_QUOTES, 'UTF-8') . '), which means the extension is '
+                . 'installed but the MySQL part is switched off.';
+        } elseif ($kind === 'failed') {
+            $headline = 'The panel could not finish connecting to its database.';
+            $explain = 'The database driver is present, so this is not an extension problem: PHP started, the MySQL '
+                . 'driver answered, and something else stopped the request. The line below is the error the server '
+                . 'returned — the same line is in the cPanel error log.';
+        } else {
+            $headline = 'PHP on this account does not have PDO.';
+            $explain = 'Every page in the panel talks to MySQL through <code>PDO</code>, and this PHP build does not '
+                . 'load it' . ($hasMysqli
+                    ? ' — although <code>mysqli</code> <em>is</em> loaded, so the extension is switched off for this version rather than missing from the server.'
+                    : '.');
+        }
+
+        if ($kind === 'failed') {
+            $steps = '';
+            $meta = '';
+        } else {
+            $steps = '<ol class="steps">'
+                . '<li><strong>cPanel → MultiPHP Manager</strong> (or <em>Select PHP Version</em> on CloudLinux). '
+                . 'Confirm which version the domain runs — this page reports PHP ' . $php . ' — then open '
+                . '<em>Extensions</em> for that version.</li>'
+                . '<li>Tick <code>pdo</code> and <code>pdo_mysql</code> (and <code>mysqli</code>) and save. '
+                . 'Reload the panel — no file upload is needed.</li>'
+                . '<li>If those entries are not in the list, the package is not installed on the server. Ask the host '
+                . 'to install <code>ea-phpXX-php-pdo</code> for that PHP version: it cannot be enabled from the panel, '
+                . 'and uploading files will not help.</li>'
+                . '<li><strong>Meanwhile, switch the domain back to PHP 7.4</strong> in MultiPHP Manager. PDO still '
+                . 'works there on this account, so the panel is usable again in one click.</li>'
+                . '</ol>'
+                . '<p class="meta">Loaded configuration: <code>' . $ini . '</code> · interface <code>' . $sapi
+                . '</code> · ' . $loaded . ' extension(s) loaded</p>';
+            $meta = '';
+        }
+
+        $detailBlock = $detail === ''
+            ? ''
+            : '<pre>' . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . '</pre>';
+
+        return '<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Database driver missing</title>
+<style>
+:root{--ink:#0b1220;--muted:#5f6b83;--line:#e4e9f2;--bad:#b91c1c;--bg:#f6f8fb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:32px 18px}
+.card{max-width:760px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:30px 30px 24px;box-shadow:0 18px 40px -32px rgba(11,18,32,.45)}
+.tag{display:inline-block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--bad);background:#fef2f2;border:1px solid #fecaca;padding:3px 9px;border-radius:999px}
+h1{font-size:22px;letter-spacing:-.02em;margin:14px 0 8px}
+p{color:var(--muted);margin:0 0 14px}
+code{background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:13px;color:#0f172a}
+.steps{margin:6px 0 18px;padding-left:20px}
+.steps li{margin:0 0 10px;color:#334155}
+.meta{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+pre{background:#0b1220;color:#e2e8f0;padding:12px 14px;border-radius:10px;overflow:auto;font-size:12.5px}
+a.btn{display:inline-block;margin-top:4px;background:#0b1220;color:#fff;text-decoration:none;font-weight:600;padding:9px 16px;border-radius:9px;font-size:14px}
+</style></head><body>
+<div class="card">
+    <span class="tag">Database unavailable</span>
+    <h1>' . $headline . '</h1>
+    <p>' . $explain . '</p>
+    ' . $steps . $meta . '
+    ' . $detailBlock . '
+    <p style="margin-top:18px"><a class="btn" href="health.php">Open health.php</a></p>
+</div>
+</body></html>';
+    }
+}
+
+if (!function_exists('lm_db_unavailable_message')) {
+    /**
+     * The JSON answer for an AJAX request when the database cannot be reached.
+     *
+     * Kept apart from the output so a test can read the sentence without
+     * ending the request.
+     *
+     * @param string $kind 'missing' | 'no_mysql' | 'failed'
+     * @return array
+     */
+    function lm_db_unavailable_message($kind)
+    {
+        return array(
+            'status'  => 'error',
+            'code'    => 'database_unavailable',
+            'message' => 'This server cannot reach MySQL, so nothing was saved: '
+                . ($kind === 'no_mysql'
+                    ? 'the pdo_mysql driver is not enabled for PHP ' . PHP_VERSION . '.'
+                    : ($kind === 'missing'
+                        ? 'the PDO extension is not enabled for PHP ' . PHP_VERSION . '.'
+                        : 'the connection was refused — see the cPanel error log for the server\'s line.'))
+                . ' Turn on pdo and pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions),'
+                . ' or switch the domain back to PHP 7.4 for now. Nothing you did was lost.',
+        );
+    }
+}
+
+if (!function_exists('lm_db_fail')) {
+    /**
+     * Report an unusable database and end the request. Never a white page.
+     *
+     * @param string $kind   'missing' | 'no_mysql' | 'failed'
+     * @param string $detail Technical line for support.
+     * @return void
+     */
+    function lm_db_fail($kind, $detail = '')
+    {
+        $detail = trim((string) preg_replace('/\s+/', ' ', (string) $detail));
+        if (function_exists('mb_substr')) {
+            $detail = mb_substr($detail, 0, 300);
+        } else {
+            $detail = substr($detail, 0, 300);
+        }
+
+        error_log('LM database unavailable (' . $kind . ') on PHP ' . PHP_VERSION . ': ' . $detail);
+
+        if (function_exists('lm_log')) {
+            lm_log('db', 'Database unavailable (' . $kind . ') on PHP ' . PHP_VERSION . ': ' . $detail);
+        }
+
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, 'LM database unavailable (' . $kind . ') on PHP ' . PHP_VERSION . "\n" . $detail . "\n"
+                . 'Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions),'
+                . ' or switch the domain back to PHP 7.4.' . "\n");
+            exit(1);
+        }
+
+        if (!headers_sent()) {
+            http_response_code(503);
+            header('Retry-After: 300');
+            header('Cache-Control: no-store');
+        }
+
+        if (lm_request_expects_json()) {
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=utf-8');
+            }
+            echo json_encode(lm_db_unavailable_message($kind));
+            exit();
+        }
+
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        echo lm_db_unavailable_html($kind, $detail);
+        exit();
+    }
+}
+
+$lmPdoProblem = lm_pdo_problem();
+
+if ($lmPdoProblem !== '') {
+    lm_db_fail(
+        $lmPdoProblem,
+        'The PDO class ' . ($lmPdoProblem === 'missing' ? 'is not defined' : 'reports no mysql driver')
+            . ' in this PHP build; get_loaded_extensions() returned '
+            . (function_exists('get_loaded_extensions') ? count(get_loaded_extensions()) : 0) . ' entries.'
+    );
+}
 
 try {
     date_default_timezone_set('UTC');
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $pdo = new PDO(
+        'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
+        array(
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT => 15,
+        )
+    );
     $pdo->exec("SET time_zone = '+00:00'");
 
-    // Create licenses table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `licenses` (
-      `id` INT AUTO_INCREMENT PRIMARY KEY,
-      `license_key` VARCHAR(255) NOT NULL UNIQUE,
-      `domain` VARCHAR(255) NOT NULL,
-      `customer_email` VARCHAR(255) NOT NULL,
-      `status` ENUM('active', 'inactive') DEFAULT 'active',
-      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
+    // Run pending migrations exactly once (no-op on the following requests).
+    lm_run_migrations($pdo);
 
-    // Create admins table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `admins` (
-      `id` INT AUTO_INCREMENT PRIMARY KEY,
-      `username` VARCHAR(255) NOT NULL UNIQUE,
-      `password` VARCHAR(255) NOT NULL
-    )");
-
-    // Create transactions table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `transactions` (
-      `id` INT AUTO_INCREMENT PRIMARY KEY,
-      `license_id` INT,
-      `transaction_ref` VARCHAR(255) NOT NULL UNIQUE,
-      `amount` DECIMAL(10, 2) NOT NULL,
-      `currency` VARCHAR(3) NOT NULL,
-      `status` VARCHAR(50) NOT NULL,
-      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (license_id) REFERENCES licenses(id) ON DELETE SET NULL
-    )");
-
-    // Create manual license request table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `license_requests` (
-      `id` INT AUTO_INCREMENT PRIMARY KEY,
-      `customer_email` VARCHAR(255) NOT NULL,
-      `domain` VARCHAR(255) NOT NULL,
-      `request_ref` VARCHAR(255) NOT NULL UNIQUE,
-      `status` ENUM('pending','approved','declined') NOT NULL DEFAULT 'pending',
-      `license_id` INT NULL,
-      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      `processed_at` DATETIME NULL,
-      `admin_note` TEXT NULL,
-      FOREIGN KEY (license_id) REFERENCES licenses(id) ON DELETE SET NULL
-    )");
-
-    // Create email queue table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `email_queue` (
-      `id` INT AUTO_INCREMENT PRIMARY KEY,
-      `recipient_email` VARCHAR(255) NOT NULL,
-      `subject` VARCHAR(255) NOT NULL,
-      `body` TEXT NOT NULL,
-      `status` ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
-      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
-
-    // Ensure licenses table has customer_email column
-    try {
-        $columnExists = false;
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'customer_email'");
-        if ($columnCheck && $columnCheck->rowCount() > 0) {
-            $columnExists = true;
-        }
-        
-        if (!$columnExists) {
-            error_log("Database: Adding missing customer_email column to licenses table");
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `customer_email` VARCHAR(255) NULL AFTER `domain`");
-            error_log("Database: customer_email column added successfully");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.customer_email): " . $e->getMessage());
+    // Remember the public URL once so cron-generated emails contain real links.
+    if (PHP_SAPI !== 'cli') {
+        lm_capture_site_url();
     }
 
-    // Ensure licenses table has expiry_date column
+    // First-run admin on a brand new installation.
+    //
+    // 8.9.0 no longer creates admin/password: a publicly known credential on
+    // an internet-facing panel is an open door. The password is either taken
+    // from LM_ADMIN_PASSWORD or generated, and is written once to
+    // storage/initial-admin.txt (0600) for the operator to read and delete.
     try {
-        $columnExists = false;
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'expiry_date'");
-        if ($columnCheck && $columnCheck->rowCount() > 0) {
-            $columnExists = true;
-        }
-        
-        if (!$columnExists) {
-            error_log("Database: Adding missing expiry_date column to licenses table");
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `expiry_date` DATE NULL AFTER `created_at`");
-            error_log("Database: expiry_date column added successfully");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.expiry_date): " . $e->getMessage());
-    }
+        $stmt = $pdo->query("SELECT id FROM admins WHERE username = 'admin'");
+        if ($stmt && $stmt->rowCount() === 0) {
+            $initialPassword = getenv('LM_ADMIN_PASSWORD');
 
-    // Ensure licenses table has domain change tracking columns
-    try {
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'max_domain_changes'");
-        if ($columnCheck && $columnCheck->rowCount() === 0) {
-            error_log("Database: Adding domain change tracking columns");
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `max_domain_changes` INT DEFAULT 3 AFTER `expiry_date`");
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `domain_change_count` INT DEFAULT 0 AFTER `max_domain_changes`");
-            error_log("Database: Domain change columns added successfully");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (domain change columns): " . $e->getMessage());
-    }
-
-    // Ensure licenses table has license_type column
-    try {
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'license_type'");
-        if ($columnCheck && $columnCheck->rowCount() === 0) {
-            error_log("Database: Adding license_type column to licenses table");
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `license_type` VARCHAR(50) DEFAULT 'standard' AFTER `status`");
-            error_log("Database: license_type column added successfully");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.license_type): " . $e->getMessage());
-    }
-
-    // Ensure older schemas still include license_id on transactions
-    try {
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `transactions` LIKE 'license_id'");
-        if ($columnCheck && $columnCheck->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `transactions` ADD COLUMN `license_id` INT NULL AFTER `id`");
-        }
-        // Add the foreign key only if not already present — avoids running an
-        // unnecessary ALTER on every request (which competes for the metadata lock).
-        $fkCheck = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND CONSTRAINT_NAME = 'fk_transactions_license'");
-        if ($fkCheck && (int)$fkCheck->fetchColumn() === 0) {
-            try {
-                $pdo->exec("ALTER TABLE `transactions` ADD CONSTRAINT `fk_transactions_license` FOREIGN KEY (`license_id`) REFERENCES licenses(id) ON DELETE SET NULL");
-            } catch (PDOException $e) {
-                // Constraint may already exist; ignore safely
+            if (!is_string($initialPassword) || strlen($initialPassword) < 10) {
+                $initialPassword = 'LM-' . bin2hex(random_bytes(9));
             }
+
+            $adminPassHash = password_hash($initialPassword, PASSWORD_DEFAULT);
+            $pdo->prepare("INSERT INTO admins (username, password) VALUES (?, ?)")
+                ->execute(array('admin', $adminPassHash));
+
+            lm_ensure_dir(lm_storage_dir(), 0755);
+            $noticeFile = lm_storage_dir() . DIRECTORY_SEPARATOR . 'initial-admin.txt';
+            @file_put_contents(
+                $noticeFile,
+                "License Manager — first-run admin\n"
+                . "username: admin\n"
+                . "password: " . $initialPassword . "\n\n"
+                . "Sign in, change this password, then delete this file.\n"
+            );
+            @chmod($noticeFile, 0600);
+
+            lm_log('migrations', 'Created first-run admin. Password written to storage/initial-admin.txt — change it and delete the file.');
         }
     } catch (PDOException $e) {
-        // Migration may fail if table structure is unexpected; log and continue
-        error_log("Database migration warning: " . $e->getMessage());
-    }
-
-    // Ensure transactions table has auto-login token columns for one-time login
-    try {
-        $tokenCheck = $pdo->query("SHOW COLUMNS FROM `transactions` WHERE Field = 'auto_login_token'");
-        if ($tokenCheck && $tokenCheck->rowCount() === 0) {
-            error_log("Database: Adding auto_login_token and token_created_at to transactions table");
-            $pdo->exec("ALTER TABLE `transactions` ADD COLUMN `auto_login_token` VARCHAR(128) NULL AFTER `status`");
-            $pdo->exec("ALTER TABLE `transactions` ADD COLUMN `token_created_at` DATETIME NULL AFTER `auto_login_token`");
-            error_log("Database: auto-login columns added successfully");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (transactions.auto_login_token): " . $e->getMessage());
-    }
-
-    // --- START OTA UPDATE SYSTEM MIGRATIONS ---
-    // 1. Create script_tiers table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `script_tiers` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `tier_name` VARCHAR(50) NOT NULL,
-        `tier_code` VARCHAR(20) UNIQUE NOT NULL,
-        `description` TEXT NULL,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB");
-
-    // Insert default tiers
-    $tiers_check = $pdo->query("SELECT COUNT(*) FROM `script_tiers` WHERE `tier_code` IN ('SAAS', 'NON-SAAS')");
-    if ($tiers_check && $tiers_check->fetchColumn() == 0) {
-        $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`) VALUES 
-            (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features'),
-            (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features')");
-    }
-
-    // 2. Create script_updates table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `script_updates` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `tier_id` INT NOT NULL,
-        `version_number` VARCHAR(20) NOT NULL,
-        `zip_path` VARCHAR(255) NOT NULL,
-        `checksum` VARCHAR(64) NOT NULL,
-        `changelog` TEXT NULL,
-        `is_released` TINYINT(1) DEFAULT 0,
-        `release_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (`tier_id`) REFERENCES `script_tiers`(`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB");
-
-    // 3. Alter licenses table
-    // Alter licenses status column to allow suspended and expired.
-    // IMPORTANT: only run the ALTER when the column is still the legacy ENUM type.
-    // Previously this ran unconditionally on EVERY request, so concurrent requests
-    // competed for the table's metadata lock and deadlocked (SQLSTATE 1213).
-    try {
-        $statusInfo = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'status'");
-        $statusCol = $statusInfo ? $statusInfo->fetch(PDO::FETCH_ASSOC) : null;
-        $statusType = strtolower(trim((string)($statusCol['Type'] ?? '')));
-        if ($statusCol && strpos($statusType, 'enum') === 0) {
-            // Retry a few times on deadlock (SQLSTATE 1213) — the ALTER competes with
-            // concurrent requests/transactions for the table's metadata lock.
-            $migrated = false;
-            for ($attempt = 0; $attempt < 3 && !$migrated; $attempt++) {
-                try {
-                    $pdo->exec("ALTER TABLE `licenses` MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'active'");
-                    $migrated = true;
-                } catch (PDOException $e2) {
-                    $isDeadlock = (strpos($e2->getMessage(), '1213') !== false);
-                    if (!$isDeadlock || $attempt >= 2) {
-                        throw $e2;
-                    }
-                    usleep(200000); // 200ms backoff before retrying
-                }
-            }
-            if ($migrated) {
-                error_log("Database: licenses.status widened from ENUM to VARCHAR(50)");
-            }
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.status modify): " . $e->getMessage());
-    }
-
-    // Add tier_id column
-    try {
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'tier_id'");
-        if ($columnCheck && $columnCheck->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `tier_id` INT NULL AFTER `license_key`");
-            $pdo->exec("ALTER TABLE `licenses` ADD CONSTRAINT `fk_licenses_tier` FOREIGN KEY (`tier_id`) REFERENCES `script_tiers`(`id`) ON DELETE SET NULL");
-            error_log("Database: Added tier_id column and foreign key constraint to licenses table");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.tier_id): " . $e->getMessage());
-    }
-
-    // Add max_domains column
-    try {
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM `licenses` WHERE Field = 'max_domains'");
-        if ($columnCheck && $columnCheck->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `licenses` ADD COLUMN `max_domains` INT DEFAULT 1 AFTER `license_type`");
-            error_log("Database: Added max_domains column to licenses table");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses.max_domains): " . $e->getMessage());
-    }
-
-    // Update existing licenses tier_id based on license_type if not set
-    try {
-        $pdo->exec("UPDATE `licenses` SET `tier_id` = 1 WHERE `license_type` = 'extended' AND `tier_id` IS NULL");
-        $pdo->exec("UPDATE `licenses` SET `tier_id` = 2 WHERE `license_type` = 'standard' AND `tier_id` IS NULL");
-    } catch (PDOException $e) {
-        error_log("Database migration warning (licenses update default tier_id): " . $e->getMessage());
-    }
-
-    // 4. Create licensed_domains table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `licensed_domains` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `license_id` INT NOT NULL,
-        `domain_name` VARCHAR(150) NOT NULL,
-        `server_ip` VARCHAR(45) NULL,
-        `first_activated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `last_update_check` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY `unique_domain_license` (`license_id`, `domain_name`),
-        FOREIGN KEY (`license_id`) REFERENCES `licenses`(`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB");
-
-    // Migrate existing domains from licenses table into licensed_domains
-    try {
-        $pdo->exec("INSERT IGNORE INTO `licensed_domains` (`license_id`, `domain_name`)
-            SELECT `id`, `domain` FROM `licenses`
-            WHERE `domain` IS NOT NULL AND `domain` != '' AND `domain` != 'N/A'");
-    } catch (PDOException $e) {
-        error_log("Database migration warning (migrate existing domains): " . $e->getMessage());
-    }
-
-    // 5. Create download_tokens table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `download_tokens` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `license_id` INT NULL,
-        `update_id` INT NOT NULL,
-        `token` VARCHAR(128) UNIQUE NOT NULL,
-        `is_used` TINYINT(1) DEFAULT 0,
-        `expires_at` DATETIME NOT NULL,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (`license_id`) REFERENCES `licenses`(`id`) ON DELETE CASCADE,
-        FOREIGN KEY (`update_id`) REFERENCES `script_updates`(`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB");
-    // --- END OTA UPDATE SYSTEM MIGRATIONS ---
-
-    // Add default admin user if not exists
-    $stmt = $pdo->query("SELECT id FROM admins WHERE username = 'admin'");
-    if ($stmt->rowCount() == 0) {
-        $admin_pass_hash = password_hash('password', PASSWORD_DEFAULT);
-        $pdo->prepare("INSERT INTO admins (username, password) VALUES (?, ?)")->execute(['admin', $admin_pass_hash]);
+        lm_log('migrations', 'Default admin check failed: ' . $e->getMessage());
     }
 
 } catch (PDOException $e) {
-    // In a real app, you'd want to log this error and show a generic error page.
-    die("Database connection failed: " . $e->getMessage());
+    lm_log('db', 'Database connection failed: ' . $e->getMessage());
+    // "could not find driver" means the extension probe passed but the link to
+    // MySQL did not; anything else is a credential, host or server problem.
+    $kind = stripos($e->getMessage(), 'could not find driver') !== false ? 'no_mysql' : 'failed';
+    lm_db_fail($kind, $e->getMessage());
+} catch (Throwable $e) {
+    // A TypeError or Error inside the bootstrap used to escape as an uncaught
+    // fatal, which leaves the operator with a blank page and one log line.
+    lm_log('db', 'Database bootstrap failed: ' . get_class($e) . ': ' . $e->getMessage());
+    lm_db_fail('failed', get_class($e) . ': ' . $e->getMessage());
 }
 
-function hasTableColumn(PDO $pdo, string $table, string $column): bool {
-    try {
-        $stmt = $pdo->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
-        $stmt->execute([$column]);
-        return $stmt->rowCount() > 0;
-    } catch (PDOException $e) {
-        return false;
-    }
-}
-
-function getLicenseInsertDefinition(PDO $pdo): array {
-    $hasMax = hasTableColumn($pdo, 'licenses', 'max_domain_changes');
-    $hasCount = hasTableColumn($pdo, 'licenses', 'domain_change_count');
-    $hasType = hasTableColumn($pdo, 'licenses', 'license_type');
-
-    if ($hasMax && $hasCount && $hasType) {
-        return [
-            'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count, license_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
-                return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0, $license_type];
-            }
-        ];
-    }
-
-    if ($hasMax && $hasCount) {
-        return [
-            'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count) VALUES (?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
-                return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0];
-            }
-        ];
-    }
-
-    return [
-        'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status) VALUES (?, ?, ?, ?)",
-        'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard') {
-            return [$license_key, $domain, $customer_email, $status];
+if (!function_exists('hasTableColumn')) {
+    /**
+     * @param PDO    $pdo
+     * @param string $table
+     * @param string $column
+     * @return bool
+     */
+    function hasTableColumn(PDO $pdo, $table, $column)
+    {
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM `" . str_replace('`', '', $table) . "` LIKE ?");
+            $stmt->execute(array($column));
+            return $stmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            return false;
         }
-    ];
+    }
 }
-?>
+
+if (!function_exists('getLicenseInsertDefinition')) {
+    /**
+     * Build an INSERT that works across older and newer licenses schemas.
+     *
+     * @param PDO $pdo
+     * @return array
+     */
+    function getLicenseInsertDefinition(PDO $pdo)
+    {
+        $hasMax = hasTableColumn($pdo, 'licenses', 'max_domain_changes');
+        $hasCount = hasTableColumn($pdo, 'licenses', 'domain_change_count');
+        $hasType = hasTableColumn($pdo, 'licenses', 'license_type');
+
+        if ($hasMax && $hasCount && $hasType) {
+            return array(
+                'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count, license_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
+                    return array($license_key, $domain, $customer_email, $status, $max_domain_changes, 0, $license_type);
+                },
+            );
+        }
+
+        if ($hasMax && $hasCount) {
+            return array(
+                'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count) VALUES (?, ?, ?, ?, ?, ?)",
+                'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
+                    return array($license_key, $domain, $customer_email, $status, $max_domain_changes, 0);
+                },
+            );
+        }
+
+        return array(
+            'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status) VALUES (?, ?, ?, ?)",
+            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard') {
+                return array($license_key, $domain, $customer_email, $status);
+            },
+        );
+    }
+}

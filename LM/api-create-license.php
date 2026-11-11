@@ -4,16 +4,32 @@
  * Programmatically creates an active license key for an email
  * Used for automated checkout integration (e.g. from CodeVault)
  */
-header('Content-Type: application/json');
+require_once __DIR__ . '/includes/security.php';
+lm_security_headers();
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 require_once('db.php');
 
-// Function to log api actions
+/**
+ * @param string $message
+ * @return void
+ */
 function create_license_log($message) {
-    file_put_contents('api_create_license.log', date('[Y-m-d H:i:s] ') . $message . "\n", FILE_APPEND);
+    lm_log('api', preg_replace('/\b([A-Z]{2,10}-)[A-Z0-9]{6,}\b/', '$1…', (string) $message));
 }
 
-create_license_log("=== API Create License Request ===");
+create_license_log('=== API Create License Request ===');
+
+// Secret-guessing must be slow and observable.
+$limit = lm_rate_limit(lm_rate_limit_ip('api-create-license'), 30, 300, true);
+if (!$limit['allowed']) {
+    http_response_code(429);
+    header('Retry-After: ' . (int) $limit['retry_after']);
+    echo json_encode(array('success' => false, 'message' => 'Too many requests.'));
+    exit;
+}
 
 // 1. Verify method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -35,16 +51,11 @@ if (empty($api_secret) || empty($customer_email)) {
 }
 
 // 3. Load configurations
-$settings_file = 'settings.json';
-$settings = [];
-if (file_exists($settings_file)) {
-    $settings = json_decode(file_get_contents($settings_file), true);
-}
-
-$configured_secret = $settings['api_secret_key'] ?? '';
+$settings = lm_settings();
+$configured_secret = (string) ($settings['api_secret_key'] ?? '');
 
 // 4. Authenticate request
-if (empty($configured_secret) || !hash_equals($configured_secret, $api_secret)) {
+if ($configured_secret === '' || !hash_equals($configured_secret, (string) $api_secret)) {
     http_response_code(401);
     create_license_log("Authentication failed. Secret mismatch or not configured on settings.");
     echo json_encode(['success' => false, 'message' => 'Unauthorized. Invalid API Secret Key.']);

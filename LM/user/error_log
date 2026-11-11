@@ -1,4 +1,0 @@
-[22-Jul-2026 12:41:20 UTC] Database migration warning (licenses.status modify): SQLSTATE[HY000]: General error: 2013 Lost connection to MySQL server during query
-[22-Jul-2026 12:41:20 UTC] Database migration warning (licenses.tier_id): SQLSTATE[HY000]: General error: 2013 Lost connection to MySQL server during query
-[22-Jul-2026 12:41:20 UTC] Database migration warning (licenses.max_domains): SQLSTATE[HY000]: General error: 2013 Lost connection to MySQL server during query
-[22-Jul-2026 12:41:20 UTC] Database migration warning (licenses update default tier_id): SQLSTATE[HY000]: General error: 2013 Lost connection to MySQL server during query

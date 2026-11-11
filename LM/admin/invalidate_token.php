@@ -1,5 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
@@ -7,7 +10,12 @@ if (!isset($_SESSION['admin_logged_in'])) {
 
 require_once('../db.php');
 
-$id = $_POST['id'] ?? null;
+if (!lm_verify_csrf()) {
+    header('Location: transactions.php?error=csrf');
+    exit();
+}
+
+$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 if (!$id) {
     header('Location: transactions.php');
     exit();
