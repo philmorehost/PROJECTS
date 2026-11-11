@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 session_start();ob_start();require __DIR__.'/church-portal.php';ob_end_clean();
-$db->exec('ALTER TABLE users ADD is_suspended INTEGER DEFAULT 0');
+
 $db->prepare("INSERT OR REPLACE INTO users(id,full_name,email,password_hash,transaction_pin_hash,role) VALUES(100,'ADMIN','admin@example.org',?,?,'provincial_admin')")->execute([password_hash('admin-password-123',PASSWORD_DEFAULT),password_hash('1234',PASSWORD_DEFAULT)]);
 $admin=$db->query('SELECT * FROM users WHERE id=100')->fetch();$rep=RepresentativeManager::target($db,1);
 $details=['operation'=>'save','rep_id'=>0,'full_name'=>'NEW REPRESENTATIVE','email'=>'new-rep@example.org','phone'=>'08012345678','password'=>'temporary-password-123','hierarchy_id'=>1,'pin'=>'1234'];

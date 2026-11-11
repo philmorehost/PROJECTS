@@ -266,3 +266,7 @@ if(document.querySelector('[data-impersonation]'))document.querySelectorAll('for
  form.querySelectorAll('input,select,textarea,button').forEach(control=>control.disabled=true);
  form.setAttribute('aria-label','Read-only while viewing as a representative');
 });
+
+// Opening a deep link must not leave the manual representative form collapsed.
+function revealRepresentativeEditor(){if(location.hash==='#representative-editor'){const editor=document.querySelector('#representative-editor');const disclosure=editor?.closest('details');if(disclosure)disclosure.open=true;}}
+revealRepresentativeEditor();window.addEventListener('hashchange',revealRepresentativeEditor);

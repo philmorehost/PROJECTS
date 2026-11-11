@@ -544,3 +544,25 @@ Portal settings now offers **Login lock policy**. `legacy` preserves the previou
 This is a **hosting-owner tool, not a public recovery endpoint**. HTTP execution is rejected, and existing private-directory rules must remain enabled. Without terminal access, ask hosting support to run it from the installation directory; do not send anyone your password or OTP. No secret is required in the command line. Diagnosis is read-only unless the unlock and exact confirmation flags are supplied.
 
 Validation: `tests/shared-login.php` reproduces old blanket block rows, unknown-email mistakes, account-specific cooldowns, another rep signing in on the same blocked IP, manual suspension, cooldown expiry, recovery boundaries and one-minute flood protection using real password/session checks in the SQLite compatibility harness. The prior OTP/legacy-strict regression is retained with explicit legacy mode. Full PHP/browser suites are not proof of live server block state, MySQL concurrency or hosting CLI/mail/firewall integration; perform those deployment checks before production acceptance.
+
+## 0.13.0 — Pending-first representative workspace and admin alerts
+
+**Church reps** now opens with a pending-count shortcut and the **pending approval cards first**, rather than putting the queue below account creation and the registered list. Cards stack on phones, use two columns from 760px and three from 1180px. Approve/reject controls stay on each card; unlisted churches still require linking to an independently verified church before approval. The queue now queries/paginates all pending applications in 12-card pages instead of silently limiting access to the first 100. Approval remains a CSRF-protected POST using the existing atomic review/role-assignment logic—there are no email auto-approval links or bulk approval shortcuts that bypass checks.
+
+Registered representatives use a two-column grid on tablet/desktop and stack on phones. Manual account creation is collapsed by default to keep reviews in reach; editing opens the disclosure, and deep links to Add representative reveal it. The dashboard has a **Pending representatives** count/shortcut. Counts are database-backed and refresh on page load, not push notifications. Existing management, PIN, read-only impersonation and return protections are unchanged.
+
+### Approval email delivery
+
+Each genuinely new application or reviewed application's resubmission queues an alert for **all active provincial admins** and the configured `notification_email`, with case-insensitive recipient deduplication. Repeated submissions of an already-pending application do not generate another notice. Alerts contain an application ID and instructions to open **Church reps → Pending approvals**, not passwords, PINs, bank details or links generated from an untrusted Host header.
+
+The public registration controller attempts a bounded delivery **after** the application transaction commits. Mail failure cannot roll back a valid application. Delivery uses native PHP `mail()` and the existing authorized reset-sender/installation-email fallback. PHP mail/Exim and the sender domain's SPF/DKIM/DMARC must be configured; mail transport acceptance is **not** guaranteed inbox delivery. No SMTP credentials are needed in the code or chat. Other notification subjects (e.g. payment/approval results) retain their existing outbox behavior; this worker is specifically scoped to pending-registration alerts.
+
+For reliable retries and draining older queued approval alerts, configure this cPanel cron every minute, replacing the path/PHP binary with the hosting account's actual values:
+
+```cron
+* * * * * /usr/local/bin/php /home/CPANEL_USER/public_html/remit/bin/approval-mail.php
+```
+
+The CLI worker sends at most 25 pending approval messages per run. A database advisory lock serializes it with web-triggered delivery to prevent simultaneous workers selecting the same batch. Each alert has a maximum of three delivery attempts; failures remain visible as an operator warning on the pending queue. Alerts whose application has already been reviewed are skipped (old generic alerts are skipped if there are no pending applications). No notification table migration is needed: this uses existing outbox `status` and `attempts` fields. Keep `bin` protected and run the worker through CLI, not a public URL. Existing outbox jobs are not deleted. A process crash after mail acceptance but before the database status update can cause a duplicate on retry; email transport and database commits cannot provide exact-once delivery.
+
+Deploy the complete release with fingerprinted CSS/JS assets and set up the cron. Test a controlled new application and verify an actual admin mailbox/spam folder. Tests mock mail transport and exercise recipient selection/deduplication, bounded retries, stale-alert skipping and advisory-lock contention; responsive browser tests check 15 pending fixtures, 12-card pages, top-of-page ordering, columns and per-card POST/CSRF actions across five widths. These do not prove live mail delivery or MySQL concurrency; verify those on hosting.

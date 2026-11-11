@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 session_start();ob_start();require __DIR__.'/church-portal.php';ob_end_clean();
-$db->exec("ALTER TABLE users ADD is_suspended INTEGER DEFAULT 0;ALTER TABLE users ADD successful_sessions_count INTEGER DEFAULT 0;
+$db->exec("ALTER TABLE users ADD successful_sessions_count INTEGER DEFAULT 0;
 CREATE TABLE security_ips(ip_address TEXT PRIMARY KEY,blocked_until TEXT,whitelisted INTEGER DEFAULT 0,clean_sessions INTEGER DEFAULT 0);
 CREATE TABLE firewall_jobs(id INTEGER PRIMARY KEY,ip_address TEXT,blocked_until TEXT,status TEXT DEFAULT 'pending');
 CREATE TABLE password_resets(email TEXT PRIMARY KEY,user_id INTEGER,request_key TEXT,code_hash TEXT,password_stamp TEXT,expires_at TEXT,sent_at TEXT,attempts INTEGER DEFAULT 0);

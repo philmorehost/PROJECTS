@@ -2,13 +2,16 @@
 declare(strict_types=1);
 require __DIR__.'/church-portal.php';require __DIR__.'/../app/UpdateManager.php';
 $dir=$argv[1] ?? sys_get_temp_dir().'/remit-redesign';if(!is_dir($dir))mkdir($dir,0700,true);
-$db->exec('CREATE TABLE security_ips(ip_address TEXT,whitelisted INTEGER,clean_sessions INTEGER,blocked_until TEXT,updated_at TEXT);ALTER TABLE users ADD is_suspended INTEGER DEFAULT 0;UPDATE officer_profiles SET account_ciphertext=\'\'');
+$db->exec('CREATE TABLE security_ips(ip_address TEXT,whitelisted INTEGER,clean_sessions INTEGER,blocked_until TEXT,updated_at TEXT);UPDATE officer_profiles SET account_ciphertext=\'\'');
 $db->exec("UPDATE remittance_ledgers SET gross_income='100000.00',period_year=2025,period_month=12 WHERE gross_income IS NULL");
 $fixtureRoot=realpath(__DIR__.'/..');$appDir=$fixtureRoot.'/app';mkdir(ROOT);symlink($appDir,ROOT.'/app');$source=file_get_contents($fixtureRoot.'/index.php');
 $start=strpos($source,'<!doctype html',strpos($source,'$flash='));$shell=str_replace('ROOT.','$fixtureRoot.',substr($source,$start));
 $title='TEST PROVINCE — FICTIONAL DATA';$flash='';$error='';$due=10000000;$paid=7500000;$compliance=75;$totals=['reports'=>4,'verified'=>3];$ids=[1];$placeholders='?';$rows=[];$portalReady=true;
 $nodes=$db->query("SELECT h.*,p.node_name parent_name,p.node_type parent_type,CASE WHEN h.node_type='zone' THEN h.node_name WHEN p.node_type='zone' THEN p.node_name ELSE z.node_name END zone_name FROM church_hierarchy h LEFT JOIN church_hierarchy p ON h.parent_id=p.id LEFT JOIN church_hierarchy z ON p.parent_id=z.id")->fetchAll();
 $_GET=[];$_POST=[];$_SERVER['REQUEST_METHOD']='GET';
+for($fixture=0;$fixture<15;$fixture++)$db->prepare("INSERT INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,'','','','')")->execute([$fixture===0?null:1,$fixture===0?'UNLISTED TEST CHURCH':null,$fixture===0?'parish':null,'PENDING TEST OFFICER '.$fixture,'pending'.$fixture.'@example.org','08012345678','fixture-only-not-a-real-password']);
+for($fixture=0;$fixture<3;$fixture++)$db->prepare("INSERT INTO users(full_name,email,password_hash,role,hierarchy_id) VALUES(?,?,?,'parish_officer',1)")->execute(['TEST REGISTERED OFFICER '.$fixture,'registered'.$fixture.'@example.org','fixture-only-not-a-real-password']);
+
 foreach(['overview','remittances','hierarchy','settings','security','profile','representatives'] as $page){$user=['id'=>$page==='profile'?1:100,'role'=>$page==='profile'?'parish_officer':'provincial_admin','full_name'=>'Test Officer','email'=>'test@example.org','hierarchy_id'=>1];$admin=$user['role']==='provincial_admin';$treasurer=$admin;ob_start();eval('?>'.$shell);$html=ob_get_clean();file_put_contents($dir.'/'.$page.'.html',$html);}
 $db->exec("UPDATE security_settings SET setting_value='8000' WHERE setting_key='levy_basis_points'");
 // Representative routes exercise real own-church forms, not admin-only views.
