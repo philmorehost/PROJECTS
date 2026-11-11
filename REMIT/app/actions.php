@@ -63,6 +63,7 @@ function action(PDO $db,array $user,array $ids): string {
   $profile=$db->prepare('SELECT phone FROM officer_profiles WHERE user_id=?');$profile->execute([$user['id']]);$phone=preg_replace('/[^0-9+]/','',(string)($profile->fetchColumn()??''));
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
   $_SESSION['payhub_reference']=$session['reference'];
+  if(($_SERVER['HTTP_ACCEPT']??'')==='application/json'||($_POST['format']??'')==='json'){header('Content-Type: application/json');echo json_encode(['reference'=>$session['reference'],'authorization_url'=>$session['reference']?PayHub::checkoutUrl($session['reference']):$session['authorization_url'],'amount_kobo'=>$kobo,'email'=>$user['email'],'name'=>$user['full_name'],'public_key'=>setting($db,'payhub_public_key')]);exit;}
   header('Location: '.$session['authorization_url']);exit;
  }
  if ($action==='payhub_verify') {
