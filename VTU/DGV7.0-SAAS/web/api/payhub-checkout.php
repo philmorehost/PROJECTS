@@ -33,17 +33,16 @@ if (!$payhub_pending || (float)$payhub_pending['amount'] <= 0) {
 $amount = (float)$payhub_pending['amount'];
 
 $callback_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
-              . '://' . $_SERVER['HTTP_HOST'] . '/web/payhub-success.php';
+              . '://' . $_SERVER['HTTP_HOST'] . '/web/payhub-success.php?local_reference=' . rawurlencode($reference);
 
-// PayHub's api/transaction/initialize IGNORES a merchant-supplied "reference"/"callback_url" and
-// always generates its own "PH_<hex>" reference. We must adopt that reference so the webhook /
-// success page can reconcile the payment back to our local pending transaction. Verify against a
-// local reference would return "Transaction not found".
+// PayHub generates its own reference, which we persist for verify/webhook reconciliation. The
+// updated API accepts callback_url at the top level; keep our local ref in its own query parameter
+// because PayHub appends its PH reference as `reference` on successful return.
 $res_json = makePayhubRequest("POST", "api/transaction/initialize", [
     "email"    => $email,
     "amount"   => $amount,
     "name"     => $name,
-    // NOTE: do NOT send "reference"/"callback_url" here — PayHub ignores them.
+    "callback_url" => $callback_url,
     "metadata" => json_encode([
         "vendor_id"    => $vendor_id,
         "reference"    => $reference,

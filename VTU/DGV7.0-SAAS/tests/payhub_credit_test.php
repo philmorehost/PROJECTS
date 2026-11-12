@@ -348,15 +348,26 @@ foreach ($ED as $edition => $root) {
         strpos($ajax, "UPDATE sas_transactions SET api_reference='\$ph_ref_esc' WHERE reference='\$loc_ref_esc' AND vendor_id='\$vid'") !== false);
     bc_assert_true("$edition: a checkout row is keyed by the PayHub reference",
         strpos($ajax, "INSERT INTO sas_user_payment_checkouts (vendor_id, username, reference, status) VALUES ('\$vid'") !== false);
-    // PayHub ignores a top-level reference/callback_url, so sending them is misleading - but the
-    // local reference must still reach PayHub inside metadata. One occurrence each, not two.
+    // PayHub generates its own reference, so our local reference stays in metadata. The updated
+    // API accepts callback_url only at top level; callback landing routes map both references.
     $init_start = strpos($ajax, 'makePayhubRequest("POST", "api/transaction/initialize", [');
     $init_end   = ($init_start === false) ? false : strpos($ajax, '], $vid, $is_vendor_funding);', $init_start);
     $init_block = ($init_start === false || $init_end === false) ? null : substr($ajax, $init_start, $init_end - $init_start);
     bc_assert("$edition: the local reference is sent ONLY inside metadata",
         $init_block === null ? -1 : substr_count($init_block, '"reference" =>'), 1);
-    bc_assert("$edition: callback_url is sent ONLY inside metadata",
+    bc_assert("$edition: callback_url is sent as a top-level initialize field",
         $init_block === null ? -1 : substr_count($init_block, '"callback_url" =>'), 1);
+    bc_assert_true("$edition: callback URL carries the local transaction reference separately",
+        $init_block !== null && strpos($init_block, '?local_reference=') !== false);
+    foreach (array('/web/payhub-success.php', '/bc-admin/payhub-success.php') as $success_rel) {
+        $success_page = @file_get_contents($root . $success_rel);
+        bc_assert_true("$edition$success_rel resolves both local and PayHub references",
+            $success_page !== false && strpos($success_page, 'local_reference') !== false);
+    }
+    $callback_pos = $init_block === null ? false : strpos($init_block, '"callback_url" =>');
+    $metadata_pos = $init_block === null ? false : strpos($init_block, '"metadata" =>');
+    bc_assert_true("$edition: callback_url is not duplicated inside metadata",
+        $callback_pos !== false && $metadata_pos !== false && $callback_pos < $metadata_pos);
     bc_assert("$edition: the initialize payload still carries metadata",
         $init_block === null ? -1 : substr_count($init_block, '"metadata" =>'), 1);
     bc_assert_true("$edition: create_checkout supplies api_website (NOT NULL, was a silent failure)",
