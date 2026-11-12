@@ -619,3 +619,79 @@ th,.parish-cell small,.panel-foot,.login-footer,.directory-unit dt,input[readonl
     padding: 12px 14px;
   }
 }
+
+/* Remittance Reports Export (CSV & Bank-Statement PDF) */
+.panel-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+.export-panel {
+  margin: 18px 0;
+}
+.export-filters {
+  padding: 6px 20px 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+.export-filters label {
+  margin: 0;
+  min-width: 0;
+}
+.export-filters label:last-of-type {
+  grid-column: 1 / -1;
+}
+.export-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding-top: 4px;
+}
+.export-actions .primary,
+.export-actions .secondary {
+  min-height: 46px;
+}
+.history-export-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.history-export-links a.secondary {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+@media (min-width: 760px) {
+  .export-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 1.5fr;
+  }
+  .export-filters label:last-of-type {
+    grid-column: auto;
+  }
+}
+@media (max-width: 600px) {
+  .export-filters {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 4px 14px 16px;
+  }
+  .export-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .export-actions .primary,
+  .export-actions .secondary,
+  .history-export-links,
+  .history-export-links a.secondary {
+    width: 100%;
+  }
+}

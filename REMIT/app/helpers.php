@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/ChurchNames.php';
 require_once __DIR__.'/PaymentProof.php';
 require_once __DIR__.'/FinancialHistory.php';
+require_once __DIR__.'/RemittanceExport.php';
 require_once __DIR__.'/PasswordReset.php';
 require_once __DIR__.'/RepresentativeManager.php';
 require_once __DIR__.'/Impersonation.php';
