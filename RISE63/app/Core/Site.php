@@ -146,7 +146,10 @@ final class Site
             'sort'    => 30,
         ],
         'terms' => [
-            'title'   => 'Terms &amp; Conditions',
+            // Plain "&", not "&amp;". This is a *data* string: page.php prints it through e(), which
+            // escapes it once. Writing the entity here escaped it twice and the heading read
+            // "Terms &amp; Conditions" on screen.
+            'title'   => 'Terms & Conditions',
             'kicker'  => 'Using this platform',
             'summary' => 'The rules that apply when you register, apply for support, or use the RISE 63 platform.',
             'sort'    => 40,

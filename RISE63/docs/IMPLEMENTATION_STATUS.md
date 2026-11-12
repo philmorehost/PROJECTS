@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.2.1 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.2.2 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -383,6 +383,29 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1m What 1.2.2 fixes — "Terms &amp; Conditions" on screen
+
+Reported with a screenshot: the Terms & Conditions heading read **"Terms &amp; Conditions"** in large
+type, and the breadcrumb said the same.
+
+One data string. `Site::BUILT_IN_META['terms']['title']` was the literal `'Terms &amp; Conditions'`;
+`site/page.php` prints a title through `e()`, which escapes once on the way out — so the entity was
+escaped a second time and the browser rendered the ampersand as text. The value is now a plain
+`'Terms & Conditions'`, which `e()` turns into `&amp;` exactly once.
+
+A one-character fix, but the class of bug is worth a guard, because it is invisible in the source: a
+data string holding an entity looks like correct markup, and the mistake only exists on screen. Two
+assertions now prevent it:
+
+* **No data class holds an entity.** `Site`, `SiteDefaults` and `Settings` must carry plain text;
+  comments are stripped first, so describing the bug stays legal.
+* **No template escapes an entity twice.** An entity written inside `e()` is rejected everywhere in
+  `app/Views`. An entity echoed raw — as the site footer and the audit filters do — remains correct
+  and is left alone.
+
+Both were confirmed to fail when the bug is reintroduced, and a repository-wide sweep found no other
+double-escaped entity.
 
 ### 2.1l What 1.2.1 fixes — the pages that were "not loading"
 
