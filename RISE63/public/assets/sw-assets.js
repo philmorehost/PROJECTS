@@ -10,4 +10,4 @@ self.RISE63_SHELL = [
     "./public/assets/site.05e53fb9.css",
     "./public/assets/site.2c64f21a.js"
 ];
-self.RISE63_RELEASE = "1.2.1-afae6cc6";
+self.RISE63_RELEASE = "1.2.2-afae6cc6";

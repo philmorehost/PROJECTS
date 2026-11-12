@@ -828,15 +828,40 @@ ok('No data string carries an HTML entity, or it is escaped twice', function ():
     //
     // Strings that reach a view as data are escaped by that view. Entities belong only in templates
     // that echo them raw, and no data class is one of those.
-    $dataClasses = ['app/Core/Site.php', 'app/Core/SiteDefaults.php', 'app/Core/Settings.php'];
+    // Every file that holds words for display — data classes AND views. The first version of this
+    // guard covered only app/Core, which is why the same bug survived in the Settings headings and
+    // the audit filter labels: an entity in a view's array literal renders correctly right up until
+    // the day someone wraps that variable in e().
+    $dataClasses = array_merge(
+        ['app/Core/Site.php', 'app/Core/SiteDefaults.php', 'app/Core/Settings.php'],
+        array_map(
+            static fn (string $path): string => substr($path, strlen(RISE63_TEST_ROOT) + 1),
+            glob(RISE63_TEST_ROOT . '/app/Views/*.php') ?: []
+        ),
+        array_map(
+            static fn (string $path): string => substr($path, strlen(RISE63_TEST_ROOT) + 1),
+            array_merge(
+                glob(RISE63_TEST_ROOT . '/app/Views/*/*.php') ?: [],
+                glob(RISE63_TEST_ROOT . '/app/Views/*/*/*.php') ?: []
+            )
+        )
+    );
     foreach ($dataClasses as $file) {
         $source = (string) file_get_contents(RISE63_TEST_ROOT . '/' . $file);
         // Comments are stripped first: this file may name the entity in order to explain why it is
         // forbidden, and a rule that forbids describing the bug is a rule someone will delete.
         $code = (string) preg_replace('#/\*.*?\*/#s', '', $source);
         $code = (string) preg_replace('#(?<!:)\/\/.*$#m', '', $code);
-        preg_match_all('/&(amp|lt|gt|quot|#\d+|#x[0-9a-f]+);/i', $code, $found);
-        assertSame([], array_values(array_unique($found[0])), $file . ' must hold plain text, not entities');
+
+        // An entity inside a *data* value is the bug. Entities in markup that is echoed raw — a
+        // literal <h2>Brand &amp; identity</h2> — are correct HTML and are left alone, so the
+        // search is limited to PHP string literals that sit in an array or a variable assignment.
+        preg_match_all(
+            '/(?:=>|=\s*\[|,\s*)\s*\'[^\']*?&(amp|lt|gt|quot|#\d+|#x[0-9a-f]+);[^\']*?\'/i',
+            $code,
+            $found
+        );
+        assertSame([], array_values(array_unique($found[0])), $file . ' holds an entity in a data value');
     }
 
     // The same mistake in a template: an entity written inside e() is escaped twice. `$label` in the

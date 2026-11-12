@@ -7,7 +7,7 @@ use function RISE63\{e, human_date, relative_time, url};
 
 $kindLabels = [
     ''          => 'Everything',
-    'admins'    => 'Administrators &amp; treasurers',
+    'admins'    => 'Administrators & treasurers',
     'financial' => 'Money movements',
     'accounts'  => 'Account changes',
 ];
@@ -82,7 +82,7 @@ $kindLabels = [
       <label for="f-kind">Show</label>
       <select id="f-kind" name="kind">
         <?php foreach ($kindLabels as $value => $text): ?>
-          <option value="<?= e($value) ?>" <?= ($filters['kind'] ?? '') === $value ? 'selected' : '' ?>><?= $text ?></option>
+          <option value="<?= e($value) ?>" <?= ($filters['kind'] ?? '') === $value ? 'selected' : '' ?>><?= e($text) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
