@@ -562,6 +562,16 @@ ok('Every public page renders as a complete document for a signed-out visitor', 
         // Exactly one <h1>: the page's subject, declared once.
         assertSame(1, substr_count($html, '<h1'), $label . ' must have exactly one <h1>');
 
+        // A 200 is not a page. These four rendered a heading and the words "This page is being
+        // written" on every installation, which no status code could reveal.
+        if (in_array($slug, ['about', 'vision', 'privacy', 'terms'], true)) {
+            assertTrue(
+                !str_contains($html, 'This page is being written'),
+                $label . ' must not render the unwritten-page placeholder'
+            );
+            assertTrue(strlen($html) > 6000, $label . ' should carry a real body, got ' . strlen($html) . ' bytes');
+        }
+
         // The WhatsApp route is derived from the setting: 0803… becomes wa.me/234803…, because that
         // is the form WhatsApp accepts for a Nigerian number.
         assertTrue(!str_contains($html, 'wa.me/0803'), $label . ' must not link a local number to WhatsApp');
@@ -704,6 +714,64 @@ ok('The hero can be reordered and trimmed without a release', function (): void 
     Core\Site::saveSlide(['headline' => 'Draft slide', 'sort_order' => 30, 'is_published' => false]);
     $public = array_column(Core\Site::slides(true), 'headline');
     assertTrue(!in_array('Draft slide', $public, true), 'an unpublished slide stays off the site');
+});
+
+ok('People and Parish Connect render on a database without migration 0004', function () use ($admin): void {
+    // Reported: "parishes and people are not loading." Both screens named users.area_id and
+    // users.zone_id unconditionally; on a database that had not run 0004 the statement failed and
+    // the router turned the uncaught PDOException into a blank 500.
+    //
+    // A directory is the page an administrator opens to discover that something is wrong. It must
+    // therefore be the last thing to break — and it must still show people, with the church each
+    // one picked, on the schema it actually has.
+    $pdo = Database::connection();
+    $pdo->exec('ALTER TABLE users DROP COLUMN IF EXISTS area_id');
+    $pdo->exec('ALTER TABLE users DROP COLUMN IF EXISTS zone_id');
+
+    try {
+        // The column check must actually see the drop, or this test proves nothing.
+        $schema = new Core\Migrator(RISE63_TEST_ROOT);
+        assertTrue(!$schema->hasColumn('users', 'area_id'), 'the column really is absent');
+
+        foreach (['parishes' => 'Parish Connect', 'people' => 'People'] as $page => $heading) {
+            $html = route($page, [], $admin);
+            assertClean($page . ' on a pre-0004 database', $html, $heading);
+        }
+
+        // And it still lists the people, rather than an empty table with a heading.
+        $directory = Core\Members::directory([]);
+        assertTrue(count($directory['rows']) > 0, 'the directory still has its rows');
+    } finally {
+        // Put the columns back: later tests use the current schema.
+        $pdo->exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS zone_id INT NULL');
+        $pdo->exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS area_id INT NULL');
+    }
+});
+
+ok('A CMS page renders the site 404, not a blank page, before migration 0005', function () use ($anonymous): void {
+    // The same defect on the public side: About Us, Privacy Policy, Terms & Conditions and Vision
+    // were all blank because site_pages did not exist yet.
+    $pdo = Database::connection();
+    $pdo->exec('ALTER TABLE site_pages RENAME TO site_pages_parked');
+
+    try {
+        foreach (['about', 'privacy', 'terms', 'vision'] as $slug) {
+            $html = route($slug, [], $anonymous);
+            assertTrue(strlen($html) > 1200, $slug . ' must still render a page, not a 500');
+            assertTrue(!str_contains($html, 'Fatal error'), $slug . ' must not leak a PHP error');
+            assertTrue(!str_contains($html, 'SQLSTATE'), $slug . ' must not leak a SQL error');
+
+            // And it is a real page, not a 404: the copy is shipped as code, so a database that is
+            // one migration behind costs the visitor nothing at all.
+            assertTrue(
+                !str_contains($html, 'This page is being written'),
+                $slug . ' must carry its own text, not the placeholder'
+            );
+            assertTrue(strlen($html) > 6000, $slug . ' should render its full text without the table');
+        }
+    } finally {
+        $pdo->exec('ALTER TABLE site_pages_parked RENAME TO site_pages');
+    }
 });
 
 /* ─────────────────────────────── summary ─────────────────────────────── */

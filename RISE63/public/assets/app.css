@@ -476,6 +476,11 @@ legend { font-weight: 700; padding: 0 6px; }
 .flash-info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 25%, transparent); }
 .notice { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; font-size: var(--t-sm); }
 .notice strong { display: block; margin-bottom: 4px; }
+/* Two notices in the interface carried a variant class that had no rule, so a warning about a
+   missing directory import and an error on Settings both rendered as ordinary grey boxes. */
+.notice-warn { background: var(--warn-soft); border-color: var(--warn); color: var(--text); }
+.notice-error { background: var(--danger-soft); border-color: var(--danger); color: var(--text); }
+.notice-info { background: var(--info-soft); border-color: var(--info); color: var(--text); }
 
 /* ── Badges & status ──────────────────────────────────────────────────────────── */
 .badge {

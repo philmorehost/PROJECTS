@@ -523,7 +523,17 @@ final class Members
         // their row — they showed as "—" beside the typed-name fallback that they never used.
         // `church_name` is the single field the views print, so a list cannot show a blank while the
         // database holds the answer.
-        $sql = 'SELECT u.*,
+        // `users.zone_id` and `users.area_id` arrive in migration 0004. Naming a column a database
+        // does not have fails the whole statement, and this query is the People directory — the page
+        // an administrator opens to *find out* something is wrong. On a database that has not been
+        // migrated it returned an uncaught PDOException, which the browser showed as a blank page.
+        // Ask the schema first, and fall back to the parish-only join, so the directory still lists
+        // people and their parishes while Settings reports the migration that is waiting.
+        $schema          = new Migrator(\RISE63\ROOT);
+        $hasChurchLevels = $schema->hasColumn('users', 'area_id') && $schema->hasColumn('users', 'zone_id');
+
+        $sql = $hasChurchLevels
+            ? 'SELECT u.*,
                        p.parish_name,
                        COALESCE(u.area_id, p.area_id) AS effective_area_id,
                        COALESCE(u.zone_id, ua.zone_id, a.zone_id) AS effective_zone_id,
@@ -540,6 +550,20 @@ final class Members
                 LEFT JOIN parishes p ON p.id = u.parish_id
                 LEFT JOIN areas ua ON ua.id = u.area_id
                 LEFT JOIN zones uz ON uz.id = u.zone_id
+                LEFT JOIN areas a ON a.id = p.area_id
+                LEFT JOIN zones z ON z.id = a.zone_id'
+            // Pre-0004: every member's church is the parish they picked, which is all this schema
+            // can express. The column names match the query above so the view needs no branch.
+            : 'SELECT u.*,
+                       p.parish_name,
+                       p.area_id AS effective_area_id,
+                       a.zone_id AS effective_zone_id,
+                       a.area_name,
+                       z.zone_name,
+                       p.parish_name AS church_name,
+                       CASE WHEN p.id IS NOT NULL THEN \'parish\' ELSE NULL END AS church_level
+                FROM users u
+                LEFT JOIN parishes p ON p.id = u.parish_id
                 LEFT JOIN areas a ON a.id = p.area_id
                 LEFT JOIN zones z ON z.id = a.zone_id';
         if ($conditions !== []) {
