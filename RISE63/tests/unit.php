@@ -820,6 +820,47 @@ ok('The preview warns when a paste creates areas with no church in them', functi
 
 /* ─────────────────────────────── The public website ─────────────────────────── */
 
+ok('No data string carries an HTML entity, or it is escaped twice', function (): void {
+    // The bug this exists to prevent: Site::BUILT_IN_META had 'Terms &amp; Conditions' as a *title*.
+    // page.php prints a title through e(), which escapes it once, so the entity was escaped twice
+    // and the public heading read "Terms &amp; Conditions" in large type. A stray entity in a data
+    // value is invisible in the source — it looks like correct markup — and only shows up on screen.
+    //
+    // Strings that reach a view as data are escaped by that view. Entities belong only in templates
+    // that echo them raw, and no data class is one of those.
+    $dataClasses = ['app/Core/Site.php', 'app/Core/SiteDefaults.php', 'app/Core/Settings.php'];
+    foreach ($dataClasses as $file) {
+        $source = (string) file_get_contents(RISE63_TEST_ROOT . '/' . $file);
+        // Comments are stripped first: this file may name the entity in order to explain why it is
+        // forbidden, and a rule that forbids describing the bug is a rule someone will delete.
+        $code = (string) preg_replace('#/\*.*?\*/#s', '', $source);
+        $code = (string) preg_replace('#(?<!:)\/\/.*$#m', '', $code);
+        preg_match_all('/&(amp|lt|gt|quot|#\d+|#x[0-9a-f]+);/i', $code, $found);
+        assertSame([], array_values(array_unique($found[0])), $file . ' must hold plain text, not entities');
+    }
+
+    // The same mistake in a template: an entity written inside e() is escaped twice. `$label` in the
+    // site footer is echoed raw, so an entity there is right — this only rejects entities that are
+    // being escaped again on the way out.
+    foreach (glob(RISE63_TEST_ROOT . '/app/Views/**/*.php') ?: [] as $file) {
+        foreach (explode("\n", (string) file_get_contents($file)) as $number => $line) {
+            if (preg_match('/\be\([^)]*&(amp|lt|gt|quot);/', $line) === 1) {
+                assertTrue(false, basename($file) . ':' . ($number + 1) . ' escapes an entity twice');
+            }
+        }
+    }
+
+    // And the titles actually published are plain.
+    foreach (['about', 'vision', 'privacy', 'terms'] as $slug) {
+        $page = RISE63\Core\Site::page($slug);
+        assertTrue($page !== null, $slug . ' exists');
+        // A literal ampersand is right; the entity is the mistake.
+        assertTrue(!preg_match('/&(amp|lt|gt|quot|#\d+);/', (string) $page['title']), $slug . ' title holds an entity: ' . $page['title']);
+        assertTrue(!str_contains((string) $page['summary'], '&amp;'), $slug . ' summary is plain text');
+    }
+    assertSame('Terms & Conditions', RISE63\Core\Site::page('terms')['title'], 'the heading reads with one ampersand');
+});
+
 ok('Every page the footer links to has real words in it, not a placeholder', function (): void {
     // The defect that shipped in 1.2.0: migration 0005 seeded these four pages with an empty body
     // and nothing ever filled it, so About Us, Vision, Privacy and Terms each rendered a heading, a
