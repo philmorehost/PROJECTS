@@ -9,6 +9,14 @@ INSERT INTO security_settings (setting_key, setting_value) VALUES
 ('support_phone', ''),
 ('theme_color', '#2563eb'),
 ('pwa_install_prompt', '1'),
+-- The public website. Empty by default: an unset WhatsApp number makes the site show an honest
+-- "not configured yet" state rather than a button that opens nothing.
+('whatsapp_number', ''),
+('whatsapp_message', 'Hello RISE 63 — I would like to know more.'),
+('contact_email', ''),
+('contact_address', ''),
+('hero_autoplay_seconds', '7'),
+('site_footer_note', ''),
 ('allow_self_registration', '1'),
 ('maintenance_mode', '0'),
 ('session_idle_minutes', '30'),

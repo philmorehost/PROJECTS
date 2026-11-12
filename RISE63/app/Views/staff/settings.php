@@ -19,6 +19,7 @@ $schemaState = array_merge(
 );
 
 $groups = [
+    'website' => ['Public website', 'What a visitor sees. The WhatsApp number is the contact route the site hands to members, and the default message is what their chat opens with.'],
     'brand' => ['Brand &amp; identity', 'These values appear across the app, the install prompt and the dynamic icon.'],
     'session' => ['Sessions &amp; alerts', 'How long a session may sit idle and who receives sign-in alerts.'],
     'programs' => ['Programs &amp; funds', 'The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.'],
@@ -87,6 +88,23 @@ $groups = [
     </div>
     <button class="btn btn-primary" type="submit">Save program year</button>
   </form>
+</section>
+
+<?php
+// The pages and the hero are edited on their own screen — a textarea per page inside this card would
+// bury the rest of Settings, and the CMS needs a list, a preview and a reorder control.
+?>
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 style="margin:0">Pages &amp; hero slider</h2>
+      <p class="faint" style="margin:2px 0 0">
+        Edit About Us, Vision, Privacy Policy, Terms &amp; Conditions and Contact copy, and manage the
+        photographs and headlines in the landing page carousel.
+      </p>
+    </div>
+    <a class="btn btn-primary" href="<?= e(url('website')) ?>">Manage website</a>
+  </div>
 </section>
 
 <?php foreach ($groups as $group => [$heading, $blurb]): ?>

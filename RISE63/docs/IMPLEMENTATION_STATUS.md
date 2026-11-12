@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.1.0 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.2.0 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -383,6 +383,59 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1k What 1.2.0 adds — the public website and its CMS
+
+The application had no public face: an anonymous visitor was redirected to the sign-in form from
+every URL except `/login` and `/register`. This release adds a landing page, five content pages and a
+contact route, all editable from Settings without a release.
+
+**Public site.** `site/layout.php` is a separate document from the application shell — its own
+stylesheet, no tab bar, no install prompt, no theme toggle, and it is always light. Six routes are
+public: the landing page (`/`), About Us, Vision, Privacy Policy, Terms & Conditions, Contact, and any
+page an administrator publishes later. Unknown anonymous URLs now render the site's own 404 instead
+of redirecting to a sign-in form, which used to tell a stranger they needed an account to read a
+public website.
+
+**Hero slider.** Up to eight slides, each with a headline, kicker, summary, supporting line,
+photograph, described alternative text, an optional call to action and a light/dark text treatment.
+The carousel advances on a configurable interval (0 disables), pauses on hover and on focus, stops for
+good once the visitor touches a control, does not advance in a hidden tab, and does not autoplay at
+all under `prefers-reduced-motion`. Arrow keys, Home and End work, it is swipeable with a dead zone so
+a vertical scroll is not read as a swipe, and the pips are plain buttons with `aria-current` rather
+than a `tablist` the page does not implement.
+
+**CMS.** Settings → Website lists pages and slides as rows with Edit, View, Move and Delete. Bodies
+are plain textareas with four pieces of markup (`##`, `###`, `-`, `>`) explained inline; there is no
+rich-text editor, because a WYSIWYG body is a stored-XSS surface. Images are validated by
+`getimagesize()`, stored under a random name in `storage/site/`, and streamed by `app/site-image.php`
+with a fixed content type and `nosniff` — never by the attachment path. The four footer pages cannot
+be deleted or have their slug changed, because the footer links to them on every page.
+
+**Defects found and fixed while testing this release:**
+
+* `View::capture()` hardcoded `app/Views/layout.php` and ignored the shell a caller asked for, so every
+  public page rendered as a bare fragment with no `<head>`. It now resolves the named shell and
+  refuses an unknown one.
+* The landing page emitted four `<h1>` elements, one per slide. It now declares one, with the other
+  slides at `<h2>`.
+* The carousel marked itself up as a `tablist` with `tab` children and no tabpanels.
+* `parish-connect` was linked from the contact page and from the closing slide's call to action, but
+  no migration seeded a page behind it — a dead end for the one audience the site is for. Migration
+  0005 now seeds it with real copy.
+* The hero image sat inside an `aria-hidden` wrapper while carrying meaningful `alt` text, so the
+  description was hidden from the visitors it exists for.
+
+**Verified here:** 292 assertions pass (`unit 77 · render 50 · smoke 38 · e2e 33+1 skipped ·
+pages 22+1 skipped · offline 15 · combobox 46 · cache 11`), the function guard is clean, and the CMS
+lifecycle — create, edit, unpublish, delete, reorder — is exercised against a real SQL engine.
+
+**Not verified: the design has never been seen in a browser.** This sandbox has no PHP binary, no
+MySQL, no live host and no browser (Playwright's Chromium download is blocked), so layout, spacing,
+type scale and colour contrast were checked only by static analysis: a template-class-versus-
+stylesheet audit, and CSS assertions for the hero's fixed height, the grid collapses, the sticky
+contents list and the reduced-motion rule. It needs a look on a real screen before launch, particularly
+on a phone.
 
 ### 2.1j What 1.1.0 fixes — zones and areas are churches too
 

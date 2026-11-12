@@ -1435,6 +1435,18 @@ ok('Every template referenced by the router exists', function (): void {
     foreach (array_unique($matches[1]) as $template) {
         assertTrue(is_file(RISE63_TEST_ROOT . '/app/Views/' . $template . '.php'), 'missing view ' . $template);
     }
+
+    // The public site renders through its own helper, which prefixes `site/`. Every name passed to it
+    // is a real template too — a landing page that 500s because a file was renamed is the failure this
+    // assertion exists to prevent, and the helper's prefix would otherwise hide it.
+    preg_match_all("/renderSite\\('([^']+)'/", $router, $siteMatches);
+    assertTrue(count($siteMatches[1]) >= 3, 'expected the router to reference the public site views');
+    foreach (array_unique($siteMatches[1]) as $template) {
+        assertTrue(
+            is_file(RISE63_TEST_ROOT . '/app/Views/site/' . $template . '.php'),
+            'missing site view ' . $template
+        );
+    }
 });
 
 ob_end_flush();
@@ -1477,7 +1489,7 @@ ok('Every routed page has matching handling and navigation', function (): void {
 
 ok('Every privileged page declares its role gate', function (): void {
     $pages = (string) file_get_contents(RISE63_TEST_ROOT . '/app/pages.php');
-    foreach (['people', 'security', 'settings'] as $adminPage) {
+    foreach (['people', 'security', 'settings', 'website'] as $adminPage) {
         $start = strpos($pages, "case '" . $adminPage . "':");
         assertTrue($start !== false, 'missing page ' . $adminPage);
         $block = substr($pages, $start, 200);
@@ -1485,6 +1497,89 @@ ok('Every privileged page declares its role gate', function (): void {
     }
     $treasury = substr($pages, strpos($pages, "case 'treasury':"), 240);
     assertContains('requireRole', $treasury, 'treasury must be role-gated');
+});
+
+ok('The public pages are reachable without an account, and the CMS is not', function (): void {
+    // The point of a landing page is that a stranger can read it. A page that is not in
+    // $publicPages is redirected to /login, so this list *is* the public site.
+    $index = (string) file_get_contents(RISE63_TEST_ROOT . '/index.php');
+    $start = strpos($index, '$publicPages');
+    assertTrue($start !== false, 'index.php must define the public allowlist');
+    $block = substr($index, $start, 1400);
+
+    foreach (['about', 'vision', 'privacy', 'terms', 'contact', 'parish-connect'] as $slug) {
+        assertContains("'" . $slug . "'", $block, 'the page ' . $slug . ' must be public');
+    }
+    // An empty page is the landing page. It must not be treated as "not signed in, go to login".
+    assertTrue(str_contains($block, "''") || str_contains($block, "'' =>"), 'the root must be public');
+
+    // Signed-in users must still be sent away from the sign-in screens, or they bounce in a loop.
+    $site = (string) file_get_contents(RISE63_TEST_ROOT . '/app/pages.php');
+    assertTrue(str_contains($site, 'renderSite'), 'the router must have a public-site renderer');
+
+    // The CMS is behind the administrator gate and is named in no public route.
+    assertTrue(!str_contains($block, "'website'"), 'the CMS must not be in the public allowlist');
+
+    // The image endpoint is public *only* as a read of a stored photograph; it must never accept a
+    // path from the request, which would turn it into a file-disclosure endpoint.
+    $image = (string) file_get_contents(RISE63_TEST_ROOT . '/app/site-image.php');
+    assertContains("preg_match('/^[a-f0-9]{16}\\.(jpg|png|webp)$/D'", $image, 'the filename must be validated');
+    assertContains('realpath(', $image, 'the resolved path must be checked against the storage root');
+    assertContains('nosniff', $image);
+    assertContains('immutable', $image);
+    assertTrue(!str_contains($image, 'readfile($_'), 'no request value may be read directly');
+    assertTrue(!str_contains($image, 'download.php'), 'an uploaded image is not an attachment');
+
+    // The CMS screen uses the shared CSRF field and posts to the shared handler rather than
+    // inventing its own endpoint.
+    $cms = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Views/staff/website.php');
+    assertContains('Security::csrfField()', $cms);
+    assertContains('name="action" value="page-save"', $cms);
+    assertContains('name="action" value="slide-save"', $cms);
+    assertContains('name="action" value="slide-move"', $cms);
+    assertTrue(!str_contains($cms, '<script'), 'the CMS view carries no inline script (CSP)');
+    assertTrue(!str_contains($cms, 'contenteditable'), 'bodies are plain text, not a rich-text editor');
+
+    // Every CMS action named in the view must have a handler, or the button silently reloads.
+    preg_match_all('/name="action" value="([a-z-]+)"/', $cms, $cmsActions);
+    $actions = (string) file_get_contents(RISE63_TEST_ROOT . '/app/actions.php');
+    foreach (array_unique($cmsActions[1]) as $action) {
+        assertContains("case '" . $action . "':", $actions, 'no POST handler for ' . $action);
+    }
+});
+
+ok('The landing page renders a hero, an outline, and an accessible carousel', function (): void {
+    $home = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Views/site/home.php');
+
+    // A carousel is a classic accessibility failure. These are the minimums that make it usable:
+    // one heading level, real buttons, a live region that is not announced four times, and controls
+    // that stop when the visitor asks the page to hold still.
+    assertContains('hero', $home);
+    assertTrue(!str_contains($home, '<div class="hero-slide"'), 'slides must be generated from content');
+    assertContains('data-slide-to', $home, 'the carousel needs direct navigation');
+    assertContains('aria-label', $home);
+    assertContains('role="region"', $home);
+    assertContains('loading="eager"', $home, 'the first photograph is the largest paint');
+
+    $js = (string) file_get_contents(RISE63_TEST_ROOT . '/public/assets/site.js');
+    assertContains('prefers-reduced-motion', $js, 'the carousel must respect the motion preference');
+    assertContains('visibilitychange', $js, 'and must not advance in a hidden tab');
+    assertContains('ArrowLeft', $js, 'keyboard navigation');
+    assertContains('Escape', $js, 'the mobile menu must close on Escape');
+
+    // The public site must not add an inline script: the CSP allows exactly two hashes, both in the
+    // application shell, and a third would silently fail in production.
+    $layout = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Views/site/layout.php');
+    // Strip the comments first: the file *explains* why there is no inline script, so the word
+    // appears there. What matters is that no <script> tag without a src survives in the markup.
+    $markup = (string) preg_replace('#/\*.*?\*/#s', '', $layout);
+    $markup = (string) preg_replace('#^\s*\*.*$#m', '', $markup);
+    preg_match_all('#<script\b[^>]*>#i', $markup, $scriptTags);
+    $inline = array_values(array_filter(
+        $scriptTags[0],
+        static fn (string $tag): bool => preg_match('#\ssrc=#i', $tag) !== 1
+    ));
+    assertSame([], $inline, 'the public site adds no inline <script>: the CSP allows only its two known hashes');
 });
 
 ok('Writes are never reachable by GET', function (): void {

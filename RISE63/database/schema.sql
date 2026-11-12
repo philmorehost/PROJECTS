@@ -326,6 +326,51 @@ CREATE TABLE sessions_meta (
     CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Public site ─────────────────────────────────────────────────────────────────────────
+-- The landing page is content, not markup: every word an administrator publishes lives here and is
+-- edited in Settings → Website. `site_pages` holds only pages that can be *added*; the four that must
+-- always exist (about, vision, privacy, terms) are seeded by migration 0005 and flagged is_system so
+-- they cannot be deleted out from under a footer link.
+CREATE TABLE site_pages (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    slug        VARCHAR(60)  NOT NULL,
+    title       VARCHAR(150) NOT NULL,
+    kicker      VARCHAR(120) NULL,
+    summary     VARCHAR(300) NULL,
+    body        MEDIUMTEXT   NULL,
+    is_published TINYINT(1)  NOT NULL DEFAULT 1,
+    is_system   TINYINT(1)   NOT NULL DEFAULT 0,
+    sort_order  INT          NOT NULL DEFAULT 100,
+    updated_by  INT          NULL,
+    created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_site_page_slug (slug),
+    KEY idx_site_pages_order (sort_order),
+    CONSTRAINT fk_site_pages_author FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per hero slide. `image_path` is a file in storage/site/ written by Security::storeSiteImage;
+-- `image_alt` is required in the form because a slide with no description is invisible to a screen
+-- reader and to search. `is_published` is separate from `sort_order` so a slide can be taken out of
+-- rotation without losing its position.
+CREATE TABLE site_slides (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    kicker       VARCHAR(120) NULL,
+    headline     VARCHAR(180) NOT NULL,
+    subhead      VARCHAR(400) NULL,
+    body         VARCHAR(600) NULL,
+    image_path   VARCHAR(120) NULL,
+    image_alt    VARCHAR(200) NULL,
+    cta_label    VARCHAR(60)  NULL,
+    cta_page     VARCHAR(60)  NULL,
+    tone         ENUM('ink','light') NOT NULL DEFAULT 'ink',
+    is_published TINYINT(1)   NOT NULL DEFAULT 1,
+    sort_order   INT          NOT NULL DEFAULT 100,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_site_slides_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE schema_migrations (
     version    VARCHAR(40) PRIMARY KEY,
     checksum   CHAR(64)    NULL,

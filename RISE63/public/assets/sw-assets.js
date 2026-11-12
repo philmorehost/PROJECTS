@@ -4,8 +4,10 @@ self.RISE63_SHELL = [
     "./favicon.svg",
     "./public/icons/icon-192.png",
     "./public/icons/icon-512.png",
-    "./public/assets/app.1803fe68.css",
+    "./public/assets/app.e7dd0af5.css",
     "./public/assets/app.d92ec849.js",
-    "./public/assets/security.613104f8.js"
+    "./public/assets/security.613104f8.js",
+    "./public/assets/site.05e53fb9.css",
+    "./public/assets/site.2c64f21a.js"
 ];
-self.RISE63_RELEASE = "1.1.0-210e3b8f";
+self.RISE63_RELEASE = "1.2.0-f11e1a3b";

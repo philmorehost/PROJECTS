@@ -52,7 +52,18 @@ final class View
         if (!$layout) {
             return $content;
         }
-        $layoutFile = \RISE63\ROOT . '/app/Views/layout.php';
+
+        // Which shell wraps this view. The application has one document (layout.php); the public
+        // site has another (site/layout.php), because it must not carry the signed-in chrome, the
+        // install prompt or the theme toggle. The caller names the shell it wants with a 'layout'
+        // key, and an unknown name is refused rather than silently falling back — a landing page
+        // wrapped in the admin shell, or vice versa, is the bug this prevents.
+        $requested = isset($data['layout']) && is_string($data['layout']) ? $data['layout'] : '';
+        $layoutTemplate = $requested === '' || $requested === 'app' ? 'layout' : 'site/layout';
+        if ($requested !== '' && $requested !== 'app' && $requested !== 'site') {
+            throw new \RuntimeException('Unknown layout: ' . $requested);
+        }
+        $layoutFile = self::templatePath($layoutTemplate);
         ob_start();
         require $layoutFile;
         return (string) ob_get_clean();

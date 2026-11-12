@@ -20,6 +20,7 @@ use RISE63\Core\ParishDirectory;
 use RISE63\Core\Program;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
+use RISE63\Core\Site;
 use RISE63\Core\Updater;
 
 use function RISE63\{config_dir, e, flash, redirect, site_title};
@@ -505,6 +506,85 @@ try {
             $back('treasury');
 
         // ── Administration ───────────────────────────────────────────────────────────
+        // ── Website (CMS) ────────────────────────────────────────────────────────────
+        // The public site is content, so these are ordinary writes with ordinary validation. The
+        // rules that matter are in Site: a system page cannot be deleted, a call to action needs both
+        // halves, an image needs a description. Each branch re-checks administrator rights — the
+        // route gate protects the page, not the POST.
+        case 'page-save':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $saved = Site::savePage([
+                'slug'         => (string) $input('slug', ''),
+                'title'        => (string) $input('title', ''),
+                'kicker'       => (string) $input('kicker', ''),
+                'summary'      => (string) $input('summary', ''),
+                'body'         => (string) ($_POST['body'] ?? ''),
+                'is_published' => $input('is_published') === '1',
+                'sort_order'   => $input('sort_order', '100'),
+            ], (int) $account['id']);
+            Audit::log((int) $account['id'], 'site.page.save', 'page', (string) $saved['slug'],
+                'Saved page “' . (string) $saved['title'] . '”');
+            flash('Page saved.', 'success');
+            $back('website');
+
+        case 'page-delete':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $slug = (string) $input('slug', '');
+            Site::deletePage($slug);
+            Audit::log((int) $account['id'], 'site.page.delete', 'page', $slug, 'Deleted page ' . $slug);
+            flash('Page deleted.', 'success');
+            $back('website');
+
+        case 'slide-save':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $id = $input('id') !== null ? (int) $input('id') : null;
+
+            // An uploaded photograph is stored by the shared upload path, which already validates the
+            // real MIME type from the file itself rather than from the client's claim. The result is
+            // a random filename, so nothing an operator types reaches the filesystem.
+            $imagePath = null;
+            if (($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $stored = Security::storeSiteImage($_FILES['image'] ?? []);
+                $imagePath = $stored['stored_name'];
+            }
+
+            $slideId = Site::saveSlide([
+                'headline'     => (string) $input('headline', ''),
+                'kicker'       => (string) $input('kicker', ''),
+                'subhead'      => (string) $input('subhead', ''),
+                'body'         => (string) $input('body', ''),
+                'image_path'   => $imagePath,
+                'image_alt'    => (string) $input('image_alt', ''),
+                'cta_label'    => (string) $input('cta_label', ''),
+                'cta_page'     => (string) $input('cta_page', ''),
+                'tone'         => (string) $input('tone', 'ink'),
+                'is_published' => $input('is_published') === '1',
+                'sort_order'   => $input('sort_order', '100'),
+            ], $id, (int) $account['id']);
+            Audit::log((int) $account['id'], 'site.slide.save', 'slide', (string) $slideId,
+                'Saved hero slide ' . $slideId);
+            flash('Slide saved.', 'success');
+            $back('website');
+
+        case 'slide-delete':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            $id = (int) $input('id', '0');
+            Site::deleteSlide($id);
+            Audit::log((int) $account['id'], 'site.slide.delete', 'slide', (string) $id,
+                'Deleted hero slide ' . $id);
+            flash('Slide deleted.', 'success');
+            $back('website');
+
+        case 'slide-move':
+            $account = Auth::requireLogin();
+            Auth::requireRole($account, ['provincial_admin']);
+            Site::moveSlide((int) $input('id', '0'), (string) $input('direction', 'up'));
+            $back('website');
+
         case 'settings-save':
             $account = Auth::requireLogin();
             Auth::requireRole($account, ['provincial_admin']);

@@ -818,6 +818,137 @@ ok('The preview warns when a paste creates areas with no church in them', functi
     assertSame(1, $bareZone['new_zones']);
 });
 
+/* ─────────────────────────────── The public website ─────────────────────────── */
+
+ok('A page body is escaped and structured, never trusted as HTML', function (): void {
+    // The body field is a textarea an administrator types into. A renderer that echoes it is a
+    // stored-XSS hole with the admin's own session as the payload target, so the test that matters
+    // is that markup is *dropped* and only the tags this code builds appear.
+    $html = RISE63\Core\Site::renderBody(
+        "## Heading\n\nA line with **bold**, *italic* and <script>alert(1)</script>.\n\n- one\n- two\n\n> quoted"
+    );
+    assertTrue(!str_contains($html, '<script>'), 'a script tag in the body must never survive');
+    assertTrue(str_contains($html, '&lt;script&gt;'), 'it is shown as text instead');
+    assertTrue(str_contains($html, '<h2 id="heading">Heading</h2>'), $html);
+    assertTrue(str_contains($html, '<strong>bold</strong>'));
+    assertTrue(str_contains($html, '<em>italic</em>'));
+    assertSame(2, substr_count($html, '<li>'));
+    assertTrue(str_contains($html, '<blockquote>quoted</blockquote>'), $html);
+
+    // A wrapped list item belongs to the item before it, not to a stray paragraph.
+    $wrapped = RISE63\Core\Site::renderBody("- first line\n  continued here\n- second");
+    assertSame(2, substr_count($wrapped, '<li>'), 'continuation lines do not become new items');
+    assertTrue(str_contains($wrapped, 'continued here'), $wrapped);
+
+    // `**bold**` must not be eaten by the italic rule.
+    assertTrue(str_contains(RISE63\Core\Site::renderBody('**both**'), '<strong>both</strong>'));
+    assertSame('', RISE63\Core\Site::renderBody(null), 'an empty body renders nothing, not an error');
+});
+
+ok('A footer page cannot be deleted, and a slug cannot shadow a route', function (): void {
+    // Deleting one would 404 a link printed on every page of the site, which nobody would think to
+    // check. Unpublishing is the supported way to hide it.
+    try {
+        $rows = RISE63\Core\Site::pages();
+    } catch (\Throwable) {
+        $rows = [];
+    }
+    $system = array_map(
+        static fn (array $row): string => (string) $row['slug'],
+        array_filter($rows, static fn (array $row): bool => (int) $row['is_system'] === 1)
+    );
+    foreach (RISE63\Core\Site::SYSTEM_PAGES as $slug) {
+        if (!in_array($slug, $system, true)) {
+            // Not seeded in this environment (migration not applied); the rule is still checkable.
+            continue;
+        }
+        assertThrows(InvalidArgumentException::class, fn () => RISE63\Core\Site::deletePage($slug));
+    }
+
+    // A page that shadowed /login would be unreachable and would make the real route ambiguous.
+    foreach (['login', 'register', 'api', 'install'] as $reserved) {
+        assertThrows(InvalidArgumentException::class, fn () => RISE63\Core\Site::savePage([
+            'slug' => $reserved, 'title' => 'Hijack',
+        ]));
+    }
+
+    // Slugs are derived, not rejected: an operator typing "About Us" gets "about-us", not an error.
+    assertSame('about-us', RISE63\Core\Site::slug('About Us'));
+    assertSame('terms-conditions', RISE63\Core\Site::slug('  Terms & Conditions  '),
+        'punctuation collapses to a single hyphen rather than being kept');
+    assertSame('', RISE63\Core\Site::slug('---'));
+});
+
+ok('A hero slide needs a headline, and a button needs both halves', function (): void {
+    // These four rules are all decided before the database is touched (an INSERT would need a
+    // connection, which the unit harness does not have), so the validation is what is under test.
+    assertThrows(InvalidArgumentException::class,
+        fn () => RISE63\Core\Site::saveSlide(['headline' => '']), 'a slide with no headline');
+
+    // A label with no destination renders a button that does nothing — worse than no button.
+    assertThrows(InvalidArgumentException::class,
+        fn () => RISE63\Core\Site::saveSlide(['headline' => 'x', 'cta_label' => 'Go']));
+    assertThrows(InvalidArgumentException::class,
+        fn () => RISE63\Core\Site::saveSlide(['headline' => 'x', 'cta_page' => 'about']));
+
+    // An image reference that is not one this application produced is refused outright.
+    assertThrows(InvalidArgumentException::class,
+        fn () => RISE63\Core\Site::saveSlide(['headline' => 'x', 'image_path' => '../../etc/passwd']));
+
+    // A described image is required: an undescribed hero is invisible to a screen reader.
+    assertThrows(InvalidArgumentException::class,
+        fn () => RISE63\Core\Site::saveSlide(['headline' => 'x', 'image_path' => 'a1b2c3d4e5f60718.jpg']));
+});
+
+ok('The table of contents points at headings that exist', function (): void {
+    // The article layout renders a contents list on the left. If the anchors do not match the ids
+    // Site::renderBody() emits, every entry in it is a dead link — and nothing would report that.
+    $body = "## First Thing\n\ntext\n\n## Second Thing\n\nmore";
+    $toc  = RISE63\Core\SiteDefaults::toc($body);
+    $html = RISE63\Core\Site::renderBody($body);
+    assertSame(2, count($toc));
+    foreach ($toc as $entry) {
+        assertTrue(str_contains($html, 'id="' . $entry['anchor'] . '"'), 'the contents entry must have a target');
+    }
+
+    // Duplicate headings get distinct anchors rather than colliding.
+    $dupes = RISE63\Core\SiteDefaults::toc("## Same\n\na\n\n## Same\n\nb");
+    assertSame(2, count($dupes));
+    assertTrue($dupes[0]['anchor'] !== $dupes[1]['anchor'], 'two headings with one name need two ids');
+
+    // One heading is not a contents list.
+    assertSame([], RISE63\Core\SiteDefaults::toc("## Only One\n\ntext"));
+    assertSame([], RISE63\Core\SiteDefaults::toc(''));
+});
+
+ok('The landing page has real content before any administrator touches it', function (): void {
+    // A fresh installation must not greet the public with an empty hero because nobody has opened
+    // Settings yet.
+    $slides = RISE63\Core\SiteDefaults::slides();
+    assertTrue(count($slides) >= 3, 'a hero needs at least three slides to be worth building');
+    foreach ($slides as $slide) {
+        assertTrue((string) $slide['headline'] !== '', 'every slide has a headline');
+        assertTrue((string) $slide['image_alt'] !== '', 'and a described photograph');
+        // A fallback must be a repository-relative asset path — never absolute, never walking up.
+        // The wasm harness stages only .php/.sql, so the file's existence is checked only when the
+        // working tree is present (which it is for a real checkout and for the deployed host).
+        $fallback = (string) $slide['fallback'];
+        assertTrue(preg_match('#^public/img/[a-z0-9-]+\.jpg$#', $fallback) === 1, 'bad fallback path: ' . $fallback);
+        $imageDir = RISE63_TEST_ROOT . '/public/img';
+        if (is_dir($imageDir)) {
+            $imageFile = RISE63_TEST_ROOT . '/' . $fallback;
+            assertTrue(is_file($imageFile) && filesize($imageFile) > 20000, 'and a real shipped image: ' . $fallback);
+        }
+        assertTrue(in_array((string) $slide['tone'], ['ink', 'light'], true));
+    }
+    $programmes = RISE63\Core\SiteDefaults::programmes();
+    assertSame(4, count($programmes), 'the blueprint defines four programmes');
+    foreach ($programmes as $programme) {
+        assertTrue((string) $programme['outcome'] !== '', $programme['name'] . ' states an outcome');
+        assertTrue(count($programme['points']) >= 3, $programme['name'] . ' lists its terms');
+    }
+});
+
 ok('Country seed contains the full ISO list and protects Nigeria', function (): void {
     $countries = ($GLOBALS['dataFile'])('countries.sql');
     preg_match_all("/^\('([A-Z]{2})'/m", $countries, $matches);

@@ -465,4 +465,66 @@ final class Security
         @chmod($target, 0640);
         return ['name' => $safe, 'stored' => $stored, 'size' => $size, 'mime' => $mime];
     }
+
+    /**
+     * Store an uploaded hero photograph for the public site.
+     *
+     * Same validation as a document upload — the MIME type is read from the file's own bytes with
+     * getimagesize(), not from the name or the client's Content-Type, because both are attacker
+     * controlled. The stored name is random and the extension is derived from the detected type, so
+     * an executable cannot be written under a .php name and the public URL is unguessable.
+     *
+     * Files land in storage/site/, which is refused by .htaccess and by the development router. They
+     * are served by app/site-image.php, which streams a known image with a strict type and no
+     * directory listing — so a photograph cannot execute, and the private directory stays private.
+     *
+     * @param array<string, mixed> $file one entry from $_FILES
+     * @return array{name:string, stored_name:string, size:int, mime:string}
+     */
+    public static function storeSiteImage(array $file, int $maxBytes = 4194304): array
+    {
+        $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE || (int) ($file['size'] ?? 0) > $maxBytes) {
+            throw new RuntimeException('That photograph is too large. The limit is 4 MB.');
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('The upload failed. Please try again.');
+        }
+        $tmp = (string) ($file['tmp_name'] ?? '');
+        if (!is_uploaded_file($tmp)) {
+            throw new RuntimeException('That file could not be read.');
+        }
+
+        $info = @getimagesize($tmp);
+        $mime = (string) ($info['mime'] ?? '');
+        $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        if (!isset($extensions[$mime])) {
+            throw new RuntimeException('Upload a photograph in JPG, PNG or WEBP format.');
+        }
+        // A hero photograph is landscape. A tiny file is almost always an icon or a mistake, and a
+        // 200-pixel-wide image would grain across the whole page.
+        $width  = (int) ($info[0] ?? 0);
+        $height = (int) ($info[1] ?? 0);
+        if ($width < 800 || $height < 400) {
+            throw new RuntimeException('That photograph is too small for a hero. Use at least 800 × 400 pixels.');
+        }
+
+        $dir = \RISE63\path('storage/site');
+        if (!is_dir($dir) && !mkdir($dir, 0770, true) && !is_dir($dir)) {
+            throw new RuntimeException('Image storage is not available.');
+        }
+        $stored = bin2hex(random_bytes(8)) . '.' . $extensions[$mime];
+        $target = $dir . '/' . $stored;
+        if (!move_uploaded_file($tmp, $target)) {
+            throw new RuntimeException('The photograph could not be saved.');
+        }
+        @chmod($target, 0640);
+
+        return [
+            'name'        => self::safeFilename((string) ($file['name'] ?? 'photograph')),
+            'stored_name' => $stored,
+            'size'        => (int) ($file['size'] ?? 0),
+            'mime'        => $mime,
+        ];
+    }
 }

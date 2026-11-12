@@ -253,6 +253,41 @@ function pgsql_create_schema(\PDO $pdo): void
             applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )',
 
+        // Migration 0005's two tables, in the harness dialect. Present so the runner adopts 0005 as
+        // already-applied instead of executing MySQL-only DDL that PGlite cannot parse — the same
+        // arrangement 0001 and 0002 use.
+        'CREATE TABLE site_pages (
+            id SERIAL PRIMARY KEY,
+            slug VARCHAR(60) NOT NULL UNIQUE,
+            title VARCHAR(150) NOT NULL,
+            kicker VARCHAR(120) NULL,
+            summary VARCHAR(300) NULL,
+            body TEXT NULL,
+            is_published SMALLINT NOT NULL DEFAULT 1,
+            is_system SMALLINT NOT NULL DEFAULT 0,
+            sort_order INT NOT NULL DEFAULT 100,
+            updated_by INT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )',
+
+        'CREATE TABLE site_slides (
+            id SERIAL PRIMARY KEY,
+            kicker VARCHAR(120) NULL,
+            headline VARCHAR(180) NOT NULL,
+            subhead VARCHAR(400) NULL,
+            body VARCHAR(600) NULL,
+            image_path VARCHAR(120) NULL,
+            image_alt VARCHAR(200) NULL,
+            cta_label VARCHAR(60) NULL,
+            cta_page VARCHAR(60) NULL,
+            tone VARCHAR(10) NOT NULL DEFAULT \'ink\',
+            is_published SMALLINT NOT NULL DEFAULT 1,
+            sort_order INT NOT NULL DEFAULT 100,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )',
+
         'CREATE TABLE sessions (
             id VARCHAR(128) PRIMARY KEY,
             user_id INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,

@@ -100,9 +100,44 @@ if ($page === '') {
 $action  = preg_replace('/[^a-z0-9-]/', '', strtolower((string) ($_POST['action'] ?? ''))) ?? '';
 $method  = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
-$publicPages = ['login', 'register', 'forgot-password', 'reset-password', 'offline', 'about'];
+/**
+ * Pages a visitor who is not signed in may see.
+ *
+ * The landing page is the front door now, not the sign-in form. A youth worker forwarded a WhatsApp
+ * link to RISE 63 should land on something that explains the initiative, not on a password prompt.
+ *
+ * CMS pages are resolved here rather than being listed: an administrator can add /scholarships
+ * without a release, so the list cannot be a constant. The check is a database read, so it is done
+ * once and only when the page is not one of the fixed ones.
+ */
+$publicPages = ['', 'login', 'register', 'forgot-password', 'reset-password', 'offline',
+                'about', 'vision', 'privacy', 'terms', 'contact', 'parish-connect'];
+/**
+ * Public URLs that are not pages of the application.
+ *
+ * A stranger who mistypes a site address, or follows a link to a page an administrator has since
+ * unpublished, used to be redirected to the sign-in form — which told them they needed an account
+ * to read a public website and gave them no way back. These two shapes are the public site's own
+ * territory: the site's 404 lives under `site-not-found`, and anything that looks like a page slug
+ * is handed to the CMS, which answers with that same 404 when there is nothing behind it.
+ */
+$siteFallback = 'site-not-found';
+if ($user === null && !in_array($page, $publicPages, true) && $page !== '') {
+    try {
+        if (\RISE63\Core\Site::page($page) !== null) {
+            $publicPages[] = $page;
+        }
+    } catch (\Throwable $error) {
+        // Migration 0005 has not run, or the table is unreachable. Deny, which is the safe direction:
+        // an unknown URL must not become an unauthenticated route into the application.
+        error_log('RISE63 public page lookup: ' . $error->getMessage());
+    }
+}
 if ($page === '') {
-    $page = $user === null ? 'login' : 'dashboard';
+    if ($user !== null) {
+        $page = 'dashboard';
+    }
+    // Anonymous visitors stay on '' — that is the landing page. The site router answers it.
 }
 
 /** URL of the page for the signed-in user's role. */
@@ -123,9 +158,15 @@ try {
         exit;
     }
 
-    // ── Authenticated reads that cannot be a page (file download) ─────────────────────
+    // ── Reads that cannot be a page ──────────────────────────────────────────────────
     if ($action === 'document-download') {
         require __DIR__ . '/app/download.php';
+        exit;
+    }
+    // An uploaded hero photograph. Public, because the landing page is public: the file is streamed
+    // with a fixed image type and is never executed or listed.
+    if ($action === 'site-image') {
+        require __DIR__ . '/app/site-image.php';
         exit;
     }
 
@@ -135,8 +176,13 @@ try {
         redirect('login');
     }
     if ($user === null && !in_array($page, $publicPages, true)) {
-        redirect('login');
+        // A signed-out visitor is a reader, not a user who forgot to sign in. Inside the site's own
+        // URL space they get the site's "that page is not here" page; the sign-in redirect is kept
+        // for the application's own URLs, which is what it was always for.
+        $page = $siteFallback;
     }
+    // A signed-in member who taps the site's own "Home" arrives at the dashboard instead of being
+    // dropped on a marketing page with a "sign in" button they do not need.
     if ($user !== null && in_array($page, ['login', 'register', 'forgot-password', 'reset-password'], true)) {
         redirect($home($user));
     }
