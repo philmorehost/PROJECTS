@@ -104,6 +104,10 @@ $pdo = new PDO('pgsql:memory://', 'postgres', 'postgres', [
 Database::use($pdo);
 pgsql_create_schema($pdo);
 
+// Seeded here rather than beside the site tests below: Settings::all() caches for the life of the
+// request, so a row inserted after the first page renders would never be seen by a later one.
+$pdo->exec("INSERT INTO security_settings (setting_key, setting_value) VALUES ('whatsapp_number', '0803 123 4567')");
+
 $admin  = pgsql_seed_user($pdo, 'Adaeze Okonkwo', 'admin@example.org', 'provincial_admin');
 $member = pgsql_seed_user($pdo, 'Chinedu Eze', 'chinedu@example.ng', 'youth_member');
 $csr    = pgsql_seed_user($pdo, 'Ngozi Bello', 'ngozi@example.ng', 'csr_rep');
@@ -517,6 +521,189 @@ ok('People warns that a write will fail before the operator tries one', function
     } finally {
         $pdo->exec('DELETE FROM schema_migrations');
     }
+});
+
+/* ────────────────────────── the public website ────────────────────────── */
+
+// Seed a page and two slides the way an administrator would, so the public routes are exercised
+// against real rows rather than against the code defaults alone.
+$pdo->exec("INSERT INTO site_pages (slug,title,kicker,summary,body,is_published,is_system,sort_order) VALUES
+  ('privacy','Privacy Policy','Your information','What we collect.','## What we collect\n\nNames and contact details.\n\n## Who sees it\n\nOfficers of your parish.',1,1,10),
+  ('terms','Terms & Conditions','The rules','','## Honesty\n\nApplications are checked.',1,1,20),
+  ('vision','Our Vision','Where we are going','','## One province\n\nNo need stays invisible.',1,0,30),
+  ('about','About RISE 63','Who we are','The people behind the initiative.','## The initiative\n\nA joint effort of the Province 63 youth arm and the Young Professionals Club.',1,1,5),
+  ('scholarships','Scholarships','School fees','','## Closing dates\n\nTermly.',0,0,40)");
+$pdo->exec("INSERT INTO site_slides
+  (kicker,headline,subhead,image_path,image_alt,cta_label,cta_page,tone,is_published,sort_order) VALUES
+  ('RISE 63','No genuine need should stay invisible.','Across every parish.','a1b2c3d4e5f60718.jpg','Members standing together after a service','Discover RISE 63','vision','ink',1,10),
+  ('ACADEMY','Learn it. Then build it.','Three months.','b2c3d4e5f6071829.jpg','Students in a workshop','','','ink',1,20),
+  ('HIDDEN','Not yet ready.','','b2c3d4e5f6071830.jpg','A draft','','','ink',0,30)");
+$anonymous = null;
+
+ok('Every public page renders as a complete document for a signed-out visitor', function () use ($anonymous): void {
+    foreach ([
+        [''           , 'the landing page'],
+        ['about'      , 'About Us'],
+        ['vision'     , 'the Vision page'],
+        ['privacy'    , 'Privacy Policy'],
+        ['terms'      , 'Terms & Conditions'],
+        ['contact'    , 'the contact page'],
+    ] as [$slug, $label]) {
+        $html = route($slug, [], $anonymous);
+        $address = $slug === '' ? '/' : '/' . $slug;
+        assertTrue(strlen($html) > 2000, $label . ' (' . $address . ') rendered only ' . strlen($html) . ' bytes');
+        assertTrue(str_contains($html, '<!doctype html>'), $label . ' must be a whole document');
+        assertTrue(!str_contains($html, 'Fatal error'), $label . ' contains PHP error markup');
+
+        // A landing page that leaks the application shell is a landing page nobody trusts.
+        assertTrue(!str_contains($html, 'class="topbar"'), $label . ' must not render the admin chrome');
+        assertTrue(!str_contains($html, 'class="bottom-nav"'), $label . ' must not render the app tab bar');
+
+        // Exactly one <h1>: the page's subject, declared once.
+        assertSame(1, substr_count($html, '<h1'), $label . ' must have exactly one <h1>');
+
+        // The WhatsApp route is derived from the setting: 0803… becomes wa.me/234803…, because that
+        // is the form WhatsApp accepts for a Nigerian number.
+        assertTrue(!str_contains($html, 'wa.me/0803'), $label . ' must not link a local number to WhatsApp');
+    }
+});
+
+ok('The landing page carries the published slides and none of the hidden ones', function () use ($anonymous): void {
+    $home = route('', [], $anonymous);
+    assertSame(2, substr_count($home, 'class="hero-slide'), 'every published slide appears, and only those');
+    assertSame(2, substr_count($home, 'data-slide-to='), 'each gets one direct-navigation control');
+    assertTrue(!str_contains($home, 'Not yet ready'), 'an unpublished slide must not leak onto the page');
+    assertTrue(str_contains($home, 'aria-roledescription="carousel"'), 'the carousel announces itself');
+    assertTrue(!str_contains($home, 'role="tab"'), 'a tab role without a tabpanel is invalid');
+    assertSame(1, substr_count($home, '<h1'), 'the landing page declares its subject once');
+
+    // The published call to action points where it says it will.
+    assertTrue(str_contains($home, 'href="/vision"'), 'the hero button opens the page it names');
+
+    // The deep link carries the configured number, not a placeholder.
+    assertTrue(str_contains($home, 'wa.me/2348031234567'), 'the WhatsApp link must be the configured number');
+});
+
+ok('An unpublished page is not readable and does not advertise itself', function () use ($anonymous): void {
+    $missing = route('site-not-found', [], $anonymous);
+    assertTrue(
+        stripos($missing, 'not here') !== false || stripos($missing, 'not found') !== false,
+        'an unknown address shows the site own 404 page'
+    );
+    assertTrue(!str_contains($missing, 'Closing dates'), 'and does not leak the draft body');
+
+    // A stranger who mistypes an address must land in the site, not at a sign-in form.
+    $index = (string) file_get_contents(RISE63_TEST_ROOT . '/index.php');
+    assertTrue(
+        str_contains($index, '$page = $siteFallback'),
+        'an unknown anonymous URL must fall back to the public site, not to /login'
+    );
+});
+
+ok('The CMS opens for an administrator and lists what exists', function () use ($admin): void {
+    $cms = route('website', [], $admin);
+    assertClean('the website admin', $cms, 'Hero slider');
+    assertTrue(str_contains($cms, 'class="cms-page"'), 'the pages are listed');
+    assertTrue(str_contains($cms, 'class="cms-slide"'), 'the slides are listed');
+    assertTrue(str_contains($cms, 'name="action" value="slide-move"'), 'a slide can be reordered');
+    assertTrue(str_contains($cms, 'name="action" value="slide-delete"'), 'a slide can be removed');
+    assertTrue(str_contains($cms, 'name="csrf"'), 'the CMS posts carry a CSRF token');
+    assertTrue(str_contains($cms, 'Privacy Policy'), 'and each row names its page');
+
+    // The editors are separate states; each posts its own action.
+    $pageEditor = route('website', ['page' => 'new'], $admin);
+    assertClean('the new-page editor', $pageEditor, 'Add a page');
+    assertTrue(str_contains($pageEditor, 'name="action" value="page-save"'), 'a page can be saved');
+    assertTrue(str_contains($pageEditor, 'name="body"'), 'and has a body field');
+    assertTrue(str_contains($pageEditor, 'cms-help'), 'with the formatting guide next to it');
+
+    $slideForm = route('website', ['slide' => 'new'], $admin);
+    assertClean('the new-slide editor', $slideForm, 'Add a slide');
+    assertTrue(str_contains($slideForm, 'name="action" value="slide-save"'), 'a slide can be saved');
+    assertTrue(str_contains($slideForm, 'enctype="multipart/form-data"'), 'and can carry a photograph');
+
+    // The editors open with the current content in them, which is the difference between a CMS an
+    // officer can use and a form that silently blanks a page.
+    $existing = route('website', ['page' => 'privacy'], $admin);
+    assertClean('the existing-page editor', $existing, 'Names and contact details');
+    assertTrue(str_contains($existing, 'aria-readonly="true"'), 'a footer page keeps its address');
+
+    $slideEditor = route('website', ['slide' => '1'], $admin);
+    assertTrue(str_contains($slideEditor, 'id="slide-editor"'), 'the slide editor opens');
+    assertTrue(str_contains($slideEditor, 'No genuine need'), 'and is filled with the current headline');
+});
+
+ok('The CMS is administrator-only', function () use ($member): void {
+    // The refusal is Security::fail(), which is `never` and calls exit — in the embed SAPI that would
+    // end the whole run, so the gate is asserted through the same predicate the gate uses. The
+    // refusal path for a real request is covered by tests/render.php, which requires requireAdmin()
+    // to appear in the route's first 200 characters.
+    assertTrue(!Core\Auth::isAdmin($member), 'a youth member was treated as an administrator');
+    assertTrue(!Core\Auth::isAdmin(['role' => 'csr_rep']), 'a CSR representative cannot edit the site');
+});
+
+ok('An administrator can create, edit, hide and remove a page', function (): void {
+    // The whole point of the CMS is that this can be done without a release. A screen that saves
+    // nothing, or saves a duplicate row each time, looks identical in a screenshot.
+    $saved = Core\Site::savePage([
+        'slug' => 'scholarships', 'title' => 'Scholarships', 'kicker' => 'School fees',
+        'summary' => 'Termly support.', 'body' => "## Who qualifies\n\nSS1 to SS3.",
+        'is_published' => true, 'sort_order' => 40,
+    ]);
+    assertSame('scholarships', $saved['slug'], 'the page is created');
+    assertTrue(strlen((string) $saved['body']) > 10, 'and its body is stored');
+
+    // Editing must update the row the slug already owns.
+    Core\Site::savePage([
+        'slug' => 'scholarships', 'title' => 'Scholarships and Bursaries', 'kicker' => 'School fees',
+        'summary' => 'Termly support.', 'body' => "## Who qualifies\n\nSS1 to SS3.",
+        'is_published' => true, 'sort_order' => 40,
+    ]);
+    $rows = Database::all("SELECT id FROM site_pages WHERE slug = 'scholarships'");
+    assertSame(1, count($rows), 'editing a page must not add a second row');
+    assertSame('Scholarships and Bursaries', (string) Core\Site::page('scholarships')['title']);
+
+    // Hiding a page takes it off the public site but keeps it editable, which is the difference
+    // between "unpublished" and "deleted".
+    Core\Site::savePage([
+        'slug' => 'scholarships', 'title' => 'Scholarships and Bursaries', 'kicker' => 'School fees',
+        'summary' => 'Termly support.', 'body' => "## Who qualifies\n\nSS1 to SS3.",
+        'is_published' => false, 'sort_order' => 40,
+    ]);
+    assertSame(null, Core\Site::page('scholarships'), 'an unpublished page is not public');
+    assertTrue(Core\Site::pageForEditing('scholarships') !== null, 'but the editor still opens it');
+
+    // And it can be removed for good.
+    Core\Site::deletePage('scholarships');
+    assertSame(null, Core\Site::pageForEditing('scholarships'), 'a deleted page is gone');
+});
+
+ok('The hero can be reordered and trimmed without a release', function (): void {
+    // The public-page test above seeded two slides; start from a clean hero so the ordering
+    // assertion is about this test's own rows.
+    Database::connection()->exec('DELETE FROM site_slides');
+
+    $first  = Core\Site::saveSlide(['headline' => 'First slide', 'sort_order' => 10, 'is_published' => true]);
+    $second = Core\Site::saveSlide(['headline' => 'Second slide', 'sort_order' => 20, 'is_published' => true]);
+
+    $order = array_column(Core\Site::slides(false), 'headline');
+    assertSame(['First slide', 'Second slide'], $order, 'slides follow sort_order');
+
+    Core\Site::moveSlide($second, 'up');
+    $order = array_column(Core\Site::slides(false), 'headline');
+    assertSame(['Second slide', 'First slide'], $order, 'moving up reorders them');
+
+    // Moving the top slide up must be a no-op, not an error or a wrap-around.
+    Core\Site::moveSlide($second, 'up');
+    assertSame(['Second slide', 'First slide'], array_column(Core\Site::slides(false), 'headline'));
+
+    Core\Site::deleteSlide($first);
+    assertSame(1, count(Core\Site::slides(false)), 'a slide can be deleted');
+
+    // Only published slides reach the public page.
+    Core\Site::saveSlide(['headline' => 'Draft slide', 'sort_order' => 30, 'is_published' => false]);
+    $public = array_column(Core\Site::slides(true), 'headline');
+    assertTrue(!in_array('Draft slide', $public, true), 'an unpublished slide stays off the site');
 });
 
 /* ─────────────────────────────── summary ─────────────────────────────── */

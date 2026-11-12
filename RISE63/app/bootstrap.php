@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace RISE63;
 
-const VERSION        = '1.1.0';
+const VERSION        = '1.2.0';
 const MIN_PHP        = '8.2.0';
 const PRODUCT        = 'RISE 63';
 const ROOT           = __DIR__ . '/..';
@@ -43,6 +43,10 @@ require __DIR__ . '/Core/Schema.php';
 require __DIR__ . '/Core/ZipReader.php';
 require __DIR__ . '/Core/Updater.php';
 require __DIR__ . '/Core/PasswordReset.php';
+// The public website. SiteDefaults is required first: Site falls back to it when migration 0005 has
+// not run, so the order matters.
+require __DIR__ . '/Core/SiteDefaults.php';
+require __DIR__ . '/Core/Site.php';
 
 date_default_timezone_set('UTC');
 ini_set('display_errors', '0');

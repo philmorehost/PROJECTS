@@ -20,6 +20,17 @@ final class Settings
         'notification_email'            => ['type' => 'email', 'label' => 'Security notification e-mail', 'group' => 'brand'],
         'support_phone'                 => ['type' => 'phone', 'label' => 'Support phone', 'group' => 'brand'],
         'theme_color'                   => ['type' => 'color', 'label' => 'Brand colour', 'group' => 'brand'],
+        // ── Public site ──────────────────────────────────────────────────────────────
+        // The WhatsApp number is the organisation's actual support channel, so it is a setting and
+        // not a constant: it changes when the officer changes, and a release should not be needed.
+        // Stored exactly as typed — the display and the wa.me link are derived from it, because
+        // "0803 123 4567" is what a person reads and 2348031234567 is what WhatsApp needs.
+        'whatsapp_number'               => ['type' => 'phone', 'label' => 'WhatsApp number', 'group' => 'website'],
+        'whatsapp_message'              => ['type' => 'text', 'max' => 160, 'label' => 'Default WhatsApp message', 'group' => 'website', 'default' => 'Hello RISE 63 — I would like to know more.'],
+        'contact_email'                 => ['type' => 'email', 'label' => 'Contact e-mail shown on the site', 'group' => 'website'],
+        'contact_address'               => ['type' => 'text', 'max' => 160, 'label' => 'Province office address', 'group' => 'website'],
+        'hero_autoplay_seconds'         => ['type' => 'int', 'min' => 0, 'max' => 20, 'label' => 'Seconds each hero slide is shown (0 = never advance on its own)', 'group' => 'website', 'default' => '7'],
+        'site_footer_note'              => ['type' => 'text', 'max' => 300, 'label' => 'Footer note', 'group' => 'website'],
         'pwa_install_prompt'            => ['type' => 'bool', 'label' => 'Show install prompt', 'group' => 'brand'],
         'allow_self_registration'       => ['type' => 'bool', 'label' => 'Allow public self-registration', 'group' => 'brand'],
         'maintenance_mode'              => ['type' => 'bool', 'label' => 'Maintenance mode', 'group' => 'brand'],

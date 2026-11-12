@@ -18,7 +18,10 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $dir = dirname(__DIR__) . '/public/assets';
-$sources = ['app.css', 'app.js', 'security.js'];
+// The public site's two files are separate sources, built the same way: the landing page is a
+// different document with a different stylesheet, and bundling it into app.css would ship the whole
+// application's CSS to every anonymous visitor.
+$sources = ['app.css', 'app.js', 'security.js', 'site.css', 'site.js'];
 
 $manifest = [];
 $written  = [];

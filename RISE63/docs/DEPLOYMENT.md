@@ -390,8 +390,8 @@ GitHub and publishes a version; an installation then asks for it by key and doma
 
 ```
 POST https://manager.pmhserver.name.ng/check-update.php
-     key=<licence key>&domain=<this domain>[&force_version=1.1.0]
- ->  {"status":"success","latest_version":"1.1.0","checksum":"<sha256>","changelog":"…",
+     key=<licence key>&domain=<this domain>[&force_version=1.2.0]
+ ->  {"status":"success","latest_version":"1.2.0","checksum":"<sha256>","changelog":"…",
       "download_url":"https://manager.pmhserver.name.ng/download.php?token=…","tier_detected":"NON-SAAS"}
  ->  {"status":"suspended"|"error","message":"…"}            HTTP 400 / 403 / 500
 ```

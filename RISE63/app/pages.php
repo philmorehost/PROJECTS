@@ -18,10 +18,11 @@ use RISE63\Core\ParishDirectory;
 use RISE63\Core\Program;
 use RISE63\Core\Security;
 use RISE63\Core\Settings;
+use RISE63\Core\Site;
 use RISE63\Core\Updater;
 use RISE63\Core\View;
 
-use function RISE63\{config_dir, e, site_title, take_flashes};
+use function RISE63\{config_dir, e, setting, site_title, take_flashes, url};
 
 $flashes = take_flashes();
 $now     = ['flashes' => $flashes, 'user' => $user, 'page' => $page, 'title' => site_title()];
@@ -29,6 +30,60 @@ $now     = ['flashes' => $flashes, 'user' => $user, 'page' => $page, 'title' => 
 /** Render with the standard chrome. */
 $render = static function (string $template, array $data = [], bool $layout = true) use ($now, $user): void {
     View::render($template, array_merge($now, ['account' => $user], $data), $layout);
+};
+
+/**
+ * Render a public page.
+ *
+ * A separate path from $render on purpose: the public site is a different document (site/layout.php)
+ * with its own stylesheet, no tab bar and no admin chrome. Everything it needs is gathered here so the
+ * templates stay layout-only.
+ *
+ * $pageName is the slug used for the nav's current-page state; $extra carries page data.
+ *
+ * @param array<string,mixed> $extra
+ */
+$renderSite = static function (string $template, array $extra = []) use ($now, $user, $page): void {
+    // $template is the view *inside* site/ — the prefix is added here, once, so every call site reads
+    // as the page name rather than as a path.
+    $navPages = [[ 'slug' => '', 'label' => 'Home' ]];
+    try {
+        foreach (Site::publishedPages() as $row) {
+            // The four seeded pages are linked by name in the footer and by position in the nav; any
+            // page an administrator adds is appended, so the menu grows with the content.
+            $navPages[] = ['slug' => $row['slug'], 'label' => $row['title']];
+        }
+    } catch (\Throwable $error) {
+        error_log('RISE63 site nav: ' . $error->getMessage());
+    }
+
+    $view = 'site/' . $template;
+    View::render($view, array_merge($now, $extra, [
+        'siteNav'     => $navPages,
+        'sitePage'    => $extra['sitePage'] ?? $page,
+        'account'     => $user,
+        'flashes'     => [],
+        'layout'      => 'site',
+    ]), true);
+};
+
+/** Settings shared by every public page, read once. */
+$siteSettings = static function (): array {
+    $raw = (string) (setting('whatsapp_number', '') ?? '');
+    $digits = preg_replace('/\D+/', '', $raw) ?? '';
+    // A local Nigerian number written as 0803… becomes 234803…; anything already international is left
+    // alone. wa.me requires the country code with no plus and no leading zero.
+    if (str_starts_with($digits, '0')) {
+        $digits = '234' . substr($digits, 1);
+    }
+    return [
+        'whatsappRaw' => $raw,
+        'whatsappDigits' => $digits,
+        'whatsappDisplay' => $raw,
+        'contactEmail' => trim((string) (setting('contact_email', '') ?: setting('notification_email', ''))),
+        'contactPhone' => trim((string) setting('support_phone', '')),
+        'heroInterval' => max(0, (int) setting('hero_autoplay_seconds', 7)) * 1000,
+    ];
 };
 
 $requireAdmin = static function () use ($user): void {
@@ -39,7 +94,81 @@ $requireAdmin = static function () use ($user): void {
 
 switch ($page) {
 
-    // ── Public ───────────────────────────────────────────────────────────────────────
+    // ── The public site ──────────────────────────────────────────────────────────────
+    // The landing page, the four CMS pages the footer links to, the contact page, and any page an
+    // administrator adds under Settings → Website. All of them render through site/layout.php: a
+    // different document from the signed-in application, with its own stylesheet and no tab bar.
+    case '':
+        $site = $siteSettings();
+        $slides = Site::slides(true);
+        if ($slides === []) {
+            // Before migration 0005, or if every slide has been unpublished, the hero still has to
+            // say something. These are the blueprint's own opening lines rather than lorem ipsum.
+            $slides = \RISE63\Core\SiteDefaults::slides();
+        }
+        $renderSite('home', [
+            'title'           => site_title() . ' — Learn. Build. Rise.',
+            'metaDescription' => 'RISE 63 is a youth educational and economic empowerment initiative of RCCL Lagos Province 63 — '
+                . 'education support, entrepreneurship training, seed grants and responsible access to cooperative financing.',
+            'ogImage'         => url('public/img/hero-recognise.jpg'),
+            'slides'          => $slides,
+            'programmes'      => \RISE63\Core\SiteDefaults::programmes(),
+            'copy'            => \RISE63\Core\SiteDefaults::copy(),
+            'heroInterval'    => $site['heroInterval'],
+            'sitePage'        => '',
+            'siteNav'         => [],
+        ]);
+        break;
+
+    case 'contact':
+        $site = $siteSettings();
+        $renderSite('contact', [
+            'title'           => 'Contact — ' . site_title(),
+            'metaDescription' => 'Speak to the RISE 63 provincial office on WhatsApp, by e-mail or by telephone.',
+            'whatsappDigits'  => $site['whatsappDigits'],
+            'whatsappDisplay' => $site['whatsappDisplay'],
+            'contactEmail'    => $site['contactEmail'],
+            'contactPhone'    => $site['contactPhone'],
+            'topics'          => [
+                'A programme'        => 'Hello RISE 63 — I would like to know more about one of the programmes.',
+                'My application'     => 'Hello RISE 63 — I would like to ask about the status of my application.',
+                'Education Bridge'   => 'Hello RISE 63 — I would like to ask about Education Bridge support.',
+                'My parish'          => 'Hello RISE 63 — I would like to be put in touch with my parish representative.',
+                'Partner with us'    => 'Hello RISE 63 — I would like to discuss supporting or partnering with RISE 63.',
+                'Something is wrong' => 'Hello RISE 63 — I would like to report a problem with the platform.',
+            ],
+        ]);
+        break;
+
+    case 'privacy':
+    case 'terms':
+    case 'vision':
+    case 'about':
+    case 'parish-connect':
+        // One handler for every CMS page. `parish-connect` is the public explanation of Phase One and
+        // is seeded alongside the other four, so it is reachable from the landing page.
+        $record = Site::page($page);
+        if ($record === null) {
+            // A page that has been unpublished, or a slug with nothing behind it. Rendering the site's
+            // own 404 keeps the visitor inside the public site instead of dropping them at a sign-in
+            // form, which is what the catch-all below would do.
+            http_response_code(404);
+            $renderSite('not-found', [
+                'title'           => 'Page not found — ' . site_title(),
+                'metaDescription' => 'That page is not available.',
+                'sitePage'        => '',
+            ]);
+            break;
+        }
+        $renderSite('page', [
+            'title'           => $record['title'] . ' — ' . site_title(),
+            'metaDescription' => $record['summary'] !== '' ? $record['summary'] : Site::plain($record['body'], 158),
+            'sitePageData'    => $record,
+            'siteToc'         => \RISE63\Core\SiteDefaults::toc($record['body']),
+            'sitePage'        => $record['slug'],
+        ]);
+        break;
+
     case 'login':
         $render('auth/login', [
             'title'    => 'Sign in',
@@ -416,6 +545,39 @@ switch ($page) {
         ]);
         break;
 
+    case 'website':
+        $requireAdmin();
+        $site = $siteSettings();
+        $pages = [];
+        $slides = [];
+        try {
+            $pages  = Site::pages();
+            $slides = Site::slides(false);
+        } catch (\Throwable $error) {
+            // Migration 0005 has not run. The screen must still open and say so, rather than 500 on
+            // the one page an administrator would go to in order to discover that.
+            error_log('RISE63 website admin: ' . $error->getMessage());
+        }
+        $editingPage = null;
+        if (isset($_GET['page']) && $_GET['page'] !== 'new') {
+            $editingPage = Site::pageForEditing((string) $_GET['page']);
+        }
+        $editingSlide = null;
+        if (isset($_GET['slide']) && $_GET['slide'] !== 'new') {
+            $editingSlide = Site::slide((int) $_GET['slide']);
+        }
+        $render('staff/website', [
+            'title'        => 'Website',
+            'pages'        => $pages,
+            'slides'       => $slides,
+            'editingPage'  => $editingPage,
+            'editingSlide' => $editingSlide,
+            'siteSettings' => $site,
+            'whatsappDigits' => $site['whatsappDigits'],
+            'whatsappRaw'    => $site['whatsappRaw'],
+        ]);
+        break;
+
     case 'settings':
         $requireAdmin();
         // The form names the action filter `do`, because `action` is already the POST router's.
@@ -525,6 +687,17 @@ switch ($page) {
             'pinLock'  => Auth::pinLockedFor($user),
             // Same reason as registration: the picker is an enhancement, the list is the feature.
             'parishes' => $choosable,
+        ]);
+        break;
+
+    case 'site-not-found':
+        // Reached two ways: index.php maps an unknown anonymous URL here, and a CMS page that has
+        // been unpublished renders it directly. Either way the visitor stays inside the public site.
+        http_response_code(404);
+        $renderSite('not-found', [
+            'title'           => 'Page not found — ' . site_title(),
+            'metaDescription' => 'That page is not available.',
+            'sitePage'        => '',
         ]);
         break;
 
