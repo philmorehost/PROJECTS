@@ -30,35 +30,53 @@ if (!empty($force_version)) {
     $post_fields['force_version'] = $force_version;
 }
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $api_url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_fields));
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-$response = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($http_code === 200 && !empty($response)) {
-    $res_data = json_decode($response, true);
-    if ($res_data && $res_data['status'] === 'success') {
-        $latest_version = $res_data['latest_version'] ?? $current_version;
-        $changelog = $res_data['changelog'] ?? '<li>Bug fixes and performance improvements.</li>';
-        $checksum = $res_data['checksum'] ?? '';
-        
-        $clean_latest = ltrim(strtolower($latest_version), 'v');
-        $clean_current = ltrim(strtolower($current_version), 'v');
-        
-        if (version_compare($clean_latest, $clean_current, '>') || !empty($force_version)) {
-            $update_available = true;
-        }
-    } else {
-        $error_msg = $res_data['message'] ?? 'Inactive or invalid license.';
-    }
+if (!function_exists('curl_init')) {
+    $error_msg = 'The server PHP cURL extension is unavailable; the License Manager cannot be contacted.';
 } else {
-    $error_msg = 'Could not establish connection to the License Manager server.';
+    $ch = curl_init();
+    if ($ch === false) {
+        $error_msg = 'Could not initialize the HTTPS connection to the License Manager.';
+    } else {
+        curl_setopt($ch, CURLOPT_URL, $api_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_fields));
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        // Never accept an update response through an unverified TLS connection.
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $response = curl_exec($ch);
+        $curl_errno = curl_errno($ch);
+        $curl_error = curl_error($ch);
+        $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            error_log('[DGV updater] License Manager transport failure (cURL ' . $curl_errno . '): ' . $curl_error);
+            $error_msg = 'Could not connect to the License Manager over HTTPS. Check that this web server can make outbound HTTPS requests.';
+        } elseif (trim((string)$response) === '') {
+            $error_msg = 'The License Manager returned an empty response (HTTP ' . $http_code . ').';
+        } else {
+            $res_data = json_decode($response, true);
+            if (is_array($res_data) && ($res_data['status'] ?? '') === 'success' && $http_code >= 200 && $http_code < 300) {
+                $latest_version = $res_data['latest_version'] ?? $current_version;
+                $changelog = $res_data['changelog'] ?? '<li>Bug fixes and performance improvements.</li>';
+                $checksum = $res_data['checksum'] ?? '';
+
+                $clean_latest = ltrim(strtolower($latest_version), 'v');
+                $clean_current = ltrim(strtolower($current_version), 'v');
+
+                if (version_compare($clean_latest, $clean_current, '>') || !empty($force_version)) {
+                    $update_available = true;
+                }
+            } elseif (is_array($res_data) && !empty($res_data['message'])) {
+                $error_msg = 'License Manager (HTTP ' . $http_code . '): ' . $res_data['message'];
+            } else {
+                $error_msg = 'The License Manager returned an unexpected response (HTTP ' . $http_code . ').';
+            }
+        }
+    }
 }
 ?>
 <!DOCTYPE html>
