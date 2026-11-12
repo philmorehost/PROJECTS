@@ -128,11 +128,12 @@ final class ChurchPortal
         // even if JavaScript was bypassed; ambiguous/fuzzy names require a human choice.
         [$unit,$requested,$type]=self::resolveChurch($db,$input);
         $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn())return;
+        ensureNotificationSchema($db);
         $db->beginTransaction();
         try{
             $s=$db->prepare('SELECT * FROM church_registrations WHERE email=? FOR UPDATE');$s->execute([$email]);$existing=$s->fetch();
-            $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn()){$db->commit();return;}
-            if($existing && $existing['status']==='pending'){$db->commit();return;}
+            $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetchColumn()){if($db->inTransaction())$db->commit();return;}
+            if($existing && $existing['status']==='pending'){if($db->inTransaction())$db->commit();return;}
             $values=[$unit,$requested,$type,$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),'','','',''];
             if($existing){
                 $db->prepare("UPDATE church_registrations SET parish_id=?,requested_church_name=?,requested_church_type=?,full_name=?,email=?,phone=?,password_hash=?,bank_name=?,account_name=?,account_ciphertext=?,account_last4=?,status='pending',reviewed_by=NULL WHERE id=?")->execute([...$values,$existing['id']]);
@@ -140,7 +141,7 @@ final class ChurchPortal
             }else {$db->prepare('INSERT INTO church_registrations(parish_id,requested_church_name,requested_church_type,full_name,email,phone,password_hash,bank_name,account_name,account_ciphertext,account_last4) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute($values);}
             $applicationId=$existing?(int)$existing['id']:(int)$db->lastInsertId();
             ApprovalNotifications::queue($db,$applicationId);
-            $db->commit();
+            if($db->inTransaction())$db->commit();
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 
     }
@@ -148,6 +149,7 @@ final class ChurchPortal
     {
         requireRole($admin,['provincial_admin']);
         if(!in_array($decision,['approved','rejected'],true))throw new InvalidArgumentException('Invalid review decision.');
+        ensureNotificationSchema($db);
         $db->beginTransaction();
         try {
             $db->query("SELECT id FROM security_settings WHERE setting_key='site_title' FOR UPDATE")->fetch();
@@ -164,7 +166,7 @@ final class ChurchPortal
             }
             $db->prepare('UPDATE church_registrations SET status=?,reviewed_by=?,password_hash=NULL WHERE id=?')->execute([$decision,$admin['id'],$id]);
             notify($db,$row['email'],'Officer registration '.$decision,$decision==='approved'?'Your registration has been approved. Sign in using the password you chose.':'Your registration was not approved. Please contact the provincial administrator.');
-            $db->commit();return 'Registration '.$decision.'. Notification queued.';
+            if($db->inTransaction())$db->commit();return 'Registration '.$decision.'. Notification queued.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }
     public static function submitPayment(PDO $db,array $user,array $input,?array $upload=null): string
@@ -176,6 +178,7 @@ final class ChurchPortal
         if($amount<=0 || $ref==='' || strlen($ref)>100 || !$dt || $dt->format('Y-m-d')!==$date || $date>date('Y-m-d') || $date<'2020-01-01')throw new InvalidArgumentException('Provide a positive transferred amount, bank reference and valid transfer date (not in the future).');
         $proof=null;$hasUpload=$upload!==null && ($upload['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE;
         if($hasUpload && !PaymentProof::ready($db))throw new RuntimeException('The administrator must enable receipt uploads in Portal settings.');
+        ensureNotificationSchema($db);
         $db->beginTransaction();
         try{
             $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? AND parish_id=? FOR UPDATE');$s->execute([(int)($input['ledger_id'] ?? 0),$ownUnit]);$row=$s->fetch();
@@ -186,7 +189,7 @@ final class ChurchPortal
             $db->prepare('INSERT INTO payment_notifications(ledger_id,submitted_by,amount,transfer_reference,transfer_date) VALUES(?,?,?,?,?)')->execute([$row['id'],$user['id'],Money::decimal($amount),$ref,$date]);
             if($proof){$notificationId=(int)$db->lastInsertId();$db->prepare('INSERT INTO payment_receipts(notification_id,proof_key,byte_size,thumb_bytes,width,height) VALUES(?,?,?,?,?,?)')->execute([$notificationId,$proof['proof_key'],$proof['byte_size'],$proof['thumb_bytes'],$proof['width'],$proof['height']]);}
             notify($db,setting($db,'notification_email'),'Payment notification pending review',$row['payment_reference'].' has a new manual transfer notification. Verify against your bank statement before approval.');
-            $db->commit();return 'Payment submitted. Awaiting treasury confirmation.';
+            if($db->inTransaction())$db->commit();return 'Payment submitted. Awaiting treasury confirmation.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($proof)PaymentProof::remove($proof['proof_key']);throw $e;}
     }
     public static function deletePendingReports(PDO $db,array $user,array $input): int
@@ -216,11 +219,12 @@ final class ChurchPortal
         if(!$auto)requireRole($user,['provincial_admin','provincial_treasurer']);
         else requireRole($user,['provincial_admin','provincial_treasurer','parish_officer','area_rep','zonal_rep']);
         $decision=$input['decision'] ?? '';if(!in_array($decision,['approved','rejected'],true))throw new InvalidArgumentException('Invalid review decision.');
+        ensureNotificationSchema($db);
         $db->beginTransaction();
         try{
             $s=$db->prepare('SELECT * FROM users WHERE id=? FOR UPDATE');$s->execute([$user['id']]);$fresh=$s->fetch();
             if(!$auto){
-              if(!Security::verifyPin($db,$fresh,(string)($input['pin'] ?? ''))){$db->commit();throw new RuntimeException('PIN invalid or temporarily locked.');}
+              if(!Security::verifyPin($db,$fresh,(string)($input['pin'] ?? ''))){if($db->inTransaction())$db->commit();throw new RuntimeException('PIN invalid or temporarily locked.');}
             }else{
               if(!in_array($fresh['role'],['provincial_admin','provincial_treasurer'],true))throw new RuntimeException('Automatic PayHub approval requires an administrator reviewer.');
             }
@@ -236,7 +240,7 @@ final class ChurchPortal
             $note=trim($input['review_note'] ?? '');if(strlen($note)>255)throw new InvalidArgumentException('Review note is too long.');
             $db->prepare('UPDATE payment_notifications SET status=?,review_note=?,reviewed_by=?,reviewed_at=NOW() WHERE id=?')->execute([$decision,$note,$user['id'],$payment['id']]);
             $s=$db->prepare('SELECT email FROM users WHERE id=?');$s->execute([$payment['submitted_by']]);notify($db,(string)$s->fetchColumn(),'Payment notification '.$decision,$row['payment_reference'].' — Your transfer notification was '.$decision.'. '.$note);
-            $db->commit();return 'Payment notification '.$decision.'.';
+            if($db->inTransaction())$db->commit();return 'Payment notification '.$decision.'.';
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }
 }

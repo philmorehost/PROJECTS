@@ -113,6 +113,41 @@ $cssContent=(string)file_get_contents(__DIR__.'/../public/assets/app.f99713ab.cs
 $payhubSrc=(string)file_get_contents(__DIR__.'/../app/PayHub.php');
 $payViewSrc=(string)file_get_contents(__DIR__.'/../app/payments-view.php');
 $actionsSrc=(string)file_get_contents(__DIR__.'/../app/actions.php');
+$indexSrc=(string)file_get_contents(__DIR__.'/../index.php');
 check(str_contains($payhubSrc,'reconcileVirtualAccount')&&str_contains($payhubSrc,'?email=')&&str_contains($payViewSrc,'PayHub::virtualAccounts($db,(string)($user[\'email\']??\'\'))')&&str_contains($actionsSrc,'church_registrations')&&str_contains($actionsSrc,'PayHub::reconcileVirtualAccount'),'PayHub VA scoping, church_registrations phone fallback and DVA reconciliation wired across PayHub/actions/payments-view');
+check(str_contains($payhubSrc,'recent_transactions')&&str_contains($actionsSrc,'payhub_last_initialized_ledger')&&str_contains($indexSrc,"str_starts_with(\$gk,'amp;')"),'PayHub recent_transactions merge, ledger-switch session refresh and return amp; normalization wired');
+
+// Test HMAC-SHA512 (128-char) webhook signature acceptance + auto-approval & stale-ledger DVA reassignment
+$db->exec("DELETE FROM remittance_ledgers WHERE payment_reference='RMT-MANUAL-TEST'");
+$db->prepare('INSERT INTO remittance_ledgers(parish_id,provincial_levy_due,amount_paid,status,payment_reference,gross_income,period_month,period_year) VALUES(1,?,?,?,?,?,?,?)')->execute(['100.00','0.00','pending','RMT-SHA512-REASSIGN','200.00',12,2025]);$sha512Ledger=(int)$db->lastInsertId();
+$sha512Body=json_encode(['event'=>'charge.success','data'=>['reference'=>'100004SHA512','amount'=>10000,'gateway_amount'=>10000,'fee_amount'=>160,'settled_amount'=>9840,'status'=>'success','domain'=>'test','channel'=>'dedicated_nuban','paid_at'=>date('c'),'customer'=>['email'=>'officer@example.org'],'metadata'=>['ledger_id'=>$dvaLedger]]]);
+$_SERVER['HTTP_X_PAYHUB_SIGNATURE']=hash_hmac('sha512',$sha512Body,'sk_test_123');
+$sha512Res=PayHub::handleWebhook($db,$sha512Body);
+check($sha512Res['status']==='queued'&&str_contains($sha512Res['message'],'auto-approved')&&$db->query('SELECT status FROM remittance_ledgers WHERE id='.$sha512Ledger)->fetchColumn()==='verified','HMAC-SHA512 webhook reassigns stale already-settled metadata to matching open ledger and auto-approves cleanly');
+
+// Test invalid signature rejection vs TLS verify API fallback (untrusted POST body ignored)
+$_SERVER['HTTP_X_PAYHUB_SIGNATURE']='0'.str_repeat('a',127);
+$forgedBody=json_encode(['event'=>'charge.success','data'=>['reference'=>'PH_FORGED_1','amount'=>999999,'metadata'=>['ledger_id'=>$cacheLedger]]]);
+$forgedRes=PayHub::handleWebhook($db,$forgedBody,fn(string $r)=>['paid'=>false]);
+check($forgedRes['status']==='invalid'&&http_response_code()===401,'unverified webhook rejected with 401 when API verify returns unpaid');
+http_response_code(200);
+$db->prepare('INSERT INTO remittance_ledgers(parish_id,provincial_levy_due,amount_paid,status,payment_reference,gross_income,period_month,period_year) VALUES(1,?,?,?,?,?,?,?)')->execute(['120.00','0.00','pending','RMT-TLS-FALLBACK','240.00',5,2025]);$tlsLedger=(int)$db->lastInsertId();
+$tamperedPost=json_encode(['event'=>'charge.success','data'=>['reference'=>'PH_TLS_VERIFIED','amount'=>1,'metadata'=>['ledger_id'=>$cacheLedger]]]);
+$tlsRes=PayHub::handleWebhook($db,$tamperedPost,fn(string $r)=>['paid'=>true,'data'=>['reference'=>'PH_TLS_VERIFIED','amount'=>12000,'gateway_amount'=>12000,'fee_amount'=>180,'settled_amount'=>11820,'status'=>'success','domain'=>'test','channel'=>'bank_transfer','paid_at'=>date('c'),'customer'=>['email'=>'officer@example.org'],'metadata'=>['ledger_id'=>$tlsLedger]]]);
+$tlsNote=$db->query("SELECT * FROM payment_notifications WHERE payhub_reference='PH_TLS_VERIFIED'")->fetch();
+check($tlsRes['status']==='queued'&&$tlsNote&&(int)$tlsNote['ledger_id']===$tlsLedger&&Money::cents((string)$tlsNote['amount'])===12000&&$db->query('SELECT status FROM remittance_ledgers WHERE id='.$tlsLedger)->fetchColumn()==='verified','mismatched webhook signature falls back safely to TLS verify payload and never trusts unverified POST data');
+
+// Test ensureNotificationSchema never executes DDL when body_html already exists on a fresh PDO
+$freshProbePdo=new class('sqlite::memory:') extends PDO {
+    public array $execSql=[];
+    public function exec(string $statement): int|false { $this->execSql[]=$statement; return parent::exec($statement); }
+};
+$freshProbePdo->exec("CREATE TABLE notification_outbox(id INTEGER PRIMARY KEY,recipient TEXT,subject TEXT,body TEXT,body_html TEXT NULL)");
+$freshProbePdo->execSql=[];
+ensureNotificationSchema($freshProbePdo);
+check(empty($freshProbePdo->execSql),'ensureNotificationSchema skips ALTER TABLE when body_html already exists on fresh PDO');
+
+$db->exec("DELETE FROM payment_notifications WHERE payhub_reference IN ('100004SHA512','PH_TLS_VERIFIED')");
+$db->exec("DELETE FROM remittance_ledgers WHERE id IN ($sha512Ledger,$tlsLedger)");
 if(is_dir(ROOT.'/storage')){foreach([ROOT.'/storage/logs/payhub.log',ROOT.'/storage/logs/.htaccess'] as $lf)if(is_file($lf))@unlink($lf);@rmdir(ROOT.'/storage/logs');@rmdir(ROOT.'/storage');@rmdir(ROOT);}
 echo "PASS: $checks combined portal/PayHub assertions (SQLite harness; mocked gateway)\n";

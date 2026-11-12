@@ -15,8 +15,26 @@ function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32))
 function checkCsrf(): void { if (!hash_equals(csrf(), (string)($_POST['csrf'] ?? ''))) { http_response_code(403); throw new RuntimeException('Your session expired. Refresh and try again.'); } }
 function setting(PDO $db, string $key): string { $s=$db->prepare('SELECT setting_value FROM security_settings WHERE setting_key=?'); $s->execute([$key]); return (string)$s->fetchColumn(); }
 function audit(PDO $db, string $type, ?string $email=null, string $details=''): void { $db->prepare('INSERT INTO security_audit_logs(ip_address,username_attempted,event_type,details) VALUES(?,?,?,?)')->execute([Security::ip(),$email,$type,$details]); }
-function ensureNotificationSchema(PDO $db): void { static $done=false; if($done)return; try{@$db->exec("ALTER TABLE notification_outbox ADD COLUMN body_html TEXT NULL");}catch(Throwable){}$done=true; }
-function notify(PDO $db, string $email, string $subject, string $body, string $html=''): void { ensureNotificationSchema($db); if (filter_var($email,FILTER_VALIDATE_EMAIL)) { $s=$db->prepare('INSERT INTO notification_outbox(recipient,subject,body,body_html) VALUES(?,?,?,?)'); $s->execute([$email,$subject,$body,$html]); } }
+function ensureNotificationSchema(PDO $db): void {
+ static $done=null;
+ $done ??= new WeakMap();
+ if($done->offsetExists($db))return;
+ try{$db->query('SELECT body_html FROM notification_outbox LIMIT 0');$done[$db]=true;return;}catch(Throwable){}
+ if(method_exists($db,'inTransaction')&&$db->inTransaction())return;
+ try{@$db->exec("ALTER TABLE notification_outbox ADD COLUMN body_html TEXT NULL");}catch(Throwable){}
+ $done[$db]=true;
+}
+function notify(PDO $db, string $email, string $subject, string $body, string $html=''): void {
+ ensureNotificationSchema($db);
+ if (!filter_var($email,FILTER_VALIDATE_EMAIL)) return;
+ try {
+  $s=$db->prepare('INSERT INTO notification_outbox(recipient,subject,body,body_html) VALUES(?,?,?,?)');
+  $s->execute([$email,$subject,$body,$html]);
+ } catch(Throwable) {
+  $s=$db->prepare('INSERT INTO notification_outbox(recipient,subject,body) VALUES(?,?,?)');
+  $s->execute([$email,$subject,$body]);
+ }
+}
 function canRemit(array $user): bool { return in_array($user['role'],['parish_officer','area_rep','zonal_rep'],true); }
 function remittingUnit(PDO $db,array $user): int {
  requireRole($user,['parish_officer','area_rep','zonal_rep']);

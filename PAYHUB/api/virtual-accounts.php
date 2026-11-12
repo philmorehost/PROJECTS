@@ -40,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $date = sanitize($input['date'] ?? '');
 
     // Reconciliation Mode: if account_number and date are provided
+    $reconciled = [];
+    $recent_transactions = [];
     if ($account_number && $date) {
         $from = $date . 'T00:00:00Z';
         $to = $date . 'T23:59:59Z';
@@ -48,14 +50,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $is_test = (strpos($secret_key, 'sk_test_') === 0);
         $response = paystack_call("transaction?" . $params, 'GET', [], $is_test);
 
-        $reconciled = [];
-        if ($response && $response['status'] && is_array($response['data'] ?? null)) {
-            $cleanAcc = ltrim($account_number, '0');
-            $vaRowStmt = $db->prepare("SELECT metadata, customer_email FROM virtual_accounts WHERE user_id = ? AND (account_number = ? OR account_number = ? OR account_number = ?) LIMIT 1");
-            $vaRowStmt->execute([$merchant['id'], $account_number, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
-            $vaRow = $vaRowStmt->fetch();
-            $vaMeta = normalize_metadata_array($vaRow['metadata'] ?? null);
+        $cleanAcc = ltrim($account_number, '0');
+        $vaRowStmt = $db->prepare("SELECT metadata, customer_email FROM virtual_accounts WHERE user_id = ? AND (account_number = ? OR account_number = ? OR account_number = ?) LIMIT 1");
+        $vaRowStmt->execute([$merchant['id'], $account_number, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
+        $vaRow = $vaRowStmt->fetch();
+        $vaMeta = normalize_metadata_array($vaRow['metadata'] ?? null);
 
+        $recentByRef = [];
+        $formatRecent = static function(array $row): array {
+            $amt = ((float)($row['gateway_amount'] ?? 0) > 0) ? (float)$row['gateway_amount'] : (float)$row['amount'];
+            $feeAmt = (float)($row['fee_amount'] ?? 0);
+            $netAmt = ((float)($row['settled_amount'] ?? 0) > 0) ? (float)$row['settled_amount'] : max(0.0, $amt - $feeAmt);
+            return [
+                'reference' => (string)$row['reference'],
+                'amount' => $amt,
+                'amount_kobo' => to_minor_units($amt),
+                'fee' => $feeAmt,
+                'fee_kobo' => to_minor_units($feeAmt),
+                'settled_amount' => $netAmt,
+                'settled_kobo' => to_minor_units($netAmt),
+                'customer_email' => (string)($row['customer_email'] ?? ''),
+                'channel' => (string)($row['payment_method'] ?? 'dedicated_account'),
+                'domain' => ((int)($row['is_test'] ?? 0) === 1) ? 'test' : 'live',
+                'paid_at' => (string)($row['created_at'] ?? date('c')),
+                'metadata' => normalize_metadata_array($row['metadata'] ?? null),
+                'status' => (string)($row['status'] ?? 'success'),
+            ];
+        };
+
+        if ($response && $response['status'] && is_array($response['data'] ?? null)) {
             foreach ($response['data'] as $rtx) {
                 $ref = $rtx['reference'];
                 $remote_acc = (string)($rtx['dedicated_account']['account_number']
@@ -65,9 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                 if ($remote_acc !== '' && ltrim($remote_acc, '0') === $cleanAcc) {
                     // Check if already in our DB
-                    $stmt = $db->prepare("SELECT id FROM transactions WHERE reference = ?");
+                    $stmt = $db->prepare("SELECT * FROM transactions WHERE reference = ? LIMIT 1");
                     $stmt->execute([$ref]);
-                    if (!$stmt->fetch()) {
+                    $existingTx = $stmt->fetch();
+                    if (!$existingTx) {
                         $amount = $rtx['amount'] / 100;
                         $cust_email = $rtx['customer']['email'] ?? ($vaRow['customer_email'] ?? '');
                         $channelType = $rtx['channel'] ?? 'dedicated_account';
@@ -77,7 +101,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
                         $fee = calculate_fees($amount, $isIntl, $merchant['id'], $gatewayFee, $channelType);
                         $settled = round(max(0.0, $amount - $fee), 2);
-                        $txMetaJson = json_encode(array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta));
+                        $txMetaArr = array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta);
+                        if (empty($txMetaArr['receiver_account_number'])) {
+                            $txMetaArr['receiver_account_number'] = $account_number;
+                        }
+                        $txMetaJson = json_encode($txMetaArr);
 
                         $db->beginTransaction();
                         try {
@@ -102,14 +130,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                             $db->commit();
                             trigger_merchant_webhook($t_id);
-                            $reconciled[] = ['reference' => $ref, 'amount' => $amount, 'fee' => $fee, 'settled_amount' => $settled, 'status' => 'reconciled'];
+                            $item = [
+                                'reference' => $ref,
+                                'amount' => $amount,
+                                'amount_kobo' => to_minor_units($amount),
+                                'fee' => $fee,
+                                'fee_kobo' => to_minor_units($fee),
+                                'settled_amount' => $settled,
+                                'settled_kobo' => to_minor_units($settled),
+                                'customer_email' => $cust_email,
+                                'channel' => $channelType,
+                                'domain' => $is_test ? 'test' : 'live',
+                                'paid_at' => (string)($rtx['paid_at'] ?? date('c')),
+                                'metadata' => $txMetaArr,
+                                'status' => 'reconciled'
+                            ];
+                            $reconciled[] = $item;
+                            $recentByRef[$ref] = $item;
                         } catch (Exception $e) {
                             $db->rollBack();
                         }
+                    } elseif ((int)$existingTx['user_id'] === (int)$merchant['id'] && $existingTx['status'] === 'success') {
+                        $recentByRef[$ref] = $formatRecent($existingTx);
                     }
                 }
             }
         }
+
+        // Also surface already-recorded DVA transfers from PayHub's DB (e.g. received via webhook seconds earlier)
+        $baseTs = strtotime($date) ?: time();
+        $localSince = date('Y-m-d 00:00:00', $baseTs - 86400);
+        $localUntil = date('Y-m-d 23:59:59', $baseTs + 86400);
+        $localStmt = $db->prepare(
+            "SELECT * FROM transactions
+              WHERE user_id = ? AND is_test = ? AND status = 'success'
+                AND payment_method IN ('bank_transfer', 'dedicated_account', 'dedicated_nuban', 'transfer', 'bank')
+                AND created_at >= ? AND created_at <= ?
+              ORDER BY id DESC LIMIT 20"
+        );
+        $localStmt->execute([$merchant['id'], $is_test ? 1 : 0, $localSince, $localUntil]);
+        foreach ($localStmt->fetchAll() as $ltx) {
+            $lRef = (string)$ltx['reference'];
+            if (isset($recentByRef[$lRef])) {
+                continue;
+            }
+            $lMeta = normalize_metadata_array($ltx['metadata'] ?? null);
+            $lAcc = (string)($lMeta['receiver_account_number'] ?? ($lMeta['virtual_account_number'] ?? ''));
+            $accMatch = ($lAcc !== '' && ltrim($lAcc, '0') === $cleanAcc);
+            $emailMatch = !empty($vaRow['customer_email']) && strcasecmp((string)$ltx['customer_email'], (string)$vaRow['customer_email']) === 0;
+            if (!$accMatch && !$emailMatch) {
+                continue;
+            }
+            $recentByRef[$lRef] = $formatRecent($ltx);
+        }
+
+        $recent_transactions = array_values($recentByRef);
     }
 
     // Default fetch logic
@@ -137,7 +212,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     echo json_encode([
         'status' => true,
         'data' => $res_data,
-        'reconciled' => $reconciled ?? []
+        'reconciled' => $reconciled,
+        'recent_transactions' => $recent_transactions
     ]);
 } else {
     http_response_code(405);

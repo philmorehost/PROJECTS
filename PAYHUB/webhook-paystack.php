@@ -150,10 +150,14 @@ if ($event_type === 'charge_success') {
     if (!$tx) {
         $acc_number = null;
         // Check standard structures for dedicated account payments
-        if (isset($data['dedicated_combined_account']['account_number'])) {
+        if (isset($data['dedicated_account']['account_number'])) {
+            $acc_number = $data['dedicated_account']['account_number'];
+        } elseif (isset($data['dedicated_combined_account']['account_number'])) {
             $acc_number = $data['dedicated_combined_account']['account_number'];
         } elseif (isset($data['customer']['dedicated_account'])) {
-            $acc_number = $data['customer']['dedicated_account'];
+            $acc_number = is_array($data['customer']['dedicated_account'])
+                ? ($data['customer']['dedicated_account']['account_number'] ?? null)
+                : $data['customer']['dedicated_account'];
         } elseif (isset($data['authorization']['receiver_bank_account_number'])) {
             $acc_number = $data['authorization']['receiver_bank_account_number'];
         } elseif (isset($data['receiver_bank_account_number'])) {
@@ -318,6 +322,22 @@ if ($event_type === 'charge_success') {
         }
 
         if ($fulfillment_success) {
+            // Link any pending checkout session that this DVA transfer settled
+            try {
+                $txMetaLink = normalize_metadata_array($tx['metadata'] ?? null);
+                $linkedCheckoutRef = trim((string)($txMetaLink['checkout_reference'] ?? ''));
+                if ($linkedCheckoutRef !== '' && $linkedCheckoutRef !== $tx['reference']) {
+                    $chkStmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? AND reference = ? AND status = 'pending' LIMIT 1");
+                    $chkStmt->execute([$tx['user_id'], $linkedCheckoutRef]);
+                    $pendingCheckout = $chkStmt->fetch();
+                    if ($pendingCheckout && amount_covers($pendingCheckout['amount'], $amount)) {
+                        supersede_checkout_transaction($db, $pendingCheckout, $tx);
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('[PayHub] DVA checkout link error: ' . $e->getMessage());
+            }
+
             // Notify Merchant & Forward Webhook (Outside Transaction to prevent timeouts/locks)
             $stmt = $db->prepare("SELECT email, business_name, webhook_url, secret_key, test_secret_key FROM users WHERE id = ?");
             $stmt->execute([$tx['user_id']]);
