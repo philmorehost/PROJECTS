@@ -38,6 +38,9 @@ try {
  $sampleDownload=($_GET['download'] ?? '')==='church-import-sample';
  if($sampleDownload && (!$user || $user['role']!=='provincial_admin')) {http_response_code(403);exit('Only a signed-in provincial administrator can download this template.');}
  if($sampleDownload && $_SERVER['REQUEST_METHOD']!=='GET') {http_response_code(405);header('Allow: GET');exit('Use GET to download the CSV template.');}
+ $exportDownload=($_GET['download'] ?? '')==='remittance-reports';
+ if($exportDownload && (!$user || !in_array($user['role'],['provincial_admin','provincial_treasurer','parish_officer','area_rep','zonal_rep'],true))) {http_response_code(403);exit('Please sign in to export remittance reports.');}
+ if($exportDownload && $_SERVER['REQUEST_METHOD']!=='GET') {http_response_code(405);header('Allow: GET');exit('Use GET to download remittance reports.');}
  if($user) {
   try { $licenseState = (new LicenseManager(ROOT))->check($_SERVER['HTTP_HOST'] ?? ''); }
   catch (RuntimeException $licenseError) { $licenseState = ['valid'=>false, 'message'=>$licenseError->getMessage()]; }
@@ -57,6 +60,10 @@ try {
    header('Content-Disposition: attachment; filename="remit-church-import-sample.csv"');
    header('Content-Length: '.strlen($csv));
    echo $csv;exit;
+  }
+  if($exportDownload) {
+   if(!$licenseState['valid']){http_response_code(403);exit('Activate a valid licence before exporting remittance reports.');}
+   RemittanceExport::serve($db,$user,$_GET);
   }
   $ids=financialScope($db,$user);
   if(($_GET['payhub_log']??'')==='1' && $_SERVER['REQUEST_METHOD']==='POST'){header('Content-Type: application/json');try{$body=file_get_contents('php://input');$payload=json_decode((string)$body,true)?:[];PayHub::log($db,(string)($payload['event']??'client_log'),$payload);echo json_encode(['ok'=>true]);}catch(Throwable){http_response_code(200);echo json_encode(['ok'=>true]);}exit;}
@@ -150,9 +157,9 @@ function hiddenAction(string $a): void {echo '<input type="hidden" name="csrf" v
 <?php require ROOT.'/app/welcome-guide.php'; ?>
 <?php if($page==='remittances' && canRemit($user) && $portalReady): ?><div class="remittance-grid"><?php endif ?>
 <?php require ROOT.'/app/offering-view.php'; ?>
-<?php if($page==='remittances'): require ROOT.'/app/payments-view.php'; if(canRemit($user) && $portalReady): ?></div><?php endif; require ROOT.'/app/history-reports.php'; endif ?>
+<?php if($page==='remittances'): require ROOT.'/app/payments-view.php'; if(canRemit($user) && $portalReady): ?></div><?php endif; require ROOT.'/app/export-reports-view.php'; require ROOT.'/app/history-reports.php'; endif ?>
 <?php if($page==='overview'): ?>
-<section class="panel"><div class="panel-heading"><div><h2><?= $page==='overview'?'Recent remittances':'Remittance ledger' ?></h2><p><?= $page==='overview'?'Recent church reports':'Own and supervised church reports' ?></p></div><?php if($page==='overview'): ?><a class="text-link" href="?page=remittances">View ledger →</a><?php else: ?><label class="search-label"><input id="ledger-search" placeholder="Search parish or reference…" aria-label="Search ledger"></label><label class="ledger-filter">Status<select id="ledger-status"><option value="">All statuses</option><option value="pending">Pending</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="verified">Verified</option></select></label><?php endif ?></div><p class="ledger-result" id="ledger-result" aria-live="polite"></p><?php $ledgerRows=array_slice($rows,0,5);require ROOT.'/app/ledger-table.php'; ?><p id="ledger-no-results" class="empty-inline" hidden>No reports match your search. Try a different parish, reference or status.</p><div class="panel-foot"><span>◈ Access scoped to your role and hierarchy</span><span>All amounts in NGN</span></div></section>
+<section class="panel"><div class="panel-heading"><div><h2><?= $page==='overview'?'Recent remittances':'Remittance ledger' ?></h2><p><?= $page==='overview'?'Recent church reports':'Own and supervised church reports' ?></p></div><?php if($page==='overview'): ?><div class="panel-links"><a class="text-link" href="?page=remittances#export-reports">Export CSV / PDF</a><a class="text-link" href="?page=remittances">View ledger →</a></div><?php else: ?><label class="search-label"><input id="ledger-search" placeholder="Search parish or reference…" aria-label="Search ledger"></label><label class="ledger-filter">Status<select id="ledger-status"><option value="">All statuses</option><option value="pending">Pending</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="verified">Verified</option></select></label><?php endif ?></div><p class="ledger-result" id="ledger-result" aria-live="polite"></p><?php $ledgerRows=array_slice($rows,0,5);require ROOT.'/app/ledger-table.php'; ?><p id="ledger-no-results" class="empty-inline" hidden>No reports match your search. Try a different parish, reference or status.</p><div class="panel-foot"><span>◈ Access scoped to your role and hierarchy</span><span>All amounts in NGN</span></div></section>
 <?php endif ?>
 <?php if($page==='remittances' && $treasurer && $portalReady && $feeSummary && ($feeSummary['payhub_count']>0 || Money::cents($feeSummary['payhub_fee_total'])>0)): ?>
 <section class="panel"><div class="panel-heading"><div><h2>Treasury gateway reconciliation</h2><p>Full church credits, PayHub gateway fees and net settlement received by the province</p></div><span class="chip">Treasury only</span></div><div class="metric-grid"><article class="metric"><div class="metric-top">Confirmed church credit <span class="metric-icon blue">↙</span></div><h2><?= e(Money::display($feeSummary['gross_confirmed'])) ?></h2><small>Total credited toward church dues</small></article><article class="metric"><div class="metric-top">PayHub gateway fees <span class="metric-icon amber">▥</span></div><h2><?= e(Money::display($feeSummary['payhub_fee_total'])) ?></h2><small>Across <?= (int)$feeSummary['payhub_count'] ?> approved PayHub payments</small></article><article class="metric"><div class="metric-top">Net settled to province <span class="metric-icon green">✓</span></div><h2><?= e(Money::display($feeSummary['net_settled_total'])) ?></h2><small>Bank &amp; virtual account net proceeds</small></article></div></section>
