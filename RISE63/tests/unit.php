@@ -820,6 +820,40 @@ ok('The preview warns when a paste creates areas with no church in them', functi
 
 /* ─────────────────────────────── The public website ─────────────────────────── */
 
+ok('Every page the footer links to has real words in it, not a placeholder', function (): void {
+    // The defect that shipped in 1.2.0: migration 0005 seeded these four pages with an empty body
+    // and nothing ever filled it, so About Us, Vision, Privacy and Terms each rendered a heading, a
+    // summary and then "This page is being written." The page loaded, returned 200, and was useless.
+    //
+    // A status code cannot tell the difference between a written page and an unwritten one, so this
+    // asserts on the text: enough of it to be a page, and none of the placeholder wording.
+    $bodies = RISE63\Core\SiteDefaults::pageBodies();
+    foreach (['about', 'vision', 'privacy', 'terms'] as $slug) {
+        assertTrue(isset($bodies[$slug]), $slug . ' has built-in copy');
+        $body = $bodies[$slug];
+        assertTrue(strlen($body) > 1200, $slug . ' needs to be a page, not a paragraph (' . strlen($body) . ' chars)');
+        assertTrue(substr_count($body, '## ') >= 3, $slug . ' should have real sections');
+        assertTrue(!str_contains(strtolower($body), 'being written'), $slug . ' is written');
+        assertTrue(!str_contains(strtolower($body), 'lorem ipsum'), $slug . ' is written');
+    }
+
+    // Specific facts that must be right, because they are the ones a member would act on.
+    assertTrue(str_contains($bodies['terms'], '₦100,000'), 'the seed grant ceiling is stated');
+    assertTrue(str_contains($bodies['terms'], 'holds no member savings'), 'and the cooperative is not oversold');
+    assertTrue(str_contains($bodies['privacy'], 'one-way hash'), 'the privacy page says how passwords are stored');
+    assertTrue(str_contains($bodies['vision'], 'small or less-connected parish'), 'the vision keeps its own line');
+
+    // The built-in page is a complete record, so the templates need no special case for it.
+    $page = RISE63\Core\Site::page('privacy');
+    // No database in this harness, which is the other path: the same copy stands in for a missing
+    // table, so the page renders instead of 500-ing.
+    assertTrue($page !== null, 'a built-in page is available without a database');
+    assertSame('Privacy Policy', $page['title']);
+    assertSame('privacy', $page['slug']);
+    assertTrue(strlen((string) $page['body']) > 1200, 'and carries the full body');
+    assertSame(null, RISE63\Core\Site::page('scholarships'), 'a page with no built-in copy is still null');
+});
+
 ok('A page body is escaped and structured, never trusted as HTML', function (): void {
     // The body field is a textarea an administrator types into. A renderer that echoes it is a
     // stored-XSS hole with the admin's own session as the payload target, so the test that matters
@@ -919,6 +953,64 @@ ok('The table of contents points at headings that exist', function (): void {
     // One heading is not a contents list.
     assertSame([], RISE63\Core\SiteDefaults::toc("## Only One\n\ntext"));
     assertSame([], RISE63\Core\SiteDefaults::toc(''));
+});
+
+ok('The public site survives a database that is one migration behind', function (): void {
+    // This is the defect a launch hits first. Migration 0005 adds site_pages; on an installation
+    // that has the code but not the migration, Site::page() threw a PDOException, the router's
+    // handler turned it into a 500, and About Us, Privacy Policy, Terms & Conditions and Vision
+    // were blank pages — the four URLs a launch links to first.
+    //
+    // A schema one migration behind must never be what takes the site down. These read as "no such
+    // page", which the router renders as the site's own 404: a page a visitor can use, while
+    // Settings reports the migration that is waiting.
+    //
+    // The unit harness has no database at all, which is exactly the condition being tested.
+    //
+    // The four footer pages do not merely survive this: they render, because their text is shipped
+    // as code (SiteDefaults::pageBodies()). A visitor gets the province's own words rather than the
+    // site's 404, and Settings reports the pending migration to the administrator.
+    $privacy = RISE63\Core\Site::page('privacy');
+    assertTrue($privacy !== null, 'Privacy Policy renders without a database');
+    assertTrue(strlen((string) $privacy['body']) > 1200, 'with its full text');
+
+    // A page that only ever existed in the database is a page that has nothing to fall back to.
+    assertSame(null, RISE63\Core\Site::page('scholarships'), 'an unknown page is still null, not an exception');
+
+    assertSame(null, RISE63\Core\Site::pageForEditing('privacy'), 'the editor does not throw');
+    assertSame(null, RISE63\Core\Site::slide(1), 'nor does a slide lookup');
+    assertSame([], RISE63\Core\Site::pages(), 'and the page list is empty rather than fatal');
+    assertSame([], RISE63\Core\Site::publishedPages(), 'so the footer falls back to its fixed links');
+
+    // The landing page itself must still render: it falls back to the built-in slides.
+    assertTrue(count(RISE63\Core\SiteDefaults::slides()) >= 3, 'the hero still has its built-in slides');
+});
+
+ok('The directory survives a database without the church-level columns', function (): void {
+    // Migration 0004 added users.zone_id and users.area_id. Both the People directory and Parish
+    // Connect named them unconditionally, so on a database that had not run 0004 an uncaught
+    // PDOException ("column u.area_id does not exist") made both screens blank.
+    //
+    // Ask the schema, then choose the query. Asserted on the source because the harness always has
+    // the columns; the behaviour is covered against a real engine in tests/pages.php.
+    $members = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Core/Members.php');
+    assertTrue(str_contains($members, "hasColumn('users', 'area_id')"), 'the directory must check for the column');
+    assertTrue(str_contains($members, 'Pre-0004:'), 'and have a query for a database without it');
+
+    $directory = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Core/ParishDirectory.php');
+    assertTrue(str_contains($directory, "hasColumn('users', 'area_id')"), 'Parish Connect must check too');
+    assertTrue(str_contains($directory, "hasColumn('users', 'zone_id')"));
+
+    // Every public read in Site must guard itself. A new unguarded one would reintroduce the blank
+    // page, and the only signal would be a support message saying "Privacy Policy is down".
+    $site = (string) file_get_contents(RISE63_TEST_ROOT . '/app/Core/Site.php');
+    $publicReads = ['function page(', 'function pageForEditing(', 'function pages(', 'function slide(', 'function slides('];
+    foreach ($publicReads as $method) {
+        $start = strpos($site, $method);
+        assertTrue($start !== false, 'missing ' . $method);
+        $body = substr($site, $start, 1400);
+        assertTrue(str_contains($body, 'catch (\\Throwable'), $method . ') must not throw at the caller');
+    }
 });
 
 ok('The landing page has real content before any administrator touches it', function (): void {

@@ -299,8 +299,20 @@ final class ParishDirectory
 
         // 2. Area churches. Not for a csr_rep: their scope is their own parish.
         if (!((string) $user['role'] === 'csr_rep' && $user['parish_id'] !== null)) {
+            // `users.area_id` and `users.zone_id` arrive in migration 0004. Counting accounts by a
+            // column the database does not have fails the whole query, which took the entire Parish
+            // Connect screen down to a blank 500. Without the columns no member can be attached to
+            // an area or a zone church yet, so a count of zero is not a guess — it is the truth for
+            // that schema, and the screen keeps listing the churches.
+            $schema = new Migrator(\RISE63\ROOT);
+            $areaAccountCount = $schema->hasColumn('users', 'area_id')
+                ? '(SELECT COUNT(*) FROM users u WHERE u.area_id = a.id)'
+                : '0';
+            $zoneAccountCount = $schema->hasColumn('users', 'zone_id')
+                ? '(SELECT COUNT(*) FROM users u WHERE u.zone_id = z.id)'
+                : '0';
             $areaSql = 'SELECT a.id, a.area_name, a.area_code, a.zone_id, z.zone_name,
-                               (SELECT COUNT(*) FROM users u WHERE u.area_id = a.id) AS account_count
+                               ' . $areaAccountCount . ' AS account_count
                         FROM areas a JOIN zones z ON z.id = a.zone_id WHERE 1=1';
             $areaParams = [];
             if ($search) {
@@ -324,7 +336,7 @@ final class ParishDirectory
 
             // 3. Zone churches.
             $zoneSql = 'SELECT z.id, z.zone_name, z.zone_code,
-                               (SELECT COUNT(*) FROM users u WHERE u.zone_id = z.id) AS account_count
+                               ' . $zoneAccountCount . ' AS account_count
                         FROM zones z WHERE 1=1';
             $zoneParams = [];
             if ($search) {

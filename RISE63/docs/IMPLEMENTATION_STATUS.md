@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.2.0 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.2.1 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -383,6 +383,47 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1l What 1.2.1 fixes — the pages that were "not loading"
+
+Reported: *"These pages are not loading: terms, privacy, about, parishes, and people."* Five URLs, and
+they failed for three different reasons. All three are now covered by tests that fail on the 1.2.0
+code.
+
+**1. The four footer pages said "This page is being written".** Migration 0005 seeded `about`,
+`vision`, `privacy` and `terms` with an **empty body**, and nothing ever filled it. Each page returned
+200, rendered its heading and summary, and then a polite note saying the page was still being written.
+A status code cannot tell a written page from an unwritten one, which is why 292 passing assertions
+did not catch a public website with four empty pages. The copy now ships as code in
+`SiteDefaults::pageBodies()` — several thousand words each, drawn from the blueprint — and an empty
+body is filled from it. The row still exists, so an administrator's first edit takes over.
+
+**2. A page an administrator opened looked blank, and saving it destroyed the text.** Because the
+public page filled its body from code but the editor read the raw row, the editor showed an empty
+textarea for a page that displayed 3,386 characters. Pressing Save would have replaced the policy with
+nothing. The editor now reads through the same fallback and says, in a notice, that the wording is the
+shipped version until it is edited.
+
+**3. Missing migrations produced blank pages, not degraded ones.** Two independent versions of the
+same defect:
+
+* With migration 0005 unapplied, `Site::page()` threw an uncaught `PDOException`, so `about`,
+  `vision`, `privacy` and `terms` returned an empty 500. Every public read in `Site` now catches and
+  falls back — the four pages render their built-in copy, and any other CMS page shows the site's own
+  404.
+* With migration 0004 unapplied, the People directory and Parish Connect named `users.area_id` and
+  `users.zone_id` unconditionally. MySQL failed the statement and both screens were a blank 500. Both
+  now check the schema first (`Migrator::hasColumn`) and fall back to a parish-only query — verified to
+  return the *same* rows on both schemas, not merely to stop throwing.
+
+Also fixed: `/about` had two `case` branches in the router, the second dead; the `notice-warn` and
+`notice-error` classes used in two admin screens had no CSS rule at all, so warnings rendered as
+ordinary grey boxes; and the CMS used an invented `btn-row` class instead of the stylesheet's
+`form-actions`.
+
+**Verified:** 297 assertions pass, and the 0004/0005 fallbacks are exercised against a real SQL engine
+by dropping the columns and renaming the table inside the test. Both defects were reproduced before
+being fixed and the regression tests confirmed to fail on the old code.
 
 ### 2.1k What 1.2.0 adds — the public website and its CMS
 

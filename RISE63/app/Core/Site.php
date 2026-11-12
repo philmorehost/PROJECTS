@@ -44,19 +44,133 @@ final class Site
         if ($slug === '') {
             return null;
         }
-        $row = Database::one(
-            'SELECT * FROM site_pages WHERE slug = ? AND is_published = 1 LIMIT 1',
-            [$slug]
-        );
-        return $row === null ? null : self::shapePage($row);
+        try {
+            $row = Database::one(
+                'SELECT * FROM site_pages WHERE slug = ? AND is_published = 1 LIMIT 1',
+                [$slug]
+            );
+        } catch (\Throwable $error) {
+            // Migration 0005 has not run, or the table is unreachable. This is the *public* entry
+            // point to a CMS page, so an exception here is an uncaught 500 on About Us, Privacy and
+            // Terms — the pages a launch links to first. Fall through to the built-in copy below,
+            // which is a real page, not an error. A schema one migration behind must never be what
+            // takes the site down.
+            error_log('RISE63 Site::page: ' . $error->getMessage());
+            return self::builtInPage($slug);
+        }
+        if ($row === null) {
+            return self::builtInPage($slug);
+        }
+
+        return self::withBuiltInBody(self::shapePage($row), $slug);
     }
+
+
+    /**
+     * A page the site ships with, built from the copy in SiteDefaults.
+     *
+     * Used in two situations, and deliberately the same in both: the database is unavailable (the
+     * migration has not been applied), or it holds a row whose body is empty. The alternative in the
+     * second case is a published page with a heading and nothing under it, which reads as a broken
+     * site rather than as a page that is waiting to be written.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function builtInPage(string $slug): ?array
+    {
+        $body = SiteDefaults::pageBodies()[$slug] ?? null;
+        if ($body === null) {
+            return null;
+        }
+        $meta = self::BUILT_IN_META[$slug] ?? ['title' => ucfirst($slug), 'kicker' => '', 'summary' => '', 'sort' => 100];
+
+        return [
+            'id'           => 0,
+            'slug'         => $slug,
+            'title'        => $meta['title'],
+            'kicker'       => $meta['kicker'],
+            'summary'      => $meta['summary'],
+            'body'         => $body,
+            'is_published' => 1,
+            'is_system'    => 1,
+            'sort_order'   => $meta['sort'],
+            'updated_at'   => null,
+        ];
+    }
+
+
+    /**
+     * Fill an empty body from the shipped copy, for the pages that have any.
+     *
+     * Migration 0005 seeds the four footer pages with an empty body on purpose — the text lives in
+     * SiteDefaults so that a fresh install shows the province's own words without anyone having to
+     * paste them in, and so the copy is not maintained in two places. An empty body is therefore
+     * normal, not a mistake, and both the public page and the admin editor read it through here.
+     *
+     * @param array<string, mixed> $page
+     * @return array<string, mixed>
+     */
+    private static function withBuiltInBody(array $page, string $slug): array
+    {
+        if (trim((string) $page['body']) !== '') {
+            return $page;
+        }
+        $builtIn = SiteDefaults::pageBodies()[$slug] ?? null;
+        if ($builtIn !== null) {
+            $page['body'] = $builtIn;
+            // Say where it came from, so the editor can explain itself rather than presenting
+            // several thousand words as though the administrator had typed them.
+            $page['body_is_built_in'] = true;
+        }
+        return $page;
+    }
+
+    /** Slug => the words that introduce a built-in page. */
+    private const BUILT_IN_META = [
+        'about' => [
+            'title'   => 'About Us',
+            'kicker'  => 'Who we are',
+            'summary' => 'RISE 63 is a youth educational and economic empowerment initiative of RCCG Lagos Province 63 — a joint effort of the LP63 YAYA CSR and the Young Professionals Club.',
+            'sort'    => 10,
+        ],
+        'vision' => [
+            'title'   => 'Our Vision',
+            'kicker'  => 'What we are building',
+            'summary' => 'A province-wide support system that identifies needs, recognises diligence, develops potential and creates sustainable opportunities for young people.',
+            'sort'    => 20,
+        ],
+        'privacy' => [
+            'title'   => 'Privacy Policy',
+            'kicker'  => 'Your information',
+            'summary' => 'What RISE 63 collects, why it is collected, who can see it, and how to ask for it to be removed.',
+            'sort'    => 30,
+        ],
+        'terms' => [
+            'title'   => 'Terms &amp; Conditions',
+            'kicker'  => 'Using this platform',
+            'summary' => 'The rules that apply when you register, apply for support, or use the RISE 63 platform.',
+            'sort'    => 40,
+        ],
+    ];
 
     /** One page whatever its state — for the admin editor, which must open a draft. */
     public static function pageForEditing(string $slug): ?array
     {
         $slug = self::slug($slug);
-        $row  = $slug === '' ? null : Database::one('SELECT * FROM site_pages WHERE slug = ? LIMIT 1', [$slug]);
-        return $row === null ? null : self::shapePage($row);
+        if ($slug === '') {
+            return null;
+        }
+        try {
+            $row = Database::one('SELECT * FROM site_pages WHERE slug = ? LIMIT 1', [$slug]);
+        } catch (\Throwable $error) {
+            error_log('RISE63 Site::pageForEditing: ' . $error->getMessage());
+            return null;
+        }
+        // The editor must open on the text that is actually published. It did not, and the
+        // consequence was worse than a blank box: an administrator who opened Privacy Policy to
+        // change one sentence, saw an empty textarea, and pressed Save would have replaced three
+        // thousand words of built-in policy with nothing at all.
+        return $row === null ? null : self::withBuiltInBody(self::shapePage($row), $slug);
     }
 
     /**
@@ -66,10 +180,15 @@ final class Site
      */
     public static function pages(): array
     {
-        return array_map(
-            static fn (array $row): array => self::shapePage($row),
-            Database::all('SELECT * FROM site_pages ORDER BY sort_order, title')
-        );
+        try {
+            $rows = Database::all('SELECT * FROM site_pages ORDER BY sort_order, title');
+        } catch (\Throwable $error) {
+            // Before migration 0005. The footer then shows only the fixed routes, which is the same
+            // list the site shipped with, rather than an error page.
+            error_log('RISE63 Site::pages: ' . $error->getMessage());
+            return [];
+        }
+        return array_map(static fn (array $row): array => self::shapePage($row), $rows);
     }
 
     /**
@@ -182,7 +301,12 @@ final class Site
     /** One slide, whatever its state. */
     public static function slide(int $id): ?array
     {
-        $row = Database::one('SELECT * FROM site_slides WHERE id = ? LIMIT 1', [$id]);
+        try {
+            $row = Database::one('SELECT * FROM site_slides WHERE id = ? LIMIT 1', [$id]);
+        } catch (\Throwable $error) {
+            error_log('RISE63 Site::slide: ' . $error->getMessage());
+            return null;
+        }
         return $row === null ? null : self::shapeSlide($row);
     }
 

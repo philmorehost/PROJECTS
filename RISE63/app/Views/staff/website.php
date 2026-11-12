@@ -227,7 +227,7 @@ $isNewSlide   = $editingSlide === null;
       <label for="slide_published" style="font-weight:400">Show this slide on the home page</label>
     </div>
 
-    <div class="btn-row" style="margin-top:14px">
+    <div class="form-actions" style="margin-top:14px">
       <button class="btn btn-primary" type="submit">Save slide</button>
       <a class="btn btn-secondary" href="<?= e(url('website')) ?>">Cancel</a>
     </div>
@@ -339,6 +339,13 @@ $isNewSlide   = $editingSlide === null;
       <span class="hint">One or two sentences under the title, and the description search engines show.</span>
     </div>
 
+    <?php if (!empty($editingPage['body_is_built_in'])): ?>
+      <p class="notice" style="margin-bottom:12px">
+        This page is showing the wording RISE 63 ships with. Edit it freely — the moment you save,
+        your version is what visitors read, and this note stops appearing.
+      </p>
+    <?php endif; ?>
+
     <div class="field">
       <label for="page_body">Page content</label>
       <textarea id="page_body" name="body" rows="18" maxlength="24000"
@@ -370,7 +377,7 @@ $isNewSlide   = $editingSlide === null;
       the footer link still shows, and lands on the contact page’s advice instead of the text.
     </p>
 
-    <div class="btn-row" style="margin-top:14px">
+    <div class="form-actions" style="margin-top:14px">
       <button class="btn btn-primary" type="submit">Save page</button>
       <a class="btn btn-secondary" href="<?= e(url('website')) ?>">Cancel</a>
       <?php if (!$isNewPage): ?>

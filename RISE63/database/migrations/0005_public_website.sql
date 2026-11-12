@@ -9,6 +9,11 @@
 -- links to) and `site_slides` (the hero carousel). Nothing here touches an existing table, so it is
 -- safe on a database holding live applications and money.
 --
+-- The seeded bodies are deliberately empty: Site::page() fills an empty body from
+-- SiteDefaults::pageBodies(), so a fresh installation shows the province's own words immediately and
+-- an administrator's first edit takes over from them. Seeding the full text here instead would copy
+-- the same paragraphs into a migration and into PHP, and the two would drift.
+--
 -- The four seeded pages are marked is_system: an administrator may rewrite and unpublish them, but
 -- not delete them, because a footer link that 404s is worse than a page with stale copy.
 

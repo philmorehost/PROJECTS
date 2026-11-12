@@ -218,9 +218,11 @@ switch ($page) {
         ]);
         break;
 
-    case 'about':
     case 'offline':
-        $render($page === 'offline' ? 'offline' : 'about', ['title' => $page === 'offline' ? 'Offline' : 'About RISE 63']);
+        // 'about' used to share this branch. It is handled far above by the CMS (that is where the
+        // copy lives now), so naming it here again would be dead code — and worse, a second answer
+        // to "what renders /about?", which is how a page quietly reverts to its old template.
+        $render('offline', ['title' => 'Offline']);
         break;
 
     // ── Member workspace ─────────────────────────────────────────────────────────────
