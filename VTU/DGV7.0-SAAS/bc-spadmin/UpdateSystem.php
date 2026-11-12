@@ -30,20 +30,19 @@ if (!empty($force_version)) {
     $post_fields['force_version'] = $force_version;
 }
 
-if (!function_exists('curl_init')) {
-    $error_msg = 'The server PHP cURL extension is unavailable; the License Manager cannot be contacted.';
-} else {
+$response = false;
+$http_code = 0;
+$transport_errors = [];
+
+if (function_exists('curl_init')) {
     $ch = curl_init();
-    if ($ch === false) {
-        $error_msg = 'Could not initialize the HTTPS connection to the License Manager.';
-    } else {
+    if ($ch !== false) {
         curl_setopt($ch, CURLOPT_URL, $api_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_fields));
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        // Never accept an update response through an unverified TLS connection.
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $response = curl_exec($ch);
@@ -51,31 +50,74 @@ if (!function_exists('curl_init')) {
         $curl_error = curl_error($ch);
         $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-
         if ($response === false) {
-            error_log('[DGV updater] License Manager transport failure (cURL ' . $curl_errno . '): ' . $curl_error);
-            $error_msg = 'Could not connect to the License Manager over HTTPS. Check that this web server can make outbound HTTPS requests.';
-        } elseif (trim((string)$response) === '') {
-            $error_msg = 'The License Manager returned an empty response (HTTP ' . $http_code . ').';
-        } else {
-            $res_data = json_decode($response, true);
-            if (is_array($res_data) && ($res_data['status'] ?? '') === 'success' && $http_code >= 200 && $http_code < 300) {
-                $latest_version = $res_data['latest_version'] ?? $current_version;
-                $changelog = $res_data['changelog'] ?? '<li>Bug fixes and performance improvements.</li>';
-                $checksum = $res_data['checksum'] ?? '';
-
-                $clean_latest = ltrim(strtolower($latest_version), 'v');
-                $clean_current = ltrim(strtolower($current_version), 'v');
-
-                if (version_compare($clean_latest, $clean_current, '>') || !empty($force_version)) {
-                    $update_available = true;
-                }
-            } elseif (is_array($res_data) && !empty($res_data['message'])) {
-                $error_msg = 'License Manager (HTTP ' . $http_code . '): ' . $res_data['message'];
-            } else {
-                $error_msg = 'The License Manager returned an unexpected response (HTTP ' . $http_code . ').';
-            }
+            $transport_errors[] = 'cURL ' . $curl_errno . ': ' . $curl_error;
         }
+    } else {
+        $transport_errors[] = 'cURL could not initialize';
+    }
+} else {
+    $transport_errors[] = 'PHP cURL extension is not installed';
+}
+
+// Some hosts have a broken/missing libcurl CA configuration while PHP's HTTPS stream
+// wrapper has its own working CA store. Retry only transport failures, with peer and
+// hostname verification still enabled; never downgrade TLS to get an updater response.
+if ($response === false) {
+    $form_body = http_build_query($post_fields);
+    $stream_context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
+            'content' => $form_body,
+            'timeout' => 12,
+            'ignore_errors' => true,
+            'follow_location' => 0
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'allow_self_signed' => false
+        ]
+    ]);
+    $http_response_header = [];
+    $stream_response = @file_get_contents($api_url, false, $stream_context);
+    $stream_error = error_get_last();
+    foreach ((array)$http_response_header as $header_line) {
+        if (preg_match('/^HTTP\/\S+\s+(\d{3})\b/i', $header_line, $status_match)) {
+            $http_code = (int)$status_match[1];
+        }
+    }
+    if ($stream_response !== false) {
+        $response = $stream_response;
+    } else {
+        $transport_errors[] = 'PHP HTTPS stream: ' . ($stream_error['message'] ?? 'request failed');
+    }
+}
+
+if ($response === false) {
+    $diagnostic = implode('; ', $transport_errors);
+    error_log('[DGV updater] License Manager transport failure: ' . $diagnostic);
+    $error_msg = 'Could not connect to the License Manager over HTTPS. ' . $diagnostic;
+} elseif (trim((string)$response) === '') {
+    $error_msg = 'The License Manager returned an empty response (HTTP ' . $http_code . ').';
+} else {
+    $res_data = json_decode($response, true);
+    if (is_array($res_data) && ($res_data['status'] ?? '') === 'success' && $http_code >= 200 && $http_code < 300) {
+        $latest_version = $res_data['latest_version'] ?? $current_version;
+        $changelog = $res_data['changelog'] ?? '<li>Bug fixes and performance improvements.</li>';
+        $checksum = $res_data['checksum'] ?? '';
+
+        $clean_latest = ltrim(strtolower($latest_version), 'v');
+        $clean_current = ltrim(strtolower($current_version), 'v');
+
+        if (version_compare($clean_latest, $clean_current, '>') || !empty($force_version)) {
+            $update_available = true;
+        }
+    } elseif (is_array($res_data) && !empty($res_data['message'])) {
+        $error_msg = 'License Manager (HTTP ' . $http_code . '): ' . $res_data['message'];
+    } else {
+        $error_msg = 'The License Manager returned an unexpected response (HTTP ' . $http_code . ').';
     }
 }
 ?>
