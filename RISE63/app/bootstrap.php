@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace RISE63;
 
-const VERSION        = '1.2.2';
+const VERSION        = '1.2.3';
 const MIN_PHP        = '8.2.0';
 const PRODUCT        = 'RISE 63';
 const ROOT           = __DIR__ . '/..';

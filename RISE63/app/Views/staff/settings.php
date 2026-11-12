@@ -20,9 +20,9 @@ $schemaState = array_merge(
 
 $groups = [
     'website' => ['Public website', 'What a visitor sees. The WhatsApp number is the contact route the site hands to members, and the default message is what their chat opens with.'],
-    'brand' => ['Brand &amp; identity', 'These values appear across the app, the install prompt and the dynamic icon.'],
-    'session' => ['Sessions &amp; alerts', 'How long a session may sit idle and who receives sign-in alerts.'],
-    'programs' => ['Programs &amp; funds', 'The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.'],
+    'brand' => ['Brand & identity', 'These values appear across the app, the install prompt and the dynamic icon.'],
+    'session' => ['Sessions & alerts', 'How long a session may sit idle and who receives sign-in alerts.'],
+    'programs' => ['Programs & funds', 'The documented figures: an 80% Academy attendance gate before a Seed Grant, ₦100,000 per month into the pool, and a per-application ceiling. Pools are set on the Treasury page, where the ledger is.'],
 ];
 ?>
 <section class="card">
@@ -109,8 +109,12 @@ $groups = [
 
 <?php foreach ($groups as $group => [$heading, $blurb]): ?>
   <section class="card">
-    <h2><?= $heading ?></h2>
-    <p class="muted"><?= $blurb ?></p>
+    <?php /* $heading is plain text and is escaped here, once, exactly as the button label below
+             is. It used to be echoed raw with the entity written into the array — which rendered
+             correctly in the h2 and as "brand &amp; identity" on the button, because that line
+             passes the same string through e(). One rule now: plain text in, escaped once out. */ ?>
+    <h2><?= e($heading) ?></h2>
+    <p class="muted"><?= e($blurb) ?></p>
     <form method="post" action="<?= e(url('')) ?>">
       <?= Security::csrfField() ?>
       <input type="hidden" name="action" value="settings-save">

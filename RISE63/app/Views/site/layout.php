@@ -145,8 +145,10 @@ $whatsappText = rawurlencode((string) (setting('whatsapp_message', 'Hello RISE 6
   <div class="site-wrap site-footer-base">
     <p>&copy; <?= e(gmdate('Y')) ?> <?= e(site_title()) ?>. All rights reserved.</p>
     <p class="site-footer-legal">
-      <?php foreach (['privacy' => 'Privacy Policy', 'terms' => 'Terms &amp; Conditions'] as $slug => $label): ?>
-        <a href="<?= e(url($slug)) ?>"><?= $label ?></a>
+      <?php /* Plain text, escaped once at output — the same rule the whole codebase follows. An
+               entity written here renders correctly only while nobody escapes the label. */ ?>
+      <?php foreach (['privacy' => 'Privacy Policy', 'terms' => 'Terms & Conditions'] as $slug => $label): ?>
+        <a href="<?= e(url($slug)) ?>"><?= e($label) ?></a>
       <?php endforeach; ?>
     </p>
   </div>

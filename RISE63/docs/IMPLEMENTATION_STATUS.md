@@ -1,6 +1,6 @@
 # RISE 63 — implementation status
 
-Updated: 2026-11-08 · version 1.2.2 · review this file before any launch decision.
+Updated: 2026-11-08 · version 1.2.3 · review this file before any launch decision.
 
 This page is deliberately conservative. It separates **verified here**, **written but unverified**, and **not built**.
 
@@ -383,6 +383,27 @@ One genuine latent issue, fixed: `View::render()` concatenated its template name
 containment check. No caller passes request input today — the router derives page names through
 `preg_replace('/[^a-z0-9-]/','')` — but a future caller could. It now resolves the real path and
 refuses anything outside `app/Views`.
+
+### 2.1n What 1.2.3 fixes — the same escape bug in three more places
+
+1.2.2 fixed the Terms heading and added a guard. The guard only covered `app/Core`, and the same
+mistake was still in the interface:
+
+* **Settings → the three group buttons.** `$groups` held `'Brand &amp; identity'` and two siblings.
+  The `<h2>` echoed them raw, so the heading looked right; the button underneath passed the same
+  string through `e()`, so it read **"save brand &amp; identity"**. The bug was visible in one of the
+  two places the same words appeared, which is why a screenshot of the heading would have looked fine.
+* **The site footer** and **the audit filter labels** carried entities in their array literals. Both
+  render correctly today because both are echoed raw — but only until someone wraps the variable in
+  `e()`, which is exactly what had already happened elsewhere.
+
+All three now hold plain text and are escaped once at output. The guard was widened to cover every
+view, scoped to PHP string literals in array values and assignments — an entity written directly in
+markup that is echoed raw is correct HTML and is left alone.
+
+Verified on rendered output: all ten public and admin pages contain zero `&amp;amp;`, and both the
+Settings headings and their buttons emit `&amp;` once. The stale snapshot in `docs/preview/` was
+corrected too.
 
 ### 2.1m What 1.2.2 fixes — "Terms &amp; Conditions" on screen
 
