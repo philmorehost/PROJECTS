@@ -6,8 +6,11 @@ include_once(__DIR__ . "/../func/bc-config.php");
 // Reached via the PayHub callback_url AND via the admin Fund.php modal's postMessage redirect.
 // Verifies the payment with the PayHub API and credits the vendor wallet idempotently.
 
-$reference  = trim($_GET['reference'] ?? ($_POST['reference'] ?? ($_GET['trxref'] ?? '')));
-$payhub_ref = trim((string)($_GET['payhub_ref'] ?? ($_POST['payhub_ref'] ?? '')));
+$callback_ref = trim((string)($_GET['reference'] ?? ($_POST['reference'] ?? ($_GET['trxref'] ?? ''))));
+$reference   = trim((string)($_GET['local_reference'] ?? ($_POST['local_reference'] ?? $callback_ref)));
+// On a PayHub callback, `reference` is its PH_ transaction reference and local_reference
+// is our own pending transaction. Modal redirects already pass both explicitly.
+$payhub_ref  = trim((string)($_GET['payhub_ref'] ?? ($_POST['payhub_ref'] ?? (!empty($_GET['local_reference']) ? $callback_ref : ''))));
 $amount     = (float)($_GET['amount'] ?? 0);
 
 $credit_status = 'none';

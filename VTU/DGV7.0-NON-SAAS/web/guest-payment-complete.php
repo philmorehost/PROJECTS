@@ -6,7 +6,7 @@
  * the authoritative result — actual fulfillment always happens server-side via
  * guest-api/webhook.php, never from this page being loaded.
  */
-$reference = htmlspecialchars(trim($_GET["reference"] ?? ''), ENT_QUOTES);
+$reference = htmlspecialchars(trim($_GET["local_reference"] ?? ($_GET["reference"] ?? '')), ENT_QUOTES);
 ?>
 <!DOCTYPE html>
 <html>
