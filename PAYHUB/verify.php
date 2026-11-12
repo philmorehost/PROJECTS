@@ -48,15 +48,21 @@ if ($tx) {
     }
 }
 
-// For sandbox-simulated transactions or already-settled / DVA-superseded transactions,
-// resolve cleanly without leaving the payer in an infinite verification refresh loop.
-if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
-    $status = 'success';
-    $amount = (float)$tx['amount'];
+// For already-settled (live or sandbox) or DVA-superseded transactions, resolve cleanly
+// without leaving the payer in an infinite verification refresh loop.
+$trustedPaid = $tx ? trusted_paid_amount($tx) : null;
+if ($tx && $tx['status'] === 'success') {
+    if ($trustedPaid === null || amount_covers($tx['amount'], $trustedPaid)) {
+        $status = 'success';
+        $amount = (float)($trustedPaid ?? $tx['amount']);
+    } else {
+        flag_amount_mismatch($tx, $tx['amount'], $trustedPaid, 'verify.php');
+        $status = 'failed';
+    }
 } elseif ($tx && in_array($tx['status'], ['superseded', 'failed'], true) && empty($tx['failure_reason'])
     && ($matchedDva = reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, false))) {
     $status = 'success';
-    $amount = (float)($matchedDva['gateway_amount'] ?: $matchedDva['amount']);
+    $amount = (float)(trusted_paid_amount($matchedDva) ?? $matchedDva['amount']);
 } else {
     // Call Paystack to verify
     $res = paystack_call("transaction/verify/" . $ref, 'GET', [], $is_test_mode);
@@ -322,9 +328,22 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
             }
         }
     } else {
-        if ($tx && $tx['status'] === 'pending' && ($matchedDva = reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true))) {
+        if ($tx) {
+            $freshStmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
+            $freshStmt->execute([$tx['id']]);
+            $freshTx = $freshStmt->fetch();
+            if ($freshTx) {
+                $tx = $freshTx;
+            }
+        }
+        $freshTrusted = $tx ? trusted_paid_amount($tx) : null;
+        if ($tx && $tx['status'] === 'success' && ($freshTrusted === null || amount_covers($tx['amount'], $freshTrusted))) {
             $status = 'success';
-            $amount = (float)($matchedDva['gateway_amount'] ?: $matchedDva['amount']);
+            $amount = (float)($freshTrusted ?? $tx['amount']);
+        } elseif ($tx && in_array($tx['status'], ['pending', 'superseded', 'failed'], true) && empty($tx['failure_reason'])
+            && ($matchedDva = reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true))) {
+            $status = 'success';
+            $amount = (float)(trusted_paid_amount($matchedDva) ?? $matchedDva['amount']);
         } elseif ($res && isset($res['data']['status']) && $res['data']['status'] === 'failed') {
             $status = 'failed';
         }
@@ -349,37 +368,44 @@ if ($tx && $tx['status'] === 'success' && (bool)$tx['is_test']) {
  * `trxref` - plus an explicit `status`, so the merchant can confirm what happened without trusting
  * the redirect alone (and should still verify server-side: a return URL can be replayed).
  */
-if ($status === 'success' && $callback_url !== '') {
-    redirect(append_query_params($callback_url, [
+$successReturnUrl = ($status === 'success' && $callback_url !== '')
+    ? append_query_params($callback_url, [
         'reference' => $ref,
         'trxref' => $ref,
         'status' => 'success',
-    ]));
+    ])
+    : '';
+if ($successReturnUrl !== '' && !headers_sent()) {
+    redirect($successReturnUrl);
 }
 
 include 'includes/header.php';
 ?>
+<?php if ($successReturnUrl !== ''): ?>
+<meta http-equiv="refresh" content="0;url=<?php echo htmlspecialchars($successReturnUrl, ENT_QUOTES, 'UTF-8'); ?>">
+<script>window.location.replace(<?php echo json_encode($successReturnUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES); ?>);</script>
+<?php endif; ?>
 <div class="pt-32 pb-20 bg-slate-50 min-h-screen flex items-center justify-center p-4">
     <div class="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden text-center p-12">
         <?php if ($status === 'success'): ?>
             <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <i class="lucide-check-circle-2 w-10 h-10"></i>
+                <i data-lucide="check-circle-2" class="w-10 h-10"></i>
             </div>
             <h2 class="text-3xl font-bold text-slate-900 mb-2">Payment Successful!</h2>
             <p class="text-slate-500 mb-8">Thank you for your payment. Your transaction reference is <strong><?php echo $ref; ?></strong>.</p>
         <?php elseif ($status === 'failed'): ?>
             <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <i class="lucide-x-circle w-10 h-10"></i>
+                <i data-lucide="x-circle" class="w-10 h-10"></i>
             </div>
             <h2 class="text-3xl font-bold text-slate-900 mb-2">Payment Failed</h2>
             <p class="text-slate-500 mb-8">We could not process your payment. Please try again or contact support.</p>
         <?php else: ?>
             <div class="w-20 h-20 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                <i class="lucide-refresh-ccw w-10 h-10"></i>
+                <i data-lucide="refresh-ccw" class="w-10 h-10"></i>
             </div>
             <h2 class="text-3xl font-bold text-slate-900 mb-2">Verifying Payment...</h2>
             <p class="text-slate-500 mb-8">Please wait while we confirm your transaction with the bank.</p>
-            <script>setTimeout(() => window.location.reload(), 3000);</script>
+            <script>setTimeout(() => window.location.reload(), 2500);</script>
         <?php endif; ?>
 
         <a href="index.php" class="inline-block bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all">Return Home</a>

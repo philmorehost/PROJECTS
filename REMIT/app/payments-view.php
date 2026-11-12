@@ -130,6 +130,8 @@ function startPolling(ref,ledgerId){
    const d=await r.json().catch(()=>null);
    if(r.ok&&d&&d.paid===true){
     stopPolling();
+    const st=document.getElementById('payhub-status');
+    if(st){st.textContent=d.message||'PayHub payment confirmed! Updating report...';st.hidden=false;}
     payhubLog('payhub_confirmed_poll',{ref,ledgerId:ledgerId||''});
     const target=new URL('index.php?page=remittances&pay=payhub#payment-options',location.href);
     if(target.pathname+target.search===location.pathname+location.search){location.reload();}

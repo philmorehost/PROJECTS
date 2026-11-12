@@ -258,6 +258,7 @@ function redirect($path) {
  */
 function safe_callback_url($url) {
     $url = trim((string) $url);
+    $url = str_replace('&amp;', '&', $url);
     if ($url === '' || strlen($url) > 255) {
         return '';
     }
@@ -1543,7 +1544,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
     }
 
     $createdTs = strtotime((string)($tx['created_at'] ?? 'now')) ?: time();
-    $windowStart = date('Y-m-d H:i:s', $createdTs - 3600);
+    $windowStart = date('Y-m-d H:i:s', min($createdTs, time()) - 86400);
     $nearStartTs = $createdTs - 300;
     $isTestInt = ((int)($tx['is_test'] ?? 0) === 1) ? 1 : 0;
     $expectedLedgerId = (int)($txMeta['ledger_id'] ?? 0);
@@ -1552,7 +1553,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         $candStmt = $db->prepare(
             "SELECT * FROM transactions
               WHERE user_id = ? AND is_test = ? AND status = 'success'
-                AND payment_method IN ('bank_transfer', 'dedicated_account', 'dedicated_nuban')
+                AND payment_method IN ('bank_transfer', 'dedicated_account', 'dedicated_nuban', 'transfer', 'bank')
                 AND created_at >= ?
               ORDER BY id DESC LIMIT 40"
         );
@@ -1625,8 +1626,8 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         }
 
         $targetAccClean = ltrim((string)$va['account_number'], '0');
-        $from = gmdate('Y-m-d\T00:00:00\Z', $createdTs - 3600);
-        $to = gmdate('Y-m-d\T23:59:59\Z', time() + 3600);
+        $from = gmdate('Y-m-d\T00:00:00\Z', min($createdTs, time()) - 86400);
+        $to = gmdate('Y-m-d\T23:59:59\Z', max($createdTs, time()) + 86400);
         $response = paystack_call("transaction?from=" . urlencode($from) . "&to=" . urlencode($to) . "&status=success", 'GET', [], ($isTestInt === 1));
         if (!$response || empty($response['status']) || !is_array($response['data'] ?? null)) {
             return null;

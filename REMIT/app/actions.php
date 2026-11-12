@@ -89,17 +89,40 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
    if($afterHook=$checkLedgerNotif())return $afterHook;
    $verify=PayHub::verify($db,$ref);
    if((!$verify||!PayHub::isPaid($verify))&&$reconciled){
-    $latestRec=end($reconciled);
-    $recRef=is_array($latestRec)?trim((string)($latestRec['reference']??'')):'';
-    if($recRef!==''){
+    foreach($reconciled as $recItem){
+     if(!is_array($recItem))continue;
+     $recRef=trim((string)($recItem['reference']??''));
+     if($recRef==='')continue;
+     $recNoteStmt=$db->prepare('SELECT id,status,ledger_id FROM payment_notifications WHERE payhub_reference=? LIMIT 1');
+     $recNoteStmt->execute([$recRef]);
+     $recNote=$recNoteStmt->fetch();
+     if($recNote){
+      if($recNote['status']==='pending' && PayHub::autoApproveEnabled($db)){
+       PayHub::autoApproveIfEnabled($db,$recRef,$source.'_reconciled');
+      }
+      if($ledgerIdHint<=0 || (int)$recNote['ledger_id']===$ledgerIdHint){
+       if($afterHook=$checkLedgerNotif())return $afterHook;
+      }
+      continue;
+     }
+     $recMeta=PayHub::decodeMetadata($recItem['metadata']??[]);
+     $recMetaLedger=(int)($recMeta['ledger_id']??0);
+     if($ledgerIdHint>0 && $recMetaLedger>0 && $recMetaLedger!==$ledgerIdHint){
+      $mL=$db->prepare('SELECT parish_id,status FROM remittance_ledgers WHERE id=?');$mL->execute([$recMetaLedger]);$mLRow=$mL->fetch();
+      if($mLRow && (int)$mLRow['parish_id']===$unit && $mLRow['status']!=='verified'){
+       continue;
+      }
+     }
      $recVerify=PayHub::verify($db,$recRef);
      if(is_array($recVerify)&&PayHub::isPaid($recVerify)){
       $verify=$recVerify;
-     }elseif(is_array($latestRec)&&(float)($latestRec['amount']??0)>0){
-      $recAmtKobo=(int)round(((float)$latestRec['amount'])*100);
-      $recFeeKobo=(int)round(((float)($latestRec['fee']??0))*100);
-      $recNetKobo=(int)round(((float)($latestRec['settled_amount']??max(0,(float)$latestRec['amount']-(float)($latestRec['fee']??0))))*100);
-      $verify=['paid'=>true,'data'=>['reference'=>$recRef,'amount'=>$recAmtKobo,'gateway_amount'=>$recAmtKobo,'fee_amount'=>$recFeeKobo,'settled_amount'=>$recNetKobo,'status'=>'success','channel'=>'dedicated_account','paid_at'=>date('c'),'customer'=>['email'=>(string)($user['email']??'')], 'metadata'=>['ledger_id'=>$ledgerIdHint,'checkout_reference'=>$ref]]];
+      break;
+     }elseif((float)($recItem['amount']??0)>0){
+      $recAmtKobo=isset($recItem['amount_kobo'])&&is_numeric($recItem['amount_kobo'])?(int)$recItem['amount_kobo']:(int)round(((float)$recItem['amount'])*100);
+      $recFeeKobo=isset($recItem['fee_kobo'])&&is_numeric($recItem['fee_kobo'])?(int)$recItem['fee_kobo']:(int)round(((float)($recItem['fee']??0))*100);
+      $recNetKobo=isset($recItem['settled_kobo'])&&is_numeric($recItem['settled_kobo'])?(int)$recItem['settled_kobo']:(int)round(((float)($recItem['settled_amount']??max(0,(float)$recItem['amount']-(float)($recItem['fee']??0))))*100);
+      $verify=['paid'=>true,'data'=>['reference'=>$recRef,'amount'=>$recAmtKobo,'gateway_amount'=>$recAmtKobo,'fee_amount'=>$recFeeKobo,'settled_amount'=>$recNetKobo,'status'=>'success','channel'=>(string)($recItem['channel']??'dedicated_account'),'paid_at'=>(string)($recItem['paid_at']??date('c')),'customer'=>['email'=>(string)($recItem['customer_email']??($user['email']??''))], 'metadata'=>['ledger_id'=>$ledgerIdHint,'checkout_reference'=>$ref]]];
+      break;
      }
     }
    }
@@ -113,6 +136,13 @@ function payhubVerifyAndProcess(PDO $db,array $user,string $ref,string $source='
  $verifiedRef=trim((string)($data['reference']??$ref)) ?: $ref;
  $meta=PayHub::decodeMetadata($data['metadata']??[]);
  $ledgerId=(int)($meta['ledger_id']??$ledgerIdHint);
+ if($ledgerId>0 && $ledgerIdHint>0 && $ledgerId!==$ledgerIdHint){
+  $lMetaChk=$db->prepare('SELECT parish_id,status FROM remittance_ledgers WHERE id=?');$lMetaChk->execute([$ledgerId]);$lMetaRow=$lMetaChk->fetch();
+  $refSeenStmt=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? LIMIT 1');$refSeenStmt->execute([$verifiedRef]);
+  if(!$refSeenStmt->fetchColumn() && $lMetaRow && (int)$lMetaRow['parish_id']===$unit && $lMetaRow['status']==='verified'){
+   $ledgerId=$ledgerIdHint;
+  }
+ }
  if($ledgerId<=0){
   $nChk=$db->prepare('SELECT ledger_id FROM payment_notifications WHERE payhub_reference IN (?,?) ORDER BY id DESC LIMIT 1');$nChk->execute([$verifiedRef,$ref]);
   $ledgerId=(int)$nChk->fetchColumn();
@@ -214,7 +244,8 @@ function action(PDO $db,array $user,array $ids): string {
    }catch(Throwable){}
   }
   $cached=$_SESSION['payhub_sessions'][$ledgerId]??null;
-  if(is_array($cached) && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference']) && (!empty($cached['payload']['virtual_accounts']) || $phone==='')){
+  $lastInitLedger=(int)($_SESSION['payhub_last_initialized_ledger']??0);
+  if(is_array($cached) && $lastInitLedger===$ledgerId && ($cached['unit']??0)===$unit && (int)($cached['kobo']??0)===$kobo && (int)($cached['created_at']??0)>=time()-600 && !empty($cached['payload']['reference']) && (!empty($cached['payload']['virtual_accounts']) || $phone==='')){
    $cachedRef=(string)($cached['payload']['payhub_reference']??$cached['payload']['reference']);
    $cachedLastNotifId=(int)($cached['last_notif_id']??0);
    $seen=$db->prepare('SELECT 1 FROM payment_notifications WHERE payhub_reference=? OR (ledger_id=? AND id>?) LIMIT 1');$seen->execute([$cachedRef,$ledgerId,$cachedLastNotifId]);
@@ -227,6 +258,7 @@ function action(PDO $db,array $user,array $ids): string {
   $session=PayHub::initializeTransaction($db,$ledgerId,$user,$kobo,(string)$user['email'],(string)$user['full_name'],$phone?:'');
   $payhubReference=(string)($session['payhub_reference']??$session['reference']);
   $_SESSION['payhub_reference']=$payhubReference;
+  $_SESSION['payhub_last_initialized_ledger']=$ledgerId;
   $checkoutUrl=PayHub::checkoutUrl($payhubReference);
   $payload=['reference'=>$session['reference'],'payhub_reference'=>$payhubReference,'checkout_url'=>$checkoutUrl,'amount_kobo'=>$kobo,'amount'=>Money::decimal($kobo),'email'=>$user['email'],'name'=>$user['full_name'],'phone'=>$phone,'public_key'=>$session['public_key']??setting($db,'payhub_public_key'),'virtual_accounts'=>$session['virtual_accounts']?:PayHub::virtualAccounts($db,(string)$user['email']),'auto_approve'=>PayHub::autoApproveEnabled($db)];
   $lastNotifStmt=$db->prepare('SELECT COALESCE(MAX(id),0) FROM payment_notifications WHERE ledger_id=?');$lastNotifStmt->execute([$ledgerId]);$lastNotifId=(int)$lastNotifStmt->fetchColumn();
@@ -281,10 +313,11 @@ function action(PDO $db,array $user,array $ids): string {
  }
  if ($action==='verify') {
   requireRole($user,['provincial_admin','provincial_treasurer']);
+  ensureNotificationSchema($db);
   $db->beginTransaction();
   try {
    $s=$db->prepare('SELECT * FROM users WHERE id=? FOR UPDATE');$s->execute([$user['id']]);$fresh=$s->fetch();
-   if(!Security::verifyPin($db,$fresh,(string)($_POST['pin'] ?? ''))) { $db->commit(); throw new RuntimeException('PIN invalid or temporarily locked after five failures. Try again after 15 minutes.'); }
+   if(!Security::verifyPin($db,$fresh,(string)($_POST['pin'] ?? ''))) { if($db->inTransaction())$db->commit(); throw new RuntimeException('PIN invalid or temporarily locked after five failures. Try again after 15 minutes.'); }
    $s=$db->prepare('SELECT * FROM remittance_ledgers WHERE id=? FOR UPDATE'); $s->execute([(int)($_POST['ledger_id'] ?? 0)]); $row=$s->fetch();
    if(!$row || $row['status']==='verified') throw new RuntimeException('Report not found or already verified.');
    $paid=Money::cents(trim($_POST['paid'] ?? ''));
@@ -294,7 +327,7 @@ function action(PDO $db,array $user,array $ids): string {
    $db->prepare('UPDATE remittance_ledgers SET amount_paid=?,status=? WHERE id=?')->execute([Money::decimal($paid),$status,$row['id']]);
    audit($db,'remittance_verified',$user['email'],json_encode(['ledger'=>$row['id'],'amount'=>Money::decimal($paid),'actor'=>$user['id']]));
    $s=$db->prepare("SELECT email FROM users WHERE hierarchy_id=? AND role IN ('parish_officer','area_rep','zonal_rep')"); $s->execute([$row['parish_id']]); foreach($s->fetchAll(PDO::FETCH_COLUMN) as $email) notify($db,$email,'Remittance confirmed',$row['payment_reference'].' • Confirmed '.Money::decimal($paid).' NGN. Status: '.$status);
-   $db->commit(); return 'Bank-confirmed payment recorded. Notification queued.';
+   if($db->inTransaction())$db->commit(); return 'Bank-confirmed payment recorded. Notification queued.';
   } catch(Throwable $e) {if($db->inTransaction()) $db->rollBack();throw $e;}
  }
  if ($action==='hierarchy_batch') {

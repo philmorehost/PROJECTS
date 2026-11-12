@@ -161,11 +161,20 @@ final class PayHub
         curl_close($ch);
         $json=json_decode((string)$response,true);
         $reconciled=(is_array($json)&&is_array($json['reconciled']??null))?$json['reconciled']:[];
+        $recent=(is_array($json)&&is_array($json['recent_transactions']??null))?$json['recent_transactions']:[];
+        $merged=[];$seenRefs=[];
+        foreach(array_merge($recent,$reconciled) as $item){
+            if(!is_array($item))continue;
+            $rRef=trim((string)($item['reference']??''));
+            if($rRef===''||isset($seenRefs[$rRef]))continue;
+            $seenRefs[$rRef]=true;
+            $merged[]=$item;
+        }
         self::log($db,'va_reconcile_request',[
-            'account_number'=>$accountNumber,'date'=>$queryDate,'http'=>$http,'curl_error'=>(string)$error,'reconciled_count'=>count($reconciled)
+            'account_number'=>$accountNumber,'date'=>$queryDate,'http'=>$http,'curl_error'=>(string)$error,'reconciled_count'=>count($reconciled),'recent_count'=>count($recent)
         ]);
         if($errno||$http!==200)return [];
-        return $reconciled;
+        return $merged;
     }
     /** @return array{reference:string,payhub_reference:string,authorization_url:string,virtual_accounts:array<int,array<string,string>>,public_key:string} */
     public static function initializeTransaction(PDO $db,int $ledgerId,array $user,int $kobo,string $email,string $name,string $phone): array
@@ -340,16 +349,36 @@ final class PayHub
         ];
     }
     /** @return array{status:string,message:string} */
-    public static function handleWebhook(PDO $db): array
+    public static function handleWebhook(PDO $db,?string $rawBody=null,?callable $remoteVerifier=null): array
     {
         if(!self::ready($db)){self::log($db,'webhook_ignored',['reason'=>'PayHub not configured']);return ['status'=>'ignored','message'=>'PayHub not configured'];}
-        $body=(string)file_get_contents('php://input');$sig=(string)($_SERVER['HTTP_X_PAYHUB_SIGNATURE']??'');
-        $expected=hash_hmac('sha256',$body,trim(setting($db,'payhub_secret_key')));
-        if(!hash_equals($expected,$sig)){
-            self::log($db,'webhook_invalid_signature',['ip'=>$_SERVER['REMOTE_ADDR']??'','sig_present'=>$sig!=='','sig_len'=>strlen($sig),'body_len'=>strlen($body)]);
+        $body=$rawBody??(string)file_get_contents('php://input');$sig=(string)($_SERVER['HTTP_X_PAYHUB_SIGNATURE']??'');
+        $secret=trim(setting($db,'payhub_secret_key'));
+        $sigNorm=strtolower(trim($sig));
+        $sigValid=$secret!==''&&$sigNorm!==''&&(
+            hash_equals(hash_hmac('sha256',$body,$secret),$sigNorm)
+            || hash_equals(hash_hmac('sha512',$body,$secret),$sigNorm)
+        );
+        $event=json_decode($body,true);
+        if(!$sigValid){
+            $candidateRef=(is_array($event)&&($event['event']??'')==='charge.success'&&is_array($event['data']??null))?trim((string)($event['data']['reference']??'')):'';
+            if($candidateRef!==''&&preg_match('/^[A-Za-z0-9_.:-]{3,100}$/',$candidateRef)){
+                $verifyRes=$remoteVerifier?$remoteVerifier($candidateRef):self::verify($db,$candidateRef);
+                if(is_array($verifyRes)&&self::isPaid($verifyRes)&&is_array($verifyRes['data']??null)){
+                    $vData=$verifyRes['data'];
+                    $vRef=trim((string)($vData['reference']??$candidateRef))?:$candidateRef;
+                    self::log($db,'webhook_verified_via_api',['reference'=>$vRef,'sig_present'=>$sig!=='','sig_len'=>strlen($sig),'body_len'=>strlen($body)]);
+                    $res=self::recordSuccessfulCharge($db,$vRef,$vData,'webhook_verified');
+                    if(in_array($res['status'],['queued','updated'],true)){
+                        $approved=self::autoApproveIfEnabled($db,$vRef,'webhook_verified');
+                        if($approved)$res['message'].=' (auto-approved)';
+                    }
+                    return $res;
+                }
+            }
+            self::log($db,'webhook_invalid_signature',['ip'=>$_SERVER['REMOTE_ADDR']??'','sig_present'=>$sig!=='','sig_len'=>strlen($sig),'sig_algo_hint'=>strlen($sig)===128?'sha512':(strlen($sig)===64?'sha256':'other'),'body_len'=>strlen($body)]);
             http_response_code(401);return ['status'=>'invalid','message'=>'Invalid signature'];
         }
-        $event=json_decode($body,true);
         if(!is_array($event)||($event['event']??'')!=='charge.success'||!is_array($event['data']??null)){
             self::log($db,'webhook_ignored',['reason'=>'Unhandled or malformed event','event'=>is_array($event)?($event['event']??''):'invalid_json']);
             return ['status'=>'ignored','message'=>'Unhandled event'];
@@ -376,6 +405,7 @@ final class PayHub
             return false;
         }
         try{
+            ensureNotificationSchema($db);
             $s=$db->prepare('SELECT * FROM payment_notifications WHERE payhub_reference=?');$s->execute([$ref]);$note=$s->fetch();
             if(!$note)return false;
             if($note['status']==='approved')return true;
@@ -405,7 +435,7 @@ final class PayHub
     {
         $ref=trim($ref);if($ref==='')return ['status'=>'ignored','message'=>'Empty reference'];
         self::ensureFeeColumns($db);
-        if($source==='webhook'&&self::ready($db)&&(!array_key_exists('fee_amount',$data)||!array_key_exists('settled_amount',$data)||(float)($data['fee_amount']??0)<=0||(float)($data['settled_amount']??0)<=0)){
+        if(in_array($source,['webhook','webhook_verified'],true)&&self::ready($db)&&(!array_key_exists('fee_amount',$data)||!array_key_exists('settled_amount',$data)||(float)($data['fee_amount']??0)<=0||(float)($data['settled_amount']??0)<=0)){
             $verifyRes=self::verify($db,$ref);
             if(is_array($verifyRes)&&self::isPaid($verifyRes)&&is_array($verifyRes['data']??null)){
                 $vData=$verifyRes['data'];
@@ -428,6 +458,21 @@ final class PayHub
             }
             if(!$row){
                 $ledgerId=(int)($meta['ledger_id']??0);$userId=(int)($meta['user_id']??0);
+                $findOpenLedger=static function(int $parishId) use ($db,$data): int {
+                    $openStmt=$db->prepare("SELECT id,provincial_levy_due,amount_paid FROM remittance_ledgers WHERE parish_id=? AND status IN ('pending','partial') ORDER BY id DESC");
+                    $openStmt->execute([$parishId]);$openLedgers=$openStmt->fetchAll();
+                    $probeAmounts=self::extractAmounts($data,0);
+                    $exactMatches=array_values(array_filter($openLedgers,static function($ol) use ($probeAmounts): bool {
+                        $dueCents=Money::cents($ol['provincial_levy_due'])-Money::cents($ol['amount_paid']);
+                        return $dueCents>0&&in_array($dueCents,[$probeAmounts['credit_kobo'],$probeAmounts['requested_kobo'],$probeAmounts['gross_kobo']],true);
+                    }));
+                    if(count($exactMatches)===1)return (int)$exactMatches[0]['id'];
+                    if(count($openLedgers)===1){
+                        $dueCents=Money::cents($openLedgers[0]['provincial_levy_due'])-Money::cents($openLedgers[0]['amount_paid']);
+                        if($dueCents>0&&$probeAmounts['credit_kobo']<=$dueCents)return (int)$openLedgers[0]['id'];
+                    }
+                    return 0;
+                };
                 if($ledgerId<=0){
                     $custEmail=strtolower(trim((string)($data['customer']['email']??($data['email']??''))));
                     if($custEmail!==''){
@@ -435,17 +480,9 @@ final class PayHub
                         $uStmt->execute([$custEmail]);$uMatch=$uStmt->fetch();
                         if($uMatch&&!empty($uMatch['hierarchy_id'])){
                             $userId=$userId?:(int)$uMatch['id'];
-                            $openStmt=$db->prepare("SELECT id,provincial_levy_due,amount_paid FROM remittance_ledgers WHERE parish_id=? AND status IN ('pending','partial') ORDER BY id DESC");
-                            $openStmt->execute([(int)$uMatch['hierarchy_id']]);$openLedgers=$openStmt->fetchAll();
-                            $probeAmounts=self::extractAmounts($data,0);
-                            $exactMatches=array_values(array_filter($openLedgers,static function($ol) use ($probeAmounts): bool {
-                                $dueCents=Money::cents($ol['provincial_levy_due'])-Money::cents($ol['amount_paid']);
-                                return $dueCents>0&&in_array($dueCents,[$probeAmounts['credit_kobo'],$probeAmounts['requested_kobo'],$probeAmounts['gross_kobo']],true);
-                            }));
-                            if(count($exactMatches)===1)$ledgerId=(int)$exactMatches[0]['id'];
-                            elseif(count($openLedgers)===1)$ledgerId=(int)$openLedgers[0]['id'];
+                            $ledgerId=$findOpenLedger((int)$uMatch['hierarchy_id']);
                             if($ledgerId>0)self::log($db,'charge_ledger_fallback_matched',['reference'=>$ref,'ledger_id'=>$ledgerId,'email'=>$custEmail]);
-                            else self::log($db,'charge_ledger_fallback_ambiguous',['reference'=>$ref,'open_count'=>count($openLedgers),'email'=>$custEmail]);
+                            else self::log($db,'charge_ledger_fallback_ambiguous',['reference'=>$ref,'email'=>$custEmail]);
                         }
                     }
                 }
@@ -453,6 +490,16 @@ final class PayHub
                 $ledger=$db->prepare('SELECT l.*,h.node_name,h.id parish_id FROM remittance_ledgers l JOIN church_hierarchy h ON h.id=l.parish_id WHERE l.id=?');$ledger->execute([$ledgerId]);$l=$ledger->fetch();
                 if(!$l){self::log($db,'charge_ignored_ledger_not_found',['reference'=>$ref,'ledger_id'=>$ledgerId]);return ['status'=>'ignored','message'=>'Ledger not found'];}
                 $expected=max(0,Money::cents($l['provincial_levy_due'])-Money::cents($l['amount_paid']));
+                $channelLower=strtolower(trim((string)($data['channel']??'')));
+                if($expected<=0&&in_array($channelLower,['dedicated_nuban','dedicated_account','bank_transfer','transfer','bank','virtual_account'],true)){
+                    $altLedgerId=$findOpenLedger((int)$l['parish_id']);
+                    if($altLedgerId>0&&$altLedgerId!==$ledgerId){
+                        self::log($db,'charge_ledger_reassigned_from_settled',['reference'=>$ref,'stale_ledger_id'=>$ledgerId,'ledger_id'=>$altLedgerId,'source'=>$source]);
+                        $ledgerId=$altLedgerId;
+                        $ledger->execute([$ledgerId]);$l=$ledger->fetch();
+                        $expected=$l?max(0,Money::cents($l['provincial_levy_due'])-Money::cents($l['amount_paid'])):0;
+                    }
+                }
                 if($expected<=0){self::log($db,'charge_ignored_already_settled',['reference'=>$ref,'ledger_id'=>$ledgerId]);return ['status'=>'updated','message'=>'Ledger already fully settled'];}
                 $amounts=self::extractAmounts($data,$expected);
                 $creditKobo=$amounts['credit_kobo'];$feeKobo=$amounts['fee_kobo'];$netKobo=$amounts['net_kobo'];

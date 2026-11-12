@@ -39,6 +39,7 @@ if ($action === 'stats') {
         $stmt = $db->query("SELECT COUNT(*) as count FROM transactions WHERE status = 'success'{$lens}");
         $success_tx = $stmt->fetch()['count'] ?? 0;
     } catch (\Throwable $e) {
+    }
 
     $success_rate = $total_tx > 0 ? number_format(($success_tx / $total_tx) * 100, 1) : '100';
 

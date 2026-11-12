@@ -28,6 +28,7 @@ final class Security {
  }
  public static function login(PDO $db,string $email,string $password): ?array {
   self::$limited=false;$ip=self::ip();
+  ensureNotificationSchema($db);
   $db->beginTransaction();
   try {
    $db->prepare('INSERT IGNORE INTO security_ips(ip_address) VALUES(?)')->execute([$ip]);

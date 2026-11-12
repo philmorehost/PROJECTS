@@ -73,8 +73,9 @@ try {
   }
   $returnRef=(string)($_GET['payhub_ref']??($_GET['reference']??($_GET['trxref']??'')));
   if($_SERVER['REQUEST_METHOD']==='GET' && $returnRef!=='' && !empty($_SESSION['user_id']) && PayHub::enabled($db)){
+   foreach($_GET as $gk=>$gv){if(is_string($gk)&&str_starts_with($gk,'amp;')){$cleanK=substr($gk,4);if(!isset($_GET[$cleanK]))$_GET[$cleanK]=$gv;}}
    require_once ROOT.'/app/actions.php';
-   try{$res=payhubVerifyAndProcess($db,$user,$returnRef,'return',true,(int)($_GET['ledger_id']??0));if(!empty($res['message'])){$_SESSION['flash']=$res['message'];}$query=[];parse_str($_SERVER['QUERY_STRING']??'',$query);unset($query['payhub_ref'],$query['reference'],$query['trxref'],$query['status']);header('Location: index.php?'.http_build_query(array_merge(['page'=>'remittances','pay'=>'payhub'],$query)).'#payment-options',true,303);exit;}catch(Throwable $ex){PayHub::log($db,'payhub_return_error',['reference'=>$returnRef,'message'=>$ex->getMessage()]);$error=$ex->getMessage();}
+   try{$res=payhubVerifyAndProcess($db,$user,$returnRef,'return',true,(int)($_GET['ledger_id']??0));if(!empty($res['message'])){$_SESSION['flash']=$res['message'];}$query=[];parse_str($_SERVER['QUERY_STRING']??'',$query);foreach(array_keys($query) as $qk){if(is_string($qk)&&str_starts_with($qk,'amp;'))unset($query[$qk]);}unset($query['payhub_ref'],$query['reference'],$query['trxref'],$query['status']);header('Location: index.php?'.http_build_query(array_merge(['page'=>'remittances','pay'=>'payhub'],$query)).'#payment-options',true,303);exit;}catch(Throwable $ex){PayHub::log($db,'payhub_return_error',['reference'=>$returnRef,'message'=>$ex->getMessage()]);$error=$ex->getMessage();}
   }
   if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action'] ?? '')!=='login') {
    require_once ROOT.'/app/actions.php';
