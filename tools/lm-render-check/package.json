@@ -1,0 +1,14 @@
+{
+  "name": "lm-render-check",
+  "private": true,
+  "type": "module",
+  "description": "Render every License Manager page under PHP 8.3 (wasm) and fail if PHP source reaches the output.",
+  "scripts": {
+    "render": "node render-check.mjs ../../LM",
+    "unit": "node stray-html-check.mjs"
+  },
+  "dependencies": {
+    "@php-wasm/node": "^3.1.54",
+    "@php-wasm/universal": "^3.1.54"
+  }
+}
