@@ -96,20 +96,23 @@ if ($pdo instanceof PDO) {
     }
 }
 
-/**
- * Short, human date.
- *
- * @param mixed $value
- * @return string
- */
-function lm_admin_date($value)
-{
-    if (!$value || (string) $value === '0000-00-00' || (string) $value === '0000-00-00 00:00:00') {
-        return '—';
-    }
+if (!function_exists('lm_admin_date')) {
+    /**
+     * Short, human date. Defined here rather than in lm_config.php because it
+     * is presentation only, and guarded so a double include cannot fatal.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    function lm_admin_date($value)
+    {
+        if (!$value || (string) $value === '0000-00-00' || (string) $value === '0000-00-00 00:00:00') {
+            return '—';
+        }
 
-    $ts = strtotime((string) $value);
-    return $ts === false ? (string) $value : date('M j, Y', $ts);
+        $ts = strtotime((string) $value);
+        return $ts === false ? (string) $value : date('M j, Y', $ts);
+    }
 }
 
 $actions = '<a class="lm-btn lm-btn--ghost" href="licenses.php?action=add">' . lm_icon('plus') . ' New licence</a>'

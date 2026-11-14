@@ -15,15 +15,16 @@ lm_security_headers();
 
 $pdo = lm_app_boot();
 
-/**
- * Read the last N bytes of a file and trim to a whole line.
- *
- * @param string $path
- * @param int    $bytes
- * @return array{exists:bool,size:int,text:string}
- */
-function lm_diag_tail($path, $bytes = 24000)
-{
+if (!function_exists('lm_diag_tail')) {
+    /**
+     * Read the last N bytes of a file and trim to a whole line.
+     *
+     * @param string $path
+     * @param int    $bytes
+     * @return array{exists:bool,size:int,text:string}
+     */
+    function lm_diag_tail($path, $bytes = 24000)
+    {
     if (!is_file($path) || !is_readable($path)) {
         return array('exists' => false, 'size' => 0, 'text' => '');
     }
@@ -50,6 +51,7 @@ function lm_diag_tail($path, $bytes = 24000)
     }
 
     return array('exists' => true, 'size' => $size, 'text' => $text);
+}
 }
 
 $root = lm_lm_dir();
