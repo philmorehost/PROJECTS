@@ -912,8 +912,13 @@ function paystack_payout($userId, $amount, $reason = "Merchant Payout", $customB
         'currency' => 'NGN'
     ], $is_test);
 
-    if (!$recipient || !$recipient['status']) {
-        return ['status' => false, 'message' => 'Failed to create recipient: ' . ($recipient['message'] ?? 'Unknown error')];
+    if (!$recipient || empty($recipient['status']) || empty($recipient['data']['recipient_code'])) {
+        return [
+            'status' => false,
+            'message' => 'Failed to create recipient: ' . ($recipient['message'] ?? 'Unknown error'),
+            '_stage' => 'recipient',
+            '_http_code' => (int)($recipient['_http_code'] ?? 0),
+        ];
     }
 
     $recipient_code = $recipient['data']['recipient_code'];

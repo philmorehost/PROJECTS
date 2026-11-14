@@ -7,27 +7,38 @@ if (!isLoggedIn() || !isAdmin()) redirect('../login.php');
 $user = getAuthUser();
 $pageTitle = 'Cron Job Manager - Admin Hub';
 
-$base_path = realpath(__DIR__ . '/../');
-$php_path = PHP_BINARY ?: '/usr/local/bin/php';
+$base_path = realpath(__DIR__ . '/../') ?: dirname(__DIR__);
+$php_path = trim((string)getenv('PAYHUB_PHP_CLI'));
+if ($php_path === '') {
+    $phpCandidates = [PHP_BINDIR . '/php', '/usr/bin/php', '/usr/local/bin/php', PHP_BINARY];
+    foreach (array_unique($phpCandidates) as $candidate) {
+        if ($candidate && is_file($candidate) && is_executable($candidate) && !preg_match('/php-(?:fpm|cgi)/i', $candidate)) {
+            $php_path = $candidate;
+            break;
+        }
+    }
+}
+if ($php_path === '') $php_path = '/usr/bin/php';
+$php_command = escapeshellarg($php_path);
 
 $cron_jobs = [
     [
         'name' => 'Automated Settlements',
-        'desc' => 'Submits eligible automated payouts at 10:00 AM Africa/Lagos (WAT) on working days. Set the server cron timezone to Africa/Lagos; reruns are idempotent per merchant per day.',
-        'schedule' => '0 10 * * *',
-        'command' => $php_path . ' ' . $base_path . '/includes/payout-cron.php'
+        'desc' => 'Submits scheduled automated settlements at 10:00 AM Africa/Lagos on weekdays. Set CRON_TZ=Africa/Lagos (or the scheduler timezone) so the run occurs at the intended local time. Existing auto-settlement reservations from the old global-review queue are safely resumed; a merchant-specific Review ON flag still requires admin approval.',
+        'schedule' => '0 10 * * 1-5',
+        'command' => $php_command . ' ' . escapeshellarg($base_path . '/includes/payout-cron.php')
     ],
     [
         'name' => 'System Health Check',
         'desc' => 'Monitors API uptime and database performance.',
         'schedule' => '*/5 * * * *',
-        'command' => $php_path . ' ' . $base_path . '/includes/health-cron.php'
+        'command' => $php_command . ' ' . escapeshellarg($base_path . '/includes/health-cron.php')
     ],
     [
         'name' => 'Transaction Expiry Reconciliation',
-        'desc' => 'Verifies abandoned pending transactions against Paystack, recovers any that were actually paid, and only then marks the rest failed. Do not replace with a blind timeout.',
-        'schedule' => '*/30 * * * *',
-        'command' => $php_path . ' ' . $base_path . '/includes/transaction-expiry-cron.php'
+        'desc' => 'Runs every 10 minutes. First reconciles Paystack and local virtual-account settlements; any remaining pending checkout older than 24 hours is marked failed.',
+        'schedule' => '*/10 * * * *',
+        'command' => $php_command . ' ' . escapeshellarg($base_path . '/includes/transaction-expiry-cron.php')
     ]
 ];
 

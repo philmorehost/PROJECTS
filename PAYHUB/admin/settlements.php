@@ -27,6 +27,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
             $payout = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$payout) throw new RuntimeException('Payout request was not found. Refresh the list and try again.');
             if ($payout['status'] !== 'pending') throw new RuntimeException('This payout is no longer pending and cannot be processed again.');
+            $payoutDetailsLower = strtolower((string)($payout['status_details'] ?? ''));
+            if (strpos($payoutDetailsLower, 'transfer outcome uncertain') !== false
+                || strpos($payoutDetailsLower, 'transfer submission started') !== false
+                || strpos($payoutDetailsLower, 'transfer submission pending') !== false) {
+                throw new RuntimeException('The provider may already have accepted this transfer. Reconcile it with Paystack before retrying or releasing the reserved funds.');
+            }
+            if ($status === 'processed' && strpos($payoutDetailsLower, 'bank details changed') !== false) {
+                throw new RuntimeException('The merchant bank details changed after this payout was reserved. Update/reconcile the destination before processing.');
+            }
 
             if ($status === 'processed') {
                 $payoutAmount = (float)$payout['net_amount'];
@@ -130,6 +139,31 @@ function render_settlement_actions($payout, $csrfToken) {
     $id = (int)$payout['id'];
     $serialized = htmlspecialchars(json_encode($payout), ENT_QUOTES, 'UTF-8');
     $token = htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8');
+    $details = strtolower((string)($payout['status_details'] ?? ''));
+    $bankDetailsChanged = strpos($details, 'bank details changed') !== false;
+    $transferMayHaveBeenSent = strpos($details, 'transfer outcome uncertain') !== false
+        || strpos($details, 'transfer submission started') !== false
+        || strpos($details, 'transfer submission pending') !== false;
+    if ($transferMayHaveBeenSent) {
+        ?>
+        <div class="max-w-[230px] rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-relaxed text-amber-800">
+            Transfer outcome needs reconciliation. Check Paystack before retrying to avoid sending twice.
+        </div>
+        <?php
+        return;
+    }
+    if ($bankDetailsChanged) {
+        ?>
+        <div class="max-w-[230px] space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-relaxed text-amber-800">
+            <p>Bank details changed after reservation. Update the destination or safely release the reserve.</p>
+            <form method="POST" onsubmit="return confirm('Cancel this payout and return the reserved funds to the merchant wallet?');">
+                <input type="hidden" name="action" value="process_payout"><input type="hidden" name="csrf_token" value="<?php echo $token; ?>"><input type="hidden" name="payout_id" value="<?php echo $id; ?>"><input type="hidden" name="details" value="Bank details changed; reserve returned."><input type="hidden" name="decision" value="cancel_refund">
+                <button type="submit" class="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">Cancel &amp; Return Reserve</button>
+            </form>
+        </div>
+        <?php
+        return;
+    }
     ?>
     <div class="min-w-[190px] space-y-2">
         <button type="button" @click="showProcess = true; payout = <?php echo $serialized; ?>" class="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700">Approve / Process</button>

@@ -27,19 +27,19 @@ if (!$is_cli) {
  *
  * So each stale row is verified against the gateway ONCE before a decision is made:
  *
- *   gateway says success               -> fulfil it, through the same guards as the webhook
- *                                         (settled-amount check, exactly-once claim)
- *   gateway says failed/abandoned, or
- *   the reference does not exist there -> mark failed, failure_reason 'expired'
- *   gateway unreachable, or still open -> leave pending, try again next run
+ *   gateway says success               -> fulfil it through the normal guarded ledger path
+ *   local DVA reconciliation succeeds  -> link it instead of failing the checkout row
+ *   anything else after 24 hours       -> mark failed with an expiry reason, even if the
+ *                                         gateway is still open or temporarily unreachable
  *
- * Suggested schedule: every 30 minutes.
+ * The 24-hour limit is absolute: the reconciliation check runs first to recover confirmed
+ * money, then no stale pending checkout is left pending indefinitely. Suggested schedule: every 10 minutes.
  */
 
 $db = Database::connect();
 ensure_payment_schema();
 
-$grace_minutes = max(60, (int)getConfig('pending_expiry_minutes', '1440')); // default 24h, never under 1h
+$grace_minutes = 1440; // fixed 24-hour expiry policy
 $batch = max(1, (int)getConfig('pending_expiry_batch', '200'));
 
 $stmt = $db->prepare(
@@ -56,12 +56,12 @@ if (!$rows) {
 
 $fulfilled = 0;
 $expired = 0;
-$still_open = 0;
+$gateway_open = 0;
 $unreachable = 0;
 
 foreach ($rows as $tx) {
-    // Do not mark a pending PH_... checkout expired if it was already settled via DVA transfer.
-    if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, false)) {
+    // Confirm local and missed Paystack DVA transfers before applying the 24-hour timeout.
+    if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true)) {
         continue;
     }
 
@@ -71,12 +71,12 @@ foreach ($rows as $tx) {
     $response = paystack_call("transaction/verify/" . urlencode($tx['reference']), 'GET', [], $is_test);
 
     if (!is_array($response)) {
-        $unreachable++;
-        continue;
+        $response = ['status' => false, 'message' => 'Gateway returned an unreadable response.', '_http_code' => 0];
     }
 
-    $data = $response['data'] ?? [];
-    $status = strtolower((string)($data['status'] ?? ''));
+    $data = (isset($response['data']) && is_array($response['data'])) ? $response['data'] : [];
+    $rawStatus = $data['status'] ?? '';
+    $status = is_scalar($rawStatus) ? strtolower((string)$rawStatus) : '';
     $settled = (float)($data['amount'] ?? 0) / 100;
 
     if ($status === 'success') {
@@ -161,17 +161,29 @@ foreach ($rows as $tx) {
         $status = 'not_found';
     }
 
-    if ($dead) {
-        $db->prepare("UPDATE transactions SET status = 'failed', failure_reason = 'expired' WHERE id = ? AND status = 'pending'")
-           ->execute([$tx['id']]);
-        log_transaction_event($tx['id'], 'expired',
-            "No payment after $grace_minutes minutes (gateway status '$status'). Marked failed.");
+    if (!$dead) {
+        // At this point the transaction has been stale for at least 24 hours, the DVA lookup
+        // found no matching settlement, and Paystack did not confirm success. Enforce the
+        // requested expiry even when Paystack still reports pending or cannot be reached.
+        if ($http === 0 || !is_array($response) || (isset($response['status']) && !$response['status'])) {
+            $unreachable++;
+        } else {
+            $gateway_open++;
+        }
+    }
+
+    $rawGatewayMessage = is_array($response) ? ($response['message'] ?? '') : '';
+    $gatewayMessage = is_scalar($rawGatewayMessage) ? trim((string)$rawGatewayMessage) : '';
+    $expiryDetail = $dead
+        ? "No payment after $grace_minutes minutes (gateway status '$status'). Marked failed."
+        : "No verified payment after $grace_minutes minutes (gateway status '" . ($status ?: 'unknown') . "'" . ($gatewayMessage !== '' ? '; ' . substr($gatewayMessage, 0, 180) : '') . '). Marked failed by the 24-hour expiry policy.';
+    $expireStmt = $db->prepare("UPDATE transactions SET status = 'failed', failure_reason = 'expired'
+        WHERE id = ? AND status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1440 MINUTE)");
+    $expireStmt->execute([$tx['id']]);
+    if ($expireStmt->rowCount() === 1) {
+        log_transaction_event($tx['id'], 'expired', $expiryDetail);
         $expired++;
-    } else {
-        // 'pending' / 'ongoing' / 'processing' on the gateway, or the call did not complete -
-        // still alive, so leave it alone and try again next run.
-        if ($http === 0) $unreachable++; else $still_open++;
     }
 }
 
-echo "Expiry reconciliation: fulfilled=$fulfilled expired=$expired still_open=$still_open unreachable=$unreachable (grace {$grace_minutes}m)\n";
+echo "Expiry reconciliation: fulfilled=$fulfilled expired=$expired gateway_open=$gateway_open unreachable=$unreachable (grace {$grace_minutes}m)\n";
