@@ -1,243 +1,170 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
+/**
+ * admin/transactions.php — the payment ledger.
+ *
+ * Same columns as before, plus the counts an operator actually reconciles
+ * against: how many succeeded, what they were worth, and which auto-login links
+ * are still live. Revoke still posts to invalidate_token.php.
+ *
+ * @package LicenseManager
+ */
+
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
+
+$pdo = lm_app_boot();
+
+$transactions = array();
+$problem = '';
+$currency = 'NGN';
+$succeeded = 0;
+$total = 0.0;
+$liveTokens = 0;
+
+if ($pdo instanceof PDO) {
+    try {
+        $transactions = $pdo->query(
+            'SELECT t.id, t.created_at, t.amount, t.currency, t.transaction_ref, '
+            . 't.auto_login_token, t.token_created_at, t.license_id, t.status '
+            . 'FROM transactions t ORDER BY t.created_at DESC, t.id DESC'
+        )->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Older schema: retry without the optional columns.
+        try {
+            $transactions = $pdo->query('SELECT * FROM transactions ORDER BY created_at DESC, id DESC')
+                ->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $inner) {
+            $problem = 'The transactions table could not be read. Run Database Repair, then reload.';
+        }
+    }
 }
 
-require_once('../db.php');
-
-try {
-    $stmt = $pdo->query(
-        "SELECT t.id, t.created_at, t.amount, t.currency, t.transaction_ref, " .
-        "t.auto_login_token, t.token_created_at FROM transactions t ORDER BY t.created_at DESC"
-    );
-    $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    // Handle database error
-    $error = "Database error: " . $e->getMessage();
-    $transactions = [];
+foreach ($transactions as $tx) {
+    $status = strtolower((string) ($tx['status'] ?? ''));
+    $amount = (float) ($tx['amount'] ?? 0);
+    $total += $amount;
+    if (in_array($status, array('success', 'paid', 'completed'), true)) {
+        $succeeded++;
+    }
+    if (!empty($tx['auto_login_token'])) {
+        $liveTokens++;
+    }
+    if (!empty($tx['currency'])) {
+        $currency = (string) $tx['currency'];
+    }
 }
+
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="diagnostic.php">' . lm_icon('chart') . ' Diagnostics</a>'
+    . '<a class="lm-btn lm-btn--ghost" href="webhook-tester.php">' . lm_icon('plug') . ' Test webhook</a>';
+
+lm_app_start('Transactions', array(
+    'subtitle' => 'Every charge the gateway reported, with the auto-login link that followed it.',
+    'active'   => 'transactions',
+    'actions'  => $actionsHtml,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction History - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 260px;
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .sidebar h1 {
-            font-size: 1.5rem;
-            padding: 2rem 1.5rem;
-            text-align: center;
-            background: rgba(15, 23, 42, 0.5);
-            margin: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .sidebar nav {
-            flex-grow: 1;
-            padding: 2rem 0;
-        }
-        .sidebar nav a {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            color: #cbd5e1;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-        .sidebar nav a:hover,
-        .sidebar nav a.active {
-            background: rgba(59, 130, 246, 0.2);
-            color: #fff;
-            border-left: 3px solid #3b82f6;
-            padding-left: calc(1.5rem - 3px);
-        }
-        .main-content {
-            margin-left: 260px;
-            flex-grow: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-        .header h2 {
-            font-size: 2rem;
-            color: #1e293b;
-            font-weight: 700;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .card-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-        }
-        .card-header h3 {
-            font-size: 1.25rem;
-            color: #1e293b;
-            margin: 0;
-            font-weight: 700;
-        }
-        .card-body {
-            padding: 2rem;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #f8fafc;
-            padding: 1rem;
-            text-align: left;
-            font-weight: 700;
-            color: #475569;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid #e2e8f0;
-            color: #475569;
-        }
-        tr:hover {
-            background: #f8fafc;
-        }
-        .error {
-            color: #991b1b;
-            background-color: #fee2e2;
-            border: 1px solid #fca5a5;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 2rem;
-            color: #64748b;
-        }
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .header h2 {
-                font-size: 1.5rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h1>🔐 License Manager</h1>
-        <nav>
-            <a href="dashboard.php">📊 Dashboard</a>
-            <a href="licenses.php">📜 Licenses</a>
-            <a href="updates.php">🚀 Push Updates</a>
-            <a href="transactions.php" class="active">💳 Transactions</a>
-            <a href="settings.php">⚙️ Settings</a>
-            <a href="profile.php">👤 Profile</a>
-            <a href="logout.php">🚪 Logout</a>
-        </nav>
-    </div>
-    <div class="main-content">
-        <div class="header">
-            <h2>💳 Transaction History</h2>
+
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
+
+<div class="lm-stats">
+    <?php
+    lm_app_stat('Transactions', (string) count($transactions), 'All records');
+    lm_app_stat('Succeeded', (string) $succeeded, 'Confirmed by the gateway', 'green');
+    lm_app_stat('Value', $currency . ' ' . number_format($total, 2), 'Sum of every row', 'indigo');
+    lm_app_stat('Live login links', (string) $liveTokens, 'Single use, 10 minute expiry', 'amber');
+    ?>
+</div>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('wallet') ?> Payment ledger</h2>
+            <p>A revoked link stops working immediately; the transaction itself is never deleted.</p>
         </div>
-        <div class="card">
-            <div class="card-header">
-                <h3>All Transactions</h3>
-            </div>
-            <div class="card-body">
-                <?php if (!empty($error)): ?>
-                    <div class="error">✗ <?= htmlspecialchars($error) ?></div>
-                <?php endif; ?>
-                <table>
+        <div class="lm-field" style="margin:0;min-width:240px">
+            <label class="lm-sr" for="txFilter">Filter transactions</label>
+            <input class="lm-input" type="search" id="txFilter" placeholder="Filter reference, status or amount…" data-lm-filter="#txTable">
+        </div>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($transactions)): ?>
+            <?php lm_app_empty(
+                'wallet',
+                'No transactions yet',
+                'A row appears here the first time Paystack confirms a charge. Use the webhook tester to prove the path works.',
+                '<a class="lm-btn lm-btn--glow" href="webhook-tester.php">' . lm_icon('plug') . ' Run a test webhook</a>'
+            ); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack" id="txTable">
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Amount</th>
                             <th>Reference</th>
-                            <th>Token</th>
-                            <th>Actions</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Login link</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (!empty($transactions)): ?>
-                            <?php foreach ($transactions as $tx): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars(date('M d, Y H:i', strtotime($tx['created_at']))) ?></td>
-                                    <td><strong><?= htmlspecialchars(number_format($tx['amount'], 2)) ?> <?= htmlspecialchars($tx['currency']) ?></strong></td>
-                                    <td><?= htmlspecialchars($tx['transaction_ref']) ?></td>
-                                                <td>
-                                                    <?php if (!empty($tx['auto_login_token'])): ?>
-                                                        <?php $masked = substr($tx['auto_login_token'], 0, 6) . '...' . substr($tx['auto_login_token'], -4); ?>
-                                                        <div style="font-family: monospace;"><?= htmlspecialchars($masked) ?></div>
-                                                        <div style="font-size: 0.85rem; color: #64748b;"><?= htmlspecialchars($tx['token_created_at']) ?></div>
-                                                    <?php else: ?>
-                                                        <span style="color: #94a3b8;">—</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($tx['auto_login_token'])): ?>
-                                                        <form method="POST" action="invalidate_token.php" style="display:inline">
-                                                            <input type="hidden" name="id" value="<?= htmlspecialchars($tx['id']) ?>">
-                                                            <button type="submit" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer;">Revoke</button>
-                                                        </form>
-                                                        <a href="../user/auto_login.php?token=<?= rawurlencode($tx['auto_login_token']) ?>" target="_blank" style="margin-left:8px; font-size:0.85rem; color:#2563eb;">Test link</a>
-                                                    <?php else: ?>
-                                                        <span style="color: #94a3b8;">—</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="3" class="empty-state">📭 No transactions found.</td>
+                        <?php foreach ($transactions as $tx): ?>
+                            <?php
+                            $status = strtolower((string) ($tx['status'] ?? ''));
+                            $tone = in_array($status, array('success', 'paid', 'completed'), true) ? 'ok'
+                                : (in_array($status, array('pending', 'processing'), true) ? 'warn' : 'bad');
+                            $token = (string) ($tx['auto_login_token'] ?? '');
+                            ?>
+                            <tr data-filter-text="<?= lm_e(strtolower(
+                                (string) ($tx['transaction_ref'] ?? '') . ' ' . $status . ' ' . (string) ($tx['amount'] ?? '')
+                            )) ?>">
+                                <td data-label="Date">
+                                    <?= lm_e(!empty($tx['created_at']) ? date('M j, Y · H:i', strtotime((string) $tx['created_at'])) : '—') ?>
+                                </td>
+                                <td data-label="Reference"><code><?= lm_e((string) ($tx['transaction_ref'] ?? '—')) ?></code></td>
+                                <td data-label="Amount" class="lm-num">
+                                    <strong><?= lm_e((string) ($tx['currency'] ?? '')) ?> <?= lm_e(number_format((float) ($tx['amount'] ?? 0), 2)) ?></strong>
+                                </td>
+                                <td data-label="Status"><?= lm_app_badge($status !== '' ? ucfirst($status) : '—', $tone) ?></td>
+                                <td data-label="Login link">
+                                    <?php if ($token !== ''): ?>
+                                        <code><?= lm_e(substr($token, 0, 6)) ?>…<?= lm_e(substr($token, -4)) ?></code>
+                                        <?php if (!empty($tx['token_created_at'])): ?>
+                                            <span class="lm-help" style="display:block">
+                                                <?= lm_e(date('M j, H:i', strtotime((string) $tx['token_created_at']))) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="lm-help">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="" class="lm-cell-actions">
+                                    <?php if ($token !== ''): ?>
+                                        <div class="lm-actions">
+                                            <a class="lm-btn lm-btn--sm lm-btn--ghost"
+                                               href="../user/auto_login.php?token=<?= rawurlencode($token) ?>"
+                                               target="_blank" rel="noopener">Test link</a>
+                                            <form method="POST" action="invalidate_token.php" style="display:inline">
+                                                <?= lm_csrf_field() ?>
+                                                <input type="hidden" name="id" value="<?= (int) $tx['id'] ?>">
+                                                <button type="submit" class="lm-btn lm-btn--sm lm-btn--danger">Revoke</button>
+                                            </form>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="lm-help">—</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-        </div>
+            <p class="lm-help" id="txFilterEmpty" hidden style="padding:14px 18px">No transaction matches that filter.</p>
+        <?php endif; ?>
     </div>
-</body>
-</html>
+</section>
+
+<?php lm_app_end(); ?>

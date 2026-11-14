@@ -7,14 +7,16 @@
  * Mail scanners (Outlook Safe Links, corporate link rewriters, antivirus
  * extensions) fetch every URL in a message before the customer sees it. When
  * the GET itself unsubscribed people, those scanners silently opted real
- * customers out of security-relevant update notices. The link now lands on a
+ * customers out of security-relevant update notices. The link lands on a
  * confirmation page; only the POST from the person reading the mail acts.
+ *
+ * @package LicenseManager
  */
 
 require_once __DIR__ . '/includes/security.php';
 lm_session_start();
 lm_security_headers();
-
+require_once __DIR__ . '/includes/ui.php';
 require_once __DIR__ . '/db.php';
 
 $token = (string) ($_GET['t'] ?? $_POST['t'] ?? '');
@@ -69,7 +71,7 @@ if ($parsed && $isPost) {
     $licenseId = (int) $parsed['license_id'];
 
     try {
-        $stmt = $pdo->prepare("SELECT l.*, t.tier_name, t.tier_code FROM licenses l LEFT JOIN script_tiers t ON l.tier_id = t.id WHERE l.id = ? LIMIT 1");
+        $stmt = $pdo->prepare('SELECT l.*, t.tier_name, t.tier_code FROM licenses l LEFT JOIN script_tiers t ON l.tier_id = t.id WHERE l.id = ? LIMIT 1');
         $stmt->execute(array($licenseId));
         $license = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -77,11 +79,11 @@ if ($parsed && $isPost) {
             $project = (string) ($license['tier_name'] ?? $license['tier_code'] ?? '');
 
             if ($action === 'resubscribe') {
-                $pdo->prepare("UPDATE licenses SET notify_updates = 1 WHERE id = ?")->execute(array($licenseId));
+                $pdo->prepare('UPDATE licenses SET notify_updates = 1 WHERE id = ?')->execute(array($licenseId));
                 $state = 'resubscribed';
                 $message = 'You will receive update notifications again for ' . ($project !== '' ? $project : 'your licence') . '.';
             } else {
-                $pdo->prepare("UPDATE licenses SET notify_updates = 0 WHERE id = ?")->execute(array($licenseId));
+                $pdo->prepare('UPDATE licenses SET notify_updates = 0 WHERE id = ?')->execute(array($licenseId));
                 $pdo->prepare("UPDATE update_notifications SET status = 'cancelled', last_error = 'Customer unsubscribed' WHERE license_id = ? AND status = 'pending'")->execute(array($licenseId));
                 $state = 'unsubscribed';
                 $message = 'You will no longer receive update reminder emails for ' . ($project !== '' ? $project : 'this licence') . '. Security and transactional emails are unaffected.';
@@ -94,84 +96,119 @@ if ($parsed && $isPost) {
     }
 }
 
-$site = lm_site_name();
-$accent = $state === 'unsubscribed' ? '#f59e0b' : ($state === 'confirm' ? '#0e7490' : '#4f46e5');
-$icon = $state === 'invalid' ? '!' : ($state === 'unsubscribed' ? '✓' : ($state === 'confirm' ? '?' : '↺'));
+$titles = array(
+    'invalid'      => 'Link not recognised',
+    'confirm'      => 'Confirm your choice',
+    'unsubscribed' => 'You are unsubscribed',
+    'resubscribed' => 'You are subscribed again',
+);
+
+$icons = array(
+    'invalid'      => 'alert',
+    'confirm'      => 'question',
+    'unsubscribed' => 'check',
+    'resubscribed' => 'refresh',
+);
+
+$badge = array(
+    'invalid'      => 'lm-badge--bad',
+    'confirm'      => 'lm-badge--info',
+    'unsubscribed' => 'lm-badge--warn',
+    'resubscribed' => 'lm-badge--ok',
+);
+
+$title = isset($titles[$state]) ? $titles[$state] : 'Email preferences';
+$icon = isset($icons[$state]) ? $icons[$state] : 'mail';
+$dashboard = lm_site_url('user/login.php');
+if (!preg_match('#^https?://#i', $dashboard)) {
+    $dashboard = lm_public_url('user/login.php');
+}
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($site) ?> — Email preferences</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at 20% 10%, #e0e7ff 0%, #f8fafc 45%, #eef2ff 100%); color: #0f172a; }
-        .card { width: 100%; max-width: 520px; background: #ffffff; border-radius: 24px; box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12); overflow: hidden; border: 1px solid rgba(148, 163, 184, 0.18); }
-        .head { background: linear-gradient(135deg, #312e81, #4f46e5 55%, #06b6d4); padding: 30px 34px; color: #fff; }
-        .brand { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.8; font-weight: 700; }
-        .body { padding: 32px 34px 36px; }
-        .icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: #fff; background: <?= $accent ?>; margin-bottom: 20px; }
-        h1 { font-size: 22px; line-height: 1.3; letter-spacing: -0.3px; margin-bottom: 10px; }
-        p { font-size: 15px; line-height: 1.7; color: #475569; }
-        .meta { margin-top: 22px; padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 13px; color: #64748b; }
-        .meta strong { color: #334155; }
-        .actions { margin-top: 26px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn { display: inline-block; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none; border: none; cursor: pointer; }
-        .btn-primary { background: #4f46e5; color: #fff; }
-        .btn-ghost { background: #eef2ff; color: #4338ca; }
-        .foot { margin-top: 26px; font-size: 12px; color: #94a3b8; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="head">
-            <div class="brand"><?= htmlspecialchars($site) ?></div>
-            <h2 style="font-size:20px;font-weight:800;margin-top:10px;letter-spacing:-0.3px;">Email preferences</h2>
-        </div>
-        <div class="body">
-            <div class="icon"><?= $icon ?></div>
-            <h1><?= $state === 'invalid' ? 'Link not recognised' : ($state === 'unsubscribed' ? 'You are unsubscribed' : ($state === 'confirm' ? 'Confirm your choice' : 'You are subscribed again')) ?></h1>
-            <p><?= htmlspecialchars($message) ?></p>
+<?php lm_public_page_start('account', array('title' => 'Email preferences')); ?>
 
-            <?php if ($state !== 'invalid' && $email !== ''): ?>
-                <div class="meta">
-                    <div><strong>Email:</strong> <?= htmlspecialchars($email) ?></div>
-                    <?php if ($project !== ''): ?>
-                        <div style="margin-top:4px;"><strong>Product:</strong> <?= htmlspecialchars($project) ?></div>
+<main class="lm-page lm-page--center" id="main">
+    <div class="lm-wrap">
+        <div class="lm-auth">
+            <div class="lm-card">
+                <div class="lm-card__body">
+                    <div class="lm-center">
+                        <span class="lm-icon-badge<?= $state === 'unsubscribed' || $state === 'invalid' ? ' lm-icon-badge--warn' : '' ?>">
+                            <?= lm_icon($icon) ?>
+                        </span>
+                        <span class="lm-badge <?= isset($badge[$state]) ? $badge[$state] : '' ?>" style="margin-bottom:12px">
+                            Email preferences
+                        </span>
+                        <h1 style="font-size:clamp(22px,3vw,30px);margin-bottom:10px"><?= lm_e($title) ?></h1>
+                        <p class="lm-meta"><?= lm_e($message) ?></p>
+                    </div>
+
+                    <?php if ($state !== 'invalid' && $email !== ''): ?>
+                        <dl class="lm-deflist lm-mt-24">
+                            <div>
+                                <dt>Email</dt>
+                                <dd style="word-break:break-all"><?= lm_e($email) ?></dd>
+                            </div>
+                            <?php if ($project !== ''): ?>
+                                <div>
+                                    <dt>Product</dt>
+                                    <dd><?= lm_e($project) ?></dd>
+                                </div>
+                            <?php endif; ?>
+                        </dl>
                     <?php endif; ?>
-                </div>
 
-                <div class="actions">
                     <?php if ($state === 'confirm'): ?>
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="t" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
+                        <form method="POST" class="lm-form lm-mt-24">
+                            <input type="hidden" name="t" value="<?= lm_e($token) ?>">
                             <input type="hidden" name="action" value="<?= $action === 'resubscribe' ? 'resubscribe' : 'unsubscribe' ?>">
-                            <button type="submit" class="btn btn-primary">
-                                <?= $action === 'resubscribe' ? 'Turn reminders back on' : 'Stop update reminders' ?>
+                            <button type="submit" class="lm-btn lm-btn--glow lm-btn--block">
+                                <?= $action === 'resubscribe' ? lm_icon('bell') . ' Turn reminders back on' : lm_icon('mail') . ' Stop update reminders' ?>
                             </button>
                         </form>
-                        <a class="btn btn-ghost" href="<?= htmlspecialchars(lm_site_url('user/login.php')) ?>">Keep them and open dashboard</a>
+                        <a class="lm-btn lm-btn--ghost lm-btn--block lm-mt-16" href="<?= lm_e($dashboard) ?>">
+                            <?= lm_icon('grid') ?> Keep them and open the dashboard
+                        </a>
                     <?php elseif ($state === 'unsubscribed'): ?>
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="t" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
+                        <form method="POST" class="lm-form lm-mt-24">
+                            <input type="hidden" name="t" value="<?= lm_e($token) ?>">
                             <input type="hidden" name="action" value="resubscribe">
-                            <button type="submit" class="btn btn-ghost">Turn reminders back on</button>
+                            <button type="submit" class="lm-btn lm-btn--ghost lm-btn--block">
+                                <?= lm_icon('bell') ?> Turn reminders back on
+                            </button>
                         </form>
-                    <?php else: ?>
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="t" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
+                        <a class="lm-btn lm-btn--glow lm-btn--block lm-mt-16" href="<?= lm_e($dashboard) ?>">
+                            <?= lm_icon('grid') ?> Open the dashboard
+                        </a>
+                    <?php elseif ($state === 'resubscribed'): ?>
+                        <form method="POST" class="lm-form lm-mt-24">
+                            <input type="hidden" name="t" value="<?= lm_e($token) ?>">
                             <input type="hidden" name="action" value="unsubscribe">
-                            <button type="submit" class="btn btn-ghost">Pause reminders</button>
+                            <button type="submit" class="lm-btn lm-btn--ghost lm-btn--block">
+                                <?= lm_icon('mail') ?> Pause reminders again
+                            </button>
                         </form>
+                        <a class="lm-btn lm-btn--glow lm-btn--block lm-mt-16" href="<?= lm_e($dashboard) ?>">
+                            <?= lm_icon('grid') ?> Open the dashboard
+                        </a>
+                    <?php else: ?>
+                        <div class="lm-note lm-note--warn lm-mt-24">
+                            <?= lm_icon('question') ?>
+                            <span>Links expire, and a link forwarded to someone else stops working. Sign in to the
+                                dashboard to manage notifications for the whole account.</span>
+                        </div>
+                        <a class="lm-btn lm-btn--block" href="<?= lm_e($dashboard) ?>">
+                            <?= lm_icon('lock') ?> Sign in to manage notifications
+                        </a>
                     <?php endif; ?>
-                    <a class="btn btn-primary" href="<?= htmlspecialchars(lm_site_url('user/login.php')) ?>">Open dashboard</a>
-                </div>
-            <?php endif; ?>
 
-            <div class="foot">You can manage this anytime from the footer of any update email.</div>
+                    <hr class="lm-divider">
+                    <p class="lm-help lm-center lm-mb-0">
+                        You can manage this at any time from the footer of any update email.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
-</body>
-</html>
+</main>
+
+<?php lm_public_page_end(array('no_tabbar' => true)); ?>

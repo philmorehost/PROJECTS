@@ -296,6 +296,11 @@ if (!function_exists('lm_admin_gate')) {
      * the ones that check the session themselves instead of calling
      * lm_require_admin().
      *
+     * The gate takes effect on the *next* request: right after a successful
+     * sign-in the flag is set and lm_session_start(true) has already run, so
+     * gating in the same request would bounce the admin straight back to the
+     * password screen with no session cookie to remember them by.
+     *
      * @return void
      */
     function lm_admin_gate()
@@ -304,16 +309,26 @@ if (!function_exists('lm_admin_gate')) {
             return;
         }
 
-        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        $path = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
 
         // Only the console is gated. A public page must never be redirected to
         // admin/profile.php (that path does not exist from the site root).
-        $path = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-        if (strpos($path, '/admin/') === false && dirname($path) !== '/admin') {
+        if (strpos($path, '/admin/') === false) {
             return;
         }
 
+        $script = basename($path);
         if (in_array($script, array('profile.php', 'logout.php', 'index.php'), true)) {
+            return;
+        }
+
+        /*
+         * A brand-new sign-in is the first request in which the flag and the
+         * session are both present. Sending it to profile.php here would lose
+         * the redirect that carried it there; the next request is early enough.
+         */
+        if (!empty($_SESSION['lm_gate_armed'])) {
+            unset($_SESSION['lm_gate_armed']);
             return;
         }
 

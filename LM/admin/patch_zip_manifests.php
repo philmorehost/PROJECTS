@@ -1,175 +1,277 @@
 <?php
-// patch_zip_manifests.php
-// Patches all stored update ZIPs that are missing manifest.json.
-// Run once, then DELETE this file.
+/**
+ * admin/patch_zip_manifests.php — add a manifest.json to older packages.
+ *
+ * Releases uploaded before the auto-manifest feature have no manifest.json
+ * inside the ZIP. This injects one, then rewrites the stored checksum so the
+ * package still verifies. Additive: nothing is ever removed from a ZIP.
+ *
+ * @package LicenseManager
+ */
 
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    die('Unauthorized. Log in to the License Manager admin first.');
-}
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
 
-require_once('../db.php');
+$pdo = lm_app_boot();
 
-$results = [];
-$action = $_POST['action'] ?? '';
+$results = array();
+$updates = array();
+$problem = '';
 
-if ($action === 'patch') {
-    // Fetch all update records
-    $stmt = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.id ASC");
-    $updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+if (!$pdo instanceof PDO) {
+    $problem = 'The database is not connected, so there is nothing to patch.';
+} elseif (extension_loaded('zip') === false) {
+    $problem = 'The PHP zip extension is not loaded, so ZIP files cannot be opened on this server.';
+} else {
+    if (lm_app_handle_post() && (string) ($_POST['action'] ?? '') === 'patch') {
+        try {
+            $rows = $pdo->query(
+                'SELECT u.*, t.tier_code FROM script_updates u '
+                . 'JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.id ASC'
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $rows = array();
+            $problem = 'The releases could not be read: ' . $e->getMessage();
+        }
 
-    foreach ($updates as $upd) {
-        $zip_path = $upd['zip_path'];
-        $result = ['id' => $upd['id'], 'version' => $upd['version_number'], 'tier' => $upd['tier_code'], 'zip' => basename($zip_path)];
+        foreach ($rows as $row) {
+            $zipPath = (string) $row['zip_path'];
+            $result = array(
+                'id'      => (int) $row['id'],
+                'version' => (string) $row['version_number'],
+                'tier'    => (string) $row['tier_code'],
+                'zip'     => basename($zipPath),
+                'status'  => 'error',
+                'message' => '',
+            );
 
-        if (!file_exists($zip_path)) {
-            // Try relative path fallback
-            $relative = dirname(dirname(__DIR__)) . '/' . ltrim($zip_path, '/\\');
-            if (file_exists($relative)) {
-                $zip_path = $relative;
-            } else {
-                $result['status'] = 'error';
-                $result['message'] = 'ZIP file not found at: ' . $upd['zip_path'];
+            if (!is_file($zipPath)) {
+                // Older rows store a path relative to the site root.
+                $candidate = dirname(dirname(__DIR__)) . '/' . ltrim($zipPath, '/\\');
+                if (is_file($candidate)) {
+                    $zipPath = $candidate;
+                } else {
+                    $result['message'] = 'ZIP not found at ' . $row['zip_path'];
+                    $results[] = $result;
+                    continue;
+                }
+            }
+
+            $zip = new ZipArchive();
+            if ($zip->open($zipPath) !== true) {
+                $result['message'] = 'The ZIP could not be opened (it may be corrupt).';
                 $results[] = $result;
                 continue;
             }
-        }
 
-        $zip = new ZipArchive();
-        if ($zip->open($zip_path) !== TRUE) {
-            $result['status'] = 'error';
-            $result['message'] = 'Could not open ZIP file.';
-            $results[] = $result;
-            continue;
-        }
-
-        // Check if manifest.json already exists
-        $has_manifest = false;
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = $zip->getNameIndex($i);
-            if ($name === 'manifest.json' || preg_match('#^[^/]+/manifest\.json$#', $name)) {
-                $has_manifest = true;
-                break;
+            $hasManifest = false;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = (string) $zip->getNameIndex($i);
+                if ($name === 'manifest.json' || preg_match('#^[^/]+/manifest\.json$#', $name)) {
+                    $hasManifest = true;
+                    break;
+                }
             }
-        }
 
-        if ($has_manifest) {
+            if ($hasManifest) {
+                $zip->close();
+                $result['status'] = 'skipped';
+                $result['message'] = 'Already has manifest.json.';
+                $results[] = $result;
+                continue;
+            }
+
+            $manifest = array(
+                'version'          => ltrim(strtolower((string) $row['version_number']), 'v'),
+                'tier'             => strtoupper((string) $row['tier_code']),
+                'changelog'        => (string) ($row['changelog'] ?? ''),
+                'files_to_delete'  => array(),
+                'database_queries' => array(),
+            );
+
+            $added = $zip->addFromString(
+                'manifest.json',
+                (string) json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            );
             $zip->close();
-            $result['status'] = 'skipped';
-            $result['message'] = 'Already has manifest.json — no patch needed.';
+
+            if (!$added) {
+                $result['message'] = 'manifest.json could not be written into the ZIP.';
+                $results[] = $result;
+                continue;
+            }
+
+            $checksum = hash_file('sha256', $zipPath);
+            try {
+                $stmt = $pdo->prepare('UPDATE script_updates SET checksum = ? WHERE id = ?');
+                $stmt->execute(array($checksum, (int) $row['id']));
+            } catch (PDOException $e) {
+                $result['message'] = 'Manifest added but the checksum row was not updated: ' . $e->getMessage();
+                $results[] = $result;
+                continue;
+            }
+
+            $result['status'] = 'patched';
+            $result['message'] = 'manifest.json injected. New checksum: ' . substr($checksum, 0, 16) . '…';
             $results[] = $result;
-            continue;
         }
+    }
 
-        // Inject manifest.json
-        $manifest = [
-            'version'          => ltrim(strtolower($upd['version_number']), 'v'),
-            'tier'             => strtoupper($upd['tier_code']),
-            'changelog'        => $upd['changelog'],
-            'files_to_delete'  => [],
-            'database_queries' => []
-        ];
-        $added = $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $zip->close();
-
-        if (!$added) {
-            $result['status'] = 'error';
-            $result['message'] = 'Failed to inject manifest.json into ZIP.';
-            $results[] = $result;
-            continue;
-        }
-
-        // Regenerate checksum
-        $new_checksum = hash_file('sha256', $zip_path);
-
-        // Update DB checksum
-        $upd_stmt = $pdo->prepare("UPDATE script_updates SET checksum = ? WHERE id = ?");
-        $upd_stmt->execute([$new_checksum, $upd['id']]);
-
-        $result['status'] = 'patched';
-        $result['message'] = 'manifest.json injected. New checksum: ' . substr($new_checksum, 0, 16) . '...';
-        $results[] = $result;
+    try {
+        $updates = $pdo->query(
+            'SELECT u.id, u.version_number, u.zip_path, u.is_released, t.tier_code '
+            . 'FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.id DESC'
+        )->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $updates = array();
     }
 }
 
-// Fetch current state for display
-$all_updates = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.id DESC")->fetchAll(PDO::FETCH_ASSOC);
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Patch ZIP Manifests – License Manager</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; margin: 0; padding: 2rem; color: #1e293b; }
-        h1 { color: #0f172a; margin-bottom: 0.25rem; }
-        .subtitle { color: #64748b; margin-bottom: 2rem; font-size: 0.9rem; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 1.5rem 2rem; margin-bottom: 2rem; }
-        h2 { font-size: 1.1rem; margin: 0 0 1rem; color: #334155; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th { background: #f8fafc; padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; }
-        .badge { padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
-        .badge-patched { background: #dcfce7; color: #15803d; }
-        .badge-skipped { background: #e0e7ff; color: #3730a3; }
-        .badge-error { background: #fee2e2; color: #b91c1c; }
-        .btn-patch { background: linear-gradient(135deg, #ef4444, #b91c1c); color: white; border: none; padding: 0.9rem 2rem; border-radius: 10px; font-size: 1rem; font-weight: 700; cursor: pointer; }
-        .btn-patch:hover { opacity: 0.9; }
-        .warning { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: 0.875rem; color: #78350f; }
-        .result-msg { font-size: 0.8rem; color: #64748b; }
-    </style>
-</head>
-<body>
-<h1>🩹 Patch ZIP Manifests</h1>
-<p class="subtitle">Injects a <code>manifest.json</code> into any stored update ZIP that is missing one, then regenerates the checksum. <strong>Delete this file after use.</strong></p>
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="updates.php">' . lm_icon('rocket') . ' Push updates</a>';
 
-<div class="warning">
-    ⚠️ <strong>This operation modifies the stored ZIP files on disk.</strong> It is safe to run — it only adds the manifest if missing and never removes existing files. Run this once to fix ZIPs uploaded before the auto-inject feature was added.
+lm_app_start('Package manifests', array(
+    'subtitle' => 'Add a manifest.json to releases that were uploaded before it was generated automatically.',
+    'active'   => 'manifests',
+    'actions'  => $actionsHtml,
+));
+?>
+
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
+
+<div class="lm-note lm-note--warn">
+    <?= lm_icon('alert') ?>
+    <span><strong>This edits the ZIP files on disk.</strong> It only ever adds a missing
+        <code>manifest.json</code> and rewrites the checksum afterwards — it never removes a file.
+        Run it once, then delete this page from the server if you do not want it reachable.</span>
 </div>
 
 <?php if (!empty($results)): ?>
-<div class="card">
-    <h2>Patch Results</h2>
-    <table>
-        <thead><tr><th>ID</th><th>Version</th><th>Tier</th><th>File</th><th>Result</th><th>Detail</th></tr></thead>
-        <tbody>
-        <?php foreach ($results as $r): ?>
-        <tr>
-            <td><?= $r['id'] ?></td>
-            <td><strong>v<?= htmlspecialchars($r['version']) ?></strong></td>
-            <td><?= htmlspecialchars($r['tier']) ?></td>
-            <td><code style="font-size:0.75rem"><?= htmlspecialchars($r['zip']) ?></code></td>
-            <td><span class="badge badge-<?= $r['status'] ?>"><?= strtoupper($r['status']) ?></span></td>
-            <td class="result-msg"><?= htmlspecialchars($r['message']) ?></td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
+    <?php
+    $patched = 0;
+    $skipped = 0;
+    $failed = 0;
+    foreach ($results as $row) {
+        if ($row['status'] === 'patched') {
+            $patched++;
+        } elseif ($row['status'] === 'skipped') {
+            $skipped++;
+        } else {
+            $failed++;
+        }
+    }
+    ?>
+    <div class="lm-stats">
+        <?php
+        lm_app_stat('Patched', (string) $patched, 'Manifest injected', $patched > 0 ? 'green' : '');
+        lm_app_stat('Skipped', (string) $skipped, 'Already had one');
+        lm_app_stat('Failed', (string) $failed, 'Could not be opened or written', $failed > 0 ? 'red' : '');
+        ?>
+    </div>
+
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('check') ?> Patch results</h2>
+                <p>One row per stored package.</p>
+            </div>
+        </div>
+        <div class="lm-panel__body lm-panel__body--flush">
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Version</th>
+                            <th>Project</th>
+                            <th>Package</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($results as $row): ?>
+                            <?php
+                            $tone = $row['status'] === 'patched' ? 'ok' : ($row['status'] === 'skipped' ? 'info' : 'bad');
+                            ?>
+                            <tr>
+                                <td data-label="ID"><?= (int) $row['id'] ?></td>
+                                <td data-label="Version"><strong>v<?= lm_e($row['version']) ?></strong></td>
+                                <td data-label="Project"><?= lm_app_badge($row['tier'], 'info') ?></td>
+                                <td data-label="Package"><code class="lm-tiny"><?= lm_e($row['zip']) ?></code></td>
+                                <td data-label="Result">
+                                    <?= lm_app_badge(ucfirst($row['status']), $tone) ?>
+                                    <span class="lm-help" style="display:block"><?= lm_e($row['message']) ?></span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
 <?php endif; ?>
 
-<div class="card">
-    <h2>All Stored Update Packages</h2>
-    <table>
-        <thead><tr><th>ID</th><th>Tier</th><th>Version</th><th>ZIP Path</th><th>Is Released</th></tr></thead>
-        <tbody>
-        <?php foreach ($all_updates as $u): ?>
-        <tr>
-            <td><?= $u['id'] ?></td>
-            <td><span class="badge" style="background:#e0e7ff;color:#3730a3"><?= htmlspecialchars($u['tier_code']) ?></span></td>
-            <td><strong>v<?= htmlspecialchars($u['version_number']) ?></strong></td>
-            <td><code style="font-size:0.75rem;color:#94a3b8"><?= htmlspecialchars($u['zip_path']) ?></code></td>
-            <td><?= $u['is_released'] ? '✅ Yes' : '❌ No' ?></td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('layers') ?> Stored packages</h2>
+            <p><?= count($updates) ?> release(s) on record.</p>
+        </div>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($updates)): ?>
+            <?php lm_app_empty('layers', 'No packages', 'Nothing has been published on this install yet.', ''); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Project</th>
+                            <th>Version</th>
+                            <th>In folder</th>
+                            <th>Released</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($updates as $update): ?>
+                            <?php $path = (string) $update['zip_path']; ?>
+                            <tr>
+                                <td data-label="ID"><?= (int) $update['id'] ?></td>
+                                <td data-label="Project"><?= lm_app_badge((string) $update['tier_code'], 'info') ?></td>
+                                <td data-label="Version"><strong>v<?= lm_e((string) $update['version_number']) ?></strong></td>
+                                <td data-label="In folder">
+                                    <?= lm_app_badge(is_file($path) ? 'Present' : 'Missing', is_file($path) ? 'ok' : 'bad') ?>
+                                    <span class="lm-help" style="display:block;word-break:break-all"><?= lm_e($path) ?></span>
+                                </td>
+                                <td data-label="Released"><?= !empty($update['is_released']) ? 'Yes' : 'No' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
 
-<form method="POST">
-    <input type="hidden" name="action" value="patch">
-    <button type="submit" class="btn-patch">🩹 Patch All Missing Manifests Now</button>
-</form>
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('refresh') ?> Run the patch</h2>
+            <p>Every package is checked; only the ones with no manifest are touched.</p>
+        </div>
+    </div>
+    <div class="lm-panel__body">
+        <form method="POST">
+            <?= lm_csrf_field() ?>
+            <input type="hidden" name="action" value="patch">
+            <button type="submit" class="lm-btn lm-btn--glow">
+                <?= lm_icon('check') ?> Patch missing manifests
+            </button>
+        </form>
+    </div>
+</section>
 
-</body>
-</html>
+<?php lm_app_end(); ?>

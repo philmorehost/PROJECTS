@@ -1,298 +1,342 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
+/**
+ * admin/dashboard.php — the console home.
+ *
+ * Answers the three questions an operator opens the panel for: what is selling,
+ * what needs attention, and what shipped last. All queries are guarded, so a
+ * half-migrated schema still renders a page instead of a white screen.
+ *
+ * @package LicenseManager
+ */
+
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
+
+$pdo = lm_app_boot();
+
+$stats = array(
+    'licences'     => 0,
+    'active'       => 0,
+    'inactive'     => 0,
+    'expiring'     => 0,
+    'transactions' => 0,
+    'revenue'      => 0.0,
+    'pending'      => 0,
+    'updates'      => 0,
+);
+
+$licenses = array();
+$transactions = array();
+$requests = array();
+$updates = array();
+$currency = 'NGN';
+
+if ($pdo instanceof PDO) {
+    try {
+        $licenses = $pdo->query('SELECT * FROM licenses ORDER BY created_at DESC, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $licenses = array();
+    }
+
+    foreach ($licenses as $row) {
+        $stats['licences']++;
+        $status = strtolower((string) ($row['status'] ?? ''));
+        if ($status === 'active') {
+            $stats['active']++;
+        } else {
+            $stats['inactive']++;
+        }
+
+        $expiry = (string) ($row['expiry_date'] ?? '');
+        if ($expiry !== '' && $expiry !== '0000-00-00') {
+            $ts = strtotime($expiry);
+            if ($ts !== false && $ts >= time() && $ts < strtotime('+30 days')) {
+                $stats['expiring']++;
+            }
+        }
+    }
+
+    try {
+        $rows = $pdo->query('SELECT * FROM transactions ORDER BY created_at DESC, id DESC LIMIT 50')->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $rows;
+    } catch (PDOException $e) {
+        $transactions = array();
+    }
+
+    try {
+        $row = $pdo->query('SELECT COUNT(*) AS total, COALESCE(SUM(amount), 0) AS sum FROM transactions')->fetch(PDO::FETCH_ASSOC);
+        $stats['transactions'] = (int) ($row['total'] ?? 0);
+        $stats['revenue'] = (float) ($row['sum'] ?? 0);
+    } catch (PDOException $e) {
+        // older schema without transactions
+    }
+
+    foreach ($transactions as $tx) {
+        if (!empty($tx['currency'])) {
+            $currency = (string) $tx['currency'];
+            break;
+        }
+    }
+
+    try {
+        $requests = $pdo->query("SELECT * FROM license_requests WHERE status = 'pending' ORDER BY created_at DESC LIMIT 5")
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $stats['pending'] = count($requests);
+    } catch (PDOException $e) {
+        $requests = array();
+    }
+
+    try {
+        $updates = $pdo->query('SELECT u.*, t.tier_code FROM script_updates u LEFT JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.release_date DESC, u.id DESC LIMIT 5')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $stats['updates'] = (int) $pdo->query('SELECT COUNT(*) FROM script_updates')->fetchColumn();
+    } catch (PDOException $e) {
+        $updates = array();
+    }
 }
 
-require_once('../db.php');
+/**
+ * Short, human date.
+ *
+ * @param mixed $value
+ * @return string
+ */
+function lm_admin_date($value)
+{
+    if (!$value || (string) $value === '0000-00-00' || (string) $value === '0000-00-00 00:00:00') {
+        return '—';
+    }
 
-// Fetch licenses from the database
-$stmt = $pdo->query("SELECT * FROM licenses ORDER BY created_at DESC");
-$licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $ts = strtotime((string) $value);
+    return $ts === false ? (string) $value : date('M j, Y', $ts);
+}
 
-// Get stats
-$total_licenses = count($licenses);
-$active_licenses = count(array_filter($licenses, fn($l) => $l['status'] === 'active'));
-$inactive_licenses = count(array_filter($licenses, fn($l) => $l['status'] === 'inactive'));
+$actions = '<a class="lm-btn lm-btn--ghost" href="licenses.php?action=add">' . lm_icon('plus') . ' New licence</a>'
+    . '<a class="lm-btn lm-btn--glow" href="updates.php">' . lm_icon('rocket') . ' Publish an update</a>';
 
-// Get transaction count
-$stmt = $pdo->query("SELECT COUNT(*) as count FROM transactions");
-$transaction_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+lm_app_start('Dashboard', array(
+    'subtitle' => 'Everything that is selling, waiting or about to lapse — on one screen.',
+    'active'   => 'dashboard',
+    'actions'  => $actions,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 260px;
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .sidebar h1 {
-            font-size: 1.5rem;
-            padding: 2rem 1.5rem;
-            text-align: center;
-            background: rgba(15, 23, 42, 0.5);
-            margin: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .sidebar nav {
-            flex-grow: 1;
-            padding: 2rem 0;
-        }
-        .sidebar nav a {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            color: #cbd5e1;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-        .sidebar nav a:hover,
-        .sidebar nav a.active {
-            background: rgba(59, 130, 246, 0.2);
-            color: #fff;
-            border-left: 3px solid #3b82f6;
-            padding-left: calc(1.5rem - 3px);
-        }
-        .main-content {
-            margin-left: 260px;
-            flex-grow: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-        .header h2 {
-            font-size: 2rem;
-            color: #1e293b;
-            font-weight: 700;
-        }
-        .logout-btn {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: #fff;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #3b82f6;
-            transition: all 0.3s ease;
-        }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-        .stat-card h3 {
-            font-size: 0.875rem;
-            color: #64748b;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .stat-card .value {
-            font-size: 2.5rem;
-            color: #1e293b;
-            font-weight: 700;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .card-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-        }
-        .card-header h3 {
-            font-size: 1.25rem;
-            color: #1e293b;
-            margin: 0;
-            font-weight: 600;
-        }
-        .card-body {
-            padding: 2rem;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #f8fafc;
-            padding: 1rem;
-            text-align: left;
-            font-weight: 600;
-            color: #475569;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid #e2e8f0;
-            color: #475569;
-        }
-        tr:hover {
-            background: #f8fafc;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .status-active {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .status-inactive {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .header h2 {
-                font-size: 1.5rem;
-            }
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h1>🔐 License Manager</h1>
-        <nav>
-            <a href="dashboard.php" class="active">📊 Dashboard</a>
-            <a href="licenses.php">📜 Licenses</a>
-            <a href="updates.php">🚀 Push Updates</a>
-            <a href="transactions.php">💳 Transactions</a>
-            <a href="settings.php">⚙️ Settings</a>
-            <a href="profile.php">👤 Profile</a>
-            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0;">
-            <a href="system-check.php" style="font-size: 0.875rem; opacity: 0.8;">✓ System Check</a>
-            <a href="database-repair.php" style="font-size: 0.875rem; opacity: 0.8;">🔧 Database Repair</a>
-            <a href="payment-debug.php" style="font-size: 0.875rem; opacity: 0.8;">🐛 Debug Logs</a>
-            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0;">
-            <a href="logout.php">🚪 Logout</a>
-        </nav>
+
+<?php if (!$pdo instanceof PDO): ?>
+    <?php lm_alert('error', 'The database is not connected. db.php is missing or the credentials are wrong, so this page cannot show live numbers.'); ?>
+<?php endif; ?>
+
+<div class="lm-stats">
+    <?php
+    lm_app_stat('Licences', (string) $stats['licences'], $stats['active'] . ' active · ' . $stats['inactive'] . ' inactive');
+    lm_app_stat('Revenue', $currency . ' ' . number_format($stats['revenue'], 2), $stats['transactions'] . ' transactions', 'green');
+    lm_app_stat('Pending requests', (string) $stats['pending'], $stats['pending'] > 0 ? 'Waiting for approval' : 'Nothing waiting', 'amber');
+    lm_app_stat('Expiring soon', (string) $stats['expiring'], 'Within 30 days', 'indigo');
+    ?>
+</div>
+
+<?php if ($stats['pending'] > 0): ?>
+    <div class="lm-note lm-note--warn">
+        <?= lm_icon('bell') ?>
+        <span><strong><?= (int) $stats['pending'] ?> licence request<?= $stats['pending'] === 1 ? '' : 's' ?> need a decision.</strong>
+            Approving one creates the licence and emails the key.
+            <a href="licenses.php#requests">Review them now</a>.</span>
     </div>
-    <div class="main-content">
-        <div class="header">
-            <h2>Dashboard</h2>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
+<?php endif; ?>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total Licenses</h3>
-                <div class="value"><?= $total_licenses ?></div>
+<div class="lm-grid-2">
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('key') ?> Recent licences</h2>
+                <p>The ten newest keys, whatever their status.</p>
             </div>
-            <div class="stat-card" style="border-left-color: #10b981;">
-                <h3>Active Licenses</h3>
-                <div class="value" style="color: #10b981;"><?= $active_licenses ?></div>
-            </div>
-            <div class="stat-card" style="border-left-color: #f59e0b;">
-                <h3>Inactive Licenses</h3>
-                <div class="value" style="color: #f59e0b;"><?= $inactive_licenses ?></div>
-            </div>
-            <div class="stat-card" style="border-left-color: #8b5cf6;">
-                <h3>Transactions</h3>
-                <div class="value" style="color: #8b5cf6;"><?= $transaction_count ?></div>
-            </div>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="licenses.php">See all</a>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h3>📋 Recent Licenses</h3>
-            </div>
-            <div class="card-body">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>License Key</th>
-                            <th>Domain</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach (array_slice($licenses, 0, 10) as $license): ?>
+        <div class="lm-panel__body lm-panel__body--flush">
+            <?php if (empty($licenses)): ?>
+                <?php lm_app_empty(
+                    'key',
+                    'No licences yet',
+                    'Add one by hand, approve a customer request, or let a Paystack payment create it automatically.',
+                    '<a class="lm-btn lm-btn--glow" href="licenses.php?action=add">' . lm_icon('plus') . ' Add a licence</a>'
+                ); ?>
+            <?php else: ?>
+                <div class="lm-tablewrap">
+                    <table class="lm-table lm-table--stack">
+                        <thead>
                             <tr>
-                                <td><code style="background: #f1f5f9; padding: 0.25rem 0.5rem; border-radius: 4px;"><?= htmlspecialchars(substr($license['license_key'], 0, 16)) ?>...</code></td>
-                                <td><?= htmlspecialchars($license['domain']) ?></td>
-                                <td><?= htmlspecialchars($license['customer_email'] ?? 'N/A') ?></td>
-                                <td>
-                                    <span class="status-badge <?= $license['status'] === 'active' ? 'status-active' : 'status-inactive' ?>">
-                                        <?= ucfirst($license['status']) ?>
-                                    </span>
-                                </td>
-                                <td><?= date('M d, Y', strtotime($license['created_at'])) ?></td>
+                                <th>Key</th>
+                                <th>Domain</th>
+                                <th>Status</th>
+                                <th>Issued</th>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php foreach (array_slice($licenses, 0, 10) as $license): ?>
+                                <?php $st = strtolower((string) ($license['status'] ?? '')); ?>
+                                <tr>
+                                    <td data-label="Key">
+                                        <code><?= lm_e(substr((string) $license['license_key'], 0, 14)) ?>…</code>
+                                    </td>
+                                    <td data-label="Domain"><?= lm_e((string) ($license['domain'] ?? '—')) ?></td>
+                                    <td data-label="Status">
+                                        <?= lm_app_badge(ucfirst($st !== '' ? $st : 'unknown'), $st === 'active' ? 'ok' : 'bad') ?>
+                                    </td>
+                                    <td data-label="Issued"><?= lm_e(lm_admin_date($license['created_at'] ?? '')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('wallet') ?> Latest transactions</h2>
+                <p>Raw payment records, newest first.</p>
             </div>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="transactions.php">See all</a>
+        </div>
+        <div class="lm-panel__body lm-panel__body--flush">
+            <?php if (empty($transactions)): ?>
+                <?php lm_app_empty(
+                    'wallet',
+                    'No transactions yet',
+                    'Payments appear here as soon as the Paystack webhook confirms a charge.',
+                    '<a class="lm-btn lm-btn--ghost" href="webhook-tester.php">' . lm_icon('plug') . ' Test the webhook</a>'
+                ); ?>
+            <?php else: ?>
+                <div class="lm-tablewrap">
+                    <table class="lm-table lm-table--stack">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach (array_slice($transactions, 0, 8) as $tx): ?>
+                                <?php
+                                $tstat = strtolower((string) ($tx['status'] ?? ''));
+                                $tone = in_array($tstat, array('success', 'paid', 'completed'), true) ? 'ok'
+                                    : (in_array($tstat, array('pending', 'processing'), true) ? 'warn' : 'bad');
+                                ?>
+                                <tr>
+                                    <td data-label="Reference"><code><?= lm_e((string) ($tx['transaction_ref'] ?? '—')) ?></code></td>
+                                    <td data-label="Amount" class="lm-num">
+                                        <?= lm_e((string) ($tx['currency'] ?? '')) ?>
+                                        <?= lm_e(number_format((float) ($tx['amount'] ?? 0), 2)) ?>
+                                    </td>
+                                    <td data-label="Status"><?= lm_app_badge($tstat !== '' ? ucfirst($tstat) : '—', $tone) ?></td>
+                                    <td data-label="Date"><?= lm_e(lm_admin_date($tx['created_at'] ?? '')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+</div>
+
+<div class="lm-grid-2">
+    <section class="lm-panel" id="requests">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('clock') ?> Requests waiting</h2>
+                <p>Customers who asked for a licence and have not been approved yet.</p>
+            </div>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="licenses.php#requests">All requests</a>
+        </div>
+        <div class="lm-panel__body lm-panel__body--flush">
+            <?php if (empty($requests)): ?>
+                <?php lm_app_empty('check', 'Nothing waiting', 'Every request has been dealt with. New ones show up here and in Licences.',''); ?>
+            <?php else: ?>
+                <div class="lm-tablewrap">
+                    <table class="lm-table lm-table--stack">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Email</th>
+                                <th>Domain</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($requests as $req): ?>
+                                <tr>
+                                    <td data-label="Reference"><code><?= lm_e((string) ($req['request_ref'] ?? '—')) ?></code></td>
+                                    <td data-label="Email"><?= lm_e((string) ($req['customer_email'] ?? '—')) ?></td>
+                                    <td data-label="Domain"><?= lm_e((string) ($req['domain'] ?? '—')) ?></td>
+                                    <td data-label="Submitted"><?= lm_e(lm_admin_date($req['created_at'] ?? '')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('rocket') ?> Recent releases</h2>
+                <p><?= (int) $stats['updates'] ?> published in total.</p>
+            </div>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="updates.php">Push an update</a>
+        </div>
+        <div class="lm-panel__body">
+            <?php if (empty($updates)): ?>
+                <?php lm_app_empty(
+                    'rocket',
+                    'No releases yet',
+                    'Upload a ZIP for the version you just built. Customers are notified automatically.',
+                    '<a class="lm-btn lm-btn--glow" href="updates.php">' . lm_icon('rocket') . ' Publish the first one</a>'
+                ); ?>
+            <?php else: ?>
+                <ol class="lm-flow">
+                    <?php foreach ($updates as $update): ?>
+                        <li>
+                            <strong>v<?= lm_e((string) ($update['version_number'] ?? '?')) ?></strong>
+                            <?php if (!empty($update['tier_code'])): ?>
+                                <span class="lm-badge lm-badge--info"><?= lm_e((string) $update['tier_code']) ?></span>
+                            <?php endif; ?>
+                            <span class="lm-help" style="display:block">
+                                <?= lm_e(lm_admin_date($update['release_date'] ?? '')) ?>
+                            </span>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
+            <?php endif; ?>
+        </div>
+    </section>
+</div>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('spark') ?> Shortcuts</h2>
+            <p>The five screens that do most of the work.</p>
         </div>
     </div>
-</body>
-</html>
+    <div class="lm-panel__body">
+        <div class="lm-btnrow">
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="licenses.php?action=add"><?= lm_icon('plus') ?> Add a licence</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="projects.php"><?= lm_icon('layers') ?> Manage projects</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="update-notifications.php"><?= lm_icon('bell') ?> Notifications</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="guide.php"><?= lm_icon('book') ?> Admin guide</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="settings.php"><?= lm_icon('settings') ?> Settings</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="system-check.php"><?= lm_icon('shield') ?> System check</a>
+            <a class="lm-btn lm-btn--sm lm-btn--ghost" href="../health.php"><?= lm_icon('check') ?> Installation check</a>
+        </div>
+    </div>
+</section>
+
+<?php lm_app_end(); ?>

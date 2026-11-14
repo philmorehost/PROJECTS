@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['admin_logged_in'])) {
@@ -9,6 +10,13 @@ if (!isset($_SESSION['admin_logged_in'])) {
 }
 
 require_once('../db.php');
+
+// Every handler is a state change: refuse a post without the token.
+if (!lm_verify_csrf()) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Security token expired. Reload the page and try again.']);
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['status' => 'error', 'message' => 'Invalid request method.']);
