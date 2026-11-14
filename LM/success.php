@@ -1,187 +1,260 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Successful - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .container { background: #fff; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 100%; max-width: 36rem; text-align: center; }
-        h1 { color: #16a34a; font-size: 2.25rem; margin-bottom: 1rem; }
-        h1.error-title { color: #dc2626; }
-        p { color: #6b7280; margin-bottom: 2rem; }
-        .license-key { background: #f3f4f6; border: 2px dashed #d1d5db; padding: 1rem; border-radius: 0.5rem; font-size: 1.25rem; font-weight: 600; margin-bottom: 2rem; word-wrap: break-word; }
-        .btn { background-color: #3b82f6; color: #fff; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 500; display: inline-block; margin-top: 1rem; border: none; cursor: pointer; font-size: 1rem; }
-        .error { color: #b91c1c; background-color: #fef2f2; border: 1px solid #fca5a5; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; }
-        .processing { color: #1e40af; background-color: #eff6ff; border: 1px solid #93c5fd; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; }
-        .spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 3px solid #3b82f6; border-radius: 50%; border-top-color: transparent; animation: spin 0.8s linear infinite; margin-right: 0.5rem; vertical-align: middle; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .installation-guide { text-align: left; margin-top: 2.5rem; padding: 1.5rem; background-color: #f9fafb; border-radius: 0.5rem; border: 1px solid #e5e7eb; }
-        .installation-guide h3 { margin-top: 0; color: #111827; }
-        .installation-guide ol { padding-left: 1.5rem; }
-        .installation-guide li { margin-bottom: 0.75rem; }
-        .installation-guide code { background-color: #e5e7eb; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div id="content"></div>
+<?php
+/**
+ * success.php — the page Paystack returns the buyer to.
+ *
+ * The polling behaviour is unchanged: api-verify-payment.php is asked every two
+ * seconds until the webhook has created the licence (or the attempts run out).
+ * What changed is that the page is server-rendered through the shared shell,
+ * so there is a real header, footer and mobile menu instead of a bare div, and
+ * the states are markup the script fills in rather than template strings.
+ *
+ * @package LicenseManager
+ */
+
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+require_once __DIR__ . '/includes/ui.php';
+
+$ref = isset($_GET['ref']) ? (string) $_GET['ref'] : '';
+$ref = preg_replace('/[^A-Za-z0-9._-]/', '', $ref);
+?>
+<?php lm_public_page_start('order', array('title' => 'Payment status')); ?>
+
+<main class="lm-page lm-page--center" id="main">
+    <div class="lm-wrap">
+        <div class="lm-auth">
+            <div id="lm-success" data-ref="<?= lm_e($ref) ?>">
+
+                <div class="lm-card" id="state-processing">
+                    <div class="lm-card__body lm-center">
+                        <span class="lm-icon-badge lm-icon-badge--warn"><?= lm_icon('clock') ?></span>
+                        <h1 style="font-size:clamp(22px,3vw,30px);margin-bottom:8px">Confirming your payment</h1>
+                        <p class="lm-meta">Stay on this page for a moment — we are waiting for the payment provider
+                            to confirm the charge, then the key appears here.</p>
+
+                        <div class="lm-progressline">
+                            <div class="lm-progressbar"><span id="progress-bar"></span></div>
+                            <span id="progress-label">0%</span>
+                        </div>
+                        <p class="lm-help" id="progress-note">Attempt 0 of 30. This usually takes a few seconds.</p>
+
+                        <p class="lm-help lm-mt-24">Reference
+                            <code><?= $ref !== '' ? lm_e($ref) : 'not supplied' ?></code></p>
+                    </div>
+                </div>
+
+                <div class="lm-card" id="state-success" hidden>
+                    <div class="lm-card__body">
+                        <div class="lm-center">
+                            <span class="lm-icon-badge"><?= lm_icon('check') ?></span>
+                            <h1 style="font-size:clamp(22px,3vw,30px);margin-bottom:8px">Payment successful</h1>
+                            <p class="lm-meta">Your licence key is below, and a copy has been emailed to you.</p>
+                        </div>
+
+                        <div class="lm-field lm-mt-24">
+                            <span class="lm-label">Licence key</span>
+                            <div class="lm-keyrow">
+                                <code class="lm-key" id="licenseKey">—</code>
+                                <button class="lm-copybtn lm-copybtn--light" type="button" id="copyKey">
+                                    <?= lm_icon('copy') ?><span>Copy</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="lm-item__actions">
+                            <a class="lm-btn lm-btn--glow lm-btn--block" href="<?= lm_e(lm_public_url('user/index.php')) ?>">
+                                <?= lm_icon('grid') ?> Open my dashboard
+                            </a>
+                            <a class="lm-btn lm-btn--ghost lm-btn--block" href="<?= lm_e(lm_public_url('api-docs.php')) ?>">
+                                <?= lm_icon('book') ?> Integrate it
+                            </a>
+                        </div>
+
+                        <p class="lm-help lm-center lm-mt-16" id="auto-login-note" hidden>
+                            Taking you to your dashboard… <a id="auto-login-link" href="<?= lm_e(lm_public_url('user/index.php')) ?>">continue now</a>.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="lm-card" id="state-error" hidden>
+                    <div class="lm-card__body">
+                        <div class="lm-center">
+                            <span class="lm-icon-badge lm-icon-badge--warn"><?= lm_icon('alert') ?></span>
+                            <h1 style="font-size:clamp(22px,3vw,30px);margin-bottom:8px">We could not confirm it yet</h1>
+                            <p class="lm-meta" id="error-message">The payment has not been confirmed by the provider.</p>
+                        </div>
+
+                        <div class="lm-note lm-note--warn lm-mt-24">
+                            <?= lm_icon('question') ?>
+                            <span>Your licence may still have been created. Sign in with the email you paid with — if
+                                the key is there, nothing is wrong. Otherwise the reference
+                                <code><?= $ref !== '' ? lm_e($ref) : '' ?></code> is what support will ask for.</span>
+                        </div>
+
+                        <div class="lm-item__actions">
+                            <a class="lm-btn lm-btn--glow lm-btn--block" href="<?= lm_e(lm_public_url('user/login.php')) ?>">
+                                <?= lm_icon('lock') ?> Sign in
+                            </a>
+                            <a class="lm-btn lm-btn--ghost lm-btn--block" href="<?= lm_e(lm_public_url('order.php')) ?>">
+                                <?= lm_icon('refresh') ?> Start again
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
     </div>
+</main>
 
-    <script>
-        const ref = '<?= isset($_GET['ref']) ? htmlspecialchars($_GET['ref']) : '' ?>';
-        let attemptCount = 0;
-        const maxAttempts = 30; // Try for up to 60 seconds
-        
-        async function checkLicense() {
-            attemptCount++;
-            
-            try {
-                // Use the new verification endpoint that checks Paystack API
-                const response = await fetch('api-verify-payment.php?ref=' + encodeURIComponent(ref));
-                const data = await response.json();
-                
-                if (data.success) {
-                    // License found!
-                    displaySuccess(data);
-                } else if (attemptCount < maxAttempts) {
-                    // Not ready yet, try again
-                    displayProcessing(data.message, attemptCount, maxAttempts);
-                    setTimeout(checkLicense, 2000); // Check again in 2 seconds
-                } else {
-                    // Timed out
-                    displayError(data.message);
-                }
-            } catch (err) {
-                if (attemptCount < maxAttempts) {
-                    displayProcessing('Processing your payment...', attemptCount, maxAttempts);
-                    setTimeout(checkLicense, 2000);
-                } else {
-                    displayError('An error occurred. Please check your email or contact support.');
-                }
+<script>
+(function () {
+    'use strict';
+
+    var root = document.getElementById('lm-success');
+    if (!root) { return; }
+
+    var ref = root.getAttribute('data-ref') || '';
+    var attempt = 0;
+    var maxAttempts = 30;
+    var timer = null;
+
+    var states = {
+        processing: document.getElementById('state-processing'),
+        success: document.getElementById('state-success'),
+        error: document.getElementById('state-error')
+    };
+    var bar = document.getElementById('progress-bar');
+    var label = document.getElementById('progress-label');
+    var note = document.getElementById('progress-note');
+
+    function show(name) {
+        Object.keys(states).forEach(function (key) {
+            if (states[key]) { states[key].hidden = key !== name; }
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function progress(step) {
+        var pct = Math.min(96, Math.round((step / maxAttempts) * 100));
+        if (bar) { bar.style.width = pct + '%'; }
+        if (label) { label.textContent = pct + '%'; }
+        if (note) {
+            note.textContent = 'Attempt ' + step + ' of ' + maxAttempts
+                + '. This usually takes a few seconds — you can safely leave this page open.';
+        }
+    }
+
+    function copyText(text, btn) {
+        var span = btn ? btn.querySelector('span') : null;
+        var flash = function (ok) {
+            if (!span) { return; }
+            var old = span.textContent;
+            span.textContent = ok ? 'Copied' : 'Failed';
+            window.setTimeout(function () { span.textContent = old; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { flash(true); }, function () { flash(false); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); flash(true); } catch (e) { flash(false); }
+            document.body.removeChild(ta);
+        }
+    }
+
+    function submitToken(token) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = <?= json_encode(lm_public_url('user/auto_login.php')) ?>;
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'token';
+        input.value = token;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    function onPaid(data) {
+        if (timer) { window.clearTimeout(timer); }
+
+        var keyEl = document.getElementById('licenseKey');
+        if (keyEl) { keyEl.textContent = data.license_key || '—'; }
+        show('success');
+
+        var copyBtn = document.getElementById('copyKey');
+        if (copyBtn && data.license_key) {
+            copyBtn.addEventListener('click', function () { copyText(data.license_key, copyBtn); });
+            copyText(data.license_key, null);
+        }
+
+        if (data.auto_login_token) {
+            var hint = document.getElementById('auto-login-note');
+            var link = document.getElementById('auto-login-link');
+            if (hint) { hint.hidden = false; }
+            if (link) {
+                link.href = <?= json_encode(lm_public_url('user/auto_login.php')) ?>
+                    + '?token=' + encodeURIComponent(data.auto_login_token);
             }
+            window.setTimeout(function () { submitToken(data.auto_login_token); }, 1500);
+        } else {
+            window.setTimeout(function () {
+                window.location.href = <?= json_encode(lm_public_url('user/login.php')) ?>;
+            }, 9000);
         }
-        
-        function displaySuccess(data) {
-            const html = `
-                <h1>✓ Payment Successful!</h1>
-                <p>Thank you for your purchase. Your license key has been sent to your email.</p>
-                <div class="license-key" id="licenseKey">${escapeHtml(data.license_key)}</div>
-                <button class="btn" onclick="copyLicense()">Copy Key</button>
-                <a href="user/index.php" class="btn" style="background-color: #10b981; margin-left: 0.5rem;">Go to Dashboard</a>
-                <p style="color: #475569; margin-top: 1rem; font-size: 0.95rem;">Your license key has been copied to the clipboard. Redirecting you to your dashboard in a few seconds.</p>
-                ${data.auto_login_token ? `<p style="margin-top: 0.75rem; color: #475569; font-size: 0.9rem;">If automatic login does not work, <a href="user/auto_login.php?token=${encodeURIComponent(data.auto_login_token)}">click here to continue</a>.</p>` : ''}
-                
-                <div class="installation-guide">
-                    <h3>Installation Guide</h3>
-                    <ol>
-                        <li>Download the main script and upload it to the server where you wish to install it.</li>
-                        <li>Navigate to the <strong>setup.php</strong> file in your browser to begin installation.</li>
-                        <li>You will be asked for the following details on the first step:</li>
-                        <ul>
-                            <li><strong>License Server URL:</strong> <code>${window.location.origin}</code></li>
-                            <li><strong>Your License Key:</strong> (The key shown above)</li>
-                            <li><strong>Your Domain Name:</strong> The domain you entered during purchase.</li>
-                        </ul>
-                        <li>Follow the on-screen instructions to complete the installation.</li>
-                    </ol>
-                </div>
-            `;
-            document.getElementById('content').innerHTML = html;
-            copyLicense(true);
-            if (data.auto_login_token) {
-                // Submit token to server-side auto-login endpoint
-                setTimeout(() => {
-                    submitToken(data.auto_login_token);
-                }, 1500);
-            } else if (data.customer_email) {
-                setTimeout(() => {
-                    autoLogin(data.customer_email, data.license_key);
-                }, 3000);
-            } else {
-                setTimeout(() => {
-                    window.location.href = 'user/index.php';
-                }, 7000);
-            }
-        }
-        
-        function displayProcessing(message, attempt, max) {
-            const progress = Math.round((attempt / max) * 100);
-            const html = `
-                <h1>Processing Payment...</h1>
-                <div class="processing">
-                    <span class="spinner"></span>
-                    <strong>${message}</strong>
-                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">This may take up to a minute. Attempt ${attempt}/${max}</p>
-                </div>
-                <p>Your license key will appear here once the payment is confirmed.</p>
-            `;
-            document.getElementById('content').innerHTML = html;
-        }
-        
-        function displayError(message) {
-            const html = `
-                <h1 class="error-title">⚠️ Payment Processing Error</h1>
-                <div class="error">${escapeHtml(message)}</div>
-                <p style="color: #6b7280; font-size: 0.875rem;">Reference: <code>${escapeHtml(ref)}</code></p>
-                <p>Your license may have been created. Check your email or login to your dashboard.</p>
-                <a href="user/login.php" class="btn" style="background-color: #10b981; margin-right: 0.5rem;">Login to Dashboard</a>
-                <a href="order.php" class="btn">Try Again</a>
-            `;
-            document.getElementById('content').innerHTML = html;
-        }
-        
-        function copyLicense(silent = false) {
-            const licenseKey = document.getElementById('licenseKey').innerText;
-            navigator.clipboard.writeText(licenseKey).then(() => {
-                if (!silent) {
-                    alert('License key copied to clipboard!');
+    }
+
+    function poll() {
+        attempt++;
+        progress(attempt);
+
+        fetch(<?= json_encode(lm_public_url('api-verify-payment.php')) ?>
+            + '?ref=' + encodeURIComponent(ref), { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.success) {
+                    onPaid(data);
+                    return;
                 }
-            }).catch(() => {
-                if (!silent) {
-                    alert('Unable to copy license key automatically. Please copy it manually.');
+
+                if (attempt < maxAttempts) {
+                    timer = window.setTimeout(poll, 2000);
+                    return;
                 }
+
+                var msg = document.getElementById('error-message');
+                if (msg) {
+                    msg.textContent = (data && data.message) || 'The provider has not confirmed the charge yet.';
+                }
+                show('error');
+            })
+            .catch(function () {
+                if (attempt < maxAttempts) {
+                    timer = window.setTimeout(poll, 2000);
+                    return;
+                }
+                show('error');
             });
-        }
+    }
 
-        function autoLogin(email, licenseKey) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'user/login.php';
-            form.style.display = 'none';
-            form.innerHTML = `
-                <input type="hidden" name="email" value="${escapeHtml(email)}">
-                <input type="hidden" name="license_key" value="${escapeHtml(licenseKey)}">
-            `;
-            document.body.appendChild(form);
-            form.submit();
+    if (!ref) {
+        show('error');
+        var empty = document.getElementById('error-message');
+        if (empty) {
+            empty.textContent = 'This page was opened without a payment reference, so there is nothing to confirm.';
         }
+        return;
+    }
 
-        function submitToken(token) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'user/auto_login.php';
-            form.style.display = 'none';
-            form.innerHTML = `<input type="hidden" name="token" value="${escapeHtml(token)}">`;
-            document.body.appendChild(form);
-            form.submit();
-        }
-        
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        // Start checking for license
-        displayProcessing('Processing your payment...', 0, maxAttempts);
-        checkLicense();
-    </script>
-</body>
-</html>
+    progress(0);
+    poll();
+})();
+</script>
+
+<?php lm_public_page_end(array('active' => 'order', 'no_tabbar' => true)); ?>

@@ -1,455 +1,355 @@
 <?php
-session_start();
+/**
+ * user/index.php — the customer dashboard: licences, pending requests, account.
+ *
+ * Rendered through the shared public shell so it matches the rest of the site
+ * on every screen size. The queries are the same ones the previous version
+ * ran; the difference is the layout, the missing-page link (api-integration.php
+ * now exists) and a real empty state.
+ *
+ * @package LicenseManager
+ */
 
-// Check if user is logged in via email
-$user_email = $_SESSION['user_email'] ?? null;
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+require_once __DIR__ . '/../includes/ui.php';
 
-if (!$user_email) {
-    header('Location: login.php');
-    exit();
+$user_email = lm_public_user();
+
+if ($user_email === '') {
+    lm_safe_redirect('login.php');
 }
 
-require_once('../db.php');
+require_once __DIR__ . '/../db.php';
 
-// Fetch user's active/inactive licenses
-$stmt = $pdo->prepare("SELECT * FROM licenses WHERE customer_email = ? ORDER BY created_at DESC");
-$stmt->execute([$user_email]);
-$licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$licenses = array();
+$pending = array();
+$approved = array();
 
-// Fetch user's pending license requests
-$stmt_req = $pdo->prepare("SELECT * FROM license_requests WHERE customer_email = ? AND status = 'pending' ORDER BY created_at DESC");
-$stmt_req->execute([$user_email]);
-$pending_requests = $stmt_req->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->prepare('SELECT * FROM licenses WHERE customer_email = ? ORDER BY created_at DESC');
+    $stmt->execute(array($user_email));
+    $licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch user profile data
-$profile = [
-    'email' => $user_email,
-    'total_licenses' => count($licenses),
-    'active_licenses' => count(array_filter($licenses, fn($l) => $l['status'] === 'active')),
-    'pending_requests' => count($pending_requests)
-];
+    $stmt = $pdo->prepare("SELECT * FROM license_requests WHERE customer_email = ? ORDER BY created_at DESC");
+    $stmt->execute(array($user_email));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (($row['status'] ?? '') === 'pending') {
+            $pending[] = $row;
+        } else {
+            $approved[] = $row;
+        }
+    }
+} catch (PDOException $e) {
+    $dbError = 'The database is not answering right now, so your licences could not be loaded.';
+}
+
+$activeCount = 0;
+foreach ($licenses as $l) {
+    if (($l['status'] ?? '') === 'active') {
+        $activeCount++;
+    }
+}
+
+$name = lm_public_user_name();
+$renewSoon = null;
+foreach ($licenses as $l) {
+    if (!empty($l['expiry_date'])) {
+        $ts = strtotime((string) $l['expiry_date']);
+        if ($ts !== false && $ts < strtotime('+30 days') && ($renewSoon === null || $ts < $renewSoon)) {
+            $renewSoon = $ts;
+        }
+    }
+}
+
+/**
+ * Human date, or an em dash for an empty value.
+ *
+ * @param string $value
+ * @param bool   $withTime
+ * @return string
+ */
+function lm_fmt_date($value, $withTime = false)
+{
+    if ($value === null || trim((string) $value) === '' || (string) $value === '0000-00-00') {
+        return '—';
+    }
+
+    $ts = strtotime((string) $value);
+    if ($ts === false) {
+        return (string) $value;
+    }
+
+    return date($withTime ? 'M j, Y · H:i' : 'M j, Y', $ts);
+}
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Licenses - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .navbar h1 {
-            font-size: 1.5rem;
-            color: #667eea;
-            margin: 0;
-        }
-        .navbar-links {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-        }
-        .navbar-links a {
-            color: #475569;
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s ease;
-        }
-        .navbar-links a:hover {
-            color: #667eea;
-        }
-        .logout-btn {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-        }
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 3rem 2rem;
-        }
-        .header {
-            color: white;
-            margin-bottom: 3rem;
-        }
-        .header h2 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 3rem;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #667eea;
-            transition: all 0.3s ease;
-        }
-        .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-        .stat-card h3 {
-            font-size: 0.875rem;
-            color: #64748b;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .stat-card .value {
-            font-size: 2.5rem;
-            color: #1e293b;
-            font-weight: 700;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-bottom: 2rem;
-        }
-        .card-header {
-            padding: 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .card-header h3 {
-            font-size: 1.5rem;
-            color: #1e293b;
-            margin: 0;
-            font-weight: 700;
-        }
-        .card-body {
-            padding: 2rem;
-        }
-        .license-item {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-        }
-        .license-item:hover {
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
-            border-color: #667eea;
-        }
-        .license-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        .license-key {
-            font-family: 'Courier New', monospace;
-            background: white;
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            font-weight: 600;
-            color: #667eea;
-            word-break: break-all;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-        .status-active {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .status-inactive {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .status-pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        .license-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .detail {
-            display: flex;
-            flex-direction: column;
-        }
-        .detail-label {
-            font-size: 0.875rem;
-            color: #64748b;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-        .detail-value {
-            font-size: 1rem;
-            color: #1e293b;
-            font-weight: 500;
-        }
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .btn {
-            padding: 0.6rem 1.2rem;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 500;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-        .btn-secondary {
-            background: #e2e8f0;
-            color: #475569;
-        }
-        .btn-secondary:hover {
-            background: #cbd5e1;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-        }
-        .empty-state-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-        .empty-state h4 {
-            font-size: 1.5rem;
-            color: #1e293b;
-            margin-bottom: 0.5rem;
-        }
-        .empty-state p {
-            color: #64748b;
-            margin-bottom: 1.5rem;
-        }
-        .copy-btn {
-            background: none;
-            border: none;
-            color: #667eea;
-            cursor: pointer;
-            font-weight: 600;
-            padding: 0;
-            text-decoration: underline;
-            transition: all 0.2s ease;
-        }
-        .copy-btn:hover {
-            color: #764ba2;
-        }
-        @media (max-width: 768px) {
-            .navbar {
-                flex-direction: column;
-                gap: 1rem;
-            }
-            .navbar-links {
-                flex-direction: column;
-                width: 100%;
-                gap: 0.5rem;
-            }
-            .navbar-links a,
-            .logout-btn {
-                width: 100%;
-                text-align: center;
-            }
-            .header h2 {
-                font-size: 1.8rem;
-            }
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            .license-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="navbar">
-        <h1>🔐 License Manager</h1>
-        <div class="navbar-links">
-            <a href="profile.php">👤 Profile</a>
-            <a href="index.php">📜 My Licenses</a>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+<?php lm_public_page_start('account', array('title' => 'My licences', 'account' => true)); ?>
 
-    <div class="container">
-        <div class="header">
-            <h2>My Licenses</h2>
-            <p>Manage and monitor all your active licenses</p>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total Licenses</h3>
-                <div class="value"><?= $profile['total_licenses'] ?></div>
+<main class="lm-page" id="main">
+    <div class="lm-wrap">
+        <div class="lm-pagehead">
+            <div class="lm-pagehead__text">
+                <h1>Hello<?= $name !== '' ? ', ' . lm_e($name) : '' ?> 👋</h1>
+                <p>Everything on your account: licences, pending requests and the details we have on file.</p>
             </div>
-            <div class="stat-card" style="border-left-color: #10b981;">
-                <h3>Active Licenses</h3>
-                <div class="value" style="color: #10b981;"><?= $profile['active_licenses'] ?></div>
-            </div>
-            <div class="stat-card" style="border-left-color: #f59e0b;">
-                <h3>Pending Requests</h3>
-                <div class="value" style="color: #f59e0b;"><?= $profile['pending_requests'] ?></div>
+            <div class="lm-pagehead__actions">
+                <a class="lm-btn lm-btn--ghost" href="<?= lm_e(lm_public_url('user/profile.php')) ?>">
+                    <?= lm_icon('user') ?> Profile
+                </a>
+                <a class="lm-btn" href="<?= lm_e(lm_public_url('order.php')) ?>">
+                    <?= lm_icon('plus') ?> New licence
+                </a>
             </div>
         </div>
 
-        <?php if (!empty($pending_requests)): ?>
-        <div class="card" style="border: 2px solid #fef3c7;">
-            <div class="card-header" style="background: #fef3c7;">
-                <h3>⏳ Pending License Requests</h3>
-            </div>
-            <div class="card-body">
-                <?php foreach ($pending_requests as $req): ?>
-                    <div class="license-item" style="background: white;">
-                        <div class="license-header">
-                            <div>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <strong style="color: #1e293b;">Request Ref:</strong>
-                                </div>
-                                <div class="license-key" style="background: #f8fafc;">
-                                    <?= htmlspecialchars($req['request_ref']) ?>
-                                    <button class="copy-btn" onclick="copyToClipboard('<?= htmlspecialchars($req['request_ref']) ?>')">📋 Copy</button>
-                                </div>
-                            </div>
-                            <span class="status-badge status-pending">Pending Approval</span>
-                        </div>
-
-                        <div class="license-details">
-                            <div class="detail">
-                                <span class="detail-label">Domain</span>
-                                <span class="detail-value"><?= htmlspecialchars($req['domain']) ?></span>
-                            </div>
-                            <div class="detail">
-                                <span class="detail-label">Requested Date</span>
-                                <span class="detail-value"><?= date('M d, Y', strtotime($req['created_at'])) ?></span>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
+        <?php if (isset($dbError)): ?>
+            <?php lm_alert('error', $dbError); ?>
         <?php endif; ?>
 
-        <div class="card">
-            <div class="card-header">
-                <h3>📋 Your Licenses</h3>
+        <?php if ($renewSoon !== null): ?>
+            <div class="lm-note lm-note--warn">
+                <?= lm_icon('clock') ?>
+                <span><strong>A licence expires soon.</strong> The earliest expiry on your account is
+                    <strong><?= lm_e(date('M j, Y', $renewSoon)) ?></strong>. Open the licence below to see the details
+                    before it lapses.</span>
             </div>
-            <div class="card-body">
+        <?php endif; ?>
+
+        <div class="lm-stats">
+            <div class="lm-stat">
+                <div class="lm-stat__label">Total licences</div>
+                <div class="lm-stat__value"><?= count($licenses) ?></div>
+                <div class="lm-stat__sub">Issued to <?= lm_e($user_email) ?></div>
+            </div>
+            <div class="lm-stat lm-stat--green">
+                <div class="lm-stat__label">Active</div>
+                <div class="lm-stat__value"><?= $activeCount ?></div>
+                <div class="lm-stat__sub">Verifying right now</div>
+            </div>
+            <div class="lm-stat lm-stat--amber">
+                <div class="lm-stat__label">Pending requests</div>
+                <div class="lm-stat__value"><?= count($pending) ?></div>
+                <div class="lm-stat__sub">Waiting for approval</div>
+            </div>
+            <div class="lm-stat lm-stat--indigo">
+                <div class="lm-stat__label">API status</div>
+                <div class="lm-stat__value" style="font-size:20px">v<?= lm_e(defined('LM_VERSION') ? LM_VERSION : '') ?></div>
+                <div class="lm-stat__sub"><a href="<?= lm_e(lm_public_url('api-docs.php')) ?>">Read the docs</a></div>
+            </div>
+        </div>
+
+        <section class="lm-panel" id="licences">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('key') ?> Your licences</h2>
+                    <p>Each key is bound to one domain. Open a licence to copy the key, call the API or move the domain.</p>
+                </div>
+                <?php if (!empty($licenses)): ?>
+                    <span class="lm-badge lm-badge--info"><?= count($licenses) ?> total</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="lm-panel__body">
                 <?php if (empty($licenses)): ?>
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <h4>No Licenses Found</h4>
-                        <p>You don't have any active licenses yet.</p>
-                        <a href="../order.php" class="btn btn-primary">Request a License</a>
+                    <div class="lm-empty">
+                        <div class="lm-empty__icon"><?= lm_icon('key') ?></div>
+                        <h3>No licences yet</h3>
+                        <p>Request one and it will appear here. If you already requested a licence, the reference is
+                            listed below — approval moves it into this table.</p>
+                        <a class="lm-btn lm-btn--glow" href="<?= lm_e(lm_public_url('order.php')) ?>">
+                            <?= lm_icon('plus') ?> Request a licence
+                        </a>
                     </div>
                 <?php else: ?>
                     <?php foreach ($licenses as $license): ?>
-                        <div class="license-item">
-                            <div class="license-header">
+                        <?php
+                        $id = (int) $license['id'];
+                        $status = strtolower((string) ($license['status'] ?? ''));
+                        $isActive = $status === 'active';
+                        $expiry = isset($license['expiry_date']) ? (string) $license['expiry_date'] : '';
+                        $expired = $expiry !== '' && $expiry !== '0000-00-00' && strtotime($expiry) !== false
+                            && strtotime($expiry) < time();
+                        $tier = (string) ($license['license_type'] ?? 'standard');
+                        ?>
+                        <article class="lm-item">
+                            <div class="lm-item__top">
+                                <div style="min-width:0;flex:1 1 260px">
+                                    <div class="lm-item__title">Licence key</div>
+                                    <div class="lm-keyrow">
+                                        <code class="lm-key"><?= lm_e($license['license_key']) ?></code>
+                                        <?= lm_copy_button((string) $license['license_key'], 'Copy') ?>
+                                    </div>
+                                </div>
+                                <div class="lm-flex" style="flex-wrap:nowrap">
+                                    <span class="lm-badge <?= $isActive && !$expired ? 'lm-badge--ok' : 'lm-badge--bad' ?>">
+                                        <?= $expired ? 'Expired' : lm_e(ucfirst($status !== '' ? $status : 'unknown')) ?>
+                                    </span>
+                                    <span class="lm-badge"><?= lm_e(ucfirst($tier)) ?></span>
+                                </div>
+                            </div>
+
+                            <dl class="lm-deflist">
                                 <div>
-                                    <div style="margin-bottom: 0.5rem;">
-                                        <strong style="color: #1e293b;">License Key:</strong>
+                                    <dt>Domain</dt>
+                                    <dd><?= lm_e($license['domain'] !== '' ? $license['domain'] : '—') ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Issued</dt>
+                                    <dd><?= lm_e(lm_fmt_date($license['created_at'] ?? '')) ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Expires</dt>
+                                    <dd><?= $expiry !== '' && $expiry !== '0000-00-00' ? lm_e(lm_fmt_date($expiry)) : 'Never' ?></dd>
+                                </div>
+                                <?php if (array_key_exists('domain_change_count', $license)): ?>
+                                    <div>
+                                        <dt>Domain changes</dt>
+                                        <dd><?= (int) $license['domain_change_count'] ?> used</dd>
                                     </div>
-                                    <div class="license-key">
-                                        <?= htmlspecialchars($license['license_key']) ?>
-                                        <button class="copy-btn" onclick="copyToClipboard('<?= htmlspecialchars($license['license_key']) ?>')">📋 Copy</button>
-                                    </div>
-                                </div>
-                                <span class="status-badge <?= $license['status'] === 'active' ? 'status-active' : 'status-inactive' ?>">
-                                    <?= ucfirst($license['status']) ?>
-                                </span>
-                            </div>
+                                <?php endif; ?>
+                            </dl>
 
-                            <div class="license-details">
-                                <div class="detail">
-                                    <span class="detail-label">Domain</span>
-                                    <span class="detail-value"><?= htmlspecialchars($license['domain']) ?></span>
-                                </div>
-                                <div class="detail">
-                                    <span class="detail-label">Created Date</span>
-                                    <span class="detail-value"><?= date('M d, Y', strtotime($license['created_at'])) ?></span>
-                                </div>
+                            <div class="lm-item__actions">
+                                <a class="lm-btn lm-btn--sm lm-btn--glow" href="license-details.php?id=<?= $id ?>">
+                                    <?= lm_icon('receipt') ?> Details
+                                </a>
+                                <a class="lm-btn lm-btn--sm lm-btn--ghost" href="change-domain.php?id=<?= $id ?>">
+                                    <?= lm_icon('globe') ?> Change domain
+                                </a>
+                                <a class="lm-btn lm-btn--sm lm-btn--ghost" href="api-integration.php?license_id=<?= $id ?>">
+                                    <?= lm_icon('code') ?> API integration
+                                </a>
+                                <a class="lm-btn lm-btn--sm lm-btn--ghost" href="<?= lm_e(lm_public_url('api-docs.php')) ?>">
+                                    <?= lm_icon('book') ?> Docs
+                                </a>
                             </div>
-
-                            <div class="button-group">
-                                <a href="license-details.php?id=<?= $license['id'] ?>" class="btn btn-primary">View Details</a>
-                                <a href="change-domain.php?id=<?= $license['id'] ?>" class="btn btn-secondary">🌐 Change Domain</a>
-                                <a href="api-integration.php?license_id=<?= $license['id'] ?>" class="btn btn-secondary">API Integration</a>
-                            </div>
-                        </div>
+                        </article>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <script>
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-            });
-        }
-    </script>
-</body>
-</html>
+        <section class="lm-panel" id="requests">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('clock') ?> Licence requests</h2>
+                    <p>A request becomes a licence once an administrator approves it. The reference below is also a
+                        sign-in credential.</p>
+                </div>
+                <?php if (!empty($pending)): ?>
+                    <span class="lm-badge lm-badge--warn"><?= count($pending) ?> pending</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="lm-panel__body">
+                <?php if (empty($pending) && empty($approved)): ?>
+                    <div class="lm-empty">
+                        <div class="lm-empty__icon"><?= lm_icon('clock') ?></div>
+                        <h3>Nothing waiting</h3>
+                        <p>You have not requested a licence with this email. When you do, the reference appears here
+                            until it is approved.</p>
+                        <a class="lm-btn lm-btn--ghost" href="<?= lm_e(lm_public_url('order.php')) ?>">Request a licence</a>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($pending as $req): ?>
+                        <article class="lm-item">
+                            <div class="lm-item__top">
+                                <div style="min-width:0;flex:1 1 260px">
+                                    <div class="lm-item__title">Request reference</div>
+                                    <div class="lm-keyrow">
+                                        <code class="lm-key"><?= lm_e($req['request_ref']) ?></code>
+                                        <?= lm_copy_button((string) $req['request_ref'], 'Copy') ?>
+                                    </div>
+                                </div>
+                                <span class="lm-badge lm-badge--warn">Pending approval</span>
+                            </div>
+
+                            <dl class="lm-deflist">
+                                <div>
+                                    <dt>Domain</dt>
+                                    <dd><?= lm_e($req['domain'] ?? '—') ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Requested</dt>
+                                    <dd><?= lm_e(lm_fmt_date($req['created_at'] ?? '')) ?></dd>
+                                </div>
+                            </dl>
+                        </article>
+                    <?php endforeach; ?>
+
+                    <?php if (!empty($approved)): ?>
+                        <div class="lm-mt-24">
+                            <h3 style="font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2);margin-bottom:12px">
+                                Earlier requests
+                            </h3>
+                            <div class="lm-tablewrap">
+                                <table class="lm-table lm-table--stack">
+                                    <thead>
+                                        <tr>
+                                            <th>Reference</th>
+                                            <th>Domain</th>
+                                            <th>Status</th>
+                                            <th>Submitted</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach (array_slice($approved, 0, 10) as $req): ?>
+                                            <?php $st = strtolower((string) ($req['status'] ?? '')); ?>
+                                            <tr>
+                                                <td data-label="Reference"><code><?= lm_e($req['request_ref']) ?></code></td>
+                                                <td data-label="Domain"><?= lm_e($req['domain'] ?? '—') ?></td>
+                                                <td data-label="Status">
+                                                    <span class="lm-badge <?= $st === 'approved' ? 'lm-badge--ok' : 'lm-badge--bad' ?>">
+                                                        <?= lm_e(ucfirst($st !== '' ? $st : 'unknown')) ?>
+                                                    </span>
+                                                </td>
+                                                <td data-label="Submitted"><?= lm_e(lm_fmt_date($req['created_at'] ?? '')) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <section class="lm-panel">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('user') ?> Account</h2>
+                    <p>The address every licence and update notice is attached to.</p>
+                </div>
+            </div>
+            <div class="lm-panel__body">
+                <dl class="lm-deflist">
+                    <div>
+                        <dt>Email</dt>
+                        <dd><?= lm_e($user_email) ?></dd>
+                    </div>
+                    <div>
+                        <dt>Licences</dt>
+                        <dd><?= count($licenses) ?></dd>
+                    </div>
+                    <div>
+                        <dt>Notifications</dt>
+                        <dd>On · <a href="<?= lm_e(lm_public_url('unsubscribe.php')) ?>">manage preferences</a></dd>
+                    </div>
+                </dl>
+
+                <div class="lm-item__actions">
+                    <a class="lm-btn lm-btn--sm lm-btn--ghost" href="<?= lm_e(lm_public_url('user/profile.php')) ?>">
+                        <?= lm_icon('user') ?> Edit profile
+                    </a>
+                    <a class="lm-btn lm-btn--sm lm-btn--ghost" href="<?= lm_e(lm_public_url('user/logout.php')) ?>">
+                        <?= lm_icon('logout') ?> Sign out
+                    </a>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<?php lm_public_page_end(array('active' => 'account', 'no_tabbar' => true)); ?>

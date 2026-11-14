@@ -1,131 +1,152 @@
 <?php
-session_start();
-$settings_file = 'settings.json';
-if (!file_exists($settings_file) || !is_readable($settings_file)) {
-    die("Configuration error: settings.json not found or not readable.");
-}
-$settings = json_decode(file_get_contents($settings_file), true);
-if (json_last_error() !== JSON_ERROR_NONE) {
-    die("Configuration error: Invalid JSON in settings.json.");
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Request License - <?= htmlspecialchars($settings['site_name'] ?? 'License Manager') ?></title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        :root {
-            --primary-color: #3b82f6;
-            --primary-hover-color: #2563eb;
-            --background-color: #f9fafb;
-            --card-background: #ffffff;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --input-border: #d1d5db;
-            --input-focus-border: #3b82f6;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--background-color);
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .order-container {
-            background: var(--card-background);
-            padding: 2.5rem;
-            border-radius: 1rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            width: 100%;
-            max-width: 32rem; /* 512px */
-            text-align: center;
-        }
-        .header img {
-            height: 4rem;
-            margin: 0 auto 1.5rem;
-        }
-        .header h1 {
-            font-size: 1.875rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-        .header p {
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-        }
-        .input-group {
-            margin-bottom: 1.5rem;
-            text-align: left;
-        }
-        .input-group label {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--input-border);
-            box-sizing: border-box;
-        }
-        .submit-btn {
-            background-color: var(--primary-color);
-            color: #fff;
-            font-weight: 600;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            width: 100%;
-            font-size: 1rem;
-        }
-        .error-message {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1.5rem;
-            text-align: left;
-            border: 1px solid #fca5a5;
-        }
-    </style>
-</head>
-<body>
-    <div class="order-container">
-        <div class="header">
-            <?php if (isset($settings['site_logo'])): ?>
-                <img src="<?= htmlspecialchars($settings['site_logo']) ?>" alt="Site Logo">
-            <?php endif; ?>
-            <h1>Request License</h1>
-            <p>Submit your details to request your license key. Once approved, you will be able to access it in your dashboard.</p>
-        </div>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="error-message">
-                <?= htmlspecialchars($_SESSION['error']) ?>
-                <?php unset($_SESSION['error']); ?>
-            </div>
-        <?php endif; ?>
+/**
+ * order.php — request a licence.
+ *
+ * Rebuilt on the shared public shell. The form posts to request_license.php
+ * exactly as before; nothing about the flow changed, only the page around it.
+ *
+ * @package LicenseManager
+ */
 
-        <form id="requestForm" method="POST" action="request_license.php">
-            <div class="input-group">
-                <label for="email">Email Address</label>
-                <input type="email" id="email" name="email" required>
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+require_once __DIR__ . '/includes/ui.php';
+
+$settings = function_exists('lm_settings') ? lm_settings() : array();
+
+$siteName = trim((string) ($settings['site_name'] ?? '')) !== ''
+    ? (string) $settings['site_name']
+    : (function_exists('lm_site_name') ? lm_site_name() : 'License Manager');
+
+$gatewayOn = !empty($settings['payment_gateway_enabled']);
+$price = trim((string) ($settings['license_price'] ?? ''));
+$maxChanges = (int) ($settings['max_domain_changes'] ?? 3);
+$logo = lm_site_logo_url();
+
+$error = isset($_SESSION['error']) ? (string) $_SESSION['error'] : '';
+unset($_SESSION['error']);
+
+$prefillDomain = isset($_GET['domain']) ? (string) $_GET['domain'] : '';
+$signedIn = lm_public_user() !== '';
+?>
+<?php lm_public_page_start('order', array('title' => 'Get a licence', 'subtitle' => 'Licensing platform')); ?>
+
+<main class="lm-page" id="main">
+    <div class="lm-wrap">
+        <div class="lm-page__head">
+            <span class="lm-eyebrow lm-eyebrow--light"><span class="lm-eyebrow__dot"></span> Step 1 of 2</span>
+            <h1>Get a licence for your domain</h1>
+            <p>Tell us where the script runs. You will get a key tied to that domain — and a dashboard to move it later if you need to.</p>
+        </div>
+
+        <div class="lm-order-layout">
+            <div class="lm-card">
+                <div class="lm-card__body">
+                    <?php if ($error !== ''): ?>
+                        <?php lm_alert('error', $error); ?>
+                    <?php endif; ?>
+
+                    <?php if ($logo !== ''): ?>
+                        <div class="lm-center lm-mb-0" style="margin-bottom:18px">
+                            <img class="lm-brand__logo" style="margin:0 auto" src="<?= lm_e($logo) ?>" alt="<?= lm_e($siteName) ?>">
+                        </div>
+                    <?php endif; ?>
+
+                    <form id="requestForm" class="lm-form" method="POST" action="<?= lm_e(lm_public_url('request_license.php')) ?>">
+                        <div class="lm-field">
+                            <label for="email">Email address</label>
+                            <input class="lm-input" type="email" id="email" name="email" autocomplete="email"
+                                   placeholder="you@company.com" required>
+                            <p class="lm-help">The licence key and every update notice go to this address.</p>
+                        </div>
+
+                        <div class="lm-field">
+                            <label for="domain">Domain name</label>
+                            <input class="lm-input" type="text" id="domain" name="domain"
+                                   value="<?= lm_e($prefillDomain) ?>" placeholder="example.com"
+                                   autocomplete="url" autocapitalize="none" spellcheck="false" required>
+                            <p class="lm-help">The domain the script will run on. No <code>https://</code> and no trailing slash —
+                                we check that it resolves before accepting the request.</p>
+                        </div>
+
+                        <?php if ($gatewayOn && $price !== '' && (float) $price > 0): ?>
+                            <div class="lm-note lm-note--ok">
+                                <?= lm_icon('wallet') ?>
+                                <span><strong>Payment is enabled.</strong> After you submit, you will be sent to Paystack
+                                    checkout for <strong><?= lm_e($price) ?></strong>. The key is emailed the moment the
+                                    webhook confirms the charge.</span>
+                            </div>
+                        <?php else: ?>
+                            <div class="lm-note">
+                                <?= lm_icon('clock') ?>
+                                <span><strong>Requests are reviewed by hand.</strong> Payment is currently switched off,
+                                    so an administrator approves your request and the key appears in your dashboard.</span>
+                            </div>
+                        <?php endif; ?>
+
+                        <button type="submit" class="lm-btn lm-btn--block lm-btn--glow">
+                            <?= lm_icon('key') ?> Request my licence
+                        </button>
+
+                        <p class="lm-help lm-center">
+                            Already have a key?
+                            <a href="<?= lm_e(lm_public_url('user/login.php')) ?>">Sign in to your account</a>.
+                        </p>
+                    </form>
+                </div>
             </div>
-            <div class="input-group">
-                <label for="domain">Domain Name</label>
-                <input type="text" id="domain" name="domain" value="<?= htmlspecialchars($_GET['domain'] ?? '') ?>" placeholder="e.g. example.com" required>
-            </div>
-            <p style="color: #475569; margin-bottom: 1rem; font-size: 0.95rem;">You will be redirected to your dashboard to monitor the status of your request.</p>
-            <button type="submit" class="submit-btn">Request License</button>
-        </form>
+
+            <aside class="lm-order-aside">
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('spark') ?> What you get</h2>
+                    </div>
+                    <div class="lm-panel__body">
+                        <ul class="lm-checklist lm-mt-0">
+                            <li><?= lm_icon('check') ?> A licence key bound to <strong>one domain</strong>.</li>
+                            <li><?= lm_icon('check') ?> Up to <strong><?= (int) $maxChanges ?></strong> domain changes you can make yourself.</li>
+                            <li><?= lm_icon('check') ?> Over-the-air updates for every release after this one.</li>
+                            <li><?= lm_icon('check') ?> Email notifications, with one-click opt-out.</li>
+                            <li><?= lm_icon('check') ?> Access to the API, the docs and your account history.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('question') ?> Before you start</h2>
+                    </div>
+                    <div class="lm-panel__body">
+                        <ol class="lm-flow">
+                            <li>The domain must resolve. We run a DNS check when you submit.</li>
+                            <li>If you are signed in, the request is attached to your account automatically.</li>
+                            <li>Approval usually takes minutes — the status is on your dashboard.</li>
+                        </ol>
+                        <?php if (!$signedIn): ?>
+                            <p class="lm-help lm-mt-16">
+                                <a href="<?= lm_e(lm_public_url('user/login.php')) ?>">Sign in first</a> and your existing
+                                licences appear next to the new request.
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('terminal') ?> Building the integration?</h2>
+                    </div>
+                    <div class="lm-panel__body">
+                        <p class="lm-help lm-mb-0">The API takes a key and a domain and answers with a status.
+                            Full reference, error codes and copy-paste examples:</p>
+                        <a class="lm-btn lm-btn--ghost lm-btn--block lm-mt-16" href="<?= lm_e(lm_public_url('api-docs.php')) ?>">
+                            <?= lm_icon('book') ?> API documentation
+                        </a>
+                    </div>
+                </div>
+            </aside>
+        </div>
     </div>
-</body>
-</html>
+</main>
+
+<?php lm_public_page_end(array('active' => 'order')); ?>

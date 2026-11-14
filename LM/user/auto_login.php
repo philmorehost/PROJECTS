@@ -1,6 +1,11 @@
 <?php
-session_start();
-require_once('../db.php');
+/**
+ * user/auto_login.php — sign a customer in from a single-use payment token.
+ */
+
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+require_once __DIR__ . '/../db.php';
 
 // Accept token via POST or GET
 $token = $_POST['token'] ?? $_GET['token'] ?? '';
