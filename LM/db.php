@@ -295,8 +295,36 @@ try {
     }
 
 } catch (PDOException $e) {
-    // In a real app, you'd want to log this error and show a generic error page.
-    die("Database connection failed: " . $e->getMessage());
+    // Never echo the message: it contains the database name, the user and the
+    // host, and on some drivers the password. Log the detail, show a hint.
+    error_log('LM database connection failed: ' . $e->getMessage());
+
+    $pdo = null;
+
+    if (PHP_SAPI !== 'cli') {
+        if (!headers_sent()) {
+            http_response_code(503);
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+        }
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Database unavailable</title>'
+            . '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+            . 'background:#0b1220;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}'
+            . 'div{max-width:520px;background:#111a2e;border:1px solid #26324a;border-radius:16px;padding:26px 28px}'
+            . 'h1{margin:0 0 10px;font-size:20px}p{margin:0 0 10px;line-height:1.65;font-size:14px;color:#a9b6cc}'
+            . 'code{background:#1b2740;padding:2px 6px;border-radius:5px;font-size:12.5px}</style></head><body><div>'
+            . '<h1>The database is not answering</h1>'
+            . '<p>This page needs MySQL. The connection in <code>db.php</code> was refused, so nothing '
+            . 'was read or written.</p>'
+            . '<p>Check the host, database name, user and password on lines 3–6 of <code>db.php</code>, '
+            . 'then reload. The exact error is in the PHP error log.</p>'
+            . '<p>File checks that need no database still work: <a href="health.php" '
+            . 'style="color:#8ea2ff">health.php</a>.</p>'
+            . '</div></body></html>';
+        exit;
+    }
 }
 
 function hasTableColumn(PDO $pdo, string $table, string $column): bool {

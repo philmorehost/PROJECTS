@@ -260,9 +260,16 @@ lm_app_start('Licences', array(
             <h2><?= lm_icon('key') ?> All licences</h2>
             <p>Search by key, domain or email. Toggling takes effect immediately for API calls.</p>
         </div>
-        <div class="lm-field" style="margin:0;min-width:240px">
-            <label class="lm-sr" for="licenceFilter">Filter licences</label>
-            <input class="lm-input" type="search" id="licenceFilter" placeholder="Filter key, domain or email…" data-lm-filter="#licenceTable">
+        <div class="lm-flex" style="justify-content:flex-end">
+            <div class="lm-seg" role="group" aria-label="Filter by status">
+                <button type="button" class="is-active" data-lm-status="">All</button>
+                <button type="button" data-lm-status="active">Active</button>
+                <button type="button" data-lm-status="inactive">Inactive</button>
+            </div>
+            <div class="lm-field" style="margin:0;min-width:220px">
+                <label class="lm-sr" for="licenceFilter">Filter licences</label>
+                <input class="lm-input" type="search" id="licenceFilter" placeholder="Filter key, domain or email…">
+            </div>
         </div>
     </div>
     <div class="lm-panel__body lm-panel__body--flush">
@@ -294,7 +301,7 @@ lm_app_start('Licences', array(
                             $isActive = $status === 'active';
                             $type = (string) ($license['license_type'] ?? 'standard');
                             ?>
-                            <tr data-filter-text="<?= lm_e(strtolower(
+                            <tr data-status="<?= lm_e($status) ?>" data-filter-text="<?= lm_e(strtolower(
                                 (string) $license['license_key'] . ' ' . (string) ($license['domain'] ?? '') . ' ' . (string) ($license['customer_email'] ?? '')
                             )) ?>">
                                 <td data-label="Key">
@@ -404,5 +411,52 @@ lm_app_start('Licences', array(
         <?php endif; ?>
     </div>
 </section>
+
+<script>
+(function () {
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-lm-status]'));
+    var table = document.getElementById('licenceTable');
+    var search = document.getElementById('licenceFilter');
+    var empty = document.getElementById('licenceFilterEmpty');
+    var current = '';
+
+    if (!table || !buttons.length) { return; }
+
+    var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+
+    function apply() {
+        var term = (search && search.value ? search.value : '').trim().toLowerCase();
+        var shown = 0;
+
+        rows.forEach(function (row) {
+            var statusOk = current === '' || row.getAttribute('data-status') === current;
+            var text = row.getAttribute('data-filter-text') || row.textContent.toLowerCase();
+            var textOk = term === '' || text.indexOf(term) !== -1;
+            var show = statusOk && textOk;
+
+            row.hidden = !show;
+            if (show) { shown++; }
+        });
+
+        if (empty) { empty.hidden = shown !== 0; }
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            current = button.getAttribute('data-lm-status') || '';
+            buttons.forEach(function (other) {
+                other.classList.toggle('is-active', other === button);
+            });
+            apply();
+        });
+    });
+
+    // This table is owned by this script (no data-lm-filter), because the rows
+    // are filtered by status *and* text and the two must not fight.
+    if (search) {
+        search.addEventListener('input', apply);
+    }
+})();
+</script>
 
 <?php lm_app_end(); ?>

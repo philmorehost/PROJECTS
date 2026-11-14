@@ -281,8 +281,11 @@ lm_app_start('Script projects', array(
             <span class="lm-label">1. Check for an update</span>
             <div class="lm-keyrow">
                 <code class="lm-key" id="guideEndpoint"></code>
-                <?= lm_app_copy('', 'Copy') ?>
+                <button class="lm-copybtn lm-copybtn--light" type="button" id="guideEndpointCopy">
+                    <?= lm_icon('copy') ?><span>Copy</span>
+                </button>
             </div>
+            <p class="lm-help">The same call the script makes: licence key, domain, current version, project code.</p>
         </div>
 
         <div class="lm-field">
@@ -528,6 +531,11 @@ lm_app_start('Script projects', array(
         ];
 
         el('guideSnippet').textContent = lines.join('\n');
+
+        // A copy button per open, because the URL changes with the project.
+        var copyButton = el('guideEndpointCopy');
+        copyButton.setAttribute('data-lm-copy', endpoint);
+        copyButton.setAttribute('type', 'button');
         if (window.openModal) { window.openModal('guideModal'); }
     }
 

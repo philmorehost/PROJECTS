@@ -8,17 +8,19 @@ lm_session_start();
 
 $_SESSION = array();
 
-if (ini_get('session.use_cookies')) {
+if (ini_get('session.use_cookies') && !headers_sent()) {
     $params = session_get_cookie_params();
-    setcookie(
-        session_name(),
-        '',
-        time() - 42000,
-        $params['path'],
-        $params['domain'],
-        (bool) $params['secure'],
-        (bool) $params['httponly']
-    );
+    // The cookie was created with path "/" by lm_session_start(), so it has to
+    // be cleared with path "/" too — session_get_cookie_params() can report a
+    // different path on some hosts, leaving a live cookie behind.
+    setcookie(lm_session_name(), '', array(
+        'expires'  => time() - 42000,
+        'path'     => '/',
+        'domain'   => (string) ($params['domain'] ?? ''),
+        'secure'   => (bool) $params['secure'],
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ));
 }
 
 @session_destroy();

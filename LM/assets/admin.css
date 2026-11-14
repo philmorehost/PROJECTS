@@ -751,6 +751,37 @@ kbd {
 .lm-checkrow__text strong { display: block; font-size: 13.5px; color: var(--ink); }
 .lm-checkrow__text small { display: block; color: var(--muted); font-size: 12px; line-height: 1.55; margin-top: 2px; }
 
+/* Segmented control (All / Active / Inactive). */
+.lm-seg {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    background: #eef2f9;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+}
+
+.lm-seg button {
+    border: 0;
+    background: transparent;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.lm-seg button:hover { color: var(--ink); }
+
+.lm-seg button.is-active {
+    background: #fff;
+    color: var(--brand-dark);
+    box-shadow: 0 1px 3px rgba(11, 18, 32, .12);
+}
+
 /* ================================================================= tables */
 
 .lm-tablewrap {
@@ -1658,6 +1689,26 @@ pre.code {
 .lm-card__body { padding: 24px; }
 .lm-meta { color: var(--muted); font-size: 14px; }
 .lm-divider { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+
+/* Logo preview on Settings → Site. */
+.lm-logo-preview {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.lm-logo-preview img {
+    height: 46px;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    padding: 5px;
+}
 
 /* legacy names the older screens still emit */
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 22px; flex-wrap: wrap; }

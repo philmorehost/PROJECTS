@@ -77,6 +77,10 @@ if (lm_app_handle_post()) {
         $posted['site_url'] = 'https://' . ltrim($posted['site_url'], '/');
     }
 
+    if (!empty($_POST['site_logo_reset'])) {
+        $posted['site_logo'] = '';
+    }
+
     if (!empty($_FILES['site_logo']['name']) && (int) ($_FILES['site_logo']['error'] ?? 1) === 0) {
         $allowed = array('png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
             'svg' => 'image/svg+xml', 'webp' => 'image/webp', 'gif' => 'image/gif');
@@ -180,10 +184,18 @@ lm_app_start('Settings', array(
             </div>
 
             <?php if (!empty($settings['site_logo'])): ?>
-                <div class="lm-flex lm-mt-8">
-                    <img src="<?= lm_e(lm_site_logo_url()) ?>" alt="Current logo"
-                         style="height:44px;width:auto;border:1px solid var(--line);border-radius:10px;background:#fff;padding:5px">
-                    <span class="lm-help">Current logo: <code><?= lm_e((string) $settings['site_logo']) ?></code></span>
+                <div class="lm-logo-preview">
+                    <img src="<?= lm_e(lm_site_logo_url()) ?>" alt="Current logo">
+                    <div>
+                        <span class="lm-help">Current logo: <code><?= lm_e((string) $settings['site_logo']) ?></code></span>
+                        <label class="lm-check" style="margin-top:8px">
+                            <input type="checkbox" name="site_logo_reset" value="1">
+                            <span class="txt">
+                                <strong>Remove the logo</strong>
+                                <small>Falls back to the built-in mark. The file stays in uploads/.</small>
+                            </span>
+                        </label>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
