@@ -1,0 +1,18 @@
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.
+LM database unavailable (missing) on PHP 7.4.33
+The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+Fix: enable pdo + pdo_mysql for this PHP version (cPanel, MultiPHP Manager, Extensions), or switch the domain back to PHP 7.4.

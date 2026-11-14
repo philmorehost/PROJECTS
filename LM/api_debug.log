@@ -1,0 +1,215 @@
+[2026-11-12 14:35:16] --- New API Request ---
+[2026-11-12 14:35:16] Received key: MAN-3092514D6FF5, domain: dgv7saas.pmhserver.name.ng
+[2026-11-12 14:35:16] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-12 14:35:16] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 14:36:43] --- New API Request ---
+[2026-11-12 14:36:43] Received key: MAN-749B9B757210, domain: v6.datagifting.com.ng
+[2026-11-12 14:36:43] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-12 14:36:43] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 14:37:02] --- New API Request ---
+[2026-11-12 14:37:02] Received key: MAN-749B9B757210, domain: v6.datagifting.com.ng
+[2026-11-12 14:37:02] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-12 14:37:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 14:37:02] --- New API Request ---
+[2026-11-12 14:37:02] Received key: MAN-749B9B757210, domain: v6.datagifting.com.ng
+[2026-11-12 14:37:02] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-12 14:37:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 14:37:02] --- New API Request ---
+[2026-11-12 14:37:02] Received key: MAN-749B9B757210, domain: v6.datagifting.com.ng
+[2026-11-12 14:37:02] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-12 14:37:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 15:09:04] --- New API Request ---
+[2026-11-12 15:09:04] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-12 15:09:04] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-12 15:09:04] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 17:05:22] --- New API Request ---
+[2026-11-12 17:05:22] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-12 17:05:22] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-12 17:05:22] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 17:11:19] --- New API Request ---
+[2026-11-12 17:11:19] Received key: MAN-AE3F2BGVE236, domain: remit.rccglp63yaya.org.ng
+[2026-11-12 17:11:19] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-12 17:11:19] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 19:18:04] --- New API Request ---
+[2026-11-12 19:18:04] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-12 19:18:04] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-12 19:18:04] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 21:10:04] --- New API Request ---
+[2026-11-12 21:10:04] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-12 21:10:04] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-12 21:10:04] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 23:05:27] --- New API Request ---
+[2026-11-12 23:05:27] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-12 23:05:27] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-12 23:05:27] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 01:19:03] --- New API Request ---
+[2026-11-13 01:19:03] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-13 01:19:03] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-13 01:19:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 03:10:06] --- New API Request ---
+[2026-11-13 03:10:07] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-13 03:10:07] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-13 03:10:07] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 05:05:33] --- New API Request ---
+[2026-11-13 05:05:33] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-13 05:05:33] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-13 05:05:33] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 07:19:03] --- New API Request ---
+[2026-11-13 07:19:03] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-13 07:19:03] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-13 07:19:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 09:11:05] --- New API Request ---
+[2026-11-13 09:11:05] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-13 09:11:05] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-13 09:11:05] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 09:35:54] --- New API Request ---
+[2026-11-13 09:35:54] Received key: MAN-39E77DEFDB81, domain: resultpins.payhub.com.ng
+[2026-11-13 09:35:54] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-13 09:35:54] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 11:05:39] --- New API Request ---
+[2026-11-13 11:05:39] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-13 11:05:39] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-13 11:05:39] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 12:05:36] --- New API Request ---
+[2026-11-13 12:05:36] Received key: MAN-E2355EF99EAE, domain: dgv7.pmhserver.name.ng
+[2026-11-13 12:05:36] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-13 12:05:36] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 13:20:05] --- New API Request ---
+[2026-11-13 13:20:05] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-13 13:20:05] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-13 13:20:05] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 15:12:03] --- New API Request ---
+[2026-11-13 15:12:03] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-13 15:12:03] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-13 15:12:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 17:05:49] --- New API Request ---
+[2026-11-13 17:05:49] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-13 17:05:49] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-13 17:05:49] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 19:20:05] --- New API Request ---
+[2026-11-13 19:20:05] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-13 19:20:05] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-13 19:20:05] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 19:46:02] --- New API Request ---
+[2026-11-13 19:46:02] Received key: MAN-1392F85B88C4, domain: jikabiz.com
+[2026-11-13 19:46:02] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-13 19:46:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 19:46:02] --- New API Request ---
+[2026-11-13 19:46:02] Received key: MAN-1392F85B88C4, domain: jikabiz.com
+[2026-11-13 19:46:02] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-13 19:46:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 19:46:02] --- New API Request ---
+[2026-11-13 19:46:02] Received key: MAN-1392F85B88C4, domain: jikabiz.com
+[2026-11-13 19:46:02] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-13 19:46:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 21:08:26] --- New API Request ---
+[2026-11-13 21:08:26] ERROR: Missing key or domain in POST request. Data: []
+[2026-11-13 21:08:26] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-13 21:08:50] --- New API Request ---
+[2026-11-13 21:08:50] Received key: TEST-KEY-12345, domain: example.com
+[2026-11-13 21:08:50] FAILURE: License key 'TEST-KEY-12345' does not exist.
+[2026-11-13 21:08:50] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:09:25] --- New API Request ---
+[2026-11-13 21:09:25] Received key: TEST-KEY-12345' OR '1'='1, domain: example.com
+[2026-11-13 21:09:25] FAILURE: License key 'TEST-KEY-12345' OR '1'='1' does not exist.
+[2026-11-13 21:09:25] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:09:50] --- New API Request ---
+[2026-11-13 21:09:50] Received key: TEST-KEY-12345', domain: example.com
+[2026-11-13 21:09:50] FAILURE: License key 'TEST-KEY-12345'' does not exist.
+[2026-11-13 21:09:50] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:10:09] --- New API Request ---
+[2026-11-13 21:10:09] Received key: TEST-KEY-12345' AND SLEEP(5)-- -, domain: example.com
+[2026-11-13 21:10:09] FAILURE: License key 'TEST-KEY-12345' AND SLEEP(5)-- -' does not exist.
+[2026-11-13 21:10:09] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:10:30] --- New API Request ---
+[2026-11-13 21:10:30] Received key: TEST-KEY-12345, domain: example.com' AND SLEEP(5)-- -
+[2026-11-13 21:10:30] FAILURE: License key 'TEST-KEY-12345' does not exist.
+[2026-11-13 21:10:30] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:11:22] --- New API Request ---
+[2026-11-13 21:11:22] Received key: TEST-KEY-12345' OR SLEEP(5)#, domain: example.com
+[2026-11-13 21:11:22] FAILURE: License key 'TEST-KEY-12345' OR SLEEP(5)#' does not exist.
+[2026-11-13 21:11:22] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:11:50] --- New API Request ---
+[2026-11-13 21:11:50] Received key: TEST-KEY-12345, domain: example.com' AND '1'='1
+[2026-11-13 21:11:50] FAILURE: License key 'TEST-KEY-12345' does not exist.
+[2026-11-13 21:11:50] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:11:50] --- New API Request ---
+[2026-11-13 21:11:50] Received key: TEST-KEY-12345, domain: example.com' AND '1'='2
+[2026-11-13 21:11:50] FAILURE: License key 'TEST-KEY-12345' does not exist.
+[2026-11-13 21:11:50] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:12:03] --- New API Request ---
+[2026-11-13 21:12:03] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-13 21:12:03] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-13 21:12:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 21:12:32] --- New API Request ---
+[2026-11-13 21:12:32] Received key: TEST-KEY-12345' AND '1'='1, domain: example.com
+[2026-11-13 21:12:32] FAILURE: License key 'TEST-KEY-12345' AND '1'='1' does not exist.
+[2026-11-13 21:12:32] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:12:32] --- New API Request ---
+[2026-11-13 21:12:32] Received key: TEST-KEY-12345' AND '1'='2, domain: example.com
+[2026-11-13 21:12:32] FAILURE: License key 'TEST-KEY-12345' AND '1'='2' does not exist.
+[2026-11-13 21:12:32] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:12:33] --- New API Request ---
+[2026-11-13 21:12:33] Received key: TEST-KEY-12345' OR pg_sleep(5)-- -, domain: example.com
+[2026-11-13 21:12:33] FAILURE: License key 'TEST-KEY-12345' OR pg_sleep(5)-- -' does not exist.
+[2026-11-13 21:12:33] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:15:19] --- New API Request ---
+[2026-11-13 21:15:19] Received key: 1' OR '1'='1, domain: example.com
+[2026-11-13 21:15:19] FAILURE: License key '1' OR '1'='1' does not exist.
+[2026-11-13 21:15:19] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-13 21:48:12] --- New API Request ---
+[2026-11-13 21:48:12] Received key: MAN-F175ACDC5346, domain: haritz.com.ng
+[2026-11-13 21:48:12] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-13 21:48:12] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 21:48:12] --- New API Request ---
+[2026-11-13 21:48:12] Received key: MAN-F175ACDC5346, domain: haritz.com.ng
+[2026-11-13 21:48:12] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-13 21:48:12] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 21:48:13] --- New API Request ---
+[2026-11-13 21:48:13] Received key: MAN-F175ACDC5346, domain: haritz.com.ng
+[2026-11-13 21:48:13] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-13 21:48:13] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-13 23:06:21] --- New API Request ---
+[2026-11-13 23:06:21] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-13 23:06:21] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-13 23:06:21] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 01:20:06] --- New API Request ---
+[2026-11-14 01:20:06] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-14 01:20:06] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-14 01:20:06] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 03:12:09] --- New API Request ---
+[2026-11-14 03:12:13] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-14 03:12:13] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-14 03:12:13] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 03:13:03] --- New API Request ---
+[2026-11-14 03:13:03] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-14 03:13:03] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-14 03:13:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 05:18:28] --- New API Request ---
+[2026-11-14 05:18:28] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-14 05:18:28] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-14 05:18:28] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 07:21:03] --- New API Request ---
+[2026-11-14 07:21:03] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-14 07:21:03] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-14 07:21:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 07:27:02] --- New API Request ---
+[2026-11-14 07:27:02] Received key: MAN-D8456DEE5AF8, domain: app.mzeevtu.com
+[2026-11-14 07:27:02] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-14 07:27:02] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 09:14:03] --- New API Request ---
+[2026-11-14 09:14:03] Received key: MAN-FEDCE6BB66EB, domain: gamio.pmhserver.name.ng
+[2026-11-14 09:14:03] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-14 09:14:03] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 09:36:15] --- New API Request ---
+[2026-11-14 09:36:15] Received key: MAN-39E77DEFDB81, domain: resultpins.payhub.com.ng
+[2026-11-14 09:36:15] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-14 09:36:15] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 11:35:01] --- New API Request ---
+[2026-11-14 11:35:01] Received key: MAN-8F91CCC3CC57, domain: buildroom.rccglp63yaya.org.ng
+[2026-11-14 11:35:01] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-14 11:35:01] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-14 13:22:04] --- New API Request ---
+[2026-11-14 13:22:04] Received key: MAN-AE3F2BCCE223, domain: kingdombuilders.pmhserver.name.ng
+[2026-11-14 13:22:04] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-14 13:22:04] Responding with: {"status":1,"message":"License is valid."}

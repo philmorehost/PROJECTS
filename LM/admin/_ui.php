@@ -1,0 +1,527 @@
+<?php
+/**
+ * Shared admin chrome for the newer License Manager screens.
+ *
+ * Usage:
+ *   require_once __DIR__ . '/_ui.php';
+ *   lm_admin_page_start('Script projects', 'projects');
+ *   ... content ...
+ *   lm_admin_page_end();
+ */
+
+require_once __DIR__ . '/../includes/guide.php';
+
+if (!function_exists('lm_admin_nav_items')) {
+    /**
+     * Primary navigation for the release console.
+     *
+     * @return array
+     */
+    function lm_admin_nav_items()
+    {
+        return array(
+            'dashboard' => array('label' => 'Dashboard', 'icon' => '📊', 'href' => 'dashboard.php', 'group' => 'Overview'),
+            'licenses' => array('label' => 'Licences', 'icon' => '📜', 'href' => 'licenses.php', 'group' => 'Overview'),
+            'transactions' => array('label' => 'Transactions', 'icon' => '💳', 'href' => 'transactions.php', 'group' => 'Overview'),
+            'updates' => array('label' => 'Push Updates', 'icon' => '🚀', 'href' => 'updates.php', 'group' => 'Releases'),
+            'github' => array('label' => 'GitHub Pull', 'icon' => '🐙', 'href' => 'github-updates.php', 'group' => 'Releases'),
+            'notifications' => array('label' => 'Notifications', 'icon' => '🔔', 'href' => 'update-notifications.php', 'group' => 'Releases'),
+            'projects' => array('label' => 'Script Projects', 'icon' => '🧩', 'href' => 'projects.php', 'group' => 'Releases'),
+            'guide' => array('label' => 'Admin Guide', 'icon' => '📖', 'href' => 'guide.php', 'group' => 'System'),
+            'settings' => array('label' => 'Settings', 'icon' => '⚙️', 'href' => 'settings.php', 'group' => 'System'),
+            'profile' => array('label' => 'Profile', 'icon' => '👤', 'href' => 'profile.php', 'group' => 'System'),
+            'system-check' => array('label' => 'System Check', 'icon' => '✅', 'href' => 'system-check.php', 'group' => 'System'),
+            'logout' => array('label' => 'Logout', 'icon' => '🚪', 'href' => 'logout.php', 'group' => 'System'),
+        );
+    }
+}
+
+if (!function_exists('lm_admin_page_start')) {
+    /**
+     * Print <head>, sidebar and the opening <main> element.
+     *
+     * @param string $title
+     * @param string $active Nav key to highlight
+     * @return void
+     */
+    function lm_admin_page_start($title, $active = '')
+    {
+        $siteName = function_exists('lm_site_name') ? lm_site_name() : 'License Manager';
+        $csrf = function_exists('lm_csrf_token') ? lm_csrf_token() : '';
+        $items = lm_admin_nav_items();
+        $group = '';
+        ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>">
+    <meta name="lm-version" content="<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?>">
+    <title><?= htmlspecialchars($title) ?> — <?= htmlspecialchars($siteName) ?></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #eef2f9;
+            --card: #ffffff;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #e5e9f2;
+            --indigo: #4f46e5;
+            --indigo-dark: #3730a3;
+            --cyan: #06b6d4;
+            --green: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --slate: #475569;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--ink); display: flex; min-height: 100vh; }
+        a { color: inherit; }
+        .sidebar { width: 264px; position: fixed; inset: 0 auto 0 0; height: 100vh; overflow-y: auto; background: linear-gradient(180deg, #111827 0%, #0b1220 100%); color: #e2e8f0; padding: 26px 16px; display: flex; flex-direction: column; gap: 4px; }
+        .sidebar .brand { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; padding: 0 10px 20px; display: flex; align-items: center; gap: 10px; }
+        .sidebar .brand span.logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #4f46e5, #06b6d4); display: grid; place-items: center; font-size: 16px; }
+        .sidebar .section { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: #64748b; font-weight: 700; padding: 16px 12px 6px; }
+        .sidebar a.nav { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: #cbd5e1; font-size: 14px; font-weight: 500; transition: background .18s ease, color .18s ease; }
+        .sidebar a.nav:hover { background: rgba(79, 70, 229, 0.16); color: #fff; }
+        .sidebar a.nav.active { background: linear-gradient(135deg, rgba(79,70,229,.35), rgba(6,182,212,.18)); color: #fff; box-shadow: inset 3px 0 0 #6366f1; }
+        .sidebar .grow { flex: 1; }
+        .sidebar .hint { font-size: 11px; color: #94a3b8; padding: 12px; line-height: 1.6; border-top: 1px solid rgba(148,163,184,.12); }
+        .main { margin-left: 264px; width: calc(100% - 264px); padding: 34px 38px 60px; }
+        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 26px; flex-wrap: wrap; }
+        .page-head h1 { font-size: 29px; font-weight: 800; letter-spacing: -0.7px; }
+        .page-head p { color: var(--muted); margin-top: 8px; font-size: 14px; max-width: 720px; line-height: 1.65; }
+        .head-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.05); margin-bottom: 22px; overflow: hidden; }
+        .card-head { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+        .card-head h2 { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
+        .card-head p { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.6; }
+        .card-body { padding: 22px 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 11px; border: 1px solid transparent; font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; white-space: nowrap; }
+        .btn:hover { transform: translateY(-1px); }
+        .btn:disabled { opacity: .6; cursor: wait; transform: none; }
+        .btn-sm { padding: 8px 13px; font-size: 12.5px; border-radius: 9px; }
+        .btn-primary { background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #fff; box-shadow: 0 10px 24px rgba(79,70,229,.26); }
+        .btn-dark { background: #0f172a; color: #fff; }
+        .btn-ghost { background: #fff; border-color: var(--line); color: #334155; }
+        .btn-danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+        .btn-green { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: 0 10px 26px rgba(15,23,42,.04); }
+        .stat .label { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+        .stat .value { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-top: 8px; }
+        .stat .sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
+        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+        .badge-indigo { background: #eef2ff; color: #4338ca; }
+        .badge-cyan { background: #ecfeff; color: #0e7490; }
+        .badge-green { background: #ecfdf5; color: #047857; }
+        .badge-amber { background: #fffbeb; color: #b45309; }
+        .badge-red { background: #fef2f2; color: #b91c1c; }
+        .badge-slate { background: #f1f5f9; color: #475569; }
+
+        /* Repository combobox — in flow, because cards clip overflow */
+        .repo-picker { position: relative; }
+        .repo-input-row { display: flex; gap: 8px; align-items: stretch; }
+        .repo-input-row .input { flex: 1; min-width: 0; }
+        .repo-menu { margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+            box-shadow: 0 12px 28px rgba(15,23,42,.08); overflow: hidden; }
+        .repo-menu-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid #f1f5f9; background: #fbfcfe; }
+        .repo-menu-head input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+            font: inherit; font-size: 12.5px; background: #fff; color: #0f172a; }
+        .repo-menu-head input:focus { outline: none; border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+        .repo-menu-count { font-size: 10.5px; color: #94a3b8; font-weight: 700; white-space: nowrap; }
+        .repo-menu-list { max-height: 270px; overflow-y: auto; }
+        .repo-item { display: flex; gap: 9px; align-items: center; padding: 9px 12px; cursor: pointer;
+            border-bottom: 1px solid #f6f8fb; }
+        .repo-item:last-child { border-bottom: 0; }
+        .repo-item:hover, .repo-item:focus { background: #f5f7ff; }
+        .repo-item.active { background: #eef2ff; }
+        .repo-item .name { font-size: 12.5px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; }
+        .repo-item .meta { font-size: 11px; color: #94a3b8; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .repo-empty { padding: 22px 14px; text-align: center; color: #94a3b8; font-size: 12.5px; line-height: 1.6; }
+        .repo-menu-foot { padding: 7px 12px; border-top: 1px solid #f1f5f9; background: #fbfcfe; font-size: 10.5px; color: #94a3b8; }
+        .repo-menu-foot:empty { display: none; }
+        .banner { padding: 14px 18px; border-radius: 13px; font-size: 13.5px; font-weight: 600; margin-bottom: 18px; line-height: 1.6; }
+        .banner-ok { background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; }
+        .banner-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+        .banner-err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .banner-info { background: #eff6ff; border: 1px solid #dbeafe; color: #1e40af; }
+        .banner a { color: inherit; font-weight: 800; }
+        .banner code { background: rgba(15,23,42,.07); padding: 1.5px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+        .field { margin-bottom: 18px; }
+        .field label { display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 7px; }
+        .field .hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.55; }
+        .input, .select, textarea.input { width: 100%; padding: 12px 13px; border-radius: 10px; border: 1px solid #d7deea; background: #f8fafc; font-family: inherit; font-size: 13.5px; color: var(--ink); }
+        .input:focus, .select:focus, textarea.input:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 4px rgba(99,102,241,.12); background: #fff; }
+        textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
+        .mono { font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }
+        .tiny { font-size: 11.5px; }
+        .muted { color: var(--muted); }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 10.5px; letter-spacing: 1.1px; text-transform: uppercase; color: var(--muted); padding: 12px 16px; border-bottom: 1px solid var(--line); background: #f8fafc; white-space: nowrap; }
+        tbody td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #fbfcff; }
+        .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+        .switch { display: flex; gap: 11px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; cursor: pointer; }
+        .switch input { margin-top: 3px; accent-color: var(--indigo); width: 16px; height: 16px; }
+        .switch .txt strong { display: block; font-size: 13px; }
+        .switch .txt small { color: var(--muted); font-size: 11.5px; line-height: 1.55; display: block; margin-top: 3px; }
+        .empty { padding: 46px 24px; text-align: center; color: var(--muted); font-size: 13.5px; }
+        .toast { position: fixed; right: 26px; bottom: 26px; background: #0f172a; color: #fff; padding: 14px 18px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(12px); pointer-events: none; transition: all .2s ease; max-width: 420px; z-index: 90; line-height: 1.55; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.err { background: #b91c1c; }
+        .toast.ok { background: #047857; }
+        .modal { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; align-items: center; justify-content: center; padding: 22px; z-index: 80; }
+        .modal.open { display: flex; }
+        .modal-card { background: #fff; border-radius: 18px; width: 100%; max-width: 720px; max-height: 88vh; overflow: auto; padding: 26px 28px; box-shadow: 0 34px 80px rgba(2,6,23,.3); }
+        .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+        .modal-head h3 { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+        .modal-close { border: none; background: #f1f5f9; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; font-size: 16px; color: #475569; }
+        pre.code { background: #0f172a; color: #e2e8f0; padding: 16px 18px; border-radius: 12px; overflow: auto; font-size: 12px; line-height: 1.65; font-family: 'JetBrains Mono', monospace; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        .chips { display: inline-flex; gap: 6px; vertical-align: middle; }
+        .chips label { display: inline-flex; align-items: center; gap: 5px; background: #f1f5f9; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+        .chips input { accent-color: var(--indigo); }
+        .progress-wrap { margin-top: 18px; display: none; }
+        .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
+        .progress-track { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4f46e5, #06b6d4); transition: width .25s ease; }
+
+        /* Repository file tree (GitHub pull) */
+        .tree { border: 1px solid var(--line); border-radius: 12px; background: #fff; max-height: 420px; overflow: auto; }
+        .tree-row { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 12.5px; border-bottom: 1px solid #f6f8fc; line-height: 1.4; }
+        .tree-row:last-child { border-bottom: none; }
+        .tree-row:hover { background: #f8faff; }
+        .tree-row.is-dir { font-weight: 600; color: #1e293b; }
+        .tree-row .twisty { width: 18px; height: 18px; border: none; background: transparent; cursor: pointer; color: #64748b; font-size: 10px; padding: 0; flex: 0 0 18px; display: grid; place-items: center; }
+        .tree-row .twisty.empty { visibility: hidden; }
+        .tree-row input[type="checkbox"] { accent-color: var(--indigo); width: 14px; height: 14px; flex: 0 0 auto; margin: 0; cursor: pointer; }
+        .tree-row .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+        .tree-row .fmeta { color: #94a3b8; font-size: 10.5px; flex: 0 0 auto; }
+        .tree-row .fcount { color: #94a3b8; font-size: 10.5px; font-weight: 500; flex: 0 0 auto; }
+        .tree-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .tree-status { font-size: 11.5px; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 7px 10px; margin-top: 10px; line-height: 1.55; }
+        .tree-status strong { color: #0f172a; }
+        @media (max-width: 980px) {
+            body { flex-direction: column; }
+            .sidebar { position: relative; width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; padding: 18px 14px; }
+            .sidebar .brand { width: 100%; padding-bottom: 12px; }
+            .sidebar .section, .sidebar .hint, .sidebar .grow { display: none; }
+            .sidebar a.nav { padding: 8px 11px; font-size: 13px; }
+            .main { margin-left: 0; width: 100%; padding: 24px 18px 50px; }
+        }
+    </style>
+    <script>
+        /* Shared helpers — defined in <head> so page scripts can use them. */
+        const LM_CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        // Release baked into this page. If an AJAX answer names a different
+        // one, the folder on the server is a mix of two uploads.
+        const LM_PAGE_VERSION = (document.querySelector('meta[name="lm-version"]') || {}).content || '';
+
+        function lmVersionMismatch(result) {
+            if (!result || !result.server_version || !LM_PAGE_VERSION) { return false; }
+            if (result.server_version === LM_PAGE_VERSION) { return false; }
+            toast('This page is from version ' + LM_PAGE_VERSION + ' but the server runs '
+                + result.server_version + '. Re-upload the whole admin/ folder.', 'error');
+            return true;
+        }
+
+        function escapeHtml(value) {
+            return String(value === undefined || value === null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function toast(message, kind) {
+            const el = document.getElementById('toast');
+            if (!el) { console.log(message); return; }
+            el.textContent = message;
+            el.className = 'toast show ' + (kind || '');
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => { el.className = 'toast'; }, 7000);
+        }
+
+        /*
+         * Some shared hosts run mod_security rules that answer a POST with a
+         * bare "403 Forbidden" before PHP is reached. Nothing in the panel can
+         * see why from inside, so lmPost() does two things: it repeats the
+         * request with every value base64-encoded (which no content rule can
+         * match any more), and when even that is refused it probes admin/ping.php
+         * to say which layer is refusing — the folder, POST requests, the body
+         * size, or this one endpoint.
+         */
+        function lmB64(value) {
+            const bytes = new TextEncoder().encode(String(value));
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
+        }
+
+        function lmTryParse(text) {
+            try { return JSON.parse(text); } catch (e) { return null; }
+        }
+
+        function lmReadable(text) {
+            return String(text)
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]*>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
+        function lmFields(data) {
+            const fd = new FormData();
+            Object.keys(data || {}).forEach(key => {
+                const value = data[key];
+                if (Array.isArray(value)) {
+                    value.forEach(item => {
+                        if (item !== undefined && item !== null) fd.append(key, item);
+                    });
+                } else if (value !== undefined && value !== null) {
+                    fd.append(key, value);
+                }
+            });
+            fd.append('csrf_token', LM_CSRF);
+            return fd;
+        }
+
+        async function lmPostEncoded(url, fd) {
+            const out = new FormData();
+            fd.forEach((value, key) => out.append(key, lmB64(value)));
+            out.append('_encoding', 'base64');
+            return fetch(url, {
+                method: 'POST',
+                body: out,
+                headers: { 'X-LM-Encoding': 'base64' },
+                credentials: 'same-origin'
+            });
+        }
+
+        /** Which layer refused the request? Returns a sentence and the probes. */
+        async function lmDiagnose(url) {
+            const steps = [];
+            const probe = async (label, target, init) => {
+                try {
+                    const response = await fetch(target, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, init || {}));
+                    const text = await response.text();
+                    const ok = !!lmTryParse(text);
+                    steps.push(label + ': HTTP ' + response.status + (ok ? ' (JSON)' : ' (not JSON)'));
+                    return { ok: !!ok && response.ok, status: response.status, text: text };
+                } catch (e) {
+                    steps.push(label + ': network error — ' + e.message);
+                    return { ok: false, status: 0, text: '' };
+                }
+            };
+
+            const big = new FormData();
+            big.append('filler', 'x'.repeat(64 * 1024));
+
+            const get = await probe('GET admin/ping.php', 'ping.php');
+            if (!get.ok) {
+                if (get.status === 404) {
+                    return { steps: steps, message: 'admin/ping.php is not on the server, so this cannot be tested yet. Upload the 9.0.3 admin/ folder (or at least admin/ping.php) and try again.' };
+                }
+                return {
+                    steps: steps,
+                    message: 'The web server refuses files in admin/ before PHP runs — that is .htaccess or a hosting security rule, not the panel. '
+                        + 'Rename .htaccess to .htaccess.off in the License Manager folder, reload, and try again. If it then works, send the .htaccess text to your host and ask which rule they reject.'
+                };
+            }
+
+            const post = await probe('POST admin/ping.php (empty)', 'ping.php', { method: 'POST', body: new FormData() });
+            if (!post.ok) {
+                return {
+                    steps: steps,
+                    message: 'PHP answers a GET but not a POST: the host blocks POST requests (mod_security). '
+                        + 'Ask the host to whitelist POST for the admin folder in ModSecurity, or switch this account to DetectionOnly in cPanel → ModSecurity.'
+                };
+            }
+
+            const large = await probe('POST admin/ping.php (64 KB)', 'ping.php', { method: 'POST', body: big });
+            if (!large.ok) {
+                return {
+                    steps: steps,
+                    message: 'Small POSTs arrive but a 64 KB body does not: the host caps the request body. Tick one folder instead of the whole repository, or ask the host to raise SecRequestBodyLimit.'
+                };
+            }
+
+            const endpoint = await probe('POST ' + url + ' (action=ping)', url, { method: 'POST', body: lmFields({ action: 'ping' }) });
+            if (!endpoint.ok) {
+                return {
+                    steps: steps,
+                    message: 'Other files in admin/ answer, but ' + url + ' is refused — a security rule is matching that file name or its parameters. '
+                        + 'Ask the host to whitelist ' + url + ' in ModSecurity, and meanwhile open health.php → Server rules to confirm.'
+                };
+            }
+
+            const endpointJson = lmTryParse(endpoint.text) || {};
+            if (endpointJson.status !== 'success') {
+                return {
+                    steps: steps,
+                    message: 'PHP answered ' + url + ' but refused the request: '
+                        + (endpointJson.message || 'no reason given') + ' (code ' + (endpointJson.code || 'unknown') + ').'
+                };
+            }
+
+            return {
+                steps: steps,
+                message: 'Every probe answered, so the refusal came from the request body itself. The panel retried with encoded values and did not get through either; '
+                    + 'clear the changelog box and publish again with a short note to confirm.'
+            };
+        }
+
+        async function lmPost(url, data) {
+            const fd = lmFields(data);
+            let response;
+            try {
+                response = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+            } catch (e) {
+                return { status: 'error', message: 'Network error: ' + e.message };
+            }
+
+            const text = await response.text();
+            let parsed = lmTryParse(text);
+            if (parsed) {
+                lmVersionMismatch(parsed);
+                return parsed;
+            }
+
+            // Not JSON: either PHP died, or the web server refused the request.
+            let status = response.status;
+            let body = text;
+
+            if (status === 403 || status === 406 || status === 413 || status === 400 || status === 501) {
+                try {
+                    const retry = await lmPostEncoded(url, fd);
+                    const retryText = await retry.text();
+                    const retryParsed = lmTryParse(retryText);
+                    if (retryParsed) {
+                        toast('Your host blocked the plain request; it went through encoded.', 'info');
+                        lmVersionMismatch(retryParsed);
+                        return retryParsed;
+                    }
+                    status = retry.status || status;
+                    body = retryText || body;
+                } catch (e) {
+                    // keep the original refusal
+                }
+            }
+
+            const clean = lmReadable(body);
+            const first = clean.split('\n').filter(function (line) { return line.trim() !== ''; }).slice(0, 2).join(' ');
+
+            let why = '';
+            if (status === 403) {
+                const diag = await lmDiagnose(url);
+                why = ' ' + diag.message;
+                return {
+                    status: 'error',
+                    http_status: status,
+                    message: (first || 'HTTP 403.') + why,
+                    diagnostic: diag.steps,
+                    raw: clean.slice(0, 600)
+                };
+            }
+
+            if (status === 401 || status === 419) {
+                why = ' Your sign-in has expired: reload this page and sign in again.';
+            } else if (status === 404) {
+                why = ' That endpoint is not on the server — a file from the release is missing.';
+            } else if (status >= 500) {
+                why = ' The server errored (HTTP ' + status + ') — check the PHP error log.';
+            } else if (/Fatal error|Warning|Notice|Undefined variable|Uncaught/i.test(clean)) {
+                why = ' (server error — check the PHP error log)';
+            }
+
+            return {
+                status: 'error',
+                http_status: status,
+                message: (first || ('The server returned HTTP ' + status + ' with no explanation.')) + why,
+                raw: clean.slice(0, 600)
+            };
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    </script>
+</head>
+<body>
+<?php require __DIR__ . '/_mobile_nav.php'; ?>
+    <aside class="sidebar">
+        <div class="brand"><span class="logo">🔐</span> License Manager</div>
+        <?php foreach ($items as $key => $item): ?>
+            <?php if ($item['group'] !== $group): $group = $item['group']; ?>
+                <div class="section"><?= htmlspecialchars($group) ?></div>
+            <?php endif; ?>
+            <a class="nav<?= $key === $active ? ' active' : '' ?>" href="<?= htmlspecialchars($item['href']) ?>"><?= $item['icon'] ?> <?= htmlspecialchars($item['label']) ?></a>
+        <?php endforeach; ?>
+        <div class="grow"></div>
+        <div class="hint">Signed in as <strong>admin</strong><br>Manager v<?= htmlspecialchars(defined('LM_VERSION') ? LM_VERSION : '') ?>
+            · <a href="../health.php" style="color:inherit;text-decoration:underline">Installation check</a></div>
+    </aside>
+
+    <main class="main">
+        <?php
+        $release = function_exists('lm_release_state') ? lm_release_state() : array('ok' => true, 'reason' => '', 'file' => '');
+
+        if (!$release['ok'] && $release['reason'] === 'version') {
+            $manifestVersion = function_exists('lm_release_manifest') ? (string) ((lm_release_manifest()['version'] ?? '')) : '';
+            ?>
+            <div class="banner banner-err">
+                <strong>Mixed release.</strong> The files on the server are from version
+                <?= htmlspecialchars($manifestVersion !== '' ? $manifestVersion : 'unknown') ?> but the running code
+                is <?= htmlspecialchars(LM_VERSION) ?>. Until the whole folder is replaced, sign-in and every AJAX
+                action can be refused with <code>403 Forbidden</code>.
+                <a href="../health.php">Installation check</a> lists each file.
+            </div>
+            <?php
+        } elseif (!$release['ok']) {
+            ?>
+            <div class="banner banner-err">
+                <strong>This page is not from the release on the server.</strong>
+                <code><?= htmlspecialchars($release['file']) ?></code> differs from
+                <code>build.json</code>, so it may ask for a different session or security token than the
+                endpoints it calls — that is what produces a bare <code>403 Forbidden</code>.
+                Re-upload the whole <code>admin/</code> folder from version <?= htmlspecialchars(LM_VERSION) ?>.
+                <a href="../health.php">See every stale file</a>.
+            </div>
+            <?php
+        } elseif ($release['reason'] === 'no_manifest') {
+            ?>
+            <div class="banner banner-info">
+                No <code>build.json</code> on the server, so this page cannot tell whether every file is from
+                the same release. Upload <code>build.json</code> with the next update to switch the check on.
+            </div>
+            <?php
+        }
+
+    }
+}
+
+if (!function_exists('lm_admin_page_end')) {
+    /**
+     * Close the shell and print shared helpers.
+     *
+     * @return void
+     */
+    function lm_admin_page_end()
+    {
+        ?>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', event => { if (event.target === modal) modal.classList.remove('open'); });
+        });
+    </script>
+</body>
+</html>
+        <?php
+    }
+}

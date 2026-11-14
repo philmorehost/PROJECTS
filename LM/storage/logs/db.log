@@ -1,0 +1,6 @@
+[2026-10-24 12:20:04 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+[2026-10-24 12:30:05 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+[2026-10-24 12:40:04 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+[2026-10-24 12:50:04 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+[2026-10-24 13:00:04 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
+[2026-10-24 13:10:05 UTC] Database unavailable (missing) on PHP 7.4.33: The PDO class is not defined in this PHP build; get_loaded_extensions() returned 35 entries.
