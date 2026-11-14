@@ -40,7 +40,21 @@ $db = Database::connect();
 ensure_payment_schema();
 
 $grace_minutes = 1440; // fixed 24-hour expiry policy
-$batch = max(1, (int)getConfig('pending_expiry_batch', '200'));
+@set_time_limit(0);
+// A row can require two gateway requests (DVA lookup and reference verification).
+// Keep each run below the 10-minute schedule even when every request hits its timeout.
+$batch = max(1, min(20, (int)getConfig('pending_expiry_batch', '20')));
+$hasMysqlLock = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+if ($hasMysqlLock) {
+    $lockStmt = $db->query("SELECT GET_LOCK('payhub_transaction_expiry', 0)");
+    if ((int)$lockStmt->fetchColumn() !== 1) {
+        error_log('[PayHub] expiry cron skipped: another run holds the lock.');
+        exit("Expiry reconciliation skipped: another run holds the lock.\n");
+    }
+    register_shutdown_function(function () use ($db) {
+        try { $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')"); } catch (\Throwable $e) {}
+    });
+}
 
 $stmt = $db->prepare(
     "SELECT * FROM transactions
@@ -51,7 +65,11 @@ $stmt->execute();
 $rows = $stmt->fetchAll();
 
 if (!$rows) {
-    exit("No stale pending transactions.\n");
+    if ($hasMysqlLock) $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')");
+    $message = "No pending transactions older than {$grace_minutes} minutes.";
+    echo $message . "\n";
+    error_log('[PayHub] expiry cron: ' . $message);
+    exit;
 }
 
 $fulfilled = 0;
@@ -61,14 +79,26 @@ $unreachable = 0;
 
 foreach ($rows as $tx) {
     // Confirm local and missed Paystack DVA transfers before applying the 24-hour timeout.
-    if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true)) {
-        continue;
+    // An unexpected reconciliation error must not abort the whole batch or leave this row
+    // pending indefinitely; proceed to direct verification and then the expiry decision.
+    try {
+        if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true)) {
+            $fulfilled++;
+            continue;
+        }
+    } catch (\Throwable $e) {
+        error_log('[PayHub] expiry cron DVA reconciliation failed for ' . $tx['reference'] . ': ' . $e->getMessage());
     }
 
     $is_test = ((int)$tx['is_test'] === 1);
 
     // Verify against the mode's OWN key - never the other mode's account.
-    $response = paystack_call("transaction/verify/" . urlencode($tx['reference']), 'GET', [], $is_test);
+    try {
+        $response = paystack_call("transaction/verify/" . urlencode($tx['reference']), 'GET', [], $is_test);
+    } catch (\Throwable $e) {
+        $response = ['status' => false, 'message' => 'Gateway verification raised an exception: ' . $e->getMessage(), '_http_code' => 0];
+        error_log('[PayHub] expiry cron gateway verification failed for ' . $tx['reference'] . ': ' . $e->getMessage());
+    }
 
     if (!is_array($response)) {
         $response = ['status' => false, 'message' => 'Gateway returned an unreadable response.', '_http_code' => 0];
@@ -177,13 +207,20 @@ foreach ($rows as $tx) {
     $expiryDetail = $dead
         ? "No payment after $grace_minutes minutes (gateway status '$status'). Marked failed."
         : "No verified payment after $grace_minutes minutes (gateway status '" . ($status ?: 'unknown') . "'" . ($gatewayMessage !== '' ? '; ' . substr($gatewayMessage, 0, 180) : '') . '). Marked failed by the 24-hour expiry policy.';
-    $expireStmt = $db->prepare("UPDATE transactions SET status = 'failed', failure_reason = 'expired'
-        WHERE id = ? AND status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1440 MINUTE)");
-    $expireStmt->execute([$tx['id']]);
-    if ($expireStmt->rowCount() === 1) {
-        log_transaction_event($tx['id'], 'expired', $expiryDetail);
-        $expired++;
+    try {
+        $expireStmt = $db->prepare("UPDATE transactions SET status = 'failed', failure_reason = 'expired'
+            WHERE id = ? AND status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1440 MINUTE)");
+        $expireStmt->execute([$tx['id']]);
+        if ($expireStmt->rowCount() === 1) {
+            log_transaction_event($tx['id'], 'expired', $expiryDetail);
+            $expired++;
+        }
+    } catch (\Throwable $e) {
+        error_log('[PayHub] expiry cron could not mark transaction ' . $tx['reference'] . ' failed: ' . $e->getMessage());
     }
 }
 
-echo "Expiry reconciliation: fulfilled=$fulfilled expired=$expired gateway_open=$gateway_open unreachable=$unreachable (grace {$grace_minutes}m)\n";
+$summary = "Expiry reconciliation: checked=" . count($rows) . " fulfilled=$fulfilled expired=$expired gateway_open=$gateway_open unreachable=$unreachable (grace {$grace_minutes}m)";
+echo $summary . "\n";
+error_log('[PayHub] ' . $summary);
+if ($hasMysqlLock) $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')");

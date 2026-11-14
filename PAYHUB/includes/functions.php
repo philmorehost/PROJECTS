@@ -640,6 +640,11 @@ function paystack_call($endpoint, $method = 'GET', $data = [], $is_test = null) 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    // Cron and request handlers must not wait forever on a stalled gateway connection.
+    // A bounded timeout lets expiry reconciliation reach its final state even when
+    // Paystack is unavailable; callers still treat timed-out lookups as unverified.
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
 
     if ($method === 'POST') {
         curl_setopt($ch, CURLOPT_POST, true);
