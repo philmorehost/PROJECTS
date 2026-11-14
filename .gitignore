@@ -16,3 +16,6 @@ keystore.properties
 # Signed bundles/APKs produced for upload, and their hand-off notes
 **/release-output/
 *.aab
+
+# Node tooling for the repo's own checks (installed, never committed)
+tools/**/node_modules/

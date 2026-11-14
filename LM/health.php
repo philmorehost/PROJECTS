@@ -5,7 +5,8 @@
  * Opens with no includes at all, so it works even when a deploy is broken and
  * every other page returns 500. It reports what a support request needs:
  * the PHP version, which files are missing, whether the runtime folders are
- * writable, and the last fatal error PHP recorded.
+ * writable, the last fatal error PHP recorded, and whether any file leaks PHP
+ * source into the page (a misplaced `?>` — see lm_health_stray_html()).
  *
  * It exposes file names and a stack-free error line, never a password, key or
  * token. Delete it once the installation is healthy.
@@ -17,6 +18,181 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 $root = __DIR__;
+
+/*
+ * Line numbers where a file leaves PHP mode and prints code as text.
+ *
+ * The source is walked once, tracking PHP mode and skipping strings and
+ * comments, to produce a copy of the file with every PHP region blanked out
+ * (newlines kept, so line numbers still match). What is left is page output.
+ * A line of that output which is nothing but PHP syntax means the file forgot
+ * to reopen with `<?php`.
+ *
+ * Blocks that legitimately print code are masked first — <script>, <style>,
+ * <pre>, <code>, <textarea> — because JavaScript braces and the operator
+ * manual's PHP samples look exactly like a leak otherwise.
+ *
+ * The signatures are the shapes a forgotten reopen actually takes: braces,
+ * guard blocks, method signatures, docblocks, require lines. Prose and markup
+ * match none of them, and `<?= ?>` stays valid throughout.
+ *
+ * @param string $src Whole file.
+ * @return array<int,string> Line number => trimmed text, empty when clean.
+ */
+if (!function_exists('lm_health_stray_html')) {
+function lm_health_stray_html($src)
+{
+    $length = strlen($src);
+    $masked = '';
+    $state = 'html'; // html | php | sq | dq | line | block
+    $i = 0;
+
+    while ($i < $length) {
+        $char = $src[$i];
+        $next = ($i + 1 < $length) ? $src[$i + 1] : '';
+
+        if ($state === 'html') {
+            if ($char === '<' && $next === '?') {
+                // `<?php` opens code; `<?=` opens a short echo. Both are code,
+                // so nothing is written to the output copy.
+                $openTag = substr($src, $i, 5);
+                $isPhp = (strtolower(substr($openTag, 0, 5)) === '<' . '?php');
+                $isEcho = (substr($openTag, 0, 3) === '<' . '?=');
+                if ($isPhp || $isEcho) {
+                    $state = 'php';
+                    $i += $isPhp ? 5 : 3;
+                    continue;
+                }
+            }
+            $masked .= $char;
+            $i++;
+            continue;
+        }
+
+        // Inside PHP: look for the tag that closes it, ignoring strings and
+        // comments (a closing tag inside an echo or a docblock is not a mode
+        // switch).
+        if ($state === 'php') {
+            if ($char === '?' && $next === '>') {
+                $state = 'html';
+                $i += 2;
+                continue;
+            }
+            if ($char === "'") {
+                $state = 'sq';
+            } elseif ($char === '"') {
+                $state = 'dq';
+            } elseif ($char === '#' || ($char === '/' && $next === '/')) {
+                $state = 'line';
+            } elseif ($char === '/' && $next === '*') {
+                $state = 'block';
+                $i++;
+            }
+        } elseif ($state === 'sq') {
+            if ($char === '\\') {
+                $i++;
+            } elseif ($char === "'") {
+                $state = 'php';
+            }
+        } elseif ($state === 'dq') {
+            if ($char === '\\') {
+                $i++;
+            } elseif ($char === '"') {
+                $state = 'php';
+            }
+        } elseif ($state === 'line') {
+            if ($char === "\n") {
+                $state = 'php';
+            }
+        } elseif ($state === 'block') {
+            if ($char === '*' && $next === '/') {
+                $state = 'php';
+                $i++;
+            }
+        }
+
+        if ($char === "\n") {
+            $masked .= "\n"; // keep line numbers true
+        }
+        $i++;
+    }
+
+    // Output that legitimately contains code: scripts, styles and samples.
+    $output = preg_replace(
+        '#<(script|style|pre|code|textarea)\b[^>]*>.*?</\1\s*>#is',
+        '',
+        $masked
+    );
+    if (!is_string($output)) {
+        $output = $masked;
+    }
+
+    $strays = array();
+    $inHtmlComment = false;
+    foreach (preg_split('/\r\n|\r|\n/', $output) as $index => $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '') {
+            continue;
+        }
+        if ($inHtmlComment) {
+            if (strpos($trimmed, '-->') !== false) {
+                $inHtmlComment = false;
+            }
+            continue;
+        }
+        if (substr($trimmed, 0, 4) === '<!--') {
+            $inHtmlComment = strpos($trimmed, '-->') === false;
+            continue;
+        }
+        if (lm_health_looks_like_php($trimmed)) {
+            $strays[$index + 1] = $trimmed;
+        }
+    }
+
+    return $strays;
+}
+}
+
+/**
+ * Is this line PHP source rather than page markup?
+ *
+ * Kept narrow on purpose: telling an operator to re-upload a file that is
+ * fine is worse than staying quiet about a rare shape.
+ *
+ * @param string $line Trimmed line.
+ * @return bool
+ */
+if (!function_exists('lm_health_looks_like_php')) {
+function lm_health_looks_like_php($line)
+{
+    if (preg_match('/^(?:public|private|protected)\s+(?:static\s+)?function\s+\w+/', $line)) {
+        return true;
+    }
+    if (preg_match('/^(?:abstract\s+|final\s+)?function\s+\w+\s*\(/', $line)) {
+        return true;
+    }
+    if (preg_match('/^if\s*\(\s*!?\s*function_exists\s*\(/', $line)) {
+        return true;
+    }
+    if (preg_match('/^(?:require|include)(?:_once)?\s*[\(\'"]/', $line)) {
+        return true;
+    }
+    if (preg_match('/^\*+\s*@(?:param|return|package|throws|var)\b/', $line)) {
+        return true;
+    }
+    if (preg_match('/^\}\s*(?:else|elseif|catch|finally)\b/', $line)) {
+        return true;
+    }
+    // A bare brace or pair of braces is the classic tail of a swallowed
+    // function body — and never appears as page text on its own line.
+    $bare = str_replace(array(' ', "\t"), '', $line);
+    if ($bare === '}' || $bare === '{' || $bare === '}}') {
+        return true;
+    }
+
+    return false;
+}
+}
 
 /* ------------------------------------------------------------------ checks */
 
@@ -208,6 +384,40 @@ foreach ($sessionScan as $path) {
 }
 
 /*
+ * Files that end a PHP block and never open another one.
+ *
+ * A template that prints HTML legitimately leaves PHP mode with `?>`, but it
+ * has to come back with `<?php` before any more code — otherwise PHP prints
+ * that code as text. The 9.7.0 console shipped exactly that in
+ * includes/app_ui.php: the shell's closing markup was emitted in HTML mode and
+ * the function's closing braces, plus the whole lm_app_end() definition, were
+ * never parsed. Every console page ended with `} } if (!function_exists(...`
+ * on screen, and because lm_app_end() was never declared each page also died
+ * with a fatal. The file *parses* perfectly, so a syntax check cannot see it —
+ * only counting the mode switches can.
+ *
+ * The scan is deliberately strict about what counts as code: a `?>` inside a
+ * string or a comment is skipped, and a closing tag whose remainder is only
+ * HTML has to hit `<?php` before the file ends. Files that never leave PHP
+ * mode (the common case) cost nothing.
+ */
+$strayHtml = array();
+foreach ($sessionScan as $path) {
+    $file = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
+    if (!is_file($file)) {
+        continue;
+    }
+    $src = (string) @file_get_contents($file);
+    if (strpos($src, '?>') === false) {
+        continue; // stayed in PHP the whole way through
+    }
+    $strays = lm_health_stray_html($src);
+    if (!empty($strays)) {
+        $strayHtml[$path] = $strays;
+    }
+}
+
+/*
  * Files on disk that this release does not ship.
  *
  * build.json lists every file that runs. A .php file that is not in it is
@@ -289,6 +499,14 @@ if (!empty($legacySession)) {
     $problems[] = count($legacySession) . ' script(s) still call session_start() instead of '
         . 'lm_session_start(), so they see an empty session: ' . implode(', ', array_slice($legacySession, 0, 8))
         . (count($legacySession) > 8 ? ', …' : '') . '. Re-upload the admin/ and user/ folders.';
+}
+if (!empty($strayHtml)) {
+    $names = array_keys($strayHtml);
+    $problems[] = count($names) . ' file(s) leave PHP mode and never reopen it, so PHP prints the code that '
+        . 'follows as text on the page: ' . implode(', ', array_slice($names, 0, 6))
+        . (count($names) > 6 ? ', …' : '') . '. The usual cause is a misplaced ?> or <?php in a template; '
+        . 're-upload ' . (count($names) === 1 ? 'that file' : 'those files') . ' from the ' . $version . ' ZIP. '
+        . 'The console shell does this in 9.7.0 and every admin page ends with stray braces.';
 }
 if (!is_file($settings)) {
     $problems[] = 'settings.json is missing. Upload the copy from your backup, or open Settings once the panel loads.';
@@ -397,6 +615,21 @@ $ok = empty($problems);
             <span>Legacy session_start() scripts</span>
             <span class="<?= empty($legacySession) ? 'yes' : 'no' ?>"><?= empty($legacySession) ? 'none' : count($legacySession) ?></span>
         </div>
+        <div class="row">
+            <span>Files printing PHP source</span>
+            <span class="<?= empty($strayHtml) ? 'yes' : 'no' ?>"><?= empty($strayHtml) ? 'none' : count($strayHtml) ?></span>
+        </div>
+        <?php if (!empty($strayHtml)): ?>
+            <p class="hint" style="margin-top:12px">These leave PHP mode and print code as text — a misplaced <code>?&gt;</code> or <code>&lt;?php</code>. Line numbers are where the code starts showing up in the page:</p>
+            <pre><?= htmlspecialchars(implode("\n", array_map(function ($path, $lines) {
+                $first = array_slice($lines, 0, 3, true);
+                $detail = array();
+                foreach ($first as $number => $text) {
+                    $detail[] = $number . ': ' . $text;
+                }
+                return $path . ' — ' . implode(' | ', $detail) . (count($lines) > 3 ? ' | …' : '');
+            }, array_keys($strayHtml), $strayHtml))) ?></pre>
+        <?php endif; ?>
         <?php if (!empty($absent)): ?>
             <p class="hint" style="margin-top:12px">In build.json but missing on the server:</p>
             <pre><?= htmlspecialchars(implode("\n", array_slice($absent, 0, 40)) . (count($absent) > 40 ? "\n… " . (count($absent) - 40) . ' more' : '')) ?></pre>

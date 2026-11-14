@@ -271,7 +271,7 @@ if (!function_exists('lm_app_start')) {
                         . 'send a different session or security token than the endpoints it calls. Re-upload the '
                         . 'complete admin/ folder.');
             }
-            ?>
+            ?> <?php // back to PHP: the markup above is the shell's closing tags, the braces below end the function.
     }
 }
 
