@@ -138,8 +138,8 @@ include '../includes/dashboard-head.php';
                 <div class="flex flex-wrap gap-4 mb-8">
                     <div class="flex items-center gap-4 p-4 bg-white rounded-3xl border border-slate-200 shadow-sm w-fit">
                         <div class="flex flex-col">
-                            <span class="text-xs font-bold text-slate-900">Global Payout Review</span>
-                            <span class="text-[10px] text-slate-500">Force all payouts to be reviewed</span>
+                            <span class="text-xs font-bold text-slate-900">Manual / API Payout Review</span>
+                            <span class="text-[10px] text-slate-500">Scheduled automated settlements follow their own review setting</span>
                         </div>
                         <?php $globalPayoutReview = getConfig('global_payout_review') === '1'; ?>
                         <form method="POST">
