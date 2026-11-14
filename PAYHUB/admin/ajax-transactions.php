@@ -1,111 +1,77 @@
 <?php
-// php-version/admin/ajax-transactions.php
 require_once '../includes/functions.php';
+require_once '../includes/transaction-report.php';
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 if (!isLoggedIn() || !isAdmin()) {
-    header('Content-Type: application/json');
+    http_response_code(403);
     echo json_encode(['status' => false, 'message' => 'Unauthorized']);
     exit;
 }
 
-// Debugging: ensure the response is always JSON
-header('Content-Type: application/json');
-
 $db = Database::connect();
-
-$search = $_GET['search'] ?? '';
-$status = $_GET['status'] ?? '';
-$merchant_id = $_GET['merchant_id'] ?? '';
-$mismatch = $_GET['mismatch'] ?? '';
-$limit = (int)($_GET['limit'] ?? 50);
-$offset = (int)($_GET['offset'] ?? 0);
-
-$query = "SELECT t.*, u.business_name 
-          FROM transactions t 
-          LEFT JOIN users u ON t.user_id = u.id 
-          WHERE 1=1";
-$params = [];
-
-// Admin reporting lens: this endpoint backs both the dashboard report and the full
-// Transaction History page, so scoping it here keeps every listing consistent.
-$query .= admin_tx_lens_sql('t');
-
-if (!empty($search)) {
-    $query .= " AND (t.reference LIKE ? OR t.customer_email LIKE ? OR u.business_name LIKE ?)";
-    $searchTerm = "%$search%";
-    $params[] = $searchTerm;
-    $params[] = $searchTerm;
-    $params[] = $searchTerm;
-}
-
-if (!empty($status)) {
-    $query .= " AND t.status = ?";
-    $params[] = $status;
-}
-
-if (!empty($merchant_id)) {
-    $query .= " AND t.user_id = ?";
-    $params[] = $merchant_id;
-}
-
-// Integrity review: transactions the guards actually stopped, plus any that settled for LESS
-// than was collected. failure_reason is written only by the integrity guards (amount_mismatch /
-// mode_mismatch) and by the expiry cron (expired).
-//
-// Overpayment is deliberately NOT included. A payer is normally charged MORE than the merchant
-// asked for, because the gateway adds its transaction fee on top - a NGN 101.00 collection
-// settles as NGN 102.54, which is Paystack's passed-on-fee arithmetic (101 / 0.985 = 102.54).
-// Those payments are accepted and credited, so listing them here made routine DGV7.0 traffic look
-// like fraud and buried the rows that genuinely needed review.
-if ($mismatch === '1') {
-    $query .= " AND (t.failure_reason IS NOT NULL OR (t.gateway_amount IS NOT NULL AND t.gateway_amount < t.amount))";
-}
-
-$query .= " ORDER BY t.created_at DESC LIMIT $limit OFFSET $offset";
+$filters = transaction_report_filters($_GET);
+$limit = filter_var($_GET['limit'] ?? 25, FILTER_VALIDATE_INT);
+$limit = max(10, min(100, $limit === false ? 25 : $limit));
+$offset = filter_var($_GET['offset'] ?? 0, FILTER_VALIDATE_INT);
+$offset = max(0, min(10000000, $offset === false ? 0 : $offset));
+$mismatch = (($_GET['mismatch'] ?? '') === '1');
 
 try {
-    $stmt = $db->prepare($query);
-    $stmt->execute($params);
-    $transactions = $stmt->fetchAll();
-    
-    $countQuery = "SELECT COUNT(*) as total FROM transactions t LEFT JOIN users u ON t.user_id = u.id WHERE 1=1";
-    $countParams = [];
-    $countQuery .= admin_tx_lens_sql('t');
-    if (!empty($search)) {
-        $countQuery .= " AND (t.reference LIKE ? OR t.customer_email LIKE ? OR u.business_name LIKE ?)";
-        $searchTerm = "%$search%";
-        $countParams[] = $searchTerm; $countParams[] = $searchTerm; $countParams[] = $searchTerm;
-    }
-    if (!empty($status)) {
-        $countQuery .= " AND t.status = ?";
-        $countParams[] = $status;
-    }
-    if (!empty($merchant_id)) {
-        $countQuery .= " AND t.user_id = ?";
-        $countParams[] = $merchant_id;
-    }
-    if ($mismatch === '1') {
-        $countQuery .= " AND (t.failure_reason IS NOT NULL OR (t.gateway_amount IS NOT NULL AND t.gateway_amount < t.amount))";
-    }
-    $cStmt = $db->prepare($countQuery);
-    $cStmt->execute($countParams);
-    $totalRecords = $cStmt->fetch()['total'] ?? 0;
+    // Keep a LEFT JOIN: older/imported transactions may have no corresponding merchant row.
+    [$where, $params] = transaction_report_where('t', $filters, true);
+    if ($mismatch) $where .= " AND (t.failure_reason IS NOT NULL OR (t.gateway_amount IS NOT NULL AND t.gateway_amount < t.amount))";
+    $where .= admin_tx_lens_sql('t');
+    $list = $db->prepare("SELECT t.*, COALESCE(NULLIF(u.business_name, ''), CONCAT('Merchant #', t.user_id), 'Unknown merchant') AS business_name,
+        u.email AS merchant_email
+        FROM transactions t LEFT JOIN users u ON u.id = t.user_id$where ORDER BY t.created_at DESC, t.id DESC LIMIT $limit OFFSET $offset");
+    $list->execute($params);
+    $rows = $list->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$row) unset($row['checkout_token']);
+    unset($row);
 
+    $count = $db->prepare("SELECT COUNT(*) FROM transactions t LEFT JOIN users u ON u.id = t.user_id$where");
+    $count->execute($params);
+    $total = (int)$count->fetchColumn();
+
+    // Cards always reflect the selected search/date range, not only one clicked status.
+    [$summaryWhere, $summaryParams] = transaction_report_where('t', $filters, false);
+    if ($mismatch) $summaryWhere .= " AND (t.failure_reason IS NOT NULL OR (t.gateway_amount IS NOT NULL AND t.gateway_amount < t.amount))";
+    $summaryWhere .= admin_tx_lens_sql('t');
+    $summaryStmt = $db->prepare("SELECT COUNT(*) AS total,
+        SUM(CASE WHEN t.status = 'success' THEN 1 ELSE 0 END) AS successful,
+        SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN t.status = 'failed' THEN 1 ELSE 0 END) AS failed,
+        SUM(CASE WHEN t.status = 'refunded' THEN 1 ELSE 0 END) AS refunded,
+        COALESCE(SUM(CASE WHEN t.status = 'success' THEN t.amount ELSE 0 END), 0) AS volume
+        FROM transactions t LEFT JOIN users u ON u.id = t.user_id$summaryWhere");
+    $summaryStmt->execute($summaryParams);
+    $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $pages = max(1, (int)ceil($total / $limit));
     echo json_encode([
         'status' => true,
-        'data' => $transactions,
+        'data' => $rows,
+        'summary' => [
+            'total' => (int)($summary['total'] ?? 0),
+            'successful' => (int)($summary['successful'] ?? 0),
+            'pending' => (int)($summary['pending'] ?? 0),
+            'failed' => (int)($summary['failed'] ?? 0),
+            'refunded' => (int)($summary['refunded'] ?? 0),
+            'volume' => (float)($summary['volume'] ?? 0),
+        ],
         'pagination' => [
-            'total' => (int)$totalRecords,
+            'total' => $total,
             'per_page' => $limit,
-            'current_page' => ($offset / $limit) + 1,
-            'total_pages' => ceil($totalRecords / $limit)
-        ]
-    ]);
-} catch (\Throwable $e) {
-    header('Content-Type: application/json');
-    echo json_encode([
-        'status' => false, 
-        'message' => 'Database error: ' . $e->getMessage()
-    ]);
+            'current_page' => (int)floor($offset / $limit) + 1,
+            'total_pages' => $pages,
+            'from' => $total ? $offset + 1 : 0,
+            'to' => min($offset + count($rows), $total),
+        ],
+        'mode' => admin_reporting_mode(),
+    ], JSON_INVALID_UTF8_SUBSTITUTE);
+} catch (Throwable $e) {
+    error_log('[PayHub] Admin transaction report error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['status' => false, 'message' => 'Unable to load transaction report. Please retry or contact support.']);
 }
-?>
