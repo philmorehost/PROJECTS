@@ -30,6 +30,10 @@
     --gradient: linear-gradient(135deg, #4f46e5 0%, #6d5efc 45%, #06b6d4 100%);
     --header-h: 68px;
     --tabbar-h: 64px;
+    /* Console shell metrics — the help drawer and any console-styled block
+       that appears in a public page read the same names as admin.css. */
+    --appbar-h: 60px;
+    --tabs-h: 62px;
     --wrap: 1160px;
     --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -3463,9 +3467,6 @@ textarea.input { min-height: 116px; resize: vertical; line-height: 1.6; }
         max-width: none;
     }
 
-    body[data-lm-drawer="true"] {
-        overflow: hidden;
-    }
 }
 
 @media (min-width: 981px) {

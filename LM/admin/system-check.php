@@ -70,18 +70,19 @@ if ($pdo instanceof PDO) {
     }
 }
 
-/**
- * One row of the report.
- *
- * @param string $label
- * @param bool   $ok
- * @param string $good
- * @param string $bad
- * @param string $note
- * @return void
- */
-function lm_check_row($label, $ok, $good, $bad, $note = '')
-{
+if (!function_exists('lm_check_row')) {
+    /**
+     * One row of the report.
+     *
+     * @param string $label
+     * @param bool   $ok
+     * @param string $good
+     * @param string $bad
+     * @param string $note
+     * @return void
+     */
+    function lm_check_row($label, $ok, $good, $bad, $note = '')
+    {
     ?>
     <div class="lm-checkrow">
         <span class="lm-checkrow__icon <?= $ok ? 'is-ok' : 'is-bad' ?>" aria-hidden="true">
@@ -97,6 +98,7 @@ function lm_check_row($label, $ok, $good, $bad, $note = '')
         <?= lm_app_badge($ok ? 'Pass' : 'Fix', $ok ? 'ok' : 'bad') ?>
     </div>
     <?php
+}
 }
 
 $allReady = $diagnostics['curl_enabled']

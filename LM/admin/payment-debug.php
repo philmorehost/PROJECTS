@@ -15,15 +15,16 @@ lm_security_headers();
 
 $pdo = lm_app_boot();
 
-/**
- * Last N lines of a file, without reading the whole thing.
- *
- * @param string $path
- * @param int    $lines
- * @return array{exists:bool,text:string}
- */
-function lm_debug_tail_lines($path, $lines = 50)
-{
+if (!function_exists('lm_debug_tail_lines')) {
+    /**
+     * Last N lines of a file, without reading the whole thing.
+     *
+     * @param string $path
+     * @param int    $lines
+     * @return array{exists:bool,text:string}
+     */
+    function lm_debug_tail_lines($path, $lines = 50)
+    {
     if (!is_file($path) || !is_readable($path)) {
         return array('exists' => false, 'text' => '');
     }
@@ -47,6 +48,7 @@ function lm_debug_tail_lines($path, $lines = 50)
     }
 
     return array('exists' => true, 'text' => implode("\n", $all));
+}
 }
 
 $errorLogPath = (string) ini_get('error_log');
