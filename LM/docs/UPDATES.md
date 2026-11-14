@@ -541,7 +541,7 @@ framework, no build step, two files: `assets/site.css` and `assets/site.js`.
   `safe-area-inset-bottom`, so it clears the iPhone home indicator, and the
   footer grows to make room for it.
 
-The admin console got the same treatment in `admin/_mobile_nav.php`:
+The admin console got the same treatment in `includes/app_ui.php`:
 
 * a dark top app bar with the current screen name,
 * a drawer with every console page grouped the way the sidebar groups them,
@@ -639,7 +639,7 @@ was never the problem.
 | Piece | What it does |
 |---|---|
 | `LM/build.json` | The release manifest: every file that runs, with its SHA-1 (134 files, ~10 KB). Written by `node qa/buildjson.cjs` when a release is cut. |
-| `lm_release_state()` | Hashes the six files that decide whether a signed-in admin is recognised — `lm_config.php`, `security.php`, `github.php`, `_ui.php`, `ajax_github.php`, `ajax_projects.php` — plus the page being opened. |
+| `lm_release_state()` | Hashes the six files that decide whether a signed-in admin is recognised — `lm_config.php`, `security.php`, `app_ui.php`, `github.php`, `ajax_github.php`, `ajax_projects.php` — plus the page being opened. |
 | Console banner | A console page from a mixed folder says so **on load**, before you click. The sign-in page warns too. |
 | `health.php` → **Release** card | Lists *every* file that differs from the manifest, every file in the manifest that is absent, and any script still calling `session_start()` instead of `lm_session_start()`. |
 | `server_version` in every JSON reply | If the page and the endpoint are different releases, the console toasts “This page is from version X but the server runs Y. Re-upload the whole admin/ folder.” |
@@ -657,8 +657,9 @@ health.php
 includes/lm_config.php
 includes/security.php
 includes/github.php
-admin/_ui.php
-admin/_mobile_nav.php
+includes/app_ui.php
+assets/admin.css
+assets/app.js
 admin/index.php
 admin/ajax_github.php
 admin/ajax_projects.php

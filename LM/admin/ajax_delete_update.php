@@ -1,6 +1,7 @@
 <?php
 // ajax_delete_update.php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
 header('Content-Type: application/json');
 
 // 1. Admin Authentication Check
@@ -11,6 +12,13 @@ if (!isset($_SESSION['admin_logged_in'])) {
 }
 
 require_once('../db.php');
+
+// Deleting a package is a state change: require the token.
+if (!lm_verify_csrf(false)) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Security token expired. Reload the page and try again.']);
+    exit();
+}
 
 // 2. Validate Request Method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

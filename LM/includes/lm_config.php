@@ -1232,8 +1232,10 @@ if (!function_exists('lm_release_state')) {
         $watch = array(
             'includes/lm_config.php',
             'includes/security.php',
+            'includes/app_ui.php',
             'includes/github.php',
-            'admin/_ui.php',
+            'assets/admin.css',
+            'assets/app.js',
             'admin/ajax_github.php',
             'admin/ajax_projects.php',
         );

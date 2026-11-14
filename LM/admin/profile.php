@@ -1,284 +1,197 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
-}
+/**
+ * admin/profile.php — the signed-in administrator.
+ *
+ * Password change, username change, and the forced first-run password reset
+ * (?force=1) that lm_admin_gate() sends you to. Signing out everywhere is a
+ * one-click action that regenerates the session id instead of leaving it valid.
+ *
+ * @package LicenseManager
+ */
 
-require_once('../db.php');
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
 
-$success_message = '';
-$error = '';
-$current_username = '';
+$pdo = lm_app_boot();
 
-// We must have an admin_id in the session now, set by the login page.
-if (!isset($_SESSION['admin_id'])) {
-    // If not, something is wrong, maybe the user session is old.
-    // Forcing a re-login is the safest option.
-    header('Location: logout.php');
-    exit();
-}
-$admin_id = $_SESSION['admin_id'];
+$forced = !empty($_SESSION['lm_password_change_required']) || isset($_GET['force']);
+$adminId = (int) ($_SESSION['admin_id'] ?? 0);
+$notice = '';
+$problem = '';
 
-// Get current admin username to display in the form
-try {
-    $stmt = $pdo->prepare("SELECT username FROM admins WHERE id = ?");
-    $stmt->execute([$admin_id]);
-    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($admin) {
-        $current_username = $admin['username'];
-    } else {
-        // This case is unlikely if session is valid, but good to handle.
-        $error = "Could not find your admin profile.";
+$admin = null;
+if ($pdo instanceof PDO && $adminId > 0) {
+    try {
+        $stmt = $pdo->prepare('SELECT id, username, created_at FROM admins WHERE id = ?');
+        $stmt->execute(array($adminId));
+        $admin = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (PDOException $e) {
+        $problem = 'The admins table could not be read. Run Database Repair.';
     }
-} catch (PDOException $e) {
-    $error = "Database error: " . $e->getMessage();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $new_username = $_POST['username'];
-    $new_password = $_POST['password'];
-    $confirm_password = $_POST['password_confirm'];
+if (lm_app_handle_post() && $pdo instanceof PDO && $admin) {
+    $action = (string) ($_POST['lm_action'] ?? 'credentials');
 
-    if (empty($new_username)) {
-        $error = "Username cannot be empty.";
-    } elseif (!empty($new_password) && $new_password !== $confirm_password) {
-        $error = 'Passwords do not match.';
-    } else {
-        try {
-            if (!empty($new_password)) {
-                // Update both username and password
-                $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("UPDATE admins SET username = ?, password = ? WHERE id = ?");
-                $stmt->execute([$new_username, $password_hash, $admin_id]);
-                $success_message = 'Profile updated successfully.';
+    try {
+        if ($action === 'credentials') {
+            $username = trim((string) ($_POST['username'] ?? ''));
+            $current = (string) ($_POST['current_password'] ?? '');
+            $new = (string) ($_POST['new_password'] ?? '');
+            $confirm = (string) ($_POST['confirm_password'] ?? '');
+
+            $stmt = $pdo->prepare('SELECT password FROM admins WHERE id = ?');
+            $stmt->execute(array($adminId));
+            $hash = (string) $stmt->fetchColumn();
+
+            if (!password_verify($current, $hash)) {
+                $problem = 'The current password is not correct.';
+            } elseif ($username === '' || strlen($username) < 3) {
+                $problem = 'Choose a username of at least 3 characters.';
+            } elseif ($new !== '' && strlen($new) < 8) {
+                $problem = 'The new password must be at least 8 characters.';
+            } elseif ($new !== '' && $new !== $confirm) {
+                $problem = 'The two new passwords do not match.';
+            } elseif ($new === '' && $username === (string) $admin['username']) {
+                $problem = 'Nothing changed.';
             } else {
-                // Update only username
-                $stmt = $pdo->prepare("UPDATE admins SET username = ? WHERE id = ?");
-                $stmt->execute([$new_username, $admin_id]);
-                $success_message = 'Username updated successfully.';
+                if ($new !== '') {
+                    $stmt = $pdo->prepare('UPDATE admins SET username = ?, password = ? WHERE id = ?');
+                    $stmt->execute(array($username, password_hash($new, PASSWORD_DEFAULT), $adminId));
+                    unset($_SESSION['lm_password_change_required']);
+                } else {
+                    $stmt = $pdo->prepare('UPDATE admins SET username = ? WHERE id = ?');
+                    $stmt->execute(array($username, $adminId));
+                }
+
+                $_SESSION['admin_username'] = $username;
+                lm_session_start(true);
+
+                $admin['username'] = $username;
+                $notice = $new !== ''
+                    ? 'Credentials updated. The new password works from the next sign-in.'
+                    : 'Username updated.';
+                $forced = false;
             }
-            // Update the username displayed on the form
-            $current_username = $new_username;
-        } catch (PDOException $e) {
-            if ($e->errorInfo[1] == 1062) { // SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry
-                $error = "That username is already taken.";
-            } else {
-                $error = "A database error occurred: " . $e->getMessage();
-            }
+        } elseif ($action === 'signout_all') {
+            // Rotate the id so every other browser holding the old one is dead.
+            lm_session_start(true);
+            $notice = 'This session was re-issued. Any other browser signed in as you is now logged out.';
         }
+    } catch (PDOException $e) {
+        $problem = 'That change could not be saved: ' . $e->getMessage();
     }
 }
+
+lm_app_start('Profile', array(
+    'subtitle' => 'The account you are signed in as, and the only password the console accepts.',
+    'active'   => 'profile',
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Profile - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 260px;
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .sidebar h1 {
-            font-size: 1.5rem;
-            padding: 2rem 1.5rem;
-            text-align: center;
-            background: rgba(15, 23, 42, 0.5);
-            margin: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .sidebar nav {
-            flex-grow: 1;
-            padding: 2rem 0;
-        }
-        .sidebar nav a {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            color: #cbd5e1;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-        .sidebar nav a:hover,
-        .sidebar nav a.active {
-            background: rgba(59, 130, 246, 0.2);
-            color: #fff;
-            border-left: 3px solid #3b82f6;
-            padding-left: calc(1.5rem - 3px);
-        }
-        .main-content {
-            margin-left: 260px;
-            flex-grow: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-        .header h2 {
-            font-size: 2rem;
-            color: #1e293b;
-            font-weight: 700;
-        }
-        .btn {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: #fff;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            margin-top: 1rem;
-        }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-bottom: 2rem;
-        }
-        .card-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-        }
-        .card-header h3 {
-            font-size: 1.25rem;
-            color: #1e293b;
-            margin: 0;
-            font-weight: 700;
-        }
-        .card-body {
-            padding: 2rem;
-        }
-        .input-group {
-            margin-bottom: 1.5rem;
-        }
-        .input-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: #1e293b;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: 'Inter', sans-serif;
-            transition: all 0.3s ease;
-        }
-        .input-group input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-        .success {
-            background: #d1fae5;
-            color: #065f46;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #a7f3d0;
-        }
-        .error {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #fca5a5;
-        }
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .header h2 {
-                font-size: 1.5rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h1>🔐 License Manager</h1>
-        <nav>
-            <a href="dashboard.php">📊 Dashboard</a>
-            <a href="licenses.php">📜 Licenses</a>
-            <a href="updates.php">🚀 Push Updates</a>
-            <a href="transactions.php">💳 Transactions</a>
-            <a href="settings.php">⚙️ Settings</a>
-            <a href="profile.php" class="active">👤 Profile</a>
-            <a href="logout.php">🚪 Logout</a>
-        </nav>
-    </div>
-    <div class="main-content">
-        <div class="header">
-            <h2>👤 Admin Profile</h2>
-        </div>
-        <div class="card">
-            <div class="card-header"><h3>Update Your Details</h3></div>
-            <div class="card-body">
-                <?php if (!empty($success_message)): ?>
-                    <div class="success">✓ <?= htmlspecialchars($success_message) ?></div>
-                <?php endif; ?>
-                <?php if (!empty($error)): ?>
-                    <div class="error">✗ <?= htmlspecialchars($error) ?></div>
-                <?php endif; ?>
-                <form method="POST">
-                    <div class="input-group">
-                        <label>Username</label>
-                        <input type="text" name="username" value="<?= htmlspecialchars($current_username) ?>" required>
-                    </div>
-                    <div class="input-group">
-                        <label>New Password (leave blank to keep current password)</label>
-                        <input type="password" name="password">
-                    </div>
-                    <div class="input-group">
-                        <label>Confirm New Password</label>
-                        <input type="password" name="password_confirm">
-                    </div>
-                    <button type="submit" class="btn">💾 Update Profile</button>
-                </form>
+
+<?php if ($forced): ?>
+    <?php lm_alert('warn', 'This account is still using the password created during installation. Choose a new one before you continue.'); ?>
+<?php endif; ?>
+<?php if ($notice !== ''): ?>
+    <?php lm_alert('ok', $notice); ?>
+<?php endif; ?>
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
+
+<div class="lm-grid-2">
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('user') ?> Credentials</h2>
+                <p>Leave the new password blank to change only the username.</p>
             </div>
         </div>
+        <div class="lm-panel__body">
+            <form method="POST" class="lm-form">
+                <?= lm_csrf_field() ?>
+                <input type="hidden" name="lm_action" value="credentials">
+
+                <div class="lm-field">
+                    <label for="username">Username</label>
+                    <input class="lm-input" type="text" id="username" name="username"
+                           value="<?= lm_e((string) ($admin['username'] ?? $_SESSION['admin_username'] ?? '')) ?>"
+                           autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                </div>
+
+                <div class="lm-field">
+                    <label for="current_password">Current password</label>
+                    <input class="lm-input" type="password" id="current_password" name="current_password"
+                           autocomplete="current-password" required>
+                </div>
+
+                <div class="lm-formgrid">
+                    <div class="lm-field">
+                        <label for="new_password">New password</label>
+                        <input class="lm-input" type="password" id="new_password" name="new_password"
+                               autocomplete="new-password" minlength="8">
+                        <p class="lm-help">At least 8 characters. Blank = keep the current one.</p>
+                    </div>
+                    <div class="lm-field">
+                        <label for="confirm_password">Confirm new password</label>
+                        <input class="lm-input" type="password" id="confirm_password" name="confirm_password"
+                               autocomplete="new-password" minlength="8">
+                    </div>
+                </div>
+
+                <div class="lm-btnrow">
+                    <button type="submit" class="lm-btn lm-btn--glow"><?= lm_icon('check') ?> Save</button>
+                    <?php if (!$forced): ?>
+                        <a class="lm-btn lm-btn--ghost" href="dashboard.php">Back to dashboard</a>
+                    <?php endif; ?>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <div class="lm-stack">
+        <section class="lm-panel">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('shield') ?> This account</h2>
+                    <p>What the console knows about the current session.</p>
+                </div>
+            </div>
+            <div class="lm-panel__body">
+                <dl class="lm-deflist">
+                    <dt>Username</dt>
+                    <dd><?= lm_e((string) ($admin['username'] ?? $_SESSION['admin_username'] ?? '—')) ?></dd>
+                    <dt>Account created</dt>
+                    <dd><?= lm_e(!empty($admin['created_at']) ? date('M j, Y', strtotime((string) $admin['created_at'])) : '—') ?></dd>
+                    <dt>Signed in from</dt>
+                    <dd><code><?= lm_e(function_exists('lm_client_ip') ? lm_client_ip() : '—') ?></code></dd>
+                    <dt>Session id</dt>
+                    <dd><code><?= lm_e(substr(session_id(), 0, 10)) ?>…</code></dd>
+                    <dt>Password state</dt>
+                    <dd><?= lm_app_badge($forced ? 'Factory default' : 'Custom', $forced ? 'warn' : 'ok') ?></dd>
+                </dl>
+            </div>
+        </section>
+
+        <section class="lm-panel">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('logout') ?> Sessions</h2>
+                    <p>Re-issuing the session id invalidates every other browser.</p>
+                </div>
+            </div>
+            <div class="lm-panel__body">
+                <form method="POST">
+                    <?= lm_csrf_field() ?>
+                    <input type="hidden" name="lm_action" value="signout_all">
+                    <button type="submit" class="lm-btn lm-btn--block"><?= lm_icon('refresh') ?> Sign out everywhere else</button>
+                </form>
+                <hr class="lm-divider">
+                <a class="lm-btn lm-btn--ghost lm-btn--block" href="logout.php"><?= lm_icon('logout') ?> Sign out of this browser</a>
+            </div>
+        </section>
     </div>
-</body>
-</html>
+</div>
+
+<?php lm_app_end(); ?>

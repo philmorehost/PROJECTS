@@ -8,18 +8,15 @@
  * through exactly the same pipeline as a manual upload.
  */
 
-require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/app_ui.php';
 lm_session_start();
 lm_security_headers();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
-}
 
-require_once __DIR__ . '/../db.php';
-require_once __DIR__ . '/_ui.php';
+$pdo = lm_app_boot();
+
 require_once __DIR__ . '/../includes/updates.php';
 require_once __DIR__ . '/../includes/github.php';
+require_once __DIR__ . '/../includes/guide.php';
 
 $tiers = $pdo->query("SELECT * FROM script_tiers ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -50,23 +47,26 @@ foreach ($tiers as $tier) {
 
 $cronUrl = lm_site_url('cron.php?key=' . rawurlencode(lm_get_cron_secret()));
 
-lm_admin_page_start('GitHub Pull', 'github');
+$actionsHtml = lm_guide_help_button('github')
+    . '<a class="lm-btn lm-btn--ghost" href="updates.php">' . lm_icon('rocket') . ' Manual upload</a>'
+    . '<a class="lm-btn lm-btn--glow" href="projects.php">' . lm_icon('layers') . ' Projects</a>';
+
+lm_app_start('GitHub pull', array(
+    'subtitle' => 'Publish straight from a branch. The package is normalised, the version is bumped and the changelog is written from the commits.',
+    'active'   => 'github',
+    'actions'  => $actionsHtml,
+));
 ?>
 
-<div class="page-head">
-    <div>
-        <h1>GitHub Pull</h1>
-        <p>Publish directly from a repository branch. The package is normalised (wrapper folder removed, monorepo sub-folder supported), the version number is incremented from the previous release and the changelog is generated from the commits.</p>
-    </div>
-    <div class="head-actions">
-        <?= lm_guide_help_button('github') ?>
-        <a class="btn btn-ghost" href="updates.php">📦 Manual upload</a>
-        <a class="btn btn-dark" href="projects.php">🧩 Projects</a>
-    </div>
-</div>
-
 <?php if (empty($projects)): ?>
-    <div class="card"><div class="empty">Create a script project first. <a href="projects.php" style="color:#4f46e5;font-weight:700;">Go to Script Projects →</a></div></div>
+    <section class="lm-panel">
+        <?php lm_app_empty(
+            'layers',
+            'No project to pull into',
+            'A GitHub pull publishes into a script project, so create one first — it holds the repository, the version history and the licence pool.',
+            '<a class="lm-btn lm-btn--glow" href="projects.php">' . lm_icon('plus') . ' Create a project</a>'
+        ); ?>
+    </section>
 <?php else: ?>
 
 <div class="card">
@@ -256,8 +256,10 @@ lm_admin_page_start('GitHub Pull', 'github');
     </div>
 </div>
 
-<div class="banner banner-info" style="margin-top:22px;">
-    Cron URL for auto-pull: <code style="word-break:break-all;"><?= htmlspecialchars($cronUrl) ?></code>
+<div class="lm-note" style="margin-top:22px">
+    <?= lm_icon('clock') ?>
+    <span><strong>Auto-pull runs from cron:</strong> <code style="word-break:break-all"><?= lm_e($cronUrl) ?></code>
+        — call it every few minutes and any project with auto-pull on is published the moment its branch moves.</span>
 </div>
 
 <script>
@@ -1708,4 +1710,4 @@ lm_admin_page_start('GitHub Pull', 'github');
 
 <?php endif; ?>
 
-<?php lm_admin_page_end(); ?>
+<?php lm_app_end(); ?>

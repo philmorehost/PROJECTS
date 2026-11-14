@@ -1027,52 +1027,13 @@ if (!function_exists('lm_guide_assets')) {
         }
 
         $json = json_encode($pages, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        /*
+         * The drawer's CSS now lives in assets/admin.css and assets/site.css,
+         * so this function only has to ship the data and the behaviour. Keeping
+         * the styles in one place is what stops the drawer from looking like a
+         * different product from the page that opened it.
+         */
         ?>
-<style>
-    .lm-guide-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 120; display: none; }
-    .lm-guide-backdrop.open { display: block; }
-    .lm-guide-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: #fff; z-index: 121;
-        box-shadow: -24px 0 60px rgba(15,23,42,.28); transform: translateX(102%); transition: transform .24s ease; display: flex; flex-direction: column; }
-    .lm-guide-drawer.open { transform: translateX(0); }
-    .lm-guide-drawer header { padding: 20px 22px 16px; border-bottom: 1px solid #e5e9f2; display: flex; gap: 12px; align-items: flex-start; }
-    .lm-guide-drawer header .icon { font-size: 22px; line-height: 1; }
-    .lm-guide-drawer header h3 { font-size: 16px; font-weight: 800; letter-spacing: -.2px; }
-    .lm-guide-drawer header p { font-size: 12px; color: #64748b; margin-top: 5px; line-height: 1.55; }
-    .lm-guide-drawer header button { margin-left: auto; border: none; background: #f1f5f9; width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-size: 15px; color: #475569; flex: 0 0 auto; }
-    .lm-guide-scroll { overflow-y: auto; padding: 18px 22px 40px; flex: 1; }
-    .lm-guide-section { border: 1px solid #e5e9f2; border-radius: 12px; margin-bottom: 10px; background: #fff; }
-    .lm-guide-section[open] { box-shadow: 0 8px 22px rgba(15,23,42,.05); }
-    .lm-guide-section > summary { cursor: pointer; padding: 13px 15px; font-size: 13px; font-weight: 700; color: #1e293b; list-style: none; display: flex; gap: 8px; align-items: center; }
-    .lm-guide-section > summary::-webkit-details-marker { display: none; }
-    .lm-guide-chev { color: #94a3b8; font-size: 10px; transition: transform .18s ease; display: inline-block; }
-    .lm-guide-section[open] .lm-guide-chev { transform: rotate(90deg); }
-    .lm-guide-body { padding: 0 15px 15px; font-size: 12.5px; line-height: 1.7; color: #334155; }
-    .lm-guide-body p { margin: 0 0 10px; }
-    .lm-guide-body h4 { font-size: 12.5px; font-weight: 800; margin: 16px 0 8px; color: #0f172a; }
-    .lm-guide-body ul, .lm-guide-body ol { margin: 0 0 10px; padding-left: 20px; }
-    .lm-guide-body li { margin-bottom: 5px; }
-    .lm-guide-body code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
-    .lm-guide-body a { color: #4f46e5; font-weight: 600; }
-    .lm-guide-steps { counter-reset: step; list-style: none; padding-left: 0 !important; }
-    .lm-guide-steps li { counter-increment: step; position: relative; padding-left: 26px; margin-bottom: 8px; }
-    .lm-guide-steps li::before { content: counter(step); position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%;
-        background: #eef2ff; color: #4338ca; font-size: 10px; font-weight: 800; display: grid; place-items: center; }
-    .lm-guide-table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 11.5px; }
-    .lm-guide-table th { text-align: left; background: #f8fafc; color: #64748b; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; padding: 7px 9px; border: 1px solid #e9eef7; }
-    .lm-guide-table td { padding: 7px 9px; border: 1px solid #eef2f8; vertical-align: top; line-height: 1.6; }
-    .lm-guide-note { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 9px; padding: 9px 11px; color: #1e40af; font-size: 12px; }
-    .lm-guide-chip { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 800; }
-    .lm-guide-pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 9px; overflow: auto; font-size: 11px; line-height: 1.6; font-family: 'JetBrains Mono', monospace; margin: 0 0 10px; }
-    .lm-guide-code { margin: 10px 0 4px; }
-    .lm-guide-code-head { display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: #cbd5e1; font-size: 10.5px;
-        padding: 7px 12px; border-radius: 9px 9px 0 0; font-family: 'JetBrains Mono', monospace; }
-    .lm-guide-code pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 0 0 9px 9px; overflow: auto; font-size: 11px;
-        line-height: 1.6; margin: 0; font-family: 'JetBrains Mono', monospace; }
-    .lm-guide-copy { border: none; background: rgba(148,163,184,.2); color: #e2e8f0; border-radius: 6px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: inherit; }
-    .lm-guide-copy:hover { background: rgba(148,163,184,.35); }
-    .lm-guide-foot { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e9f2; text-align: center; }
-    .lm-guide-foot a { color: #4f46e5; font-size: 12px; font-weight: 700; text-decoration: none; }
-</style>
 <script>
     var LM_GUIDE = { pages: <?= $json ?>, open: null };
 
@@ -1099,7 +1060,7 @@ if (!function_exists('lm_guide_assets')) {
         drawer.setAttribute('role', 'dialog');
         drawer.setAttribute('aria-modal', 'true');
         drawer.innerHTML = '<header><span class="icon" id="lmGuideIcon">📖</span>'
-            + '<div style="flex:1;min-width:0;"><h3 id="lmGuideTitle">Guide</h3><p id="lmGuideSummary"></p></div>'
+            + '<div class="lm-guide-headtext"><h3 id="lmGuideTitle">Guide</h3><p id="lmGuideSummary"></p></div>'
             + '<button type="button" aria-label="Close" data-lm-guide-close>✕</button></header>'
             + '<div class="lm-guide-scroll" id="lmGuideScroll"></div>';
 
@@ -1221,13 +1182,11 @@ if (!function_exists('lm_guide_help_button')) {
 
         // An <a> rather than a <button>: the drawer intercepts the click, but if
         // JavaScript is unavailable the link still lands on the full guide.
-        return '<a class="lm-guide-btn" data-lm-guide="' . htmlspecialchars($key, ENT_QUOTES) . '"'
-            . ' href="guide.php#' . rawurlencode($key) . '"'
-            . ' style="display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:10px;'
-            . 'border:1px solid #d7deea;background:#fff;color:#334155;font-family:inherit;font-size:13px;'
-            . 'font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;line-height:1.2;"'
-            . ' onmouseover="this.style.background=\'#f8faff\';this.style.borderColor=\'#c7d2fe\';"'
-            . ' onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#d7deea\';">'
+        // Styled by .lm-btn--ghost in assets/admin.css (and site.css on the
+        // public side) — no inline hover handlers, no one-off styles here.
+        return '<a class="lm-btn lm-btn--sm lm-btn--ghost" data-lm-guide="'
+            . htmlspecialchars($key, ENT_QUOTES) . '"'
+            . ' href="guide.php#' . rawurlencode($key) . '">'
             . '📖 ' . htmlspecialchars($label) . '</a>';
     }
 }

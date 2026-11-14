@@ -26,15 +26,20 @@ $required = array(
     'admin/ping.php'                => 'Request self-test (9.0.3)',
     'includes/security.php'         => 'Sessions, CSRF, throttles',
     'includes/lm_config.php'        => 'Configuration and helpers',
-    'includes/ui.php'               => 'Public header, footer and mobile menu (9.0.0)',
+    'includes/ui.php'               => 'Public header, footer and mobile menu (9.7.0)',
     'includes/updates.php'          => 'Publishing and cleanup',
     'includes/notifications.php'    => 'Update emails',
     'includes/mailer.php'           => 'SMTP transport',
     'includes/migrations.php'       => 'Schema migrations',
     'assets/site.css'               => 'Public stylesheet (9.0.0)',
     'assets/site.js'                => 'Menu and drawer behaviour (9.0.0)',
-    'admin/_mobile_nav.php'         => 'Console mobile menu (9.0.0)',
-    'admin/_ui.php'                 => 'Console chrome',
+    'includes/app_ui.php'           => 'Console chrome and navigation (9.7.0)',
+    'includes/guide.php'            => 'Admin guide content',
+    'assets/admin.css'              => 'Console stylesheet (9.7.0)',
+    'assets/app.js'                 => 'Console behaviour and AJAX helper (9.7.0)',
+    'user/index.php'                => 'Customer dashboard',
+    'user/api-integration.php'      => 'Per-licence integration kit (9.7.0)',
+    'api-docs.php'                  => 'Public API reference',
     'user/login.php'                => 'Customer sign-in',
     'admin/index.php'               => 'Admin sign-in',
     'db.php'                        => 'Database bootstrap',
@@ -385,7 +390,7 @@ $ok = empty($problems);
             <span class="<?= empty($unexpected) ? 'yes' : 'no' ?>"><?= empty($unexpected) ? 'none' : count($unexpected) ?></span>
         </div>
         <?php if (!empty($unexpected)): ?>
-            <p class="hint" style="margin-top:12px">Not shipped by any release — open <a href="admin/system-check.php">System check</a> to quarantine:</p>
+            <p class="hint" style="margin-top:12px">Not shipped by any release. If one of these was not added on purpose, rename it to <code>.bak</code> (or delete it) over FTP/cPanel — the console no longer ships a quarantine tool:</p>
             <pre><?= htmlspecialchars(implode("\n", array_slice($unexpected, 0, 40)) . (count($unexpected) > 40 ? "\n… " . (count($unexpected) - 40) . ' more' : '')) ?></pre>
         <?php endif; ?>
         <div class="row">

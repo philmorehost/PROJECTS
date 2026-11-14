@@ -1,313 +1,319 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
+/**
+ * admin/updates.php — publish a package (OTA).
+ *
+ * The upload still goes straight to ajax_upload_update.php with an XHR so the
+ * progress bar is real, but it now carries the CSRF token and reports problems
+ * through the shared toast instead of a bare alert(). Delete and cleanup do the
+ * same through lmPost().
+ *
+ * @package LicenseManager
+ */
+
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
+
+$pdo = lm_app_boot();
+
+$settings = lm_settings();
+$tiers = array();
+$recent = array();
+$total = 0;
+$problem = '';
+
+if ($pdo instanceof PDO) {
+    try {
+        $tiers = $pdo->query('SELECT * FROM script_tiers ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $problem = 'The projects table could not be read. Run Database Repair, then reload.';
+    }
+
+    try {
+        $recent = $pdo->query(
+            'SELECT u.*, t.tier_code, t.tier_name FROM script_updates u '
+            . 'LEFT JOIN script_tiers t ON u.tier_id = t.id '
+            . 'ORDER BY u.release_date DESC, u.id DESC LIMIT 25'
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM script_updates')->fetchColumn();
+    } catch (PDOException $e) {
+        $recent = array();
+    }
 }
 
-require_once('../db.php');
+$maxUpload = (string) ini_get('upload_max_filesize');
+$maxConfigured = (int) ($settings['max_update_size_mb'] ?? 128);
 
-// Fetch script tiers
-$stmt = $pdo->query("SELECT * FROM script_tiers ORDER BY id ASC");
-$tiers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="update-notifications.php">' . lm_icon('bell') . ' Notifications</a>'
+    . '<a class="lm-btn lm-btn--ghost" href="projects.php">' . lm_icon('layers') . ' Projects</a>';
 
-// Fetch recent updates
-$stmt = $pdo->query("SELECT u.*, t.tier_code FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id ORDER BY u.release_date DESC LIMIT 10");
-$recent_updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+lm_app_start('Push updates', array(
+    'subtitle' => 'Upload a ZIP, bump the version, and every licence on that project hears about it.',
+    'active'   => 'updates',
+    'actions'  => $actionsHtml,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Push Updates - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); color: #fff; display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); }
-        .sidebar h1 { font-size: 1.5rem; padding: 2rem 1.5rem; text-align: center; background: rgba(15, 23, 42, 0.5); margin: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-        .sidebar nav { flex-grow: 1; padding: 2rem 0; }
-        .sidebar nav a { display: flex; align-items: center; padding: 1rem 1.5rem; color: #cbd5e1; text-decoration: none; transition: all 0.3s ease; position: relative; }
-        .sidebar nav a:hover, .sidebar nav a.active { background: rgba(59, 130, 246, 0.2); color: #fff; border-left: 3px solid #3b82f6; padding-left: calc(1.5rem - 3px); }
-        .main-content { margin-left: 260px; flex-grow: 1; padding: 2rem; overflow-y: auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-        .header h2 { font-size: 2rem; color: #1e293b; font-weight: 700; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: hidden; margin-bottom: 2rem; }
-        .card-header { padding: 1.5rem 2rem; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%); }
-        .card-header h3 { font-size: 1.25rem; color: #1e293b; margin: 0; font-weight: 600; }
-        .card-body { padding: 2rem; }
-        
-        .form-group { margin-bottom: 1.5rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #475569; font-size: 0.875rem; }
-        .form-control { width: 100%; padding: 0.75rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 0.875rem; transition: border-color 0.3s ease; }
-        .form-control:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-        select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; background-size: 1rem; }
-        textarea.form-control { resize: vertical; min-height: 120px; }
-        
-        .btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-align: center; border: none; transition: all 0.3s ease; font-size: 0.875rem; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-primary:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-        .btn-danger { background: #ef4444; color: white; }
-        .btn-danger:hover { background: #dc2626; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
-        .btn-outline-danger { background: transparent; border: 1px solid #ef4444; color: #ef4444; }
-        .btn-outline-danger:hover { background: #ef4444; color: white; }
-        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.75rem; border-radius: 6px; }
-        .btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none; }
-        
-        .progress-container { display: none; margin-top: 1.5rem; }
-        .progress-bar-bg { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
-        .progress-bar-fill { height: 100%; background: #10b981; width: 0%; transition: width 0.3s ease; }
-        .status-message { font-size: 0.875rem; font-weight: 500; margin-top: 0.5rem; }
-        .text-success { color: #10b981; }
-        .text-danger { color: #ef4444; }
 
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #f8fafc; padding: 1rem; text-align: left; font-weight: 600; color: #475569; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 1rem; border-bottom: 1px solid #e2e8f0; color: #475569; font-size: 0.875rem; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; background: #e0e7ff; color: #4338ca; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h1>🔐 License Manager</h1>
-        <nav>
-            <a href="dashboard.php">📊 Dashboard</a>
-            <a href="licenses.php">📜 Licenses</a>
-            <a href="updates.php" class="active">🚀 Push Updates</a>
-            <a href="transactions.php">💳 Transactions</a>
-            <a href="settings.php">⚙️ Settings</a>
-            <a href="profile.php">👤 Profile</a>
-            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0;">
-            <a href="logout.php">🚪 Logout</a>
-        </nav>
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
+
+<?php if (empty($tiers)): ?>
+    <div class="lm-note lm-note--warn">
+        <?= lm_icon('layers') ?>
+        <span><strong>No projects yet.</strong> An update has to belong to a project (script tier) before it can be
+            published. <a href="projects.php">Create the first project</a>.</span>
     </div>
-    
-    <div class="main-content">
-        <div class="header">
-            <h2>Push Updates (OTA)</h2>
+<?php endif; ?>
+
+<div class="lm-stats">
+    <?php
+    lm_app_stat('Projects', (string) count($tiers), 'Script tiers you publish for');
+    lm_app_stat('Releases', (string) $total, 'Packages on record', 'indigo');
+    lm_app_stat('Upload cap', $maxUpload !== '' ? $maxUpload : '—', 'PHP upload_max_filesize', 'amber');
+    lm_app_stat('Console limit', $maxConfigured . ' MB', 'Set in Settings → Storage', 'green');
+    ?>
+</div>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('rocket') ?> Upload a package</h2>
+            <p>The ZIP may contain a <code>manifest.json</code>; if it does not, one is generated from the two fields below.</p>
         </div>
+    </div>
+    <div class="lm-panel__body">
+        <form id="updateForm" enctype="multipart/form-data" class="lm-form">
+            <?= lm_csrf_field() ?>
 
-        <div class="card">
-            <div class="card-header">
-                <h3>Upload New Update Package</h3>
+            <div class="lm-formgrid">
+                <div class="lm-field">
+                    <label for="tier_id">Project</label>
+                    <select class="lm-select" id="tier_id" name="tier_id" required>
+                        <option value="">— Select a project —</option>
+                        <?php foreach ($tiers as $tier): ?>
+                            <option value="<?= (int) $tier['id'] ?>">
+                                <?= lm_e((string) $tier['tier_name']) ?> (<?= lm_e((string) $tier['tier_code']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="lm-field">
+                    <label for="version_number">Version</label>
+                    <input class="lm-input lm-mono" type="text" id="version_number" name="version_number"
+                           placeholder="e.g. 7.0.2" required>
+                    <p class="lm-help">Any label you use yourself. Customers see it verbatim.</p>
+                </div>
             </div>
-            <div class="card-body">
-                <form id="updateForm" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label>Target Script Tier</label>
-                        <select name="tier_id" class="form-control" required>
-                            <option value="">-- Select Script --</option>
-                            <?php foreach($tiers as $t): ?>
-                                <option value="<?= htmlspecialchars($t['id']) ?>"><?= htmlspecialchars($t['tier_name']) ?> (<?= htmlspecialchars($t['tier_code']) ?>)</option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Version Number</label>
-                        <input type="text" name="version_number" class="form-control" placeholder="e.g. 7.02" required>
-                    </div>
 
-                    <div class="form-group">
-                        <label>Changelog (HTML or plain text)</label>
-                        <textarea name="changelog" class="form-control" placeholder="- Added new gateway&#10;- Fixed bugs..." required></textarea>
-                    </div>
+            <div class="lm-field">
+                <label for="changelog">Changelog</label>
+                <textarea class="lm-textarea" id="changelog" name="changelog" required
+                          placeholder="- Added Paystack checkout&#10;- Fixed the domain change counter"></textarea>
+                <p class="lm-help">Plain text or HTML. This is what lands in the notification email.</p>
+            </div>
 
-                    <div class="form-group">
-                        <label>Update ZIP File</label>
-                        <input type="file" name="update_zip" accept=".zip" class="form-control" required style="padding: 0.5rem 1rem;">
-                        <small style="color: #64748b; margin-top: 0.5rem; display: block;">Max Upload Size: <?= ini_get('upload_max_filesize') ?></small>
-                        <div style="margin-top: 0.75rem; padding: 0.75rem 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 0.8rem; color: #166534;">
-                            <strong>✅ Auto-Manifest:</strong> If your ZIP does not include a <code>manifest.json</code>, one will be automatically generated from the version number and changelog above.<br>
-                            <strong>📦 Recommended ZIP structure:</strong>
-                            <pre style="margin: 0.5rem 0 0; font-size: 0.75rem; color: #1e293b; background: #f8fafc; padding: 0.5rem; border-radius: 4px;">update.zip
-├── manifest.json        ← auto-generated if missing
-└── files/              ← your updated PHP/CSS/JS files
+            <div class="lm-field">
+                <label for="update_zip">Package</label>
+                <input class="lm-input" type="file" id="update_zip" name="update_zip" accept=".zip" required>
+                <p class="lm-help">Maximum <?= lm_e($maxUpload !== '' ? $maxUpload : 'unknown') ?> on this server.</p>
+            </div>
+
+            <details class="lm-details">
+                <summary>Expected folder layout</summary>
+                <pre class="lm-code">update.zip
+├── manifest.json        ← generated when missing
+└── files/               ← the files that replace what the customer has
     ├── func/
     │   └── bc-func.php
     └── bc-admin/
         └── SomePage.php</pre>
-                        </div>
-                    </div>
+            </details>
 
-                    <button type="submit" id="submitBtn" class="btn btn-primary">Upload &amp; Publish Update</button>
-
-                    <div class="progress-container" id="progressContainer">
-                        <div class="status-message" id="statusMessage">Uploading...</div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" id="progressBar"></div>
-                        </div>
-                    </div>
-                </form>
+            <div class="lm-progress-wrap" id="progressWrap" hidden>
+                <div class="lm-progress-line">
+                    <span id="progressLabel">Uploading…</span>
+                    <div class="lm-progress"><span id="progressBar" style="width:0%"></span></div>
+                    <span id="progressPct">0%</span>
+                </div>
             </div>
+
+            <div class="lm-btnrow">
+                <button type="submit" id="submitBtn" class="lm-btn lm-btn--glow">
+                    <?= lm_icon('rocket') ?> Upload &amp; publish
+                </button>
+                <a class="lm-btn lm-btn--ghost" href="updates.php">Reset</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('clock') ?> Recent releases</h2>
+            <p>The newest 25. Deleting a release removes its ZIP from disk as well as the row.</p>
         </div>
-
-        <div class="card">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <h3>Recent Updates</h3>
-                <button type="button" id="cleanupBtn" class="btn btn-outline-danger btn-sm" onclick="cleanupOldUpdates()">🧹 Clean Up Old Updates</button>
-            </div>
-            <div class="card-body" style="padding: 0;">
-                <table>
+        <button type="button" class="lm-btn lm-btn--sm lm-btn--danger" data-lm-cleanup>
+            <?= lm_icon('refresh') ?> Clean up old releases
+        </button>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($recent)): ?>
+            <?php lm_app_empty(
+                'rocket',
+                'Nothing published yet',
+                'Upload the first package above. Customers are notified once the row exists.',
+                ''
+            ); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack" id="releaseTable">
                     <thead>
                         <tr>
-                            <th>Script Tier</th>
+                            <th>Project</th>
                             <th>Version</th>
-                            <th>File Path</th>
-                            <th>Date Published</th>
-                            <th style="text-align: right; padding-right: 2rem;">Actions</th>
+                            <th>Package</th>
+                            <th>Published</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if(empty($recent_updates)): ?>
-                            <tr><td colspan="5" style="text-align: center;">No updates published yet.</td></tr>
-                        <?php else: ?>
-                            <?php foreach($recent_updates as $u): ?>
-                            <tr>
-                                <td><span class="badge"><?= htmlspecialchars($u['tier_code']) ?></span></td>
-                                <td><strong>v<?= htmlspecialchars($u['version_number']) ?></strong></td>
-                                <td><code style="font-size: 0.75rem; color: #94a3b8;"><?= htmlspecialchars($u['zip_path']) ?></code></td>
-                                <td><?= date('M d, Y H:i', strtotime($u['release_date'])) ?></td>
-                                <td style="text-align: right; padding-right: 2rem;">
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteUpdate(<?= $u['id'] ?>, '<?= htmlspecialchars($u['version_number']) ?>')">Delete</button>
+                        <?php foreach ($recent as $update): ?>
+                            <tr data-filter-text="<?= lm_e(strtolower(
+                                (string) ($update['tier_code'] ?? '') . ' ' . (string) ($update['version_number'] ?? '')
+                            )) ?>">
+                                <td data-label="Project">
+                                    <?= lm_app_badge((string) ($update['tier_code'] ?? '—'), 'info') ?>
+                                    <span class="lm-help" style="display:block"><?= lm_e((string) ($update['tier_name'] ?? '')) ?></span>
+                                </td>
+                                <td data-label="Version"><strong>v<?= lm_e((string) $update['version_number']) ?></strong></td>
+                                <td data-label="Package"><code class="lm-tiny"><?= lm_e((string) ($update['zip_path'] ?? '—')) ?></code></td>
+                                <td data-label="Published">
+                                    <?= lm_e(!empty($update['release_date']) ? date('M j, Y · H:i', strtotime((string) $update['release_date'])) : '—') ?>
+                                </td>
+                                <td data-label="" class="lm-cell-actions">
+                                    <button type="button" class="lm-btn lm-btn--sm lm-btn--danger"
+                                            data-lm-delete-update="<?= (int) $update['id'] ?>"
+                                            data-lm-version="<?= lm_e((string) $update['version_number']) ?>">
+                                        Delete
+                                    </button>
                                 </td>
                             </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-        </div>
+        <?php endif; ?>
     </div>
+</section>
 
-    <script>
-    document.getElementById('updateForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const form = this;
-        const btn = document.getElementById('submitBtn');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const statusMessage = document.getElementById('statusMessage');
-        
-        btn.disabled = true;
-        btn.textContent = 'Processing...';
-        progressContainer.style.display = 'block';
-        statusMessage.textContent = 'Uploading... Please wait.';
-        statusMessage.className = 'status-message';
-        progressBar.style.width = '0%';
-        progressBar.style.background = '#3b82f6';
-        
-        const formData = new FormData(form);
-        const xhr = new XMLHttpRequest();
-        
-        xhr.open('POST', 'ajax_upload_update.php', true);
-        
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                progressBar.style.width = percent + '%';
-                if(percent === 100) {
-                    statusMessage.textContent = 'Upload complete. Processing ZIP file...';
+<script>
+(function () {
+    var form = document.getElementById('updateForm');
+    var btn = document.getElementById('submitBtn');
+    var wrap = document.getElementById('progressWrap');
+    var bar = document.getElementById('progressBar');
+    var pct = document.getElementById('progressPct');
+    var label = document.getElementById('progressLabel');
+    var token = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+    function paint(percent) {
+        bar.style.width = percent + '%';
+        pct.textContent = percent + '%';
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            btn.disabled = true;
+            btn.textContent = 'Processing…';
+            wrap.hidden = false;
+            label.textContent = 'Uploading…';
+            paint(0);
+
+            var data = new FormData(form);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'ajax_upload_update.php', true);
+            xhr.setRequestHeader('X-CSRF-Token', token);
+
+            xhr.upload.onprogress = function (e) {
+                if (!e.lengthComputable) { return; }
+                var percent = Math.round((e.loaded / e.total) * 100);
+                paint(percent);
+                if (percent === 100) {
+                    label.textContent = 'Unpacking and publishing…';
                 }
-            }
-        };
-        
-        xhr.onload = function() {
-            btn.disabled = false;
-            btn.textContent = 'Upload & Publish Update';
-            
-            try {
-                const res = JSON.parse(xhr.responseText);
-                if(res.status === 'success') {
-                    progressBar.style.background = '#10b981';
-                    statusMessage.textContent = res.message;
-                    statusMessage.className = 'status-message text-success';
-                    form.reset();
-                    setTimeout(() => window.location.reload(), 1500);
+            };
+
+            var finish = function (message, ok) {
+                btn.disabled = false;
+                btn.textContent = 'Upload & publish';
+                label.textContent = message;
+                bar.style.background = ok ? 'var(--green)' : 'var(--red)';
+                if (window.lmToast) { window.lmToast(message, ok ? 'ok' : 'bad'); }
+                if (ok) { window.setTimeout(function () { window.location.reload(); }, 1400); }
+            };
+
+            xhr.onload = function () {
+                var res = null;
+                try { res = JSON.parse(xhr.responseText); } catch (err) { res = null; }
+                if (res && res.status === 'success') {
+                    paint(100);
+                    finish(res.message || 'Published.', true);
                 } else {
-                    progressBar.style.background = '#ef4444';
-                    statusMessage.textContent = 'Error: ' + res.message;
-                    statusMessage.className = 'status-message text-danger';
+                    finish((res && res.message) || 'The server rejected the upload (HTTP ' + xhr.status + ').', false);
                 }
-            } catch(err) {
-                progressBar.style.background = '#ef4444';
-                statusMessage.textContent = 'A critical server error occurred. Check PHP logs.';
-                statusMessage.className = 'status-message text-danger';
+            };
+
+            xhr.onerror = function () {
+                finish('The connection dropped during the upload. Check the file size and try again.', false);
+            };
+
+            xhr.send(data);
+        });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lm-delete-update]'), function (button) {
+        button.addEventListener('click', function () {
+            var id = button.getAttribute('data-lm-delete-update');
+            var version = button.getAttribute('data-lm-version') || '';
+            if (!window.confirm('Delete v' + version + '?\n\nThe ZIP is removed from the server and the row is deleted. Customers who already downloaded are unaffected.')) {
+                return;
             }
-        };
-        
-        xhr.onerror = function() {
-            btn.disabled = false;
-            btn.textContent = 'Upload & Publish Update';
-            progressBar.style.background = '#ef4444';
-            statusMessage.textContent = 'Network error occurred during upload.';
-            statusMessage.className = 'status-message text-danger';
-        };
-        
-        xhr.send(formData);
+            if (!window.lmPost) { return; }
+            button.disabled = true;
+            window.lmPost('ajax_delete_update.php', { action: 'delete_single', update_id: id }).then(function (res) {
+                if (window.lmToast) { window.lmToast(res.message || 'Deleted.', 'ok'); }
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            }).catch(function (err) {
+                button.disabled = false;
+                if (window.lmToast) { window.lmToast(err.message || 'Delete failed.', 'bad'); }
+            });
+        });
     });
 
-    function deleteUpdate(id, version) {
-        if (!confirm('Are you sure you want to delete update version ' + version + '? This will physically delete the update ZIP file from the server and remove its record in the database.')) {
-            return;
-        }
-        
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'ajax_delete_update.php', true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        
-        xhr.onload = function() {
-            try {
-                const res = JSON.parse(xhr.responseText);
-                if (res.status === 'success') {
-                    alert(res.message);
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + res.message);
-                }
-            } catch(e) {
-                alert('A server error occurred. Check PHP error logs.');
+    var cleanup = document.querySelector('[data-lm-cleanup]');
+    if (cleanup) {
+        cleanup.addEventListener('click', function () {
+            if (!window.confirm('Keep only the newest release per project?\n\nEvery older ZIP is deleted from disk and from the database. This cannot be undone.')) {
+                return;
             }
-        };
-        
-        xhr.send('action=delete_single&update_id=' + id);
+            cleanup.disabled = true;
+            if (!window.lmPost) { cleanup.disabled = false; return; }
+            window.lmPost('ajax_delete_update.php', { action: 'cleanup_old' }).then(function (res) {
+                cleanup.disabled = false;
+                if (window.lmToast) { window.lmToast(res.message || 'Cleaned up.', 'ok'); }
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            }).catch(function (err) {
+                cleanup.disabled = false;
+                if (window.lmToast) { window.lmToast(err.message || 'Cleanup failed.', 'bad'); }
+            });
+        });
     }
-    
-    function cleanupOldUpdates() {
-        if (!confirm('Are you sure you want to clean up old updates? This will delete all physical update ZIP files and database records of older versions, keeping only the latest version for each script tier.')) {
-            return;
-        }
-        
-        const cleanupBtn = document.getElementById('cleanupBtn');
-        cleanupBtn.disabled = true;
-        cleanupBtn.textContent = 'Cleaning...';
-        
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'ajax_delete_update.php', true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        
-        xhr.onload = function() {
-            cleanupBtn.disabled = false;
-            cleanupBtn.textContent = '🧹 Clean Up Old Updates';
-            
-            try {
-                const res = JSON.parse(xhr.responseText);
-                if (res.status === 'success') {
-                    alert(res.message);
-                    window.location.reload();
-                } else {
-                    alert('Error: ' + res.message);
-                }
-            } catch(e) {
-                alert('A server error occurred. Check PHP error logs.');
-            }
-        };
-        
-        xhr.send('action=cleanup_old');
-    }
-    </script>
-</body>
-</html>
+})();
+</script>
+
+<?php lm_app_end(); ?>
