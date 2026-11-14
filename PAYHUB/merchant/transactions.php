@@ -2,7 +2,7 @@
 // php-version/merchant/transactions.php
 require_once '../includes/functions.php';
 
-if (!isLoggedIn()) {
+if (!isLoggedIn() || isAdmin()) {
     redirect('../login.php');
 }
 requireCompliance();
@@ -62,155 +62,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch Transactions
-$is_test = $user['is_test_mode'];
-$stmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? AND is_test = ? ORDER BY created_at DESC");
-$stmt->execute([$user['id'], $is_test]);
-$transactions = $stmt->fetchAll();
-
 include '../includes/dashboard-head.php';
 ?>
-<body class="bg-slate-50 text-slate-900 flex h-screen overflow-hidden" x-data>
+<body class="flex h-screen overflow-hidden bg-slate-50 text-slate-900" x-data="merchantTransactionReport()">
     <?php include '../includes/sidebar.php'; ?>
-
-    <main class="flex-1 flex flex-col min-w-0 overflow-hidden" x-data="{ selectedTx: null, timeline: [], loadingTimeline: false }">
+    <main class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <?php include '../includes/topbar.php'; ?>
+        <div class="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div class="mx-auto max-w-7xl">
+            <?php if (isset($success_msg)): ?><div role="status" class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"><?php echo htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
+            <?php if (isset($error_msg)): ?><div role="alert" class="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800"><?php echo htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
+            <header class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Payments · Account report</p><h1 class="text-3xl font-extrabold tracking-tight text-slate-950">Transactions</h1><p class="mt-2 text-sm text-slate-500">Review every customer payment, follow its processing, and export a statement.</p></div><div class="flex flex-wrap gap-2"><a :href="exportUrl('csv')" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"><i data-lucide="file-spreadsheet" class="h-4 w-4 text-emerald-600"></i>Download CSV</a><a :href="exportUrl('pdf')" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800"><i data-lucide="file-down" class="h-4 w-4"></i>Download PDF</a></div></header>
 
-        <div class="flex-1 overflow-y-auto p-4 sm:p-8">
-            <?php if (isset($success_msg)): ?>
-                <div class="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
-                    <?php echo $success_msg; ?>
-                </div>
-            <?php endif; ?>
-            <?php if (isset($error_msg)): ?>
-                <div class="mb-6 p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 font-medium">
-                    <?php echo $error_msg; ?>
-                </div>
-            <?php endif; ?>
-
-            <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-900 mb-2">Transactions</h1>
-                    <p class="text-slate-500">Monitor and manage all your customer payments</p>
-                </div>
-                <div class="flex gap-2">
-                    <button class="p-2.5 bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl shadow-sm transition-all"><i data-lucide="filter" class="w-5 h-5"></i></button>
-                    <button class="p-2.5 bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl shadow-sm transition-all"><i data-lucide="download" class="w-5 h-5"></i></button>
-                </div>
+            <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <button @click="setStatus('')" class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" :class="status === '' ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'"><span class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">All transactions <i data-lucide="layers-3" class="h-4 w-4"></i></span><span class="mt-3 block text-2xl font-extrabold text-slate-900" x-text="number(summary.total)"></span><span class="mt-1 block text-xs text-slate-500">In selected period</span></button>
+                <button @click="setStatus('success')" class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" :class="status === 'success' ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'"><span class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">Successful <i data-lucide="circle-check" class="h-4 w-4 text-emerald-500"></i></span><span class="mt-3 block text-2xl font-extrabold text-emerald-700" x-text="number(summary.successful)"></span><span class="mt-1 block truncate text-xs text-slate-500" x-text="currency(summary.volume) + ' successful volume'"></span></button>
+                <button @click="setStatus('pending')" class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" :class="status === 'pending' ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200'"><span class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">Pending <i data-lucide="clock-3" class="h-4 w-4 text-amber-500"></i></span><span class="mt-3 block text-2xl font-extrabold text-amber-700" x-text="number(summary.pending)"></span><span class="mt-1 block text-xs text-slate-500">Awaiting completion</span></button>
+                <button @click="setStatus('failed')" class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" :class="status === 'failed' ? 'border-rose-400 ring-2 ring-rose-100' : 'border-slate-200'"><span class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">Failed <i data-lucide="circle-x" class="h-4 w-4 text-rose-500"></i></span><span class="mt-3 block text-2xl font-extrabold text-rose-700" x-text="number(summary.failed)"></span><span class="mt-1 block text-xs text-slate-500">Unsuccessful payments</span></button>
+                <button @click="setStatus('refunded')" class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" :class="status === 'refunded' ? 'border-sky-400 ring-2 ring-sky-100' : 'border-slate-200'"><span class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">Refunded <i data-lucide="undo-2" class="h-4 w-4 text-sky-500"></i></span><span class="mt-3 block text-2xl font-extrabold text-sky-700" x-text="number(summary.refunded)"></span><span class="mt-1 block text-xs text-slate-500">Reversed transactions</span></button>
             </div>
-
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="bg-slate-50/50">
-                                <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Reference</th>
-                                <th class="hidden lg:table-cell px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
-                                <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                                <th class="hidden md:table-cell px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Fee</th>
-                                <th class="hidden md:table-cell px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Settled</th>
-                                <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <?php foreach ($transactions as $tx): ?>
-                                <tr class="hover:bg-slate-50/50 transition-colors">
-                                    <td class="px-6 py-4 font-mono text-sm"><?php echo $tx['reference']; ?></td>
-                                    <td class="hidden lg:table-cell px-6 py-4 text-sm"><?php echo $tx['customer_email']; ?></td>
-                                    <td class="px-6 py-4 text-sm font-bold"><?php echo formatCurrency($tx['amount']); ?></td>
-                                    <td class="hidden md:table-cell px-6 py-4 text-sm text-red-500">-<?php echo formatCurrency($tx['fee_amount']); ?></td>
-                                    <td class="hidden md:table-cell px-6 py-4 text-sm text-emerald-600 font-bold"><?php echo formatCurrency($tx['settled_amount']); ?></td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider <?php
-                                            echo $tx['status'] === 'success' ? 'bg-emerald-100 text-emerald-700' :
-                                                ($tx['status'] === 'refunded' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700');
-                                        ?>">
-                                            <?php echo $tx['status']; ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center gap-2">
-                                            <button
-                                                @click="selectedTx = <?php echo htmlspecialchars(json_encode($tx)); ?>; loadingTimeline = true; fetch('../api-reference.php?action=get_timeline&id=' + selectedTx.id).then(r => r.json()).then(data => { timeline = data; loadingTimeline = false; })"
-                                                class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                                title="View Timeline"
-                                            >
-                                                <i data-lucide="activity" class="w-4 h-4"></i>
-                                            </button>
-                                            <?php if ($tx['status'] === 'success'): ?>
-                                                <form method="POST" onsubmit="return confirm('Are you sure you want to refund this transaction?');" class="inline">
-                                                    <input type="hidden" name="action" value="refund">
-                                                    <input type="hidden" name="transaction_id" value="<?php echo $tx['id']; ?>">
-                                                    <button type="submit" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Initiate Refund">
-                                                        <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
-                                                    </button>
-                                                </form>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($transactions)): ?>
-                                <tr>
-                                    <td colspan="7" class="px-6 py-12 text-center text-slate-500">No transactions found.</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Timeline Modal -->
-        <div x-show="selectedTx" x-cloak class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-            <div class="bg-white rounded-3xl border border-slate-200 w-full max-w-lg overflow-hidden shadow-2xl">
-                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div>
-                        <h3 class="font-bold text-slate-900">Transaction Timeline</h3>
-                        <p class="text-xs text-slate-500 font-mono mt-1" x-text="selectedTx?.reference"></p>
-                    </div>
-                    <button @click="selectedTx = null" class="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                        <i data-lucide="x" class="w-5 h-5"></i>
-                    </button>
-                </div>
-                <div class="p-8 max-h-[60vh] overflow-y-auto">
-                    <div x-show="loadingTimeline" class="flex justify-center py-12">
-                        <i data-lucide="refresh-ccw" class="animate-spin text-indigo-600 w-8 h-8"></i>
-                    </div>
-                    <div x-show="!loadingTimeline && timeline.length > 0" class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-indigo-500 before:via-slate-200 before:to-slate-200">
-                        <template x-for="event in timeline" :key="event.id">
-                            <div class="relative flex items-start gap-6 group">
-                                <div class="absolute left-0 w-10 h-10 rounded-full bg-white border-2 border-indigo-500 flex items-center justify-center z-10 shadow-sm">
-                                    <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
-                                </div>
-                                <div class="pl-14">
-                                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1" x-text="new Date(event.created_at).toLocaleString()"></p>
-                                    <h4 class="font-bold text-slate-900 capitalize" x-text="event.event_type.replace(/_/g, ' ')"></h4>
-                                    <p class="text-sm text-slate-500 mt-1" x-text="event.description"></p>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    <div x-show="!loadingTimeline && timeline.length === 0" class="text-center py-12">
-                        <i data-lucide="file-text" class="text-slate-200 w-12 h-12 mx-auto mb-4"></i>
-                        <p class="text-slate-500">No events found for this transaction.</p>
-                    </div>
-                </div>
-                <div class="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-                    <button @click="selectedTx = null" class="px-6 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50 transition-colors">Close</button>
-                </div>
-            </div>
-        </div>
+            <section class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(220px,1fr)_180px_150px_150px_auto] lg:items-end">
+                <label class="block"><span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Search report</span><span class="relative block"><i data-lucide="search" class="absolute left-3 top-3 h-4 w-4 text-slate-400"></i><input x-model="search" @input.debounce.350ms="resetAndFetch()" placeholder="Reference, customer name or email..." class="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"></span></label>
+                <label class="block"><span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Date range</span><select x-model="period" @change="applyPeriod()" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="all">All time</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="custom">Custom dates</option></select></label>
+                <label class="block"><span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">From</span><input type="date" x-model="from" @change="period='custom'; resetAndFetch()" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"></label>
+                <label class="block"><span class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">To</span><input type="date" x-model="to" @change="period='custom'; resetAndFetch()" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"></label>
+                <button @click="clearFilters()" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Reset</button>
+            </div></section>
+            <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="font-bold text-slate-900">Payment activity</h2><p class="mt-1 text-xs text-slate-500">Select a payment to review its complete details and processing timeline.</p></div><span class="w-fit rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest" :class="mode === 'test' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'" x-text="mode + ' mode'"></span></div>
+                <div x-show="error" x-cloak class="m-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" x-text="error"></div><div class="overflow-x-auto"><table class="w-full min-w-[850px] text-left"><thead class="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-400"><tr><th class="px-5 py-3">Date / Reference</th><th class="px-5 py-3">Customer</th><th class="px-5 py-3">Amount</th><th class="px-5 py-3">Fee</th><th class="px-5 py-3">Net settled</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Action</th></tr></thead><tbody class="divide-y divide-slate-100">
+                    <template x-for="tx in transactions" :key="tx.id"><tr @click="openTransaction(tx)" @keydown.enter="openTransaction(tx)" tabindex="0" role="button" class="cursor-pointer transition hover:bg-indigo-50/40 focus:bg-indigo-50/50"><td class="px-5 py-4"><span class="block whitespace-nowrap text-sm font-semibold text-slate-800" x-text="date(tx.created_at)"></span><span class="mt-1 block font-mono text-[11px] text-slate-400" x-text="tx.reference"></span></td><td class="px-5 py-4"><span class="block max-w-[230px] truncate text-sm font-semibold text-slate-800" x-text="tx.customer_name || 'Customer'"></span><span class="mt-1 block max-w-[230px] truncate text-xs text-slate-400" x-text="tx.customer_email || '—'"></span></td><td class="px-5 py-4 whitespace-nowrap text-sm font-bold text-slate-900" x-text="currency(tx.amount)"></td><td class="px-5 py-4 whitespace-nowrap text-sm text-rose-600" x-text="currency(tx.fee_amount)"></td><td class="px-5 py-4 whitespace-nowrap text-sm font-semibold text-emerald-700" x-text="currency(tx.settled_amount)"></td><td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase" :class="statusClass(tx.status)" x-text="tx.status"></span></td><td class="px-5 py-4"><div class="flex items-center gap-2"><button @click.stop="openTransaction(tx)" class="rounded-lg p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600" title="View full details"><i data-lucide="arrow-up-right" class="h-4 w-4"></i></button><form x-show="tx.status === 'success'" method="POST" @click.stop @submit="return confirm('Are you sure you want to request a refund for this payment?')" class="inline"><input type="hidden" name="action" value="refund"><input type="hidden" name="transaction_id" :value="tx.id"><button type="submit" class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Refund transaction"><i data-lucide="undo-2" class="h-4 w-4"></i></button></form></div></td></tr></template>
+                    <template x-if="!loading && transactions.length === 0"><tr><td colspan="7" class="px-5 py-16 text-center"><i data-lucide="search-x" class="mx-auto mb-3 h-8 w-8 text-slate-300"></i><p class="font-semibold text-slate-700">No transactions found</p><p class="mt-1 text-sm text-slate-400">Try another date range or search term.</p></td></tr></template><template x-if="loading && transactions.length === 0"><tr><td colspan="7" class="px-5 py-14 text-center text-sm text-slate-400">Loading your transactions…</td></tr></template>
+                </tbody></table></div><footer class="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><p class="text-xs text-slate-500">Showing <b class="text-slate-800" x-text="pagination.from"></b>–<b class="text-slate-800" x-text="pagination.to"></b> of <b class="text-slate-800" x-text="number(pagination.total)"></b> transactions</p><div class="flex items-center gap-2"><span class="mr-2 text-xs text-slate-400" x-text="'Page ' + pagination.current_page + ' of ' + pagination.total_pages"></span><button @click="changePage(-1)" :disabled="page <= 1 || loading" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold disabled:opacity-40">Previous</button><button @click="changePage(1)" :disabled="page >= pagination.total_pages || loading" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold disabled:opacity-40">Next</button></div></footer>
+            </section>
+        </div></div>
     </main>
 
-    <?php include '../includes/merchant-quick-actions.php'; ?>
+    <div x-show="selectedTx" x-cloak @keydown.escape.window="selectedTx = null" @click.self="selectedTx = null" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6"><section class="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Transaction details"><header class="flex items-start justify-between border-b border-slate-100 bg-slate-50 px-5 py-5 sm:px-8"><div><p class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-600">Payment details</p><h2 class="mt-1 text-xl font-extrabold text-slate-950" x-text="detail?.transaction?.reference || selectedTx?.reference"></h2><p class="mt-1 text-xs text-slate-500" x-text="detail?.transaction ? date(detail.transaction.created_at) : ''"></p></div><button @click="selectedTx = null" class="rounded-xl p-2 text-slate-500 hover:bg-slate-200" aria-label="Close"><i data-lucide="x" class="h-5 w-5"></i></button></header><div class="flex-1 overflow-y-auto p-5 sm:p-8"><div x-show="detailLoading" class="py-12 text-center text-sm text-slate-400">Loading transaction process…</div><div x-show="detailError" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" x-text="detailError"></div><template x-if="detail?.transaction"><div><div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4"><div class="rounded-2xl bg-slate-950 p-4 text-white"><p class="text-[10px] font-bold uppercase text-slate-400">Amount</p><p class="mt-2 text-xl font-extrabold" x-text="currency(detail.transaction.amount)"></p></div><div class="rounded-2xl border border-slate-200 p-4"><p class="text-[10px] font-bold uppercase text-slate-400">Fee</p><p class="mt-2 text-lg font-extrabold text-rose-700" x-text="currency(detail.transaction.fee_amount)"></p></div><div class="rounded-2xl border border-slate-200 p-4"><p class="text-[10px] font-bold uppercase text-slate-400">Net settled</p><p class="mt-2 text-lg font-extrabold text-emerald-700" x-text="currency(detail.transaction.settled_amount)"></p></div><div class="rounded-2xl border border-slate-200 p-4"><p class="text-[10px] font-bold uppercase text-slate-400">Status</p><span class="mt-2 inline-block rounded-full px-2 py-1 text-[10px] font-extrabold uppercase" :class="statusClass(detail.transaction.status)" x-text="detail.transaction.status"></span></div></div>
+            <div class="mb-7 grid gap-5 md:grid-cols-2"><article class="rounded-2xl border border-slate-200 p-5"><h3 class="mb-4 text-sm font-extrabold">Customer & payment</h3><dl class="space-y-3 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Customer</dt><dd class="text-right font-semibold" x-text="detail.transaction.customer_name || '—'"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Email</dt><dd class="break-all text-right font-semibold" x-text="detail.transaction.customer_email || '—'"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Method / currency</dt><dd class="font-semibold" x-text="(detail.transaction.payment_method || '—') + ' · ' + (detail.transaction.currency || 'NGN')"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Gateway reference</dt><dd class="break-all text-right font-mono text-xs" x-text="detail.transaction.gateway_reference || '—'"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Failure reason</dt><dd class="text-right font-semibold text-rose-700" x-text="detail.transaction.failure_reason || '—'"></dd></div></dl></article><article class="rounded-2xl border border-slate-200 p-5"><h3 class="mb-4 text-sm font-extrabold">Processing information</h3><dl class="space-y-3 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Transaction ID</dt><dd class="font-mono" x-text="'#' + detail.transaction.id"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Gateway amount</dt><dd class="font-semibold" x-text="detail.transaction.gateway_amount ? currency(detail.transaction.gateway_amount) : '—'"></dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Card fingerprint</dt><dd class="text-right font-semibold" x-text="detail.transaction.card_last4 ? [detail.transaction.card_type, '•••• ' + detail.transaction.card_last4, detail.transaction.card_country].filter(Boolean).join(' · ') : 'Not available'"></dd></div></dl></article></div>
+            <section class="mb-7"><h3 class="mb-4 text-sm font-extrabold">Processing timeline</h3><div class="space-y-3"><template x-for="(event, index) in detail.timeline" :key="index"><div class="flex gap-3"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-indigo-500 ring-4 ring-indigo-50"></span><div class="flex-1 border-b border-slate-100 pb-3"><div class="flex flex-wrap justify-between gap-2"><b class="text-sm capitalize" x-text="(event.event_type || 'event').replaceAll('_', ' ')"></b><time class="text-[11px] text-slate-400" x-text="date(event.created_at)"></time></div><p class="mt-1 whitespace-pre-wrap text-sm text-slate-500" x-text="event.description || ''"></p></div></div></template><p x-show="!detail.timeline?.length" class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No timeline events were recorded.</p></div></section>
+            <section class="mb-7"><h3 class="mb-3 text-sm font-extrabold">Refunds and reversals</h3><div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase text-slate-400"><tr><th class="px-3 py-2">Type</th><th class="px-3 py-2">Reference</th><th class="px-3 py-2">Amount</th><th class="px-3 py-2">Date</th></tr></thead><tbody><template x-for="(item, index) in detail.reversals" :key="index"><tr class="border-t"><td class="px-3 py-2 font-bold" x-text="item.kind"></td><td class="px-3 py-2 font-mono" x-text="item.reversal_reference"></td><td class="px-3 py-2" x-text="currency(item.amount)"></td><td class="px-3 py-2" x-text="date(item.created_at)"></td></tr></template><tr x-show="!detail.reversals?.length"><td colspan="4" class="px-3 py-3 text-slate-400">No reversals recorded.</td></tr></tbody></table></div></section>
+            <section><h3 class="mb-3 text-sm font-extrabold">Webhook attempts</h3><div class="space-y-3"><template x-for="(hook,index) in detail.webhooks" :key="index"><details class="rounded-xl border border-slate-200"><summary class="flex cursor-pointer list-none justify-between gap-3 px-4 py-3 text-sm"><b x-text="'Attempt ' + (hook.attempt_count || index + 1) + ' · ' + hook.status"></b><span class="text-xs text-slate-400" x-text="date(hook.last_attempt_at || hook.created_at)"></span></summary><div class="grid gap-3 border-t p-4 md:grid-cols-2"><div><p class="mb-1 text-[10px] font-bold uppercase text-slate-400">Request</p><pre class="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 text-[10px] text-white" x-text="hook.payload || '—'"></pre></div><div><p class="mb-1 text-[10px] font-bold uppercase text-slate-400">Response</p><pre class="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 text-[10px] text-white" x-text="hook.response || '—'"></pre></div></div></details></template><p x-show="!detail.webhooks?.length" class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No webhook attempts logged.</p></div></section><details x-show="detail.transaction.metadata" class="mt-7 rounded-xl border border-slate-200"><summary class="cursor-pointer px-4 py-3 text-sm font-bold">Transaction metadata</summary><pre class="max-h-64 overflow-auto whitespace-pre-wrap break-all border-t bg-slate-50 p-4 text-xs" x-text="pretty(detail.transaction.metadata)"></pre></details></div></template></div><footer class="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4"><button @click="selectedTx = null" class="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">Close details</button></footer></section></div>
+
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        });
+    function merchantTransactionReport() { return {
+        search:'',status:'',period:'all',from:'',to:'',page:1,perPage:25,transactions:[],summary:{total:0,successful:0,pending:0,failed:0,refunded:0,volume:0},pagination:{total:0,current_page:1,total_pages:1,from:0,to:0},loading:false,error:'',mode:'live',selectedTx:null,detail:null,detailLoading:false,detailError:'',
+        init(){this.fetchTransactions();}, params(){return new URLSearchParams({search:this.search,status:this.status,from:this.from,to:this.to,limit:this.perPage,offset:(this.page-1)*this.perPage});},
+        async fetchTransactions(){this.loading=true;this.error='';try{const r=await fetch('./ajax-transactions.php?'+this.params().toString(),{headers:{'Accept':'application/json'}});const d=await r.json();if(!r.ok||!d.status)throw new Error(d.message||'Unable to load report');this.transactions=d.data||[];this.summary=d.summary;this.pagination=d.pagination;this.mode=d.mode||'live';this.$nextTick(()=>{if(window.lucide)lucide.createIcons();});}catch(e){this.error=e.message;this.transactions=[];}finally{this.loading=false;}},
+        resetAndFetch(){this.page=1;this.fetchTransactions();},setStatus(value){this.status=value;this.resetAndFetch();},changePage(delta){const next=this.page+delta;if(next>=1&&next<=this.pagination.total_pages){this.page=next;this.fetchTransactions();}},
+        applyPeriod(){const now=new Date(),d=v=>[v.getFullYear(),String(v.getMonth()+1).padStart(2,'0'),String(v.getDate()).padStart(2,'0')].join('-');this.from='';this.to='';if(this.period==='today')this.from=this.to=d(now);else if(['7','30','90'].includes(this.period)){const start=new Date(now);start.setDate(start.getDate()-(Number(this.period)-1));this.from=d(start);this.to=d(now);}else if(this.period==='lastmonth'){this.from=d(new Date(now.getFullYear(),now.getMonth()-1,1));this.to=d(new Date(now.getFullYear(),now.getMonth(),0));}else if(this.period==='month'){this.from=d(new Date(now.getFullYear(),now.getMonth(),1));this.to=d(now);}this.resetAndFetch();},
+        clearFilters(){this.search='';this.status='';this.period='all';this.from='';this.to='';this.resetAndFetch();},exportUrl(format){return './export-transactions.php?'+new URLSearchParams({format,search:this.search,status:this.status,from:this.from,to:this.to}).toString();},
+        async openTransaction(tx){this.selectedTx=tx;this.detail=null;this.detailError='';this.detailLoading=true;try{const r=await fetch('./transaction-details.php?id='+encodeURIComponent(tx.id),{headers:{'Accept':'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to load details');this.detail=d;}catch(e){this.detailError=e.message;}finally{this.detailLoading=false;this.$nextTick(()=>{if(window.lucide)lucide.createIcons();});}},
+        date(value){if(!value)return'—';const x=new Date(value.replace(' ','T')+(value.endsWith('Z')?'':'Z'));return isNaN(x)?value:x.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})+' UTC';},number(v){return Number(v||0).toLocaleString('en-GB');},currency(v){return'NGN '+Number(v||0).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2});},pretty(v){try{return JSON.stringify(typeof v==='string'?JSON.parse(v):v,null,2);}catch(e){return v||'';}},statusClass(v){return({success:'bg-emerald-100 text-emerald-800',pending:'bg-amber-100 text-amber-800',failed:'bg-rose-100 text-rose-800',refunded:'bg-sky-100 text-sky-800'})[v]||'bg-slate-100 text-slate-700';}
+    };}
     </script>
 </body>
 </html>
