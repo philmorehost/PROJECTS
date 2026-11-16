@@ -12,6 +12,14 @@ $success_msg = '';
 $error_msg = '';
 $allowedPriorities = ['low', 'medium', 'high', 'critical'];
 
+$merchantName = trim((string)($user['business_name'] ?? ''));
+if ($merchantName === '') {
+    $merchantName = trim((string)($user['full_name'] ?? ''));
+}
+if ($merchantName === '') {
+    $merchantName = trim((string)($user['email'] ?? 'Merchant'));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_msg = 'Your security token expired. Refresh the page and try again.';
@@ -29,28 +37,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($subject === '' || $message === '' || !in_array($priority, $allowedPriorities, true)) {
             $error_msg = 'Add a subject and message, then select a valid priority.';
         } else {
+            $createdTicketId = 0;
             $db->beginTransaction();
             try {
                 $stmt = $db->prepare("INSERT INTO tickets (user_id, subject, priority, status) VALUES (?, ?, ?, 'open')");
                 $stmt->execute([$user['id'], $subject, $priority]);
-                $ticketId = (int)$db->lastInsertId();
+                $createdTicketId = (int)$db->lastInsertId();
                 $stmt = $db->prepare('INSERT INTO ticket_messages (ticket_id, user_id, message, is_admin) VALUES (?, ?, ?, 0)');
-                $stmt->execute([$ticketId, $user['id'], $message]);
+                $stmt->execute([$createdTicketId, $user['id'], $message]);
                 $db->commit();
                 $success_msg = 'Your request was sent. Support will reply in this ticket thread.';
-                if (($user['role'] ?? '') !== 'admin') {
-                    notifyAdmins(
-                        'New Support Ticket: ' . $subject,
-                        '<p><strong>Merchant:</strong> ' . htmlspecialchars($user['business_name'] ?? $user['email'], ENT_QUOTES, 'UTF-8') . '<br>' .
-                        '<strong>Priority:</strong> ' . htmlspecialchars($priority, ENT_QUOTES, 'UTF-8') . '<br>' .
-                        '<strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '<br>' .
-                        '<strong>Message:</strong><br>' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</p>'
-                    );
-                }
             } catch (Throwable $e) {
                 if ($db->inTransaction()) $db->rollBack();
+                $createdTicketId = 0;
                 error_log('[PayHub tickets] Merchant could not create ticket: ' . $e->getMessage());
                 $error_msg = 'Could not create your ticket. Please try again.';
+            }
+
+            if ($createdTicketId > 0) {
+                notifySupportTicketAdmins([
+                    'event' => 'new_ticket',
+                    'ticket_id' => $createdTicketId,
+                    'subject' => $subject,
+                    'priority' => $priority,
+                    'status' => 'open',
+                    'merchant_name' => $merchantName,
+                    'merchant_email' => (string)($user['email'] ?? ''),
+                    'message' => $message,
+                ]);
             }
         }
     } elseif ($_POST['action'] === 'new_ticket_message') {
@@ -61,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if (!$ticketId || $ticketId < 1 || $message === '') {
             $error_msg = 'Ticket or message is invalid.';
         } else {
-            $stmt = $db->prepare("SELECT id, subject, status FROM tickets WHERE id = ? AND user_id = ?");
+            $stmt = $db->prepare("SELECT id, subject, priority, status FROM tickets WHERE id = ? AND user_id = ?");
             $stmt->execute([$ticketId, $user['id']]);
             $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$ticket) {
@@ -71,13 +85,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } else {
                 $stmt = $db->prepare('INSERT INTO ticket_messages (ticket_id, user_id, message, is_admin) VALUES (?, ?, ?, 0)');
                 if ($stmt->execute([$ticketId, $user['id'], $message])) {
+                    $effectiveStatus = (string)($ticket['status'] ?? 'open');
+                    if ($effectiveStatus === 'resolved') {
+                        try {
+                            $db->prepare("UPDATE tickets SET status = 'open' WHERE id = ?")->execute([$ticketId]);
+                            $effectiveStatus = 'open';
+                        } catch (Throwable $e) {
+                            error_log('[PayHub tickets] Could not reopen resolved ticket #' . (int)$ticketId . ': ' . $e->getMessage());
+                        }
+                    }
                     $success_msg = 'Your reply was added to the ticket.';
-                    notifyAdmins(
-                        'New Reply on Ticket #' . (int)$ticketId,
-                        '<p><strong>Merchant:</strong> ' . htmlspecialchars($user['business_name'] ?? $user['email'], ENT_QUOTES, 'UTF-8') . '<br>' .
-                        '<strong>Ticket:</strong> ' . htmlspecialchars($ticket['subject'], ENT_QUOTES, 'UTF-8') . '<br>' .
-                        '<strong>Message:</strong><br>' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</p>'
-                    );
+                    notifySupportTicketAdmins([
+                        'event' => 'merchant_reply',
+                        'ticket_id' => (int)$ticketId,
+                        'subject' => (string)($ticket['subject'] ?? ''),
+                        'priority' => (string)($ticket['priority'] ?? 'medium'),
+                        'status' => $effectiveStatus,
+                        'merchant_name' => $merchantName,
+                        'merchant_email' => (string)($user['email'] ?? ''),
+                        'message' => $message,
+                    ]);
                 } else {
                     $error_msg = 'Could not send your reply. Please try again.';
                 }
