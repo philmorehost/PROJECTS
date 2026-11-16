@@ -1,157 +1,152 @@
 <?php
-// php-version/support.php
 require_once 'includes/functions.php';
 
+$pageTitle = 'Support Center - Payhub';
 $success_msg = '';
 $error_msg = '';
+$form = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
+$currentUser = isLoggedIn() ? getAuthUser() : null;
+$isMerchant = $currentUser && ($currentUser['role'] ?? '') === 'merchant';
 
-// Simple Math Captcha
-if (!isset($_SESSION['captcha_a'])) {
-    $_SESSION['captcha_a'] = rand(1, 10);
-    $_SESSION['captcha_b'] = rand(1, 10);
+if (!isset($_SESSION['support_captcha_a'], $_SESSION['support_captcha_b'])) {
+    $_SESSION['support_captcha_a'] = random_int(1, 9);
+    $_SESSION['support_captcha_b'] = random_int(1, 9);
+}
+if (!isset($_SESSION['support_form_started'])) {
+    $_SESSION['support_form_started'] = time();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'contact') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'public_whatsapp_contact') {
+    foreach ($form as $field => $_) {
+        $form[$field] = trim((string)($_POST[$field] ?? ''));
+    }
+    $captchaAnswer = filter_var($_POST['captcha'] ?? null, FILTER_VALIDATE_INT);
+    $honeypot = trim((string)($_POST['website'] ?? ''));
+    $elapsed = time() - (int)($_SESSION['support_form_started'] ?? time());
+
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
-        $error_msg = "Invalid security token.";
+        $error_msg = 'Your security check expired. Refresh the page and try again.';
+    } elseif ($honeypot !== '' || $elapsed < 3) {
+        // Silently reject automated submissions; never store public messages as support tickets.
+        $error_msg = 'Please review the form and try again.';
+    } elseif (!filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
+        $error_msg = 'Enter a valid email address.';
+    } elseif ($form['name'] === '' || strlen($form['name']) > 100) {
+        $error_msg = 'Enter your name (up to 100 characters).';
+    } elseif ($form['subject'] === '' || strlen($form['subject']) > 120) {
+        $error_msg = 'Enter a subject (up to 120 characters).';
+    } elseif (strlen($form['message']) < 15 || strlen($form['message']) > 3000) {
+        $error_msg = 'Please provide a message between 15 and 3,000 characters.';
+    } elseif ($captchaAnswer === false || $captchaAnswer !== (int)$_SESSION['support_captcha_a'] + (int)$_SESSION['support_captcha_b']) {
+        $error_msg = 'The answer to the quick security question is incorrect.';
     } else {
-        $email = sanitize($_POST['email']);
-        $subject = sanitize($_POST['subject']);
-        $message = sanitize($_POST['message']);
-        $captcha = (int)$_POST['captcha'];
-
-        if ($captcha !== ($_SESSION['captcha_a'] + $_SESSION['captcha_b'])) {
-            $error_msg = "Incorrect captcha answer.";
+        $whatsappNumber = preg_replace('/\D+/', '', (string)getConfig('support_whatsapp_number', ''));
+        if (strlen($whatsappNumber) < 7 || strlen($whatsappNumber) > 15) {
+            $error_msg = 'WhatsApp contact is not configured yet. Please try again later.';
         } else {
-            $db = Database::connect();
-
-            // Check if merchant exists
-            $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
-
-            $is_registered = $user ? 1 : 0;
-            $userId = $user ? $user['id'] : null;
-
-            $db->beginTransaction();
-            try {
-                $stmt = $db->prepare("INSERT INTO tickets (user_id, guest_email, subject, is_registered, status) VALUES (?, ?, ?, ?, 'open')");
-                $stmt->execute([$userId, $is_registered ? null : $email, $subject, $is_registered]);
-                $ticketId = $db->lastInsertId();
-
-                // If guest, $userId is null. ticket_messages.user_id is now NULLable.
-                $stmt = $db->prepare("INSERT INTO ticket_messages (ticket_id, user_id, message) VALUES (?, ?, ?)");
-                $stmt->execute([$ticketId, $userId, $message]);
-
-                $db->commit();
-
-                // Notify admins about the new support request
-                notifyAdmins(
-                    "New Support Request: " . $subject,
-                    "<p>A new support request was submitted through the support form.</p>
-                     <p><strong>Email:</strong> " . htmlspecialchars($email) . "<br>
-                     <strong>Subject:</strong> " . htmlspecialchars($subject) . "<br>
-                     <strong>Message:</strong><br>" . nl2br(htmlspecialchars($message)) . "</p>"
-                );
-
-                $success_msg = "Message sent! Our team will get back to you shortly.";
-                // Reset captcha
-                $_SESSION['captcha_a'] = rand(1, 10);
-                $_SESSION['captcha_b'] = rand(1, 10);
-            } catch (Exception $e) {
-                $db->rollBack();
-                $error_msg = "Failed to send message: " . $e->getMessage();
-            }
+            $message = "Public support enquiry\n\nName: {$form['name']}\nEmail: {$form['email']}\nSubject: {$form['subject']}\n\nMessage:\n{$form['message']}";
+            $_SESSION['support_captcha_a'] = random_int(1, 9);
+            $_SESSION['support_captcha_b'] = random_int(1, 9);
+            $_SESSION['support_form_started'] = time();
+            header('Location: https://wa.me/' . $whatsappNumber . '?text=' . rawurlencode($message), true, 303);
+            exit;
         }
     }
+    // Give the visitor a fresh challenge after any failed attempt.
+    $_SESSION['support_captcha_a'] = random_int(1, 9);
+    $_SESSION['support_captcha_b'] = random_int(1, 9);
+    $_SESSION['support_form_started'] = time();
 }
 
-$pageTitle = 'Support Center - Payhub';
+$articles = [];
+try {
+    $db = Database::connect();
+    $articles = $db->query("SELECT title, slug FROM blog_posts ORDER BY created_at DESC LIMIT 4")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log('[PayHub support] Could not load help articles: ' . $e->getMessage());
+}
+
 include 'includes/header.php';
 ?>
-<div class="pt-20">
-    <div class="bg-indigo-600 py-24 px-4 text-center">
-        <h1 class="text-4xl font-bold text-white mb-8 tracking-tight">How can we help you?</h1>
-        <div class="max-w-2xl mx-auto relative">
-            <i class="lucide-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
-            <input type="text" placeholder="Search for articles, guides..." class="w-full pl-12 pr-4 py-4 rounded-2xl border-none focus:ring-4 focus:ring-indigo-300 shadow-2xl">
-        </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 -mt-12 mb-24">
-        <?php if ($success_msg): ?>
-            <div class="mb-12 p-6 bg-emerald-50 text-emerald-700 rounded-3xl border border-emerald-100 font-bold text-center"><?php echo $success_msg; ?></div>
-        <?php endif; ?>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div class="md:col-span-2">
-                <h2 class="text-2xl font-bold text-slate-900 mb-8">Popular Articles</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <?php
-                    $db = Database::connect();
-                    $articles = $db->query("SELECT * FROM blog_posts ORDER BY created_at DESC LIMIT 4")->fetchAll();
-                    foreach($articles as $art):
-                    ?>
-                        <a href="blog.php?slug=<?php echo $art['slug']; ?>" class="p-6 bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-all font-bold text-slate-700 flex items-center justify-between group">
-                            <?php echo $art['title']; ?>
-                            <i class="lucide-arrow-right w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity"></i>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-
-                <div class="mt-16 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                    <h3 class="text-2xl font-bold text-slate-900 mb-8">Direct Message</h3>
-                    <?php if ($error_msg): ?>
-                        <div class="mb-6 p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 font-medium"><?php echo $error_msg; ?></div>
-                    <?php endif; ?>
-                    <form method="POST" class="space-y-6">
-                        <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
-                        <input type="hidden" name="action" value="contact">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Email Address</label>
-                                <input type="email" name="email" required placeholder="your@email.com" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Subject</label>
-                                <input type="text" name="subject" required placeholder="How can we help?" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Message</label>
-                            <textarea name="message" required rows="5" placeholder="Detailed description..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"></textarea>
-                        </div>
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                            <div class="flex items-center gap-4">
-                                <div class="bg-slate-100 px-4 py-3 rounded-xl font-bold text-slate-600 whitespace-nowrap">
-                                    <?php echo $_SESSION['captcha_a']; ?> + <?php echo $_SESSION['captcha_b']; ?> = ?
-                                </div>
-                                <input type="number" name="captcha" required placeholder="Answer" class="w-24 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            </div>
-                            <button type="submit" class="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">Send Message</button>
-                        </div>
-                    </form>
-                </div>
+<main class="pt-20">
+    <section class="relative overflow-hidden bg-slate-950 px-4 py-20 text-center sm:py-24">
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900"></div>
+        <div class="absolute -left-20 top-10 h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl"></div>
+        <div class="absolute -right-16 bottom-0 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl"></div>
+        <div class="relative mx-auto max-w-3xl">
+            <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-widest text-indigo-200"><i data-lucide="life-buoy" class="h-4 w-4"></i> PayHub Help Center</span>
+            <h1 class="mt-6 text-4xl font-extrabold tracking-tight text-white sm:text-6xl">How can we help?</h1>
+            <p class="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">Find an answer in our guides or get in touch with the right support channel.</p>
+            <div class="mx-auto mt-8 flex max-w-lg flex-col justify-center gap-3 sm:flex-row">
+                <?php if ($isMerchant): ?>
+                    <a href="merchant/tickets.php" class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-950/30 transition hover:bg-indigo-400"><i data-lucide="messages-square" class="h-4 w-4"></i>Open merchant support</a>
+                <?php elseif (!$currentUser): ?>
+                    <a href="login.php" class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-950/30 transition hover:bg-indigo-400"><i data-lucide="log-in" class="h-4 w-4"></i>Merchant login</a>
+                    <a href="register.php" class="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"><i data-lucide="user-plus" class="h-4 w-4"></i>Create an account</a>
+                <?php endif; ?>
             </div>
+        </div>
+    </section>
 
-            <div class="md:col-span-1 space-y-8">
-                <div class="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <div class="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6">
-                        <i class="lucide-book-open text-indigo-600 w-6 h-6"></i>
+    <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <?php if ($success_msg !== ''): ?><div role="status" class="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-semibold text-emerald-800"><?php echo htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
+        <div class="grid gap-10 lg:grid-cols-12">
+            <section class="lg:col-span-7">
+                <div class="mb-6 flex items-end justify-between gap-4">
+                    <div><p class="text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-600">Learn & solve</p><h2 class="mt-2 text-2xl font-extrabold text-slate-950">Popular help articles</h2></div>
+                    <a href="blog.php" class="hidden items-center gap-1 text-sm font-bold text-indigo-600 hover:text-indigo-800 sm:flex">All articles <i data-lucide="arrow-up-right" class="h-4 w-4"></i></a>
+                </div>
+                <?php if ($articles): ?>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <?php foreach ($articles as $article): ?>
+                            <a href="blog.php?slug=<?php echo rawurlencode((string)$article['slug']); ?>" class="group flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
+                                <span class="font-bold leading-snug text-slate-800 group-hover:text-indigo-700"><?php echo htmlspecialchars((string)$article['title'], ENT_QUOTES, 'UTF-8'); ?></span><i data-lucide="arrow-up-right" class="h-4 w-4 shrink-0 text-slate-300 group-hover:text-indigo-600"></i>
+                            </a>
+                        <?php endforeach; ?>
                     </div>
-                    <h3 class="text-xl font-bold text-slate-900 mb-2">Documentation</h3>
-                    <p class="text-slate-600 text-sm leading-relaxed mb-6">Explore our technical documentation for developers and merchants.</p>
-                    <a href="docs.php" class="text-indigo-600 font-bold hover:underline">Read Docs &rarr;</a>
+                <?php else: ?>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Help articles will appear here soon.</div>
+                <?php endif; ?>
+                <div class="mt-8 grid gap-4 sm:grid-cols-2">
+                    <a href="docs.php" class="rounded-2xl border border-slate-200 bg-white p-6 transition hover:border-indigo-200"><span class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><i data-lucide="book-open-check" class="h-5 w-5"></i></span><h3 class="mt-4 font-extrabold text-slate-900">Documentation</h3><p class="mt-1 text-sm leading-relaxed text-slate-500">Guides for payments, integrations, and your merchant dashboard.</p><span class="mt-4 inline-flex items-center gap-1 text-sm font-bold text-indigo-600">Read the docs <i data-lucide="arrow-right" class="h-4 w-4"></i></span></a>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6"><span class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><i data-lucide="shield-check" class="h-5 w-5"></i></span><h3 class="mt-4 font-extrabold text-slate-900">Secure support</h3><p class="mt-1 text-sm leading-relaxed text-slate-500">Merchant ticket conversations are tied to your account and visible only after login.</p></div>
                 </div>
-                <div class="bg-slate-900 p-8 rounded-[2rem] text-white shadow-xl">
-                    <h3 class="text-xl font-bold mb-4">Urgent Issue?</h3>
-                    <p class="text-slate-400 text-sm mb-8 leading-relaxed">Merchants with 'Special' accounts have access to 24/7 priority phone support.</p>
-                    <button class="w-full bg-white text-slate-900 py-3 rounded-xl font-bold text-sm">Call Support</button>
-                </div>
-            </div>
+            </section>
+
+            <aside class="lg:col-span-5">
+                <?php if ($isMerchant): ?>
+                    <div class="sticky top-28 rounded-3xl bg-indigo-950 p-7 text-white shadow-xl sm:p-8">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-indigo-200"><i data-lucide="messages-square" class="h-6 w-6"></i></span>
+                        <p class="mt-6 text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-300">For registered merchants</p>
+                        <h2 class="mt-2 text-2xl font-extrabold">Open a support ticket</h2>
+                        <p class="mt-3 text-sm leading-relaxed text-indigo-100/75">Sign in to create a private request, share details securely, and follow replies from our team.</p>
+                        <a href="merchant/tickets.php" class="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-extrabold text-indigo-950 transition hover:bg-indigo-50"><i data-lucide="arrow-right" class="h-4 w-4"></i>Go to merchant support</a>
+                    </div>
+                <?php else: ?>
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                        <div class="flex items-start gap-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><i data-lucide="message-circle" class="h-6 w-6"></i></span>
+                            <div><p class="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">Not registered yet?</p><h2 class="mt-1 text-xl font-extrabold text-slate-950">Contact us on WhatsApp</h2><p class="mt-2 text-sm leading-relaxed text-slate-500">Public enquiries are sent to our WhatsApp contact. They do not create support tickets. You can create a private ticket after registering and signing in.</p></div>
+                        </div>
+                        <?php if ($error_msg !== ''): ?><div role="alert" class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><?php echo htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
+                        <form method="POST" class="mt-6 space-y-4" novalidate>
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                            <input type="hidden" name="action" value="public_whatsapp_contact">
+                            <div class="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+                            <div><label for="contact-name" class="mb-1.5 block text-xs font-bold text-slate-600">Your name</label><input id="contact-name" type="text" name="name" required maxlength="100" autocomplete="name" value="<?php echo htmlspecialchars($form['name'], ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"></div>
+                            <div><label for="contact-email" class="mb-1.5 block text-xs font-bold text-slate-600">Email address</label><input id="contact-email" type="email" name="email" required maxlength="254" autocomplete="email" value="<?php echo htmlspecialchars($form['email'], ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"></div>
+                            <div><label for="contact-subject" class="mb-1.5 block text-xs font-bold text-slate-600">Subject</label><input id="contact-subject" type="text" name="subject" required maxlength="120" value="<?php echo htmlspecialchars($form['subject'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="What do you need help with?" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"></div>
+                            <div><label for="contact-message" class="mb-1.5 block text-xs font-bold text-slate-600">Message</label><textarea id="contact-message" name="message" required minlength="15" maxlength="3000" rows="4" placeholder="Please include enough detail for us to help…" class="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"><?php echo htmlspecialchars($form['message'], ENT_QUOTES, 'UTF-8'); ?></textarea><p class="mt-1 text-right text-[11px] text-slate-400">15–3,000 characters</p></div>
+                            <div class="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><span class="text-sm font-bold text-slate-700">Security check: <?php echo (int)$_SESSION['support_captcha_a']; ?> + <?php echo (int)$_SESSION['support_captcha_b']; ?> =</span><input aria-label="Answer to security check" type="number" name="captcha" required inputmode="numeric" class="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"><span class="text-xs text-slate-400">Please solve to continue</span></div>
+                            <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700"><i data-lucide="send" class="h-4 w-4"></i>Continue to WhatsApp</button>
+                            <p class="text-center text-[11px] leading-relaxed text-slate-400">WhatsApp opens with your message prepared. Review it and tap <strong>Send</strong> in WhatsApp to contact us.</p>
+                        </form>
+                    </div>
+                <?php endif; ?>
+            </aside>
         </div>
     </div>
-</div>
+</main>
 <script src="https://unpkg.com/lucide@latest"></script>
-<script>lucide.createIcons();</script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 <?php include 'includes/footer.php'; ?>

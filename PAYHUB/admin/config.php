@@ -27,6 +27,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($key === 'sys_db_version') {
             ensure_critical_tables();
         }
+    } elseif ($_POST['action'] === 'update_support_whatsapp') {
+        $rawNumber = trim((string)($_POST['support_whatsapp_number'] ?? ''));
+        if ($rawNumber === '') {
+            $number = '';
+        } elseif (!preg_match('/^[+]?[- 0-9().]+$/', $rawNumber)) {
+            $error_msg = 'Enter a WhatsApp number using digits and optional spaces, plus, brackets, or hyphens.';
+            $number = null;
+        } else {
+            $number = preg_replace('/[^0-9]/', '', $rawNumber);
+            if (strlen($number) < 7 || strlen($number) > 15) {
+                $error_msg = 'Use the full international WhatsApp number (7–15 digits, including country code).';
+                $number = null;
+            }
+        }
+        if ($number !== null) {
+            $stmt = $db->prepare("INSERT INTO config (`key`, `value`) VALUES ('support_whatsapp_number', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+            $stmt->execute([$number]);
+            $success_msg = $number === '' ? 'Public WhatsApp contact has been cleared.' : 'Public WhatsApp contact number updated.';
+        }
     } elseif ($_POST['action'] === 'update_logo') {
         if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
             $ext = pathinfo($_FILES['site_logo']['name'], PATHINFO_EXTENSION);
@@ -105,8 +124,13 @@ include '../includes/dashboard-head.php';
         <?php include '../includes/topbar.php'; ?>
         <div class="flex-1 overflow-y-auto p-4 sm:p-8">
             <?php if (isset($success_msg)): ?>
-                <div class="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
-                    <?php echo $success_msg; ?>
+                <div role="status" class="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 font-medium">
+                    <?php echo htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?>
+                </div>
+            <?php endif; ?>
+            <?php if (isset($error_msg)): ?>
+                <div role="alert" class="mb-6 p-4 bg-rose-50 text-rose-700 rounded-2xl border border-rose-100 font-medium">
+                    <?php echo htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?>
                 </div>
             <?php endif; ?>
 
@@ -131,6 +155,22 @@ include '../includes/dashboard-head.php';
                 <div class="flex items-center gap-2 bg-black/20 p-3 rounded-xl border border-white/10 w-full md:w-auto">
                     <code class="text-xs font-mono text-indigo-300 truncate"><?php echo BASE_URL; ?>webhook-paystack.php</code>
                     <button onclick="navigator.clipboard.writeText('<?php echo BASE_URL; ?>webhook-paystack.php'); alert('Webhook URL copied!');" class="p-2 hover:bg-white/10 rounded-lg transition-colors"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+
+            <div class="mb-8 max-w-7xl rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm sm:p-8">
+                <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                    <div class="max-w-xl">
+                        <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><i data-lucide="message-circle" class="h-5 w-5"></i></span><div><h2 class="font-extrabold text-slate-900">Public support WhatsApp</h2><p class="text-xs text-slate-500">Destination for enquiries submitted from the public support page.</p></div></div>
+                        <p class="mt-3 text-xs leading-relaxed text-slate-500">Enter the complete international number, including country code, without needing a WhatsApp prefix. The visitor reviews and sends their prepared message in WhatsApp.</p>
+                    </div>
+                    <form method="POST" class="flex w-full flex-col gap-2 sm:flex-row md:max-w-lg">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_support_whatsapp">
+                        <label class="sr-only" for="support-whatsapp-number">WhatsApp number with country code</label>
+                        <input id="support-whatsapp-number" type="tel" name="support_whatsapp_number" value="<?php echo htmlspecialchars(getConfig('support_whatsapp_number'), ENT_QUOTES, 'UTF-8'); ?>" placeholder="+2348012345678" autocomplete="tel" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+                        <button type="submit" class="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700">Save number</button>
+                    </form>
                 </div>
             </div>
 

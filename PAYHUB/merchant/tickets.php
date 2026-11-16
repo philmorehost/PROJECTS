@@ -5,6 +5,7 @@ require_once '../includes/functions.php';
 if (!isLoggedIn()) redirect('../login.php');
 
 $user = getAuthUser();
+if (!$user || ($user['role'] ?? '') !== 'merchant') redirect('../support.php');
 $db = Database::connect();
 $pageTitle = 'Support Center - PayHub';
 $success_msg = '';
