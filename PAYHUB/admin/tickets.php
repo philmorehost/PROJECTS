@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($message === '') {
                 $error_msg = 'Write a reply before sending.';
             } else {
-                $stmt = $db->prepare("SELECT t.subject, t.guest_email, t.is_registered, u.email AS user_email FROM tickets t LEFT JOIN users u ON u.id = t.user_id WHERE t.id = ?");
+                $stmt = $db->prepare("SELECT t.*, u.business_name, u.email AS user_email FROM tickets t LEFT JOIN users u ON u.id = t.user_id WHERE t.id = ?");
                 $stmt->execute([$ticketId]);
                 $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$ticket) {
@@ -42,11 +42,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 } else {
                     $stmt = $db->prepare('INSERT INTO ticket_messages (ticket_id, user_id, message, is_admin) VALUES (?, ?, ?, 1)');
                     $stmt->execute([$ticketId, $user['id'], $message]);
-                    $to = !empty($ticket['is_registered']) ? ($ticket['user_email'] ?? '') : ($ticket['guest_email'] ?? '');
-                    if ($to !== '') {
-                        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
-                        sendEmail($to, 'Re: ' . $ticket['subject'], '<h2>Support Reply</h2><p>' . $safeMessage . '</p><hr><p>You can manage this ticket in your PayHub dashboard.</p>');
+
+                    $merchantEmail = trim((string)(($ticket['user_email'] ?? '') !== '' ? $ticket['user_email'] : ($ticket['guest_email'] ?? '')));
+                    $merchantName = trim((string)($ticket['business_name'] ?? ''));
+                    if ($merchantName === '') {
+                        $merchantName = $merchantEmail !== '' ? $merchantEmail : (!empty($ticket['is_registered']) ? 'Registered merchant' : 'Guest');
                     }
+
+                    if ($merchantEmail !== '') {
+                        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+                        $safeSubject = htmlspecialchars((string)($ticket['subject'] ?? ''), ENT_QUOTES, 'UTF-8');
+                        $dashboardUrl = htmlspecialchars(BASE_URL . 'merchant/tickets.php', ENT_QUOTES, 'UTF-8');
+                        sendEmail(
+                            $merchantEmail,
+                            'Re: [Ticket #' . (int)$ticketId . '] ' . (string)($ticket['subject'] ?? 'Support Request'),
+                            "<h2 style='margin: 0 0 12px; color: #0f172a;'>Support Reply on Ticket #" . (int)$ticketId . "</h2>"
+                            . "<p style='margin: 0 0 16px; color: #64748b; font-size: 14px;'>Subject: <strong style='color: #0f172a;'>{$safeSubject}</strong></p>"
+                            . "<div style='background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4f46e5; border-radius: 12px; padding: 16px 18px; margin-bottom: 24px;'>{$safeMessage}</div>"
+                            . "<p style='margin: 0;'><a href='{$dashboardUrl}' style='display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;'>View Ticket in Dashboard</a></p>"
+                        );
+                    }
+
+                    $adminSender = trim((string)($user['business_name'] ?? ''));
+                    if ($adminSender === '') {
+                        $adminSender = trim((string)($user['full_name'] ?? ''));
+                    }
+                    if ($adminSender === '') {
+                        $adminSender = trim((string)($user['email'] ?? 'Support Team'));
+                    }
+
+                    notifySupportTicketAdmins([
+                        'event' => 'admin_reply',
+                        'ticket_id' => (int)$ticketId,
+                        'subject' => (string)($ticket['subject'] ?? ''),
+                        'priority' => (string)($ticket['priority'] ?? 'medium'),
+                        'status' => (string)($ticket['status'] ?? 'open'),
+                        'merchant_name' => $merchantName,
+                        'merchant_email' => $merchantEmail,
+                        'sender_name' => $adminSender,
+                        'message' => $message,
+                    ]);
+
                     $success_msg = 'Your reply was added to the ticket.';
                 }
             }

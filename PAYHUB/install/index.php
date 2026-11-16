@@ -355,6 +355,7 @@ if ($stage === 2 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             ('smtp_user', ''),
             ('smtp_pass', ''),
             ('smtp_from', 'noreply@payhub.com'),
+            ('admin_email', ''),
             ('site_name', 'Payhub'),
             ('site_logo', '');
         ";
@@ -387,6 +388,8 @@ if ($stage === 3 && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
         $stmt = $pdo->prepare("INSERT INTO users (email, password_hash, full_name, role) VALUES (?, ?, ?, 'admin')");
         $stmt->execute([$email, $pass, $name]);
+        $cfgStmt = $pdo->prepare("INSERT INTO config (`key`, `value`) VALUES ('admin_email', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+        $cfgStmt->execute([trim((string)$email)]);
         
         header("Location: ?stage=4");
         exit;

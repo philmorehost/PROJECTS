@@ -87,6 +87,7 @@ $pricingDefaults = [
     'aggregator_international_fee_percent' => '3.9', 'aggregator_international_fee_flat' => '100',
     'local_markup_percent' => '0', 'local_markup_flat' => '0', 'local_markup_cap' => '0',
     'international_markup_percent' => '0', 'international_markup_flat' => '0', 'international_markup_cap' => '0',
+    'admin_email' => (string)($user['email'] ?? ''),
 ];
 $seedPricing = $db->prepare("INSERT IGNORE INTO config (`key`, `value`) VALUES (?, ?)");
 foreach ($pricingDefaults as $key => $value) $seedPricing->execute([$key, $value]);
@@ -387,6 +388,7 @@ include '../includes/dashboard-head.php';
                                 ['key' => 'payout_markup', 'label' => 'Payout Markup (Flat)', 'desc' => 'Flat PayHub margin added to payout fees'],
                                 ['key' => 'min_payout_amount', 'label' => 'Min Payout Amount', 'desc' => 'Minimum amount a merchant can request for payout'],
                                 ['key' => 'max_daily_payout_requests', 'label' => 'Max Daily Payouts', 'desc' => 'Max times a merchant can request payout per day'],
+                                ['key' => 'admin_email', 'label' => 'Admin Notification Email', 'desc' => 'Destination email(s) for support tickets, replies, and platform alerts'],
                                 ['key' => 'smtp_host', 'label' => 'SMTP Host', 'desc' => 'Email server address']
                             ];
                             foreach($ref as $item):

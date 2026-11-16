@@ -2077,30 +2077,70 @@ function verify_otp($email, $otp, $purpose) {
     }
 }
 
-function sendEmail($to, $subject, $body) {
-    $smtp_host = getConfig('smtp_host');
-    $smtp_port = getConfig('smtp_port');
-    $smtp_user = getConfig('smtp_user');
-    $smtp_pass = getConfig('smtp_pass');
-    $smtp_from = getConfig('smtp_from');
-    $site_name = getConfig('site_name', 'Payhub');
+function sendEmail($to, $subject, $body, array $options = []) {
+    $to = trim((string)$to);
+    if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        error_log("sendEmail: skipped invalid recipient address '{$to}'");
+        return false;
+    }
+
+    $smtp_host = trim((string)getConfig('smtp_host'));
+    $smtp_port = trim((string)getConfig('smtp_port'));
+    $smtp_user = trim((string)getConfig('smtp_user'));
+    $smtp_pass = (string)getConfig('smtp_pass');
+    $smtp_from = trim((string)getConfig('smtp_from'));
+    $site_name = str_replace(["\r", "\n"], '', trim((string)getConfig('site_name', 'Payhub')));
+    if ($site_name === '') {
+        $site_name = 'Payhub';
+    }
     $logo = getConfig('site_logo');
+
+    $replyTo = trim((string)($options['reply_to'] ?? ''));
+    if ($replyTo !== '' && !filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+        $replyTo = '';
+    }
+    $replyToName = str_replace(["\r", "\n"], '', trim((string)($options['reply_to_name'] ?? '')));
+    $cleanSubject = str_replace(["\r", "\n"], ' ', (string)$subject);
 
     // Development Fallback: Log email instead of sending if email_mock_mode is enabled
     if (getConfig('email_mock_mode') === '1') {
-        error_log("sendEmail (MOCKED) to {$to}: [{$subject}] " . strip_tags($body));
+        if (isset($GLOBALS['__payhub_mock_emails']) && is_array($GLOBALS['__payhub_mock_emails'])) {
+            $GLOBALS['__payhub_mock_emails'][] = [
+                'to' => $to,
+                'subject' => $cleanSubject,
+                'body' => $body,
+                'options' => $options,
+            ];
+        }
+        error_log("sendEmail (MOCKED) to {$to}: [{$cleanSubject}] " . strip_tags((string)$body));
         return true;
     }
 
-    // Use smtp_user as From address when smtp_from is not configured
-    if (empty($smtp_from)) {
-        $smtp_from = $smtp_user ?: ('noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $smtpUserIsEmail = ($smtp_user !== '' && filter_var($smtp_user, FILTER_VALIDATE_EMAIL));
+
+    // Resolve a valid From address. Replace the installer's placeholder noreply@payhub.com
+    // when a real mailbox is configured in smtp_user so strict SMTP servers (cPanel/Exim) do not reject MAIL FROM.
+    if (
+        $smtp_from === ''
+        || !filter_var($smtp_from, FILTER_VALIDATE_EMAIL)
+        || (strcasecmp($smtp_from, 'noreply@payhub.com') === 0 && $smtpUserIsEmail)
+    ) {
+        if ($smtpUserIsEmail) {
+            $smtp_from = $smtp_user;
+        } else {
+            $rawHost = preg_replace('/:\d+$/', '', strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? ''))));
+            $fallbackCandidate = ($rawHost !== '' && strpos($rawHost, '.') !== false)
+                ? ('noreply@' . $rawHost)
+                : 'noreply@payhub.com';
+            $smtp_from = filter_var($fallbackCandidate, FILTER_VALIDATE_EMAIL) ? $fallbackCandidate : 'noreply@payhub.com';
+        }
     }
 
     $logo_html = '';
     if ($logo) {
-        $logo_url = BASE_URL . 'uploads/' . $logo;
-        $logo_html = "<img src='$logo_url' alt='$site_name' style='height: 40px; margin-bottom: 20px;'>";
+        $logo_url = htmlspecialchars(BASE_URL . 'uploads/' . $logo, ENT_QUOTES, 'UTF-8');
+        $safe_site_name = htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8');
+        $logo_html = "<img src='$logo_url' alt='$safe_site_name' style='height: 40px; margin-bottom: 20px;'>";
     }
 
     $modern_body = "
@@ -2118,78 +2158,262 @@ function sendEmail($to, $subject, $body) {
                     $body
                 </div>
                 <div style='margin-top: 40px; padding-top: 24px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;'>
-                    &copy; " . date('Y') . " $site_name. All rights reserved.
+                    &copy; " . date('Y') . " " . htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8') . ". All rights reserved.
                 </div>
             </div>
         </div>
     </body>
     </html>";
 
-    if (!$smtp_host || !$smtp_user) {
-        $headers = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\nFrom: $site_name <$smtp_from>\r\n";
-        $result = mail($to, $subject, $modern_body, $headers);
+    if ($smtp_host === '' || $smtp_user === '') {
+        $headers = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\nFrom: {$site_name} <{$smtp_from}>\r\n";
+        if ($replyTo !== '') {
+            $headers .= ($replyToName !== '' ? "Reply-To: {$replyToName} <{$replyTo}>\r\n" : "Reply-To: {$replyTo}\r\n");
+        }
+        $result = @mail($to, $cleanSubject, $modern_body, $headers);
         if (!$result) {
             $last_error = error_get_last();
             error_log("sendEmail: PHP mail() failed sending to {$to}. Error: " . ($last_error['message'] ?? 'Unknown error'));
         }
-        return $result;
+        return (bool)$result;
     }
 
-    $mail = new PHPMailer(true);
-    try {
+    $scheme = '';
+    $normalizedHost = $smtp_host;
+    if (preg_match('#^(ssl|tls)://(.+)$#i', $smtp_host, $m)) {
+        $scheme = strtolower($m[1]);
+        $normalizedHost = trim($m[2]);
+    }
+    $port = (int)$smtp_port > 0 ? (int)$smtp_port : ($scheme === 'ssl' ? 465 : 587);
+
+    $attemptSmtpSend = function ($fromAddress) use (
+        $normalizedHost,
+        $scheme,
+        $port,
+        $smtp_user,
+        $smtp_pass,
+        $site_name,
+        $to,
+        $replyTo,
+        $replyToName,
+        $cleanSubject,
+        $modern_body
+    ) {
+        $mail = new PHPMailer(true);
         $mail->isSMTP();
-        $mail->CharSet = 'UTF-8';
-        $mail->Host       = $smtp_host;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = $smtp_user;
-        $mail->Password   = $smtp_pass;
-        if ((int)$smtp_port === 465) {
+        $mail->CharSet  = 'UTF-8';
+        $mail->Timeout  = 15;
+        $mail->Host     = $normalizedHost;
+        $mail->SMTPAuth = true;
+        $mail->Username = $smtp_user;
+        $mail->Password = $smtp_pass;
+        if ($scheme === 'ssl' || $port === 465) {
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        } else {
+        } elseif ($scheme === 'tls' || $port === 587) {
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        } else {
+            $mail->SMTPSecure  = '';
+            $mail->SMTPAutoTLS = true;
         }
-        $mail->Port       = $smtp_port;
-        $mail->setFrom($smtp_from, $site_name);
+        $mail->Port = $port;
+        $mail->setFrom($fromAddress, $site_name);
         $mail->addAddress($to);
+        if ($replyTo !== '') {
+            $mail->addReplyTo($replyTo, $replyToName);
+        }
         $mail->isHTML(true);
-        $mail->Subject = $subject;
+        $mail->Subject = $cleanSubject;
         $mail->Body    = $modern_body;
+        $mail->AltBody = trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", (string)$modern_body)));
         $mail->send();
         return true;
-    } catch (Exception $e) {
-        error_log("sendEmail: PHPMailer error sending to {$to}: " . $e->getMessage());
+    };
+
+    try {
+        return $attemptSmtpSend($smtp_from);
+    } catch (\Throwable $e) {
+        // Retry once with authenticated smtp_user as From if a custom From address was rejected by the SMTP server.
+        if ($smtpUserIsEmail && strcasecmp($smtp_from, $smtp_user) !== 0) {
+            try {
+                return $attemptSmtpSend($smtp_user);
+            } catch (\Throwable $retryErr) {
+                error_log("sendEmail: SMTP error sending to {$to} (retry with smtp_user failed): " . $retryErr->getMessage());
+                return false;
+            }
+        }
+        error_log("sendEmail: SMTP error sending to {$to}: " . $e->getMessage());
         return false;
     }
 }
 
 /**
  * Email address(es) that should receive administrative notifications.
- * Combines admin users (users.role = 'admin') with the configured SMTP user
- * (used elsewhere as the admin contact) as a fallback — deduplicated.
+ * Resolves configured admin/support notification email(s), active admin user accounts,
+ * and valid SMTP mailbox fallbacks — deduplicated and validated.
  */
 function getAdminEmails() {
     $emails = [];
+    $addParsedList = function ($raw) use (&$emails) {
+        if (!is_string($raw) || trim($raw) === '') {
+            return;
+        }
+        $parts = preg_split('/[\s,;]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($parts as $part) {
+            $candidate = strtolower(trim($part));
+            if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                $emails[] = $candidate;
+            }
+        }
+    };
+
+    $addParsedList((string)getConfig('admin_email', ''));
+    $addParsedList((string)getConfig('support_email', ''));
+
     try {
         $db = Database::connect();
-        $rows = $db->query("SELECT email FROM users WHERE role = 'admin'")->fetchAll();
-        foreach ($rows as $r) {
-            if (!empty($r['email'])) $emails[] = strtolower(trim($r['email']));
+        try {
+            $rows = $db->query("SELECT email FROM users WHERE role = 'admin' AND (is_deleted = 0 OR is_deleted IS NULL)")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $inner) {
+            $rows = $db->query("SELECT email FROM users WHERE role = 'admin'")->fetchAll(PDO::FETCH_ASSOC);
         }
-    } catch (Exception $e) {
+        foreach ($rows as $r) {
+            $addr = strtolower(trim((string)($r['email'] ?? '')));
+            if ($addr !== '' && filter_var($addr, FILTER_VALIDATE_EMAIL)) {
+                $emails[] = $addr;
+            }
+        }
+    } catch (\Throwable $e) {
         error_log("getAdminEmails: " . $e->getMessage());
     }
-    $fallback = getConfig('smtp_user');
-    if (!empty($fallback)) $emails[] = strtolower(trim($fallback));
+
+    $smtpUser = strtolower(trim((string)getConfig('smtp_user', '')));
+    if ($smtpUser !== '' && filter_var($smtpUser, FILTER_VALIDATE_EMAIL)) {
+        $emails[] = $smtpUser;
+    }
+
+    if (empty($emails)) {
+        $smtpFrom = strtolower(trim((string)getConfig('smtp_from', '')));
+        if ($smtpFrom !== '' && strcasecmp($smtpFrom, 'noreply@payhub.com') !== 0 && filter_var($smtpFrom, FILTER_VALIDATE_EMAIL)) {
+            $emails[] = $smtpFrom;
+        }
+    }
+
     return array_values(array_unique($emails));
 }
 
 /**
  * Send an email notification to all platform administrators (best-effort).
  */
-function notifyAdmins($subject, $body) {
+function notifyAdmins($subject, $body, array $options = []) {
     $sent = false;
-    foreach (getAdminEmails() as $email) {
-        if (sendEmail($email, $subject, $body)) $sent = true;
+    try {
+        $recipients = getAdminEmails();
+        if (empty($recipients)) {
+            error_log("notifyAdmins: no valid admin email recipients configured for subject '{$subject}'");
+            return false;
+        }
+        foreach ($recipients as $email) {
+            try {
+                if (sendEmail($email, $subject, $body, $options)) {
+                    $sent = true;
+                }
+            } catch (\Throwable $inner) {
+                error_log("notifyAdmins: error sending to {$email}: " . $inner->getMessage());
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log("notifyAdmins: " . $e->getMessage());
     }
     return $sent;
+}
+
+/**
+ * Sends a structured support ticket notification (new request or any reply) to the admin email(s).
+ */
+function notifySupportTicketAdmins(array $ticketData) {
+    try {
+        $event = (string)($ticketData['event'] ?? 'new_ticket');
+        $ticketId = (int)($ticketData['ticket_id'] ?? 0);
+        $subjectText = trim((string)($ticketData['subject'] ?? '(No subject)'));
+        if ($subjectText === '') {
+            $subjectText = '(No subject)';
+        }
+        $priority = strtolower(trim((string)($ticketData['priority'] ?? 'medium')));
+        $status = strtolower(trim((string)($ticketData['status'] ?? 'open')));
+        $merchantName = trim((string)($ticketData['merchant_name'] ?? ''));
+        $merchantEmail = trim((string)($ticketData['merchant_email'] ?? ''));
+        $senderName = trim((string)($ticketData['sender_name'] ?? ''));
+        $message = (string)($ticketData['message'] ?? '');
+
+        if ($merchantName === '') {
+            $merchantName = $merchantEmail !== '' ? $merchantEmail : 'Merchant';
+        }
+
+        $ticketLabel = $ticketId > 0 ? ('#' . $ticketId) : 'New';
+        if ($event === 'merchant_reply') {
+            $emailSubject = "[Ticket {$ticketLabel}] New Reply: {$subjectText}";
+            $heading = "New Reply on Support Ticket {$ticketLabel}";
+            $subtext = 'A merchant added a new reply to an existing support ticket.';
+        } elseif ($event === 'admin_reply') {
+            $emailSubject = "[Ticket {$ticketLabel}] Support Reply: {$subjectText}";
+            $heading = "Support Reply on Ticket {$ticketLabel}";
+            $subtext = 'A support team reply was posted on this ticket.';
+        } else {
+            $emailSubject = "[Ticket {$ticketLabel}] New Support Ticket: {$subjectText}";
+            $heading = "New Support Ticket {$ticketLabel}";
+            $subtext = 'A new support ticket has been submitted and awaits attention.';
+        }
+
+        $safeHeading = htmlspecialchars($heading, ENT_QUOTES, 'UTF-8');
+        $safeSubtext = htmlspecialchars($subtext, ENT_QUOTES, 'UTF-8');
+        $safeTicketLabel = htmlspecialchars($ticketLabel, ENT_QUOTES, 'UTF-8');
+        $safeSubject = htmlspecialchars($subjectText, ENT_QUOTES, 'UTF-8');
+        $safeMerchantName = htmlspecialchars($merchantName, ENT_QUOTES, 'UTF-8');
+        $safeMerchantEmail = htmlspecialchars($merchantEmail, ENT_QUOTES, 'UTF-8');
+        $safePriority = htmlspecialchars(ucfirst($priority !== '' ? $priority : 'medium'), ENT_QUOTES, 'UTF-8');
+        $statusDisplay = in_array($status, ['pending', 'processing'], true) ? 'In progress' : ucfirst($status !== '' ? $status : 'open');
+        $safeStatus = htmlspecialchars($statusDisplay, ENT_QUOTES, 'UTF-8');
+        $safeSender = htmlspecialchars($senderName, ENT_QUOTES, 'UTF-8');
+        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        $inboxUrl = htmlspecialchars(BASE_URL . 'admin/tickets.php' . ($ticketId > 0 ? ('?q=' . rawurlencode($subjectText)) : ''), ENT_QUOTES, 'UTF-8');
+
+        $merchantDisplay = ($merchantEmail !== '' && strcasecmp($merchantName, $merchantEmail) !== 0)
+            ? "{$safeMerchantName} &lt;{$safeMerchantEmail}&gt;"
+            : $safeMerchantName;
+
+        $senderRow = '';
+        if ($event === 'admin_reply' && $senderName !== '') {
+            $senderRow = "<tr><td style='padding: 6px 0; color: #64748b; font-weight: 600; width: 120px;'>Replied By</td><td style='padding: 6px 0; color: #0f172a; font-weight: 600;'>{$safeSender}</td></tr>";
+        }
+
+        $body = "
+            <h2 style='margin: 0 0 8px; color: #0f172a; font-size: 20px;'>{$safeHeading}</h2>
+            <p style='margin: 0 0 20px; color: #64748b; font-size: 14px;'>{$safeSubtext}</p>
+            <table role='presentation' cellspacing='0' cellpadding='0' style='width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin-bottom: 20px; font-size: 14px;'>
+                <tr><td style='padding: 6px 0; color: #64748b; font-weight: 600; width: 120px;'>Ticket</td><td style='padding: 6px 0; color: #0f172a; font-weight: 700;'>{$safeTicketLabel}</td></tr>
+                <tr><td style='padding: 6px 0; color: #64748b; font-weight: 600;'>Subject</td><td style='padding: 6px 0; color: #0f172a; font-weight: 600;'>{$safeSubject}</td></tr>
+                <tr><td style='padding: 6px 0; color: #64748b; font-weight: 600;'>Merchant</td><td style='padding: 6px 0; color: #0f172a;'>{$merchantDisplay}</td></tr>
+                <tr><td style='padding: 6px 0; color: #64748b; font-weight: 600;'>Priority</td><td style='padding: 6px 0; color: #0f172a;'>{$safePriority}</td></tr>
+                <tr><td style='padding: 6px 0; color: #64748b; font-weight: 600;'>Status</td><td style='padding: 6px 0; color: #0f172a;'>{$safeStatus}</td></tr>
+                {$senderRow}
+            </table>
+            <div style='background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #4f46e5; border-radius: 12px; padding: 16px 18px; margin-bottom: 24px;'>
+                <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 8px;'>Message</div>
+                <div style='color: #1e293b; font-size: 15px; line-height: 1.6;'>{$safeMessage}</div>
+            </div>
+            <p style='margin: 0;'>
+                <a href='{$inboxUrl}' style='display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 12px;'>Open Support Inbox</a>
+            </p>";
+
+        $options = [];
+        if ($merchantEmail !== '' && filter_var($merchantEmail, FILTER_VALIDATE_EMAIL)) {
+            $options['reply_to'] = $merchantEmail;
+            $options['reply_to_name'] = $merchantName;
+        }
+
+        return notifyAdmins($emailSubject, $body, $options);
+    } catch (\Throwable $e) {
+        error_log("notifySupportTicketAdmins: " . $e->getMessage());
+        return false;
+    }
 }
