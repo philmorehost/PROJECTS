@@ -54,7 +54,7 @@ function ensure_critical_tables() {
     if (!isInstalled()) return;
 
     // Quick version check to avoid redundant DB calls on every request
-    $version = '1.2.2';
+    $version = '1.2.3';
     if (getConfig('sys_db_version') === $version) return;
 
     try {
@@ -185,6 +185,19 @@ function ensure_critical_tables() {
             }
         } catch (\Throwable $e) {
             error_log('[PayHub] Payout status schema migration failed: ' . $e->getMessage());
+        }
+
+        // Legacy support installs disagree on whether an in-progress ticket is `pending`
+        // or `processing`. Keep both values writable across upgrades.
+        try {
+            $ticketStatus = $db->query("SHOW COLUMNS FROM `tickets` LIKE 'status'")->fetch();
+            $ticketStatusType = strtolower((string)($ticketStatus['Type'] ?? ''));
+            if (strpos($ticketStatusType, 'enum(') !== false
+                && (strpos($ticketStatusType, 'pending') === false || strpos($ticketStatusType, 'processing') === false)) {
+                $db->exec("ALTER TABLE `tickets` MODIFY COLUMN `status` VARCHAR(20) NOT NULL DEFAULT 'open'");
+            }
+        } catch (\Throwable $e) {
+            error_log('[PayHub] Ticket status schema migration failed: ' . $e->getMessage());
         }
 
         // Ensure support system columns and fix foreign key constraints
