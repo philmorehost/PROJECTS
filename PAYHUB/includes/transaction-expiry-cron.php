@@ -2,22 +2,11 @@
 // php-version/includes/transaction-expiry-cron.php
 require_once __DIR__ . '/functions.php';
 
-// Reachable over HTTP as well as from cron, since the whole script tree is web-served.
-// Scheduling belongs to the server, so refuse web callers unless they are a logged-in
-// admin. (includes/payout-cron.php has the same exposure and no guard - worth adding.)
-$is_cli = (PHP_SAPI === 'cli');
-if (!$is_cli) {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        @session_start();
-    }
-    if (!isAdmin()) {
-        http_response_code(403);
-        exit("Forbidden: this script runs from the command line.\n");
-    }
-    header('Content-Type: text/plain');
+$isDirectExpiryCron = realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__);
+if ($isDirectExpiryCron && PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("CLI only. Use the authenticated Cron Manager to run an admin batch.\n");
 }
-
-$cronRunId = $is_cli ? payhub_cron_start('transaction_expiry') : 0;
 
 /*
  * Reconciled expiry for abandoned transactions.
@@ -38,21 +27,26 @@ $cronRunId = $is_cli ? payhub_cron_start('transaction_expiry') : 0;
  * money, then no stale pending checkout is left pending indefinitely. Suggested schedule: every 10 minutes.
  */
 
-$db = Database::connect();
-ensure_payment_schema();
+function payhub_run_transaction_expiry($batchLimit = null, $adminTriggered = false) {
+    $cronRunId = payhub_cron_start('transaction_expiry');
+    payhub_cron_log($cronRunId, 'info', $adminTriggered ? 'Admin requested pending-transaction expiry' : 'Scheduled pending-transaction expiry started');
+    $db = Database::connect();
+    ensure_payment_schema();
 
 $grace_minutes = 1440; // fixed 24-hour expiry policy
 @set_time_limit(0);
 // A row can require two gateway requests (DVA lookup and reference verification).
 // Keep each run below the 10-minute schedule even when every request hits its timeout.
-$batch = max(1, min(20, (int)getConfig('pending_expiry_batch', '20')));
+$configuredBatch = max(1, min(20, (int)getConfig('pending_expiry_batch', '20')));
+$batch = $batchLimit === null ? $configuredBatch : max(1, min($configuredBatch, (int)$batchLimit));
 $hasMysqlLock = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
 if ($hasMysqlLock) {
     $lockStmt = $db->query("SELECT GET_LOCK('payhub_transaction_expiry', 0)");
     if ((int)$lockStmt->fetchColumn() !== 1) {
         error_log('[PayHub] expiry cron skipped: another run holds the lock.');
+        payhub_cron_log($cronRunId, 'warning', 'Another expiry run holds the advisory lock');
         payhub_cron_finish($cronRunId, 'skipped', 'Another expiry run holds the advisory lock.');
-        exit("Expiry reconciliation skipped: another run holds the lock.\n");
+        return ['status' => 'skipped', 'checked' => 0, 'expired' => 0, 'fulfilled' => 0, 'remaining' => null, 'summary' => 'Another expiry run holds the advisory lock.'];
     }
     register_shutdown_function(function () use ($db) {
         try { $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')"); } catch (\Throwable $e) {}
@@ -66,20 +60,23 @@ $stmt = $db->prepare(
 );
 $stmt->execute();
 $rows = $stmt->fetchAll();
+payhub_cron_log($cronRunId, 'info', 'Loaded stale pending transaction batch', ['checked' => count($rows), 'batch_limit' => $batch, 'admin_triggered' => $adminTriggered]);
 
 if (!$rows) {
     if ($hasMysqlLock) $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')");
     $message = "No pending transactions older than {$grace_minutes} minutes.";
-    echo $message . "\n";
+    if (!$adminTriggered) echo $message . "\n";
     error_log('[PayHub] expiry cron: ' . $message);
     payhub_cron_finish($cronRunId, 'success', $message);
-    exit;
+    return ['status' => 'success', 'checked' => 0, 'expired' => 0, 'fulfilled' => 0, 'remaining' => 0, 'summary' => $message];
 }
 
 $fulfilled = 0;
 $expired = 0;
 $gateway_open = 0;
 $unreachable = 0;
+$mismatched = 0;
+$errors = 0;
 
 foreach ($rows as $tx) {
     // Confirm local and missed Paystack DVA transfers before applying the 24-hour timeout.
@@ -88,10 +85,12 @@ foreach ($rows as $tx) {
     try {
         if (reconcile_dva_for_checkout($db, (int)$tx['user_id'], $tx, true)) {
             $fulfilled++;
+            payhub_cron_log($cronRunId, 'info', 'Pending checkout matched to a successful virtual-account payment', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference']]);
             continue;
         }
     } catch (\Throwable $e) {
         error_log('[PayHub] expiry cron DVA reconciliation failed for ' . $tx['reference'] . ': ' . $e->getMessage());
+        payhub_cron_log($cronRunId, 'warning', 'DVA reconciliation raised an exception; direct gateway verification will follow', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'error' => $e->getMessage()]);
     }
 
     $is_test = ((int)$tx['is_test'] === 1);
@@ -102,6 +101,7 @@ foreach ($rows as $tx) {
     } catch (\Throwable $e) {
         $response = ['status' => false, 'message' => 'Gateway verification raised an exception: ' . $e->getMessage(), '_http_code' => 0];
         error_log('[PayHub] expiry cron gateway verification failed for ' . $tx['reference'] . ': ' . $e->getMessage());
+        payhub_cron_log($cronRunId, 'error', 'Gateway verification raised an exception', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'error' => $e->getMessage()]);
     }
 
     if (!is_array($response)) {
@@ -120,6 +120,12 @@ foreach ($rows as $tx) {
         // claim is exactly-once so a webhook arriving mid-run cannot double-credit.
         if (!amount_covers($tx['amount'], $settled)) {
             flag_amount_mismatch($tx, $tx['amount'], $settled, 'expiry cron');
+            $mismatched++;
+            $stateStmt = $db->prepare("SELECT status FROM transactions WHERE id = ?");
+            $stateStmt->execute([$tx['id']]);
+            $mismatchMarked = $stateStmt->fetchColumn() !== 'pending';
+            if (!$mismatchMarked) $errors++;
+            payhub_cron_log($cronRunId, $mismatchMarked ? 'warning' : 'error', 'Gateway reported a success below the requested amount; ' . ($mismatchMarked ? 'transaction rejected' : 'database failed to transition transaction out of pending'), ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'expected' => (float)$tx['amount'], 'settled' => $settled]);
             continue;
         }
 
@@ -170,9 +176,12 @@ foreach ($rows as $tx) {
             $db->commit();
             $did_fulfil = true;
             $fulfilled++;
+            payhub_cron_log($cronRunId, 'info', 'Gateway-confirmed pending payment recovered and fulfilled', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'net_amount' => $net]);
         } catch (\Throwable $e) {
-            $db->rollBack();
+            if ($db->inTransaction()) $db->rollBack();
+            $errors++;
             error_log('[PayHub] expiry cron fulfilment failed for ' . $tx['reference'] . ': ' . $e->getMessage());
+            payhub_cron_log($cronRunId, 'error', 'Could not fulfill gateway-confirmed payment', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'error' => $e->getMessage()]);
         }
 
         if ($did_fulfil) {
@@ -218,14 +227,25 @@ foreach ($rows as $tx) {
         if ($expireStmt->rowCount() === 1) {
             log_transaction_event($tx['id'], 'expired', $expiryDetail);
             $expired++;
+            payhub_cron_log($cronRunId, 'info', 'Pending transaction marked failed after 24-hour expiry', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'gateway_status' => $status ?: 'unknown', 'http_code' => $http]);
         }
     } catch (\Throwable $e) {
+        $errors++;
         error_log('[PayHub] expiry cron could not mark transaction ' . $tx['reference'] . ' failed: ' . $e->getMessage());
+        payhub_cron_log($cronRunId, 'error', 'Database update failed while marking transaction expired', ['transaction_id' => (int)$tx['id'], 'reference' => $tx['reference'], 'error' => $e->getMessage()]);
     }
 }
 
-$summary = "Expiry reconciliation: checked=" . count($rows) . " fulfilled=$fulfilled expired=$expired gateway_open=$gateway_open unreachable=$unreachable (grace {$grace_minutes}m)";
-echo $summary . "\n";
+$remaining = (int)$db->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 1440 MINUTE)")->fetchColumn();
+$summary = "Expiry reconciliation: checked=" . count($rows) . " fulfilled=$fulfilled expired=$expired amount_mismatch=$mismatched gateway_open=$gateway_open unreachable=$unreachable errors=$errors remaining=$remaining (grace {$grace_minutes}m)";
+if (!$adminTriggered) echo $summary . "\n";
 error_log('[PayHub] ' . $summary);
-payhub_cron_finish($cronRunId, 'success', $summary);
+payhub_cron_finish($cronRunId, $errors > 0 ? 'failed' : 'success', $summary);
 if ($hasMysqlLock) $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')");
+return ['status' => $errors > 0 ? 'failed' : 'success', 'checked' => count($rows), 'expired' => $expired, 'fulfilled' => $fulfilled, 'amount_mismatch' => $mismatched, 'remaining' => $remaining, 'summary' => $summary];
+}
+
+if ($isDirectExpiryCron) {
+    $runResult = payhub_run_transaction_expiry();
+    if (($runResult['status'] ?? '') === 'failed') exit(1);
+}

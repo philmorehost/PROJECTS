@@ -550,7 +550,8 @@ function payhub_ensure_cron_runs_table() {
     static $ready = false;
     if ($ready) return true;
     try {
-        Database::connect()->exec("CREATE TABLE IF NOT EXISTS cron_runs (
+        $db = Database::connect();
+        $db->exec("CREATE TABLE IF NOT EXISTS cron_runs (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             job_name VARCHAR(64) NOT NULL,
             status VARCHAR(16) NOT NULL DEFAULT 'running',
@@ -558,6 +559,16 @@ function payhub_ensure_cron_runs_table() {
             started_at DATETIME NOT NULL,
             finished_at DATETIME NULL,
             INDEX idx_cron_job_started (job_name, started_at)
+        ) ENGINE=InnoDB");
+        $db->exec("CREATE TABLE IF NOT EXISTS cron_run_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            run_id BIGINT UNSIGNED NOT NULL,
+            level VARCHAR(12) NOT NULL DEFAULT 'info',
+            message TEXT NOT NULL,
+            context TEXT NULL,
+            created_at DATETIME NOT NULL,
+            INDEX idx_cron_log_run_created (run_id, created_at),
+            INDEX idx_cron_log_created (created_at)
         ) ENGINE=InnoDB");
         $ready = true;
         return true;
@@ -583,18 +594,34 @@ function payhub_cron_start($jobName) {
                     $summary = substr((string)$error['message'] . ' in ' . (string)$error['file'] . ':' . (int)$error['line'], 0, 2000);
                     $stmt = $db->prepare("UPDATE cron_runs SET status = 'failed', summary = ?, finished_at = NOW() WHERE id = ? AND status = 'running'");
                     $stmt->execute([$summary, $runId]);
+                    if ($stmt->rowCount() > 0) payhub_cron_log($runId, 'error', 'Fatal cron failure', ['details' => $summary]);
                 } else {
                     $stmt = $db->prepare("UPDATE cron_runs SET status = 'failed', summary = 'Job exited without recording a result', finished_at = NOW() WHERE id = ? AND status = 'running'");
                     $stmt->execute([$runId]);
+                    if ($stmt->rowCount() > 0) payhub_cron_log($runId, 'error', 'Job exited without recording a result');
                 }
             } catch (\Throwable $e) {
                 error_log('[PayHub cron] Could not close heartbeat: ' . $e->getMessage());
             }
         });
+        payhub_cron_log($runId, 'info', 'Run started', ['job' => $jobName]);
         return $runId;
     } catch (\Throwable $e) {
         error_log('[PayHub cron] Could not start heartbeat for ' . $jobName . ': ' . $e->getMessage());
         return 0;
+    }
+}
+
+function payhub_cron_log($runId, $level, $message, array $context = []) {
+    if ((int)$runId <= 0 || !payhub_ensure_cron_runs_table()) return false;
+    $level = in_array($level, ['info', 'warning', 'error'], true) ? $level : 'info';
+    try {
+        $stmt = Database::connect()->prepare("INSERT INTO cron_run_logs (run_id, level, message, context, created_at) VALUES (?, ?, ?, ?, NOW())");
+        $contextJson = $context ? json_encode($context, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) : null;
+        return $stmt->execute([(int)$runId, $level, substr((string)$message, 0, 2000), $contextJson]);
+    } catch (\Throwable $e) {
+        error_log('[PayHub cron] Could not write run log #' . (int)$runId . ': ' . $e->getMessage());
+        return false;
     }
 }
 
@@ -603,7 +630,9 @@ function payhub_cron_finish($runId, $status, $summary) {
     $status = in_array($status, ['success', 'failed', 'skipped'], true) ? $status : 'failed';
     try {
         $stmt = Database::connect()->prepare("UPDATE cron_runs SET status = ?, summary = ?, finished_at = NOW() WHERE id = ?");
-        return $stmt->execute([$status, substr((string)$summary, 0, 2000), (int)$runId]);
+        $saved = $stmt->execute([$status, substr((string)$summary, 0, 2000), (int)$runId]);
+        if ($saved) payhub_cron_log($runId, $status === 'failed' ? 'error' : ($status === 'skipped' ? 'warning' : 'info'), $summary);
+        return $saved;
     } catch (\Throwable $e) {
         error_log('[PayHub cron] Could not finish heartbeat #' . (int)$runId . ': ' . $e->getMessage());
         return false;
