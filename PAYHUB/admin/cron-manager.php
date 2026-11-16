@@ -6,6 +6,30 @@ if (!isLoggedIn() || !isAdmin()) redirect('../login.php');
 
 $user = getAuthUser();
 $pageTitle = 'Cron Job Manager - Admin Hub';
+$cronActionMessage = '';
+$cronActionType = 'success';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'run_automated_payouts') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
+        $cronActionType = 'error';
+        $cronActionMessage = 'Security token expired. Refresh the page and try again.';
+    } else {
+        require_once __DIR__ . '/../includes/payout-cron.php';
+        ob_start();
+        try {
+            $runResult = payhub_run_automated_payouts(true);
+            $runOutput = trim((string)ob_get_clean());
+            $runCounts = $runResult['counts'] ?? [];
+            $hasRunIssues = (int)($runCounts['failed'] ?? 0) > 0 || (int)($runCounts['uncertain'] ?? 0) > 0 || (int)($runCounts['review'] ?? 0) > 0;
+            $cronActionType = ($runResult['status'] ?? '') === 'success' ? ($hasRunIssues ? 'warning' : 'success') : 'warning';
+            $cronActionMessage = ($runResult['summary'] ?? ($runOutput ?: 'Payout run finished.'));
+        } catch (Throwable $e) {
+            ob_end_clean();
+            $cronActionType = 'error';
+            $cronActionMessage = 'Payout run failed: ' . $e->getMessage();
+            error_log('[PayHub cron manager] Admin-triggered payout run failed: ' . $e->getMessage());
+        }
+    }
+}
 $cron_latest = [];
 try {
     if (payhub_ensure_cron_runs_table()) {
@@ -62,6 +86,24 @@ include '../includes/dashboard-head.php';
             <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 class="text-2xl font-bold text-slate-900 mb-2">Cron Job Manager</h1>
                 <p class="text-slate-500">Copy these commands to your cPanel or server cron scheduler</p>
+            </div>
+
+            <?php if ($cronActionMessage !== ''): ?>
+                <div class="mb-6 max-w-4xl rounded-2xl border p-4 text-sm font-semibold <?php echo $cronActionType === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ($cronActionType === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-rose-200 bg-rose-50 text-rose-800'); ?>"><?php echo htmlspecialchars($cronActionMessage, ENT_QUOTES, 'UTF-8'); ?></div>
+            <?php endif; ?>
+
+            <div class="mb-6 max-w-4xl rounded-2xl border border-indigo-100 bg-indigo-50/70 p-6">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="font-bold text-slate-900">Run automated payouts now</h2>
+                        <p class="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Processes only eligible merchants with an active automated payout method, valid bank details, and Review OFF. Requests awaiting manual approval and transfers needing reconciliation are not submitted. A merchant already processed today is skipped to prevent duplicate payouts.</p>
+                    </div>
+                    <form method="POST" onsubmit="return confirm('Run the eligible automated payouts now? Transfers already sent or awaiting admin approval will not be retried.');">
+                        <input type="hidden" name="action" value="run_automated_payouts">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                        <button type="submit" class="whitespace-nowrap rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-indigo-700">Trigger Automated Payouts</button>
+                    </form>
+                </div>
             </div>
 
             <div class="mb-6 max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
