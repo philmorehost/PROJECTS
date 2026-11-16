@@ -4,12 +4,11 @@ require_once __DIR__ . '/functions.php';
 
 date_default_timezone_set('Africa/Lagos');
 
-if (PHP_SAPI !== 'cli') {
+$isDirectPayoutCron = realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__);
+if ($isDirectPayoutCron && PHP_SAPI !== 'cli') {
     http_response_code(403);
     exit("CLI only.\n");
 }
-
-$cronRunId = payhub_cron_start('automated_payouts');
 
 function payhub_payout_is_holiday($date) {
     $day = (int)date('N', strtotime($date));
@@ -40,8 +39,8 @@ function payhub_submit_automated_payout($db, $payoutId, $allowUnsubmittedReserva
         }
 
         $detail = (string)($payout['status_details'] ?? '');
-        $isRecoverableQueue = (bool)preg_match('/^AUTOMATED \\d{4}-\\d{2}-\\d{2}.*awaiting admin approval/', $detail)
-            || ($allowUnsubmittedReservation && (bool)preg_match('/^AUTOMATED \\d{4}-\\d{2}-\\d{2}.*reserved; ready to submit/', $detail));
+        $isRecoverableQueue = $allowUnsubmittedReservation
+            && (bool)preg_match('/^AUTOMATED \\d{4}-\\d{2}-\\d{2}.*reserved; ready to submit/', $detail);
         if (!$isRecoverableQueue) {
             $db->rollBack();
             return 'skipped';
@@ -148,28 +147,34 @@ function payhub_mark_automated_payout_uncertain($db, $payoutId, $marker, $reason
     }
 }
 
-if (payhub_payout_is_holiday(date('Y-m-d'))) {
-    payhub_cron_finish($cronRunId, 'skipped', 'Weekend or fixed public holiday; no scheduled payout run.');
-    exit("Today is a weekend or fixed public holiday. No payouts today.\n");
-}
-if (getConfig('payout_enabled', '1') !== '1') {
-    payhub_cron_finish($cronRunId, 'skipped', 'Global payout service is disabled.');
-    exit("Global payout service is disabled.\n");
-}
+function payhub_run_automated_payouts($adminTriggered = false) {
+    $cronRunId = payhub_cron_start('automated_payouts');
+    @set_time_limit(0);
 
-$db = Database::connect();
+    if (!$adminTriggered && payhub_payout_is_holiday(date('Y-m-d'))) {
+        payhub_cron_finish($cronRunId, 'skipped', 'Weekend or fixed public holiday; no scheduled payout run.');
+        echo "Today is a weekend or fixed public holiday. No payouts today.\n";
+        return ['status' => 'skipped', 'summary' => 'Weekend or fixed public holiday.'];
+    }
+    if (getConfig('payout_enabled', '1') !== '1') {
+        payhub_cron_finish($cronRunId, 'skipped', 'Global payout service is disabled.');
+        echo "Global payout service is disabled.\n";
+        return ['status' => 'skipped', 'summary' => 'Global payout service is disabled.'];
+    }
+
+    $db = Database::connect();
 $minimum = max(0, (float)getConfig('min_payout_amount', '1000'));
 $runMarker = 'AUTOMATED ' . date('Y-m-d');
 $counts = ['submitted' => 0, 'failed' => 0, 'review' => 0, 'uncertain' => 0, 'skipped' => 0];
 
-// Resume legacy global-review queue rows: those records were explicitly waiting for approval,
-// so they are known not to have been sent. Ambiguous legacy submission rows are never retried.
+// Resume only known-safe, unsubmitted automated reservations. Rows explicitly awaiting
+// admin approval are never submitted by either the scheduler or the admin catch-up action.
 $queuedStmt = $db->query("SELECT id FROM payouts WHERE status = 'pending'
-    AND (status_details LIKE 'AUTOMATED %awaiting admin approval%' OR status_details LIKE 'AUTOMATED %reserved; ready to submit%')
+    AND status_details LIKE 'AUTOMATED %reserved; ready to submit%'
     ORDER BY request_date, id");
 foreach ($queuedStmt->fetchAll(PDO::FETCH_COLUMN) as $queuedId) {
     try {
-        $result = payhub_submit_automated_payout($db, (int)$queuedId);
+        $result = payhub_submit_automated_payout($db, (int)$queuedId, true);
         if (isset($counts[$result])) $counts[$result]++;
     } catch (Throwable $e) {
         error_log('[PayHub payouts] Could not resume queued payout #' . (int)$queuedId . ': ' . $e->getMessage());
@@ -180,8 +185,9 @@ foreach ($queuedStmt->fetchAll(PDO::FETCH_COLUMN) as $queuedId) {
 // The global review switch continues to govern merchant-initiated/API payout requests. A merchant
 // who explicitly chose scheduled automated settlement should not be silently placed in that queue;
 // the per-merchant Review ON flag remains an intentional exception.
+$reviewFilter = $adminTriggered ? ' AND COALESCE(require_payout_review, 0) = 0' : '';
 $stmt = $db->prepare("SELECT id FROM users WHERE role = 'merchant' AND payout_method = 'automated'
-    AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0 ORDER BY id");
+    AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0 $reviewFilter ORDER BY id");
 $stmt->execute([$minimum]);
 $merchantIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 echo "Automated payout run " . date('Y-m-d H:i:s T') . ': eligible merchants=' . count($merchantIds) . "\n";
@@ -260,5 +266,12 @@ foreach ($merchantIds as $merchantId) {
 }
 
 $summary = 'Automated payout totals: ' . json_encode($counts);
-echo $summary . "\n";
-payhub_cron_finish($cronRunId, 'success', $summary . '; eligible merchants=' . count($merchantIds));
+echo ($adminTriggered ? 'Admin-triggered ' : '') . $summary . "\n";
+payhub_cron_finish($cronRunId, 'success', ($adminTriggered ? 'Admin-triggered; ' : '') . $summary . '; eligible merchants=' . count($merchantIds));
+return ['status' => 'success', 'summary' => $summary, 'counts' => $counts, 'eligible_merchants' => count($merchantIds)];
+}
+
+if ($isDirectPayoutCron) {
+    $result = payhub_run_automated_payouts(false);
+    if (($result['status'] ?? '') === 'failed') exit(1);
+}
