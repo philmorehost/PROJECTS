@@ -128,6 +128,9 @@ interface VtuApiService {
     @POST("web/api/share-fund.php")
     suspend fun shareFund(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 
+    @POST("web/api/share-fund-otp.php")
+    suspend fun requestShareFundOtp(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
     @POST("web/api/withdrawal.php")
     suspend fun withdrawToBank(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 

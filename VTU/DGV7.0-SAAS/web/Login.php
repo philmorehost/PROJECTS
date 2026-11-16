@@ -13,23 +13,28 @@
     }
 
     // Admin Impersonation Logic (Titanium Platform)
-    if(isset($_GET['logAsUser']) && isset($_GET['auth'])){
-        $logAs = mysqli_real_escape_string($connection_server, trim($_GET['logAsUser']));
-        $auth = $_GET['auth'];
-        $expected_auth = md5($logAs . date('Ymd') . "SUPER_ADMIN_SECRET");
-        
-        if($auth === $expected_auth){
-            $vendor_id = $select_vendor_table["id"];
-            $check_u = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$logAs' LIMIT 1");
-            if($r = mysqli_fetch_assoc($check_u)){
-                $_SESSION["user_session"] = $r['username'];
-                $_SESSION["admin_impersonation"] = true; // Flag for later use if needed
-                header("Location: Dashboard.php");
-                exit();
-            }
+    // A one-time token minted by bc-spadmin/Users.php. It replaces the old
+    // md5(username + YYYYMMDD + "SUPER_ADMIN_SECRET") scheme, which was a universal,
+    // predictable password for every account: the "secret" was a literal in the source
+    // and the hash was valid for the whole day. This version is random, expires in two
+    // minutes and is burned on first use.
+    if (isset($_GET['logAsToken'])) {
+        $impersonated_user = bc_consume_login_token((string)$_GET['logAsToken'], 'impersonate');
+        if ($impersonated_user) {
+            session_regenerate_id(true);
+            $_SESSION["user_session"] = strtolower($impersonated_user['username']);
+            $_SESSION["admin_impersonation"] = true;
+            $_SESSION["admin_impersonation_vendor"] = (int)$impersonated_user['vendor_id'];
+            recordLoginAttempt($impersonated_user['username'], $_SERVER['REMOTE_ADDR'] ?? '', 1, (int)$impersonated_user['vendor_id']);
+            header("Location: Dashboard.php");
+            exit();
         }
+        // Never reveal whether the token was wrong or expired.
+        $_SESSION["product_purchase_response"] = "This login link is invalid or has expired. Please ask the administrator to generate a new one.";
+        header("Location: Login.php");
+        exit();
     }
-    
+
     if(isset($_POST['google_token'])){
         $id_token = $_POST['google_token'];
         $payload = verifyGoogleToken($id_token);
@@ -94,6 +99,11 @@
     					if($user_detail["status"] == 1){
                             recordLoginAttempt($user, $ip, 1, $vendor_id);
 
+                            // Stop session fixation: the pre-login session id must not carry over
+                            // into an authenticated one.
+                            if (session_status() === PHP_SESSION_ACTIVE) {
+                                session_regenerate_id(true);
+                            }
 
     						$_SESSION["user_session"] = strtolower($user_detail["username"]);
 

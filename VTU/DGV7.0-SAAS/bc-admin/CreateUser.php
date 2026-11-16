@@ -26,7 +26,7 @@
                     if(filter_var($email, FILTER_VALIDATE_EMAIL)){
                         if(is_numeric($phone) && (strlen($phone) == 11)){
                             $md5_pass = md5($pass);
-                            $api_key = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50);
+                            $api_key = bin2hex(random_bytes(25));
                             $last_login = date('Y-m-d H:i:s');
                             
                             $insert = mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, security_quest, security_answer, home_address, account_level, api_key, last_login, api_status, status) VALUES ('".$get_logged_admin_details["id"]."', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$quest', '$answer', '$address', '1', '$api_key', '$last_login', '2', '1')");

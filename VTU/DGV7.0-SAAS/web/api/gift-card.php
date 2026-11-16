@@ -82,7 +82,7 @@ elseif ($action === 'purchase') {
             exit;
         }
 
-        if (!verifyUserPIN($pin, $user)) {
+        if (!bc_verify_pin_secure($pin, $user)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
             exit;
         }
@@ -198,7 +198,7 @@ elseif ($action === 'buy_p2p') {
             exit;
         }
 
-        if (!verifyUserPIN($pin, $user)) {
+        if (!bc_verify_pin_secure($pin, $user)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
             exit;
         }

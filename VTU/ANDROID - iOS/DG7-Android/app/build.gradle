@@ -19,8 +19,8 @@ android {
         targetSdk 36
         // Version 7 was consumed by the upload Play accepted before blocking on the 16 KB error,
         // so the corrected bundle uses 8. Must stay above every code already uploaded.
-        versionCode 8
-        versionName "1.0.7"
+        versionCode 9
+        versionName "1.0.8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

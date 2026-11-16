@@ -9,6 +9,7 @@ import com.mzeevtu.R
 import com.mzeevtu.api.RetrofitClient
 import com.mzeevtu.databinding.FragmentExamBinding
 import com.mzeevtu.util.LoadingOverlay
+import com.mzeevtu.util.PinPromptHelper
 import com.mzeevtu.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -132,8 +133,16 @@ class ExamFragment : Fragment(R.layout.fragment_exam) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Confirm Purchase")
             .setMessage("Exam: ${selectedExam.uppercase()}\nPIN Type: $selectedProductCode\nAmount: \u20A6$selectedProductPrice")
-            .setPositiveButton("Buy Now") { _, _ -> doPurchase() }
+            .setPositiveButton("Buy Now") { _, _ -> promptPinThenPurchase() }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase() {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase() },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase() {

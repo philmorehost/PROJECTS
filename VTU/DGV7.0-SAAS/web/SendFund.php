@@ -35,7 +35,7 @@ if (isset($_POST["initiate-transfer"]) || isset($_POST["process-transfer"])) {
     $otp = $_POST['otp'] ?? '';
 
     // Verify PIN
-    if (!verifyUserPIN($pin, $get_logged_user_details)) {
+    if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
         $error_data = [
             "status" => "error",
             "title" => "Verification Failed",

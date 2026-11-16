@@ -76,7 +76,7 @@
     // Login as User Redirect Logic
     if(isset($_GET["login-as"]) && is_numeric($_GET["login-as"])){
         $uid = (int)$_GET["login-as"];
-        $q = mysqli_query($connection_server, "SELECT u.username, v.website_url FROM sas_users u JOIN sas_vendors v ON u.vendor_id = v.id WHERE u.id='$uid' LIMIT 1");
+        $q = mysqli_query($connection_server, "SELECT u.username, u.vendor_id, v.website_url FROM sas_users u JOIN sas_vendors v ON u.vendor_id = v.id WHERE u.id='$uid' LIMIT 1");
         if($r = mysqli_fetch_assoc($q)){
             // Always hand the one-time login token over HTTPS, and keep only the host. Older rows store
             // website_url with an "http://" prefix, which used to put the impersonated session - and the
@@ -91,12 +91,17 @@
                 exit();
             }
             
-            // Generate a secure one-time login token
-            $token = bin2hex(random_bytes(16));
-            mysqli_query($connection_server, "UPDATE sas_users SET failed_pin_count=failed_pin_count+1, last_failed_pin=NOW() WHERE id='$uid'"); // Reuse column temporarily as token or use a real token table
-            // For now, use the same mechanism as bc-admin -> bc-spadmin but in reverse
-            // We'll redirect to the vendor's dashboard with a special param
-            header("Location: https://".$target_url."/web/Login.php?logAsUser=".rawurlencode($r['username'])."&auth=".md5($r['username'].date('Ymd')."SUPER_ADMIN_SECRET"));
+            // Generate a secure one-time login token. The previous link carried
+            // md5(username + YYYYMMDD + "SUPER_ADMIN_SECRET"), which anyone who saw the source or a
+            // single logged URL could recompute for any account, for the rest of the day. The token
+            // below is random, single-use and expires in two minutes; only its SHA-256 is stored.
+            $one_time_token = bc_create_login_token($r['username'], (int)$r['vendor_id'], 'impersonate', 120, (string)($get_logged_spadmin_details['email'] ?? 'superadmin'));
+            if ($one_time_token === '') {
+                $_SESSION["product_purchase_response"] = "Could not create a secure login link. Please try again.";
+                header("Location: Users.php");
+                exit();
+            }
+            header("Location: https://".$target_url."/web/Login.php?logAsToken=".rawurlencode($one_time_token));
             exit();
         }
     }

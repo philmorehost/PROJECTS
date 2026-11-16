@@ -24,10 +24,10 @@ if ($select_vendor_table) {
 
 			$pin = $get_api_post_info['pin'] ?? '';
 			if (empty($pin)) {
-				echo json_encode(array("status" => "failed", "desc" => "Transaction PIN is required"), true);
+				echo json_encode(array("status" => "failed", "code" => "pin_required", "desc" => "Transaction PIN is required"), true);
 				exit;
 			}
-			if (!verifyUserPIN($pin, $get_logged_user_details)) {
+			if (!bc_verify_pin_secure((string)$pin, $get_logged_user_details, 'withdrawal')) {
 				echo json_encode(array("status" => "failed", "desc" => "Invalid Transaction PIN"), true);
 				exit;
 			}

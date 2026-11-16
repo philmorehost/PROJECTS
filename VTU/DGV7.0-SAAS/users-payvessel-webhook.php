@@ -22,7 +22,6 @@
 		//Payvessel End
 		
 		$webhook = "\n PAYLOAD:".$payload."\n IP: ".$ip_address."\n HASH:".$hashkey."\n SIGNATURE:".$payvessel_signature;
-		fwrite(fopen("upayvessel-webhook.txt", "a++"), $webhook);
 		//echo $webhook;
 		
 		$customer_name = "";

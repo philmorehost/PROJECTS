@@ -44,7 +44,7 @@ if (mysqli_num_rows($check_user) == 1) {
 
             // Generate/Refresh API Key if needed
             if (empty($user_detail['api_key'])) {
-                $new_key = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"), 0, 50);
+                $new_key = bin2hex(random_bytes(25));
                 mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key' WHERE id='".$user_detail['id']."'");
                 $user_detail['api_key'] = $new_key;
             }

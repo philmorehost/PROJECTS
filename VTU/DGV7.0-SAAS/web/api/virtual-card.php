@@ -78,7 +78,7 @@ elseif ($action === 'issue') {
         exit;
     }
 
-    if (!verifyUserPIN($pin, $user)) {
+    if (!bc_verify_pin_secure($pin, $user)) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
         exit;
     }
@@ -120,7 +120,7 @@ elseif ($action === 'fund') {
         exit;
     }
 
-    if (!verifyUserPIN($pin, $user)) {
+    if (!bc_verify_pin_secure($pin, $user)) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
         exit;
     }
@@ -159,7 +159,7 @@ elseif ($action === 'reveal') {
     $pin = $input['pin'] ?? '';
     $reference = mysqli_real_escape_string($connection_server, $input['card_ref'] ?? '');
 
-    if (verifyUserPIN($pin, $user)) {
+    if (bc_verify_pin_secure($pin, $user)) {
         $q = mysqli_query($connection_server, "SELECT masked_pan, cvv, expiry_month, expiry_year FROM sas_virtual_cards_v2 WHERE reference='$reference' AND username='$username' LIMIT 1");
         if ($r = mysqli_fetch_assoc($q)) {
             echo json_encode(['status' => 'success', 'data' => $r]);

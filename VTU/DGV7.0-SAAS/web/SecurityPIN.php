@@ -7,21 +7,45 @@
     }
 
     if(isset($_POST["set-pin"])){
-        $pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["pin"])));
-        $confirm_pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["confirm_pin"])));
+        bc_validate_csrf();
+        $error = "";
+        $pin = trim(strip_tags($_POST["pin"] ?? ''));
+        $confirm_pin = trim(strip_tags($_POST["confirm_pin"] ?? ''));
+        $current_pin = trim(strip_tags($_POST["current_pin"] ?? ''));
 
-        if(!empty($pin) && is_numeric($pin) && strlen($pin) == 4){
+        if(!empty($pin) && ctype_digit($pin) && strlen($pin) == 4){
             if($pin === $confirm_pin){
-                $username = $_SESSION["user_session"];
+                $username = $get_logged_user_details["username"];
                 $vid = $get_logged_user_details["vendor_id"];
-                $hashed_pin = password_hash($pin, PASSWORD_DEFAULT);
-                $update = mysqli_query($connection_server, "UPDATE sas_users SET transaction_pin='$pin', security_pin='$hashed_pin' WHERE username='$username' AND vendor_id='$vid'");
-                if($update){
-                    $_SESSION["product_purchase_response"] = "Security PIN set successfully!";
-                    header("Location: Dashboard.php");
-                    exit();
-                } else {
-                    $error = "Failed to update PIN. Please try again.";
+
+                // A PIN may only be replaced after proving the current one. Otherwise a hijacked
+                // session (or the old impersonation link) could simply install a new PIN and drain
+                // the wallet - which is exactly what happened.
+                $has_existing_pin = !empty($get_logged_user_details["security_pin"]) || !empty($get_logged_user_details["transaction_pin"]);
+                if ($has_existing_pin) {
+                    if (empty($current_pin)) {
+                        $error = "Enter your current PIN to change it.";
+                    } elseif (!bc_verify_pin_secure($current_pin, $get_logged_user_details, 'set_pin')) {
+                        $error = "Current PIN is incorrect.";
+                    }
+                }
+
+                if (empty($error) && in_array($pin, array('0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321'), true)) {
+                    $error = "That PIN is too easy to guess. Please choose another.";
+                }
+
+                if (empty($error)) {
+                    $username_sql = mysqli_real_escape_string($connection_server, $username);
+                    $pin_int = (int)$pin;
+                    $hashed_pin = mysqli_real_escape_string($connection_server, password_hash($pin, PASSWORD_DEFAULT));
+                    $update = mysqli_query($connection_server, "UPDATE sas_users SET transaction_pin='$pin_int', security_pin='$hashed_pin' WHERE username='$username_sql' AND vendor_id='" . (int)$vid . "'");
+                    if($update){
+                        $_SESSION["product_purchase_response"] = "Security PIN set successfully!";
+                        header("Location: Dashboard.php");
+                        exit();
+                    } else {
+                        $error = "Failed to update PIN. Please try again.";
+                    }
                 }
             } else {
                 $error = "PINs do not match!";
@@ -58,6 +82,13 @@
             <?php endif; ?>
 
             <form method="post" action="">
+                <?php echo bc_csrf_field(); ?>
+                <?php if (!empty($get_logged_user_details["security_pin"]) || !empty($get_logged_user_details["transaction_pin"])): ?>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-uppercase text-muted">Current PIN</label>
+                    <input name="current_pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control form-control-lg text-center fw-bold" placeholder="****" inputmode="numeric" required>
+                </div>
+                <?php endif; ?>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-uppercase text-muted">New 4-Digit PIN</label>
                     <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control form-control-lg text-center fw-bold" placeholder="****" inputmode="numeric" required>

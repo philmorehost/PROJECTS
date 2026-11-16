@@ -244,7 +244,9 @@ $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
                     <div class="row row-cols-4 g-2 mt-4" style="position: relative; z-index: 20;">
                         <div class="col"><a href="Fund.php" class="quick-action-btn"><i class="bi bi-plus-lg"></i>Fund</a></div>
                         <div class="col"><a href="SubmitPayment.php" class="quick-action-btn"><i class="bi bi-cash-coin"></i>Submit</a></div>
+                        <?php if(isServiceEnabled('share_fund')): ?>
                         <div class="col"><a href="ShareFund.php" class="quick-action-btn"><i class="bi bi-send"></i>Share</a></div>
+                        <?php endif; ?>
                         <?php if(isServiceEnabled('crypto_hub')): ?>
                         <div class="col"><a href="CryptoHub.php" class="quick-action-btn"><i class="bi bi-currency-bitcoin"></i>Crypto</a></div>
                         <?php endif; ?>
@@ -383,6 +385,7 @@ $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
                             </a>
                         </div>
                         <?php endif; ?>
+                        <?php if(isServiceEnabled('share_fund')): ?>
                         <div class="col">
                             <a href="ShareFund.php" class="text-decoration-none h-100 d-block">
                                 <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
@@ -394,6 +397,7 @@ $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
                                 </div>
                             </a>
                         </div>
+                        <?php endif; ?>
                         <?php if(isServiceEnabled('exam')): ?>
                         <div class="col">
                             <a href="Exam.php" class="text-decoration-none h-100 d-block">

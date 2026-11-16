@@ -9,6 +9,7 @@ import com.jikabiz.app.R
 import com.jikabiz.app.api.RetrofitClient
 import com.jikabiz.app.databinding.FragmentExamBinding
 import com.jikabiz.app.util.LoadingOverlay
+import com.jikabiz.app.util.PinPromptHelper
 import com.jikabiz.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -132,8 +133,16 @@ class ExamFragment : Fragment(R.layout.fragment_exam) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Confirm Purchase")
             .setMessage("Exam: ${selectedExam.uppercase()}\nPIN Type: $selectedProductCode\nAmount: ₦$selectedProductPrice")
-            .setPositiveButton("Buy Now") { _, _ -> doPurchase() }
+            .setPositiveButton("Buy Now") { _, _ -> promptPinThenPurchase() }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase() {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase() },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase() {

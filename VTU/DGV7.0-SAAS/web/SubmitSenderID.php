@@ -40,7 +40,8 @@ function isTrivialMessage($msg)
 
 // ── Auto-submit function to upstream API ─────────────────────────────────────
 function auto_submit_sender_id_to_api($connection_server, $vendor_id, $s_id, $s_msg) {
-    $log_file = $_SERVER['DOCUMENT_ROOT'] . '/sender_id_debug.log';
+    // SECURITY: this used to append to /sender_id_debug.log in the document root, which was
+    // downloadable and contained provider responses. Keep diagnostics in the server error log only.
     $log_data = date('Y-m-d H:i:s') . " - Submitting SenderID '$s_id' for Vendor '$vendor_id'\n";
 
     // PhilmoreSMS
@@ -104,7 +105,7 @@ function auto_submit_sender_id_to_api($connection_server, $vendor_id, $s_id, $s_
         $log_data .= "KudiSMS not active or not found in sas_apis for this vendor.\n";
     }
     
-    file_put_contents($log_file, $log_data . "\n", FILE_APPEND);
+    if (!empty($log_data)) { error_log('[SENDERID] ' . str_replace("\n", ' | ', trim($log_data))); }
 }
 
 // ── Handle Edit Sender ID (user — only Pending/Rejected) ──────────────────

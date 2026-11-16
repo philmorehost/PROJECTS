@@ -37,14 +37,58 @@ class ShareFundFragment : Fragment(R.layout.fragment_share_fund) {
             .setTitle("Confirm Fund Transfer")
             .setMessage("Send ₦$amount to @$recipient")
             .setView(pinView)
-            .setPositiveButton("Send") { _, _ ->
+            .setPositiveButton("Continue") { _, _ ->
                 val pin = etPin?.text?.toString()?.trim() ?: ""
-                if (pin.length != 4) snack("PIN must be 4 digits") else doSend(recipient, amount, pin)
+                if (pin.length != 4) snack("PIN must be 4 digits") else requestOtp(recipient, amount, pin)
             }
             .setNegativeButton("Cancel", null).show()
     }
 
-    private fun doSend(recipient: String, amount: String, pin: String) {
+    /**
+     * A PIN alone is no longer enough: the server emails a 6-digit code that must be
+     * supplied with the transfer. This mirrors the website's two-step flow.
+     */
+    private fun requestOtp(recipient: String, amount: String, pin: String) {
+        LoadingOverlay.show(requireContext(), "Sending verification code...")
+        binding.btnSend.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val prefs = PreferenceManager(requireContext())
+                val api = RetrofitClient.getService()
+                val resp = api.requestShareFundOtp(mapOf(
+                    "api_key" to prefs.getApiKey(),
+                    "user" to recipient, "amount" to amount, "pin" to pin))
+                val status = resp.body()?.get("status") as? String ?: "failed"
+                val msg = resp.body()?.get("message") as? String
+                    ?: resp.body()?.get("desc") as? String ?: ""
+                activity?.runOnUiThread {
+                    LoadingOverlay.dismiss(); binding.btnSend.isEnabled = true
+                    if (status.contains("success", true)) showOtpDialog(recipient, amount, pin)
+                    else snack(msg)
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread { LoadingOverlay.dismiss(); binding.btnSend.isEnabled = true; snack(e.message ?: "Error") }
+            }
+        }
+    }
+
+    private fun showOtpDialog(recipient: String, amount: String, pin: String) {
+        val otpView = layoutInflater.inflate(R.layout.dialog_pin_input, null)
+        val etOtp = otpView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_pin)
+        etOtp.filters = arrayOf(android.text.InputFilter.LengthFilter(6))
+        etOtp.hint = "6-digit code"
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Email Verification")
+            .setMessage("Enter the 6-digit code sent to your email to send ₦$amount to @$recipient.")
+            .setView(otpView)
+            .setPositiveButton("Send") { _, _ ->
+                val otp = etOtp?.text?.toString()?.trim() ?: ""
+                if (otp.length != 6) snack("Code must be 6 digits") else doSend(recipient, amount, pin, otp)
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun doSend(recipient: String, amount: String, pin: String, otp: String) {
         LoadingOverlay.show(requireContext(), "Sending funds...")
         binding.btnSend.isEnabled = false
         lifecycleScope.launch {
@@ -52,7 +96,7 @@ class ShareFundFragment : Fragment(R.layout.fragment_share_fund) {
                 val prefs = PreferenceManager(requireContext())
                 val api = RetrofitClient.getService()
                 val resp = api.shareFund(mapOf("api_key" to prefs.getApiKey(),
-                    "user" to recipient, "amount" to amount, "pin" to pin))
+                    "user" to recipient, "amount" to amount, "pin" to pin, "otp" to otp))
                 val status = resp.body()?.get("status") as? String ?: "failed"
                 val msg = resp.body()?.get("message") as? String ?: resp.body()?.get("desc") as? String ?: ""
                 activity?.runOnUiThread {

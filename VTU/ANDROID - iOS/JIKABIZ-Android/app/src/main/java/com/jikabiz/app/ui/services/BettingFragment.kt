@@ -11,6 +11,7 @@ import com.jikabiz.app.R
 import com.jikabiz.app.api.RetrofitClient
 import com.jikabiz.app.databinding.FragmentBettingBinding
 import com.jikabiz.app.util.LoadingOverlay
+import com.jikabiz.app.util.PinPromptHelper
 import com.jikabiz.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -161,8 +162,16 @@ class BettingFragment : Fragment(R.layout.fragment_betting) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Confirm Betting Deposit")
             .setMessage("Platform: ${selectedProviderCode.uppercase()}\nCustomer: $verifiedCustomerName\nID: $customerId\nAmount: ₦$amount")
-            .setPositiveButton("Pay Now") { _, _ -> doPurchase(customerId, amount) }
+            .setPositiveButton("Pay Now") { _, _ -> promptPinThenPurchase(customerId, amount) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase(customerId: String, amount: String) {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase(customerId, amount) },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase(customerId: String, amount: String) {

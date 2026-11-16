@@ -1,11 +1,24 @@
 package com.mzeevtu.api
 
 import com.mzeevtu.util.Constants
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
+import okio.Buffer
+import org.json.JSONObject
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+
+/**
+ * Holds the transaction PIN entered for the CURRENT purchase only. The request interceptor
+ * appends it to the outgoing JSON so every purchase endpoint satisfies the vendor's
+ * "force transaction PIN" setting, and clears it immediately afterwards.
+ */
+object TransactionPin {
+    @Volatile var current: String? = null
+}
 
 object RetrofitClient {
 
@@ -28,8 +41,9 @@ object RetrofitClient {
     private fun buildRetrofit(): Retrofit {
         val baseUrl = Constants.BASE_URL
 
+        // Do NOT log bodies: they contain the api_key, the transaction PIN and OTP codes.
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.NONE
         }
 
         val client = OkHttpClient.Builder()
@@ -37,12 +51,35 @@ object RetrofitClient {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                val req = chain.request().newBuilder()
+                val original = chain.request()
+                var builder = original.newBuilder()
                     .addHeader("X-App-Source", Constants.APP_SOURCE_HEADER)
                     .addHeader("Accept", "application/json")
-                    .addHeader("Content-Type", "application/json")
-                    .build()
-                chain.proceed(req)
+
+                val pin = TransactionPin.current
+                val body = original.body
+                if (!pin.isNullOrEmpty() && body != null && original.method.equals("POST", true)) {
+                    try {
+                        val buffer = Buffer()
+                        body.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.trimStart().startsWith("{")) {
+                            val json = JSONObject(text)
+                            if (!json.has("pin")) {
+                                json.put("pin", pin)
+                                builder = builder.method(
+                                    original.method,
+                                    json.toString().toRequestBody("application/json".toMediaType())
+                                )
+                                TransactionPin.current = null
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Never break a request because the PIN could not be attached.
+                    }
+                }
+
+                chain.proceed(builder.build())
             }
             .addInterceptor(logging)
             .build()

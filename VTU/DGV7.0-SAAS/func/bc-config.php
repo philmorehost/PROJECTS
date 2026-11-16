@@ -238,8 +238,9 @@ if ($connection_server) {
             }
         }
 
-        // Migration: Sync existing transaction_pins to security_pin (hashed) for users
-        $check_unfilled_pins = mysqli_query($connection_server, "SELECT id, transaction_pin FROM sas_users WHERE (security_pin IS NULL OR security_pin = '') AND transaction_pin IS NOT NULL AND transaction_pin != '' LIMIT 100");
+        // Migration: Sync existing transaction_pins to security_pin (hashed) for users.
+        // Skip 0: a BIGINT 0 means "never set" or the weak default "0000", not a real PIN.
+        $check_unfilled_pins = mysqli_query($connection_server, "SELECT id, transaction_pin FROM sas_users WHERE (security_pin IS NULL OR security_pin = '') AND transaction_pin IS NOT NULL AND transaction_pin != '' AND transaction_pin != '0' LIMIT 100");
         while($pin_row = mysqli_fetch_assoc($check_unfilled_pins)){
             $h_pin = password_hash($pin_row['transaction_pin'], PASSWORD_DEFAULT);
             mysqli_query($connection_server, "UPDATE sas_users SET security_pin='$h_pin' WHERE id='".$pin_row['id']."'");

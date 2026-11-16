@@ -241,7 +241,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'withdraw') {
     }
 
     // Verify PIN
-    if (!verifyUserPIN($pin, $get_logged_user_details)) {
+    if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
         exit();
     }

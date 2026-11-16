@@ -563,7 +563,12 @@ function base64url_encode($data) {
  * Handles both modern hashed security_pin and legacy numeric transaction_pin.
  */
 function verifyUserPIN($input_pin, $user_details) {
+    $input_pin = (string)$input_pin;
     if (empty($input_pin) && $input_pin !== '0' && $input_pin !== '0000') return false;
+
+    // A PIN is always four digits. Enforcing the shape here stops "0"/"" from ever matching a
+    // hashed legacy value that was migrated from a BIGINT 0.
+    if (!preg_match('/^\d{4}$/', $input_pin)) return false;
 
     $db_security_pin = $user_details['security_pin'] ?? '';
     // transaction_pin is BIGINT in DB, so it comes as a string representation of a number or null
@@ -585,9 +590,17 @@ function verifyUserPIN($input_pin, $user_details) {
 
     // 2. Fallback to legacy numeric transaction_pin (BIGINT column)
     if ($db_transaction_pin !== null && $db_transaction_pin !== '') {
-        // Use numeric comparison to handle leading zeros (e.g. "0123" matches 123)
-        // and specifically handle "0000" which is stored as 0 in BIGINT.
-        return (int)$input_pin === (int)$db_transaction_pin;
+        // A BIGINT of 0 is ambiguous: it is what a never-set PIN looks like *and* what the weak
+        // default "0000" is stored as. Treating 0 as a match let anybody debit an account whose
+        // owner had never chosen a PIN by sending "0000" (or any zero-padded number). Require a
+        // real, non-zero PIN here; users who genuinely want 0000 must set a hashed security_pin.
+        if ((int)$db_transaction_pin === 0) {
+            return false;
+        }
+        $input_digits = preg_replace('/\D/', '', (string)$input_pin);
+        if ($input_digits === '') return false;
+        // Numeric comparison keeps leading-zero PINs (e.g. "0123" stored as 123) working.
+        return (int)$input_digits === (int)$db_transaction_pin;
     }
 
     return false;
@@ -2430,7 +2443,9 @@ function beeMailer($recipient_email, $email_subject, $email_body)
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, true);
 	$sent = customBCMailSender('', $recipient_email, $email_subject, $mail_html_body, $mail_headers);
-	@fwrite(@fopen("./email-msg.txt", "a++"), "\n" . $recipient_email . " || " . strtoupper($email_subject) . " || " . $email_body . "\n");
+	// SECURITY: do not write the recipient/subject/body to email-msg.txt. Those files sit in the
+	// web root, so every password-reset code, login OTP and new-password email was downloadable by
+	// anyone who guessed the filename.
 	return $sent;
 }
 

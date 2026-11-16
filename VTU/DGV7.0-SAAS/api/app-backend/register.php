@@ -39,7 +39,7 @@ if (json_last_error() === JSON_ERROR_NONE) {
             !empty($password)
         ) {
             $account_type = '1';
-            $token = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50);
+            $token = bin2hex(random_bytes(25));
             $status = '1';
             $balance = "0";
             $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $email . "')");

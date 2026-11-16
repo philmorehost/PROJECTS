@@ -288,7 +288,7 @@ function releaseP2PFunds($tradeId) {
         // 3. Credit Vendor for the Fee
         mysqli_query($connection_server, "UPDATE sas_vendors SET balance = balance + $fee WHERE id = '$vid'");
         mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status)
-            SELECT '$vid', 'p2p_fee', 'P2P Trade Commission', 'FEE_$tid', '$fee', '$fee', balance - $fee, balance, 'Commission from P2P Gift Card Trade #$tid', '".$_SERVER["HTTP_HOST"]."', '1' FROM sas_vendors WHERE id='$vid'");
+            SELECT '$vid', 'p2p_fee', 'P2P Trade Commission', 'FEE_$tid', '$fee', '$fee', balance - $fee, balance, 'Commission from P2P Gift Card Trade #$tid', '".bc_safe_host_sql($connection_server)."', '1' FROM sas_vendors WHERE id='$vid'");
 
         // Record Profit for Platform (Super Admin tracking)
         mysqli_query($connection_server, "INSERT INTO sas_platform_earnings (vendor_id, amount, source, reference) VALUES ('$vid', '$fee', 'P2P_Giftcard', '$tid')");

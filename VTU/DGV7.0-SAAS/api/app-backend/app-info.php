@@ -3,8 +3,23 @@ include_once("app-config.php");
 
 header("Content-Type: application/json");
 $incoming_post_request = file_get_contents("php://input");
-fwrite(fopen("app-info.txt", "a"), $incoming_post_request . "\n\n");
 $decode_post_request = json_decode($incoming_post_request, true);
+if (!is_array($decode_post_request)) $decode_post_request = array();
+
+// Both values used to be concatenated straight into SQL. A username of `x' OR '1'='1` returned
+// any account's profile - and this endpoint hands out api_key - so this was a direct account
+// takeover primitive. Escape once here and use the escaped copies in every query below.
+$app_username = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($decode_post_request["username"] ?? ''))));
+$app_passkey  = mysqli_real_escape_string($connection_server, trim((string)($decode_post_request["encoded-passkey"] ?? '')));
+
+if (bc_is_rate_limited('app_info', (string)($_SERVER['REMOTE_ADDR'] ?? '') . ':' . strtolower($app_username), 20, 300)) {
+    echo json_encode(["status" => "failed", "status-msg" => "Too many requests. Please try again later."]);
+    exit;
+}
+if ($app_passkey !== '' && !preg_match('/^[a-f0-9]{32}$/i', $app_passkey)) {
+    echo json_encode(["status" => "failed", "status-msg" => "Invalid credentials"]);
+    exit;
+}
 
 if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
 
@@ -80,9 +95,9 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         $user_account_type_code = "1";
 
         $user_assoc_array = array();
-        $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $decode_post_request["username"] . "'");
+        $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username'");
         if (mysqli_num_rows($checkuser) == 1) {
-            $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $decode_post_request["username"] . "' AND password = '" . $decode_post_request["encoded-passkey"] . "'");
+            $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username' AND password = '$app_passkey'");
             if (mysqli_num_rows($checkuser_pass) == 1) {
 
                 //Transactions
@@ -94,7 +109,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                 $user_trans_status_array = array();
 
                 //Get Transactions
-                $checkuser_trans = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $decode_post_request["username"] . "' ORDER BY date DESC");
+                $checkuser_trans = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username' ORDER BY date DESC");
                 if (mysqli_num_rows($checkuser_trans) >= 1) {
                     while ($user_trans_det = mysqli_fetch_assoc($checkuser_trans)) {
                         array_push($user_trans_ref_array, $user_trans_det["reference"]);
@@ -158,7 +173,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                 $user_va_bank_acct_number_array = array();
                 $user_va_bank_fee_array = array();
                 //Get Virtual Accounts
-                $checkuser_virtual_accounts = mysqli_query($connection_server, "SELECT * FROM sas_user_banks WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $decode_post_request["username"] . "'");
+                $checkuser_virtual_accounts = mysqli_query($connection_server, "SELECT * FROM sas_user_banks WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username'");
                 if (mysqli_num_rows($checkuser_virtual_accounts) >= 1) {
                     while ($user_va_det = mysqli_fetch_assoc($checkuser_virtual_accounts)) {
                         array_push($user_va_bank_name_array, $user_va_det["bank_name"]);
@@ -189,7 +204,11 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                         "phone" => $user_det["phone_number"],
                         "address" => $user_det["home_address"],
                         "email" => $user_det["email"],
-                        "api-key" => $user_det["api_key"],
+                        // SECURITY: never return the full api_key from this legacy endpoint. It is
+                        // authenticated by the account's md5 password hash, which is exactly what
+                        // leaked debug logs exposed - returning the key completed the takeover.
+                        // The supported apps obtain the key from /web/api/login.php instead.
+                        "api-key" => substr((string)$user_det["api_key"], 0, 6) . str_repeat('*', 24),
                         "account-type" => $user_account_type,
                         "status" => $user_account_status_array[$user_det["status"]],
                         "ai_status" => (int)$user_det["ai_status"],
@@ -755,8 +774,11 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
             "banner-ads-redirect" => $banner_ads_redirect_assoc_array,
             "payment-gateway" => $payment_gateway_assoc_array,
             "payment-gateway-public-key" => $payment_gateway_public_key_assoc_array,
-            "payment-gateway-secret-key" => $payment_gateway_secret_key_assoc_array,
-            "payment-gateway-encrypt-key" => $payment_gateway_encrypt_key_assoc_array,
+            // SECURITY: secret/encrypt keys are server-side only. They were previously shipped to
+            // every app install (and cached in app-json.json on disk), which let anyone with the
+            // APK take over the vendor's payment gateway.
+            "payment-gateway-secret-key" => array(),
+            "payment-gateway-encrypt-key" => array(),
             "user-info" => $user_assoc_array,
             "services" => $services_assoc_array
         );
@@ -771,7 +793,6 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
     $app_json = json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Bad Request"), true);
 }
 
-fwrite(fopen("app-json.json", "a"), $app_json . "\n\n");
 
 echo $app_json;
 

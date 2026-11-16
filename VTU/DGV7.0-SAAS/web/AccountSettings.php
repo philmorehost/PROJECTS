@@ -181,15 +181,26 @@
     }
 
 if (isset($_POST["update-user-security"])) {
-    $new_pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new_pin"])));
-    $con_pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["con_pin"])));
+    bc_validate_csrf();
+    $new_pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new_pin"] ?? '')));
+    $con_pin = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["con_pin"] ?? '')));
+    $old_pin = trim(strip_tags($_POST["old_pin"] ?? ''));
 
     if (!empty($new_pin)) {
         if (is_numeric($new_pin) && strlen($new_pin) == 4) {
             if ($new_pin === $con_pin) {
-                $hashed_pin = password_hash($new_pin, PASSWORD_DEFAULT);
-                mysqli_query($connection_server, "UPDATE sas_users SET transaction_pin='$new_pin', security_pin='$hashed_pin' WHERE id='".$get_logged_user_details['id']."'");
-                $_SESSION["product_purchase_response"] = "Security settings and PIN updated successfully";
+                // Replacing an existing PIN requires the current one: a hijacked session must not
+                // be able to install its own PIN and empty the wallet.
+                $has_existing_pin = !empty($get_logged_user_details['security_pin']) || !empty($get_logged_user_details['transaction_pin']);
+                if ($has_existing_pin && !bc_verify_pin_secure($old_pin, $get_logged_user_details, 'set_pin')) {
+                    $_SESSION["product_purchase_response"] = "Current PIN is incorrect.";
+                } elseif (in_array($new_pin, array('0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321'), true)) {
+                    $_SESSION["product_purchase_response"] = "That PIN is too easy to guess. Please choose another.";
+                } else {
+                    $hashed_pin = password_hash($new_pin, PASSWORD_DEFAULT);
+                    mysqli_query($connection_server, "UPDATE sas_users SET transaction_pin='$new_pin', security_pin='$hashed_pin' WHERE id='".$get_logged_user_details['id']."'");
+                    $_SESSION["product_purchase_response"] = "Security settings and PIN updated successfully";
+                }
             } else {
                 $_SESSION["product_purchase_response"] = "PIN and Confirm PIN do not match";
             }
@@ -253,7 +264,7 @@ if (isset($_POST["buy-user-ai-tokens"])) {
         $upd = mysqli_query($connection_server, "UPDATE sas_users SET balance='$new_bal', ai_token_balance='$new_token_bal' WHERE id='$uid'");
         if ($upd) {
             mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $token_amount WHERE id='$vid'");
-            mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status, date) VALUES ('$vid', 'AI_TOKEN', 'AI Token Purchase', '$ref', '".$get_logged_user_details['username']."', '$token_amount', '$cost', '".$get_logged_user_details['balance']."', '$new_bal', '$desc', 'web', '".$_SERVER['HTTP_HOST']."', 1, NOW())");
+            mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status, date) VALUES ('$vid', 'AI_TOKEN', 'AI Token Purchase', '$ref', '".$get_logged_user_details['username']."', '$token_amount', '$cost', '".$get_logged_user_details['balance']."', '$new_bal', '$desc', 'web', '".bc_safe_host_sql($connection_server)."', 1, NOW())");
             $_SESSION["product_purchase_response"] = "✅ $token_amount AI Tokens purchased successfully!";
         }
     } else {
@@ -386,6 +397,13 @@ if (isset($_POST["buy-user-ai-tokens"])) {
             <div class="card shadow-sm border-0 p-4 rounded-4 mb-4">
                 <h5 class="fw-bold mb-4"><i class="bi bi-shield-lock me-2 text-danger"></i>Security PIN Setup</h5>
                 <form method="post" action="">
+                    <?php echo bc_csrf_field(); ?>
+                    <?php if (!empty($get_logged_user_details['security_pin']) || !empty($get_logged_user_details['transaction_pin'])): ?>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">CURRENT PIN</label>
+                        <input name="old_pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control bg-light" placeholder="Required to change your PIN" inputmode="numeric"/>
+                    </div>
+                    <?php endif; ?>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">NEW 4-DIGIT PIN</label>
                         <input name="new_pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control bg-light" placeholder="Leave empty to keep current" inputmode="numeric"/>

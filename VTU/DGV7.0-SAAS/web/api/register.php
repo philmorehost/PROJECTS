@@ -55,7 +55,7 @@ $referral_id = function_exists('bc_resolve_referral_id')
     : "";
 
 $md5_pass = md5($pass);
-$api_key = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50);
+$api_key = bin2hex(random_bytes(25));
 $last_login = date('Y-m-d H:i:s.u');
 
 $query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, last_login, api_status, status)

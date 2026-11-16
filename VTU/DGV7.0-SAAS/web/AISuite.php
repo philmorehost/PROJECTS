@@ -69,7 +69,7 @@
             if ($upd) {
                 mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $final_tokens WHERE id='$vid'");
             }
-            mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status, date) VALUES ('$vid', 'AI_TOKEN', 'AI Token Purchase', '$ref', '".$get_logged_user_details['username']."', '$token_amount', '$cost', '".$get_logged_user_details['balance']."', '$new_bal', '$desc', 'web', '".$_SERVER['HTTP_HOST']."', 1, NOW())");
+            mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status, date) VALUES ('$vid', 'AI_TOKEN', 'AI Token Purchase', '$ref', '".$get_logged_user_details['username']."', '$token_amount', '$cost', '".$get_logged_user_details['balance']."', '$new_bal', '$desc', 'web', '".bc_safe_host_sql($connection_server)."', 1, NOW())");
             $_SESSION["product_purchase_response"] = "✅ $token_amount AI Tokens purchased successfully!";
         } else {
             $_SESSION["product_purchase_response"] = "❌ Insufficient balance or invalid amount.";

@@ -26,13 +26,15 @@ $vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT id, print_hub_secret, website_url FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 $valid_secret = $get_vendor['print_hub_secret'] ?? '';
 
-// Fallback to global secret if vendor secret is empty
 if (empty($valid_secret)) {
-    $get_opt = mysqli_fetch_array(mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='print_hub_secret'"));
-    $valid_secret = $get_opt['option_value'] ?? md5(($get_vendor['website_url'] ?? 'SYSTEM') . "PRINT_HUB_SECRET");
+    // No configured secret => endpoint is closed. The old fallback derived a "secret" from
+    // md5(website_url . "PRINT_HUB_SECRET"), which anybody can compute, so it was effectively
+    // an open endpoint that could mint wallet funding.
+    http_response_code(503);
+    exit(json_encode(["status" => "error", "msg" => "Print Hub secret is not configured"]));
 }
 
-if ($secret !== $valid_secret) {
+if (!hash_equals((string)$valid_secret, (string)$secret)) {
     http_response_code(401);
     exit(json_encode(["status" => "error", "msg" => "Invalid Secret Key"]));
 }

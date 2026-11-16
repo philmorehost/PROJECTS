@@ -9,6 +9,7 @@ import com.datagifting.app.R
 import com.datagifting.app.api.RetrofitClient
 import com.datagifting.app.databinding.FragmentExamBinding
 import com.datagifting.app.util.LoadingOverlay
+import com.datagifting.app.util.PinPromptHelper
 import com.datagifting.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -132,8 +133,16 @@ class ExamFragment : Fragment(R.layout.fragment_exam) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Confirm Purchase")
             .setMessage("Exam: ${selectedExam.uppercase()}\nPIN Type: $selectedProductCode\nAmount: ₦$selectedProductPrice")
-            .setPositiveButton("Buy Now") { _, _ -> doPurchase() }
+            .setPositiveButton("Buy Now") { _, _ -> promptPinThenPurchase() }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase() {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase() },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase() {

@@ -29,7 +29,7 @@ if (isset($_POST['action'])) {
         $pin = $_POST['pin'] ?? '';
         $otp = $_POST['otp'] ?? '';
 
-        if (!verifyUserPIN($pin, $get_logged_user_details)) {
+        if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
         } elseif (empty($_SESSION["giftcard_otp"]) || $otp !== $_SESSION["giftcard_otp"]) {
             $response = ['status' => 'error', 'message' => 'Invalid Email OTP'];
@@ -101,7 +101,7 @@ if (isset($_POST['action'])) {
         $recipient_user = mysqli_real_escape_string($connection_server, $_POST['recipient']);
         $pin = $_POST['pin'] ?? '';
 
-        if (!verifyUserPIN($pin, $get_logged_user_details)) {
+        if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
         } else {
             $q_r = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE (username='$recipient_user' OR email='$recipient_user') AND vendor_id='$vid' LIMIT 1");
@@ -120,7 +120,7 @@ if (isset($_POST['action'])) {
         $card_id = (int)$_POST['card_id'];
         $pin = $_POST['pin'] ?? '';
 
-        if (!verifyUserPIN($pin, $get_logged_user_details)) {
+        if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
         } else {
             $q_c = mysqli_query($connection_server, "SELECT * FROM `sas_giftcard_inventory` WHERE id='$card_id' AND is_for_sale=1 AND vendor_id='$vid' LIMIT 1");
