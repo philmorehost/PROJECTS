@@ -9,6 +9,8 @@ if (PHP_SAPI !== 'cli') {
     exit("CLI only.\n");
 }
 
+$cronRunId = payhub_cron_start('automated_payouts');
+
 function payhub_payout_is_holiday($date) {
     $day = (int)date('N', strtotime($date));
     if ($day >= 6) return true;
@@ -146,8 +148,14 @@ function payhub_mark_automated_payout_uncertain($db, $payoutId, $marker, $reason
     }
 }
 
-if (payhub_payout_is_holiday(date('Y-m-d'))) exit("Today is a weekend or fixed public holiday. No payouts today.\n");
-if (getConfig('payout_enabled', '1') !== '1') exit("Global payout service is disabled.\n");
+if (payhub_payout_is_holiday(date('Y-m-d'))) {
+    payhub_cron_finish($cronRunId, 'skipped', 'Weekend or fixed public holiday; no scheduled payout run.');
+    exit("Today is a weekend or fixed public holiday. No payouts today.\n");
+}
+if (getConfig('payout_enabled', '1') !== '1') {
+    payhub_cron_finish($cronRunId, 'skipped', 'Global payout service is disabled.');
+    exit("Global payout service is disabled.\n");
+}
 
 $db = Database::connect();
 $minimum = max(0, (float)getConfig('min_payout_amount', '1000'));
@@ -251,4 +259,6 @@ foreach ($merchantIds as $merchantId) {
     }
 }
 
-echo 'Automated payout totals: ' . json_encode($counts) . "\n";
+$summary = 'Automated payout totals: ' . json_encode($counts);
+echo $summary . "\n";
+payhub_cron_finish($cronRunId, 'success', $summary . '; eligible merchants=' . count($merchantIds));
