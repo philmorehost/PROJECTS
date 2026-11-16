@@ -54,7 +54,7 @@ function ensure_critical_tables() {
     if (!isInstalled()) return;
 
     // Quick version check to avoid redundant DB calls on every request
-    $version = '1.2.1';
+    $version = '1.2.2';
     if (getConfig('sys_db_version') === $version) return;
 
     try {
@@ -157,7 +157,10 @@ function ensure_critical_tables() {
                 'status_details' => "TEXT",
                 'gateway_reference' => "VARCHAR(100)",
                 'fee_amount' => "DECIMAL(15, 2) DEFAULT 0.00",
-                'net_amount' => "DECIMAL(15, 2) DEFAULT 0.00"
+                'net_amount' => "DECIMAL(15, 2) DEFAULT 0.00",
+                'bank_name' => "VARCHAR(255) DEFAULT NULL",
+                'account_number' => "VARCHAR(50) DEFAULT NULL",
+                'request_date' => "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
             ]
         ];
         foreach ($cols as $table => $columns) {
@@ -169,6 +172,19 @@ function ensure_critical_tables() {
                     }
                 } catch (\Throwable $e) {}
             }
+        }
+
+        // Legacy payout tables used a status enum that rejected the statuses used by the
+        // payout worker. Widen it once so scheduler updates cannot fail on older installs.
+        try {
+            $payoutStatus = $db->query("SHOW COLUMNS FROM `payouts` LIKE 'status'")->fetch();
+            $payoutStatusType = strtolower((string)($payoutStatus['Type'] ?? ''));
+            if (strpos($payoutStatusType, 'enum(') !== false
+                && (strpos($payoutStatusType, 'processed') === false || strpos($payoutStatusType, 'declined') === false)) {
+                $db->exec("ALTER TABLE `payouts` MODIFY COLUMN `status` VARCHAR(20) NOT NULL DEFAULT 'pending'");
+            }
+        } catch (\Throwable $e) {
+            error_log('[PayHub] Payout status schema migration failed: ' . $e->getMessage());
         }
 
         // Ensure support system columns and fix foreign key constraints
@@ -526,6 +542,71 @@ function getConfig($key, $default = '') {
         return $row ? $row['value'] : $default;
     } catch (\Throwable $e) {
         return $default;
+    }
+}
+
+/** Store cron heartbeats in the database so the admin can verify execution. */
+function payhub_ensure_cron_runs_table() {
+    static $ready = false;
+    if ($ready) return true;
+    try {
+        Database::connect()->exec("CREATE TABLE IF NOT EXISTS cron_runs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            job_name VARCHAR(64) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'running',
+            summary TEXT NULL,
+            started_at DATETIME NOT NULL,
+            finished_at DATETIME NULL,
+            INDEX idx_cron_job_started (job_name, started_at)
+        ) ENGINE=InnoDB");
+        $ready = true;
+        return true;
+    } catch (\Throwable $e) {
+        error_log('[PayHub cron] Could not initialize run tracking: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function payhub_cron_start($jobName) {
+    if (!payhub_ensure_cron_runs_table()) return 0;
+    try {
+        $db = Database::connect();
+        $stmt = $db->prepare("INSERT INTO cron_runs (job_name, status, summary, started_at) VALUES (?, 'running', 'Job started', NOW())");
+        $stmt->execute([$jobName]);
+        $runId = (int)$db->lastInsertId();
+        register_shutdown_function(function () use ($runId) {
+            try {
+                $error = error_get_last();
+                $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+                $db = Database::connect();
+                if ($error && in_array($error['type'], $fatalTypes, true)) {
+                    $summary = substr((string)$error['message'] . ' in ' . (string)$error['file'] . ':' . (int)$error['line'], 0, 2000);
+                    $stmt = $db->prepare("UPDATE cron_runs SET status = 'failed', summary = ?, finished_at = NOW() WHERE id = ? AND status = 'running'");
+                    $stmt->execute([$summary, $runId]);
+                } else {
+                    $stmt = $db->prepare("UPDATE cron_runs SET status = 'failed', summary = 'Job exited without recording a result', finished_at = NOW() WHERE id = ? AND status = 'running'");
+                    $stmt->execute([$runId]);
+                }
+            } catch (\Throwable $e) {
+                error_log('[PayHub cron] Could not close heartbeat: ' . $e->getMessage());
+            }
+        });
+        return $runId;
+    } catch (\Throwable $e) {
+        error_log('[PayHub cron] Could not start heartbeat for ' . $jobName . ': ' . $e->getMessage());
+        return 0;
+    }
+}
+
+function payhub_cron_finish($runId, $status, $summary) {
+    if ((int)$runId <= 0) return false;
+    $status = in_array($status, ['success', 'failed', 'skipped'], true) ? $status : 'failed';
+    try {
+        $stmt = Database::connect()->prepare("UPDATE cron_runs SET status = ?, summary = ?, finished_at = NOW() WHERE id = ?");
+        return $stmt->execute([$status, substr((string)$summary, 0, 2000), (int)$runId]);
+    } catch (\Throwable $e) {
+        error_log('[PayHub cron] Could not finish heartbeat #' . (int)$runId . ': ' . $e->getMessage());
+        return false;
     }
 }
 

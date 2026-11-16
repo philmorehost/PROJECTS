@@ -17,6 +17,8 @@ if (!$is_cli) {
     header('Content-Type: text/plain');
 }
 
+$cronRunId = $is_cli ? payhub_cron_start('transaction_expiry') : 0;
+
 /*
  * Reconciled expiry for abandoned transactions.
  *
@@ -49,6 +51,7 @@ if ($hasMysqlLock) {
     $lockStmt = $db->query("SELECT GET_LOCK('payhub_transaction_expiry', 0)");
     if ((int)$lockStmt->fetchColumn() !== 1) {
         error_log('[PayHub] expiry cron skipped: another run holds the lock.');
+        payhub_cron_finish($cronRunId, 'skipped', 'Another expiry run holds the advisory lock.');
         exit("Expiry reconciliation skipped: another run holds the lock.\n");
     }
     register_shutdown_function(function () use ($db) {
@@ -69,6 +72,7 @@ if (!$rows) {
     $message = "No pending transactions older than {$grace_minutes} minutes.";
     echo $message . "\n";
     error_log('[PayHub] expiry cron: ' . $message);
+    payhub_cron_finish($cronRunId, 'success', $message);
     exit;
 }
 
@@ -223,4 +227,5 @@ foreach ($rows as $tx) {
 $summary = "Expiry reconciliation: checked=" . count($rows) . " fulfilled=$fulfilled expired=$expired gateway_open=$gateway_open unreachable=$unreachable (grace {$grace_minutes}m)";
 echo $summary . "\n";
 error_log('[PayHub] ' . $summary);
+payhub_cron_finish($cronRunId, 'success', $summary);
 if ($hasMysqlLock) $db->query("SELECT RELEASE_LOCK('payhub_transaction_expiry')");
