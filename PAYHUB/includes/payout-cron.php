@@ -149,6 +149,7 @@ function payhub_mark_automated_payout_uncertain($db, $payoutId, $marker, $reason
 
 function payhub_run_automated_payouts($adminTriggered = false) {
     $cronRunId = payhub_cron_start('automated_payouts');
+    payhub_cron_log($cronRunId, 'info', $adminTriggered ? 'Admin requested automated payout run' : 'Scheduled automated payout run started');
     @set_time_limit(0);
 
     if (!$adminTriggered && payhub_payout_is_holiday(date('Y-m-d'))) {
@@ -175,6 +176,7 @@ $queuedStmt = $db->query("SELECT id FROM payouts WHERE status = 'pending'
 foreach ($queuedStmt->fetchAll(PDO::FETCH_COLUMN) as $queuedId) {
     try {
         $result = payhub_submit_automated_payout($db, (int)$queuedId, true);
+        payhub_cron_log($cronRunId, $result === 'failed' ? 'error' : 'info', 'Recovered reserved automated payout', ['payout_id' => (int)$queuedId, 'result' => $result]);
         if (isset($counts[$result])) $counts[$result]++;
     } catch (Throwable $e) {
         error_log('[PayHub payouts] Could not resume queued payout #' . (int)$queuedId . ': ' . $e->getMessage());
@@ -186,11 +188,20 @@ foreach ($queuedStmt->fetchAll(PDO::FETCH_COLUMN) as $queuedId) {
 // who explicitly chose scheduled automated settlement should not be silently placed in that queue;
 // the per-merchant Review ON flag remains an intentional exception.
 $reviewFilter = $adminTriggered ? ' AND COALESCE(require_payout_review, 0) = 0' : '';
+if ($adminTriggered) {
+    $reviewStmt = $db->prepare("SELECT COUNT(*) FROM users WHERE role = 'merchant' AND payout_method = 'automated'
+        AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0
+        AND COALESCE(require_payout_review, 0) = 1");
+    $reviewStmt->execute([$minimum]);
+    $reviewHeld = (int)$reviewStmt->fetchColumn();
+    if ($reviewHeld > 0) payhub_cron_log($cronRunId, 'warning', 'Admin trigger excluded merchants awaiting payout review', ['count' => $reviewHeld]);
+}
 $stmt = $db->prepare("SELECT id FROM users WHERE role = 'merchant' AND payout_method = 'automated'
     AND payout_method_status = 'active' AND is_test_mode = 0 AND wallet_balance >= ? AND is_suspended = 0 $reviewFilter ORDER BY id");
 $stmt->execute([$minimum]);
 $merchantIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
 echo "Automated payout run " . date('Y-m-d H:i:s T') . ': eligible merchants=' . count($merchantIds) . "\n";
+payhub_cron_log($cronRunId, 'info', 'Eligible merchant query completed', ['merchant_count' => count($merchantIds), 'admin_triggered' => $adminTriggered]);
 
 foreach ($merchantIds as $merchantId) {
     $payoutId = null;
@@ -214,6 +225,7 @@ foreach ($merchantIds as $merchantId) {
         if ($stmt->fetchColumn()) {
             $db->rollBack();
             $counts['skipped']++;
+            payhub_cron_log($cronRunId, 'info', 'Merchant skipped: payout already recorded today', ['merchant_id' => (int)$merchantId]);
             continue;
         }
 
@@ -226,6 +238,7 @@ foreach ($merchantIds as $merchantId) {
         if (empty($merchant['settlement_account_number']) || empty($merchant['settlement_bank_code'])) {
             $db->rollBack();
             error_log('[PayHub payouts] Automated payout skipped for merchant ' . (int)$merchantId . ': settlement bank details are incomplete.');
+            payhub_cron_log($cronRunId, 'warning', 'Merchant skipped: settlement bank details are incomplete', ['merchant_id' => (int)$merchantId]);
             $counts['review']++;
             continue;
         }
@@ -250,10 +263,12 @@ foreach ($merchantIds as $merchantId) {
 
         if ($queueForReview) {
             echo "Queued automated payout #$payoutId for merchant $merchantId for admin review (merchant review is enabled).\n";
+            payhub_cron_log($cronRunId, 'warning', 'Payout reserved but withheld for merchant review', ['merchant_id' => (int)$merchantId, 'payout_id' => $payoutId]);
             $counts['review']++;
             continue;
         }
         $result = payhub_submit_automated_payout($db, $payoutId, true);
+        payhub_cron_log($cronRunId, in_array($result, ['failed', 'uncertain', 'error'], true) ? 'error' : 'info', 'Automated payout processed', ['merchant_id' => (int)$merchantId, 'payout_id' => $payoutId, 'result' => $result]);
         if (isset($counts[$result])) $counts[$result]++;
         elseif ($result === 'error') $counts['uncertain']++;
         else $counts['skipped']++;
