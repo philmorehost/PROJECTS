@@ -15,7 +15,11 @@ if (empty($user) || empty($pass)) {
     exit;
 }
 
-bc_ensure_security_tables();
+if (!bc_ensure_user_login_otp_column()) {
+    http_response_code(503);
+    echo json_encode(["status" => "error", "message" => "Unable to verify login security settings. Please try again later."]);
+    exit;
+}
 $vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 if (!$get_vendor) {

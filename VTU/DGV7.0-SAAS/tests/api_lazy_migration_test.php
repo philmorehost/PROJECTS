@@ -60,11 +60,16 @@ foreach (['sas_otp_codes', 'sas_login_tokens', 'sas_registrations_pending', 'sas
 check('bc_ensure_security_tables adds sas_users.email_verified',
     (bool)preg_match('/ALTER TABLE\s+sas_users\s+ADD COLUMN\s+`?email_verified`?/i', $security), true);
 
-check('bc_ensure_security_tables adds sas_vendors.user_login_otp_enabled',
+check('login OTP migration adds sas_vendors.user_login_otp_enabled',
     (bool)preg_match('/ALTER TABLE\s+sas_vendors\s+ADD COLUMN\s+`?user_login_otp_enabled`?/i', $security), true);
 $login = file_get_contents($root . '/web/api/login.php');
-check('app login runs the lazy migration before fetching its vendor',
-    strpos($login, 'bc_ensure_security_tables();') < strpos($login, 'SELECT * FROM sas_vendors'), true);
+check('app login checks the policy column before fetching its vendor',
+    strpos($login, 'bc_ensure_user_login_otp_column()') !== false && strpos($login, 'bc_ensure_user_login_otp_column()') < strpos($login, 'SELECT * FROM sas_vendors'), true);
+check('app login fails closed if the policy column cannot be checked',
+    strpos($login, 'if (!bc_ensure_user_login_otp_column())') !== false, true);
+$webLogin = file_get_contents($root . '/web/Login.php');
+check('website login fails closed if the policy column cannot be checked',
+    strpos($webLogin, 'if (!bc_ensure_user_login_otp_column())') !== false, true);
 
 // 5. Every column the registration/login endpoints INSERT into must be covered somewhere.
 $register = file_get_contents($root . '/web/api/register.php');

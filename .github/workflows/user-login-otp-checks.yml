@@ -1,0 +1,54 @@
+name: User login OTP and public bootstrap checks
+
+on:
+  push:
+    paths:
+      - 'VTU/DGV7.0-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-security.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-func.php'
+      - 'VTU/DGV7.0-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-SAAS/tests/user*otp*'
+      - 'VTU/DGV7.0-SAAS/tests/user_site_migration_gate_test.php'
+      - 'VTU/DGV7.0-SAAS/tests/api_lazy_migration_test.php'
+      - '.github/workflows/user-login-otp-checks.yml'
+  pull_request:
+    paths:
+      - 'VTU/DGV7.0-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-security.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-func.php'
+      - 'VTU/DGV7.0-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-SAAS/tests/user*otp*'
+      - 'VTU/DGV7.0-SAAS/tests/user_site_migration_gate_test.php'
+      - 'VTU/DGV7.0-SAAS/tests/api_lazy_migration_test.php'
+      - '.github/workflows/user-login-otp-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  otp-and-bootstrap:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    name: PHP ${{ matrix.php }} OTP and public bootstrap
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Check syntax
+        working-directory: VTU/DGV7.0-SAAS
+        run: |
+          for file in func/bc-config.php func/bc-security.php func/bc-func.php web/Login.php web/api/login.php web/api/login-otp.php; do php -l "$file" || exit 1; done
+      - name: Test migration gates and login OTP
+        working-directory: VTU/DGV7.0-SAAS
+        run: |
+          set -e
+          for test in user_site_migration_gate_test user_login_otp_column_migration_test api_lazy_migration_test user_login_otp_policy_test user_login_otp_option_test user_login_otp_delivery_test user_login_otp_flow_test; do
+            php -n "tests/${test}.php"
+          done
+          python3 tests/user_login_otp_clients_test.py
