@@ -3,16 +3,38 @@
 if (!defined('PORTAL_PATH')) exit;
 
 require_once PORTAL_PATH . '/include/result_helper.php';
+require_once PORTAL_PATH . '/include/cbt_helper.php';
 
 $msg = '';
 $action = isset($_GET['action']) ? $_GET['action'] : 'list';
 
-// Load student context if role is student or parent
+// Load student context if role is student or parent.
+// Scoped to the current school so a repeated admission number or email in another
+// tenant can never point the portal at the wrong student/class.
 $student_info = null;
 if ($user_role === 'student') {
-    $stmt = $pdo->prepare("SELECT * FROM sm_students WHERE email = ? OR admission_number = ? LIMIT 1");
-    $stmt->execute([$_SESSION['user_session'], $_SESSION['user_session']]);
-    $student_info = $stmt->fetch();
+    $student_info = CbtHelper::resolveStudent($pdo, $school_id ?? null, $_SESSION['user_session'] ?? '');
+} elseif ($user_role === 'parent') {
+    // Parents view a linked child's examinations (explicit ?student=ADM or first linked child)
+    try {
+        $stmtParentId = $pdo->prepare("SELECT id_number FROM sm_parents WHERE school_id_number = ? AND (email = ? OR id_number = ?) LIMIT 1");
+        $stmtParentId->execute([$school_id, $_SESSION['user_session'] ?? '', $_SESSION['user_session'] ?? '']);
+        $parentIdNumber = $stmtParentId->fetchColumn();
+
+        if ($parentIdNumber) {
+            $requestedChild = trim((string)($_GET['student'] ?? ''));
+            if ($requestedChild !== '') {
+                $stmtChild = $pdo->prepare("SELECT * FROM sm_students WHERE school_id_number = ? AND parent_id_number = ? AND admission_number = ? LIMIT 1");
+                $stmtChild->execute([$school_id, $parentIdNumber, $requestedChild]);
+            } else {
+                $stmtChild = $pdo->prepare("SELECT * FROM sm_students WHERE school_id_number = ? AND parent_id_number = ? ORDER BY firstname ASC LIMIT 1");
+                $stmtChild->execute([$school_id, $parentIdNumber]);
+            }
+            $student_info = $stmtChild->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+    } catch (Throwable $e) {
+        $student_info = null;
+    }
 }
 
 if (($user_role === 'student' || $user_role === 'parent') && $action === 'list') {
@@ -42,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $questions = (int)$_POST['exam_questions'];
         $duration = (int)$_POST['exam_duration'];
         $attempt_questions = isset($_POST['attempt_questions']) ? (int)$_POST['attempt_questions'] : 0;
-        $is_approved = ($_SESSION['user_role'] === 'teacher') ? 0 : 1;
+        $is_approved = CbtHelper::approvalForRole($pdo, $school_id ?? null, $_SESSION['user_role'] ?? '');
 
         // Automatically initialize an empty JSON structure for the questions
         $stmtSub = $pdo->prepare("SELECT subject_name FROM sm_subjects WHERE school_id_number = ? AND subject_code = ? LIMIT 1");
@@ -58,7 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare("INSERT INTO sm_cbt_schedules (school_id_number, paper_title, numeric_class_name, session, term_id_number, subject_code, cbt_type, exam_json, exam_date, exam_time, exam_questions, exam_duration, attempt_questions, is_approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$school_id, $title, $cls, $sess, $term, $sub, $type, $empty_json, $date, $time, $questions, $duration, $attempt_questions, $is_approved]);
-        $msg = "CBT Test scheduled successfully!";
+        CbtHelper::flushCache();
+        $msg = $is_approved == 1
+            ? "CBT Test scheduled successfully! Students in this class can now see it."
+            : "CBT Test scheduled successfully — it is pending approval. Students cannot see it until a School Admin approves it.";
     } elseif (isset($_POST['update_cbt_questions'])) {
         $cbt_id = (int)$_POST['cbt_id'];
         $questions = $_POST['questions'] ?? [];
@@ -114,12 +139,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cbt_id = (int)$_POST['cbt_id'];
         $stmt = $pdo->prepare("DELETE FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ?");
         $stmt->execute([$school_id, $cbt_id]);
+        CbtHelper::flushCache();
         $msg = "CBT Test schedule deleted.";
     } elseif (isset($_POST['approve_cbt'])) {
         $cbt_id = (int)$_POST['cbt_id'];
-        $stmt = $pdo->prepare("UPDATE sm_cbt_schedules SET is_approved = 1 WHERE school_id_number = ? AND cbt_id = ?");
-        $stmt->execute([$school_id, $cbt_id]);
-        $msg = "CBT Exam schedule approved successfully!";
+        try {
+            if ($user_role !== 'school_admin' && $user_role !== 'teacher') {
+                throw new RuntimeException('Only school staff can approve examinations.');
+            }
+            $stmt = $pdo->prepare("UPDATE sm_cbt_schedules SET is_approved = 1 WHERE school_id_number = ? AND cbt_id = ?");
+            $stmt->execute([$school_id, $cbt_id]);
+            CbtHelper::flushCache();
+            $msg = "CBT Exam schedule approved successfully! Students can now see it in their account.";
+        } catch (PDOException $e) {
+            $msg = "Could not approve this exam: " . $e->getMessage() . " — run Database Repair from Settings if the is_approved column is missing.";
+        }
+    } elseif (isset($_POST['toggle_cbt_approval'])) {
+        if ($user_role !== 'school_admin') {
+            $msg = "Only a School Admin can change the exam approval policy.";
+        } else {
+            $enable = !empty($_POST['require_approval']);
+            $msg = CbtHelper::setRequireApproval($pdo, $school_id ?? null, $enable)
+                ? ($enable
+                    ? "Approval mode ON — new teacher-created exams wait for a School Admin before students see them."
+                    : "Approval mode OFF — every scheduled exam is published to students immediately.")
+                : "Could not save the approval policy. Run Database Repair from Settings if this persists.";
+        }
+    } elseif (isset($_POST['approve_all_cbt'])) {
+        try {
+            if ($user_role !== 'school_admin') {
+                throw new RuntimeException('Only a School Admin can approve all pending examinations.');
+            }
+            $stmt = $pdo->prepare("UPDATE sm_cbt_schedules SET is_approved = 1 WHERE school_id_number = ? AND is_approved = 0");
+            $stmt->execute([$school_id]);
+            $approvedCount = $stmt->rowCount();
+            CbtHelper::flushCache();
+            $msg = $approvedCount > 0
+                ? "{$approvedCount} pending CBT exam(s) approved. They are now visible to students."
+                : "There were no exams awaiting approval.";
+        } catch (PDOException $e) {
+            $approvedCount = 0;
+            $msg = "Could not approve pending exams: " . $e->getMessage();
+        }
     } elseif (isset($_POST['bulk_delete_cbt'])) {
         $ids = $_POST['bulk_ids'] ?? [];
         if (!empty($ids)) {
@@ -139,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $orig = $stmtOrig->fetch();
 
         if ($orig) {
-            $is_approved = ($_SESSION['user_role'] === 'teacher') ? 0 : 1;
+            $is_approved = CbtHelper::approvalForRole($pdo, $school_id ?? null, $_SESSION['user_role'] ?? '');
             $stmt = $pdo->prepare("INSERT INTO sm_cbt_schedules (school_id_number, paper_title, numeric_class_name, session, term_id_number, subject_code, cbt_type, exam_json, exam_date, exam_time, exam_questions, exam_duration, attempt_questions, is_approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$school_id, $new_title, $orig['numeric_class_name'], $new_session, $new_term, $orig['subject_code'], $orig['cbt_type'], $orig['exam_json'], $orig['exam_date'], $orig['exam_time'], $orig['exam_questions'], $orig['exam_duration'], $orig['attempt_questions'], $is_approved]);
             $new_cbt_id = $pdo->lastInsertId();
@@ -161,14 +222,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $cbt_id = (int)$_POST['cbt_id'];
             if (!$student_info) {
-                $stmt = $pdo->prepare("SELECT * FROM sm_students WHERE email = ? OR admission_number = ? LIMIT 1");
-                $stmt->execute([$_SESSION['user_session'] ?? '', $_SESSION['user_session'] ?? '']);
-                $student_info = $stmt->fetch();
+                $student_info = CbtHelper::resolveStudent($pdo, $school_id, $_SESSION['user_session'] ?? '');
             }
             if (!$student_info) {
-                throw new Exception("Student context not found.");
+                throw new Exception("Student context not found. Please sign in again.");
             }
             $adm_num = $student_info['admission_number'];
+
+            $stmtExam = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ? LIMIT 1");
+            $stmtExam->execute([$school_id, $cbt_id]);
+            $examRow = $stmtExam->fetch();
+            if (!$examRow) {
+                throw new Exception("Scheduled exam not found.");
+            }
+            if ((int)($examRow['is_approved'] ?? 1) !== 1) {
+                throw new Exception("This examination is awaiting approval by the school administrator.");
+            }
+            $examAliases = CbtHelper::classAliases($pdo, $school_id, $student_info['current_class'] ?? '');
+            if (!CbtHelper::classMatches($examRow['numeric_class_name'], $examAliases)) {
+                throw new Exception("This examination is not available for your class.");
+            }
+            $startState = CbtHelper::state($examRow);
+            if (($startState['state'] ?? '') !== 'active') {
+                throw new Exception(($startState['state'] ?? '') === 'upcoming'
+                    ? 'This examination has not opened yet. It opens ' . ($startState['starts_at_label'] ?? 'soon') . '.'
+                    : 'The examination window has closed.');
+            }
 
             $stmtCheck = $pdo->prepare("SELECT id FROM sm_cbt_started WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ?");
             $stmtCheck->execute([$school_id, $cbt_id, $adm_num]);
@@ -196,9 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $answers = $_POST['answers'] ?? ''; 
 
             if (!$student_info) {
-                $stmt = $pdo->prepare("SELECT * FROM sm_students WHERE email = ? OR admission_number = ? LIMIT 1");
-                $stmt->execute([$_SESSION['user_session'] ?? '', $_SESSION['user_session'] ?? '']);
-                $student_info = $stmt->fetch();
+                $student_info = CbtHelper::resolveStudent($pdo, $school_id, $_SESSION['user_session'] ?? '');
             }
             if (!$student_info) {
                 throw new Exception("Student context not found. Please log in again.");
@@ -451,10 +528,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
         <?php
         exit;
     } elseif ($section === 'student_cbt') {
-        $stmtClassTests = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND numeric_class_name = ? AND is_approved = 1 ORDER BY exam_date DESC, exam_time DESC");
-        $stmtClassTests->execute([$school_id, $student_info['current_class']]);
-        $student_tests = $stmtClassTests->fetchAll();
-        
+        $student_tests = CbtHelper::visibleExams($pdo, $school_id, $student_info);
+        $student_pending_tests = CbtHelper::pendingExamsForStudent($pdo, $school_id, $student_info);
+
         $scbt_per_page = 5;
         $total_scbt = count($student_tests);
         $scbt_total_pages = max(1, ceil($total_scbt / $scbt_per_page));
@@ -462,11 +538,39 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
         if ($scbt_current_page > $scbt_total_pages) $scbt_current_page = $scbt_total_pages;
         $scbt_offset = ($scbt_current_page - 1) * $scbt_per_page;
         $student_tests_paginated = array_slice($student_tests, $scbt_offset, $scbt_per_page);
+
+        // If an exam opens within the next 15 minutes, refresh so the Start button
+        // appears on time without the student having to reload manually.
+        $nextOpenSeconds = null;
+        foreach ($student_tests as $studentExamRow) {
+            $rowState = CbtHelper::state($studentExamRow);
+            if ($rowState['state'] === 'upcoming' && ($nextOpenSeconds === null || $rowState['seconds_to_start'] < $nextOpenSeconds)) {
+                $nextOpenSeconds = $rowState['seconds_to_start'];
+            }
+        }
+
+        if ($nextOpenSeconds !== null && $nextOpenSeconds <= 900) {
+            echo '<script>setTimeout(function(){ window.location.reload(); }, ' . (max(15, (int)$nextOpenSeconds + 5) * 1000) . ');</script>';
+        }
         ?>
         <div>
             <h4 class="text-lg font-bold text-white mb-4">Your Available Examinations</h4>
-            <?php if (empty($student_tests)) : ?>
-                <div class="text-center py-8 text-gray-400 text-sm">No scheduled tests found for your class.</div>
+            <?php if (!$student_info) : ?>
+                <div class="text-center py-8 text-amber-300 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                    We could not link this login to a student record in your school.<br>
+                    <span class="text-xs text-amber-200/80">Ask your school administrator to confirm your email / admission number, then sign in again.</span>
+                </div>
+            <?php elseif (empty($student_tests)) : ?>
+                <div class="text-center py-8 text-gray-300 text-sm bg-white/5 border border-white/10 rounded-xl px-4">
+                    <p class="font-semibold text-white">No examinations are visible for your class right now.</p>
+                    <?php if (!empty($student_pending_tests)) : ?>
+                        <p class="text-xs text-amber-300 mt-2">
+                            🕓 <?php echo count($student_pending_tests); ?> exam(s) have been scheduled for your class and are <strong>waiting for the school administrator to approve them</strong>.
+                        </p>
+                    <?php else : ?>
+                        <p class="text-xs text-gray-400 mt-2">Your class code is <code class="text-indigo-300"><?php echo htmlspecialchars($student_info['current_class'] ?? 'not set'); ?></code>. If your school scheduled an exam, ask them to confirm it targets this exact class and has been approved.</p>
+                    <?php endif; ?>
+                </div>
             <?php else : ?>
                 <div class="grid md:grid-cols-2 gap-4">
                     <?php 
@@ -475,16 +579,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                         $stmtSubCheck->execute([$school_id, $cbt['cbt_id'], $student_info['admission_number']]);
                         $submission = $stmtSubCheck->fetch();
 
-                        $exam_start = strtotime($cbt['exam_date'] . ' ' . $cbt['exam_time']);
-                        $exam_end = $exam_start + ($cbt['exam_duration'] * 60);
-                        $now = time();
-
-                        $status = 'upcoming';
-                        if ($now >= $exam_start && $now <= $exam_end) {
-                            $status = 'active';
-                        } elseif ($now > $exam_end) {
-                            $status = 'expired';
-                        }
+                        $cbt_state = CbtHelper::state($cbt);
+                        $status = $cbt_state['state'];
                     ?>
                         <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col justify-between gap-4">
                             <div>
@@ -520,18 +616,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                         <strong class="text-green-400 font-bold"><?php echo $submission['score']; ?> / <?php echo $cbt['exam_questions']; ?></strong>
                                         <span class="text-[10px] text-gray-500 block mt-1">Submitted: <?php echo $submission['date_submitted']; ?></span>
                                     </div>
-                                <?php elseif ($status === 'active') : ?>
+                                <?php elseif ($status === 'active' && CbtHelper::publishedQuestionCount($cbt) > 0) : ?>
                                     <a href="?page=evaluation&action=take_cbt&cbt_id=<?php echo $cbt['cbt_id']; ?>" 
                                        class="w-full block text-center py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-lg">
                                         💻 Start Examination
                                     </a>
+                                <?php elseif ($status === 'active') : ?>
+                                    <button disabled class="w-full py-2 bg-white/5 text-amber-300 border border-amber-500/20 rounded-lg text-xs font-bold cursor-not-allowed">
+                                        📝 Questions not published yet
+                                    </button>
                                 <?php elseif ($status === 'expired') : ?>
                                     <button disabled class="w-full py-2 bg-white/5 text-gray-500 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
-                                        Exam Expired / Closed
+                                        ⛔ Closed<?php echo !empty($cbt_state['ends_at_label']) ? ' on ' . htmlspecialchars($cbt_state['ends_at_label']) : ' / Closed'; ?>
                                     </button>
                                 <?php else : ?>
-                                    <button disabled class="w-full py-2 bg-white/5 text-gray-400 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
-                                        Waiting to Open
+                                    <button disabled class="w-full py-2 bg-white/5 text-gray-300 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
+                                        🕓 Opens <?php echo htmlspecialchars($cbt_state['starts_at_label'] ?? 'soon'); ?>
                                     </button>
                                 <?php endif; ?>
                             </div>
@@ -587,8 +687,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                     <tr class="hover:bg-white/5 transition">
                         <td class="py-3.5 px-4 font-semibold text-white">
                             <?php echo htmlspecialchars($cbt['paper_title']); ?>
-                            <?php if ($cbt['is_approved'] == 0): ?>
+                            <?php $cbt_class_population = $cbt_class_population ?? []; ?>
+                            <?php if ((int)($cbt['is_approved'] ?? 1) === 0): ?>
                                 <span class="ml-2 px-1.5 py-0.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded text-[9px] font-bold uppercase tracking-wider">Pending Approval</span>
+                                <div class="text-[10px] text-yellow-300/80 font-normal mt-1">⛔ Hidden from students until approved</div>
+                            <?php else: ?>
+                                <?php $classPop = CbtHelper::classStudentCount($pdo, $school_id, $cbt['numeric_class_name'], $cbt_class_population); ?>
+                                <?php if ($classPop > 0): ?>
+                                    <div class="text-[10px] text-emerald-400/90 font-normal mt-1">✅ Visible to <?php echo $classPop; ?> student<?php echo $classPop === 1 ? '' : 's'; ?> in this class</div>
+                                <?php else: ?>
+                                    <div class="text-[10px] text-rose-400 font-normal mt-1">⚠️ No student is assigned to class code <code><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></code></div>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td class="py-3.5 px-4 font-mono text-xs"><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></td>
@@ -601,7 +710,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                         </td>
                         <td class="py-3.5 px-4 text-right">
                             <div class="inline-flex gap-1.5 items-center">
-                                <?php if ($cbt['is_approved'] == 0 && $user_role === 'school_admin'): ?>
+                                <?php if ((int)($cbt['is_approved'] ?? 1) === 0 && $user_role === 'school_admin'): ?>
                                     <form method="post" class="inline">
                                         <input type="hidden" name="cbt_id" value="<?php echo $cbt['cbt_id']; ?>" />
                                         <button type="submit" name="approve_cbt" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg text-xs font-semibold transition" title="Approve Test">
@@ -609,6 +718,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                         </button>
                                     </form>
                                 <?php endif; ?>
+                                <a href="?page=evaluation&action=cbt_visibility&cbt_id=<?php echo $cbt['cbt_id']; ?>"
+                                   class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-lg text-xs font-semibold transition" title="Why students may not see this exam">
+                                    👁️ Visibility
+                                </a>
                                 <a href="?page=evaluation&action=add_cbt_quiz&cbt_id=<?php echo $cbt['cbt_id']; ?>" 
                                    class="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg text-xs font-semibold transition" title="Set Questions">
                                     ✏️ Questions
@@ -846,7 +959,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
             </form>
         </div>
 
-    <?php elseif ($action === 'cbt') : ?>
+    <?php elseif ($action === 'cbt') :
+        // Pending approvals + per-class population, used to explain exam visibility
+        $pending_cbt_count = 0;
+        if ($user_role === 'school_admin' || $user_role === 'teacher') {
+            try {
+                $stmtPending = $pdo->prepare("SELECT COUNT(*) FROM sm_cbt_schedules WHERE school_id_number = ? AND is_approved = 0");
+                $stmtPending->execute([$school_id]);
+                $pending_cbt_count = (int)$stmtPending->fetchColumn();
+            } catch (Throwable $e) {
+                $pending_cbt_count = 0;
+            }
+        }
+        $cbt_class_population = [];
+        ?>
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 border border-white/10 p-6 rounded-2xl">
                 <div>
@@ -864,6 +990,41 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                     </div>
                 <?php endif; ?>
             </div>
+
+            <?php if ($user_role === 'school_admin') : ?>
+                <?php $cbtNeedsApproval = CbtHelper::requireApproval($pdo, $school_id ?? null); ?>
+                <form method="post" class="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="text-xs text-gray-300">
+                        <strong class="text-white">Exam approval policy:</strong>
+                        <?php echo $cbtNeedsApproval
+                            ? 'Teacher-created exams stay hidden until you approve them.'
+                            : 'Every scheduled exam is published to students immediately.'; ?>
+                    </div>
+                    <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-200 shrink-0 cursor-pointer">
+                        <input type="checkbox" name="require_approval" value="1" <?php echo $cbtNeedsApproval ? 'checked' : ''; ?> onchange="this.form.submit()" class="accent-indigo-500" />
+                        Require my approval for teacher exams
+                        <input type="hidden" name="toggle_cbt_approval" value="1" />
+                    </label>
+                </form>
+            <?php endif; ?>
+
+            <?php if ($pending_cbt_count > 0) : ?>
+                <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="text-sm text-amber-200">
+                        <strong>⏳ <?php echo $pending_cbt_count; ?> examination<?php echo $pending_cbt_count === 1 ? '' : 's'; ?> pending approval.</strong>
+                        Students cannot see or start an exam until it is approved.
+                    </div>
+                    <?php if ($user_role === 'school_admin') : ?>
+                        <form method="post" onsubmit="return confirm('Approve all <?php echo $pending_cbt_count; ?> pending exam(s)? Students will see them immediately.');" class="shrink-0">
+                            <button type="submit" name="approve_all_cbt" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">
+                                ✅ Approve All Now
+                            </button>
+                        </form>
+                    <?php else : ?>
+                        <span class="text-[11px] text-amber-300/80">Ask a School Admin to approve them.</span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <?php if ($user_role === 'school_admin' || $user_role === 'teacher') : ?>
                 <!-- Admin/Teacher View -->
@@ -937,7 +1098,21 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                 <tbody class="divide-y divide-white/5">
                                     <?php foreach ($cbt_sched_paginated as $cbt) : ?>
                                         <tr class="hover:bg-white/5 transition">
-                                            <td class="py-3.5 px-4 font-semibold text-white"><?php echo htmlspecialchars($cbt['paper_title']); ?></td>
+                                            <td class="py-3.5 px-4 font-semibold text-white">
+                                                <?php echo htmlspecialchars($cbt['paper_title']); ?>
+                                                <?php if ((int)($cbt['is_approved'] ?? 1) === 0): ?>
+                                                    <span class="ml-2 px-1.5 py-0.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded text-[9px] font-bold uppercase tracking-wider">Pending Approval</span>
+                                                    <div class="text-[10px] text-yellow-300/80 font-normal mt-1">⛔ Hidden from students until approved</div>
+                                                <?php else: ?>
+                                                    <?php $cbt_class_population = $cbt_class_population ?? []; ?>
+                                                    <?php $classPop = CbtHelper::classStudentCount($pdo, $school_id, $cbt['numeric_class_name'], $cbt_class_population); ?>
+                                                    <?php if ($classPop > 0): ?>
+                                                        <div class="text-[10px] text-emerald-400/90 font-normal mt-1">✅ Visible to <?php echo $classPop; ?> student<?php echo $classPop === 1 ? '' : 's'; ?> in this class</div>
+                                                    <?php else: ?>
+                                                        <div class="text-[10px] text-rose-400 font-normal mt-1">⚠️ No student is assigned to class code <code><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></code></div>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="py-3.5 px-4 font-mono text-xs"><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></td>
                                             <td class="py-3.5 px-4"><?php echo htmlspecialchars($cbt['subject_code']); ?></td>
                                             <td class="py-3.5 px-4"><?php echo htmlspecialchars($cbt['exam_questions']); ?></td>
@@ -947,7 +1122,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                                 <div class="text-[10px] text-indigo-400 mt-0.5">🕒 <?php echo htmlspecialchars($cbt['exam_time']); ?></div>
                                             </td>
                                             <td class="py-3.5 px-4 text-right">
-                                                <div class="inline-flex gap-1.5">
+                                                <div class="inline-flex gap-1.5 flex-wrap justify-end">
+                                                    <?php if ((int)($cbt['is_approved'] ?? 1) === 0 && $user_role === 'school_admin'): ?>
+                                                        <form method="post" class="inline">
+                                                            <input type="hidden" name="cbt_id" value="<?php echo $cbt['cbt_id']; ?>" />
+                                                            <button type="submit" name="approve_cbt" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg text-xs font-semibold transition" title="Approve Test">
+                                                                ✅ Approve
+                                                            </button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                    <a href="?page=evaluation&action=cbt_visibility&cbt_id=<?php echo $cbt['cbt_id']; ?>"
+                                                       class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-lg text-xs font-semibold transition" title="Why students may not see this exam">
+                                                        👁️ Visibility
+                                                    </a>
                                                     <a href="?page=evaluation&action=add_cbt_quiz&cbt_id=<?php echo $cbt['cbt_id']; ?>" 
                                                        class="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg text-xs font-semibold transition" title="Set Questions">
                                                         ✏️ Questions
@@ -1002,11 +1189,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                 <div class="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
                     <div id="student-cbt-wrapper" class="flex flex-col justify-between h-full transition-opacity duration-200">
                         <?php
-                        // We will load the paginated view directly using the same logic
-                        $stmtClassTests = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND numeric_class_name = ? AND is_approved = 1 ORDER BY exam_date DESC, exam_time DESC");
-                        $stmtClassTests->execute([$school_id, $student_info['current_class']]);
-                        $student_tests = $stmtClassTests->fetchAll();
-                        
+                        // Same visibility engine as the AJAX partial so both views always agree
+                        $student_tests = CbtHelper::visibleExams($pdo, $school_id, $student_info);
+                        $student_pending_tests = CbtHelper::pendingExamsForStudent($pdo, $school_id, $student_info);
+
                         $scbt_per_page = 5;
                         $total_scbt = count($student_tests);
                         $scbt_total_pages = max(1, ceil($total_scbt / $scbt_per_page));
@@ -1014,11 +1200,39 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                         if ($scbt_current_page > $scbt_total_pages) $scbt_current_page = $scbt_total_pages;
                         $scbt_offset = ($scbt_current_page - 1) * $scbt_per_page;
                         $student_tests_paginated = array_slice($student_tests, $scbt_offset, $scbt_per_page);
+
+        // If an exam opens within the next 15 minutes, refresh so the Start button
+        // appears on time without the student having to reload manually.
+        $nextOpenSeconds = null;
+        foreach ($student_tests as $studentExamRow) {
+            $rowState = CbtHelper::state($studentExamRow);
+            if ($rowState['state'] === 'upcoming' && ($nextOpenSeconds === null || $rowState['seconds_to_start'] < $nextOpenSeconds)) {
+                $nextOpenSeconds = $rowState['seconds_to_start'];
+            }
+        }
+
+        if ($nextOpenSeconds !== null && $nextOpenSeconds <= 900) {
+            echo '<script>setTimeout(function(){ window.location.reload(); }, ' . (max(15, (int)$nextOpenSeconds + 5) * 1000) . ');</script>';
+        }
                         ?>
                         <div>
                             <h4 class="text-lg font-bold text-white mb-4">Your Available Examinations</h4>
-                            <?php if (empty($student_tests)) : ?>
-                                <div class="text-center py-8 text-gray-400 text-sm">No scheduled tests found for your class.</div>
+                            <?php if (!$student_info) : ?>
+                                <div class="text-center py-8 text-amber-300 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                    We could not link this login to a student record in your school.<br>
+                                    <span class="text-xs text-amber-200/80">Ask your school administrator to confirm your email / admission number, then sign in again.</span>
+                                </div>
+                            <?php elseif (empty($student_tests)) : ?>
+                                <div class="text-center py-8 text-gray-300 text-sm bg-white/5 border border-white/10 rounded-xl px-4">
+                                    <p class="font-semibold text-white">No examinations are visible for your class right now.</p>
+                                    <?php if (!empty($student_pending_tests)) : ?>
+                                        <p class="text-xs text-amber-300 mt-2">
+                                            🕓 <?php echo count($student_pending_tests); ?> exam(s) have been scheduled for your class and are <strong>waiting for the school administrator to approve them</strong>.
+                                        </p>
+                                    <?php else : ?>
+                                        <p class="text-xs text-gray-400 mt-2">Your class code is <code class="text-indigo-300"><?php echo htmlspecialchars($student_info['current_class'] ?? 'not set'); ?></code>. If your school scheduled an exam, ask them to confirm it targets this exact class and has been approved.</p>
+                                    <?php endif; ?>
+                                </div>
                             <?php else : ?>
                                 <div class="grid md:grid-cols-2 gap-4">
                                     <?php 
@@ -1027,16 +1241,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                         $stmtSubCheck->execute([$school_id, $cbt['cbt_id'], $student_info['admission_number']]);
                                         $submission = $stmtSubCheck->fetch();
 
-                                        $exam_start = strtotime($cbt['exam_date'] . ' ' . $cbt['exam_time']);
-                                        $exam_end = $exam_start + ($cbt['exam_duration'] * 60);
-                                        $now = time();
-
-                                        $status = 'upcoming';
-                                        if ($now >= $exam_start && $now <= $exam_end) {
-                                            $status = 'active';
-                                        } elseif ($now > $exam_end) {
-                                            $status = 'expired';
-                                        }
+                                        $cbt_state = CbtHelper::state($cbt);
+                                        $status = $cbt_state['state'];
                                     ?>
                                         <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col justify-between gap-4">
                                             <div>
@@ -1072,18 +1278,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                                         <strong class="text-green-400 font-bold"><?php echo $submission['score']; ?> / <?php echo $cbt['exam_questions']; ?></strong>
                                                         <span class="text-[10px] text-gray-500 block mt-1">Submitted: <?php echo $submission['date_submitted']; ?></span>
                                                     </div>
-                                                <?php elseif ($status === 'active') : ?>
+                                                <?php elseif ($status === 'active' && CbtHelper::publishedQuestionCount($cbt) > 0) : ?>
                                                     <a href="?page=evaluation&action=take_cbt&cbt_id=<?php echo $cbt['cbt_id']; ?>" 
                                                        class="w-full block text-center py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-lg">
                                                         💻 Start Examination
                                                     </a>
+                                                <?php elseif ($status === 'active') : ?>
+                                                    <button disabled class="w-full py-2 bg-white/5 text-amber-300 border border-amber-500/20 rounded-lg text-xs font-bold cursor-not-allowed">
+                                                        📝 Questions not published yet
+                                                    </button>
                                                 <?php elseif ($status === 'expired') : ?>
                                                     <button disabled class="w-full py-2 bg-white/5 text-gray-500 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
-                                                        Exam Expired / Closed
+                                                        ⛔ Closed<?php echo !empty($cbt_state['ends_at_label']) ? ' on ' . htmlspecialchars($cbt_state['ends_at_label']) : ' / Closed'; ?>
                                                     </button>
                                                 <?php else : ?>
-                                                    <button disabled class="w-full py-2 bg-white/5 text-gray-400 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
-                                                        Waiting to Open
+                                                    <button disabled class="w-full py-2 bg-white/5 text-gray-300 border border-white/5 rounded-lg text-xs font-bold cursor-not-allowed">
+                                                        🕓 Opens <?php echo htmlspecialchars($cbt_state['starts_at_label'] ?? 'soon'); ?>
                                                     </button>
                                                 <?php endif; ?>
                                             </div>
@@ -1779,21 +1989,170 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
             </div>
         <?php } ?>
 
+    <?php elseif ($action === 'cbt_visibility') :
+        $cbt_id = (int)($_GET['cbt_id'] ?? 0);
+        $stmtC = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ? LIMIT 1");
+        $stmtC->execute([$school_id, $cbt_id]);
+        $visExam = $stmtC->fetch(PDO::FETCH_ASSOC);
+
+        $visOk = false;
+        $visReport = null;
+        $visStudents = [];
+        $visSubmissions = 0;
+
+        if (!$visExam) {
+            echo "<div class='p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl'>Scheduled exam not found.</div>";
+        } elseif ($user_role !== 'school_admin' && $user_role !== 'teacher') {
+            echo "<div class='p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl'>Only staff can inspect exam visibility.</div>";
+        } else {
+            $visOk = true;
+            $visReport = CbtHelper::visibilityReport($pdo, $school_id, $visExam);
+
+            $stmtClassStudents = $pdo->prepare("SELECT admission_number, firstname, lastname, current_class, session FROM sm_students WHERE school_id_number = ? ORDER BY firstname ASC");
+            $stmtClassStudents->execute([$school_id]);
+            foreach ($stmtClassStudents->fetchAll() as $stu) {
+                $stuAliases = CbtHelper::classAliases($pdo, $school_id, $stu['current_class'] ?? '');
+                if (CbtHelper::classMatches($visExam['numeric_class_name'] ?? '', $stuAliases)) {
+                    $visStudents[] = $stu;
+                }
+            }
+
+            $stmtVisSubs = $pdo->prepare("SELECT COUNT(*) FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ?");
+            $stmtVisSubs->execute([$school_id, $cbt_id]);
+            $visSubmissions = (int)$stmtVisSubs->fetchColumn();
+        }
+
+        $visApproved = $visExam ? ((int)($visExam['is_approved'] ?? 1) === 1) : false;
+        $visAllGood = $visOk
+            && $visApproved
+            && $visReport['class_size'] > 0
+            && $visReport['published'] > 0
+            && $visReport['window']['state'] === 'active'
+            && $visSubmissions < max(1, $visReport['class_size']);
+    ?>
+
+    <?php if ($visOk) : ?>
+        <div class="max-w-4xl mx-auto space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <a href="?page=evaluation&action=cbt" class="text-gray-400 hover:text-white text-sm transition">← Back to CBT panel</a>
+                    <h3 class="text-xl font-bold text-white mt-2">👁️ Exam visibility check</h3>
+                    <p class="text-sm text-gray-400"><?php echo htmlspecialchars($visExam['paper_title']); ?> · <?php echo htmlspecialchars($visExam['subject_code']); ?> · Class <?php echo htmlspecialchars($visExam['numeric_class_name']); ?></p>
+                </div>
+                <span class="px-3 py-1.5 rounded-full text-xs font-bold border <?php echo $visAllGood ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'; ?>">
+                    <?php echo $visAllGood ? '✅ Live for students' : '⚠️ Needs attention'; ?>
+                </span>
+            </div>
+
+            <div class="p-4 rounded-2xl border <?php echo $visAllGood ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200' : 'bg-amber-500/10 border-amber-500/25 text-amber-200'; ?> text-sm">
+                <?php echo htmlspecialchars($visReport['verdict']); ?>
+            </div>
+
+            <div class="bg-white/5 border border-white/10 rounded-2xl divide-y divide-white/5">
+                <?php foreach ($visReport['checks'] as $check) : ?>
+                    <div class="p-4 flex items-start gap-3">
+                        <span class="text-lg leading-none"><?php echo $check['ok'] ? '✅' : '⚠️'; ?></span>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold <?php echo $check['ok'] ? 'text-white' : 'text-amber-300'; ?>"><?php echo htmlspecialchars($check['label']); ?></p>
+                            <p class="text-xs text-gray-400 mt-0.5"><?php echo htmlspecialchars($check['detail']); ?></p>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Students in class</p>
+                    <p class="text-2xl font-bold text-white mt-1"><?php echo (int)$visReport['class_size']; ?></p>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Submitted</p>
+                    <p class="text-2xl font-bold text-white mt-1"><?php echo $visSubmissions; ?></p>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Window</p>
+                    <p class="text-sm font-bold text-white mt-2"><?php echo htmlspecialchars($visReport['window']['starts_at_label']); ?> → <?php echo htmlspecialchars($visReport['window']['ends_at_label']); ?></p>
+                </div>
+            </div>
+
+            <?php if (!$visApproved && $user_role === 'school_admin') : ?>
+                <form method="post" class="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-sm text-amber-200">This exam is waiting for approval. Approving publishes it to every student in <?php echo htmlspecialchars($visExam['numeric_class_name']); ?>.</p>
+                    <input type="hidden" name="cbt_id" value="<?php echo (int)$cbt_id; ?>" />
+                    <button type="submit" name="approve_cbt" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">✅ Approve now</button>
+                </form>
+            <?php endif; ?>
+
+            <?php if (!empty($visStudents)) : ?>
+                <div class="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                    <div class="px-5 py-3 border-b border-white/10">
+                        <h4 class="text-sm font-semibold text-white">Students this exam is aimed at</h4>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Matching ignores punctuation and case, so “JSS 1”, “JSS-1” and “JSS1” all count as the same class.</p>
+                    </div>
+                    <div class="max-h-72 overflow-y-auto divide-y divide-white/5">
+                        <?php foreach ($visStudents as $stu) : ?>
+                            <div class="px-5 py-2.5 flex items-center justify-between text-xs">
+                                <span class="text-white font-semibold"><?php echo htmlspecialchars(trim($stu['firstname'] . ' ' . $stu['lastname'])); ?></span>
+                                <span class="text-gray-400 font-mono"><?php echo htmlspecialchars($stu['admission_number']); ?> · <?php echo htmlspecialchars($stu['current_class'] ?: 'no class'); ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+
     <?php elseif ($action === 'take_cbt') : 
         $cbt_id = (int)$_GET['cbt_id'];
         $stmtC = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ?");
         $stmtC->execute([$school_id, $cbt_id]);
         $cbt = $stmtC->fetch();
 
-        if (!$cbt || ($user_role === 'student' && ($student_info['current_class'] !== $cbt['numeric_class_name'] || $cbt['is_approved'] != 1))) {
-            echo "<div class='p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl'>Scheduled exam not found or unauthorized.</div>";
+        $cbt_authorized = true;
+        $cbt_denied_reason = '';
+        if (!$cbt) {
+            $cbt_authorized = false;
+            $cbt_denied_reason = 'Scheduled exam not found.';
+        } elseif ($user_role === 'student' || $user_role === 'parent') {
+            if (!$student_info) {
+                $cbt_authorized = false;
+                $cbt_denied_reason = 'We could not link this login to a student record. Please contact your school administrator.';
+            } elseif ((int)($cbt['is_approved'] ?? 1) !== 1) {
+                $cbt_authorized = false;
+                $cbt_denied_reason = 'This examination is still awaiting approval by the school administrator.';
+            } else {
+                $studentAliases = CbtHelper::classAliases($pdo, $school_id, $student_info['current_class'] ?? '');
+                if (!CbtHelper::classMatches($cbt['numeric_class_name'], $studentAliases)) {
+                    $cbt_authorized = false;
+                    $cbt_denied_reason = 'This examination was scheduled for a different class (' . htmlspecialchars($cbt['numeric_class_name']) . ').';
+                } else {
+                    $cbtWindow = CbtHelper::state($cbt);
+                    if ($cbtWindow['state'] === 'upcoming') {
+                        $cbt_authorized = false;
+                        $cbt_denied_reason = '⏰ This examination has not opened yet. It opens ' . htmlspecialchars($cbtWindow['starts_at_label']) . '.';
+                    } elseif ($cbtWindow['state'] === 'expired') {
+                        $cbt_authorized = false;
+                        $cbt_denied_reason = '⛔ The examination window closed ' . htmlspecialchars($cbtWindow['ends_at_label']) . '. Ask your school administrator to reschedule you if you still need to sit the paper.';
+                    } elseif (CbtHelper::publishedQuestionCount($cbt) < 1) {
+                        $cbt_authorized = false;
+                        $cbt_denied_reason = '📝 This examination has no published questions yet. Please check back later or contact your teacher.';
+                    }
+                }
+            }
+        }
+
+        if (!$cbt_authorized) {
+            echo "<div class='p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl'>" . $cbt_denied_reason . "</div>";
         } else {
-            // Check if already submitted
-            $stmtSubCheck = $pdo->prepare("SELECT id FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
-            $stmtSubCheck->execute([$school_id, $cbt_id, $student_info['admission_number']]);
-            if ($stmtSubCheck->fetchColumn()) {
-                echo "<script>window.location.href = '?page=evaluation&action=cbt';</script>";
-                exit;
+            // Check if already submitted (students / parents only)
+            if ($student_info) {
+                $stmtSubCheck = $pdo->prepare("SELECT id FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
+                $stmtSubCheck->execute([$school_id, $cbt_id, $student_info['admission_number']]);
+                if ($stmtSubCheck->fetchColumn()) {
+                    echo "<script>window.location.href = '?page=evaluation&action=cbt';</script>";
+                    exit;
+                }
             }
         ?>
             <!-- Dynamic Fullscreen JAMB / WAEC Simulation Panel -->
@@ -3498,12 +3857,12 @@ if ($action === 'student_results') {
             <?php endif; ?>
 
         <?php elseif ($user_role === 'parent'):
-            $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE email = ? OR id_number = ? LIMIT 1");
-            $stmtParent->execute([$_SESSION['user_session'], $_SESSION['user_session']]);
+            $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE school_id_number = ? AND (email = ? OR id_number = ?) LIMIT 1");
+            $stmtParent->execute([$school_id, $_SESSION['user_session'], $_SESSION['user_session']]);
             $parent_id = $stmtParent->fetchColumn();
 
-            $stmtChildren = $pdo->prepare("SELECT * FROM sm_students WHERE parent_id_number = ?");
-            $stmtChildren->execute([$parent_id]);
+            $stmtChildren = $pdo->prepare("SELECT * FROM sm_students WHERE school_id_number = ? AND parent_id_number = ?");
+            $stmtChildren->execute([$school_id, $parent_id]);
             $children = $stmtChildren->fetchAll();
         ?>
             <?php if (empty($children)): ?>

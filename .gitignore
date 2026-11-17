@@ -19,3 +19,12 @@ keystore.properties
 
 # Node tooling for the repo's own checks (installed, never committed)
 tools/**/node_modules/
+
+# Runtime OTA backups, temporary update staging and logs (SMSP + LM)
+SMSP/backups/
+SMSP/tmp_update/
+SMSP/logs/
+SMSP/config/.sys_cache
+secure_updates/
+LM/*.log
+LM/storage/logs/*.log

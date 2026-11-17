@@ -3,16 +3,23 @@
 require_once __DIR__ . '/mail_helper.php';
 
 class SubscriptionHelper {
-    public static function checkAndProcess($pdo) {
+    /**
+     * @param PDO  $pdo
+     * @param bool $force Skip the per-session 5-minute throttle. Required for CLI /
+     *                    cron runs where $_SESSION does not persist between runs.
+     */
+    public static function checkAndProcess($pdo, bool $force = false) {
         // Run check at most once per 5 minutes to avoid DB overhead
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+        if (!$force) {
+            if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
+                session_start();
+            }
+            $last_check = $_SESSION['last_sub_check'] ?? 0;
+            if (time() - $last_check < 300) {
+                return; // Throttle checks
+            }
+            $_SESSION['last_sub_check'] = time();
         }
-        $last_check = $_SESSION['last_sub_check'] ?? 0;
-        if (time() - $last_check < 300) {
-            return; // Throttle checks
-        }
-        $_SESSION['last_sub_check'] = time();
 
         try {
             // Fetch all schools (except super admins who have no school constraints)

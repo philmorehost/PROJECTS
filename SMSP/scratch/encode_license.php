@@ -127,11 +127,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_license_setup'
     }
 }
 
+if (php_sapi_name() === 'cli') {
+    return;
+}
+
 if (empty($license_key)) {
     display_license_error("No license key configured. Please enter your license key to activate the script.", $setup_error ?? '');
 }
 
-$domain = $_SERVER['HTTP_HOST'];
+$domain = $_SERVER['HTTP_HOST'] ?? ($main_domain ?: (defined('APP_URL') ? (parse_url(APP_URL, PHP_URL_HOST) ?: '') : ''));
 if (!empty($main_domain)) {
     $clean_host = str_replace(['www.', ':80', ':443'], '', strtolower($domain));
     $clean_main = str_replace(['www.', ':80', ':443'], '', strtolower($main_domain));

@@ -27,6 +27,8 @@ $api_secret = $_POST['api_secret'] ?? '';
 $customer_email = trim($_POST['customer_email'] ?? '');
 $domain = trim($_POST['domain'] ?? 'N/A');
 $license_type = trim($_POST['license_type'] ?? 'standard');
+$requested_tier_code = strtoupper(trim($_POST['tier_code'] ?? ''));
+$requested_tier_id = intval($_POST['tier_id'] ?? 0);
 
 if (empty($api_secret) || empty($customer_email)) {
     http_response_code(400);
@@ -58,12 +60,35 @@ $max_domain_changes = $settings['max_domain_changes'] ?? 3;
 try {
     $pdo->beginTransaction();
 
+    // Resolve target project tier (defaults to DGV7.0 IDs 1/2 when omitted)
+    $resolved_tier_id = null;
+    if ($requested_tier_id > 0) {
+        $tCheck = $pdo->prepare("SELECT id FROM script_tiers WHERE id = ? LIMIT 1");
+        $tCheck->execute([$requested_tier_id]);
+        if ($tRow = $tCheck->fetch(PDO::FETCH_ASSOC)) {
+            $resolved_tier_id = (int)$tRow['id'];
+        }
+    } elseif ($requested_tier_code !== '') {
+        $tCheck = $pdo->prepare("SELECT id FROM script_tiers WHERE UPPER(tier_code) = ? LIMIT 1");
+        $tCheck->execute([$requested_tier_code]);
+        if ($tRow = $tCheck->fetch(PDO::FETCH_ASSOC)) {
+            $resolved_tier_id = (int)$tRow['id'];
+        }
+    }
+
     // Insert license
     $licenseInsert = getLicenseInsertDefinition($pdo);
-    $params = $licenseInsert['params']($new_license_key, $domain, $customer_email, 'active', $max_domain_changes, $license_type);
+    $params = $licenseInsert['params']($new_license_key, $domain, $customer_email, 'active', $max_domain_changes, $license_type, $resolved_tier_id);
     $stmt = $pdo->prepare($licenseInsert['sql']);
     $stmt->execute($params);
     $license_id = $pdo->lastInsertId();
+
+    $cleanDom = preg_replace('#^https?://#i', '', strtolower(trim($domain)));
+    $cleanDom = preg_replace('/^www\./i', '', explode('/', $cleanDom)[0]);
+    if ($license_id && $cleanDom !== '' && $cleanDom !== 'n/a') {
+        $domStmt = $pdo->prepare("INSERT IGNORE INTO licensed_domains (license_id, domain_name) VALUES (?, ?)");
+        $domStmt->execute([$license_id, $cleanDom]);
+    }
 
     // Create a transaction record representing this automated API creation
     $transaction_ref = 'API-' . strtoupper(bin2hex(random_bytes(8)));

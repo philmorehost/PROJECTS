@@ -53,7 +53,7 @@ try {
     $pdo->beginTransaction();
 
     // Find if the license key exists and is active
-    $stmt = $pdo->prepare("SELECT id, license_type FROM licenses WHERE license_key = ?");
+    $stmt = $pdo->prepare("SELECT l.id, l.license_type, l.tier_id, t.tier_code FROM licenses l LEFT JOIN script_tiers t ON l.tier_id = t.id WHERE l.license_key = ?");
     $stmt->execute([$license_key]);
     $license = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -65,9 +65,29 @@ try {
         exit;
     }
 
-    // Update license type
-    $up_stmt = $pdo->prepare("UPDATE licenses SET license_type = 'extended' WHERE id = ?");
-    $up_stmt->execute([$license['id']]);
+    // Resolve upgraded tier_id (supports DGV7.0 NON-SAAS -> SAAS and any <FAMILY>-NON-SAAS -> <FAMILY>-SAAS, e.g. SMSP-NON-SAAS -> SMSP-SAAS)
+    $targetTierCode = strtoupper(trim($_POST['tier_code'] ?? ''));
+    $currentTierCode = strtoupper(trim($license['tier_code'] ?? ''));
+    if ($targetTierCode === '') {
+        if ($currentTierCode === 'NON-SAAS' || (int)($license['tier_id'] ?? 2) === 2) {
+            $targetTierCode = 'SAAS';
+        } elseif (substr($currentTierCode, -9) === '-NON-SAAS') {
+            $targetTierCode = substr($currentTierCode, 0, -9) . '-SAAS';
+        }
+    }
+
+    $newTierId = (int)($license['tier_id'] ?? 1);
+    if ($targetTierCode !== '') {
+        $tStmt = $pdo->prepare("SELECT id FROM script_tiers WHERE UPPER(tier_code) = ? LIMIT 1");
+        $tStmt->execute([$targetTierCode]);
+        if ($tRow = $tStmt->fetch(PDO::FETCH_ASSOC)) {
+            $newTierId = (int)$tRow['id'];
+        }
+    }
+
+    // Update license type and tier_id
+    $up_stmt = $pdo->prepare("UPDATE licenses SET license_type = 'extended', tier_id = ? WHERE id = ?");
+    $up_stmt->execute([$newTierId, $license['id']]);
 
     // Record dynamic log details inside transactions table
     $transaction_ref = 'UPG-' . strtoupper(bin2hex(random_bytes(8)));

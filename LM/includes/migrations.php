@@ -645,7 +645,7 @@ if (!function_exists('lm_schema_version')) {
      */
     function lm_schema_version()
     {
-        return '2026_10_28_update_access';
+        return '2026_10_30_ota_signals';
     }
 }
 
@@ -747,6 +747,82 @@ if (!function_exists('lm_migration_update_access')) {
     }
 }
 
+if (!function_exists('lm_migration_ota_signals')) {
+    /**
+     * Live update signals — tell licensed sites a release exists.
+     *
+     * Until now a portal only learned about a release when its own cron called
+     * check-update.php. Publishing can now push a signed "update available"
+     * signal straight to every registered domain of the project, and the
+     * delivery of each one is recorded here.
+     *
+     *   signal_endpoint  receiving path on the portal (default added below)
+     *   auto_signal      1 = signal automatically when a release is published
+     *
+     * @param PDO $pdo
+     * @return void
+     */
+    function lm_migration_ota_signals(PDO $pdo)
+    {
+        lm_db_add_column($pdo, 'script_tiers', 'signal_endpoint', "VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php'");
+        lm_db_add_column($pdo, 'script_tiers', 'auto_signal', "TINYINT(1) NOT NULL DEFAULT 1");
+
+        // The SchoolApp project family shares one repository but ships two
+        // editions. Seeding them here keeps a fresh install usable without
+        // hard-coding anything in the code: an admin can still create, edit or
+        // archive projects from Projects at any time.
+        try {
+            $seed = $pdo->prepare(
+                "INSERT IGNORE INTO `script_tiers`
+                    (`tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`,
+                     `signal_endpoint`, `auto_signal`, `is_active`, `sort_order`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)"
+            );
+            $seed->execute(array(
+                'SchoolApp Multi-Tenant SaaS', 'SMSP-SAAS',
+                'SchoolApp (SMSP) — multi-tenant SaaS edition with unlimited schools per install.',
+                'philmorehost/PROJECTS', 'main', 'SMSP', '/api/v1/ota-signal.php', 3,
+            ));
+            $seed->execute(array(
+                'SchoolApp Standard', 'SMSP-NON-SAAS',
+                'SchoolApp (SMSP) — single-school standard edition.',
+                'philmorehost/PROJECTS', 'main', 'SMSP', '/api/v1/ota-signal.php', 4,
+            ));
+        } catch (PDOException $e) {
+            lm_log('migrations', 'SMSP project seed skipped: ' . $e->getMessage());
+        }
+
+        try {
+            $pdo->exec("UPDATE script_tiers SET auto_signal = 1 WHERE auto_signal IS NULL");
+        } catch (PDOException $e) {
+            lm_log('migrations', 'auto_signal backfill skipped: ' . $e->getMessage());
+        }
+
+        try {
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS `ota_signal_logs` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `update_id` INT NOT NULL,
+                    `tier_id` INT NOT NULL,
+                    `license_id` INT NULL,
+                    `domain_name` VARCHAR(190) NOT NULL,
+                    `endpoint_url` VARCHAR(255) NOT NULL,
+                    `http_code` INT NOT NULL DEFAULT 0,
+                    `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    `response_body` TEXT NULL,
+                    `trigger_source` VARCHAR(20) NOT NULL DEFAULT 'auto',
+                    `signaled_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    KEY `idx_signal_update` (`update_id`),
+                    KEY `idx_signal_tier` (`tier_id`),
+                    KEY `idx_signal_domain` (`domain_name`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+        } catch (PDOException $e) {
+            lm_log('migrations', 'ota_signal_logs unavailable: ' . $e->getMessage());
+        }
+    }
+}
+
 if (!function_exists('lm_run_migrations')) {
     /**
      * Run pending migrations once, under an advisory lock.
@@ -803,6 +879,7 @@ if (!function_exists('lm_run_migrations')) {
             '2026_10_23_github_paths' => 'lm_migration_github_paths',
             '2026_10_23_pull_jobs' => 'lm_migration_pull_jobs',
             '2026_10_28_update_access' => 'lm_migration_update_access',
+            '2026_10_30_ota_signals' => 'lm_migration_ota_signals',
         );
 
         foreach ($migrations as $version => $callback) {

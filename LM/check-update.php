@@ -33,25 +33,30 @@ if (!is_array($whitelisted_ips)) {
     }
 }
 
+// Optional project/tier scoping parameters (omitted by legacy DGV7.0 clients; sent by multi-project clients like SMSP)
+$expected_tier = strtoupper(trim($_REQUEST['expected_tier'] ?? ''));
+$project_family = strtoupper(trim($_REQUEST['project_family'] ?? ''));
+
 // Check if IP is in the whitelist
 if (in_array($requester_ip, $whitelisted_ips)) {
-    check_update_log("Bypassing validation: request from whitelisted internal IP: {$requester_ip}");
+    $whitelist_tier = !empty($expected_tier) ? $expected_tier : (!empty($project_family) ? ($project_family . '-SAAS') : 'SAAS');
+    check_update_log("Bypassing validation: request from whitelisted internal IP: {$requester_ip} (target tier: {$whitelist_tier})");
     
-    // Serve the SAAS unlicensed update payload directly
+    // Serve the target tier's unlicensed update payload directly (defaults to SAAS for DGV7.0 backward compatibility)
     try {
         $force_version = trim($_REQUEST['force_version'] ?? '');
         if (!empty($force_version)) {
-            // Filter by SAAS tier to prevent cross-tier contamination
-            $stmt = $pdo->prepare("SELECT u.* FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id WHERE u.version_number = ? AND t.tier_code = 'SAAS' LIMIT 1");
-            $stmt->execute([$force_version]);
+            // Filter by target tier to prevent cross-tier contamination
+            $stmt = $pdo->prepare("SELECT u.*, t.tier_code FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id WHERE u.version_number = ? AND UPPER(t.tier_code) = ? LIMIT 1");
+            $stmt->execute([$force_version, $whitelist_tier]);
         } else {
-            $stmt = $pdo->prepare("SELECT u.* FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id WHERE t.tier_code = 'SAAS' AND u.is_released = 1 ORDER BY u.release_date DESC, u.id DESC LIMIT 1");
-            $stmt->execute();
+            $stmt = $pdo->prepare("SELECT u.*, t.tier_code FROM script_updates u JOIN script_tiers t ON u.tier_id = t.id WHERE UPPER(t.tier_code) = ? AND u.is_released = 1 ORDER BY u.release_date DESC, u.id DESC LIMIT 1");
+            $stmt->execute([$whitelist_tier]);
         }
         $latest_update = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$latest_update) {
-            echo json_encode(['status' => 'error', 'message' => 'No matching update found.']);
+            echo json_encode(['status' => 'success', 'message' => "No updates released yet for tier {$whitelist_tier}.", 'latest_version' => '0.00', 'tier_detected' => $whitelist_tier]);
             exit;
         }
 
@@ -64,15 +69,23 @@ if (in_array($requester_ip, $whitelisted_ips)) {
 
         // Build the download url
         $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-        $download_url = $protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['SCRIPT_NAME']) . '/download.php?token=' . $token;
+        $base_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+        $download_url = $protocol . $_SERVER['HTTP_HOST'] . $base_dir . '/download.php?token=' . $token;
+
+        $client_ver = trim($_REQUEST['current_version'] ?? '');
+        $is_newer = ($client_ver !== '' && $latest_update['version_number'] !== '0.00')
+            ? version_compare(ltrim($latest_update['version_number'], 'vV'), ltrim($client_ver, 'vV'), '>')
+            : true;
 
         echo json_encode([
             'status' => 'success',
+            'update_available' => $is_newer,
             'latest_version' => $latest_update['version_number'],
+            'release_date' => $latest_update['release_date'] ?? '',
             'changelog' => $latest_update['changelog'],
             'download_url' => $download_url,
             'checksum' => $latest_update['checksum'],
-            'tier_detected' => 'SAAS (Whitelisted Bypass)'
+            'tier_detected' => $latest_update['tier_code']
         ]);
         exit;
     } catch (PDOException $e) {
@@ -124,7 +137,7 @@ try {
     $tier_code = $license['tier_code'];
     $tier_id = $license['tier_id'];
     if (empty($tier_code)) {
-        // Fallback mapping
+        // Fallback mapping for legacy DGV7.0 licenses with NULL tier_id
         if ($license['license_type'] === 'extended') {
             $tier_code = 'SAAS';
             $tier_id = 1;
@@ -135,6 +148,29 @@ try {
         check_update_log("WARNING: License '{$license_key}' has no tier_id set. Fell back to tier '{$tier_code}' (tier_id={$tier_id}) based on license_type='{$license['license_type']}'.");
     } else {
         check_update_log("INFO: License '{$license_key}' resolved to tier '{$tier_code}' (tier_id={$tier_id}) from DB.");
+    }
+
+    // Cross-project contamination guard (only enforced when client specifies project_family or expected_tier)
+    $resolved_upper = strtoupper((string)$tier_code);
+    if (!empty($project_family)) {
+        $matches_family = ($resolved_upper === $project_family || str_starts_with($resolved_upper, $project_family . '-') || str_starts_with($resolved_upper, $project_family . '_'));
+        if (!$matches_family) {
+            check_update_log("REJECTED: License '{$license_key}' belongs to tier '{$tier_code}', but client requested project_family '{$project_family}'.");
+            http_response_code(403);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "License project mismatch: this license belongs to '{$tier_code}' and cannot pull updates for '{$project_family}'."
+            ]);
+            exit;
+        }
+    } elseif (!empty($expected_tier) && $resolved_upper !== $expected_tier) {
+        check_update_log("REJECTED: License '{$license_key}' belongs to tier '{$tier_code}', but client expected '{$expected_tier}'.");
+        http_response_code(403);
+        echo json_encode([
+            'status' => 'error',
+            'message' => "License tier mismatch: this license is assigned to '{$tier_code}', not '{$expected_tier}'."
+        ]);
+        exit;
     }
 
     // Check if domain is registered
@@ -192,13 +228,21 @@ try {
 
     // Build secure download URL
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-    $download_url = $protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['SCRIPT_NAME']) . '/download.php?token=' . $token;
+    $base_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+    $download_url = $protocol . $_SERVER['HTTP_HOST'] . $base_dir . '/download.php?token=' . $token;
 
     check_update_log("Issued update info for domain '{$requesting_domain}' (Version: {$latest_update['version_number']})");
 
+    $client_ver = trim($_REQUEST['current_version'] ?? '');
+    $is_newer = ($client_ver !== '' && $latest_update['version_number'] !== '0.00')
+        ? version_compare(ltrim($latest_update['version_number'], 'vV'), ltrim($client_ver, 'vV'), '>')
+        : true;
+
     echo json_encode([
         'status' => 'success',
+        'update_available' => $is_newer,
         'latest_version' => $latest_update['version_number'],
+        'release_date' => $latest_update['release_date'] ?? '',
         'checksum' => $latest_update['checksum'],
         'changelog' => $latest_update['changelog'],
         'download_url' => $download_url,

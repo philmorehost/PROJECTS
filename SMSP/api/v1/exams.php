@@ -8,6 +8,7 @@ require_once PORTAL_PATH . '/config/config.php';
 require_once PORTAL_PATH . '/include/db.php';
 require_once PORTAL_PATH . '/include/jwt_helper.php';
 require_once PORTAL_PATH . '/include/addon_helper.php';
+require_once PORTAL_PATH . '/include/cbt_helper.php';
 
 // Decode base64 helper
 function decodeB64($str) {
@@ -115,47 +116,65 @@ try {
     }
 
     if ($method === 'GET') {
-        // List scheduled CBT exams for the class or entire school (for admin/teacher)
+        $student_record = null;
+        $pending_exams = [];
+
         if (!empty($target_adm)) {
-            $stmt = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND numeric_class_name = ? ORDER BY exam_date DESC, exam_time DESC");
-            $stmt->execute([$school_id, $current_class]);
+            $student_record = CbtHelper::resolveStudentByAdmission($pdo, $school_id, $target_adm);
+            if ($student_record) {
+                $current_class = $student_record['current_class'] ?? $current_class;
+            }
+        }
+
+        if ($student_record) {
+            // Only approved exams matching the student's class are visible.
+            // Class matching tolerates "JSS 1" / "JSS-1" / "JSS1" data drift.
+            $exams = CbtHelper::visibleExams($pdo, $school_id, $student_record);
+            $pending_exams = CbtHelper::pendingExamsForStudent($pdo, $school_id, $student_record);
         } else {
+            // Staff (or an admission number outside this school): full school schedule.
             $stmt = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? ORDER BY exam_date DESC, exam_time DESC");
             $stmt->execute([$school_id]);
+            $exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
-        $exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
+        $server_time = time();
         $exams_list = [];
         foreach ($exams as $ex) {
             $status = "available";
             $score_info = null;
-            
-            if (!empty($target_adm)) {
-                // Check submission log
-                $stmtSub = $pdo->prepare("SELECT score, submitted_at FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
+            $window = CbtHelper::state($ex, $server_time);
+
+            if ($student_record && !empty($target_adm)) {
+                // Submission log (schema columns: date_submitted)
+                $stmtSub = $pdo->prepare("SELECT score, date_submitted FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
                 $stmtSub->execute([$school_id, $ex['cbt_id'], $target_adm]);
                 $submission = $stmtSub->fetch(PDO::FETCH_ASSOC);
-                
-                // Check start log
-                $stmtStart = $pdo->prepare("SELECT started_at FROM sm_cbt_started WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
+
+                // Start log (schema columns: date_started)
+                $stmtStart = $pdo->prepare("SELECT date_started FROM sm_cbt_started WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
                 $stmtStart->execute([$school_id, $ex['cbt_id'], $target_adm]);
                 $start = $stmtStart->fetch(PDO::FETCH_ASSOC);
-                
+
                 if ($submission) {
                     $status = "completed";
                     $score_info = [
                         "score" => (float)$submission['score'],
                         "total_questions" => (int)$ex['exam_questions'],
                         "percentage" => $ex['exam_questions'] > 0 ? round(($submission['score'] / $ex['exam_questions']) * 100, 2) : 0,
-                        "submitted_at" => $submission['submitted_at']
+                        "submitted_at" => $submission['date_submitted'] ?? null
                     ];
                 } elseif ($start) {
                     $status = "started";
+                } elseif ($window['state'] === 'upcoming') {
+                    $status = "upcoming";
+                } elseif ($window['state'] === 'expired') {
+                    $status = "expired";
                 }
             } else {
                 $status = "view_only";
             }
-            
+
             $exams_list[] = [
                 "cbt_id" => (int)$ex['cbt_id'],
                 "paper_title" => $ex['paper_title'],
@@ -168,15 +187,41 @@ try {
                 "exam_duration" => (int)$ex['exam_duration'], // in minutes
                 "exam_date" => $ex['exam_date'],
                 "exam_time" => $ex['exam_time'],
+                "is_approved" => (int)($ex['is_approved'] ?? 1),
+                "questions_published" => CbtHelper::publishedQuestionCount($ex),
+                "state" => $window['state'],
+                "can_start" => $window['can_start'],
+                "starts_at" => $window['starts_at_label'],
+                "ends_at" => $window['ends_at_label'],
                 "status" => $status,
                 "result" => $score_info
             ];
         }
-        
-        echo json_encode([
+
+        $response = [
             "status" => "success",
+            "server_time" => date('c', $server_time),
+            "student_class" => $current_class,
             "exams" => $exams_list
-        ]);
+        ];
+
+        if ($student_record) {
+            $response["pending_approval"] = array_map(static function ($ex) {
+                return [
+                    "cbt_id" => (int)$ex['cbt_id'],
+                    "paper_title" => $ex['paper_title'],
+                    "subject_code" => $ex['subject_code'],
+                    "numeric_class_name" => $ex['numeric_class_name'],
+                ];
+            }, $pending_exams);
+            if (empty($exams_list) && !empty($pending_exams)) {
+                $response["message"] = "Your scheduled exam is awaiting approval by the school administrator.";
+            } elseif (empty($exams_list)) {
+                $response["message"] = "No approved CBT exams were found for class " . ($current_class !== '' ? $current_class : 'N/A') . ".";
+            }
+        }
+
+        echo json_encode($response);
         exit;
         
     } elseif ($method === 'POST') {
@@ -204,7 +249,47 @@ try {
                 echo json_encode(["error" => "Missing cbt_id parameter."]);
                 exit;
             }
-            
+
+            // Validate the exam is approved, belongs to the student's class, and is inside its window
+            $stmtExam = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ? LIMIT 1");
+            $stmtExam->execute([$school_id, $cbt_id]);
+            $examRow = $stmtExam->fetch(PDO::FETCH_ASSOC);
+
+            if (!$examRow) {
+                http_response_code(404);
+                echo json_encode(["error" => "Scheduled exam not found."]);
+                exit;
+            }
+            if ((int)($examRow['is_approved'] ?? 1) !== 1) {
+                http_response_code(403);
+                echo json_encode(["error" => "This examination is awaiting approval by the school administrator."]);
+                exit;
+            }
+            if (CbtHelper::publishedQuestionCount($examRow) < 1) {
+                http_response_code(409);
+                echo json_encode(["error" => "This examination has no published questions yet."]);
+                exit;
+            }
+            if (!empty($target_adm)) {
+                $aliases = CbtHelper::classAliases($pdo, $school_id, $current_class);
+                if (!CbtHelper::classMatches($examRow['numeric_class_name'], $aliases)) {
+                    http_response_code(403);
+                    echo json_encode(["error" => "This examination is not available for your class (" . $current_class . ")."]);
+                    exit;
+                }
+                $window = CbtHelper::state($examRow);
+                if ($window['state'] === 'upcoming') {
+                    http_response_code(403);
+                    echo json_encode(["error" => "This examination has not opened yet. It opens " . $window['starts_at_label'] . "."]);
+                    exit;
+                }
+                if ($window['state'] === 'expired') {
+                    http_response_code(403);
+                    echo json_encode(["error" => "The examination window closed " . $window['ends_at_label'] . "."]);
+                    exit;
+                }
+            }
+
             // Check if already submitted
             $stmtSubCheck = $pdo->prepare("SELECT id FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ? LIMIT 1");
             $stmtSubCheck->execute([$school_id, $cbt_id, $target_adm]);
@@ -278,7 +363,31 @@ try {
                 echo json_encode(["error" => "Missing cbt_id parameter."]);
                 exit;
             }
-            
+
+            // The exam must exist, be approved and belong to the student's class
+            $stmtExam = $pdo->prepare("SELECT * FROM sm_cbt_schedules WHERE school_id_number = ? AND cbt_id = ? LIMIT 1");
+            $stmtExam->execute([$school_id, $cbt_id]);
+            $examRow = $stmtExam->fetch(PDO::FETCH_ASSOC);
+
+            if (!$examRow) {
+                http_response_code(404);
+                echo json_encode(["error" => "Scheduled exam not found."]);
+                exit;
+            }
+            if ((int)($examRow['is_approved'] ?? 1) !== 1) {
+                http_response_code(403);
+                echo json_encode(["error" => "This examination is not open for submission."]);
+                exit;
+            }
+            if (!empty($target_adm)) {
+                $aliases = CbtHelper::classAliases($pdo, $school_id, $current_class);
+                if (!CbtHelper::classMatches($examRow['numeric_class_name'], $aliases)) {
+                    http_response_code(403);
+                    echo json_encode(["error" => "This examination is not available for your class."]);
+                    exit;
+                }
+            }
+
             // Check if already submitted
             $stmtCheck = $pdo->prepare("SELECT id FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ? AND admission_number = ?");
             $stmtCheck->execute([$school_id, $cbt_id, $target_adm]);

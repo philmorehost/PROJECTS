@@ -436,7 +436,14 @@ try {
         'desc_addon_data_cleanup' => 'Wipe records or reset session databases cleanly',
         'desc_addon_id_card' => 'Generate beautiful barcode-supported printable ID Cards',
         'desc_addon_live_classes' => 'Host online audio/video classes with interactive screenshare',
-        'desc_addon_sms' => 'Send SMS notifications to parents and staff'
+        'desc_addon_sms' => 'Send SMS notifications to parents and staff',
+        'system_version' => '2.0.0',
+        'edition_tier' => 'SMSP-SAAS',
+        'auto_update_enabled' => '1',
+        'ota_signal_enabled' => '1',
+        'update_server_url' => 'https://manager.pmhserver.name.ng',
+        'last_update_check' => '',
+        'last_update_status' => ''
     ];
 
     $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM `sm_global_settings` WHERE `setting_key` = ?");
@@ -550,6 +557,68 @@ try {
             // Log the error to a local file for diagnosis
             file_put_contents(dirname(__DIR__) . '/migration_error.txt', date('Y-m-d H:i:s') . ' Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         }
+    }
+
+    // Ensure OTA update audit log table exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `sm_update_logs` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `from_version` VARCHAR(20) NOT NULL,
+            `to_version` VARCHAR(20) NOT NULL,
+            `trigger_source` VARCHAR(20) NOT NULL DEFAULT 'manual',
+            `status` VARCHAR(20) NOT NULL,
+            `backup_zip` VARCHAR(255) DEFAULT NULL,
+            `backup_sql` VARCHAR(255) DEFAULT NULL,
+            `message` TEXT DEFAULT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ");
+
+    // Ensure scheduled task (cron) audit log table exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `sm_cron_logs` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `job_key` VARCHAR(60) NOT NULL,
+            `job_name` VARCHAR(150) NOT NULL,
+            `trigger_source` VARCHAR(30) NOT NULL DEFAULT 'cli',
+            `status` VARCHAR(20) NOT NULL DEFAULT 'running',
+            `exit_code` INT NOT NULL DEFAULT 0,
+            `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `finished_at` DATETIME DEFAULT NULL,
+            `duration_ms` INT NOT NULL DEFAULT 0,
+            `output` LONGTEXT NULL,
+            INDEX `idx_cron_job` (`job_key`),
+            INDEX `idx_cron_started` (`started_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ");
+
+    // Make sure the logs/ folder used by cron scripts exists and is not web-readable
+    try {
+        $logsDir = dirname(__DIR__) . '/logs';
+        if (!is_dir($logsDir)) {
+            @mkdir($logsDir, 0755, true);
+        }
+        if (is_dir($logsDir) && !file_exists($logsDir . '/.htaccess')) {
+            @file_put_contents($logsDir . '/.htaccess', "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
+        }
+    } catch (Throwable $e) {
+        // Non fatal
+    }
+
+    // Seed cron defaults once (the UI also falls back to these values)
+    try {
+        $cronDefaults = [
+            'cron_ota_enabled'         => '1',
+            'cron_maintenance_enabled' => '1',
+            'cron_email_reports'       => '0',
+            'cron_log_retention_days'  => '30',
+        ];
+        $cronSeed = $pdo->prepare("INSERT IGNORE INTO `sm_global_settings` (`setting_key`, `setting_value`) VALUES (?, ?)");
+        foreach ($cronDefaults as $cronKey => $cronValue) {
+            $cronSeed->execute([$cronKey, $cronValue]);
+        }
+    } catch (Throwable $e) {
+        // Non fatal
     }
 
     // Load bootstrap and licensing utilities
