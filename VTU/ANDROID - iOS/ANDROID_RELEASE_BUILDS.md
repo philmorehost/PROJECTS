@@ -24,3 +24,31 @@ Each successful release job verifies the signatures and uploads two 30-day artif
 Push and pull-request builds continue to produce debug APKs; pull requests do not receive signing secrets or run release jobs. Manual workflow runs can select `debug`, `release`, or `both`.
 
 The workflow rebuilds the version codes already defined in each app's Gradle file; it does not increment Play Store version codes or upload releases to Google Play.
+
+## Version codes must be bumped for every release
+
+Play permanently consumes a version code once it is uploaded, so every new build needs a fresh one
+in `app/build.gradle`. Highest codes already consumed and the current builds:
+
+| App | Current build | Next code to use |
+| --- | --- | --- |
+| DG7 | `1.0.11` / `versionCode 12` | 13 |
+| JIKABIZ | `1.0.11` / `versionCode 12` | 13 |
+| MZEEVTU | `1.0.17` / `versionCode 18` | 19 |
+
+## Self-updating (weekly Play in-app updates)
+
+Each app ships `util/AppUpdateChecker.kt`, called from `MainActivity`. It uses the Play In-App
+Updates API (`com.google.android.play:app-update:2.1.0`) and asks Play for a newer version of its own
+package at most once every 7 days (timestamp in `SharedPreferences` under `last_update_check_at`).
+When Play reports one, the app opens Play's update flow: `IMMEDIATE` if Play marks the update as
+high-priority, otherwise `FLEXIBLE`. `onResume` re-arms an interrupted `IMMEDIATE` update.
+
+No Firebase, no APK hosting, and no server-side version manifest are involved - publishing the AAB
+is the only step needed to make the prompt appear. Notes:
+
+- Only Play-installed copies self-update; sideloaded APKs report `UPDATE_NOT_AVAILABLE` and keep
+  using `web/api/app-update.php`.
+- `REQUEST_INSTALL_PACKAGES` is deliberately not declared; the app never installs anything itself.
+- The mechanism only exists from these builds onward, so anything older than `vc12`/`vc18` will
+  never prompt and must be updated once manually.

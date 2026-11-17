@@ -16,6 +16,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.jikabiz.app.R
 import com.jikabiz.app.databinding.ActivityMainBinding
 import com.jikabiz.app.ui.auth.LoginActivity
+import com.jikabiz.app.util.AppUpdateChecker
 import com.jikabiz.app.util.Constants
 import com.jikabiz.app.util.PreferenceManager
 import com.google.android.material.snackbar.Snackbar
@@ -55,6 +56,16 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.setupWithNavController(navController)
 
         setupNetworkMonitoring()
+
+        // Weekly Play In-App Updates check. No-ops while the 7-day window is open, and does
+        // nothing at all for APKs sideloaded from the website (Play has no record of them).
+        AppUpdateChecker.check(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Resume an IMMEDIATE update the user interrupted, so the old code cannot keep running.
+        AppUpdateChecker.resumePendingImmediateUpdate(this)
     }
 
     private fun setupNetworkMonitoring() {

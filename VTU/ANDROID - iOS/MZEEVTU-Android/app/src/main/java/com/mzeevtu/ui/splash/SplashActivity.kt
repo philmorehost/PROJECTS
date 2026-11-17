@@ -12,7 +12,6 @@ import com.mzeevtu.api.RetrofitClient
 import com.mzeevtu.databinding.ActivitySplashBinding
 import com.mzeevtu.ui.MainActivity
 import com.mzeevtu.ui.auth.LoginActivity
-import com.mzeevtu.util.AppUpdateManager
 import com.mzeevtu.util.PreferenceManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

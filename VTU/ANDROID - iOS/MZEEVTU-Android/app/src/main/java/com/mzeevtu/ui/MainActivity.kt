@@ -16,7 +16,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.mzeevtu.R
 import com.mzeevtu.databinding.ActivityMainBinding
 import com.mzeevtu.ui.auth.LoginActivity
-import com.mzeevtu.util.AppUpdateManager
+import com.mzeevtu.util.AppUpdateChecker
 import com.mzeevtu.util.Constants
 import com.mzeevtu.util.PreferenceManager
 import com.google.android.material.snackbar.Snackbar
@@ -57,11 +57,17 @@ class MainActivity : AppCompatActivity() {
 
         setupNetworkMonitoring()
 
-        // Check for app updates in the background (non-blocking).
-        // Also triggered if a push notification set the pending-update flag.
-        val pendingUpdate = prefs.getBoolean(Constants.KEY_PENDING_UPDATE_CHECK, false)
-        if (pendingUpdate) prefs.saveBoolean(Constants.KEY_PENDING_UPDATE_CHECK, false)
-        AppUpdateManager(this).checkForUpdate(lifecycleScope)
+        // Weekly Play In-App Updates check, replacing the old sideloaded-APK flow: downloading and
+        // installing an APK from our own server is not allowed for a Play-distributed app, and the
+        // install step could never complete because REQUEST_INSTALL_PACKAGES is not declared.
+        // AppUpdateChecker asks Play instead, which is both compliant and actually works.
+        AppUpdateChecker.check(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Resume an IMMEDIATE update the user interrupted, so the old code cannot keep running.
+        AppUpdateChecker.resumePendingImmediateUpdate(this)
     }
 
     private fun setupNetworkMonitoring() {

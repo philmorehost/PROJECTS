@@ -19,8 +19,8 @@ android {
         targetSdk 36
         // Version 7 was consumed by the upload Play accepted before blocking on the 16 KB error,
         // so the corrected bundle uses 8. Must stay above every code already uploaded.
-        versionCode 11
-        versionName "1.0.10"
+        versionCode 12
+        versionName "1.0.11"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -154,6 +154,11 @@ tasks.withType(JavaCompile).configureEach {
 dependencies {
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    // Play In-App Updates: lets the app ask the Play Store whether a newer version is
+    // live for this package and prompt the user with Play's own update UI. No Firebase,
+    // no APK hosting, no version manifest to maintain - Play is the source of truth.
+    implementation 'com.google.android.play:app-update:2.1.0'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
