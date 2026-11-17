@@ -36,6 +36,7 @@ if (!function_exists('lm_app_nav_items')) {
             'updates'       => array('label' => 'Push Updates', 'icon' => 'rocket',   'href' => 'updates.php',             'group' => 'Releases'),
             'github'        => array('label' => 'GitHub Pull',  'icon' => 'layers',   'href' => 'github-updates.php',      'group' => 'Releases'),
             'notifications' => array('label' => 'Notifications', 'icon' => 'bell',    'href' => 'update-notifications.php', 'group' => 'Releases'),
+            'signals'       => array('label' => 'Update Signals', 'icon' => 'bolt',   'href' => 'ota-signals.php',         'group' => 'Releases'),
             'projects'      => array('label' => 'Projects',     'icon' => 'layers',   'href' => 'projects.php',            'group' => 'Releases'),
             'guide'         => array('label' => 'Admin Guide',  'icon' => 'book',     'href' => 'guide.php',               'group' => 'System'),
             'settings'      => array('label' => 'Settings',     'icon' => 'settings', 'href' => 'settings.php',            'group' => 'System'),

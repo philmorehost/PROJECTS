@@ -949,6 +949,23 @@ if (!function_exists('lm_publish_update')) {
             $result['notification_queue'] = $queue;
         }
 
+        // Push a signed "update available" signal to every licensed domain of
+        // the project (opt-out per project via script_tiers.auto_signal).
+        // A failure here must never fail the publish: the release already
+        // exists and each portal still polls check-update.php on its own.
+        $signal = array_key_exists('signal', $options) ? (bool) $options['signal'] : true;
+        if ($signal) {
+            try {
+                require_once __DIR__ . '/ota_signals.php';
+                $result['signal'] = lm_ota_signal_send($pdo, $updateId, array(
+                    'source' => (string) $source,
+                ));
+            } catch (Throwable $e) {
+                lm_log('signals', 'Signal after publish failed: ' . $e->getMessage());
+                $result['signal'] = array('ok' => false, 'message' => $e->getMessage());
+            }
+        }
+
         return $result;
     }
 }
