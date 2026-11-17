@@ -37,7 +37,7 @@ if (!$connection_server) {
 if ($connection_server) {
     // Branch DG6.7 Optimization: Only run migrations if not already done globally or in current session
     // This significantly improves site-wide page load speeds by skipping redundant DB structural checks.
-    define('SYSTEM_VERSION', '6.9.11-ai'); // DGV6.90 AI Edition — triggers AI schema migrations
+    define('SYSTEM_VERSION', '6.9.11-ai-login-otp-1'); // DGV6.90 AI Edition — triggers AI schema migrations
     $current_mig_v = $_SESSION['migrations_completed_version'] ?? '0';
 
     // Global Migration Check to avoid redundant checks for new visitors

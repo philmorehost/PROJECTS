@@ -60,6 +60,12 @@ foreach (['sas_otp_codes', 'sas_login_tokens', 'sas_registrations_pending', 'sas
 check('bc_ensure_security_tables adds sas_users.email_verified',
     (bool)preg_match('/ALTER TABLE\s+sas_users\s+ADD COLUMN\s+`?email_verified`?/i', $security), true);
 
+check('bc_ensure_security_tables adds sas_vendors.user_login_otp_enabled',
+    (bool)preg_match('/ALTER TABLE\s+sas_vendors\s+ADD COLUMN\s+`?user_login_otp_enabled`?/i', $security), true);
+$login = file_get_contents($root . '/web/api/login.php');
+check('app login runs the lazy migration before fetching its vendor',
+    strpos($login, 'bc_ensure_security_tables();') < strpos($login, 'SELECT * FROM sas_vendors'), true);
+
 // 5. Every column the registration/login endpoints INSERT into must be covered somewhere.
 $register = file_get_contents($root . '/web/api/register.php');
 check('register.php INSERT includes email_verified',

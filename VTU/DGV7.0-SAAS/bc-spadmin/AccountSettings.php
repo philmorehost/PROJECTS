@@ -435,10 +435,9 @@
         $force_login_otp = isset($_POST["force_bcadmin_login_otp"]) ? '1' : '0';
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_bcadmin_login_otp', '$force_login_otp') ON DUPLICATE KEY UPDATE option_value='$force_login_otp'");
 
-        // Platform-wide default for END USER login OTP (website + mobile apps). A vendor's own
-        // setting (sas_vendors.user_login_otp_enabled) overrides it.
+        // Platform-wide minimum for END USER login OTP (website + mobile apps).
         $force_user_login_otp = isset($_POST["force_user_login_otp"]) ? '1' : '0';
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_user_login_otp', '$force_user_login_otp') ON DUPLICATE KEY UPDATE option_value='$force_user_login_otp'");
+        $user_otp_saved = setSuperAdminOption('force_user_login_otp', $force_user_login_otp);
 
         // Daily password-reset limit (per account, default 1)
         $reset_daily_limit = max(1, (int)($_POST["password_reset_daily_limit"] ?? 1));
@@ -464,6 +463,7 @@
         } else {
             $_SESSION["product_purchase_response"] = "Global security policy updated successfully";
         }
+        if (!$user_otp_saved) $_SESSION["product_purchase_response"] = "Could not save the user login OTP policy. Please check database permissions and try again.";
         header("Location: ".$_SERVER["REQUEST_URI"]);
         exit();
     }
@@ -1219,7 +1219,7 @@
                                     <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0 mt-3">
                                         <div>
                                             <label class="form-check-label fw-bold h6 mb-1 text-dark-primary" for="forceUserLoginOtp">Require Login OTP for Users (Website &amp; Apps)</label>
-                                            <p class="text-dark-primary small mb-0" style="opacity: 0.8;">Platform-wide default. When enabled, every customer must enter a one-time code emailed to them at sign-in on the website and the mobile apps. A vendor can override this for their own site; vendors that never chose inherit this default.</p>
+                                            <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every customer must enter a one-time code emailed to them at sign-in on the website and mobile apps. Vendors cannot disable this platform requirement.</p>
                                         </div>
                                         <input type="checkbox" name="force_user_login_otp" class="form-check-input ms-0" id="forceUserLoginOtp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_user_login_otp == '1') ? 'checked' : ''; ?>>
                                     </div>

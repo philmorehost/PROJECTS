@@ -52,6 +52,10 @@ if (!$q || mysqli_num_rows($q) !== 1) {
     exit;
 }
 $user_detail = mysqli_fetch_assoc($q);
+if ((int)$user_detail['status'] !== 1) {
+    echo json_encode(["status" => "error", "message" => "Account is not active. Please contact support."]);
+    exit;
+}
 
 $app_ip = $_SERVER['REMOTE_ADDR'] ?? '';
 if (isIPBlocked($app_ip, $vendor_id) || isAccountLocked($user_detail['username'], $vendor_id)) {

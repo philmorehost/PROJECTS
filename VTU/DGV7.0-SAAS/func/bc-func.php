@@ -6693,16 +6693,13 @@ function bc_admin_login_otp_required($vendor) {
  *
  * This is separate from bc_admin_login_otp_required(): that one gates the vendor's own
  * bc-admin console, this one gates the customer accounts that sit behind /web and the apps.
- * A per-vendor preference (sas_vendors.user_login_otp_enabled) wins when explicitly set;
- * NULL / '' inherits the super-admin global default (force_user_login_otp), which is OFF by
- * default so enabling it is always an explicit, deliberate choice.
+ * The platform policy is a mandatory minimum; vendors may additionally enable it
+ * for their own customers when the platform policy is off.
  */
 function bc_user_login_otp_required($vendor) {
+    if ((string)getSuperAdminOption('force_user_login_otp', '0') === '1') return true;
     $pref = is_array($vendor) ? ($vendor['user_login_otp_enabled'] ?? null) : $vendor;
-    if ($pref !== null && $pref !== '') {
-        return ((string)$pref === '1');
-    }
-    return ((string)getSuperAdminOption('force_user_login_otp', '0') === '1');
+    return ((string)$pref === '1');
 }
 
 /**
@@ -6757,7 +6754,7 @@ function bc_send_user_login_otp($user_detail, $vendor_id) {
           . "This code expires in <strong>10 minutes</strong> and can be used once.<br><br>"
           . "If you did not try to sign in, change your password immediately - someone has your password.";
 
-    sendVendorEmail($email, "Your Sign-In Verification Code", $body);
+    if (!sendVendorEmail($email, "Your Sign-In Verification Code", $body)) return '';
     return $otp;
 }
 
@@ -7133,9 +7130,8 @@ function setVendorOption($vid, $name, $value) {
 function getSuperAdminOption($name, $default = '') {
     global $connection_server;
     static $admin_options_cache = [];
-    // Temporary portal host changes in bc-spadmin must reach existing vendor sessions
-    // immediately, so do not reuse this value from request or session cache.
-    $always_fresh = ($name === 'temporary_vendor_domain');
+    // Security policy and temporary portal host changes must reach existing sessions immediately.
+    $always_fresh = in_array($name, ['temporary_vendor_domain', 'force_user_login_otp'], true);
 
     if (!$always_fresh && isset($admin_options_cache[$name])) return $admin_options_cache[$name];
 

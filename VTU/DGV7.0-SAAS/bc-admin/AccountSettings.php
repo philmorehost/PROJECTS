@@ -949,7 +949,7 @@ if (isset($_POST["update-security-settings"])) {
 
     // (VoveID Identity Verification is configured in IdentityAPI.php, with the other KYC providers.)
 
-    mysqli_query($connection_server, "UPDATE sas_vendors SET force_security_pin='$force_pin', reg_otp_enabled='$force_otp', trans_email_enabled='$force_email', login_otp_enabled='$login_otp', user_login_otp_enabled='$user_login_otp', force_google_sso='$force_sso', google_client_id='$google_id', smtp_host='$smtp_host', smtp_user='$smtp_user', smtp_pass='$smtp_pass', smtp_port='$smtp_port', smtp_sec='$smtp_sec', support_whatsapp='$support_whatsapp' WHERE id='" . $get_logged_admin_details["id"] . "'");
+    $security_settings_saved = mysqli_query($connection_server, "UPDATE sas_vendors SET force_security_pin='$force_pin', reg_otp_enabled='$force_otp', trans_email_enabled='$force_email', login_otp_enabled='$login_otp', user_login_otp_enabled='$user_login_otp', force_google_sso='$force_sso', google_client_id='$google_id', smtp_host='$smtp_host', smtp_user='$smtp_user', smtp_pass='$smtp_pass', smtp_port='$smtp_port', smtp_sec='$smtp_sec', support_whatsapp='$support_whatsapp' WHERE id='" . $get_logged_admin_details["id"] . "'");
 
     if (!empty($new_pin)) {
         if (is_numeric($new_pin) && strlen($new_pin) == 4) {
@@ -966,6 +966,8 @@ if (isset($_POST["update-security-settings"])) {
     } else {
         $_SESSION["product_purchase_response"] = "Security settings updated successfully";
     }
+
+    if (!$security_settings_saved) $_SESSION["product_purchase_response"] = "Could not save security settings. Please check database migrations and permissions, then try again.";
 
     header("Location: " . $_SERVER["REQUEST_URI"]);
     exit();
@@ -1932,9 +1934,9 @@ if ($q_site_details && mysqli_num_rows($q_site_details) > 0) {
                                         <div class="small text-muted">Enable to send OTP verification email during user registration. Disable for instant onboarding.</div>
                                     </div>
                                     <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" name="force-user-login-otp" id="forceUserLoginOTP" <?php echo bc_user_login_otp_required($get_logged_admin_details) ? 'checked' : ''; ?>>
+                                        <input class="form-check-input" type="checkbox" name="force-user-login-otp" id="forceUserLoginOTP" <?php echo ((string)($get_logged_admin_details['user_login_otp_enabled'] ?? '0') === '1') ? 'checked' : ''; ?>>
                                         <label class="form-check-label fw-bold" for="forceUserLoginOTP">Require Login OTP for Users (Website &amp; Apps)</label>
-                                        <div class="small text-muted">When on, every customer must enter a one-time code emailed to them each time they sign in to your website or mobile app. Use this when you want only owners of a valid email address to reach an account — a stolen password alone will no longer work.</div>
+                                        <div class="small text-muted">Enable for your customers independently of the platform setting. If the platform requires login OTP for everyone, it remains required even when this switch is off.</div>
                                     </div>
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" name="force-login-otp" id="forceLoginOTP" <?php echo bc_admin_login_otp_required($get_logged_admin_details) ? 'checked' : ''; ?>>

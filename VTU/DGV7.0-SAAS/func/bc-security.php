@@ -623,6 +623,13 @@ function bc_ensure_security_tables(): void {
         KEY idx_reg_lookup (vendor_id, username)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // API-only hosts do not load bc-tables.php. Add the vendor policy column before
+    // fetching the vendor on login, even when an old schema marker was already recorded.
+    $bc_vendor_cols = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
+    if ($bc_vendor_cols && mysqli_num_rows($bc_vendor_cols) === 0) {
+        @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN user_login_otp_enabled TINYINT(1) NULL DEFAULT NULL");
+    }
+
     // sas_users.email_verified is also written by /web/api/register.php, which reaches the DB
     // through bc-connect.php only - bc-tables.php (where the column is normally migrated) is
     // never loaded on that path. Without this, a fresh host answered the registration INSERT
@@ -744,10 +751,10 @@ function bc_issue_otp(string $purpose, string $username, int $vendor_id, array $
     $hash = hash('sha256', $code);
     $meta_json = mysqli_real_escape_string($connection_server, json_encode($meta));
 
-    mysqli_query($connection_server, "INSERT INTO sas_otp_codes (vendor_id, username, purpose, code_hash, meta, expires_at)
+    $inserted = mysqli_query($connection_server, "INSERT INTO sas_otp_codes (vendor_id, username, purpose, code_hash, meta, expires_at)
         VALUES ('" . (int)$vendor_id . "', '$username_esc', '$purpose_esc', '$hash', '$meta_json', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
 
-    return $code;
+    return $inserted ? $code : '';
 }
 
 /**
@@ -828,10 +835,10 @@ function bc_create_login_token(string $username, int $vendor_id, string $purpose
     $ip_esc       = mysqli_real_escape_string($connection_server, $_SERVER['REMOTE_ADDR'] ?? '');
     $ttl_seconds  = max(60, min(900, $ttl_seconds));
 
-    mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
+    $inserted = mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
         VALUES ('$hash', '" . (int)$vendor_id . "', '$username_esc', '$purpose_esc', '$created_esc', '$ip_esc', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
 
-    return $token;
+    return $inserted ? $token : '';
 }
 
 /**
