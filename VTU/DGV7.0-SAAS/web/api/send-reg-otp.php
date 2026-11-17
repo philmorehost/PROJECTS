@@ -78,7 +78,7 @@ $_SESSION['reg_pending'] = [
     'phone'     => $phone,
     'address'   => $address,
     'referral'  => $referral,
-    'api_key'   => substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50),
+    'api_key'   => bin2hex(random_bytes(25)),
 ];
 $_SESSION['reg_otp']          = $otp;
 $_SESSION['reg_otp_expires']  = $otp_expires;
@@ -98,7 +98,7 @@ if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 0) {
         ? bc_resolve_referral_id($connection_server, $vendor_id, $referral)
         : "";
 
-    $q = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$pass_md5', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')";
+    $q = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass_md5', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1', '0')";
 
     if (mysqli_query($connection_server, $q)) {
         // Send welcome email

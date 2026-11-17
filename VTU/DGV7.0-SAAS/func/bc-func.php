@@ -6688,6 +6688,79 @@ function bc_admin_login_otp_required($vendor) {
     return ((string)getSuperAdminOption('force_bcadmin_login_otp', '0') === '1');
 }
 
+/**
+ * Should an END USER (website or mobile app) prove an emailed code at login?
+ *
+ * This is separate from bc_admin_login_otp_required(): that one gates the vendor's own
+ * bc-admin console, this one gates the customer accounts that sit behind /web and the apps.
+ * A per-vendor preference (sas_vendors.user_login_otp_enabled) wins when explicitly set;
+ * NULL / '' inherits the super-admin global default (force_user_login_otp), which is OFF by
+ * default so enabling it is always an explicit, deliberate choice.
+ */
+function bc_user_login_otp_required($vendor) {
+    $pref = is_array($vendor) ? ($vendor['user_login_otp_enabled'] ?? null) : $vendor;
+    if ($pref !== null && $pref !== '') {
+        return ((string)$pref === '1');
+    }
+    return ((string)getSuperAdminOption('force_user_login_otp', '0') === '1');
+}
+
+/**
+ * The JSON body returned to a mobile client after a fully authenticated login.
+ * Shared by web/api/login.php (password step) and web/api/login-otp.php (code step) so both
+ * paths return byte-identical fields - the app stores api_key/balance from whichever it gets.
+ */
+function bc_user_login_payload($user_detail, $vendor) {
+    if (empty($user_detail['api_key'])) {
+        global $connection_server;
+        $new_key = bin2hex(random_bytes(25));
+        $user_id = (int)($user_detail['id'] ?? 0);
+        if ($connection_server && $user_id > 0) {
+            mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key' WHERE id='$user_id'");
+            $user_detail['api_key'] = $new_key;
+        }
+    }
+    return [
+        "status" => "success",
+        "message" => "Login successful",
+        "data" => [
+            "username" => $user_detail['username'],
+            "firstname" => $user_detail['firstname'],
+            "lastname" => $user_detail['lastname'],
+            "api_key" => $user_detail['api_key'],
+            "balance" => $user_detail['balance'],
+            "account_level" => $user_detail['account_level'],
+            "level_name" => accountLevel($user_detail['account_level']),
+            "email" => $user_detail['email'],
+            "phone" => $user_detail['phone_number'],
+            "kyc_verified" => ((int)$user_detail['kyc_status'] === 2) ? "Yes" : "No",
+            "kyc_status" => (int)$user_detail['kyc_status'],
+            "security_pin_set" => !empty($user_detail['security_pin']),
+            "ai_status" => (int)($vendor['ai_status'] ?? 0),
+        ],
+    ];
+}
+
+/** Emails a login verification code for a user account. Returns the plaintext code ('' on failure). */
+function bc_send_user_login_otp($user_detail, $vendor_id) {
+    $username = (string)($user_detail['username'] ?? '');
+    $email    = trim((string)($user_detail['email'] ?? ''));
+    if ($username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return '';
+
+    $otp = bc_issue_otp('user_login', $username, (int)$vendor_id, array('ip' => $_SERVER['REMOTE_ADDR'] ?? ''), 600);
+    if ($otp === '') return '';
+
+    $body = "Hello <strong>" . htmlspecialchars((string)$user_detail['firstname'], ENT_QUOTES, 'UTF-8') . "</strong>,<br><br>"
+          . "Your sign-in verification code is:<br><br>"
+          . "<div style=\"font-size:34px;font-weight:bold;letter-spacing:10px;text-align:center;background:#f0f4ff;padding:18px 10px;border-radius:8px;\">"
+          . $otp . "</div><br>"
+          . "This code expires in <strong>10 minutes</strong> and can be used once.<br><br>"
+          . "If you did not try to sign in, change your password immediately - someone has your password.";
+
+    sendVendorEmail($email, "Your Sign-In Verification Code", $body);
+    return $otp;
+}
+
 function seedVendorBlog($vendor_id) {
     global $connection_server;
 

@@ -18,6 +18,14 @@
         $referral = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_GET["referral"] ?? ""))));
         
         if(!empty($user) && !empty($pass) && !empty($first) && !empty($last) && !empty($email) && !empty($phone) && !empty($address)){
+                    // When email verification is on, this legacy no-JS path must NOT create the
+                    // account: it used to insert straight into sas_users, which let a direct POST
+                    // skip the emailed code entirely. Send the visitor through the real flow.
+                    if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 1) {
+                        $_SESSION["product_purchase_response"] = "Please verify your email address to finish creating your account.";
+                        header("Location: Register.php");
+                        exit();
+                    }
                     $vendor_id = $select_vendor_table["id"];
                     $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='$user'");
                     

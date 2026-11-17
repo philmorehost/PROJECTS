@@ -10,6 +10,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.mzeevtu.databinding.ActivityLoginBinding
 import com.mzeevtu.data.model.ApiResult
+import com.mzeevtu.data.repository.LoginOutcome
+import com.mzeevtu.util.OtpDialogHelper
 import com.mzeevtu.data.repository.AuthRepository
 import com.mzeevtu.ui.security.LockActivity
 import com.mzeevtu.util.Constants
@@ -148,18 +150,63 @@ class LoginActivity : AppCompatActivity() {
         binding.progressBar.show()
 
         lifecycleScope.launch {
-            when (val result = authRepo.login(username, password)) {
-                is ApiResult.Success -> {
+            when (val result = authRepo.loginStart(username, password)) {
+                is LoginOutcome.Success -> {
                     binding.progressBar.hide()
                     registerFcmToken()
                     navigateToMain()
                 }
-                is ApiResult.Error -> {
+                is LoginOutcome.OtpRequired -> {
+                    binding.progressBar.hide()
+                    promptLoginOtp(result)
+                }
+                is LoginOutcome.Failure -> {
                     binding.progressBar.hide()
                     binding.btnLogin.isEnabled = true
                     binding.root.showSnack(result.message)
                 }
-                else -> {}
+            }
+        }
+    }
+
+    /**
+     * The password was accepted but the vendor requires an emailed code. Nothing (api_key,
+     * balance) has been handed to the app yet - it arrives only after this step succeeds.
+     */
+    private fun promptLoginOtp(step: LoginOutcome.OtpRequired) {
+        OtpDialogHelper.prompt(
+            this,
+            "Verify Sign-In",
+            step.message,
+            onCode = { code ->
+                if (code.length != 6) {
+                    binding.root.showSnack("Enter the 6-digit code")
+                    promptLoginOtp(step)
+                } else {
+                    verifyLoginOtp(step, code)
+                }
+            }
+        )
+    }
+
+    private fun verifyLoginOtp(step: LoginOutcome.OtpRequired, code: String) {
+        binding.progressBar.show()
+        lifecycleScope.launch {
+            when (val result = authRepo.loginWithOtp(step.challenge, code)) {
+                is LoginOutcome.Success -> {
+                    binding.progressBar.hide()
+                    registerFcmToken()
+                    navigateToMain()
+                }
+                is LoginOutcome.OtpRequired -> {
+                    binding.progressBar.hide()
+                    promptLoginOtp(result)
+                }
+                is LoginOutcome.Failure -> {
+                    binding.progressBar.hide()
+                    binding.btnLogin.isEnabled = true
+                    binding.root.showSnack(result.message)
+                }
             }
         }
     }

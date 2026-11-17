@@ -40,37 +40,38 @@ if (mysqli_num_rows($check_user) == 1) {
 
     if ($user_detail['password'] === $md5_pass) {
         if ($user_detail["status"] == 1) {
-            recordLoginAttempt($user, $ip, 1, $vendor_id);
+            // ── Login OTP gate ──────────────────────────────────────────────────
+            // The password is correct, but that is no longer the whole story when the
+            // vendor has switched user login OTP on. Nothing sensitive (api_key, balance)
+            // is returned until the emailed code is confirmed by login-otp.php.
+            if (bc_user_login_otp_required($get_vendor)) {
+                if (bc_is_rate_limited('app_login_otp', $vendor_id . ':' . strtolower($user_detail['username']), 6, 900)) {
+                    echo json_encode(["status" => "error", "message" => "Too many verification codes requested. Please try again later."]);
+                    exit;
+                }
+                $email_check = trim((string)$user_detail['email']);
+                if (!filter_var($email_check, FILTER_VALIDATE_EMAIL)) {
+                    echo json_encode(["status" => "error", "message" => "This account has no valid email address on file. Please contact support."]);
+                    exit;
+                }
 
-            // Generate/Refresh API Key if needed
-            if (empty($user_detail['api_key'])) {
-                $new_key = bin2hex(random_bytes(25));
-                mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key' WHERE id='".$user_detail['id']."'");
-                $user_detail['api_key'] = $new_key;
+                $challenge = bc_create_login_token($user_detail['username'], (int)$vendor_id, 'user_login', 900, 'app-login');
+                $otp = bc_send_user_login_otp($user_detail, $vendor_id);
+                if ($challenge === '' || $otp === '') {
+                    echo json_encode(["status" => "error", "message" => "Could not send the verification code. Please try again."]);
+                    exit;
+                }
+
+                echo json_encode([
+                    "status" => "otp_required",
+                    "challenge" => $challenge,
+                    "message" => "A 6-digit verification code has been sent to your email.",
+                ]);
+                exit;
             }
 
-            $is_kyc_compliant = ($user_detail['kyc_status'] == 2);
-            $pin_set = !empty($user_detail['security_pin']);
-
-            echo json_encode([
-                "status" => "success",
-                "message" => "Login successful",
-                "data" => [
-                    "username" => $user_detail['username'],
-                    "firstname" => $user_detail['firstname'],
-                    "lastname" => $user_detail['lastname'],
-                    "api_key" => $user_detail['api_key'],
-                    "balance" => $user_detail['balance'],
-                    "account_level" => $user_detail['account_level'],
-                    "level_name" => accountLevel($user_detail['account_level']),
-                    "email" => $user_detail['email'],
-                    "phone" => $user_detail['phone_number'],
-                    "kyc_verified" => $is_kyc_compliant ? "Yes" : "No",
-                    "kyc_status" => (int)$user_detail['kyc_status'],
-                    "security_pin_set" => $pin_set,
-                    "ai_status" => (int)$get_vendor['ai_status']
-                ]
-            ]);
+            recordLoginAttempt($user, $ip, 1, $vendor_id);
+            echo json_encode(bc_user_login_payload($user_detail, $get_vendor));
         } else {
             recordLoginAttempt($user, $ip, 0, $vendor_id);
             echo json_encode(["status" => "error", "message" => "Account is not active. Status: " . accountStatus($user_detail['status'])]);

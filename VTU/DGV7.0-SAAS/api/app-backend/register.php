@@ -38,6 +38,16 @@ if (json_last_error() === JSON_ERROR_NONE) {
             !empty($address) &&
             !empty($password)
         ) {
+            // Legacy endpoint: these old clients have no way to submit an emailed code, so when
+            // email verification is on the only safe answer is to refuse and point at the update.
+            if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 1) {
+                echo json_encode(array(
+                    "json-status" => "success",
+                    "status" => "failed",
+                    "status-msg" => "Please update your app to the latest version to create an account. Email verification is now required."
+                ));
+                exit;
+            }
             $account_type = '1';
             $token = bin2hex(random_bytes(25));
             $status = '1';

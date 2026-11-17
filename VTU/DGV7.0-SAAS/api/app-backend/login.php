@@ -41,6 +41,18 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_detail = mysqli_fetch_array($checkuser_pass);
                     if ($get_user_detail["status"] == "1") {
+
+                        // This legacy endpoint has no way to carry a one-time code, so when the
+                        // vendor requires user login OTP it must not mint a session at all -
+                        // otherwise it would be a hole straight past the new protection.
+                        if (bc_user_login_otp_required($select_vendor_table)) {
+                            echo json_encode(array(
+                                "json-status" => "success",
+                                "status" => "failed",
+                                "status-msg" => "Please update your app to the latest version to sign in. Email verification is now required."
+                            ));
+                            exit;
+                        }
                         
                         // Email Beginning
                         $login_template_encoded_text_array = array("{firstname}" => $get_user_detail["firstname"], "{lastname}" => $get_user_detail["lastname"], "{username}" => $get_user_detail["username"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);

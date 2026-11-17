@@ -12,6 +12,12 @@ interface VtuApiService {
     @POST("web/api/register.php")
     suspend fun register(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 
+    @POST("web/api/register-otp.php")
+    suspend fun resendRegisterOtp(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
+    @POST("web/api/login-otp.php")
+    suspend fun loginOtp(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
     // ── Profile & Site ────────────────────────────────────────────────────
     @POST("web/api/profile.php")
     suspend fun getProfile(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>

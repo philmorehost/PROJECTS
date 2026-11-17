@@ -90,7 +90,10 @@ if ($create_vendor_table) {
         "identity_api_enabled" => "TINYINT(1) DEFAULT 0",
         // NULL = inherit the super-admin global default; 1 = this vendor forces login OTP on;
         // 0 = this vendor has opted out (their own account only).
-        "login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL"
+        "login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL",
+        // Same three-state model, but for END USER accounts (website + mobile apps):
+        // NULL = inherit force_user_login_otp, 1 = require an emailed code at user login.
+        "user_login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors");
     $existing = []; while($r = mysqli_fetch_assoc($res)) $existing[] = $r['Field'];
@@ -194,6 +197,16 @@ if ($create_vendor_table) {
 
     if (!in_array('reg_otp_enabled', $existing_columns)) {
         mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN reg_otp_enabled TINYINT(1) DEFAULT 1");
+    }
+
+    // Proof that the address on an account actually receives mail. Existing rows are grandfathered
+    // (DEFAULT 1) so nobody is locked out by the upgrade; new registrations are written as 0 and
+    // flipped to 1 only when the emailed code is confirmed.
+    $bc_user_cols = [];
+    $bc_user_cols_res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users");
+    if ($bc_user_cols_res) { while ($bc_user_col = mysqli_fetch_assoc($bc_user_cols_res)) { $bc_user_cols[] = $bc_user_col['Field']; } }
+    if (!in_array('email_verified', $bc_user_cols)) {
+        mysqli_query($connection_server, "ALTER TABLE sas_users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
     }
 
     if (!in_array('trans_email_enabled', $existing_columns)) {

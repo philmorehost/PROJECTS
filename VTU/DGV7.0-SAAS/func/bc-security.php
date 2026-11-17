@@ -603,6 +603,124 @@ function bc_ensure_security_tables(): void {
         UNIQUE KEY uniq_token_hash (token_hash),
         KEY idx_token_lookup (vendor_id, username)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Registration that has been submitted but not yet proven by an emailed code.
+    // The mobile apps have no reliable cookie session, so the pending account has to live
+    // server-side; the client only ever holds the random token, never the data.
+    mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_registrations_pending (
+        id INT NOT NULL AUTO_INCREMENT,
+        token_hash CHAR(64) NOT NULL,
+        vendor_id INT UNSIGNED NOT NULL,
+        username VARCHAR(225) NOT NULL,
+        email VARCHAR(225) NOT NULL,
+        payload LONGTEXT NOT NULL,
+        attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_reg_token (token_hash),
+        KEY idx_reg_lookup (vendor_id, username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // sas_users.email_verified is also written by /web/api/register.php, which reaches the DB
+    // through bc-connect.php only - bc-tables.php (where the column is normally migrated) is
+    // never loaded on that path. Without this, a fresh host answered the registration INSERT
+    // with "Unknown column 'email_verified'". Existing rows default to 1 so nobody is locked out.
+    $bc_user_column_exists = false;
+    $bc_cols_res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users LIKE 'email_verified'");
+    if ($bc_cols_res) {
+        $bc_user_column_exists = (mysqli_num_rows($bc_cols_res) > 0);
+    }
+    if (!$bc_user_column_exists) {
+        @mysqli_query($connection_server, "ALTER TABLE sas_users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
+    }
+}
+
+/**
+ * Stores a pending registration and emails a 6-digit code for it.
+ *
+ * @return array{token:string, otp:string} token is what the client sends back with the code.
+ */
+function bc_reg_pending_create(int $vendor_id, array $payload, string $purpose = 'register', int $ttl_seconds = 1800): array {
+    global $connection_server;
+    if (!$connection_server) return ['token' => '', 'otp' => ''];
+    bc_ensure_security_tables();
+
+    $username = (string)($payload['username'] ?? '');
+    $email    = (string)($payload['email'] ?? '');
+    if ($username === '' || $email === '') return ['token' => '', 'otp' => ''];
+
+    // Bind the payload to the vendor that created it: a token minted on vendor A must never be
+    // replayable on vendor B's host to create an account from A's submitted data.
+    $payload['vendor_id'] = (int)$vendor_id;
+
+    // One live registration per username: a resubmit supersedes the previous attempt.
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+    mysqli_query($connection_server, "UPDATE sas_registrations_pending SET used_at=NOW()
+        WHERE vendor_id='" . (int)$vendor_id . "' AND username='$username_esc' AND used_at IS NULL");
+
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $email_esc = mysqli_real_escape_string($connection_server, $email);
+    $payload_json = mysqli_real_escape_string($connection_server, json_encode($payload));
+    $ttl_seconds = max(300, min(3600, $ttl_seconds));
+
+    mysqli_query($connection_server, "INSERT INTO sas_registrations_pending (token_hash, vendor_id, username, email, payload, expires_at)
+        VALUES ('$hash', '" . (int)$vendor_id . "', '$username_esc', '$email_esc', '$payload_json', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
+
+    $otp = bc_issue_otp($purpose, $username, $vendor_id, array('email' => $email), 600);
+    return ['token' => $token, 'otp' => $otp];
+}
+
+/** Looks up a live pending registration without consuming it. */
+function bc_reg_pending_get(string $token, string $purpose = 'register'): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash = hash('sha256', $token);
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_registrations_pending
+        WHERE token_hash='$hash' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+
+    $row = mysqli_fetch_assoc($q);
+    $payload = json_decode((string)$row['payload'], true);
+    if (!is_array($payload)) return null;
+    $row['payload_decoded'] = $payload;
+    return $row;
+}
+
+/** Re-sends a code for an existing pending registration. */
+function bc_reg_pending_resend(string $token, string $purpose = 'register'): string {
+    global $connection_server;
+    $row = bc_reg_pending_get($token, $purpose);
+    if (!$row) return '';
+    return bc_issue_otp($purpose, (string)$row['username'], (int)$row['vendor_id'], array('email' => $row['email']), 600);
+}
+
+/**
+ * Verifies the code for a pending registration, burns the token and returns the payload.
+ * Returns null on a wrong/expired code so the caller cannot accidentally create the account.
+ */
+function bc_reg_pending_consume(string $token, string $code, string $purpose = 'register', int $max_attempts = 5): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+
+    $row = bc_reg_pending_get($token, $purpose);
+    if (!$row) return null;
+    if ((int)$row['attempts'] >= $max_attempts) return null;
+
+    if (!bc_verify_otp($purpose, (string)$row['username'], (int)$row['vendor_id'], $code)) {
+        mysqli_query($connection_server, "UPDATE sas_registrations_pending SET attempts=attempts+1 WHERE id='" . (int)$row['id'] . "'");
+        return null;
+    }
+
+    mysqli_query($connection_server, "UPDATE sas_registrations_pending SET used_at=NOW() WHERE id='" . (int)$row['id'] . "' AND used_at IS NULL");
+    if (mysqli_affected_rows($connection_server) !== 1) return null;
+
+    return $row['payload_decoded'];
 }
 
 /**
@@ -794,6 +912,32 @@ function bc_consume_login_token(string $token, string $purpose = 'impersonate'):
     $user = mysqli_fetch_assoc($u);
     bc_log_security_event('IMPERSONATION_LOGIN', $purpose, (string)$user['username'], 'By ' . (string)$row['created_by'] . ' from ' . (string)$row['ip_address']);
     return $user;
+}
+
+/**
+ * Reads a one-time login token without consuming it. Used by the two-step app login, where
+ * the token is a challenge that must survive a wrong OTP so the user can retry.
+ */
+function bc_peek_login_token(string $token, string $purpose = 'user_login'): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash        = hash('sha256', $token);
+    $purpose_esc = mysqli_real_escape_string($connection_server, $purpose);
+
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_login_tokens
+        WHERE token_hash='$hash' AND purpose='$purpose_esc' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+    return mysqli_fetch_assoc($q);
+}
+
+/** Marks a peeked login token as used. */
+function bc_burn_login_token(int $token_id): void {
+    global $connection_server;
+    if (!$connection_server || $token_id <= 0) return;
+    mysqli_query($connection_server, "UPDATE sas_login_tokens SET used_at=NOW() WHERE id='" . (int)$token_id . "' AND used_at IS NULL");
 }
 
 /**
