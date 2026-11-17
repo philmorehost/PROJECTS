@@ -33,6 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $settings['smtp_pass'] = $_POST['smtp_pass'] ?? '';
     $settings['admin_email'] = $_POST['admin_email'] ?? '';
 
+    $settings['github_default_repo'] = trim($_POST['github_default_repo'] ?? 'philmorehost/PROJECTS') ?: 'philmorehost/PROJECTS';
+    $settings['github_default_branch'] = trim($_POST['github_default_branch'] ?? 'main') ?: 'main';
+    $settings['github_token'] = trim($_POST['github_token'] ?? '');
+    $settings['github_webhook_secret'] = trim($_POST['github_webhook_secret'] ?? '');
+
     if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] == 0) {
         $target_dir = "../uploads/";
         if (!file_exists($target_dir)) {
@@ -50,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]/webhook.php";
+$github_webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]/github-webhook.php";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -338,6 +344,7 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
         <h1>🔐 License Manager</h1>
         <nav>
             <a href="dashboard.php">📊 Dashboard</a>
+            <a href="projects.php">📦 Projects</a>
             <a href="licenses.php">📜 Licenses</a>
             <a href="updates.php">🚀 Push Updates</a>
             <a href="transactions.php">💳 Transactions</a>
@@ -456,6 +463,38 @@ $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https"
                             <div class="input-group wide-input">
                                 <label>Admin Email</label>
                                 <input type="email" name="admin_email" value="<?= htmlspecialchars($settings['admin_email'] ?? '') ?>">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card wide-card">
+                    <div class="card-header"><h3>🐙 GitHub Integration &amp; Auto-Push Webhook</h3></div>
+                    <div class="card-body">
+                        <div class="input-grid">
+                            <div class="input-group">
+                                <label>Default GitHub Repository (owner/repo)</label>
+                                <input type="text" name="github_default_repo" value="<?= htmlspecialchars($settings['github_default_repo'] ?? 'philmorehost/PROJECTS') ?>" placeholder="philmorehost/PROJECTS">
+                                <small>Default mono-repo used when adding new project subdirectories.</small>
+                            </div>
+                            <div class="input-group">
+                                <label>Default GitHub Branch</label>
+                                <input type="text" name="github_default_branch" value="<?= htmlspecialchars($settings['github_default_branch'] ?? 'main') ?>" placeholder="main">
+                                <small>Default branch pulled during manual or webhook-triggered releases.</small>
+                            </div>
+                            <div class="input-group">
+                                <label>GitHub Personal Access Token (PAT)</label>
+                                <input type="password" name="github_token" value="<?= htmlspecialchars($settings['github_token'] ?? '') ?>" placeholder="ghp_... or github_pat_...">
+                                <small>Required for private repositories (needs read-only <code>Contents</code> scope on <code>philmorehost/PROJECTS</code>).</small>
+                            </div>
+                            <div class="input-group">
+                                <label>GitHub Webhook Secret</label>
+                                <input type="password" name="github_webhook_secret" value="<?= htmlspecialchars($settings['github_webhook_secret'] ?? '') ?>" placeholder="Shared HMAC secret for X-Hub-Signature-256">
+                                <small>Must match the Secret configured on GitHub &rarr; Repository Settings &rarr; Webhooks.</small>
+                            </div>
+                            <div class="input-group wide-input">
+                                <label>GitHub Push Webhook Endpoint (Read-only)</label>
+                                <input type="text" value="<?= htmlspecialchars($github_webhook_url) ?>" readonly>
+                                <small>Add this URL in GitHub Webhooks (Content type: <code>application/json</code>, event: <code>Just the push event</code>) to automatically package changed project directories and signal licensed websites.</small>
                             </div>
                         </div>
                     </div>

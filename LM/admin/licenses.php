@@ -7,14 +7,40 @@ if (!isset($_SESSION['admin_logged_in'])) {
 
 require_once('../db.php');
 
+// Fetch all projects / script tiers
+$tiers = $pdo->query("SELECT id, tier_name, tier_code FROM script_tiers ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+
 // Handle POST requests for license management
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_license'])) {
-        $stmt = $pdo->prepare("INSERT INTO licenses (license_key, domain, customer_email, status, license_type) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $_POST['license_type'] ?? 'standard']);
+        $licType = $_POST['license_type'] ?? 'standard';
+        $tierId = intval($_POST['tier_id'] ?? 0);
+        if ($tierId <= 0) {
+            $tierId = ($licType === 'extended') ? 1 : 2;
+        }
+        $stmt = $pdo->prepare("INSERT INTO licenses (license_key, domain, customer_email, status, license_type, tier_id) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $licType, $tierId]);
+        $newId = (int)$pdo->lastInsertId();
+        $cleanDom = preg_replace('#^https?://#i', '', strtolower(trim($_POST['domain'] ?? '')));
+        $cleanDom = preg_replace('/^www\./i', '', explode('/', $cleanDom)[0]);
+        if ($newId > 0 && $cleanDom !== '' && $cleanDom !== 'n/a') {
+            $domStmt = $pdo->prepare("INSERT IGNORE INTO licensed_domains (license_id, domain_name) VALUES (?, ?)");
+            $domStmt->execute([$newId, $cleanDom]);
+        }
     } elseif (isset($_POST['edit_license'])) {
-        $stmt = $pdo->prepare("UPDATE licenses SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ? WHERE id = ?");
-        $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $_POST['license_type'] ?? 'standard', $_POST['id']]);
+        $licType = $_POST['license_type'] ?? 'standard';
+        $tierId = intval($_POST['tier_id'] ?? 0);
+        if ($tierId <= 0) {
+            $tierId = ($licType === 'extended') ? 1 : 2;
+        }
+        $stmt = $pdo->prepare("UPDATE licenses SET license_key = ?, domain = ?, customer_email = ?, status = ?, license_type = ?, tier_id = ? WHERE id = ?");
+        $stmt->execute([$_POST['license_key'], $_POST['domain'], $_POST['customer_email'], $_POST['status'], $licType, $tierId, $_POST['id']]);
+        $cleanDom = preg_replace('#^https?://#i', '', strtolower(trim($_POST['domain'] ?? '')));
+        $cleanDom = preg_replace('/^www\./i', '', explode('/', $cleanDom)[0]);
+        if ((int)$_POST['id'] > 0 && $cleanDom !== '' && $cleanDom !== 'n/a') {
+            $domStmt = $pdo->prepare("INSERT IGNORE INTO licensed_domains (license_id, domain_name) VALUES (?, ?)");
+            $domStmt->execute([(int)$_POST['id'], $cleanDom]);
+        }
     } elseif (isset($_POST['toggle_status'])) {
         $stmt = $pdo->prepare("UPDATE licenses SET status = ? WHERE id = ?");
         $new_status = $_POST['current_status'] === 'active' ? 'inactive' : 'active';
@@ -28,8 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $reqStmt = $pdo->query("SELECT * FROM license_requests ORDER BY created_at DESC LIMIT 100");
 $license_requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all licenses
-$stmt = $pdo->query("SELECT * FROM licenses ORDER BY created_at DESC");
+// Fetch all licenses joined with tier info
+$stmt = $pdo->query("SELECT l.*, t.tier_code, t.tier_name FROM licenses l LEFT JOIN script_tiers t ON l.tier_id = t.id ORDER BY l.created_at DESC");
 $licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Fetch pending manual requests
 $reqStmt = $pdo->query("SELECT * FROM license_requests WHERE status = 'pending' ORDER BY created_at DESC");
@@ -261,6 +287,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
         <h1>🔐 License Manager</h1>
         <nav>
             <a href="dashboard.php">📊 Dashboard</a>
+            <a href="projects.php">📦 Projects</a>
             <a href="licenses.php" class="active">📜 Licenses</a>
             <a href="updates.php">🚀 Push Updates</a>
             <a href="transactions.php">💳 Transactions</a>
@@ -284,6 +311,14 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="input-group"><label>License Key</label><input type="text" name="license_key" required></div>
                     <div class="input-group"><label>Domain</label><input type="text" name="domain" required></div>
                     <div class="input-group"><label>Customer Email</label><input type="email" name="customer_email" required></div>
+                    <div class="input-group">
+                        <label>Project / Script Tier</label>
+                        <select name="tier_id">
+                            <?php foreach ($tiers as $t): ?>
+                                <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['tier_name']) ?> (<?= htmlspecialchars($t['tier_code']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="input-group">
                         <label>License Type</label>
                         <select name="license_type">
@@ -311,6 +346,16 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="input-group"><label>Domain</label><input type="text" name="domain" value="<?= htmlspecialchars($license['domain']) ?>" required></div>
                     <div class="input-group"><label>Customer Email</label><input type="email" name="customer_email" value="<?= htmlspecialchars($license['customer_email'] ?? '') ?>" required></div>
                     <div class="input-group">
+                        <label>Project / Script Tier</label>
+                        <select name="tier_id">
+                            <?php foreach ($tiers as $t): ?>
+                                <option value="<?= (int)$t['id'] ?>" <?= ((int)($license['tier_id'] ?? 2) === (int)$t['id']) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($t['tier_name']) ?> (<?= htmlspecialchars($t['tier_code']) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="input-group">
                         <label>License Type</label>
                         <select name="license_type">
                             <option value="standard" <?= ($license['license_type'] ?? 'standard') === 'standard' ? 'selected' : '' ?>>Standard</option>
@@ -336,6 +381,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                     <thead>
                         <tr>
                             <th>License Key</th>
+                            <th>Project</th>
                             <th>Domain</th>
                             <th>Email</th>
                             <th>Type</th>
@@ -347,6 +393,7 @@ $requests = $reqStmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php foreach ($licenses as $license): ?>
                             <tr>
                                 <td><?= htmlspecialchars($license['license_key']) ?></td>
+                                <td><span class="status-badge" style="background:#e0e7ff;color:#3730a3;"><?= htmlspecialchars($license['tier_code'] ?? 'NON-SAAS') ?></span></td>
                                 <td><?= htmlspecialchars($license['domain']) ?></td>
                                 <td><?= htmlspecialchars($license['customer_email'] ?? '') ?></td>
                                 <td><span class="status-badge <?= ($license['license_type'] ?? 'standard') === 'extended' ? 'status-active' : 'status-inactive' ?>"><?= htmlspecialchars(ucfirst($license['license_type'] ?? 'standard')) ?></span></td>

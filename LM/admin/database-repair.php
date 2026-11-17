@@ -74,26 +74,57 @@ if (isset($_POST['repair'])) {
         try {
             $pdo->exec("CREATE TABLE IF NOT EXISTS `script_tiers` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `tier_name` VARCHAR(50) NOT NULL,
-                `tier_code` VARCHAR(20) UNIQUE NOT NULL,
+                `tier_name` VARCHAR(100) NOT NULL,
+                `tier_code` VARCHAR(50) UNIQUE NOT NULL,
                 `description` TEXT NULL,
+                `github_repo` VARCHAR(150) NULL DEFAULT NULL,
+                `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main',
+                `github_subdir` VARCHAR(200) NULL DEFAULT NULL,
+                `exclude_paths` TEXT NULL,
+                `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php',
+                `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0,
+                `auto_signal` TINYINT(1) NOT NULL DEFAULT 1,
+                `last_github_sha` VARCHAR(64) NULL DEFAULT NULL,
+                `last_pulled_at` DATETIME NULL DEFAULT NULL,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB");
+
+            $pdo->exec("ALTER TABLE `script_tiers` MODIFY COLUMN `tier_name` VARCHAR(100) NOT NULL, MODIFY COLUMN `tier_code` VARCHAR(50) NOT NULL");
+
+            $ghColCheck = $pdo->query("SHOW COLUMNS FROM `script_tiers` WHERE Field = 'github_repo'");
+            if ($ghColCheck && $ghColCheck->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE `script_tiers`
+                    ADD COLUMN `github_repo` VARCHAR(150) NULL DEFAULT NULL AFTER `description`,
+                    ADD COLUMN `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main' AFTER `github_repo`,
+                    ADD COLUMN `github_subdir` VARCHAR(200) NULL DEFAULT NULL AFTER `github_branch`,
+                    ADD COLUMN `exclude_paths` TEXT NULL AFTER `github_subdir`,
+                    ADD COLUMN `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php' AFTER `exclude_paths`,
+                    ADD COLUMN `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0 AFTER `signal_endpoint`,
+                    ADD COLUMN `auto_signal` TINYINT(1) NOT NULL DEFAULT 1 AFTER `auto_pull_github`,
+                    ADD COLUMN `last_github_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `auto_signal`,
+                    ADD COLUMN `last_pulled_at` DATETIME NULL DEFAULT NULL AFTER `last_github_sha`");
+                $messages[] = ['type' => 'success', 'text' => '✓ Added GitHub & push-signal columns to script_tiers'];
+            }
             
             $tiers_check = $pdo->query("SELECT COUNT(*) FROM `script_tiers` WHERE `tier_code` IN ('SAAS', 'NON-SAAS')");
             if ($tiers_check && $tiers_check->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`) VALUES 
-                    (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features'),
-                    (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features')");
+                $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`) VALUES 
+                    (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-SAAS'),
+                    (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-NON-SAAS')");
                 $messages[] = ['type' => 'success', 'text' => '✓ Created script_tiers table and inserted default tiers'];
             } else {
                 $messages[] = ['type' => 'info', 'text' => 'ℹ script_tiers table and default tiers already exist'];
             }
+
+            $smspExcludes = 'config/config.php, config/.sys_cache, install/, backups/, tmp_update/, logs/, dataimg/, uploads/, mobile-android/, mobile-ios/, scratch/';
+            $seedStmt = $pdo->prepare("INSERT IGNORE INTO `script_tiers` (`tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`, `exclude_paths`, `signal_endpoint`, `auto_pull_github`, `auto_signal`) VALUES (?, ?, ?, 'philmorehost/PROJECTS', 'main', 'SMSP', ?, '/api/v1/ota-signal.php', 1, 1)");
+            $seedStmt->execute(['SchoolApp Multi-Tenant SaaS', 'SMSP-SAAS', 'Extended multi-tenant SaaS license for SchoolApp (SMSP)', $smspExcludes]);
+            $seedStmt->execute(['SchoolApp Standard', 'SMSP-NON-SAAS', 'Standard single-school license for SchoolApp (SMSP)', $smspExcludes]);
         } catch (PDOException $e) {
             $messages[] = ['type' => 'error', 'text' => '✗ Error repairing script_tiers: ' . $e->getMessage()];
         }
 
-        // 2. script_updates
+        // 2. script_updates & ota_signal_logs
         try {
             $pdo->exec("CREATE TABLE IF NOT EXISTS `script_updates` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -102,11 +133,37 @@ if (isset($_POST['repair'])) {
                 `zip_path` VARCHAR(255) NOT NULL,
                 `checksum` VARCHAR(64) NOT NULL,
                 `changelog` TEXT NULL,
+                `source` VARCHAR(30) NOT NULL DEFAULT 'upload',
+                `commit_sha` VARCHAR(64) NULL DEFAULT NULL,
                 `is_released` TINYINT(1) DEFAULT 0,
                 `release_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (`tier_id`) REFERENCES `script_tiers`(`id`) ON DELETE CASCADE
             ) ENGINE=InnoDB");
-            $messages[] = ['type' => 'success', 'text' => '✓ Checked script_updates table'];
+
+            $updSrcCol = $pdo->query("SHOW COLUMNS FROM `script_updates` WHERE Field = 'source'");
+            if ($updSrcCol && $updSrcCol->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE `script_updates`
+                    ADD COLUMN `source` VARCHAR(30) NOT NULL DEFAULT 'upload' AFTER `changelog`,
+                    ADD COLUMN `commit_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `source`");
+            }
+
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `ota_signal_logs` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `update_id` INT NOT NULL,
+                `tier_id` INT NOT NULL,
+                `license_id` INT NULL,
+                `domain_name` VARCHAR(150) NOT NULL,
+                `endpoint_url` VARCHAR(255) NOT NULL,
+                `http_code` INT NOT NULL DEFAULT 0,
+                `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
+                `response_body` TEXT NULL,
+                `signaled_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_signal_update` (`update_id`),
+                INDEX `idx_signal_tier` (`tier_id`),
+                FOREIGN KEY (`update_id`) REFERENCES `script_updates`(`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB");
+
+            $messages[] = ['type' => 'success', 'text' => '✓ Checked script_updates and ota_signal_logs tables'];
         } catch (PDOException $e) {
             $messages[] = ['type' => 'error', 'text' => '✗ Error repairing script_updates: ' . $e->getMessage()];
         }

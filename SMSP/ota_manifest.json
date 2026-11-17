@@ -1,0 +1,10 @@
+{
+    "version": "2.1.1",
+    "project_family": "SMSP",
+    "changelog": "SchoolApp v2.1.1 — CBT visibility diagnostics: admins/teachers get a per-exam “👁️ Visibility” report that explains exactly why students cannot see or start a paper (approval, class population, published questions, exam window). Exams now publish immediately by default with an optional per-school approval policy, pending exams are surfaced with one-click Approve / Approve All, and student pages auto-refresh when a paper opens. Also includes the v2.1.0 Cron Jobs page and OTA automation snapshot.",
+    "files_to_delete": [],
+    "database_queries": [
+        "CREATE TABLE IF NOT EXISTS `sm_cron_logs` (`id` INT AUTO_INCREMENT PRIMARY KEY, `job_key` VARCHAR(60) NOT NULL, `job_name` VARCHAR(150) NOT NULL, `trigger_source` VARCHAR(30) NOT NULL DEFAULT 'cli', `status` VARCHAR(20) NOT NULL DEFAULT 'running', `exit_code` INT NOT NULL DEFAULT 0, `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, `finished_at` DATETIME DEFAULT NULL, `duration_ms` INT NOT NULL DEFAULT 0, `output` LONGTEXT NULL, INDEX `idx_cron_job` (`job_key`), INDEX `idx_cron_started` (`started_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+        "INSERT IGNORE INTO `sm_global_settings` (`setting_key`, `setting_value`) VALUES ('cron_ota_enabled', '1'), ('cron_maintenance_enabled', '1'), ('cron_email_reports', '0'), ('cron_log_retention_days', '30');"
+    ]
+}

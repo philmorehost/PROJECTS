@@ -626,6 +626,30 @@ if ($cached) {
                 <p style="color: #718096;">Use the cURL example above to test your request. Check the response status code and message. The API also maintains debug logs for troubleshooting.</p>
             </section>
             
+            <!-- Multi-Project OTA & Signed Update Signals -->
+            <section>
+                <h2>Multi-Project OTA Updates &amp; Push Signals</h2>
+                <p style="color: #4a5568; margin-bottom: 1rem;">License Manager supports dynamic multi-project OTA packaging from GitHub subdirectories (e.g. <code>SMSP</code>, <code>VTU/DGV7.0-SAAS</code>, <code>VTU/DGV7.0-NON-SAAS</code>) and outbound HMAC-signed update signals to licensed installations.</p>
+
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <strong>Check for Updates:</strong> <span class="url"><?php echo htmlspecialchars($scheme . '://' . $host . '/check-update.php'); ?></span>
+                    <p style="margin-top:0.5rem;color:#4a5568;">Parameters: <code>license_key</code>, <code>domain</code>, <code>current_version</code>, and optional <code>project_family</code> (e.g. <code>SMSP</code>) / <code>expected_tier</code> (e.g. <code>SMSP-SAAS</code>). Returns <code>update_available</code>, <code>latest_version</code>, <code>tier</code>, <code>checksum</code> (SHA-256), and a single-use 30-minute <code>download_url</code>.</p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <strong>Download Package:</strong> <span class="url"><?php echo htmlspecialchars($scheme . '://' . $host . '/download.php?token=...'); ?></span>
+                    <p style="margin-top:0.5rem;color:#4a5568;">Streams the release ZIP archive from secure storage and invalidates the single-use token.</p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <strong>Outbound Client Signal (LM &rarr; Licensed Website):</strong> <span class="url">https://&lt;licensed-domain&gt;/api/v1/ota-signal.php</span>
+                    <p style="margin-top:0.5rem;color:#4a5568;">Signed with header <code>X-LM-Signature: sha256=&lt;hmac_sha256(raw_json_body, license_key)&gt;</code>. Triggers instant background OTA updates on client websites that have automated updates enabled.</p>
+                </div>
+            </section>
+
             <!-- Contact -->
             <section style="background: #f7fafc; padding: 2rem; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0;">
                 <h2 style="border: none; padding-bottom: 0;">Need Help?</h2>

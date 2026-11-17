@@ -70,6 +70,17 @@ try {
         </div>
     <?php endif; ?>
 
+    <!-- Background jobs / cron discovery card -->
+    <div class="p-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+            <h3 class="font-bold text-amber-200 text-sm">⏰ Scheduled Tasks (Cron Jobs)</h3>
+            <p class="text-xs text-amber-100/70 mt-1">OTA auto-updates, subscription reminders and platform maintenance all run from cron. Copy-ready crontab lines, a web-cron fallback and run history are in the Cron Jobs page.</p>
+        </div>
+        <a href="?page=cron_settings" class="shrink-0 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition text-center">
+            Open Cron Jobs &rarr;
+        </a>
+    </div>
+
     <form method="post" class="space-y-6">
         <!-- AI configs -->
         <div class="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl backdrop-blur-md">

@@ -85,7 +85,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_school'])) {
         $selected_addons = $_POST['addons'] ?? [];
 
         // Validation
-        if (empty($school_name) || empty($slug) || empty($admin_email) || empty($admin_pass) || empty($package_id)) {
+        $existingSchoolCount = (int)$pdo->query("SELECT COUNT(*) FROM sm_schools")->fetchColumn();
+        if (strtoupper(trim($platform_settings['edition_tier'] ?? 'SMSP-SAAS')) === 'SMSP-NON-SAAS' && $existingSchoolCount >= 1) {
+            $error = 'This installation uses a Single-School (SMSP-NON-SAAS) license and already has an active school configured. Upgrade to SMSP-SAAS to host multiple tenant schools.';
+        } elseif (empty($school_name) || empty($slug) || empty($admin_email) || empty($admin_pass) || empty($package_id)) {
             $error = 'All fields including plan selection are required.';
         } elseif (!filter_var($admin_email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';

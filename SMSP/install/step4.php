@@ -5,6 +5,11 @@ $success = false;
 if (isset($_SESSION['temp_db'])) {
     $db = $_SESSION['temp_db'];
 
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $app_url = $scheme . '://' . $host;
+    $installed_license = $_SESSION['license_key'] ?? '';
+
     // Generate config.php content
     $config_content = "<?php\n";
     $config_content .= "// Application Configuration Settings\n";
@@ -13,8 +18,9 @@ if (isset($_SESSION['temp_db'])) {
     $config_content .= "define('DB_USER', '" . addslashes($db['user']) . "');\n";
     $config_content .= "define('DB_PASS', '" . addslashes($db['pass']) . "');\n";
     $config_content .= "define('DB_NAME', '" . addslashes($db['name']) . "');\n";
+    $config_content .= "define('APP_URL', '" . addslashes($app_url) . "');\n";
     $config_content .= "define('JWT_SECRET', '" . bin2hex(random_bytes(32)) . "');\n";
-    $config_content .= "define('LICENSE_KEY', '" . addslashes($_SESSION['license_key'] ?? '') . "');\n";
+    $config_content .= "define('LICENSE_KEY', '" . addslashes($installed_license) . "');\n";
     $config_content .= "?>";
 
     $config_dir = dirname(INSTALL_PATH) . '/config';
@@ -24,6 +30,18 @@ if (isset($_SESSION['temp_db'])) {
 
     $config_file = $config_dir . '/config.php';
     if (file_put_contents($config_file, $config_content) !== false) {
+        // Persist license_key and main_domain into sm_global_settings for OTA updates & push signals
+        try {
+            $dsn = "mysql:host={$db['host']};port=" . (int)$db['port'] . ";dbname={$db['name']};charset=utf8mb4";
+            $instPdo = new PDO($dsn, $db['user'], $db['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $upStmt = $instPdo->prepare("INSERT INTO sm_global_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            if ($installed_license !== '') {
+                $upStmt->execute(['license_key', $installed_license]);
+            }
+            $upStmt->execute(['main_domain', preg_replace('/:\d+$/', '', strtolower($host))]);
+        } catch (Throwable $ignore) {
+        }
+
         $success = true;
         // Clean up session
         unset($_SESSION['temp_db']);

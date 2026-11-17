@@ -167,9 +167,9 @@ if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'parent') {
         $adm = trim($_POST['admission_number'] ?? '');
         $school_id = $_SESSION['school_id'];
         
-        // Find parent ID
-        $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE email = ? OR id_number = ? LIMIT 1");
-        $stmtParent->execute([$_SESSION['user_session'], $_SESSION['user_session']]);
+        // Find parent ID (scoped to this tenant)
+        $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE school_id_number = ? AND (email = ? OR id_number = ?) LIMIT 1");
+        $stmtParent->execute([$school_id, $_SESSION['user_session'], $_SESSION['user_session']]);
         $parentId = $stmtParent->fetchColumn();
 
         if (empty($adm) || empty($parentId)) {
@@ -593,6 +593,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
         case 'super_settings':
             include PORTAL_PATH . '/views/super_settings.php';
             break;
+        case 'system_update':
+            include PORTAL_PATH . '/views/system_update.php';
+            break;
+        case 'cron_settings':
+            include PORTAL_PATH . '/views/cron_settings.php';
+            break;
     }
     exit;
 }
@@ -844,6 +850,12 @@ if (isset($_GET['print'])) {
                 </a>
                 <a href="?page=super_settings" class="flex items-center px-4 py-2.5 rounded-lg <?php echo $page === 'super_settings' ? 'active-sidebar-link' : 'hover:bg-white/5 text-gray-300'; ?> transition-all font-medium">
                     🔑 API & Gateway Settings
+                </a>
+                <a href="?page=system_update" class="flex items-center px-4 py-2.5 rounded-lg <?php echo $page === 'system_update' ? 'active-sidebar-link' : 'hover:bg-white/5 text-gray-300'; ?> transition-all font-medium">
+                    🔄 System Update
+                </a>
+                <a href="?page=cron_settings" class="flex items-center px-4 py-2.5 rounded-lg <?php echo $page === 'cron_settings' ? 'active-sidebar-link' : 'hover:bg-white/5 text-gray-300'; ?> transition-all font-medium">
+                    ⏰ Cron Jobs
                 </a>
             <?php endif; ?>
 
@@ -1189,6 +1201,12 @@ if (isset($_GET['print'])) {
                 case 'super_settings':
                     include PORTAL_PATH . '/views/super_settings.php';
                     break;
+                case 'system_update':
+                    include PORTAL_PATH . '/views/system_update.php';
+                    break;
+                case 'cron_settings':
+                    include PORTAL_PATH . '/views/cron_settings.php';
+                    break;
                 default:
                     ?>
                     <?php
@@ -1274,14 +1292,22 @@ if (isset($_GET['print'])) {
                                         <p class="text-base mb-1">📱</p>
                                         <span class="text-xs text-gray-300 font-semibold block">SMS Rules</span>
                                     </a>
+                                    <a href="?page=cron_settings" class="p-3 bg-white/5 border border-white/5 hover:border-white/10 rounded-xl text-center transition">
+                                        <p class="text-base mb-1">⏰</p>
+                                        <span class="text-xs text-gray-300 font-semibold block">Cron Jobs</span>
+                                    </a>
+                                    <a href="?page=system_update" class="p-3 bg-white/5 border border-white/5 hover:border-white/10 rounded-xl text-center transition">
+                                        <p class="text-base mb-1">🔄</p>
+                                        <span class="text-xs text-gray-300 font-semibold block">System Update</span>
+                                    </a>
                                 </div>
                             </div>
                         </div>
                         <?php
                     } elseif ($user_role === 'parent') {
                         // Parent Dashboard: list their linked children
-                        $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE email = ? OR id_number = ?");
-                        $stmtParent->execute([$_SESSION['user_session'], $_SESSION['user_session']]);
+                        $stmtParent = $pdo->prepare("SELECT id_number FROM sm_parents WHERE school_id_number = ? AND (email = ? OR id_number = ?) LIMIT 1");
+                        $stmtParent->execute([$school_id, $_SESSION['user_session'], $_SESSION['user_session']]);
                         $parentRow = $stmtParent->fetch();
                         $parent_id = $parentRow ? $parentRow['id_number'] : '';
 
@@ -1421,8 +1447,10 @@ if (isset($_GET['print'])) {
                         <?php
                     } elseif ($user_role === 'student') {
                         // Student dashboard
-                        $stmtStu = $pdo->prepare("SELECT * FROM sm_students WHERE email = ? OR admission_number = ?");
-                        $stmtStu->execute([$_SESSION['user_session'], $_SESSION['user_session']]);
+                        // Scoped to the current school so a repeated admission number / email
+                        // in another tenant can never load the wrong student profile.
+                        $stmtStu = $pdo->prepare("SELECT * FROM sm_students WHERE school_id_number = ? AND (email = ? OR admission_number = ?) ORDER BY (email = ?) DESC LIMIT 1");
+                        $stmtStu->execute([$school_id, $_SESSION['user_session'], $_SESSION['user_session'], $_SESSION['user_session']]);
                         $studentRow = $stmtStu->fetch();
                         ?>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1860,6 +1888,28 @@ if (isset($_GET['print'])) {
                         <li><strong>Registered Schools:</strong> Monitor all tenant schools, check student levels, or click <strong>Impersonate School Owner</strong> to jump directly into their admin workspace.</li>
                         <li><strong>Packages:</strong> Define subscription prices, student thresholds, and billing cycles (monthly, yearly, lifetime).</li>
                         <li><strong>Addon Pricing:</strong> Edit the default marketplace prices for module expansions.</li>
+                    </ul>
+                `;
+            } else if (page === 'cron_settings') {
+                title = "⏰ Cron Jobs & Scheduled Tasks Help";
+                content = `
+                    <p class='mb-2'>Configure and monitor every background job this portal needs:</p>
+                    <ul class='list-disc pl-5 space-y-2 text-sm text-gray-300'>
+                        <li><strong>Scheduled Jobs:</strong> OTA auto-update checks and subscription/maintenance sweeps.</li>
+                        <li><strong>Crontab:</strong> Copy the ready-made lines into cPanel → Cron Jobs, or use <code>crontab -e</code>.</li>
+                        <li><strong>Web Cron:</strong> No shell access? Schedule the token-protected URL instead.</li>
+                        <li><strong>Run Now:</strong> Execute any job immediately and inspect its full output.</li>
+                        <li><strong>History:</strong> Every CLI, web-cron and manual run is logged with duration and status.</li>
+                    </ul>
+                `;
+            } else if (page === 'system_update') {
+                title = "🔄 System Update (OTA) Help";
+                content = `
+                    <p class='mb-2'>Keep SchoolApp up to date with central OTA releases:</p>
+                    <ul class='list-disc pl-5 space-y-2 text-sm text-gray-300'>
+                        <li><strong>Manual 3-Step Update:</strong> Click <strong>Check for Updates</strong> to verify SHA-256 package integrity, stream a full SQL + codebase backup, and apply updates safely.</li>
+                        <li><strong>Live Push Signals:</strong> When enabled, License Manager automatically signals this portal whenever a new release is published from GitHub.</li>
+                        <li><strong>Auto-Rollback:</strong> Any file or SQL error automatically restores your pre-update backup snapshot.</li>
                     </ul>
                 `;
             }

@@ -1,0 +1,11 @@
+# Runtime OTA Backups, Temporary Update Staging & Logs
+SMSP/backups/
+SMSP/tmp_update/
+SMSP/logs/
+SMSP/config/.sys_cache
+secure_updates/
+LM/api_create_license.log
+LM/api_upgrade_license.log
+LM/github_webhook.log
+LM/api_check_update.log
+LM/*.log

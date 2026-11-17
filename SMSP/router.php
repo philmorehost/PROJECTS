@@ -4,6 +4,12 @@
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $file = __DIR__ . $uri;
 
+// 0. Block direct web access to internal directories and manifests
+if (preg_match('#^/(config|include|backups|tmp_update|cron|logs|ota_manifest\.json)(/|$)#i', $uri)) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 // 1. If it's a real file or directory (and not a directory without index), let the server handle it
 if (file_exists($file)) {
     if (is_dir($file)) {

@@ -328,12 +328,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($isValid) {
             $stmt = $pdo->prepare("INSERT INTO sm_global_settings (setting_key, setting_value) VALUES ('license_key', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
             $stmt->execute([$license_key, $license_key]);
+
+            $stmtDom = $pdo->prepare("INSERT INTO sm_global_settings (setting_key, setting_value) VALUES ('main_domain', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+            $stmtDom->execute([$domain, $domain]);
             
             // Clear local cache file so that bootstrap picks up new key instantly
             $cache_file = dirname(__DIR__) . '/config/.sys_cache';
             if (file_exists($cache_file)) {
                 @unlink($cache_file);
             }
+
+            // Sync edition_tier (SMSP-SAAS / SMSP-NON-SAAS) & register domain on LM OTA server
+            $otaHelperPath = PORTAL_PATH . '/include/update_helper.php';
+            if (file_exists($otaHelperPath)) {
+                require_once $otaHelperPath;
+                try {
+                    UpdateHelper::checkUpdate($pdo);
+                } catch (Throwable $ignore) {
+                }
+            }
+
             $msg = "License key updated and validated successfully!";
         } else {
             $error = "Failed to update license key: " . $error_msg;
@@ -474,6 +488,8 @@ $allAddons = ['CBT', 'Bulk Report Card', 'Data Cleanup', 'ID Card', 'Live Classe
         <a href="?page=super_admin&action=domain_settings" class="flex-shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all <?php echo $action === 'domain_settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'; ?>">🌐 Domain & WHMCS</a>
         <a href="?page=super_admin&action=image_converter" class="flex-shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all <?php echo $action === 'image_converter' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'; ?>">📸 Image Converter</a>
         <a href="?page=super_admin&action=license_settings" class="flex-shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all <?php echo $action === 'license_settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'; ?>">🔑 Script License</a>
+        <a href="?page=system_update" class="flex-shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20">🔄 System Update</a>
+        <a href="?page=cron_settings" class="flex-shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20">⏰ Cron Jobs</a>
     </div>
 
     <?php if ($msg): ?>

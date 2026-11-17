@@ -29,8 +29,12 @@ AddDefaultCharset UTF-8
   RewriteEngine On
   RewriteBase /
 
-  # Redirect config and include folders
-  RewriteRule ^(config|include|install/schema\.sql) - [F,L]
+  # Redirect sensitive internal folders and manifests.
+  # The (/|$) boundary keeps root files such as cron-web.php reachable while
+  # still blocking /cron/, /logs/, /config/ ... and the manifest itself.
+  RewriteRule ^(config|include|backups|tmp_update|cron|logs)(/|$) - [F,L]
+  RewriteRule ^(ota_manifest\.json|install/schema\.sql)$ - [F,L]
+  RewriteRule ^cron/.*\.log$ - [F,L]
 
   # Subpath Tenant Redirection (e.g. schoolapp.ng/tenant1 -> routes internally)
   # Exclude actual files, directories, or assets from rewrites
