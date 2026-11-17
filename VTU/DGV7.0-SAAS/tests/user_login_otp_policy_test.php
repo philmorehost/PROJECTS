@@ -3,9 +3,8 @@
  * Assertions for the user-login-OTP policy — DGV7.0-SAAS.
  *
  * THE RULE UNDER TEST
- *   sas_vendors.user_login_otp_enabled is three-state: NULL/'': inherit the platform default
- *   (super-admin option force_user_login_otp); '1': force the emailed code on; '0': this vendor
- *   has opted out. bc_user_login_otp_required() is the single decision point used by the
+ *   The platform option force_user_login_otp enforces OTP for every vendor. When it is
+ *   off, sas_vendors.user_login_otp_enabled='1' independently enables OTP for that vendor. bc_user_login_otp_required() is the single decision point used by the
  *   website login, web/api/login.php and the legacy app-backend login, so if it drifts the
  *   protection silently disappears on one surface only.
  *
@@ -68,12 +67,14 @@ check('global off, vendor missing column inherits off', bc_user_login_otp_requir
 check('global off, vendor 1 forces on', bc_user_login_otp_required(['user_login_otp_enabled' => 1]), true);
 check('global off, vendor 0 stays off', bc_user_login_otp_required(['user_login_otp_enabled' => 0]), false);
 
-// Global default ON -> vendors inherit ON but may opt out.
+// Global policy ON -> every vendor, including those explicitly set to 0, is protected.
 $GLOBALS['__global_default'] = '1';
 check('global on, vendor NULL inherits on', bc_user_login_otp_required(['user_login_otp_enabled' => null]), true);
 check('global on, vendor missing column inherits on', bc_user_login_otp_required(['id' => 1]), true);
-check('global on, vendor 0 opts out', bc_user_login_otp_required(['user_login_otp_enabled' => 0]), false);
+check('global on, vendor 0 cannot opt out', bc_user_login_otp_required(['user_login_otp_enabled' => 0]), true);
 check('global on, vendor 1 stays on', bc_user_login_otp_required(['user_login_otp_enabled' => '1']), true);
+
+check('global on, scalar 0 cannot opt out', bc_user_login_otp_required('0'), true);
 
 // Defensive shapes: a scalar or a missing row must never crash a login page.
 $GLOBALS['__global_default'] = '0';

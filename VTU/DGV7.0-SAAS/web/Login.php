@@ -12,6 +12,17 @@
         exit();
     }
 
+    // Do not rely on the 60-second vendor session cache for an authentication policy.
+    $login_vendor_id = (int)($select_vendor_table['id'] ?? 0);
+    if ($login_vendor_id > 0) {
+        $login_vendor_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$login_vendor_id' AND status=1 LIMIT 1");
+        $select_vendor_table = $login_vendor_query ? mysqli_fetch_array($login_vendor_query) : false;
+        if (!$select_vendor_table) {
+            http_response_code(503);
+            exit('Unable to verify login security settings. Please try again later.');
+        }
+    }
+
     // Admin Impersonation Logic (Titanium Platform)
     // A one-time token minted by bc-spadmin/Users.php. It replaces the old
     // md5(username + YYYYMMDD + "SUPER_ADMIN_SECRET") scheme, which was a universal,

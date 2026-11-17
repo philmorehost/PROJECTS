@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.29-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.17-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -91,8 +91,8 @@ if ($create_vendor_table) {
         // NULL = inherit the super-admin global default; 1 = this vendor forces login OTP on;
         // 0 = this vendor has opted out (their own account only).
         "login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL",
-        // Same three-state model, but for END USER accounts (website + mobile apps):
-        // NULL = inherit force_user_login_otp, 1 = require an emailed code at user login.
+        // END USER accounts: 1 requires OTP for this vendor; the platform policy
+        // can require it for all vendors regardless of this value.
         "user_login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors");

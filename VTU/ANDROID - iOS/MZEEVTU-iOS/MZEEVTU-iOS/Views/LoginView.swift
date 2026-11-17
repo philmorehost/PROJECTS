@@ -6,6 +6,8 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showRegister = false
+    @State private var challenge: String?
+    @State private var otp = ""
 
     var onLoginSuccess: () -> Void
 
@@ -30,36 +32,46 @@ struct LoginView: View {
                     .multilineTextAlignment(.center)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                TextField("Username", text: $email)
+            if challenge != nil {
+                Text("Enter the six-digit code sent to your email.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                TextField("Verification code", text: $otp)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .autocapitalization(.none)
-
-                SecureField("Password", text: $password)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
-            .padding(.horizontal)
-
-            Button(action: login) {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else {
-                    Text("Login")
-                        .fontWeight(.bold)
-                        .frame(maxWidth: .infinity)
+                    .keyboardType(.numberPad)
+                    .padding(.horizontal)
+                Button(action: verifyOtp) {
+                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
+                    else { Text("Verify and sign in").fontWeight(.bold).frame(maxWidth: .infinity) }
                 }
-            }
-            .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .disabled(isLoading || email.isEmpty || password.isEmpty)
+                .padding().background(Color.blue).foregroundColor(.white).cornerRadius(12).padding(.horizontal)
+                .disabled(isLoading || otp.count != 6 || !otp.allSatisfy({ $0.isNumber }))
+                Button("Cancel and sign in again") {
+                    challenge = nil
+                    otp = ""
+                    errorMessage = nil
+                }.disabled(isLoading)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("Username", text: $email)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .autocapitalization(.none)
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
 
-            Button("Create an account") { showRegister = true }
-                .font(.subheadline)
-                .padding(.top, 4)
+                Button(action: login) {
+                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
+                    else { Text("Login").fontWeight(.bold).frame(maxWidth: .infinity) }
+                }
+                .padding().background(Color.blue).foregroundColor(.white).cornerRadius(12).padding(.horizontal)
+                .disabled(isLoading || email.isEmpty || password.isEmpty)
+
+                Button("Create an account") { showRegister = true }
+                    .font(.subheadline)
+                    .padding(.top, 4)
+            }
 
             Spacer()
             Spacer()
@@ -85,21 +97,43 @@ struct LoginView: View {
             isLoading = false
             switch result {
             case .success(let response):
-                if response.status == "success", let data = response.data {
-                    AppNetworkService.shared.apiKey = data.api_key
-                    // Authoritative: login.php reports `security_pin_set` through bc_user_has_pin(),
-                    // so an account with a legacy-only PIN is not sent to the PIN screen again.
-                    AppNetworkService.shared.pinSet = data.security_pin_set ?? false
-                    AppNetworkService.shared.pinRequired = data.pin_required ?? false
-                    // Save username for display
-                    UserDefaults.standard.set(data.username, forKey: "saved_username")
-                    onLoginSuccess()
+                if response.status == "otp_required", let token = response.challenge, !token.isEmpty {
+                    challenge = token
+                    otp = ""
+                    password = ""
                 } else {
-                    errorMessage = response.message ?? "Login failed"
+                    finishLogin(response)
                 }
             case .failure(let error):
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    func verifyOtp() {
+        guard let challenge = challenge else { return }
+        isLoading = true
+        errorMessage = nil
+        AppNetworkService.shared.request("login-otp.php", params: ["challenge": challenge, "otp": otp]) { (result: Result<LoginResponse, Error>) in
+            isLoading = false
+            switch result {
+            case .success(let response): finishLogin(response)
+            case .failure(let error): errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func finishLogin(_ response: LoginResponse) {
+        if response.status == "success", let data = response.data {
+            AppNetworkService.shared.apiKey = data.api_key
+            AppNetworkService.shared.pinSet = data.security_pin_set ?? false
+            AppNetworkService.shared.pinRequired = data.pin_required ?? false
+            UserDefaults.standard.set(data.username, forKey: "saved_username")
+            challenge = nil
+            otp = ""
+            onLoginSuccess()
+        } else {
+            errorMessage = response.message ?? "Login failed"
         }
     }
 }
@@ -107,6 +141,7 @@ struct LoginView: View {
 struct LoginResponse: Codable {
     let status: String
     let message: String?
+    let challenge: String?
     let data: UserData?
 }
 

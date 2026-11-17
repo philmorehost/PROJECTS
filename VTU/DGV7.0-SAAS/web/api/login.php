@@ -15,6 +15,7 @@ if (empty($user) || empty($pass)) {
     exit;
 }
 
+bc_ensure_security_tables();
 $vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 if (!$get_vendor) {
@@ -56,7 +57,7 @@ if (mysqli_num_rows($check_user) == 1) {
                 }
 
                 $challenge = bc_create_login_token($user_detail['username'], (int)$vendor_id, 'user_login', 900, 'app-login');
-                $otp = bc_send_user_login_otp($user_detail, $vendor_id);
+                $otp = $challenge !== '' ? bc_send_user_login_otp($user_detail, $vendor_id) : '';
                 if ($challenge === '' || $otp === '') {
                     echo json_encode(["status" => "error", "message" => "Could not send the verification code. Please try again."]);
                     exit;
