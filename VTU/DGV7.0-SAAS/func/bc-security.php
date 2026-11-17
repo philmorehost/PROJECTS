@@ -552,6 +552,29 @@ function bc_check_spending_anomaly(string $username, float $amount): bool {
 // quickly, and are scoped to one vendor + username + purpose.
 // ─────────────────────────────────────────────────────────────
 
+/** Ensure the user-login policy column exists without re-running unrelated migrations.
+ * Recheck after ALTER because another request may have added it concurrently. Never
+ * silently fall back to an unset vendor policy if the schema cannot be inspected.
+ */
+function bc_ensure_user_login_otp_column(): bool {
+    global $connection_server;
+    if (!$connection_server) return false;
+    static $ready = false;
+    if ($ready) return true;
+    $column = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
+    if (!$column) {
+        error_log('[DGV-OTP] Could not inspect the vendor login OTP policy column.');
+        return false;
+    }
+    if (mysqli_num_rows($column) === 0) {
+        @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN user_login_otp_enabled TINYINT(1) NULL DEFAULT NULL");
+        $column = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
+    }
+    $ready = (bool)($column && mysqli_num_rows($column) > 0);
+    if (!$ready) error_log('[DGV-OTP] Could not migrate the vendor login OTP policy column.');
+    return $ready;
+}
+
 /**
  * Creates the tables backing OTPs and one-time impersonation links.
  * Called lazily so /web/api/* endpoints work even when the migrations page
@@ -623,12 +646,8 @@ function bc_ensure_security_tables(): void {
         KEY idx_reg_lookup (vendor_id, username)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // API-only hosts do not load bc-tables.php. Add the vendor policy column before
-    // fetching the vendor on login, even when an old schema marker was already recorded.
-    $bc_vendor_cols = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
-    if ($bc_vendor_cols && mysqli_num_rows($bc_vendor_cols) === 0) {
-        @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN user_login_otp_enabled TINYINT(1) NULL DEFAULT NULL");
-    }
+    // API-only hosts do not load bc-tables.php; repair the policy column independently.
+    bc_ensure_user_login_otp_column();
 
     // sas_users.email_verified is also written by /web/api/register.php, which reaches the DB
     // through bc-connect.php only - bc-tables.php (where the column is normally migrated) is

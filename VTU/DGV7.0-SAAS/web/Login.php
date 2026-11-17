@@ -12,6 +12,12 @@
         exit();
     }
 
+    // A failed schema upgrade must not silently disable a vendor's login OTP policy.
+    if (!bc_ensure_user_login_otp_column()) {
+        http_response_code(503);
+        exit('Unable to verify login security settings. Please try again later.');
+    }
+
     // Do not rely on the 60-second vendor session cache for an authentication policy.
     $login_vendor_id = (int)($select_vendor_table['id'] ?? 0);
     if ($login_vendor_id > 0) {

@@ -37,20 +37,24 @@ if (!$connection_server) {
 if ($connection_server) {
     // Branch DG6.7 Optimization: Only run migrations if not already done globally or in current session
     // This significantly improves site-wide page load speeds by skipping redundant DB structural checks.
-    define('SYSTEM_VERSION', '6.9.11-ai-login-otp-1'); // DGV6.90 AI Edition — triggers AI schema migrations
+    // The OTP release accidentally changed this unrelated legacy marker. That re-ran
+    // hundreds of old schema checks and bank-table updates on public page requests. Keep
+    // both previously deployed values compatible: neither represents new legacy work.
+    define('SYSTEM_VERSION', '6.9.11-ai');
+    $bc_compatible_system_versions = [SYSTEM_VERSION, '6.9.11-ai-login-otp-1'];
     $current_mig_v = $_SESSION['migrations_completed_version'] ?? '0';
 
     // Global Migration Check to avoid redundant checks for new visitors
-    if ($current_mig_v !== SYSTEM_VERSION) {
+    if (!in_array($current_mig_v, $bc_compatible_system_versions, true)) {
         $q_mig = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='system_migration_version' LIMIT 1");
         $global_mig_v = ($q_mig && $r_mig = mysqli_fetch_assoc($q_mig)) ? $r_mig['option_value'] : '0';
-        if ($global_mig_v === SYSTEM_VERSION) {
+        if (in_array($global_mig_v, $bc_compatible_system_versions, true)) {
             $_SESSION['migrations_completed_version'] = SYSTEM_VERSION;
             $current_mig_v = SYSTEM_VERSION;
         }
     }
 
-    if ($current_mig_v !== SYSTEM_VERSION) {
+    if (!in_array($current_mig_v, $bc_compatible_system_versions, true)) {
         include_once(__DIR__ . "/bc-tables.php");
 
         // Migration: Add val_4 to parameter value tables
