@@ -1,0 +1,35 @@
+name: VTU service handler checks
+
+on:
+  push:
+    paths:
+      - 'VTU/DGV7.0-SAAS/web/func/**'
+      - 'VTU/DGV7.0-NON-SAAS/web/func/**'
+      - 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
+      - '.github/workflows/vtu-service-checks.yml'
+  pull_request:
+    paths:
+      - 'VTU/DGV7.0-SAAS/web/func/**'
+      - 'VTU/DGV7.0-NON-SAAS/web/func/**'
+      - 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
+      - '.github/workflows/vtu-service-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  service-handlers:
+    name: PHP syntax and VTU purchase gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Check syntax of all web service handlers
+        run: |
+          set -euo pipefail
+          find 'VTU/DGV7.0-SAAS/web/func' 'VTU/DGV7.0-NON-SAAS/web/func' -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Exercise service purchase security gates
+        run: php -n 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
