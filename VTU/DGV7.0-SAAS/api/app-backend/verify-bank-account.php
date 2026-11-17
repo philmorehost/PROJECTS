@@ -3,7 +3,6 @@ include_once("app-config.php");
 
 header("Content-Type: application/json");
 $incoming_post_request = file_get_contents("php://input");
-fwrite(fopen("bank.txt", "a"), $incoming_post_request . "\n\n");
 $decode_post_request = json_decode($incoming_post_request, true);
 if (json_last_error() === JSON_ERROR_NONE) {
 
@@ -93,7 +92,6 @@ if (json_last_error() === JSON_ERROR_NONE) {
 } else {
     $app_json = json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Bad Request"), true);
 }
-fwrite(fopen("bank.json", "a"), $app_json . "\n\n");
 
 echo $app_json;
 ?>

@@ -3,7 +3,6 @@ include_once("app-config.php");
 
 header("Content-Type: application/json");
 $incoming_post_request = file_get_contents("php://input");
-fwrite(fopen("login.txt", "a"), $incoming_post_request . "\n\n");
 $decode_post_request = json_decode($incoming_post_request, true);
 if (json_last_error() === JSON_ERROR_NONE) {
 
@@ -12,11 +11,25 @@ if (json_last_error() === JSON_ERROR_NONE) {
     $select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
     if ($select_vendor_table) {
 
-        $username = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["username"])));
-        $password = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["encoded-passkey"])));
-        
+        $username = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($decode_post_request["username"] ?? ''))));
+        $password = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($decode_post_request["encoded-passkey"] ?? ''))));
+
         $status_update = "failed";
         $status_msg = "Unknown Error";
+
+        $app_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (bc_is_rate_limited('app_login', (string)$app_ip, 10, 300)) {
+            echo json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Too many attempts. Try again later."));
+            exit;
+        }
+
+        // The app sends md5(password) as the passkey. Anything that is not a 32-hex digest is
+        // not a credential this endpoint can check, and accepting arbitrary text here is what
+        // turned a leaked hash into a login (pass-the-hash).
+        if (!preg_match('/^[a-f0-9]{32}$/i', $password)) {
+            echo json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Invalid username or password"));
+            exit;
+        }
 
         if (
             !empty($username) &&
@@ -28,6 +41,18 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_detail = mysqli_fetch_array($checkuser_pass);
                     if ($get_user_detail["status"] == "1") {
+
+                        // This legacy endpoint has no way to carry a one-time code, so when the
+                        // vendor requires user login OTP it must not mint a session at all -
+                        // otherwise it would be a hole straight past the new protection.
+                        if (bc_user_login_otp_required($select_vendor_table)) {
+                            echo json_encode(array(
+                                "json-status" => "success",
+                                "status" => "failed",
+                                "status-msg" => "Please update your app to the latest version to sign in. Email verification is now required."
+                            ));
+                            exit;
+                        }
                         
                         // Email Beginning
                         $login_template_encoded_text_array = array("{firstname}" => $get_user_detail["firstname"], "{lastname}" => $get_user_detail["lastname"], "{username}" => $get_user_detail["username"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);
@@ -70,7 +95,6 @@ if (json_last_error() === JSON_ERROR_NONE) {
 } else {
     $app_json = json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Bad Request"), true);
 }
-fwrite(fopen("login.json", "a"), $app_json . "\n\n");
 
 
 echo $app_json;

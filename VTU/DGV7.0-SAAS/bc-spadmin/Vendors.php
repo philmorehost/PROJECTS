@@ -112,9 +112,16 @@
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
         if(isset($_SESSION["admin_to_vendor_redirect_hostname"]) && ($_SESSION["admin_to_vendor_redirect_hostname"] == true)){
             $vendors_auth_email = $_SESSION["vendor_email"];
-            $vendors_auth_pass = base64_encode($_SESSION["vendor_pass"]);
             $vendors_url = $_SESSION["admin_to_vendor_redirect_hostname"];
-            $vendors_auth_text = base64_encode($vendors_auth_email.":".$vendors_auth_pass);
+            // One-time, random, 2-minute token instead of base64(email:base64(password)): the old
+            // value was the vendor's real password sitting in a URL (browser history, access logs,
+            // proxies). Only a SHA-256 of this token is stored, and it is burned on first use.
+            $vendor_row_q = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE email='" . mysqli_real_escape_string($connection_server, $vendors_auth_email) . "' LIMIT 1");
+            $vendor_row = ($vendor_row_q && mysqli_num_rows($vendor_row_q) === 1) ? mysqli_fetch_assoc($vendor_row_q) : null;
+            $vendors_auth_text = '';
+            if ($vendor_row) {
+                $vendors_auth_text = bc_create_vendor_login_token((int)$vendor_row['id'], (string)($get_logged_spadmin_details['email'] ?? 'superadmin'));
+            }
             //Unset Vendor Session
             unset($_SESSION["vendor_email"]);
             unset($_SESSION["vendor_pass"]);
@@ -123,7 +130,12 @@
             if($type == "manageapi"){
                 $type_manage_api = "&&redirect=MarketPlace.php";
             }
-            header("Location: /bc-spadmin/Vendors.php?vendorUrl=".$vendors_url."&&vendorLogAuth=".$vendors_auth_text.$type_manage_api);
+            if ($vendors_auth_text === '') {
+                $_SESSION["product_purchase_response"] = "Could not create a secure vendor login link. Please try again.";
+                header("Location: /bc-spadmin/Vendors.php");
+                exit();
+            }
+            header("Location: /bc-spadmin/Vendors.php?vendorUrl=".$vendors_url."&&vendorLogToken=".$vendors_auth_text.$type_manage_api);
         }else{
             header("Location: /bc-spadmin/Vendors.php");
         }
@@ -205,10 +217,10 @@
     <?php
     	//Redirect To Vendor Page
         $getVendorUrl = isset($_GET["vendorUrl"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["vendorUrl"]))) : "";
-    	$getVendorLogAuth = isset($_GET["vendorLogAuth"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["vendorLogAuth"]))) : "";
+    	$getVendorLogToken = isset($_GET["vendorLogToken"]) ? (string)$_GET["vendorLogToken"] : "";
         $getRedirectUrl = isset($_GET["redirect"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirect"]))) : "";
     	
-    	if(isset($_GET["vendorUrl"]) && !empty($getVendorUrl) && isset($_GET["vendorLogAuth"]) && !empty($getVendorLogAuth)){
+    	if(isset($_GET["vendorUrl"]) && !empty($getVendorUrl) && !empty($getVendorLogToken)){
             // Always open the vendor's admin over HTTPS.
             //  * This used to be a hard-coded "http://", so impersonating a vendor from the super admin
             //    dropped the whole vendor session onto plain http - mixed content on a site served over
@@ -222,7 +234,7 @@
             // Nothing usable left (empty or garbage host): open nothing rather than "https:///bc-admin/...",
             // which the browser would resolve against the current host.
             if ($vendor_host !== '') {
-                $vendor_admin_url = 'https://' . $vendor_host . '/bc-admin/Dashboard.php?logVendorAdmin=' . rawurlencode($getVendorLogAuth);
+                $vendor_admin_url = 'https://' . $vendor_host . '/bc-admin/Dashboard.php?logVendorToken=' . rawurlencode($getVendorLogToken);
                 if(isset($_GET["redirect"]) && !empty($getRedirectUrl)){
                     $vendor_admin_url .= '&redirectAdminTo=' . rawurlencode($getRedirectUrl);
                 }

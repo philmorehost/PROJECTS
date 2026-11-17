@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "REMIT Church Remittance",
+  "short_name": "REMIT",
+  "description": "Monthly church offerings and provincial remittance.",
+  "start_url": "./index.php?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fa",
+  "theme_color": "#146a63",
+  "launch_handler": {"client_mode": "navigate-existing"},
+  "icons": [
+    {"src": "public/assets/remit-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "public/assets/remit-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "public/assets/remit-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['admin_logged_in'])) {
@@ -9,7 +10,13 @@ if (!isset($_SESSION['admin_logged_in'])) {
 }
 
 require_once('../db.php');
-require_once('../includes/ota_github_helper.php');
+
+// Every handler is a state change: refuse a post without the token.
+if (!lm_verify_csrf()) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Security token expired. Reload the page and try again.']);
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['status' => 'error', 'message' => 'Invalid request method.']);
@@ -133,30 +140,17 @@ try {
     
     if ($existing) {
         // Update existing record
-        $updateId = (int)$existing['id'];
-        $update_stmt = $pdo->prepare("UPDATE script_updates SET zip_path = ?, checksum = ?, changelog = ?, source = 'upload', commit_sha = NULL, release_date = CURRENT_TIMESTAMP, is_released = 1 WHERE id = ?");
-        $update_stmt->execute([$target_path, $checksum, $changelog, $updateId]);
+        $update_stmt = $pdo->prepare("UPDATE script_updates SET zip_path = ?, checksum = ?, changelog = ?, release_date = CURRENT_TIMESTAMP, is_released = 1 WHERE id = ?");
+        $update_stmt->execute([$target_path, $checksum, $changelog, $existing['id']]);
     } else {
         // Insert new record
-        $insert_stmt = $pdo->prepare("INSERT INTO script_updates (tier_id, version_number, zip_path, checksum, changelog, source, is_released) VALUES (?, ?, ?, ?, ?, 'upload', 1)");
+        $insert_stmt = $pdo->prepare("INSERT INTO script_updates (tier_id, version_number, zip_path, checksum, changelog, is_released) VALUES (?, ?, ?, ?, ?, 1)");
         $insert_stmt->execute([$tier_id, $version_number, $target_path, $checksum, $changelog]);
-        $updateId = (int)$pdo->lastInsertId();
-    }
-
-    $signalSummary = null;
-    if (isset($_POST['send_signals']) && $_POST['send_signals'] === '1') {
-        $signalSummary = OTAGitHubHelper::signalLicensedWebsites($pdo, $updateId);
-    }
-
-    $msg = "Update v{$version_number} successfully published!";
-    if ($signalSummary && isset($signalSummary['sent'])) {
-        $msg .= " Signaled {$signalSummary['sent']}/{$signalSummary['total']} licensed site(s).";
     }
     
     echo json_encode([
-        'status'  => 'success', 
-        'message' => $msg,
-        'signals' => $signalSummary,
+        'status' => 'success', 
+        'message' => "Update v{$version_number} successfully published!"
     ]);
 
 } catch (PDOException $e) {

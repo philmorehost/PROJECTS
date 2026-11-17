@@ -1,0 +1,20 @@
+# Private runtime configuration & lock files — never commit
+.env
+storage/installed
+storage/setup.mutex
+storage/sessions/*
+!storage/sessions/.gitkeep
+storage/cache/*
+!storage/cache/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+storage/updates/*
+!storage/updates/.gitkeep
+storage/license.php
+storage/license-cache.json
+
+# Dev / test tooling only (production has zero Node/Composer dependencies)
+node_modules/
+package-lock.json
+.preview-data/
+*.log

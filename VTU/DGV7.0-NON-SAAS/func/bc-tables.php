@@ -457,7 +457,14 @@ if ($create_user_table) {
         "tx_fail_service"      => "VARCHAR(40) DEFAULT NULL",
         "tx_lock_until"        => "DATETIME NULL",
         "tx_lock_service"      => "VARCHAR(40) DEFAULT NULL",
-        "tx_lock_reason"       => "VARCHAR(255) DEFAULT NULL"
+        "tx_lock_reason"       => "VARCHAR(255) DEFAULT NULL",
+        // Referral ("Refer and Earn"). These two columns are created by the CREATE TABLE above on a
+        // fresh install, but CREATE TABLE IF NOT EXISTS never alters an existing table - so every
+        // upgraded install was missing them. web/api/referral.php then hit an SQL error, and PHP 8
+        // turns "mysqli_stmt_get_result(false)" into a fatal TypeError, which surfaced in the apps
+        // as "The server returned an error (HTTP 500)" on the Refer and Earn screen.
+        "referral_id"            => "VARCHAR(225)",
+        "referral_bonus_awarded" => "TINYINT(1) DEFAULT 0"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users");
     $existing = []; while($r = mysqli_fetch_assoc($res)) $existing[] = $r['Field'];

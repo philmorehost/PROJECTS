@@ -11,6 +11,7 @@ import com.jikabiz.app.R
 import com.jikabiz.app.api.RetrofitClient
 import com.jikabiz.app.databinding.FragmentCableBinding
 import com.jikabiz.app.util.LoadingOverlay
+import com.jikabiz.app.util.PinPromptHelper
 import com.jikabiz.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -261,8 +262,16 @@ class CableFragment : Fragment(R.layout.fragment_cable) {
                 "Package: $selectedPlanName\n" +
                 "Amount: ₦$selectedPlanAmount"
             )
-            .setPositiveButton("Pay Now") { _, _ -> doPurchase(smartcard) }
+            .setPositiveButton("Pay Now") { _, _ -> promptPinThenPurchase(smartcard) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase(smartcard: String) {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase(smartcard) },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase(smartcard: String) {

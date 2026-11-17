@@ -11,6 +11,7 @@ import com.datagifting.app.R
 import com.datagifting.app.api.RetrofitClient
 import com.datagifting.app.databinding.FragmentCableBinding
 import com.datagifting.app.util.LoadingOverlay
+import com.datagifting.app.util.PinPromptHelper
 import com.datagifting.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -261,8 +262,16 @@ class CableFragment : Fragment(R.layout.fragment_cable) {
                 "Package: $selectedPlanName\n" +
                 "Amount: ₦$selectedPlanAmount"
             )
-            .setPositiveButton("Pay Now") { _, _ -> doPurchase(smartcard) }
+            .setPositiveButton("Pay Now") { _, _ -> promptPinThenPurchase(smartcard) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase(smartcard: String) {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase(smartcard) },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase(smartcard: String) {

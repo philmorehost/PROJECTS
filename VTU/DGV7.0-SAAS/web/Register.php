@@ -18,6 +18,14 @@
         $referral = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_GET["referral"] ?? ""))));
         
         if(!empty($user) && !empty($pass) && !empty($first) && !empty($last) && !empty($email) && !empty($phone) && !empty($address)){
+                    // When email verification is on, this legacy no-JS path must NOT create the
+                    // account: it used to insert straight into sas_users, which let a direct POST
+                    // skip the emailed code entirely. Send the visitor through the real flow.
+                    if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 1) {
+                        $_SESSION["product_purchase_response"] = "Please verify your email address to finish creating your account.";
+                        header("Location: Register.php");
+                        exit();
+                    }
                     $vendor_id = $select_vendor_table["id"];
                     $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='$user'");
                     
@@ -37,7 +45,7 @@
                             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
                                 if(is_numeric($phone) && (strlen($phone) == 11)){
                                     $md5_pass = md5($pass);
-                                    $api_key = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50);
+                                    $api_key = bin2hex(random_bytes(25));
                                     $last_login = date('Y-m-d H:i:s.u');
                                     mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')");
                                     

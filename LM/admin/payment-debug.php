@@ -1,295 +1,257 @@
 <?php
-session_start();
+/**
+ * admin/payment-debug.php — why a payment failed.
+ *
+ * The tail of the PHP error log plus the last few transactions and licences,
+ * with the columns that matter when a charge succeeds but a key does not.
+ * Log files are tail-read, so a large log cannot exhaust memory here.
+ *
+ * @package LicenseManager
+ */
 
-// Check if user is admin
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit;
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
+
+$pdo = lm_app_boot();
+
+if (!function_exists('lm_debug_tail_lines')) {
+    /**
+     * Last N lines of a file, without reading the whole thing.
+     *
+     * @param string $path
+     * @param int    $lines
+     * @return array{exists:bool,text:string}
+     */
+    function lm_debug_tail_lines($path, $lines = 50)
+    {
+    if (!is_file($path) || !is_readable($path)) {
+        return array('exists' => false, 'text' => '');
+    }
+
+    $size = (int) @filesize($path);
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) {
+        return array('exists' => true, 'text' => '(not readable)');
+    }
+
+    $chunk = min($size, 65536);
+    if ($chunk > 0) {
+        @fseek($handle, -$chunk, SEEK_END);
+    }
+    $text = (string) @stream_get_contents($handle);
+    @fclose($handle);
+
+    $all = explode("\n", $text);
+    if (count($all) > $lines) {
+        $all = array_slice($all, -$lines);
+    }
+
+    return array('exists' => true, 'text' => implode("\n", $all));
+}
 }
 
-require_once('../db.php');
+$errorLogPath = (string) ini_get('error_log');
+$phpErrors = $errorLogPath !== ''
+    ? lm_debug_tail_lines($errorLogPath, 50)
+    : array('exists' => false, 'text' => '');
 
-// Read PHP error log
-$error_logs = '';
-$latest_errors = '';
+$root = lm_lm_dir();
+$webhook = lm_debug_tail_lines($root . '/webhook.log', 40);
+$success = lm_debug_tail_lines($root . '/success.log', 20);
+$errorLog = lm_debug_tail_lines($root . '/error.log', 40);
 
-// Try to get PHP error log
-$error_log_path = ini_get('error_log');
-if ($error_log_path && file_exists($error_log_path)) {
-    $all_errors = file_get_contents($error_log_path);
-    $lines = explode("\n", $all_errors);
-    $latest_errors = implode("\n", array_slice($lines, -50)); // Last 50 lines
+$transactions = array();
+$licenses = array();
+$problem = '';
+
+if ($pdo instanceof PDO) {
+    try {
+        $transactions = $pdo->query('SELECT * FROM transactions ORDER BY id DESC LIMIT 5')->fetchAll(PDO::FETCH_ASSOC);
+        $licenses = $pdo->query('SELECT * FROM licenses ORDER BY id DESC LIMIT 5')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $problem = 'The database could not be read: ' . $e->getMessage();
+    }
 }
 
-// Also check for our custom logs
-$webhook_log = '';
-$success_log = '';
-$payment_log = '';
-
-if (file_exists('../webhook.log')) {
-    $all_webhook = file_get_contents('../webhook.log');
-    $lines = explode("\n", $all_webhook);
-    $webhook_log = implode("\n", array_slice($lines, -30)); // Last 30 lines
+$orphans = 0;
+foreach ($transactions as $tx) {
+    if (empty($tx['license_id'])) {
+        $orphans++;
+    }
 }
 
-if (file_exists('../success.log')) {
-    $all_success = file_get_contents('../success.log');
-    $lines = explode("\n", $all_success);
-    $success_log = implode("\n", array_slice($lines, -20)); // Last 20 lines
-}
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="webhook-tester.php">' . lm_icon('plug') . ' Webhook tester</a>'
+    . '<a class="lm-btn lm-btn--ghost" href="diagnostic.php">' . lm_icon('terminal') . ' Diagnostics</a>';
 
-// Check recent transactions
-$transactions = [];
-$licenses = [];
-
-try {
-    $stmt = $pdo->query("SELECT * FROM transactions ORDER BY id DESC LIMIT 5");
-    $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $stmt = $pdo->query("SELECT * FROM licenses ORDER BY id DESC LIMIT 5");
-    $licenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    $error_logs .= "Database error: " . $e->getMessage();
-}
+lm_app_start('Payment debug', array(
+    'subtitle' => 'The tail of every log that a failed checkout writes to, next to the rows it produced.',
+    'active'   => 'logs',
+    'actions'  => $actionsHtml,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Debug - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        .back-link {
-            display: inline-block;
-            margin-bottom: 2rem;
-            padding: 0.75rem 1.5rem;
-            background: white;
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        h1 {
-            color: white;
-            margin-bottom: 2rem;
-            font-size: 2.5rem;
-        }
-        .section {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        .section h2 {
-            font-size: 1.5rem;
-            color: #1e293b;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 0.5rem;
-        }
-        .log-content {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 1.5rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.875rem;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .log-content:empty::after {
-            content: '(No logs found)';
-            color: #94a3b8;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-        th {
-            background: #eef2ff;
-            color: #3b82f6;
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 2px solid #bfdbfe;
-            font-weight: 600;
-        }
-        td {
-            padding: 0.75rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        tr:hover {
-            background: #f9fafb;
-        }
-        .status {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .status-success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .status-error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .info-box {
-            background: #eff6ff;
-            border: 1px solid #93c5fd;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            color: #1e40af;
-        }
-        .code {
-            background: #f3f4f6;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.875rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="dashboard.php" class="back-link">← Back to Dashboard</a>
-        <h1>🐛 Payment Debug Center</h1>
 
-        <div class="section">
-            <h2>🆘 Quick Diagnostics</h2>
-            <div class="info-box">
-                <strong>If you see "Error processing payment":</strong>
-                <ol style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                    <li>Check <strong>PHP Error Logs</strong> below for cURL or API errors</li>
-                    <li>Verify your <strong>Paystack Secret Key</strong> is correct in Settings</li>
-                    <li>Make sure <strong>cURL</strong> is enabled on your server</li>
-                    <li>Check <strong>Recent Transactions</strong> to see if transaction was created</li>
-                </ol>
-            </div>
-        </div>
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
 
-        <div class="section">
-            <h2>⚙️ PHP Error Logs (Last 50 lines)</h2>
-            <p style="margin-bottom: 1rem; color: #666;">
-                These logs from your PHP server may contain cURL errors or API issues:
-            </p>
-            <div class="log-content"><?= htmlspecialchars($latest_errors) ?></div>
-        </div>
+<?php if ($orphans > 0): ?>
+    <div class="lm-note lm-note--bad">
+        <?= lm_icon('alert') ?>
+        <span><strong><?= (int) $orphans ?> of the last five transactions have no licence attached.</strong>
+            Money was taken but the key was not minted. The webhook log below is where the reason will be.</span>
+    </div>
+<?php endif; ?>
 
-        <div class="section">
-            <h2>🎫 Recent Transactions</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Reference</th>
-                        <th>License ID</th>
-                        <th>Amount</th>
-                        <th>Currency</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($transactions)): ?>
-                        <?php foreach ($transactions as $tx): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($tx['id']) ?></td>
-                                <td><code class="code"><?= htmlspecialchars($tx['transaction_ref']) ?></code></td>
-                                <td><?= $tx['license_id'] ?? '—' ?></td>
-                                <td><?= htmlspecialchars($tx['amount']) ?></td>
-                                <td><?= htmlspecialchars($tx['currency']) ?></td>
-                                <td><span class="status status-<?= $tx['status'] === 'success' ? 'success' : 'error' ?>"><?= htmlspecialchars($tx['status']) ?></span></td>
-                                <td><?= htmlspecialchars($tx['created_at']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="7" style="text-align: center; color: #94a3b8;">No transactions found</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2>🔐 Recent Licenses</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>License Key</th>
-                        <th>Domain</th>
-                        <th>Email</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($licenses)): ?>
-                        <?php foreach ($licenses as $lic): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($lic['id']) ?></td>
-                                <td><code class="code"><?= htmlspecialchars(substr($lic['license_key'], 0, 15) . '...') ?></code></td>
-                                <td><?= htmlspecialchars($lic['domain']) ?></td>
-                                <td><?= htmlspecialchars($lic['customer_email'] ?? '') ?></td>
-                                <td><span class="status status-<?= $lic['status'] === 'active' ? 'success' : 'error' ?>"><?= htmlspecialchars($lic['status']) ?></span></td>
-                                <td><?= htmlspecialchars($lic['created_at']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6" style="text-align: center; color: #94a3b8;">No licenses found</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2>📋 Success Page Logs (Last 20 lines)</h2>
-            <div class="log-content"><?= htmlspecialchars($success_log) ?></div>
-        </div>
-
-        <div class="section">
-            <h2>🪝 Webhook Logs (Last 30 lines)</h2>
-            <div class="log-content"><?= htmlspecialchars($webhook_log) ?></div>
-        </div>
-
-        <div class="section">
-            <h2>📝 Troubleshooting Steps</h2>
-            <div style="background: #f9fafb; padding: 1.5rem; border-radius: 8px;">
-                <h3 style="margin-bottom: 1rem;">If payment fails:</h3>
-                <ol style="padding-left: 1.5rem; line-height: 1.8;">
-                    <li>Go to <strong>Admin Settings</strong> and verify:
-                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                            <li>Paystack Secret Key is set and correct</li>
-                            <li>SMTP credentials are configured</li>
-                        </ul>
-                    </li>
-                    <li>Check the <strong>PHP Error Logs</strong> above for cURL errors</li>
-                    <li>If cURL is disabled, contact your hosting provider to enable it</li>
-                    <li>Test a webhook using <a href="webhook-tester.php" style="color: #3b82f6; font-weight: 500;">Webhook Tester</a></li>
-                    <li>Monitor this page in real-time during a test payment</li>
-                </ol>
-            </div>
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('alert') ?> Start here</h2>
+            <p>“Error processing payment” is one of four things.</p>
         </div>
     </div>
-</body>
-</html>
+    <div class="lm-panel__body">
+        <ol class="lm-flow">
+            <li><strong>The secret key is wrong or from test mode.</strong> Re-paste the live key in
+                <a href="settings.php">Settings</a>, then re-run <a href="system-check.php">System check</a>.</li>
+            <li><strong>cURL is unavailable</strong>, so the server cannot call Paystack at all.</li>
+            <li><strong>The webhook never arrived.</strong> The charge exists in Paystack but no row here —
+                verify the webhook URL and the <code>charge.success</code> event.</li>
+            <li><strong>The schema is out of date.</strong> Run <a href="database-repair.php">Database repair</a>;
+                a missing <code>license_id</code> column is enough to break the whole path.</li>
+        </ol>
+    </div>
+</section>
+
+<div class="lm-grid-2" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start">
+    <?php
+    $panels = array(
+        array('PHP error log (last 50 lines)', $phpErrors, $errorLogPath !== '' ? $errorLogPath : 'error_log is not set in php.ini'),
+        array('Webhook log', $webhook, 'webhook.log in the LM folder'),
+        array('Success page log', $success, 'success.log in the LM folder'),
+        array('Error log', $errorLog, 'error.log in the LM folder'),
+    );
+    ?>
+    <?php foreach ($panels as $panel): ?>
+        <?php list($label, $data, $where) = $panel; ?>
+        <section class="lm-panel">
+            <div class="lm-panel__head">
+                <div>
+                    <h2><?= lm_icon('terminal') ?> <?= lm_e($label) ?></h2>
+                    <p><code style="word-break:break-all"><?= lm_e($where) ?></code></p>
+                </div>
+                <?= lm_app_badge($data['exists'] ? 'Present' : 'Absent', $data['exists'] ? 'ok' : '') ?>
+            </div>
+            <div class="lm-panel__body lm-panel__body--flush">
+                <?php if (!$data['exists'] || trim($data['text']) === ''): ?>
+                    <div class="lm-empty" style="padding:24px 20px">
+                        <p class="lm-help lm-mb-0">
+                            <?= $data['exists'] ? 'The file is empty — nothing has failed here.' : 'This log does not exist yet.' ?>
+                        </p>
+                    </div>
+                <?php else: ?>
+                    <pre class="lm-code" style="border-radius:0;margin:0;max-height:340px"><?= lm_e($data['text']) ?></pre>
+                <?php endif; ?>
+            </div>
+        </section>
+    <?php endforeach; ?>
+</div>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('receipt') ?> Last five transactions</h2>
+            <p>A blank licence id is the failure this page exists to explain.</p>
+        </div>
+        <a class="lm-btn lm-btn--sm lm-btn--ghost" href="transactions.php">Full ledger</a>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($transactions)): ?>
+            <?php lm_app_empty('wallet', 'No transactions', 'No charge has reached this install yet.', ''); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Reference</th>
+                            <th>Licence</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($transactions as $tx): ?>
+                            <?php $status = strtolower((string) ($tx['status'] ?? '')); ?>
+                            <tr>
+                                <td data-label="ID"><?= (int) $tx['id'] ?></td>
+                                <td data-label="Reference"><code><?= lm_e((string) ($tx['transaction_ref'] ?? '')) ?></code></td>
+                                <td data-label="Licence">
+                                    <?php if (empty($tx['license_id'])): ?>
+                                        <span class="lm-badge lm-badge--bad">NULL</span>
+                                    <?php else: ?>
+                                        <?= (int) $tx['license_id'] ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Amount" class="lm-num"><?= lm_e((string) ($tx['currency'] ?? '')) ?> <?= lm_e((string) ($tx['amount'] ?? '')) ?></td>
+                                <td data-label="Status"><?= lm_app_badge($status !== '' ? ucfirst($status) : '—', $status === 'success' ? 'ok' : 'bad') ?></td>
+                                <td data-label="Created"><?= lm_e((string) ($tx['created_at'] ?? '')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('key') ?> Last five licences</h2>
+            <p>Shown with the email, because a licence with no address is a licence nobody received.</p>
+        </div>
+        <a class="lm-btn lm-btn--sm lm-btn--ghost" href="licenses.php">All licences</a>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($licenses)): ?>
+            <?php lm_app_empty('key', 'No licences', 'Nothing has been issued on this install yet.', ''); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Key</th>
+                            <th>Domain</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($licenses as $lic): ?>
+                            <?php $status = strtolower((string) ($lic['status'] ?? '')); ?>
+                            <tr>
+                                <td data-label="ID"><?= (int) $lic['id'] ?></td>
+                                <td data-label="Key"><code><?= lm_e(substr((string) $lic['license_key'], 0, 15)) ?>…</code></td>
+                                <td data-label="Domain"><?= lm_e((string) ($lic['domain'] ?? '')) ?></td>
+                                <td data-label="Email">
+                                    <?= lm_e((string) ($lic['customer_email'] ?? '')) ?>
+                                    <?php if (empty($lic['customer_email'])): ?>
+                                        <span class="lm-badge lm-badge--warn">missing</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Status"><?= lm_app_badge($status !== '' ? ucfirst($status) : '—', $status === 'active' ? 'ok' : 'bad') ?></td>
+                                <td data-label="Created"><?= lm_e((string) ($lic['created_at'] ?? '')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<?php lm_app_end(); ?>

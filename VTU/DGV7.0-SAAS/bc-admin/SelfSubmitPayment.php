@@ -18,7 +18,7 @@
             if(!empty($amount) && is_numeric($amount)){
                 if(($amount > $get_admin_payment_details["amount_charged"]) && ($amount > 0) && ($get_admin_payment_details["amount_charged"] == true) && ($get_admin_payment_details["amount_charged"] > 0)){
                     if(isset($get_admin_payment_order_details["min_amount"]) && isset($get_admin_payment_order_details["max_amount"]) && ($amount >= $get_admin_payment_order_details["min_amount"]) && ($amount <= $get_admin_payment_order_details["max_amount"])){
-                        $create_submitted_payment_table = mysqli_query($connection_server, "INSERT INTO sas_super_admin_submitted_payments (vendor_id, reference, amount, discounted_amount, description, mode, api_website, status) VALUES ('".$get_logged_admin_details["id"]."', '$reference', '$amount', '$discounted_amount', '$description', '$purchase_method', '".$_SERVER["HTTP_HOST"]."', '2')");
+                        $create_submitted_payment_table = mysqli_query($connection_server, "INSERT INTO sas_super_admin_submitted_payments (vendor_id, reference, amount, discounted_amount, description, mode, api_website, status) VALUES ('".$get_logged_admin_details["id"]."', '$reference', '$amount', '$discounted_amount', '$description', '$purchase_method', '".bc_safe_host_sql($connection_server)."', '2')");
                         if($create_submitted_payment_table == true){
                             //Request Sent Successfully
                             $json_response_array = array("desc" => "Request Sent Successfully");

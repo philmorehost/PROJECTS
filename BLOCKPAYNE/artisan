@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * BLOCKPAYNE CLI & Cron Entrypoint (`php artisan schedule:run`, `php artisan migrate`, `php artisan doctor`).
+ * Ensures compatibility with standard cPanel cron instructions (`* * * * * php artisan schedule:run`).
+ */
+
+require_once __DIR__ . '/app/bootstrap.php';
+
+$cmd = $argv[1] ?? 'help';
+
+if ($cmd === 'schedule:run') {
+    require __DIR__ . '/bin/cron.php';
+    exit(0);
+}
+
+if ($cmd === 'migrate') {
+    \App\Support\Database::migrate();
+    echo "[BlockPayne] Database schema & 250 ISO countries migrated successfully.\n";
+    exit(0);
+}
+
+if ($cmd === 'doctor') {
+    require __DIR__ . '/bin/doctor.php';
+    exit(0);
+}
+
+echo "BlockPayne CLI v" . BP_VERSION . "\n";
+echo "Available commands:\n";
+echo "  php artisan schedule:run   Poll blockchain nodes, expire stale invoices & send alerts\n";
+echo "  php artisan migrate        Apply schema.sql & countries.sql idempotently\n";
+echo "  php artisan doctor         Run post-install configuration health check\n";

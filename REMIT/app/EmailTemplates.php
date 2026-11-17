@@ -1,0 +1,24 @@
+<?php
+declare(strict_types=1);
+final class EmailTemplates
+{
+    /** @return array{html:string,text:string} */
+    public static function wrap(string $eyebrow,string $title,string $bodyHtml,string $bodyText,string $ctaLabel='',string $ctaUrl=''): array
+    {
+        $ctaHtml='';
+        if($ctaLabel!=='' && $ctaUrl!==''){
+            $ctaHtml='<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:28px auto 0;border-collapse:separate;border-radius:14px;overflow:hidden;background:#0f172a"><tr><td align="center" style="padding:14px 28px"><a href="'.htmlspecialchars($ctaUrl,ENT_QUOTES,'UTF-8').'" style="display:inline-block;color:#fff;font:700 15px/1.2 Inter,Arial,sans-serif;text-decoration:none">'.htmlspecialchars($ctaLabel,ENT_QUOTES,'UTF-8').'</a></td></tr></table>';
+        }
+        $preview=htmlspecialchars($eyebrow,ENT_QUOTES,'UTF-8');
+        $html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"></head><body style="margin:0;padding:0;background:#f6f8fb;font-family:Inter,Arial,sans-serif;color:#0f172a"><div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#f6f8fb">'.$preview.'</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f8fb;padding:36px 16px"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,.08)"><tr><td style="padding:28px 32px;background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 55%,#2563eb 100%);color:#fff"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td><div style="display:inline-flex;align-items:center;gap:10px"><span style="display:inline-flex;width:38px;height:38px;align-items:center;justify-content:center;border-radius:12px;background:rgba(255,255,255,.14);font-weight:800">R</span><span style="font:800 20px/1 Inter,Arial,sans-serif;letter-spacing:.02em">REMIT</span></div></td></tr><tr><td style="padding-top:24px"><p style="margin:0 0 8px;font:600 12px/1.2 Inter,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;opacity:.8">'.htmlspecialchars($eyebrow,ENT_QUOTES,'UTF-8').'</p><h1 style="margin:0;font:800 28px/1.15 Inter,Arial,sans-serif">'.htmlspecialchars($title,ENT_QUOTES,'UTF-8').'</h1></td></tr></table></td></tr><tr><td style="padding:32px;font:15px/1.7 Inter,Arial,sans-serif;color:#334155">'.$bodyHtml.$ctaHtml.'<p style="margin:28px 0 0;font-size:13px;line-height:1.6;color:#64748b">This is an automated message from REMIT. If you were not expecting this message, please contact your provincial administrator.</p></td></tr><tr><td style="padding:0 32px 28px;text-align:center;font:600 12px/1.4 Inter,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8">Faithful stewardship, simplified</td></tr></table></td></tr></table></body></html>';
+        return ['html'=>$html,'text'=>trim($eyebrow."\n\n".$title."\n\n".$bodyText.($ctaLabel!=='' && $ctaUrl!=='' ? "\n\n".$ctaLabel.': '.$ctaUrl : '')."\n\nREMIT | Faithful stewardship, simplified")];
+    }
+    /** @return array{html:string,text:string} */
+    public static function passwordReset(string $code): array
+    {
+        $code=mb_strtoupper(trim($code));
+        $html='<p style="margin:0 0 16px">Use the one-time code below to continue resetting your REMIT password. This code expires in 15 minutes and must be entered on the password reset page.</p><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 16px;border-collapse:separate;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;overflow:hidden"><tr><td align="center" style="padding:20px"><p style="margin:0;font:700 12px/1.2 Inter,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2563eb">One-time code</p><p style="margin:10px 0 0;font:800 34px/1 Inter,Arial,sans-serif;letter-spacing:.24em;color:#0f172a">'.htmlspecialchars($code,ENT_QUOTES,'UTF-8').'</p></td></tr></table><p style="margin:0"><strong style="color:#0f172a">Security note:</strong> if you did not request this reset, ignore this email and sign in normally. Do not share this code with anyone.</p>';
+        $text="Use the one-time code below to continue resetting your REMIT password. This code expires in 15 minutes and must be entered on the password reset page.\n\nOne-time code: $code\n\nSecurity note: if you did not request this reset, ignore this email and sign in normally. Do not share this code with anyone.";
+        return self::wrap('Password reset','Your secure password reset code',$html,$text,'Open password reset','index.php?page=password-reset');
+    }
+}

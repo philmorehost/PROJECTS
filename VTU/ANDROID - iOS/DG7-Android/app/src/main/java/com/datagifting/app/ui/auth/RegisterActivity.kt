@@ -6,6 +6,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.datagifting.app.data.model.ApiResult
 import com.datagifting.app.data.repository.AuthRepository
+import com.datagifting.app.data.repository.LoginOutcome
+import com.datagifting.app.data.repository.RegisterOutcome
+import com.datagifting.app.util.OtpDialogHelper
 import com.datagifting.app.databinding.ActivityRegisterBinding
 import com.datagifting.app.ui.MainActivity
 import com.google.android.material.snackbar.Snackbar
@@ -68,28 +71,83 @@ class RegisterActivity : AppCompatActivity() {
             binding.btnRegister.isEnabled = true
 
             when (result) {
-                is ApiResult.Success -> {
-                    // Auto-login
-                    when (authRepo.login(username, password)) {
-                        is ApiResult.Success -> {
-                            startActivity(Intent(this@RegisterActivity, MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            })
-                            finish()
-                        }
-                        is ApiResult.Error -> {
-                            snack("Registered! Please login.")
-                            finish()
-                        }
+                is RegisterOutcome.Success -> autoLogin(username, password)
+                is RegisterOutcome.OtpRequired -> promptRegistrationOtp(result, username, password)
+                is RegisterOutcome.Failure -> snack(result.message)
+            }
+        }
+    }
+
+    /**
+     * The account is NOT created yet: the server has emailed a 6-digit code. Only after the
+     * code is confirmed does registerVerify() create the account, which is what stops people
+     * registering with addresses they do not own.
+     */
+    private fun promptRegistrationOtp(step: RegisterOutcome.OtpRequired, username: String, password: String) {
+        OtpDialogHelper.prompt(
+            this,
+            "Verify Your Email",
+            step.message,
+            onCode = { code ->
+                if (code.length != 6) {
+                    snack("Enter the 6-digit code")
+                    promptRegistrationOtp(step, username, password)
+                } else {
+                    verifyRegistrationOtp(step, code, username, password)
+                }
+            },
+            onResend = {
+                lifecycleScope.launch {
+                    when (val r = authRepo.resendRegisterOtp(step.token)) {
+                        is ApiResult.Success -> snack(r.data)
+                        is ApiResult.Error -> snack(r.message)
                         else -> {}
                     }
                 }
-                is ApiResult.Error -> snack(result.message)
+            }
+        )
+    }
+
+    private fun verifyRegistrationOtp(step: RegisterOutcome.OtpRequired, code: String, username: String, password: String) {
+        binding.progressBar.visibility = android.view.View.VISIBLE
+        binding.btnRegister.isEnabled = false
+        lifecycleScope.launch {
+            val result = authRepo.registerVerify(step.token, code)
+            binding.progressBar.visibility = android.view.View.GONE
+            binding.btnRegister.isEnabled = true
+            when (result) {
+                is ApiResult.Success -> autoLogin(username, password)
+                is ApiResult.Error -> {
+                    snack(result.message)
+                    promptRegistrationOtp(step, username, password)
+                }
                 else -> {}
             }
         }
     }
 
+    private fun autoLogin(username: String, password: String) {
+        lifecycleScope.launch {
+            when (val login = authRepo.loginStart(username, password)) {
+                is LoginOutcome.Success -> {
+                    startActivity(Intent(this@RegisterActivity, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    })
+                    finish()
+                }
+                is LoginOutcome.OtpRequired -> {
+                    // Login OTP is on for this vendor: send the user to the sign-in screen
+                    // rather than guessing a session state here.
+                    snack("Account created. Please sign in with the code we email you.")
+                    finish()
+                }
+                is LoginOutcome.Failure -> {
+                    snack("Registered! Please login.")
+                    finish()
+                }
+            }
+        }
+    }
     private fun snack(msg: String) {
         Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
     }

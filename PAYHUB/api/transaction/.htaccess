@@ -1,0 +1,21 @@
+RewriteEngine On
+
+# Ensure Authorization header is passed to PHP
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Redirect /api/transaction/initialize to /api/transaction/initialize.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^initialize$ initialize.php [L,QSA]
+
+# Redirect /api/transaction/verify/:ref to /api/transaction/verify.php?reference=:ref
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^verify/([^/]+)$ verify.php?reference=$1 [L,QSA]
+
+# Redirect /api/transaction/reconcile to /api/transaction/reconcile.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^reconcile$ reconcile.php [L,QSA]
+
+# Sandbox-only simulate endpoint: /api/transaction/simulate
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^simulate$ simulate.php [L,QSA]

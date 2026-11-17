@@ -21,7 +21,8 @@ import androidx.navigation.fragment.findNavController
 import com.datagifting.app.R
 import com.datagifting.app.api.RetrofitClient
 import com.datagifting.app.databinding.FragmentPrintHubBinding
-import com.datagifting.app.util.LoadingOverlay
+import com.datagifting.app.util.LoadingOverlay
+import com.datagifting.app.util.PinPromptHelper
 import com.datagifting.app.util.PreferenceManager
 import com.datagifting.app.util.safeNavigate
 import com.google.android.material.button.MaterialButton
@@ -357,7 +358,7 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
                 "Quantity: $qty card(s)\n" +
                 "Total: ₦${"%.2f".format(total)}"
             )
-            .setPositiveButton("Buy") { _, _ -> doPurchase(plan, qty) }
+            .setPositiveButton("Buy") { _, _ -> promptPinThenPurchase(plan, qty) }
             .setNegativeButton("Cancel", null)
             .show()
     }
@@ -369,6 +370,14 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
         SERVICE_TYPE_EXAM -> "Exam PIN"
         SERVICE_TYPE_BETTING -> "Betting Card"
         else -> "Data Card"
+    }
+
+    private fun promptPinThenPurchase(plan: PrintPlanItem, quantity: Int) {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase(plan, quantity) },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase(plan: PrintPlanItem, quantity: Int) {

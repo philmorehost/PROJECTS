@@ -1,0 +1,592 @@
+# REMIT — RCCG Youth Province treasury
+
+Initial native PHP implementation. No framework, Composer package or frontend build is required. **Not yet production-complete.** License validation and software updates use the existing License Manager API. No real credentials are included in source.
+
+## Implemented
+
+- Four-stage, CSRF-protected, licence-key-gated installer with a filesystem mutex and installation lock. No CLI operator token is required.
+- PDO prepared statements, persistent connections, InnoDB/foreign-key schema, unique parish/month reports; province-level users have a **nullable hierarchy ID** instead of a fictitious province node.
+- Login with generic errors, session rotation, 30-minute inactivity expiry, HttpOnly/SameSite cookies, rechecking suspension on every request, CSRF on all writes and output escaping.
+- Configurable account and IP failure windows, application IP blocks, suspension scope and privileged-role exceptions, audit log, PIN throttling, recognized-IP green king badge after five clean session logins. Recognition never bypasses security. Unknown accounts trigger IP blocks when IP protection is enabled.
+- Province-wide treasurer/admin views and recursive hierarchy-scoped representative/officer views. Parish, Area and Zone representatives submit their own church’s reports; Area/Zone representatives also supervise descendant churches.
+- Integer-cent money arithmetic (64-bit required), half-up basis-point allocation, monthly income reports, cumulative bank-confirmed reconciliation under row locks with a transaction PIN and audit entry.
+- Responsive bright dashboard driven by actual database records, ledger filtering, directory builder, atomic/repeatable CSV directory import, officer provisioning, settings and security event views.
+- Transactional notification outbox and firewall work queue (no delivery/execution workers yet).
+
+## Requirements / deployment
+
+PHP **8.2+**, 64-bit; PDO, pdo_mysql, curl, gd, json, OpenSSL (plus ZIP for software updates); MySQL 8+ or MariaDB 10.6+; Apache 2.4/LiteSpeed with .htaccess enabled. Use a dedicated empty database and database user with only that database's privileges. DDL privileges are needed for installation; reduce privileges afterward. Never use the database root account.
+
+1. Upload the contents of this folder to a dedicated document directory/subdomain. Keep sibling projects separate.
+2. Verify `app`, `config`, `storage`, `database`, `bin`, and `tests` return **403/404 over HTTP**. `.htaccess` protects them but server configuration must honor it. Disable directory listing. Do not serve the repository root as a public document root.
+3. Enable HTTPS **before setup**. If using a reverse proxy, configure trusted proxy addresses at the server layer and pass verified HTTPS/client address information. The application intentionally ignores all `X-Forwarded-*` headers; never let arbitrary clients supply trusted addresses. Confirm secure session cookies in the browser.
+4. Make `config` writable by the PHP user. Open `index.php` and enter your License Manager key. Stage 1 posts `key` and the detected hostname to `https://manager.pmhserver.name.ng/api.php`. The key must be active and authorized for that hostname. The obsolete `bin/setup-token.php` command now only prints a retirement notice.
+5. Follow environment → empty database → administrator/PIN → completion. The database is provisioned in cPanel, not created by PHP. Completion writes `config/installed.lock`. Licence credentials/cache are stored in private `config/license.json` and `config/license-cache.json` with owner-only permissions. Configuration files are written with mode 0600 (confirm hosting-user compatibility).
+6. Back up the database and configuration securely. Once installed, remove write access to `config` if practical. Never remove the installation lock on a live installation.
+7. Configure cron: `php /absolute/path/to/REMIT/bin/maintenance.php` every five minutes. Display retention is 5/10/15/60 minutes; deletion retains failures until **all enforcement windows** have expired. Non-failure audit events are retained indefinitely pending a formal archival policy.
+8. Enable OPcache at hosting level: `opcache.enable=1`, `opcache.memory_consumption=128`. Do not disable timestamp validation without a deployment cache-reset procedure. Enable transport compression. Only fingerprinted CSS/JS receive immutable caching; change the filename whenever contents change.
+
+### Interrupted installation
+
+MySQL DDL auto-commits. Migration is deliberately **not retried destructively**. If stage 2 fails, inspect server logs, remove only this new installation's partial tables using a database administration tool, and retry with an empty database. If configuration already exists or the browser loses its setup session, an operator must inspect the installation before recovery: for an unused installation only, remove the partial database/configuration and restart with a valid licence key. Do not apply this procedure to an installation containing real transactions. Protect `setup.mutex` like other config files.
+
+### Local development / verification
+
+```sh
+cd REMIT
+php tests/run.php
+php tests/license-updates.php
+php tests/church-portal.php
+find . -name '*.php' -print0 | xargs -0 -n1 php -l
+php -S 0.0.0.0:8080 router.php
+```
+
+Use the provided development router, **not** plain `php -S`, because PHP's built-in server ignores .htaccess. A working MySQL/MariaDB server is required for installation and integration tests. Never expose development HTTP to untrusted networks.
+
+### CSV
+
+UTF-8, exact header (no BOM):
+
+```csv
+zone,area,parish,parish_code,contact_person,phone_number
+Grace Zone,Hope Area,Living Water Parish,LWP001,Parish Officer,08000000000
+```
+
+Up to 5,000 rows and 2 MB. The importer reuses matching zone/area ancestors and parish codes, updates contact details for matching parishes, rejects code conflicts, and rolls back the entire import on failure. CSV contact persons are **not automatically given accounts**: the supplied specification has no officer email field. Provision accounts separately in the directory; share initial credentials via a trusted channel. Forced first-login password change and self-service password recovery remain to be implemented before broad rollout.
+
+## Integration boundaries / remaining work
+
+- **Product activation and updates:** implemented as described below. No obfuscated helper was added; security logic remains auditable. Live merchant hosting validation and update testing are still required before rollout.
+- **PayHub:** require official endpoint documentation, merchant credentials supplied via server environment, signature/replay rules, settlement currency/amount verification and sandbox. No virtual accounts, payment initiation or webhook routes are exposed yet. Add an idempotent payment-events table and transactional amount reconciliation before enabling callbacks.
+- **Receipts:** no upload/download endpoint is exposed yet; `storage/receipts` is private. Implement MIME/content validation, size limits, randomized names, malware review and an authenticated scope-checked download handler before exposing proof uploads.
+- **Firewall:** application blocks work immediately; `firewall_jobs` contains **pending requests only**. Build a separately privileged worker with a narrow, validated firewall adapter (e.g. CSF API), management-IP safeguards, expiry/unblock handling, idempotent retries and status reporting. Never run privileged shell commands in PHP web requests. Shared hosting may not permit this integration.
+- **Email:** notifications are queued, not delivered. Add a retry-safe, atomically claimed SMTP worker and escaped HTML templates. Never email passwords or PINs. Compliance scheduling and device fingerprinting are not implemented (alerts currently use unrecognized IPs only).
+- Income category breakdowns, category-specific split configuration, receipt upload/audit workflow, extended payment history/overpayment policy, period-aware compliance, weekly charts, live polling, interactive tree view, exports, admin user lifecycle/PIN reset, password change/recovery, setup recovery, MFA, integration tests and deployment hardening remain.
+
+## Acceptance checklist (requires PHP + MySQL)
+
+- Run money tests and PHP lint; install on both supported database engines.
+- Verify private paths are inaccessible, HTTPS cookies, CSP, CSRF rejection and generic login errors.
+- Provision two zones/areas/parishes. Confirm cross-scope reads/writes cannot leak other parish records; representatives cannot mutate data.
+- Test CSV rollback/conflicts/reimport and duplicate monthly report rejection.
+- Test failure thresholds, time windows, privileged/local exceptions, immediate unknown-user IP blocks, retained locks after toggles, five clean distinct sessions, suspension recheck and PIN lockout.
+- Test concurrent payment confirmation/replays; confirmed cumulative amount cannot decrease or exceed allocation.
+- Test setup retries, configuration permissions, backups/restore and maintenance retention against enforcement windows.
+- Perform a security review before handling real remittances. No gateway, firewall or email delivery is asserted by the UI. The licence/update integration must also be tested against the deployed LM.
+
+## Verification in this workspace
+
+- PHP syntax checks and PHP 8.2 grammar parsing are run on the PHP files, including the new licence and updater classes.
+- `tests/run.php`: **1,020 money assertions passed**, including DECIMAL limits, half-up rounding, invalid inputs and randomized roundtrips.
+- JavaScript passed `node --check`; the first-run installer rendered without PHP warnings/errors in a CLI request simulation.
+- Native PHP 8.2, Apache/LiteSpeed and MySQL/MariaDB integration were **not available/tested** here. WASM checks do not establish database correctness or production readiness.
+
+
+## License Manager activation
+
+The public documentation is `https://manager.pmhserver.name.ng/api-docs.php`. The deployed validation contract is `POST /api.php` with form fields `key` and `domain`. Only numeric/string `1` is accepted as valid; `0` and `suspended` reject access. Unexpected statuses and malformed responses fail closed. There is no direct database coupling to LM.
+
+- **New install:** enter your LM key in environment stage 1. The detected hostname is lowercased, validated and stripped of its port. The persisted hostname must match subsequent requests; `X-Forwarded-Host` is not trusted. Configure your web server to reject unrecognized Host headers and use your final production hostname during setup.
+- **Existing install:** the provincial administrator signs in and opens **Portal settings → Licence & activation**. Missing/invalid licences restrict other users; the administrator retains sign-in and licence-repair access. Non-licence record changes require valid activation.
+- Keys are never rendered back to the browser, placed in download URLs, or logged by REMIT. Successful activation is logged without credentials. The **existing LM server source logs licence keys**; review and restrict/remove those manager-side logs separately before production.
+- Successful checks are cached for one hour. Confirmed rejection is cached for 60 seconds and never receives outage grace. An unreachable manager permits ordinary portal use only from a prior successful check less than 24 hours old. Explicit rechecks, activation and update operations require an online result; installation and updates cannot use grace.
+- HTTPS certificate verification remains enabled, redirects are disabled, response/download size limits and timeouts apply, and only the fixed manager host is contacted. Permit outbound HTTPS to that host on your actual hosting server. No secret key is requested in chat.
+- If a setup browser session from the older operator-token installer exists, it is reset to stage 1 unless it has completed licence validation. An installation that already migrated a database but lost its installer session still requires the interrupted-installation recovery procedure above; no data is deleted automatically.
+
+## Admin software updates from LM
+
+The public docs explain validation but not the update payload. The updater contract is taken from this repository's **`LM/check-update.php` and `LM/download.php`**:
+
+1. Admin selects **Check for updates** under Portal settings. REMIT validates the licence online and POSTs `license_key` and `domain` to `/check-update.php`.
+2. LM returns `status: "success"`, `latest_version`, `changelog`, `checksum` (SHA-256), and a one-time `download_url`. The update is scoped by the **LM licence tier**, not a REMIT-specific API field. Make sure the licence tier publishes the correct REMIT release.
+3. **Pull & verify release** makes a fresh check (tokens expire/are one-use), downloads only from `https://manager.pmhserver.name.ng/download.php?token=…`, checks SHA-256 and ZIP structure, and stages privately under `storage/updates/`. Download tokens are not displayed or persisted in update metadata.
+4. **Install verified release** requires a transaction PIN, an explicit external-backup confirmation and a fresh valid licence. The updater serializes update jobs and excludes other portal requests, backs up every existing destination, records originally absent files, and briefly enables maintenance while replacing code with same-directory atomic renames. Configuration, receipts, licence files and the database are not overwritten.
+5. A failed file replacement attempts rollback. Incomplete rollback or an interrupted update retains maintenance for operator recovery. Successful installs retain previous files and a rollback inventory in the private staging directory. OPcache entries for replaced PHP files are invalidated.
+
+### Release/package requirements (including LM GitHub pulls)
+
+LM can obtain the release from GitHub upstream; REMIT still consumes the published LM ZIP, **not GitHub directly**. This branch does not change LM's upstream GitHub publishing implementation. Its deployed publisher must produce the following metadata:
+
+- `version.json` inside the REMIT payload: `{"product":"remit","version":"0.5.0"}` (example next version). Update this file in the release commit; the returned LM `latest_version` must match exactly. Current baseline is `0.4.0`.
+- `manifest.json` in the REMIT payload, or at ZIP root (LM's auto-generated manifest is supported): `{"version":"0.5.0","database_queries":[],"files_to_delete":[]}`. Changelog/tier metadata may also be present.
+- Supported layouts: application files at ZIP root; `REMIT/`; or `PROJECTS-main/REMIT/` (the wrapper name may vary). Sibling project contents in a full GitHub archive are **never applied**. Archives are still subject to size/entry validation across the entire ZIP.
+- Required files: `index.php`, `app/bootstrap.php`, `version.json`. A different `product` is rejected even if LM accidentally serves another application's tier.
+- Automatic installation permits selected source files under `app`, `bin`, `tests`, `database`, `public/assets`, and known root files. It never executes packaged SQL or PHP migration hooks. Any non-empty `database_queries` or `files_to_delete` list rejects automatic installation. Schema-changing releases require a reviewed manual migration/deployment.
+- Protect private files when building packages: do not include actual `config/database.php`, licence credentials, `.git`, receipts, backups or runtime storage. Private-path overwrite attempts are rejected (the standard config/storage `.htaccess` markers are ignored). ZIP links, special files, path traversal, duplicate/case-colliding files, encrypted entries, over 5,000 entries, over 25 MB download or over 100 MB expanded contents are rejected. Individual entries are capped at 10 MB.
+- The checksum is served over verified HTTPS by LM, **not an independent signature**. Treat LM and its publishing account as trusted code-signing authorities. Restrict LM admin access and verify the release pipeline. REMIT does not claim that the API cryptographically signs releases.
+
+### Update recovery / backups
+
+Before every install, back up the entire application and MySQL database **outside this web directory**. Automatic backups cover only files touched by a release, not database snapshots. Do not delete storage while installing. For normal successful upgrades, review/prune old `storage/updates/` directories manually after the retention period you choose; never publish or download them through a public URL.
+
+If `storage/maintenance.json` remains after a crash, keep public traffic stopped. Read its backup ID, then inspect `storage/updates/<id>/rollback.json`. For each path whose value is `true`, restore the corresponding file from `backup/<path>`; for each path whose value is `false`, remove only that newly installed file if present. Restore the original permissions, verify code syntax and the old `version.json`, clear/invalidate OPcache, and remove `storage/maintenance.json` **only after recovery is complete**. If backups were not fully written, restore your external application backup instead. Do not run application code from a partly applied release. Database rollback is not needed for this file-only updater; schema migrations are intentionally not executed.
+
+### New verification
+
+`php tests/license-updates.php` covers activation fields, cached validation, suspension, domain binding, outage-grace boundaries, URL restrictions, protected paths, ZIP traversal/links, wrong products/versions, migration/deletion refusal, GitHub subtree isolation and a complete staged file installation with backup/config preservation. The licence transport is mocked; no real LM keys or live requests are used. A deployed cPanel/LM integration test and failure-recovery drill remain required.
+
+## 0.2.0 — Bright church portal and Youth Thanksgiving workflow
+
+The portal now uses a light blue/white design with teal confirmation states, larger offering inputs and explicit total/retention/payable cards. No demo transactions or gateway settlements are fabricated.
+
+### Upgrade an existing installation
+
+1. Back up the application **and database** externally. Deploy the complete updated `REMIT` directory without overwriting generated private config or storage.
+2. Sign in as provincial administrator, open **Portal settings**, and select **Enable registration & payment features**. This executes `database/migrations/002-church-portal.sql`, an additive/idempotent migration serialized with a MySQL advisory lock. DDL auto-commits; inspect logs and retry if interrupted. No existing ledger amounts or rates are rewritten.
+3. Configure **Church retention / deduction (%)**, the provincial receiving bank account, and whether public registration is open.
+4. Review new applications under **Church hierarchy → Church registrations**. Verify parish authority through an independent trusted contact before approving. Multiple approved officers may represent one parish; they share parish ledger visibility, but each officer has separate bank profile details.
+5. Confirm the PHP OpenSSL extension and config-directory permissions. The first account-detail submission creates `config/bank.key` (32 random bytes, owner-only permissions). Back up this key securely **with your database backups**, outside the public document root. Losing it makes existing account numbers undecryptable. Do not regenerate or replace it during an update or restore. Account details remain masked to registration reviewers and are shown in full only to the owning officer's authenticated profile.
+
+New installations apply the migration automatically during database setup. Old installations remain able to view their existing data and use licence repair while awaiting upgrade; new reports and church features require the migration. Migration activation requires a valid licence, CSRF protection and the provincial administrator role. Restrict database DDL permissions again after activation if using a least-privilege runtime account.
+
+### Percentage meaning
+
+**Total offering is always 100%.** The administrator sets the percentage the church **retains / deducts** from its total. The remainder is the percentage payable to the province. For example: ₦100,000 total − 20% church retention = ₦80,000 payable and ₦20,000 retained. Enter `20`, not `2000`, in the new admin field. The old internal `levy_basis_points` setting still stores the *payable* percentage to preserve existing installations; existing default 10% payable therefore appears as 90% retained until changed by the administrator.
+
+The payable amount is rounded half-up to cents, and retention is the exact remainder so both always add to the full collection. Server-side validation/calculation is authoritative; the browser preview uses integer arithmetic too. Each new report snapshots the rate, service type and retention in `report_allocations`. Policy changes never recalculate old reports. A 100%-retained / zero-payable report is marked complete without creating a payment. One report per parish/month is retained from the existing model (multiple service entries within a month are not supported yet).
+
+### Church self-registration and account privacy
+
+`index.php?page=register` lets an officer search the existing church directory, select their parish, supply officer/contact details, choose a password and submit the church's bank name, account name and 10-digit Nigerian account number. The directory exposes only parish/code/area/zone labels, not other officers' contacts or banking details. No new church, privileged role or login access is created by an unapproved application. The public route is available only when registration is enabled, the schema is ready and the site's licence is valid.
+
+Every valid-CSRF submission attempt is counted server-side (five per IP per hour), including invalid inputs. Approval creates only a parish-officer account for the requested parish, copies its encrypted bank profile and clears the application's password hash. Rejection also clears the password hash. Duplicate emails receive the same generic acknowledgement without creating another account. Registration is admin-verified, not email-verified; automatic email delivery and password recovery remain pending. Configure a deployment-level request limit/WAF as additional spam protection; shared/NAT IPs share this application limit.
+
+Account numbers use AES-256-GCM with a local key; only their last four digits are retained separately for masked review. Bank name, account name, officer contacts and registration records are personal information: restrict database/backups, define a retention/privacy policy, and do not include credentials, PINs, BVNs or card details. Registration approvals and review decisions are retained on each application; email notifications are **queued, not delivered** until an email worker is configured. Officer profile changes do not alter the provincial receiving account and do not perform bank-account ownership verification.
+
+### Manual transfers and notifications
+
+Church officers see the configured provincial account, enter their full Youth Thanksgiving collection and save their calculated report. After transferring funds, they submit an amount, actual bank transaction reference and transfer date. Notifications are pending and do not change confirmed revenue. Pending amounts cannot exceed the outstanding balance; report access is parish-scoped. Treasurer/admin approval requires the transaction PIN and independent statement verification. Approval adds the notification amount once, with row locks, audit records and replay protection. Rejection leaves the ledger unchanged and can include a review note. Existing cumulative manual confirmation remains available to treasurers for bank-statement reconciliation; it does not auto-approve or consume pending notifications. Resolve/reject any conflicting pending notifications before confirming them.
+
+**Automated PayHub deposit remains unavailable.** The payment-method card is explicitly marked unavailable, with no initiation, virtual-account or webhook route pretending to work. The published PayHub page still lacks the detailed authentication/initialization/verification/signature contract. Receipt upload/download also remains unimplemented; the new notification form takes bank transaction details only, not proof files.
+
+### Tests for this release
+
+`php tests/church-portal.php` passes **156 assertions** covering percentages, cent conservation, encrypted account integrity, registration/approval/rejection, rate limiting, scope checks, notification/PIN/replay handling, confirmed balances, historical rate snapshots and view rendering. It executes real SQL through a SQLite compatibility harness that adapts MySQL syntax. It does **not** validate MySQL DDL, MySQL row locks, simultaneous approvals, cPanel permissions or live external APIs. Run the MySQL deployment acceptance checks, two-parish authorization tests and concurrent payment tests before handling real remittances.
+
+
+## 0.2.1 — Readability, mobile navigation and dashboard improvements
+
+- Body text is now 16px, inputs/selects at least 16px (avoiding input-focus auto-zoom on phones), with larger labels, explanatory text and accessible focus indicators. Buttons and navigation controls have at least 44px touch targets. Browser zoom remains enabled.
+- Authenticated views at 900px and below use a fixed footer icon bar: Home, Payments/Ledger, Churches, More. The top hamburger opens the same role-aware native dialog. The dialog supports Escape, a visible close button, backdrop dismissal, focus containment/return and scroll locking. Profile/admin links are shown according to the current role; these remain navigation conveniences, not authorization controls. Extra fallback links remain available when scripting/dialog support is absent.
+- Bottom navigation accounts for safe-area insets; page/footer padding prevents it covering content. The desktop sidebar remains available above 900px. There are no new external scripts, fonts or icon services; footer icons are inline accessible SVG.
+- Dashboard shortcuts guide officers to reporting, payments and their account details; administrators get review, directory and percentage shortcuts. Guidance uses existing scoped database totals, with no fabricated collection trends. Report completion is explicitly about submitted reports, not churches that have not reported.
+- The ledger now combines search and status filtering, announces the loaded result count, and displays a no-matches message. At 600px and below its rows become labelled cards; other wide administrative tables retain internal scrolling. Filtering only covers the currently loaded reports (existing 100-report limit), not a full-history search.
+- No schema migration is required for this patch. Deploy all code/assets together. Earlier 0.2.0 installations still need the documented church-feature schema activation if not already done. Clear hosting/CDN HTML caches if needed; asset filenames are content-fingerprinted.
+
+Validation: 39 PHP role-specific navigation assertions, 237 Chromium browser assertions over three roles and five viewport widths, plus the existing 156 church-portal, 1,020 money and 76 licence/update assertions. Browser checks use isolated **test fixtures**, not live user/financial data. They cover font sizes, touch targets, modal open/close/Escape/focus return, role menus, card layout, ledger filters, script-free fallback links and absence of page-level horizontal overflow. Actual iOS/Android device testing and production MySQL/cPanel acceptance remain recommended.
+
+Optional browser regression (requires PHP, Node, Playwright and an installed Chromium):
+
+```sh
+mkdir -p /tmp/remit-mobile-fixtures
+for role in parish_officer provincial_admin area_rep; do
+  php tests/mobile-ui.php "$role" "/tmp/remit-mobile-fixtures/$role.html"
+done
+# Install Playwright in an external development tools directory, not production:
+npm install --prefix /tmp/remit-browser-tools playwright
+# Point to your installed Chromium binary; omit CHROME_EXECUTABLE for Playwright-managed Chromium.
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/mobile-browser.js /tmp/remit-mobile-fixtures
+```
+
+## 0.2.2 — Downloadable church import sample
+
+Provincial administrators can open **Church hierarchy → Import a church directory → Download sample CSV**. The download is generated server-side through the authenticated portal, requires an active licence, and is not a public asset. It uses the importer's shared column definition:
+
+```csv
+zone,area,parish,parish_code,contact_person,phone_number
+```
+
+The attachment `remit-church-import-sample.csv` is UTF-8 without a BOM, uses CRLF rows, and contains three explicitly fictional parish examples showing a shared zone and two areas. Replace all sample rows before uploading; keep the exact header/order, assign unique parish codes, and treat phone numbers as text in spreadsheet tools to preserve leading zeroes. Downloading does not read/export existing churches or change the database.
+
+No schema migration or frontend asset update is needed for this patch. Deploy the updated PHP files together. `php tests/import-sample.php` verifies admin authorization, CSV formatting/header compatibility and sample import/reimport using a SQLite compatibility harness (26 assertions). Live MySQL and browser download headers still need deployment verification.
+
+
+## 0.2.3 — Hidden desktop sidebar scrollbar
+
+The desktop sidebar (901px and wider) hides its scrollbar in Firefox and WebKit/Blink browsers while retaining `overflow-y: auto`. Mouse-wheel, trackpad and keyboard navigation continue to work; mobile navigation is unchanged. Deploy the updated templates and fingerprinted stylesheet together. No database migration is required.
+
+## 0.3.0 — Searchable units, bulk assignment and zone-planted parishes
+
+### Find a church without scrolling
+
+Church-unit selects in registration, officer provisioning, unit creation, bulk destination selection and parish upgrades now become type-ahead comboboxes. Type a name, parish code, parent or zone; matching units appear automatically (up to 20 suggestions at a time; refine the query to narrow large matches). Click a result or use Arrow keys and Enter. Free text is not accepted as a unit ID. Escape closes the suggestions; native selects remain available without JavaScript. The search uses the permitted options already rendered to the page, with no new public lookup endpoint or contact-data exposure. Public registration lists church names/codes and area/zone context, including parishes directly under a zone.
+
+### Assign multiple units
+
+Provincial administrators can open **Church hierarchy → Assign church units in bulk**:
+
+1. Search/select the destination Zone or Area.
+2. Filter source units by name/code/parent/zone and by Area/Parish.
+3. Select individual checkboxes or **Select visible units**, then **Assign selected units** (maximum 500 per operation). Filtering retains hidden selections; the visible/selected count and Clear selection control make this explicit.
+
+Areas may be assigned only to Zones. Parishes may be assigned to Areas **or directly to Zones**. Zones cannot be moved beneath another unit. Moving an Area keeps its child parishes attached, so select the Area only, not its descendants. Mixed batches that cannot all use the selected destination are rejected atomically. Unknown IDs, self-assignment, cyclic ancestry, selected ancestor/descendant batches and unauthorized roles are rejected. Moves serialize with CSV imports and other hierarchy writes using the `site_title` row lock; reports, parish IDs/codes and officer accounts are not recreated or deleted. Representatives' authorized scope follows the new tree on the next request. Already-open pages do not update until refreshed.
+
+### Upgrade a planted parish safely
+
+Use **Church hierarchy → Upgrade a zone-planted parish to an Area** for a Parish currently directly under a Zone. Enter the new Area name. The action creates an Area under the original Zone and moves the original Parish beneath it as the headquarters parish. It deliberately **does not change the old parish's type or ID**: existing financial records and parish-officer accounts remain attached to that parish and remain visible in rollups. Add other parishes using the assignment tool and provision a separate Area representative against the new Area. Repeating the upgrade after the parish has moved beneath an Area is rejected.
+
+Hierarchy move/upgrade identifiers are logged to the server application log; no contacts, passwords or bank details are logged by these operations. Retain/protect server logs according to the deployment policy.
+
+### CSV and installation compatibility
+
+No database migration is required. Existing hierarchies retain their structure until an administrator changes them. New Parishes can choose either an Area or Zone parent in the creation form; Areas still require a Zone. CSV imports retain the same six columns, but `area` may now be blank for a direct Zone parish:
+
+```csv
+zone,area,parish,parish_code,contact_person,phone_number
+Example Zone,,Example Planted Parish,PLANT001,Example Officer,08000000000
+```
+
+Existing parish-code conflicts still reject the import; importing does not silently move a previously assigned parish. Use the bulk assignment tool for reorganizations. The downloaded three-row sample remains compatible, and the import page now explains the optional Area column.
+
+### Verification
+
+- `php tests/hierarchy.php`: 44 assertions using a SQLite compatibility harness for parent validation, role restrictions, atomic move rejection, moving Areas/Parishes, representative scopes, safe upgrades, CSV direct-parish import/reimport and registration labels. MySQL row-lock/concurrency semantics still need deployment testing.
+- `php tests/hierarchy-ui.php /tmp/remit-hierarchy-ui.html` generates a fictional-only test fixture from the production hierarchy-tools view.
+- With Playwright/Chromium available, `node tests/hierarchy-browser.js /tmp/remit-hierarchy-ui.html` runs 40 assertions at phone and desktop widths for live suggestions, result limiting, pointer/keyboard selection, invalid free text, no-results messaging, retained hidden selections, clearing and destination selection. Use the external dev-tools `NODE_PATH`/`CHROME_EXECUTABLE` setup documented above. Fixtures do not contain live church data.
+- Existing church portal, money, licence/update, sample CSV and role-specific navigation regression tests are retained. Deploy PHP and newly fingerprinted frontend assets together; validate real MySQL/cPanel and representative account scopes before a large reorganization.
+
+## 0.4.0 — Church directory workspace, editing and protected deletion
+
+**Church hierarchy** now puts Quick add/edit first, alongside the directory at widths of 1100px and above. Smaller screens stack the tools above the cards. A top shortcut bar opens CSV import, officer provisioning, bulk assignment and registration review; less-used tools are collapsible instead of forcing administrators to scroll past them before reaching the list. Directory cards support combined name/code/contact/parent search, level filtering, Zone filtering, result counts and an empty-results state. Non-admin users retain read-only, server-scoped views; contact fields and edit/delete controls are admin-only.
+
+### Edit a unit
+
+Choose **Edit details** on a directory card. You can update the name, parish code, contacts and valid parent. Unit ID and level remain unchanged; this preserves officer/registration/financial relationships. Areas still require Zone parents, and Parishes can use Area or Zone parents. Zones remain at the provincial root. Level changes are rejected; use the existing safe Parish-to-Area upgrade instead. Duplicate parish codes are rejected by the database and changes roll back together. Parent changes alter representative scope on subsequent requests. Quick add now also accepts optional contact details.
+
+### Delete an unused unit
+
+The **Delete** link only opens a confirmation view; it never mutates data via GET. The administrator must type the exact current unit name and check a confirmation box, then submit a CSRF-protected POST with a valid site licence. An unused leaf Parish, empty Area or empty Zone can be permanently removed. Deletion is blocked when the unit has:
+
+- Any child units (move/reassign them first).
+- Any officer/user accounts attached to it.
+- Any remittance ledger entry, including unpaid reports.
+- Any church registration records when that feature schema is enabled, including rejected/approved records.
+
+No cascade deletion of accounts, registrations or financial history is offered. Database foreign keys provide a further safeguard against links added concurrently. Structural writes share the same serialization lock used by creation, imports, bulk assignments and upgrades. Edit/delete unit IDs and actor IDs are logged to the application log without bank or contact details. Logs are not a substitute for external backups. Repeated deletion and stale/wrong-name confirmations are rejected.
+
+**No database migration is required.** Deploy the updated PHP templates and fingerprinted assets together. Existing data is unchanged until an administrator submits an action. MySQL concurrency/permissions and browser behavior on the actual hosting site should still be verified before reorganizing a live province.
+
+Validation for this release: `tests/hierarchy-edit-delete.php` adds 25 SQL/role/rollback/protection assertions on top of the 44 existing hierarchy assertions (SQLite compatibility harness, not a MySQL locking test). `tests/hierarchy-page-ui.php` renders fictional-only admin/read-only/edit/delete fixtures; `tests/hierarchy-page-browser.js` runs 138 Chromium assertions across 320, 390, 768, 1024, 1100 and 1440 pixel layouts, including tool ordering, side-by-side alignment, mobile overflow, tool disclosure shortcuts, filters, role visibility and prefilled confirmation/edit forms. Existing autocomplete, mobile navigation, finance, registration, CSV and licence/update regressions are retained.
+
+Optional workspace browser check (using the external Playwright/Chromium setup above):
+
+```sh
+mkdir -p /tmp/remit-directory-fixtures
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/provincial_admin.html
+php tests/hierarchy-page-ui.php area_rep /tmp/remit-directory-fixtures/area_rep.html
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/edit.html edit
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/delete.html delete
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/hierarchy-page-browser.js /tmp/remit-directory-fixtures
+```
+
+## 0.4.1 — Responsive Church directory pagination
+
+The directory displays **6 units per page** by default, with **6 / 12 / 24** choices. Phones show large Previous/Next controls and a Page X of Y indicator; wider layouts also show a bounded numbered page strip. Search, level and Zone filters apply across the entire authorized directory, not just the current page. Changing a filter or page size returns to page 1; out-of-range pages are clamped safely. Empty lists show 0–0 counts and disabled navigation.
+
+Pagination and filtering work as server-rendered GET requests without JavaScript (use **Apply filters**). With JavaScript enabled they update instantly, preserve shareable/refreshable URL state and support Back/Forward between page selections. Admin edit/delete links retain the selected directory filters and page on the confirmation/edit view. Role scope and admin-only contact visibility/search remain unchanged. No database migration is required; deploy PHP views and fingerprinted assets together.
+
+This is **display pagination**, not database LIMIT/OFFSET pagination: the existing role-authorized nodes are still loaded for hierarchy tools, and an inert HTML template holds their cards for instant filtering. Only the current page's cards are active in the directory. Large-province data-volume optimization would require a separate scoped query/API design.
+
+Validation: 42 pure-PHP pagination assertions; 294 directory interaction/layout assertions across admin/read-only roles and six widths (320–1440px); 27 URL/history/server-rendered fallback assertions using fictional fixtures. Existing finance, hierarchy edit/delete, registration, licence/update, CSV, autocomplete and mobile-navigation regressions also pass. Browser checks use headless Chromium, not physical devices; live cPanel/MySQL acceptance remains necessary.
+
+```sh
+php tests/directory-pagination.php
+# First generate the admin/read-only/edit/delete fixtures shown above, then:
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/page2.html '' 'directory_page=2'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/filtered.html '' 'directory_q=Planted&directory_size=6&directory_page=2'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/empty.html '' 'directory_q=DoesNotExist&directory_page=999'
+php tests/hierarchy-page-ui.php provincial_admin /tmp/remit-directory-fixtures/contact.html '' 'directory_q=Test+Officer'
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/directory-pagination-browser.js /tmp/remit-directory-fixtures
+```
+
+## 0.5.0 — Officer-only registration and intelligent church discovery
+
+`index.php?page=register` now registers an **officer account**, not a new church/bank account. Search or select admin-added **Parishes, Areas and Zones**. Suggestions rank exact, partial, multi-word and common typo matches, including parent/code context. Suggestions never silently choose a fuzzy match. The native directory dropdown remains usable without JavaScript. Full name, phone, email and password are required; bank details are no longer collected or stored during signup. Approved Parish officers can complete their bank profile later in **My church account**.
+
+If genuinely absent, check **my church is not listed**, enter its **CAPS name** and level, then submit for review. The browser uppercases the name and offers similar churches alongside it. Server-side checks independently ignore case, spacing and punctuation when comparing names: a unique exact normalized match reuses the existing unit, even if “not listed” was chosen. Ambiguous matches require explicit directory selection. Approximate matches do not auto-link. No public registration request creates any hierarchy row, preventing duplicate church creation from this flow, including concurrent submissions. Different officer applications may refer to the same church; emails remain unique per application/account.
+
+Unlisted names appear in the admin's **Church hierarchy → Registrations** queue, including their submitted level. Verify affiliation independently, select an existing church, or first add the genuinely missing church using Quick add (correct parent and parish code), then link it before approval. Rejection needs no church link. Approval derives the role from the verified unit: `parish_officer`, `area_rep`, or `zonal_rep`; applicants cannot request treasury/admin roles. Existing license/CSRF checks, IP attempt limits, pending-password clearing, foreign keys and unique-email constraints remain. Legacy pending registrations retain their bank ciphertext and profile details on approval. Notifications remain queued in the existing outbox, not guaranteed email delivery.
+
+### Required upgrade for existing installations
+
+1. Back up the database, files and original `config/bank.key`.
+2. Deploy all 0.5.0 PHP files and fingerprinted assets together.
+3. As admin, open **Portal settings → Upgrade registration & payment features**. New public registrations stay unavailable until this completes; existing login/payment/report features remain enabled.
+4. The existing licence/CSRF/admin-gated schema upgrader makes `church_registrations.parish_id` nullable and adds nullable `requested_church_name` / `requested_church_type` columns, then records `officer_registration_schema=1`. It preserves existing records, foreign keys, bank data, percentages and financial history. MySQL DDL auto-commits: interrupted column additions can be retried through the same upgrade action. New installations receive the changes during setup.
+5. Verify a Parish, Area, Zone and unlisted application on your hosting environment before rollout. Recheck representative scopes after approval. No public hierarchy creation is offered.
+
+Validation adds **35** officer registration SQL/role/privacy/rollback assertions (on top of 156 existing portal checks), **24** migration SQL-recording assertions and **125** discovery/browser checks at widths 320, 390, 768, 1024 and 1440. Existing hierarchy, edit/delete, pagination, CSV, money, licensing, autocomplete and mobile regressions pass. SQLite and SQL-recording harnesses do **not** prove real MySQL/MariaDB DDL, locking or concurrent deployment; headless Chromium is not physical-device acceptance.
+
+```sh
+php tests/officer-registration.php /tmp/remit-registration.html
+php tests/registration-upgrade.php
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/officer-registration-browser.js /tmp/remit-registration.html
+```
+
+## 0.6.0 — Multiline hierarchy entry and automatic CAPS
+
+Admins can now use **Church hierarchy → Add multiple churches** and paste one hierarchy per line:
+
+```text
+GRACE ZONE, HOPE AREA, LIVING HOPE PARISH
+GRACE ZONE, NEW LIFE AREA
+GRACE ZONE, HOPE AREA, GRACE PARISH
+GRACE ZONE
+NEW ZONE
+```
+
+A line can contain **ZONE**, **ZONE, AREA**, or **ZONE, AREA, PARISH**. Blank lines are ignored; a missing Parish creates no placeholder and can be supplied in a later batch. Repeat a Zone/Area to build its other descendants. Matching is CAPS/whitespace-normalized **within the same level and parent**, so repeated paths reuse existing units and preserve their IDs/codes; identical names in different Zones/Areas remain separate. Legacy ambiguous duplicate paths stop the whole batch rather than selecting an arbitrary unit. For an existing direct-Zone church, use `ZONE, , PARISH`. Quote names containing commas, e.g. `"GRACE, EAST ZONE", HOPE AREA`.
+
+The admin/licence/CSRF-protected action accepts up to **5,000 non-empty lines / 2 MB** in one transaction, with the existing structural-write singleton lock. Any invalid row or database failure rolls back the complete batch. New Parishes get unique **AUTO{id}** codes (with collision suffixes), editable afterward via Edit details. Existing parish codes, contacts, officer accounts, registrations, links and financial records are not replaced. Reposting the same paths adds no duplicates. CSV import stays available and now rejects an existing same-parent Parish name with a different code rather than duplicating it; edit its code explicitly if required.
+
+**All church name entry is automatically CAPS**: multiline input, Quick add, editing, Area upgrades, CSV import and unlisted registration names. Browser code changes the actual input value while preserving the caret; PHP independently validates/converts names, including when JavaScript is off. Names are limited to 150 UTF-8 bytes after conversion. A bundled Unicode 14.0 uppercase mapping (generated from Python's Unicode data) supports non-ASCII names and expanding letters without adding an mbstring dependency. Personal names, bank details and existing parish codes are not uppercased.
+
+Existing directory/registration church labels appear in CAPS immediately. **Saving the first successful batch also converts existing stored directory names to CAPS** without merging units or changing IDs, parents or history. No schema migration is needed for this release; the 0.5.0 officer-registration schema upgrade is still required if not previously enabled. Review old ambiguous/invalid directory names if a batch asks for correction. Deletion confirmation accepts the displayed CAPS form of legacy names; all linked-record and explicit-confirmation protections remain.
+
+All newly added **Zones, Areas and Parishes** are returned by the existing public registration directory and can be searched or selected. Similar-name/typo suggestions and native dropdown fallback remain. Unlisted names are converted to CAPS and saved only with the pending application; exact normalized matches reuse existing churches. Admin church linking and affiliation approval are still mandatory before access. No public hierarchy creation is allowed.
+
+Validation adds **34** multiline/Unicode/idempotency/parent-scope/code-collision/rollback/privacy assertions to the existing 44 hierarchy checks. The directory browser suite now has **330** assertions across two roles and six widths, including actual multiline/Quick add CAPS values and read-only visibility; the **125** registration discovery and **27** URL/fallback checks remain. Other finance, portal, CSV, edit/delete, licensing, autocomplete and mobile regressions are retained. SQLite/headless tests do not establish MySQL locking/concurrency, cPanel deployment or physical-device acceptance.
+
+```sh
+php tests/hierarchy-batch.php
+# Use the previously documented fixture commands for directory and registration browser checks.
+```
+
+## 0.7.0 — Mobile-first fintech redesign and persistent footer navigation
+
+All shared workspace and public page layouts now use a simpler mobile-first visual system: light neutral surfaces, deep teal actions, readable forms, softer borders and rounded panels. Dashboard stat cards have subtle blue, sage, amber and lavender backgrounds. The desktop sidebar is no longer displayed; the content uses the available width and a centered reading layout. Forms stack on phones and expand to paired columns where space permits. Existing directory tools, CAPS/bulk entry, pagination, allocation previews, bank/payment controls, settings, security and role scoping remain functional.
+
+The **persistent bottom menu** is fixed to the viewport and reserves document space so final form actions are not obscured, including safe-area padding. Phones/tablets show **icons only**, with accessible names, current-page state and 48px targets. **More** opens the existing keyboard-accessible dialog for profile/settings/security and logout; native no-JavaScript links remain available when enhancement is unavailable. At desktop widths (901px+), the footer uses **text links**, including permitted profile/settings/security destinations directly. Public sign-in, registration and installer pages have their own fixed Sign in/Register footer (icons on phones, text on desktop). No authenticated/private destinations are added to public navigation. Sign out remains available in the workspace header as well as the mobile dialog.
+
+The redesign covers dashboard, remittances/offering/payment, hierarchy, profile, settings/licensing, security, login, officer registration and setup. It preserves native form semantics, focus outlines, SVG accessible-name handling and reduced-motion preferences. Data tables keep contained horizontal scrolling where card conversion is unsuitable. No finance, permission, migration or payment-integration behavior changed. **No new database migration is needed**; deploy all PHP templates and fingerprinted assets together. Prior feature upgrades remain required if not already enabled.
+
+Validation: `tests/redesign-ui.php` renders nine actual production page layouts with fictional data and SQLite compatibility fixtures; `tests/redesign-browser.js` runs **675** layout/navigation checks across nine pages at 320, 390, 768, 1024 and 1440 pixels, including mobile icon-only/desktop text presentation, footer persistence, touch targets, no page overflow, non-overlapping final actions and stat backgrounds. The role/mobile suite now has **255** browser assertions plus 39 PHP role checks. Existing directory 330, registration 125, URL/fallback 27 and autocomplete 40 browser checks pass, along with finance, hierarchy, CSV, licensing and portal regressions. These headless checks do not replace physical-device, screen-reader or live cPanel/MySQL acceptance.
+
+```sh
+php tests/redesign-ui.php /tmp/remit-redesign
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/redesign-browser.js /tmp/remit-redesign
+```
+
+## 0.8.0 — Remittance for every worshipping church, fewer steps
+
+**Updated policy:** Zones and Areas have their own worshipping members and monthly Youth Service offerings, as do Parishes. Approved `zonal_rep`, `area_rep` and `parish_officer` accounts can now submit **their own assigned church's** monthly offering and notify treasury of its bank transfer. This supersedes earlier release notes that described Area/Zone representatives as read-only. Funds still go directly to the provincial treasury; this is not inter-level fund collection or consolidated reporting.
+
+### Staff flow
+
+1. Tap **Start remittance** on the dashboard (or **Remit** in the footer).
+2. Enter month, year and total offering; retention and provincial amount calculate automatically.
+3. Save the offering. A 303 redirect takes the user straight to the provincial bank/payment section.
+4. Transfer to the displayed provincial account, using the report reference, then **Submit payment** with the actual bank reference.
+5. Treasury independently checks the bank and confirms payment. Fully pending deposits show **Awaiting treasury confirmation** instead of being offered again; partial pending deposits reduce the selectable balance.
+
+The report form identifies the account's church and never offers a church selector. Server checks derive its ID from the authenticated account and validate the role/unit type (`zonal_rep` → Zone, `area_rep` → Area, `parish_officer` → Parish), ignoring posted target IDs. Payment notifications are restricted to that same church. Representatives cannot submit for child/sibling/parent churches or approve payments. Provincial admin/treasurer accounts continue to confirm payments with their transaction PIN. Profiles/contact/bank details are available to all three church-representative roles; they never alter the provincial receiving account.
+
+Financial reads now include the representative's own unit and its descendants; treasury sees all levels. Dashboard totals for Area/Zone representatives are explicitly labelled as own + supervised churches. This preserves supervisory visibility without permitting writes against those descendants. The older `scope()` helper retains parish-only semantics for compatibility; production financial routes use `financialScope()`.
+
+**Shorter pages:** dashboard tasks use concise labels; lengthy guidance is removed; charts, reports and payment history use native collapsible sections. Remittance forms and transfer controls come before report history. Payment options query the account's own reports directly, so a busy supervisory ledger's 100-row display limit cannot hide the account's outstanding reports. PayHub remains explicitly not connected; no automated deposit API is invented.
+
+**No schema migration is required.** The historical `remittance_ledgers.parish_id` column already references `church_hierarchy.id` without a parish-only constraint, and the unique unit/month/year key and allocation snapshots work for every hierarchy level. Column/table names are kept for update compatibility; existing data, IDs, percentages, receipts, history, encryption keys and parish reports are unchanged. Deploy PHP templates and fingerprinted CSS together. Existing feature schema upgrades are still required if not enabled. Existing valid Area/Zone representative accounts gain own-church remittance after deployment; no re-registration is necessary.
+
+Validation adds **52** PHP role/ownership/report/payment/allocation/duplicate/treasury-confirmation assertions plus **164** browser checks across all three representative roles and four widths. The browser flow clicks Start remittance, verifies the live 80/20 calculation, checks own-church payment choices, collapsed history and mobile overflow. Fifteen fictional production fixtures cover the original nine page types plus representative dashboard/remittance routes. Existing 675 page-layout checks, 255 role/mobile checks, directory/registration/autocomplete checks and finance/portal/hierarchy/licensing regressions remain. SQLite compatibility and headless Chromium do not establish production MySQL locking, concurrency, live bank settlement or physical-device acceptance.
+
+```sh
+php tests/representative-remittance.php
+php tests/redesign-ui.php /tmp/remit-redesign
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/representative-remittance-browser.js /tmp/remit-redesign
+```
+
+## 0.9.0 — Readable account details and installable PWA
+
+Explicit dark text fixes the bank-card regression (white inherited text on a pale background). Account number, bank name, account name and caption now have separate high-contrast foregrounds. Supporting text, form labels, placeholders, allocation previews, cards and navigation text are darker and clearer without changing any account values, percentages or financial behavior.
+
+### Install REMIT
+
+Deploy over **HTTPS**. A scoped web manifest, standalone display, 192/512px and maskable icons, Apple home-screen metadata and root service worker make REMIT installable in supporting browsers. Chromium's **Install app** banner appears when the browser emits `beforeinstallprompt`; the browser's native install dialog is triggered only by a user click. Safari/iOS receives manual Share → Add to Home Screen instructions. Dismissing the banner suppresses it for **30 days** in that browser/profile. Installed/standalone mode and the `appinstalled` event suppress it, with a scoped local-storage hint shared between same-origin tabs. Storage-denied/private mode is best effort. A fresh native install-eligibility event can clear a stale installed hint after uninstalling. Other unsupported browsers are not falsely promised installation.
+
+**Browser → installed app:** web pages cannot reliably detect every previously installed PWA or force-open it when someone types a URL into a browser. REMIT does not use redirect loops, custom URL schemes, Android package guesses or fake “Open app” buttons. `launch_handler: navigate-existing` asks supporting browsers to reuse an installed app window when the browser/OS launches the PWA. Actual link capture/open-in-app depends on browser/OS capabilities and user preferences. Otherwise open REMIT from its home-screen/app icon. Local installed hints do not prove installation in another browser/profile and can become stale after uninstalling or clearing storage. This is a platform limitation, not an automatic handoff guarantee.
+
+### Offline and financial privacy
+
+The worker is scoped to the deployment directory, supports subfolder installs, and versions cache names per scope. It caches **only** the generic offline screen, its stylesheet and public icons. Financial pages, bank details, profiles, login/session responses, APIs, receipts and POST requests are never put in the service-worker cache. Navigations are network-first without caching their responses; network failure shows a generic reconnect screen. There is **no offline payment/report queue or automatic POST replay**. Reconnect to transact. Authentication, session expiry and sign-in requirements remain unchanged. `sw.js` and the manifest are revalidated; scripts/styles use fingerprinted names. Deployment and licence-managed updates must include the manifest, worker, offline screen and icons; updater exceptions are restricted to those exact new root/icon paths.
+
+Validation adds **24** browser assertions for native-prompt simulation, persistent dismissal, installed/standalone suppression, Safari-instruction simulation, nested deployment scope, icons/manifest, offline fallback, no private-cache entries, failed offline POST and bank-text contrast (all four card text elements ≥4.5:1). Native OS installation, iOS rendering and browser link capture still require real-device acceptance. Existing finance, role, remittance, directory and responsive regressions are retained. No database migration is required.
+
+```sh
+CHROME_EXECUTABLE=/path/to/chromium NODE_PATH=/tmp/remit-browser-tools/node_modules \
+  node tests/pwa-browser.js
+```
+
+## 0.10.0 — Payment receipts and full financial history
+
+Parish, Area and Zone representatives can submit a payment notification for their **own** church, optionally attaching a JPEG, PNG or WebP receipt. The bank reference/date/amount remain required. A thumbnail opens an accessible, keyboard-dismissable receipt modal; without dialog support/JavaScript the link opens the protected image. Treasury/admin can preview all receipts; representatives can view only their own church's receipts, **not** descendant churches' private images. Session/suspension checks and licence validation apply to image requests too. Screenshots do not verify settlement: independent bank reconciliation, treasury PIN, existing approval/rejection logic and audit remain unchanged.
+
+**Existing installations:** back up the database, deploy the complete release, then use **Portal settings → Enable receipt uploads**. The additive, repeatable migration creates `payment_receipts` without changing old notifications. MySQL DDL auto-commits; DDL privileges are required for this step. Fresh installation includes it automatically. PHP GD must include WebP encoding support; otherwise payment notifications still work without attachments. Set `upload_max_filesize` to at least `8M`, `post_max_size` above that (e.g. `12M`), and an appropriate PHP memory limit (e.g. `256M`). Keep Apache/LiteSpeed private-directory protections enabled.
+
+Originals are limited to 8 MiB, 12 megapixels and 8000 pixels per edge; documents/PDFs are rejected. The server decodes and re-encodes images to WebP, strips metadata, corrects JPEG orientation when EXIF is available, flattens transparency on white, and stores only a maximum-2000px image and 320px thumbnail (each capped at 2 MiB). Upload names are never used as paths. Random private filenames live under protected `storage/receipts/`; do not expose this directory through a CDN or alias. Receipt responses are authenticated, `no-store`, and never cached by the service worker. Include receipt files **and** database metadata in backups. Normal failed submissions roll back and remove generated files; the existing CLI maintenance task also removes unreferenced receipt files after a 24-hour grace period. Referenced receipts are retained for financial review, not automatically purged.
+
+**View reports** and **Review/View payments** now search across the entire authorized financial history, not just the newest 100 records. Search church names/codes, report/bank references and amounts; payment search includes review notes. Status, year and month filters are applied in the database with bounded 12-row pages. Report dates refer to service period; payment dates refer to transfer date. Typing refreshes automatically after a short pause, selects refresh immediately, and Apply/Reset/Previous/Next work without JavaScript. Read scope is enforced before every query; this does not broaden receipt or write permissions.
+
+Validation: `tests/payment-proof-history.php` exercises actual GD JPEG/PNG/WebP conversion, bounds, malformed files, private-path/access checks, orphan cleanup and >100-record history queries using the SQLite compatibility harness. `tests/payment-proof-history-browser.js` covers modal/Escape/focus return and automatic filters at 320/390/1024px. Existing money, remittance, registration, hierarchy, licensing/update and layout suites are retained. These are not live MySQL concurrency, cPanel multipart upload or real-device deployment tests; perform those deployment checks before production acceptance.
+
+## 0.10.1 — Welcome and quick-start guide
+
+Overview and Remittances include a compact, closable welcome guide. Representatives see three steps: save the monthly offering, transfer directly to province, and submit a payment notification with an optional receipt. Treasury sees setup, review and independent bank-confirmation guidance instead. The action links open the relevant offering form or payment history; payment history deep links automatically expand its disclosure when JavaScript is available.
+
+Close hides the guide contents and keeps a “Welcome to REMIT · Quick guide” control available to reopen it. The preference is remembered separately per account and installation path in this browser's local storage; it does not store financial information. When browser storage is unavailable, dismissal still works for the current page. Without JavaScript, the native disclosure remains closable/reopenable. No database upgrade is required for this release.
+
+`tests/welcome-guide-browser.js` checks mobile/desktop layouts, dismissal persistence, reopening, per-account isolation, action links and the no-JavaScript disclosure.
+
+## 0.11.0 — Email OTP password recovery
+
+The login page now links to **Forgot password? Reset by email**. Enter a registered email address, request a code, and submit the six-digit code with a matching new 12–72 byte password. Codes expire in 10 minutes, can be used only once, and stop working after five incorrect attempts. Only the newest code works. Resetting a password does not sign the user in automatically, change their role or transaction PIN, unsuspend an account, or clear IP blocks. Existing sessions are rejected on their next request after any password change. **Deploying this version also signs out pre-upgrade sessions once** so every authenticated session has the new password stamp.
+
+### Enable email delivery
+
+1. Back up the database and deploy the complete release. No credentials or OTPs should be included in an update package.
+2. As provincial admin, open **Portal settings → Email password reset** and set an authorized sender mailbox on your hosting domain. Saving creates two additive tables (`password_resets`, `password_reset_limits`) using a repeatable, advisory-lock-protected migration. DDL privileges are required; MySQL DDL auto-commits. Fresh installation creates the tables automatically, but the sender must still be configured. Leave the sender blank to disable recovery.
+3. Configure the hosting server’s **PHP `mail()` service** and outbound mail delivery (typically cPanel/Exim). Ensure the sender/domain is authorized and SPF/DKIM/DMARC and any provider sending restrictions are correct. This feature uses native PHP mail, **not an SMTP API or the unprocessed notification outbox**. OTPs are sent synchronously after the challenge transaction commits. PHP mail acceptance is not proof of inbox delivery; check the actual mailbox, spam folder and hosting mail logs. No SMTP passwords are stored by REMIT.
+4. From the login page, request a reset for a controlled test account, receive the actual email and complete it. Check expired/incorrect code behavior, new-password login, old-password rejection and existing-session invalidation before production acceptance. A real hosting/mailbox test is still required; automated tests mock mail transport.
+
+Recovery does not depend on an active licence, so an expired licence cannot prevent account recovery; existing licence restrictions still apply after sign-in. All recovery forms are CSRF-protected POSTs and work without JavaScript. Responses do not disclose whether an email belongs to an active account. Suspended, pending-registration and unknown accounts do not receive codes. No email links are built from the incoming Host header.
+
+Only a password hash of the OTP is stored; the plaintext code appears only in the outbound email. It is not placed in URLs, logs or `notification_outbox`. Failed mail submission invalidates that challenge and writes only a generic operator error. A reset is bound to the current password and email, so later account changes invalidate it. Completion, password update, code consumption and audit recording are transactional with row locks. Per-account issuance is limited to three requests per 15 minutes, with a 60-second resend delay; per-IP issuance is capped at five requests and verification at 30 submissions per 15 minutes. Limits apply across sessions. Use the real client IP at the web-server layer: REMIT deliberately does not trust arbitrary forwarded headers. The existing CLI maintenance job clears expired challenge/rate rows older than one day. Keep public pages and email transport on HTTPS/secure infrastructure.
+
+Tests: `php tests/password-reset.php` checks real password/OTP hashing, expiry, replay, cooldown/rate/attempt limits, unknown/suspended accounts, account changes, transport failure, atomic rollback and session stamps using the SQLite compatibility harness and mocked mail. `php tests/password-reset-upgrade.php` records migration SQL and failure/lock handling (not live MySQL DDL). Browser tests cover enabled/disabled/success states, mobile layout, native form validation, CSRF fields and the login link. Live MySQL concurrency and cPanel mail delivery are deployment checks, not claimed by these harnesses.
+
+## 0.11.1 — Recovery enabled by default (admin lockout fix)
+
+This supersedes the opt-in/blank-sender behavior described for 0.11.0 above. Email password recovery now works by default after installation: the sender is the configured reset sender, otherwise the installation's notification email, otherwise the earliest provincial admin's email. Sender addresses come only from trusted database records, never from the browser's Host header. Fresh installations already create reset tables and save the installation email, so there is no post-install activation step.
+
+**Already locked out after installation?** Back up the database and upload the complete updated REMIT release through your hosting file manager/deployment process. Open **Forgot password?** from the login page again. When reset tables have not yet been installed, this page runs the existing bounded, repeatable reset-schema migration automatically, without admin sign-in. It does not reset a password or send mail on GET; the normal CSRF-protected email request and OTP verification are still required. If the database user lacks CREATE TABLE privileges, the page shows a hosting-support message; restore the required privileges and retry. An explicit disable set using the new Enabled/Disabled selector is respected and is not silently reversed.
+
+A blank sender field now means **use the installation email**, not disable. In Portal settings, use the separate **Password recovery → Disabled** selector if you deliberately want to turn recovery off. A valid authorized sender is still recommended for delivery. The hosting PHP mail service must work, and SPF/DKIM/DMARC restrictions may prevent mail sent using an external installation email. If no OTP arrives, check spam and the hosting mail logs and configure an authorized sender; default enablement cannot guarantee inbox delivery. No credential, SMTP password or OTP needs to be shared in chat.
+
+Tests cover blank-sender defaults, installation/admin sender fallback, explicit disable/re-enable, automatic missing-schema initialization, repeated initialization, and existing OTP security and browser/layout regressions. Live hosting inbox delivery and MySQL DDL permissions still require deployment verification.
+
+## 0.11.2 — Sign in after OTP reset from a login-blocked IP
+
+Repeated failed sign-ins can create a day-long application IP block. Previously `Security::login()` rejected a blocked IP before password verification, so a successful password reset could still be followed by the same generic login error. The new regression test reproduces this using the real login/block/reset code, rather than testing password hashing alone.
+
+After a successful OTP reset commits, REMIT now creates a **server-session-only, one-use recovery sign-in permit**. It is bound to that account ID/email, the newly stored password hash, the current IP and a 10-minute expiry, with at most five sign-in attempts. The reset page rotates its session ID and preserves only this permit and fresh CSRF state. Sign-in still requires the correct new password and an active, non-suspended account. Another account, IP, session, changed password or expired/exhausted permit does not receive this exception. The permit is consumed at successful sign-in; the resulting session follows the existing password-stamp, inactivity and licence checks.
+
+This does **not** remove a shared IP's block, whitelist an address, unsuspend a user, clear security history, approve payments or bypass any server/firewall block outside PHP. A recovery sign-in is audited separately. Other accounts/sessions keep their normal IP restrictions. If the account is signed out while its IP is still blocked, another OTP reset may be needed until the block expires or an authorized administrator reviews it. Use the **same browser session** for reset and sign-in; do not close its private/incognito session between steps.
+
+For an already affected installation: deploy the complete 0.11.2 release, request a **new** OTP reset (prior resets cannot create the new permit), then manually enter the new password on the login page in the same browser within 10 minutes. Avoid browser autofill of the previous password. No database migration is required. Hosting-level IP blocks and account suspension still require authorized operator review; the generic screenshot error alone does not establish which condition exists on a live installation.
+
+`tests/password-reset-login.php` covers failed-attempt IP blocking, reset-to-login success, session rotation/stamp validity, password/IP/account/expiry/attempt binding, single-use behavior, suspension, retained shared-IP restrictions, auditing and ordinary unblocked sign-in. It uses the SQLite compatibility harness and mocked mail, not live MySQL concurrency or a hosting mail/firewall test.
+
+## 0.12.0 — Representative registration and account management
+
+### Registration fixes
+
+Multiple representatives using one church Wi-Fi/NAT can now submit applications without exhausting the old five-attempt shared-IP limit. Registration remains bounded to **30 attempts per IP per hour and five per normalized email per hour**, including valid-format email attempts that later fail form validation. The email counter is serialized using the existing installation settings lock and audit records; the maintenance task removes these counter events after one day. No arbitrary forwarded IP headers are trusted.
+
+A rejected applicant can now correct details and reapply for independent admin approval, instead of receiving a generic success while their application stays rejected. Pending applications cannot be overwritten by someone who merely knows the email. Already-active accounts are not overwritten, and a previously approved application may be resubmitted if its account was safely deleted. Reapplication retains the application ID and records the previous status/reviewer in audit history. No public request creates a church, assigns a privileged role, or bypasses approval. Unlisted churches still require admin linking to the correct church before approval. Invalid null-byte passwords are rejected cleanly.
+
+Registration closure, missing registration-schema upgrade and licence problems remain enforced; the public page now gives a more actionable reason. In particular, this update **does not silently reopen intentionally closed registration or bypass licence validation**. Check **Portal settings → Public officer registration**, perform the existing officer-registration upgrade if required, and approve pending applications under the new Church representatives page. Approval emails remain queued by the existing outbox (there is no mail delivery worker for those notifications); applicants can sign in after approval with their chosen password.
+
+### Admin: Church representatives
+
+Use **More → Church representatives** on mobile or **Church reps** in the desktop footer. This dedicated admin-only page includes searchable/paginated registered accounts, active/suspended filters, pending applications and these controls:
+
+- **Add** a rep with name, email, phone, church and initial password. Roles are derived from the church level, never submitted privilege choices.
+- **Edit** name/email/phone/church assignment and optionally replace the password. Blank keeps an existing password; passwords are never displayed or emailed. Share initial/replacement credentials through a trusted channel. Bank-profile values and financial history are not rewritten by this editor.
+- **Suspend / unsuspend** an account. Suspension is enforced by existing authentication/session checks. Unsuspending does not clear unrelated IP blocks or change the password.
+- **Delete** an unused account after typing `DELETE`. Payment/review history blocks deletion; suspend those accounts instead. The profile and account deletion are transactional, protected by existing foreign keys, and audited. Church reports remain associated with the church, not removed with a rep.
+- **View as representative (read-only)** after verifying the admin transaction PIN. This is support impersonation, not permission to submit money movements or change the rep's profile.
+
+All new management mutations and impersonation starts require the current admin's transaction PIN, CSRF token and active licence. Privileged accounts cannot be targeted through this tool. Password changes invalidate old password-stamped sessions; normal suspension/licence/role checks remain in effect. Management events identify the admin actor and target ID without logging passwords or PINs.
+
+### Safe impersonation and return
+
+A conspicuous **Viewing as … · Read-only** banner appears on every impersonated workspace page, with a POST/CSRF-protected **Return to admin** button. The target's normal church read scope is used. **Every write action except return or sign-out is rejected server-side**, even if controls are re-enabled manually or JavaScript is disabled. The interface also disables write forms as a convenience. Sign-out ends the whole session, not just impersonation.
+
+Session IDs and CSRF tokens rotate at start/return. Nested impersonation, privileged/suspended targets and non-admin initiators are refused. The original admin's current role, suspension, password stamp and absolute 30-minute impersonation expiry are checked on every request. If the target is deleted, suspended, changes role or changes password, the valid original admin is restored automatically. If the admin is invalidated or the impersonation expires, the session is signed out instead of restoring authority. Return remains available if the licence expires mid-session, so the admin can address it; licence restrictions still apply to subsequent mutations. Start/end events record both identities in the audit log.
+
+### Deployment / verification
+
+Deploy the complete PHP release and fingerprinted JS/CSS assets together. **No new database migration is introduced**; the existing officer registration schema must already be enabled (the new page links to settings when it is not). Back up the database before deployment. The SQLite compatibility tests exercise management CRUD/protection, approval/resubmission/rate boundaries, rollback and real session rotation. Browser tests cover mobile/desktop management, menus, disabled write forms and return availability; existing finance, recovery and registration suites remain in place. These harnesses do not prove live MySQL locking/concurrency, real mail delivery or a deployed server's registration settings/licence; verify those in staging.
+
+## 0.12.1 — Shared-connection login lockout repair and hosting recovery
+
+The old login policy could reject **every account on an IP** before checking a password. A single unknown-email attempt could also queue a day-long IP ban, and password mistakes could permanently suspend representatives. This can affect an entire church Wi-Fi/NAT or a deployment where the server reports a reverse proxy's address for every user. The v0.11.2 OTP exception helped one account for one login, but did not repair this broader policy. A generic login error alone still does not prove the state of a particular live server.
+
+The default is now **Shared-connection safe** policy, including when upgrading an installation without a `login_lock_mode` setting:
+
+- Historical blanket application IP blocks no longer veto every unrelated account. No new whole-IP firewall jobs are created by failed logins in this mode.
+- Failed guesses are counted per **email + connection**, and (when configured) per email across connections. They are temporary cooldowns, capped at 15 minutes, not permanent `is_suspended` writes. The existing policy thresholds, local-address scope and privileged-account protection options still apply. A valid login, OTP reset or explicit hosting recovery establishes a new account failure boundary without deleting audit history.
+- A separate **60 attempts per IP per minute** flood limit remains. Throttled requests do not add more attempt rows or extend that minute indefinitely. A valid OTP recovery permit retains its account/IP/password/expiry/attempt restrictions. Neither ordinary login nor recovery overrides an actual suspended account.
+- Login distinguishes a generic temporary-limit response from the generic credential/access failure, without disclosing whether an email exists. Account suspension still needs authorized review; no deployment automatically unsuspends all users.
+
+Portal settings now offers **Login lock policy**. `legacy` preserves the previous strict, day-long IP-ban and automatic-suspension behavior if an operator explicitly chooses it; it is not recommended behind shared connections. In shared-safe mode, the displayed account/IP windows are capped at 15 minutes for login enforcement. Existing IP records and failure history remain visible for investigation. External firewalls/CSF/Cloudflare/hosting bans and already-applied firewall jobs are not undone by PHP; have hosting support review those separately. Configure trusted proxies at the **web-server** layer if needed; REMIT does not trust arbitrary forwarded headers.
+
+### When the admin is already locked out
+
+1. Back up and upload the complete 0.12.1 release. Existing deployments without an explicit legacy setting use the safer policy immediately; no database migration or password reset is required for an active account with a correct password.
+2. In cPanel Terminal/SSH, `cd` to the deployed REMIT directory and run read-only diagnosis using the actual installation email:
+   ```sh
+   php bin/login-recovery.php --email=admin@your-domain.example
+   ```
+   It reports the matching account's role/suspension, login policy, recent failures and recorded application IP blocks; it never prints a password, hash or OTP. A missing email/account, suspension or retained strict policy can therefore be distinguished without guessing passwords.
+3. If the hosting owner confirms this is their admin account and wants it unlocked:
+   ```sh
+   php bin/login-recovery.php --email=admin@your-domain.example --unlock-admin --confirm=UNLOCK --use-scoped
+   ```
+   The CLI-only command rechecks/locks the account, permits **only provincial admins**, clears that admin's suspension, resets its cooldown boundary via an audit marker, and selects shared-safe policy. It **does not change the password**, modify transaction PINs or unsuspend other accounts. Sign in with the current password, or complete an email OTP reset if the password is unknown. Review individual suspended representatives in Church representatives after regaining access.
+4. To clear one specifically verified legacy application IP block and cancel its still-pending firewall jobs, append `--ip=ACTUAL_CLIENT_IP` to the confirmed command. Already-applied external firewall rules require hosting review. Do not guess the address or clear all blocks indiscriminately.
+
+This is a **hosting-owner tool, not a public recovery endpoint**. HTTP execution is rejected, and existing private-directory rules must remain enabled. Without terminal access, ask hosting support to run it from the installation directory; do not send anyone your password or OTP. No secret is required in the command line. Diagnosis is read-only unless the unlock and exact confirmation flags are supplied.
+
+Validation: `tests/shared-login.php` reproduces old blanket block rows, unknown-email mistakes, account-specific cooldowns, another rep signing in on the same blocked IP, manual suspension, cooldown expiry, recovery boundaries and one-minute flood protection using real password/session checks in the SQLite compatibility harness. The prior OTP/legacy-strict regression is retained with explicit legacy mode. Full PHP/browser suites are not proof of live server block state, MySQL concurrency or hosting CLI/mail/firewall integration; perform those deployment checks before production acceptance.
+
+## 0.16.2 — Pending-first representative workspace and admin alerts
+
+**Church reps** now opens with a pending-count shortcut and the **pending approval cards first**, rather than putting the queue below account creation and the registered list. Cards stack on phones, use two columns from 760px and three from 1180px. Approve/reject controls stay on each card; unlisted churches still require linking to an independently verified church before approval. The queue now queries/paginates all pending applications in 12-card pages instead of silently limiting access to the first 100. Approval remains a CSRF-protected POST using the existing atomic review/role-assignment logic—there are no email auto-approval links or bulk approval shortcuts that bypass checks.
+
+Registered representatives use a two-column grid on tablet/desktop and stack on phones. Manual account creation is collapsed by default to keep reviews in reach; editing opens the disclosure, and deep links to Add representative reveal it. The dashboard has a **Pending representatives** count/shortcut. Counts are database-backed and refresh on page load, not push notifications. Existing management, PIN, read-only impersonation and return protections are unchanged.
+
+### Approval email delivery
+
+Each genuinely new application or reviewed application's resubmission queues an alert for **all active provincial admins** and the configured `notification_email`, with case-insensitive recipient deduplication. Repeated submissions of an already-pending application do not generate another notice. Alerts contain an application ID and instructions to open **Church reps → Pending approvals**, not passwords, PINs, bank details or links generated from an untrusted Host header.
+
+The public registration controller attempts a bounded delivery **after** the application transaction commits. Mail failure cannot roll back a valid application. Delivery uses native PHP `mail()` and the existing authorized reset-sender/installation-email fallback. PHP mail/Exim and the sender domain's SPF/DKIM/DMARC must be configured; mail transport acceptance is **not** guaranteed inbox delivery. No SMTP credentials are needed in the code or chat. Other notification subjects (e.g. payment/approval results) retain their existing outbox behavior; this worker is specifically scoped to pending-registration alerts.
+
+For reliable retries and draining older queued approval alerts, configure this cPanel cron every minute, replacing the path/PHP binary with the hosting account's actual values:
+
+```cron
+* * * * * /usr/local/bin/php /home/CPANEL_USER/public_html/remit/bin/approval-mail.php
+```
+
+The CLI worker sends at most 25 pending approval messages per run. A database advisory lock serializes it with web-triggered delivery to prevent simultaneous workers selecting the same batch. Each alert has a maximum of three delivery attempts; failures remain visible as an operator warning on the pending queue. Alerts whose application has already been reviewed are skipped (old generic alerts are skipped if there are no pending applications). No notification table migration is needed: this uses existing outbox `status` and `attempts` fields. Keep `bin` protected and run the worker through CLI, not a public URL. Existing outbox jobs are not deleted. A process crash after mail acceptance but before the database status update can cause a duplicate on retry; email transport and database commits cannot provide exact-once delivery.
+
+Deploy the complete release with fingerprinted CSS/JS assets and set up the cron. Test a controlled new application and verify an actual admin mailbox/spam folder. Tests mock mail transport and exercise recipient selection/deduplication, bounded retries, stale-alert skipping and advisory-lock contention; responsive browser tests check 15 pending fixtures, 12-card pages, top-of-page ordering, columns and per-card POST/CSRF actions across five widths. These do not prove live mail delivery or MySQL concurrency; verify those on hosting.
+
+- 0.16.2: prevent accidental native form submission from exposing PayHub JSON session data; PayHub button is explicit button-driven with AJAX guard and graceful fallback, no secret keys displayed. Added signed-in administrator PIN reset without old PIN; PIN shown only as masked status.
+
+- 0.16.2: admin bulk permanent delete for pending remittances in Remittance history, removing associated pending payment notifications and receipts so representatives can resubmit those periods; verified history preserved.
+
+- 0.16.5: redesigned remittance payment flow with reliable offering calculator, fixed PayHub inline checkout/button, automatic payment selection after saving, quick Pay Now actions, and safer pending-payment handling.
+
+- 0.16.5: hotfix for fatal undefined ChurchPortal::ownOutstanding on remittances page; restores remittance page rendering.
+
+- 0.16.7: removed inline PayHub checkout dependency, switched to virtual-account-first PayHub flow, fixed hosted-checkout amount display, automatically displays default PayHub virtual bank account and generated payment reference/details.
+
+- 0.16.8: fixed PayHub return verification (`payhub_ref` GET flow) no longer triggering false CSRF session-expired errors or page reload loops, guarded `app/actions.php` (`function_exists` + `require_once`) to eliminate `Cannot redeclare action()` fatals, fixed DVA webhook vs cached session invalidation and same-URL payment refresh, and surfaced `storage/logs/payhub.log` path in Portal settings.
+
+- 0.16.9: removed the `YOUTH THANKSGIVING SERVICE` / `Start remittance` intro card from the remittances offering panel, placed Step 1 offering entry side-by-side with Step 2 PayHub/bank payment (`remittance-grid`), and refined mobile-first responsive rules across all viewports.
+
+- 0.16.10: streamlined the PayHub virtual account card copy, fixed Manual Bank Transfer to read and display admin-configured provincial receiving bank account details (`provincial_bank_name`, `provincial_account_name`, `provincial_account_number`) with one-tap copy, and fixed Manual Bank Transfer so pending offering reports and their references appear consistently with pre-filled amounts.
+
+- 0.16.11: fixed PayHub virtual account scoping by customer email (`?email=`) with `church_registrations` phone fallback, added real-time DVA reconciliation across PayHub and REMIT polling (`GET /api/virtual-accounts?account_number=...&date=...`), resolved pending checkout references (`PH_...`) to settled DVA transactions without GTV double-counting, fixed `calculate_fees()` zero-fee fallback to Paystack pricing tiers (`estimate_paystack_fee`), and fixed REMIT decimal string fee/net extraction (`extractAmounts()`), webhook zero-fee re-verification, and fee-on-top ledger matching.
+
+- 0.16.12: eliminated MySQL implicit-commit `"There is no active transaction"` failures during PayHub auto-approval by probing `notification_outbox.body_html` non-destructively and running `ensureNotificationSchema()` before `beginTransaction()`, added HMAC-SHA512 (`128`-char) support plus TLS API re-verification fallback in `PayHub::handleWebhook()`, prevented stale cached session metadata across ledger switches, handled DVA reconciliation even when transactions are already recorded on PayHub (`recent_transactions`), reassigned recurring DVA payments from stale already-settled VA metadata to open matching ledgers, and fixed `PAYHUB/verify.php` live-success fast-path, `callback_url` `&amp;` normalization, and automatic return redirects.
+
+- 0.16.13: added CSV and bank-statement PDF export (`RemittanceExport`) for church representatives (`parish_officer`, `area_rep`, `zonal_rep`), provincial administrators, and provincial treasurers on Remittances (`#export-reports` and synced `#reports-history` links), supporting year, from-month to to-month range, single-month, status, and text search filters with strict `financialScope()` isolation, CSV formula-injection neutralization, pure-PHP multi-page A4 Landscape PDF generation with executive KPI summary tiles, aligned tabular figures, statement totals, and treasury-only PayHub gateway fee/net settlement columns.
+
+- 0.16.14: restored missing JavaScript event handlers in `public/assets/app.a9d3eb4d.js` for the Quick Guide modal (`[data-guide-open]`, `#quick-guide-modal`, `[data-guide-close]`, backdrop click, Escape key, focus restoration, and non-`showModal` fallback), mobile navigation drawer (`[data-menu-open]`, `#mobile-menu`, `[data-menu-close]`), receipt dialog, server-history auto-submit, uppercase church inputs, impersonation button locking, and hash-targeted `<details>` disclosures; fixed admin/treasurer Quick Guide CTA link (`index.php?page=remittances`) and scrollable mobile modal card CSS.

@@ -12,24 +12,116 @@
         exit();
     }
 
+    // A failed schema upgrade must not silently disable a vendor's login OTP policy.
+    if (!bc_ensure_user_login_otp_column()) {
+        http_response_code(503);
+        exit('Unable to verify login security settings. Please try again later.');
+    }
+
+    // Do not rely on the 60-second vendor session cache for an authentication policy.
+    $login_vendor_id = (int)($select_vendor_table['id'] ?? 0);
+    if ($login_vendor_id > 0) {
+        $login_vendor_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$login_vendor_id' AND status=1 LIMIT 1");
+        $select_vendor_table = $login_vendor_query ? mysqli_fetch_array($login_vendor_query) : false;
+        if (!$select_vendor_table) {
+            http_response_code(503);
+            exit('Unable to verify login security settings. Please try again later.');
+        }
+    }
+
     // Admin Impersonation Logic (Titanium Platform)
-    if(isset($_GET['logAsUser']) && isset($_GET['auth'])){
-        $logAs = mysqli_real_escape_string($connection_server, trim($_GET['logAsUser']));
-        $auth = $_GET['auth'];
-        $expected_auth = md5($logAs . date('Ymd') . "SUPER_ADMIN_SECRET");
-        
-        if($auth === $expected_auth){
-            $vendor_id = $select_vendor_table["id"];
-            $check_u = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$logAs' LIMIT 1");
-            if($r = mysqli_fetch_assoc($check_u)){
-                $_SESSION["user_session"] = $r['username'];
-                $_SESSION["admin_impersonation"] = true; // Flag for later use if needed
+    // A one-time token minted by bc-spadmin/Users.php. It replaces the old
+    // md5(username + YYYYMMDD + "SUPER_ADMIN_SECRET") scheme, which was a universal,
+    // predictable password for every account: the "secret" was a literal in the source
+    // and the hash was valid for the whole day. This version is random, expires in two
+    // minutes and is burned on first use.
+    if (isset($_GET['logAsToken'])) {
+        $impersonated_user = bc_consume_login_token((string)$_GET['logAsToken'], 'impersonate');
+        if ($impersonated_user) {
+            session_regenerate_id(true);
+            $_SESSION["user_session"] = strtolower($impersonated_user['username']);
+            $_SESSION["admin_impersonation"] = true;
+            $_SESSION["admin_impersonation_vendor"] = (int)$impersonated_user['vendor_id'];
+            recordLoginAttempt($impersonated_user['username'], $_SERVER['REMOTE_ADDR'] ?? '', 1, (int)$impersonated_user['vendor_id']);
+            header("Location: Dashboard.php");
+            exit();
+        }
+        // Never reveal whether the token was wrong or expired.
+        $_SESSION["product_purchase_response"] = "This login link is invalid or has expired. Please ask the administrator to generate a new one.";
+        header("Location: Login.php");
+        exit();
+    }
+
+    // ── Login verification code (step 2 of an OTP-protected sign-in) ─────────────
+    // The password step only ADMITS the attempt; the session is created here, after the
+    // emailed code is confirmed. Pending state is per-session and expires in 15 minutes.
+    $login_otp_pending = $_SESSION['login_otp_pending'] ?? null;
+
+    if (isset($_GET['cancel-login-otp'])) {
+        unset($_SESSION['login_otp_pending']);
+        header("Location: Login.php");
+        exit();
+    }
+
+    if (isset($_POST['resend-login-otp']) && is_array($login_otp_pending)) {
+        if (bc_is_rate_limited('web_login_otp', ((int)$login_otp_pending['vendor_id']) . ':' . strtolower((string)$login_otp_pending['username']), 6, 900)) {
+            $_SESSION["product_purchase_response"] = "Please wait a few minutes before requesting another code.";
+        } else {
+            $resend_user = mysqli_real_escape_string($connection_server, (string)$login_otp_pending['username']);
+            $resend_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . (int)$login_otp_pending['vendor_id'] . "' AND username='$resend_user' LIMIT 1");
+            $resend_row = ($resend_q && mysqli_num_rows($resend_q) === 1) ? mysqli_fetch_assoc($resend_q) : null;
+            if ($resend_row && bc_send_user_login_otp($resend_row, (int)$login_otp_pending['vendor_id']) !== '') {
+                $_SESSION["product_purchase_response"] = "A new verification code has been sent to your email.";
+            } else {
+                $_SESSION["product_purchase_response"] = "Could not send a new code. Please sign in again.";
+                unset($_SESSION['login_otp_pending']);
+            }
+        }
+        header("Location: Login.php");
+        exit();
+    }
+
+    if (isset($_POST['verify-login-otp']) && is_array($login_otp_pending)) {
+        $entered_login_otp = preg_replace('/\D/', '', (string)($_POST['login_otp'] ?? ''));
+        $pending_vendor_id = (int)$login_otp_pending['vendor_id'];
+        $pending_username  = (string)$login_otp_pending['username'];
+
+        if (time() > ((int)$login_otp_pending['created'] + 900)) {
+            unset($_SESSION['login_otp_pending']);
+            $_SESSION["product_purchase_response"] = "Your verification code expired. Please sign in again.";
+        } elseif (!bc_verify_otp('user_login', $pending_username, $pending_vendor_id, $entered_login_otp)) {
+            $_SESSION["product_purchase_response"] = "Incorrect or expired verification code.";
+        } else {
+            $pending_user_sql = mysqli_real_escape_string($connection_server, $pending_username);
+            $pending_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$pending_vendor_id' AND username='$pending_user_sql' LIMIT 1");
+            $pending_row = ($pending_q && mysqli_num_rows($pending_q) === 1) ? mysqli_fetch_assoc($pending_q) : null;
+            if (!$pending_row || (int)$pending_row['status'] !== 1) {
+                unset($_SESSION['login_otp_pending']);
+                $_SESSION["product_purchase_response"] = "This account cannot be signed in right now. Please contact support.";
+            } else {
+                unset($_SESSION['login_otp_pending']);
+                session_regenerate_id(true);
+                $_SESSION["user_session"] = strtolower($pending_row["username"]);
+                recordLoginAttempt($pending_row["username"], $_SERVER['REMOTE_ADDR'] ?? '', 1, $pending_vendor_id);
+
+                // Same "new sign-in" notice the password-only path sends.
+                $log_template_encoded_text_array = array("{firstname}" => $pending_row["firstname"], "{lastname}" => $pending_row["lastname"], "{username}" => $pending_row["username"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);
+                $raw_log_template_subject = getUserEmailTemplate('user-log','subject');
+                $raw_log_template_body = getUserEmailTemplate('user-log','body');
+                foreach($log_template_encoded_text_array as $array_key => $array_val){
+                    $raw_log_template_subject = str_replace($array_key, $array_val, $raw_log_template_subject);
+                    $raw_log_template_body = str_replace($array_key, $array_val, $raw_log_template_body);
+                }
+                sendVendorEmail($pending_row["email"], $raw_log_template_subject, $raw_log_template_body);
+
                 header("Location: Dashboard.php");
                 exit();
             }
         }
+        header("Location: Login.php");
+        exit();
     }
-    
+
     if(isset($_POST['google_token'])){
         $id_token = $_POST['google_token'];
         $payload = verifyGoogleToken($id_token);
@@ -45,6 +137,22 @@
             if ($check_user && mysqli_num_rows($check_user) == 1) {
                 $user_detail = mysqli_fetch_assoc($check_user);
                 if ($user_detail["status"] == 1) {
+                    // Google proves the mailbox, but if this vendor requires a login code we still
+                    // go through the same step so the audit trail and UX stay identical.
+                    if (bc_user_login_otp_required($select_vendor_table)) {
+                        if (bc_send_user_login_otp($user_detail, (int)$vendor_id) !== '') {
+                            $_SESSION['login_otp_pending'] = array(
+                                'username'  => strtolower($user_detail['username']),
+                                'vendor_id' => (int)$vendor_id,
+                                'created'   => time(),
+                            );
+                            $_SESSION["product_purchase_response"] = "A verification code has been sent to your email.";
+                        } else {
+                            $_SESSION["product_purchase_response"] = "Could not send the verification code. Please try again.";
+                        }
+                        header("Location: Login.php");
+                        exit();
+                    }
                     $_SESSION["user_session"] = strtolower($user_detail["username"]);
                     // Update google_id if not set
                     if (empty($user_detail['google_id'])) {
@@ -92,8 +200,40 @@
     			if($check_user_password_details && mysqli_num_rows($check_user_password_details) == 1){
     				while($user_detail = mysqli_fetch_assoc($check_user_password_details)){
     					if($user_detail["status"] == 1){
+                            // Password accepted — but when the vendor requires user login OTP,
+                            // stop here and prove the mailbox before creating the session.
+                            if (bc_user_login_otp_required($select_vendor_table)) {
+                                if (bc_is_rate_limited('web_login_otp', $vendor_id . ':' . strtolower($user_detail['username']), 6, 900)) {
+                                    $json_response_array = array("desc" => "Too many verification codes requested. Please try again later.");
+                                    $json_response_encode = json_encode($json_response_array, true);
+                                    continue;
+                                }
+                                if (!filter_var(trim((string)$user_detail['email']), FILTER_VALIDATE_EMAIL)) {
+                                    $json_response_array = array("desc" => "This account has no valid email address on file. Please contact support.");
+                                    $json_response_encode = json_encode($json_response_array, true);
+                                    continue;
+                                }
+                                if (bc_send_user_login_otp($user_detail, $vendor_id) !== '') {
+                                    $_SESSION['login_otp_pending'] = array(
+                                        'username'  => strtolower($user_detail['username']),
+                                        'vendor_id' => (int)$vendor_id,
+                                        'created'   => time(),
+                                    );
+                                    $json_response_array = array("desc" => "A verification code has been sent to your email.");
+                                } else {
+                                    $json_response_array = array("desc" => "Could not send the verification code. Please try again.");
+                                }
+                                $json_response_encode = json_encode($json_response_array, true);
+                                continue;
+                            }
+
                             recordLoginAttempt($user, $ip, 1, $vendor_id);
 
+                            // Stop session fixation: the pre-login session id must not carry over
+                            // into an authenticated one.
+                            if (session_status() === PHP_SESSION_ACTIVE) {
+                                session_regenerate_id(true);
+                            }
 
     						$_SESSION["user_session"] = strtolower($user_detail["username"]);
 
@@ -225,7 +365,7 @@
                     <h2 class="fw-bold text-dark mb-1 d-none d-lg-block">Sign In</h2>
                     <p class="text-muted mb-4 d-none d-lg-block">Enter your credentials to access your dashboard</p>
 
-                    <?php if(!empty($select_vendor_table['google_client_id'])): ?>
+                    <?php if(!empty($select_vendor_table['google_client_id']) && empty($_SESSION['login_otp_pending'])): ?>
                     <script src="https://accounts.google.com/gsi/client" async defer></script>
                     <div id="g_id_onload"
                         data-client_id="<?php echo $select_vendor_table['google_client_id']; ?>"
@@ -250,6 +390,36 @@
                     </div>
                     <?php endif; ?>
 
+                    <?php if (!empty($_SESSION['login_otp_pending'])): ?>
+                    <div class="text-center mb-3">
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle d-inline-block">
+                            <i class="bi bi-shield-lock text-primary fs-3"></i>
+                        </div>
+                    </div>
+                    <h4 class="fw-bold text-dark text-center mb-1">Verify it's you</h4>
+                    <p class="text-muted text-center small mb-4">
+                        We emailed a 6-digit sign-in code to
+                        <strong><?php echo htmlspecialchars(strtolower((string)$_SESSION['login_otp_pending']['username'])); ?></strong>'s address.
+                    </p>
+                    <form method="post" action="">
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-uppercase text-muted">Verification Code</label>
+                            <input name="login_otp" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                                   autocomplete="one-time-code" required
+                                   class="form-control form-control-lg bg-light text-center fw-bold"
+                                   style="letter-spacing: 10px; font-size: 1.5rem;" placeholder="——————">
+                        </div>
+                        <button name="verify-login-otp" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-3 mb-3 py-3 fw-bold">
+                            VERIFY &amp; SIGN IN
+                        </button>
+                        <button name="resend-login-otp" type="submit" class="btn btn-link w-100 text-decoration-none fw-bold">
+                            Didn't receive it? Resend code
+                        </button>
+                        <div class="text-center mt-2">
+                            <a href="Login.php?cancel-login-otp=1" class="small text-muted">Use a different account</a>
+                        </div>
+                    </form>
+                    <?php else: ?>
                     <form method="post" action="">
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-uppercase text-muted">Username</label>
@@ -286,6 +456,7 @@
                             <a href="Register.php" class="fw-bold text-decoration-none">Create an Account</a>
                         </div>
                     </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

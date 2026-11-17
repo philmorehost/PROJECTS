@@ -158,80 +158,21 @@ try {
     }
 
     // --- START OTA UPDATE SYSTEM MIGRATIONS ---
-    // 1. Create script_tiers table (Dynamic Multi-Project Registry)
+    // 1. Create script_tiers table
     $pdo->exec("CREATE TABLE IF NOT EXISTS `script_tiers` (
         `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `tier_name` VARCHAR(100) NOT NULL,
-        `tier_code` VARCHAR(50) UNIQUE NOT NULL,
+        `tier_name` VARCHAR(50) NOT NULL,
+        `tier_code` VARCHAR(20) UNIQUE NOT NULL,
         `description` TEXT NULL,
-        `github_repo` VARCHAR(150) NULL DEFAULT NULL,
-        `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main',
-        `github_subdir` VARCHAR(200) NULL DEFAULT NULL,
-        `exclude_paths` TEXT NULL,
-        `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php',
-        `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0,
-        `auto_signal` TINYINT(1) NOT NULL DEFAULT 1,
-        `last_github_sha` VARCHAR(64) NULL DEFAULT NULL,
-        `last_pulled_at` DATETIME NULL DEFAULT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");
 
-    // Widen legacy tier_name / tier_code columns if still narrow
-    try {
-        $codeColStmt = $pdo->query("SHOW COLUMNS FROM `script_tiers` WHERE Field = 'tier_code'");
-        $codeCol = $codeColStmt ? $codeColStmt->fetch(PDO::FETCH_ASSOC) : null;
-        if ($codeCol && strtolower((string)($codeCol['Type'] ?? '')) === 'varchar(20)') {
-            $pdo->exec("ALTER TABLE `script_tiers` MODIFY COLUMN `tier_name` VARCHAR(100) NOT NULL, MODIFY COLUMN `tier_code` VARCHAR(50) NOT NULL");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (script_tiers widen): " . $e->getMessage());
-    }
-
-    // Insert default DGV7.0 tiers if missing (preserves IDs 1 & 2 for existing DGV7.0 installations)
+    // Insert default tiers
     $tiers_check = $pdo->query("SELECT COUNT(*) FROM `script_tiers` WHERE `tier_code` IN ('SAAS', 'NON-SAAS')");
-    if ($tiers_check && (int)$tiers_check->fetchColumn() === 0) {
-        $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`, `exclude_paths`, `signal_endpoint`) VALUES 
-            (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-SAAS', 'func/db-dtl.php, func/bc-activation.php, backups/, tmp_update/, logs/, uploaded-image/, uploads/, Downloads/', '/api/ota-signal.php'),
-            (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-NON-SAAS', 'func/db-dtl.php, func/levelup.php, install.php, backups/, tmp_update/, logs/, uploaded-image/, Downloads/', '/api/ota-signal.php')");
-    }
-
-    // Add GitHub & Push-Signal columns to existing script_tiers installations (runs once)
-    try {
-        $ghColCheck = $pdo->query("SHOW COLUMNS FROM `script_tiers` WHERE Field = 'github_repo'");
-        if ($ghColCheck && $ghColCheck->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `script_tiers`
-                ADD COLUMN `github_repo` VARCHAR(150) NULL DEFAULT NULL AFTER `description`,
-                ADD COLUMN `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main' AFTER `github_repo`,
-                ADD COLUMN `github_subdir` VARCHAR(200) NULL DEFAULT NULL AFTER `github_branch`,
-                ADD COLUMN `exclude_paths` TEXT NULL AFTER `github_subdir`,
-                ADD COLUMN `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php' AFTER `exclude_paths`,
-                ADD COLUMN `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0 AFTER `signal_endpoint`,
-                ADD COLUMN `auto_signal` TINYINT(1) NOT NULL DEFAULT 1 AFTER `auto_pull_github`,
-                ADD COLUMN `last_github_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `auto_signal`,
-                ADD COLUMN `last_pulled_at` DATETIME NULL DEFAULT NULL AFTER `last_github_sha`");
-
-            // Pre-populate GitHub mapping on existing DGV7.0 tiers without touching their IDs or codes
-            $pdo->exec("UPDATE `script_tiers` SET `github_repo` = 'philmorehost/PROJECTS', `github_branch` = 'main', `github_subdir` = 'VTU/DGV7.0-SAAS', `exclude_paths` = 'func/db-dtl.php, func/bc-activation.php, backups/, tmp_update/, logs/, uploaded-image/, uploads/, Downloads/' WHERE `tier_code` = 'SAAS' AND `github_subdir` IS NULL");
-            $pdo->exec("UPDATE `script_tiers` SET `github_repo` = 'philmorehost/PROJECTS', `github_branch` = 'main', `github_subdir` = 'VTU/DGV7.0-NON-SAAS', `exclude_paths` = 'func/db-dtl.php, func/levelup.php, install.php, backups/, tmp_update/, logs/, uploaded-image/, Downloads/' WHERE `tier_code` = 'NON-SAAS' AND `github_subdir` IS NULL");
-
-            // Seed initial SMSP tiers during this one-time migration
-            $smspExcludes = 'config/config.php, config/.sys_cache, install/, backups/, tmp_update/, logs/, dataimg/, uploads/, mobile-android/, mobile-ios/, scratch/';
-            $seedStmt = $pdo->prepare("INSERT IGNORE INTO `script_tiers` (`tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`, `exclude_paths`, `signal_endpoint`, `auto_pull_github`, `auto_signal`) VALUES (?, ?, ?, 'philmorehost/PROJECTS', 'main', 'SMSP', ?, '/api/v1/ota-signal.php', 1, 1)");
-            $seedStmt->execute(['SchoolApp Multi-Tenant SaaS', 'SMSP-SAAS', 'Extended multi-tenant SaaS license for SchoolApp (SMSP)', $smspExcludes]);
-            $seedStmt->execute(['SchoolApp Standard', 'SMSP-NON-SAAS', 'Standard single-school license for SchoolApp (SMSP)', $smspExcludes]);
-        } else {
-            // Also ensure fresh databases where CREATE TABLE ran above have SMSP seeded if only the 2 base tiers exist
-            $totalTiersStmt = $pdo->query("SELECT COUNT(*) FROM `script_tiers`");
-            $smspCountStmt = $pdo->query("SELECT COUNT(*) FROM `script_tiers` WHERE `tier_code` IN ('SMSP-SAAS', 'SMSP-NON-SAAS')");
-            if ($totalTiersStmt && $smspCountStmt && (int)$totalTiersStmt->fetchColumn() === 2 && (int)$smspCountStmt->fetchColumn() === 0) {
-                $smspExcludes = 'config/config.php, config/.sys_cache, install/, backups/, tmp_update/, logs/, dataimg/, uploads/, mobile-android/, mobile-ios/, scratch/';
-                $seedStmt = $pdo->prepare("INSERT IGNORE INTO `script_tiers` (`tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`, `exclude_paths`, `signal_endpoint`, `auto_pull_github`, `auto_signal`) VALUES (?, ?, ?, 'philmorehost/PROJECTS', 'main', 'SMSP', ?, '/api/v1/ota-signal.php', 1, 1)");
-                $seedStmt->execute(['SchoolApp Multi-Tenant SaaS', 'SMSP-SAAS', 'Extended multi-tenant SaaS license for SchoolApp (SMSP)', $smspExcludes]);
-                $seedStmt->execute(['SchoolApp Standard', 'SMSP-NON-SAAS', 'Standard single-school license for SchoolApp (SMSP)', $smspExcludes]);
-            }
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (script_tiers github columns): " . $e->getMessage());
+    if ($tiers_check && $tiers_check->fetchColumn() == 0) {
+        $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`) VALUES 
+            (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features'),
+            (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features')");
     }
 
     // 2. Create script_updates table
@@ -242,40 +183,9 @@ try {
         `zip_path` VARCHAR(255) NOT NULL,
         `checksum` VARCHAR(64) NOT NULL,
         `changelog` TEXT NULL,
-        `source` VARCHAR(30) NOT NULL DEFAULT 'upload',
-        `commit_sha` VARCHAR(64) NULL DEFAULT NULL,
         `is_released` TINYINT(1) DEFAULT 0,
         `release_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (`tier_id`) REFERENCES `script_tiers`(`id`) ON DELETE CASCADE
-    ) ENGINE=InnoDB");
-
-    // Add source & commit_sha columns to existing script_updates tables
-    try {
-        $updSourceCheck = $pdo->query("SHOW COLUMNS FROM `script_updates` WHERE Field = 'source'");
-        if ($updSourceCheck && $updSourceCheck->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `script_updates`
-                ADD COLUMN `source` VARCHAR(30) NOT NULL DEFAULT 'upload' AFTER `changelog`,
-                ADD COLUMN `commit_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `source`");
-        }
-    } catch (PDOException $e) {
-        error_log("Database migration warning (script_updates source/commit_sha): " . $e->getMessage());
-    }
-
-    // 2b. Create ota_signal_logs table for tracking push signals sent to licensed client domains
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `ota_signal_logs` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `update_id` INT NOT NULL,
-        `tier_id` INT NOT NULL,
-        `license_id` INT NULL,
-        `domain_name` VARCHAR(150) NOT NULL,
-        `endpoint_url` VARCHAR(255) NOT NULL,
-        `http_code` INT NOT NULL DEFAULT 0,
-        `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
-        `response_body` TEXT NULL,
-        `signaled_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX `idx_signal_update` (`update_id`),
-        INDEX `idx_signal_tier` (`tier_id`),
-        FOREIGN KEY (`update_id`) REFERENCES `script_updates`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB");
 
     // 3. Alter licenses table
@@ -385,8 +295,36 @@ try {
     }
 
 } catch (PDOException $e) {
-    // In a real app, you'd want to log this error and show a generic error page.
-    die("Database connection failed: " . $e->getMessage());
+    // Never echo the message: it contains the database name, the user and the
+    // host, and on some drivers the password. Log the detail, show a hint.
+    error_log('LM database connection failed: ' . $e->getMessage());
+
+    $pdo = null;
+
+    if (PHP_SAPI !== 'cli') {
+        if (!headers_sent()) {
+            http_response_code(503);
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+        }
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Database unavailable</title>'
+            . '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+            . 'background:#0b1220;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}'
+            . 'div{max-width:520px;background:#111a2e;border:1px solid #26324a;border-radius:16px;padding:26px 28px}'
+            . 'h1{margin:0 0 10px;font-size:20px}p{margin:0 0 10px;line-height:1.65;font-size:14px;color:#a9b6cc}'
+            . 'code{background:#1b2740;padding:2px 6px;border-radius:5px;font-size:12.5px}</style></head><body><div>'
+            . '<h1>The database is not answering</h1>'
+            . '<p>This page needs MySQL. The connection in <code>db.php</code> was refused, so nothing '
+            . 'was read or written.</p>'
+            . '<p>Check the host, database name, user and password on lines 3–6 of <code>db.php</code>, '
+            . 'then reload. The exact error is in the PHP error log.</p>'
+            . '<p>File checks that need no database still work: <a href="health.php" '
+            . 'style="color:#8ea2ff">health.php</a>.</p>'
+            . '</div></body></html>';
+        exit;
+    }
 }
 
 function hasTableColumn(PDO $pdo, string $table, string $column): bool {
@@ -403,22 +341,11 @@ function getLicenseInsertDefinition(PDO $pdo): array {
     $hasMax = hasTableColumn($pdo, 'licenses', 'max_domain_changes');
     $hasCount = hasTableColumn($pdo, 'licenses', 'domain_change_count');
     $hasType = hasTableColumn($pdo, 'licenses', 'license_type');
-    $hasTier = hasTableColumn($pdo, 'licenses', 'tier_id');
-
-    if ($hasMax && $hasCount && $hasType && $hasTier) {
-        return [
-            'sql' => "INSERT INTO licenses (license_key, tier_id, domain, customer_email, status, max_domain_changes, domain_change_count, license_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard', $tier_id = null) {
-                $resolved_tier = $tier_id !== null ? (int)$tier_id : ($license_type === 'extended' ? 1 : 2);
-                return [$license_key, $resolved_tier, $domain, $customer_email, $status, $max_domain_changes, 0, $license_type];
-            }
-        ];
-    }
 
     if ($hasMax && $hasCount && $hasType) {
         return [
             'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count, license_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard', $tier_id = null) {
+            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
                 return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0, $license_type];
             }
         ];
@@ -427,7 +354,7 @@ function getLicenseInsertDefinition(PDO $pdo): array {
     if ($hasMax && $hasCount) {
         return [
             'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count) VALUES (?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard', $tier_id = null) {
+            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
                 return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0];
             }
         ];
@@ -435,7 +362,7 @@ function getLicenseInsertDefinition(PDO $pdo): array {
 
     return [
         'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status) VALUES (?, ?, ?, ?)",
-        'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard', $tier_id = null) {
+        'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard') {
             return [$license_key, $domain, $customer_email, $status];
         }
     ];

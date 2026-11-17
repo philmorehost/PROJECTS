@@ -66,10 +66,8 @@ class AppNetworkService {
                 let decoded = try JSONDecoder().decode(T.self, from: data)
                 DispatchQueue.main.async { completion(.success(decoded)) }
             } catch {
-                // If decoding fails, check if it's a string response (common in legacy APIs)
-                if let stringResponse = String(data: data, encoding: .utf8) {
-                    print("Raw Response: \(stringResponse)")
-                }
+                // SECURITY: do NOT print the raw response. These payloads carry the api_key,
+                // wallet balance and transaction history into the device console.
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }.resume()
@@ -106,9 +104,7 @@ class AppNetworkService {
                 let decoded = try JSONDecoder().decode(T.self, from: data)
                 DispatchQueue.main.async { completion(.success(decoded)) }
             } catch {
-                if let stringResponse = String(data: data, encoding: .utf8) {
-                    print("Raw JSON Response: \(stringResponse)")
-                }
+                // SECURITY: do NOT print the raw JSON - it contains the api_key.
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }.resume()

@@ -58,7 +58,7 @@ $referral_edited = function_exists('bc_resolve_referral_id')
     : "";
 
 $last_login = date('Y-m-d H:i:s.u');
-mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')");
+mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1', '1')");
 
 // Send welcome email using the configured template
 $reg_tpl_vars = ["{firstname}" => $first, "{lastname}" => $last, "{username}" => $user,

@@ -50,7 +50,7 @@ mysqli_query($connection_server, "UPDATE sas_vendors SET balance = balance - $to
 $ref = "WA_BRD_" . time() . "_" . rand(100, 999);
 $desc = "WhatsApp Broadcast Campaign ($count users)";
 mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) 
-    VALUES ('$vid', 'whatsapp', 'WhatsApp Marketing', '$ref', '$total_cost', '$total_cost', '{$vendor_r['balance']}', '{$vendor_r['balance']}' - $total_cost, '$desc', '".$_SERVER["HTTP_HOST"]."', '1')");
+    VALUES ('$vid', 'whatsapp', 'WhatsApp Marketing', '$ref', '$total_cost', '$total_cost', '{$vendor_r['balance']}', '{$vendor_r['balance']}' - $total_cost, '$desc', '".bc_safe_host_sql($connection_server)."', '1')");
 
 // 4. Record Super Admin Profit
 $base_cost_ngn = round($marketing_usd * $live_rate * $count, 2);

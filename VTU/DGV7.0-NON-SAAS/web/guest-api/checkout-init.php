@@ -265,13 +265,12 @@ if (empty($guest_email)) {
 }
 
 $callback_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
-              . '://' . $_SERVER['HTTP_HOST'] . '/web/guest-payment-complete.php?reference=' . urlencode($reference);
+              . '://' . $_SERVER['HTTP_HOST'] . '/web/guest-payment-complete.php?local_reference=' . urlencode($reference);
 
 $res_json = makePayhubRequest("POST", "api/transaction/initialize", [
     "email"        => $guest_email,
     "amount"       => $discounted_amount,
     "name"         => $guest_phone_contact ?: "Guest Customer",
-    "reference"    => $reference,
     "callback_url" => $callback_url,
     "metadata"     => json_encode([
         "vendor_id" => $vendor_id,

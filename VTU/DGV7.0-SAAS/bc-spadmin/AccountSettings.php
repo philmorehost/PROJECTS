@@ -435,6 +435,10 @@
         $force_login_otp = isset($_POST["force_bcadmin_login_otp"]) ? '1' : '0';
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_bcadmin_login_otp', '$force_login_otp') ON DUPLICATE KEY UPDATE option_value='$force_login_otp'");
 
+        // Platform-wide minimum for END USER login OTP (website + mobile apps).
+        $force_user_login_otp = isset($_POST["force_user_login_otp"]) ? '1' : '0';
+        $user_otp_saved = setSuperAdminOption('force_user_login_otp', $force_user_login_otp);
+
         // Daily password-reset limit (per account, default 1)
         $reset_daily_limit = max(1, (int)($_POST["password_reset_daily_limit"] ?? 1));
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('password_reset_daily_limit', '$reset_daily_limit') ON DUPLICATE KEY UPDATE option_value='$reset_daily_limit'");
@@ -459,6 +463,7 @@
         } else {
             $_SESSION["product_purchase_response"] = "Global security policy updated successfully";
         }
+        if (!$user_otp_saved) $_SESSION["product_purchase_response"] = "Could not save the user login OTP policy. Please check database permissions and try again.";
         header("Location: ".$_SERVER["REQUEST_URI"]);
         exit();
     }
@@ -1185,6 +1190,9 @@
 
                                 $opt_login_otp = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_bcadmin_login_otp'");
                                 $force_bcadmin_login_otp = mysqli_fetch_assoc($opt_login_otp)['option_value'] ?? '0';
+
+                                $opt_user_login_otp = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_user_login_otp'");
+                                $force_user_login_otp = mysqli_fetch_assoc($opt_user_login_otp)['option_value'] ?? '0';
                                 ?>
                                 <div class="bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-25 mb-4">
                                     <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0 mb-3">
@@ -1207,6 +1215,13 @@
                                             <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every vendor admin must enter a one-time code emailed to their address each time they sign in to bc-admin. A vendor can switch it off for their own account only; that does not affect other vendors.</p>
                                         </div>
                                         <input type="checkbox" name="force_bcadmin_login_otp" class="form-check-input ms-0" id="forceLoginOtp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_bcadmin_login_otp == '1') ? 'checked' : ''; ?>>
+                                    </div>
+                                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0 mt-3">
+                                        <div>
+                                            <label class="form-check-label fw-bold h6 mb-1 text-dark-primary" for="forceUserLoginOtp">Require Login OTP for Users (Website &amp; Apps)</label>
+                                            <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every customer must enter a one-time code emailed to them at sign-in on the website and mobile apps. Vendors cannot disable this platform requirement.</p>
+                                        </div>
+                                        <input type="checkbox" name="force_user_login_otp" class="form-check-input ms-0" id="forceUserLoginOtp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_user_login_otp == '1') ? 'checked' : ''; ?>>
                                     </div>
                                 </div>
 

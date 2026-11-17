@@ -1,0 +1,25 @@
+[24-Oct-2026 10:17:37 UTC] PHP Fatal error:  Uncaught Error: Class 'PDO' not found in /home/pmhmanager/public_html/db.php:50
+Stack trace:
+#0 /home/pmhmanager/public_html/admin/index.php(20): require_once()
+#1 {main}
+  thrown in /home/pmhmanager/public_html/db.php on line 50
+[24-Oct-2026 10:17:56 UTC] PHP Fatal error:  Uncaught Error: Class 'PDO' not found in /home/pmhmanager/public_html/db.php:50
+Stack trace:
+#0 /home/pmhmanager/public_html/admin/index.php(20): require_once()
+#1 {main}
+  thrown in /home/pmhmanager/public_html/db.php on line 50
+[24-Oct-2026 10:17:58 UTC] PHP Fatal error:  Uncaught Error: Class 'PDO' not found in /home/pmhmanager/public_html/db.php:50
+Stack trace:
+#0 /home/pmhmanager/public_html/admin/index.php(20): require_once()
+#1 {main}
+  thrown in /home/pmhmanager/public_html/db.php on line 50
+[24-Oct-2026 10:17:59 UTC] PHP Fatal error:  Uncaught Error: Class 'PDO' not found in /home/pmhmanager/public_html/db.php:50
+Stack trace:
+#0 /home/pmhmanager/public_html/admin/index.php(20): require_once()
+#1 {main}
+  thrown in /home/pmhmanager/public_html/db.php on line 50
+[24-Oct-2026 10:18:24 UTC] PHP Fatal error:  Uncaught Error: Class 'PDO' not found in /home/pmhmanager/public_html/db.php:50
+Stack trace:
+#0 /home/pmhmanager/public_html/admin/index.php(20): require_once()
+#1 {main}
+  thrown in /home/pmhmanager/public_html/db.php on line 50

@@ -16,8 +16,9 @@ import kotlinx.coroutines.launch
  * Push notification format expected from the server:
  *   { "data": { "type": "app_update" } }
  *
- * When type == "app_update", the service triggers AppUpdateManager to check
- * for a new APK version and show an update dialog on the next foreground launch.
+ * When type == "app_update", the service sets a flag so the server can signal that a new
+ * release is live. Installation is handled by Play In-App Updates through AppUpdateChecker;
+ * this app never downloads or installs an APK itself.
  *
  * Token lifecycle:
  *   - onNewToken() is called when FCM issues a new registration token.

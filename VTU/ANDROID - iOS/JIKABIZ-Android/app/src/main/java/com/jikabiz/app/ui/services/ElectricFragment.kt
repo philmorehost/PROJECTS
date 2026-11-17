@@ -13,6 +13,7 @@ import com.jikabiz.app.R
 import com.jikabiz.app.api.RetrofitClient
 import com.jikabiz.app.databinding.FragmentElectricBinding
 import com.jikabiz.app.util.LoadingOverlay
+import com.jikabiz.app.util.PinPromptHelper
 import com.jikabiz.app.util.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -234,8 +235,16 @@ class ElectricFragment : Fragment(R.layout.fragment_electric) {
                 "Type: ${selectedMeterType.replaceFirstChar { it.uppercase() }}\n" +
                 "Amount: ₦$amountStr"
             )
-            .setPositiveButton("Pay Now") { _, _ -> doPurchase(meter, amountStr) }
+            .setPositiveButton("Pay Now") { _, _ -> promptPinThenPurchase(meter, amountStr) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun promptPinThenPurchase(meter: String, amount: String) {
+        PinPromptHelper.requirePin(
+            requireContext(), PreferenceManager(requireContext()),
+            onReady = { doPurchase(meter, amount) },
+            onNeedsSetup = { snack("Please set a transaction PIN in Profile > Set PIN first") }
+        )
     }
 
     private fun doPurchase(meter: String, amount: String) {

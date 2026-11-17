@@ -125,32 +125,29 @@ if (isset($_GET['action'])) {
         }
 
         if ($gateway == 'payhub') {
-            // CRITICAL (PayHub API contract): PayHub's api/transaction/initialize IGNORES any
-            // merchant-supplied "reference" / "callback_url" and always generates its own
-            // "PH_<hex>" reference (returned in data.reference / data.access_code). We MUST adopt
-            // that PayHub reference as the canonical one for the whole flow (verify, poll, success
-            // page, webhook). Calling api/transaction/verify/{local_ref} returns "Transaction not
-            // found" -> the inline modal resets and the wallet is never credited. So we persist the
-            // PayHub ref on the local transaction + a checkout row and return it to the front-end
-            // so it polls/redirects with the RIGHT reference.
-            $callback_url = $is_vendor_funding ? $web_http_host . "/bc-admin/payhub-success.php" : $web_http_host . "/web/payhub-success.php";
+            // PayHub generates its own PH_ reference; the local DGV reference belongs
+            // in metadata so fulfillment can map the verified gateway transaction back to its row.
+            // The merchant API accepts callback_url at the top level and redirects here after
+            // verification. Keep our local ref under a separate query name because PayHub appends
+            // its own reference as `reference` when it returns the payer.
+            $local_ref_for_return = rawurlencode(stripslashes($reference));
+            $callback_url = $is_vendor_funding
+                ? $web_http_host . "/bc-admin/payhub-success.php?local_reference=" . $local_ref_for_return
+                : $web_http_host . "/web/payhub-success.php?local_reference=" . $local_ref_for_return;
             $res_json = makePayhubRequest("POST", "api/transaction/initialize", [
                 "email" => $email,
                 "amount" => $amount,
                 "name" => $name,
                 "phone" => $phone,
-                // NOTE: do NOT send "reference"/"callback_url" at the top level - PayHub ignores
-                // them. The local reference is carried inside metadata for cross-referencing.
+                "callback_url" => $callback_url,
                 "metadata" => json_encode([
                     "vendor_id" => $vid,
                     "username" => $tx['username'] ?? '',
                     "target" => $is_vendor_funding ? "vendor" : "user",
                     "reference" => $reference,
-                    "product_unique_id" => $tx['product_unique_id'] ?? '',
-                    "callback_url" => $callback_url
+                    "product_unique_id" => $tx['product_unique_id'] ?? ''
                 ])
             ], $vid, $is_vendor_funding);
-
             $res = json_decode($res_json, true);
             if (($res['status'] ?? '') == 'success') {
                 $inner = json_decode($res['json_result'], true);

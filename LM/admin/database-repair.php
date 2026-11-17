@@ -1,18 +1,24 @@
 <?php
-session_start();
+/**
+ * admin/database-repair.php — bring an older schema up to what the code expects.
+ *
+ * Additive only: it creates missing tables and adds missing columns, and it
+ * never drops one. The repair is a POST behind the CSRF token, and the result
+ * of each step is reported individually so a partial fix is obvious.
+ *
+ * @package LicenseManager
+ */
 
-// Check if user is admin
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: ../index.php');
-    exit;
-}
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
+
+$pdo = lm_app_boot();
 
 $messages = [];
 
 // Force database migration
-if (isset($_POST['repair'])) {
-    require_once('../db.php');
-    
+if (lm_app_handle_post() && isset($_POST['repair'])) {
     try {
         // Add customer_email column if missing
         try {
@@ -74,57 +80,26 @@ if (isset($_POST['repair'])) {
         try {
             $pdo->exec("CREATE TABLE IF NOT EXISTS `script_tiers` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `tier_name` VARCHAR(100) NOT NULL,
-                `tier_code` VARCHAR(50) UNIQUE NOT NULL,
+                `tier_name` VARCHAR(50) NOT NULL,
+                `tier_code` VARCHAR(20) UNIQUE NOT NULL,
                 `description` TEXT NULL,
-                `github_repo` VARCHAR(150) NULL DEFAULT NULL,
-                `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main',
-                `github_subdir` VARCHAR(200) NULL DEFAULT NULL,
-                `exclude_paths` TEXT NULL,
-                `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php',
-                `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0,
-                `auto_signal` TINYINT(1) NOT NULL DEFAULT 1,
-                `last_github_sha` VARCHAR(64) NULL DEFAULT NULL,
-                `last_pulled_at` DATETIME NULL DEFAULT NULL,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB");
-
-            $pdo->exec("ALTER TABLE `script_tiers` MODIFY COLUMN `tier_name` VARCHAR(100) NOT NULL, MODIFY COLUMN `tier_code` VARCHAR(50) NOT NULL");
-
-            $ghColCheck = $pdo->query("SHOW COLUMNS FROM `script_tiers` WHERE Field = 'github_repo'");
-            if ($ghColCheck && $ghColCheck->rowCount() === 0) {
-                $pdo->exec("ALTER TABLE `script_tiers`
-                    ADD COLUMN `github_repo` VARCHAR(150) NULL DEFAULT NULL AFTER `description`,
-                    ADD COLUMN `github_branch` VARCHAR(100) NOT NULL DEFAULT 'main' AFTER `github_repo`,
-                    ADD COLUMN `github_subdir` VARCHAR(200) NULL DEFAULT NULL AFTER `github_branch`,
-                    ADD COLUMN `exclude_paths` TEXT NULL AFTER `github_subdir`,
-                    ADD COLUMN `signal_endpoint` VARCHAR(255) NOT NULL DEFAULT '/api/v1/ota-signal.php' AFTER `exclude_paths`,
-                    ADD COLUMN `auto_pull_github` TINYINT(1) NOT NULL DEFAULT 0 AFTER `signal_endpoint`,
-                    ADD COLUMN `auto_signal` TINYINT(1) NOT NULL DEFAULT 1 AFTER `auto_pull_github`,
-                    ADD COLUMN `last_github_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `auto_signal`,
-                    ADD COLUMN `last_pulled_at` DATETIME NULL DEFAULT NULL AFTER `last_github_sha`");
-                $messages[] = ['type' => 'success', 'text' => '✓ Added GitHub & push-signal columns to script_tiers'];
-            }
             
             $tiers_check = $pdo->query("SELECT COUNT(*) FROM `script_tiers` WHERE `tier_code` IN ('SAAS', 'NON-SAAS')");
             if ($tiers_check && $tiers_check->fetchColumn() == 0) {
-                $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`) VALUES 
-                    (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-SAAS'),
-                    (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features', 'philmorehost/PROJECTS', 'main', 'VTU/DGV7.0-NON-SAAS')");
+                $pdo->exec("INSERT INTO `script_tiers` (`id`, `tier_name`, `tier_code`, `description`) VALUES 
+                    (1, 'DGV7.0-SAAS', 'SAAS', 'Extended license for multiple domains with premium features'),
+                    (2, 'DGV7.0-NON-SAAS', 'NON-SAAS', 'Standard license for a single domain with core features')");
                 $messages[] = ['type' => 'success', 'text' => '✓ Created script_tiers table and inserted default tiers'];
             } else {
                 $messages[] = ['type' => 'info', 'text' => 'ℹ script_tiers table and default tiers already exist'];
             }
-
-            $smspExcludes = 'config/config.php, config/.sys_cache, install/, backups/, tmp_update/, logs/, dataimg/, uploads/, mobile-android/, mobile-ios/, scratch/';
-            $seedStmt = $pdo->prepare("INSERT IGNORE INTO `script_tiers` (`tier_name`, `tier_code`, `description`, `github_repo`, `github_branch`, `github_subdir`, `exclude_paths`, `signal_endpoint`, `auto_pull_github`, `auto_signal`) VALUES (?, ?, ?, 'philmorehost/PROJECTS', 'main', 'SMSP', ?, '/api/v1/ota-signal.php', 1, 1)");
-            $seedStmt->execute(['SchoolApp Multi-Tenant SaaS', 'SMSP-SAAS', 'Extended multi-tenant SaaS license for SchoolApp (SMSP)', $smspExcludes]);
-            $seedStmt->execute(['SchoolApp Standard', 'SMSP-NON-SAAS', 'Standard single-school license for SchoolApp (SMSP)', $smspExcludes]);
         } catch (PDOException $e) {
             $messages[] = ['type' => 'error', 'text' => '✗ Error repairing script_tiers: ' . $e->getMessage()];
         }
 
-        // 2. script_updates & ota_signal_logs
+        // 2. script_updates
         try {
             $pdo->exec("CREATE TABLE IF NOT EXISTS `script_updates` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -133,37 +108,11 @@ if (isset($_POST['repair'])) {
                 `zip_path` VARCHAR(255) NOT NULL,
                 `checksum` VARCHAR(64) NOT NULL,
                 `changelog` TEXT NULL,
-                `source` VARCHAR(30) NOT NULL DEFAULT 'upload',
-                `commit_sha` VARCHAR(64) NULL DEFAULT NULL,
                 `is_released` TINYINT(1) DEFAULT 0,
                 `release_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (`tier_id`) REFERENCES `script_tiers`(`id`) ON DELETE CASCADE
             ) ENGINE=InnoDB");
-
-            $updSrcCol = $pdo->query("SHOW COLUMNS FROM `script_updates` WHERE Field = 'source'");
-            if ($updSrcCol && $updSrcCol->rowCount() === 0) {
-                $pdo->exec("ALTER TABLE `script_updates`
-                    ADD COLUMN `source` VARCHAR(30) NOT NULL DEFAULT 'upload' AFTER `changelog`,
-                    ADD COLUMN `commit_sha` VARCHAR(64) NULL DEFAULT NULL AFTER `source`");
-            }
-
-            $pdo->exec("CREATE TABLE IF NOT EXISTS `ota_signal_logs` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `update_id` INT NOT NULL,
-                `tier_id` INT NOT NULL,
-                `license_id` INT NULL,
-                `domain_name` VARCHAR(150) NOT NULL,
-                `endpoint_url` VARCHAR(255) NOT NULL,
-                `http_code` INT NOT NULL DEFAULT 0,
-                `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
-                `response_body` TEXT NULL,
-                `signaled_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX `idx_signal_update` (`update_id`),
-                INDEX `idx_signal_tier` (`tier_id`),
-                FOREIGN KEY (`update_id`) REFERENCES `script_updates`(`id`) ON DELETE CASCADE
-            ) ENGINE=InnoDB");
-
-            $messages[] = ['type' => 'success', 'text' => '✓ Checked script_updates and ota_signal_logs tables'];
+            $messages[] = ['type' => 'success', 'text' => '✓ Checked script_updates table'];
         } catch (PDOException $e) {
             $messages[] = ['type' => 'error', 'text' => '✗ Error repairing script_updates: ' . $e->getMessage()];
         }
@@ -238,148 +187,90 @@ if (isset($_POST['repair'])) {
     }
 }
 
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="system-check.php">' . lm_icon('shield') . ' System check</a>'
+    . '<a class="lm-btn lm-btn--ghost" href="diagnostic.php">' . lm_icon('terminal') . ' Diagnostics</a>';
+
+lm_app_start('Database repair', array(
+    'subtitle' => 'Additive schema fixes for installs that were updated in place. Nothing is ever dropped.',
+    'active'   => 'database',
+    'actions'  => $actionsHtml,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database Repair - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-        }
-        .back-link {
-            display: inline-block;
-            margin-bottom: 2rem;
-            padding: 0.75rem 1.5rem;
-            background: white;
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        h1 {
-            color: white;
-            margin-bottom: 2rem;
-            font-size: 2.5rem;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        .message {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 4px solid;
-        }
-        .message.success {
-            background: #d1fae5;
-            border-color: #10b981;
-            color: #065f46;
-        }
-        .message.error {
-            background: #fee2e2;
-            border-color: #ef4444;
-            color: #991b1b;
-        }
-        .message.info {
-            background: #dbeafe;
-            border-color: #3b82f6;
-            color: #1e40af;
-        }
-        .form-group {
-            margin-top: 2rem;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        .warning-box {
-            background: #fef3c7;
-            border: 1px solid #fcd34d;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            color: #92400e;
-        }
-        .warning-box h3 {
-            margin-bottom: 0.5rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="dashboard.php" class="back-link">← Back to Dashboard</a>
-        <h1>🔧 Database Repair</h1>
 
-        <div class="card">
-            <div class="warning-box">
-                <h3>⚠️ About This Tool</h3>
-                <p>This tool will check and repair your database schema. If you see errors like "Unknown column 'customer_email'", run this repair to fix them.</p>
-            </div>
+<div class="lm-note">
+    <?= lm_icon('shield') ?>
+    <span><strong>Safe to run more than once.</strong> Each step checks what is there first and reports
+        “already exists” rather than failing. Back up the database from cPanel before a major upgrade anyway.</span>
+</div>
 
-            <?php if (!empty($messages)): ?>
-                <div style="margin-bottom: 2rem;">
-                    <?php foreach ($messages as $msg): ?>
-                        <div class="message <?= htmlspecialchars($msg['type']) ?>">
-                            <?= htmlspecialchars($msg['text']) ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-
-            <div class="form-group">
-                <form method="POST">
-                    <button type="submit" name="repair" value="1">🔨 Run Database Repair</button>
-                </form>
-            </div>
-
-            <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
-                <h3 style="color: #1e293b; margin-bottom: 1rem;">What This Does:</h3>
-                <ul style="color: #666; line-height: 1.8; padding-left: 1.5rem;">
-                    <li>✓ Checks if licenses table has customer_email column</li>
-                    <li>✓ Checks if licenses table has expiry_date column</li>
-                    <li>✓ Checks if transactions table has license_id column</li>
-                    <li>✓ Adds missing columns automatically</li>
-                    <li>✓ Fixes NULL customer_email values where possible</li>
-                </ul>
-            </div>
-
-            <div style="margin-top: 2rem; padding: 1.5rem; background: #eff6ff; border-radius: 8px; color: #1e40af;">
-                <h3 style="margin-bottom: 0.5rem;">💡 If Still Getting Errors</h3>
-                <p>After running this repair, try:</p>
-                <ol style="margin-top: 0.75rem; padding-left: 1.5rem;">
-                    <li>Go to <a href="system-check.php" style="color: #3b82f6; font-weight: 500;">System Check</a></li>
-                    <li>Visit <a href="payment-debug.php" style="color: #3b82f6; font-weight: 500;">Payment Debug</a> to check logs</li>
-                    <li>Try a test payment again</li>
-                </ol>
-            </div>
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('database') ?> Run the repair</h2>
+            <p>Fixes “Unknown column”, missing tables and licences with no tier attached.</p>
         </div>
     </div>
-</body>
-</html>
+    <div class="lm-panel__body">
+        <?php if (!empty($messages)): ?>
+            <div class="lm-stack" style="gap:8px;margin-bottom:18px">
+                <?php foreach ($messages as $msg): ?>
+                    <?php
+                    $tone = $msg['type'] === 'success' ? 'ok' : ($msg['type'] === 'error' ? 'bad' : 'info');
+                    ?>
+                    <div class="<?= $tone === 'ok' ? 'lm-note lm-note--ok' : ($tone === 'bad' ? 'lm-note lm-note--bad' : 'lm-note') ?>" style="margin:0">
+                        <?= lm_icon($tone === 'ok' ? 'check' : ($tone === 'bad' ? 'alert' : 'question')) ?>
+                        <span><?= lm_e((string) $msg['text']) ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <form method="POST">
+            <?= lm_csrf_field() ?>
+            <button type="submit" name="repair" value="1" class="lm-btn lm-btn--glow">
+                <?= lm_icon('refresh') ?> Run database repair
+            </button>
+        </form>
+    </div>
+</section>
+
+<div class="lm-grid-2" style="align-items:start">
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('check') ?> What it fixes</h2>
+                <p>Every step is idempotent.</p>
+            </div>
+        </div>
+        <div class="lm-panel__body">
+            <ul class="lm-list">
+                <li><code>licenses.customer_email</code> and <code>expiry_date</code> added when missing.</li>
+                <li><code>transactions.license_id</code> added when missing.</li>
+                <li>NULL customer emails recovered from the matching transaction where possible.</li>
+                <li><code>script_tiers</code> created and the two default tiers inserted.</li>
+                <li><code>script_updates</code>, <code>licensed_domains</code> and <code>download_tokens</code> created.</li>
+                <li>Existing licence domains copied into <code>licensed_domains</code>.</li>
+                <li>Licences with no tier attached pointed at the tier their type implies.</li>
+            </ul>
+        </div>
+    </section>
+
+    <section class="lm-panel">
+        <div class="lm-panel__head">
+            <div>
+                <h2><?= lm_icon('alert') ?> If something still fails</h2>
+                <p>In this order.</p>
+            </div>
+        </div>
+        <div class="lm-panel__body">
+            <ol class="lm-flow">
+                <li>Open <a href="system-check.php">System check</a> — it names the exact table and column.</li>
+                <li>Read <a href="payment-debug.php">Payment debug</a> for the SQL error the gateway hit.</li>
+                <li>Walk the <a href="guide.php#script">integration guide</a> if the failure is on the script side.</li>
+                <li>Still stuck: the raw error is in <a href="diagnostic.php">Diagnostics</a> → Error log.</li>
+            </ol>
+        </div>
+    </section>
+</div>
+
+<?php lm_app_end(); ?>

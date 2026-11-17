@@ -1,0 +1,1431 @@
+[2026-10-24 09:04:59 UTC] --- New API Request ---
+[2026-10-24 09:04:59 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-24 09:04:59 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-24 09:04:59 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 11:34:56 UTC] --- New API Request ---
+[2026-10-24 11:34:56 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-10-24 11:34:56 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-10-24 11:34:56 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 14:06:57 UTC] --- New API Request ---
+[2026-10-24 14:06:57 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-24 14:06:57 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-24 14:06:57 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-24 14:07:13 UTC] --- New API Request ---
+[2026-10-24 14:07:13 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-24 14:07:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-24 14:07:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 14:09:35 UTC] --- New API Request ---
+[2026-10-24 14:09:35 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-24 14:09:35 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-24 14:09:35 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 15:08:48 UTC] --- New API Request ---
+[2026-10-24 15:08:48 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-24 15:08:48 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-24 15:08:48 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 19:43:02 UTC] --- New API Request ---
+[2026-10-24 19:43:02 UTC] --- New API Request ---
+[2026-10-24 19:43:02 UTC] Received key for domain jikabiz.com
+[2026-10-24 19:43:02 UTC] Received key for domain jikabiz.com
+[2026-10-24 19:43:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-24 19:43:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-24 19:43:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 19:43:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 19:43:03 UTC] --- New API Request ---
+[2026-10-24 19:43:03 UTC] Received key for domain jikabiz.com
+[2026-10-24 19:43:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-24 19:43:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 20:50:21 UTC] --- New API Request ---
+[2026-10-24 20:50:22 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-24 20:50:22 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-24 20:50:22 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 21:42:12 UTC] --- New API Request ---
+[2026-10-24 21:42:12 UTC] Received key for domain haritz.com.ng
+[2026-10-24 21:42:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-24 21:42:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 21:42:13 UTC] --- New API Request ---
+[2026-10-24 21:42:13 UTC] Received key for domain haritz.com.ng
+[2026-10-24 21:42:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-24 21:42:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-24 21:42:13 UTC] --- New API Request ---
+[2026-10-24 21:42:13 UTC] Received key for domain haritz.com.ng
+[2026-10-24 21:42:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-24 21:42:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 07:23:25 UTC] --- New API Request ---
+[2026-10-25 07:23:25 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-25 07:23:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-25 07:23:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 07:27:02 UTC] --- New API Request ---
+[2026-10-25 07:27:02 UTC] --- New API Request ---
+[2026-10-25 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-25 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-25 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-25 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-25 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 07:27:02 UTC] --- New API Request ---
+[2026-10-25 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-25 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-25 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 07:27:02 UTC] --- New API Request ---
+[2026-10-25 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-25 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-25 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 09:10:20 UTC] --- New API Request ---
+[2026-10-25 09:10:20 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-25 09:10:20 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-25 09:10:20 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 12:57:18 UTC] --- New API Request ---
+[2026-10-25 12:57:18 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-25 12:57:18 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-25 12:57:18 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 15:58:58 UTC] --- New API Request ---
+[2026-10-25 15:58:58 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-25 15:58:58 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-25 15:58:58 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-25 18:18:59 UTC] --- New API Request ---
+[2026-10-25 18:18:59 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-25 18:18:59 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-25 18:18:59 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 07:12:32 UTC] --- New API Request ---
+[2026-10-26 07:12:32 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-26 07:12:32 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-26 07:12:32 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 09:10:42 UTC] --- New API Request ---
+[2026-10-26 09:10:42 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-26 09:10:42 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-26 09:10:42 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 11:40:49 UTC] --- New API Request ---
+[2026-10-26 11:40:49 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-10-26 11:40:49 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-10-26 11:40:49 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 14:11:04 UTC] --- New API Request ---
+[2026-10-26 14:11:04 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-26 14:11:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-26 14:11:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 19:34:25 UTC] --- New API Request ---
+[2026-10-26 19:34:25 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-26 19:34:25 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-26 19:34:25 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-26 19:44:03 UTC] --- New API Request ---
+[2026-10-26 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-10-26 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-26 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 19:44:03 UTC] --- New API Request ---
+[2026-10-26 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-10-26 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-26 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 19:44:04 UTC] --- New API Request ---
+[2026-10-26 19:44:04 UTC] Received key for domain jikabiz.com
+[2026-10-26 19:44:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-26 19:44:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 21:43:12 UTC] --- New API Request ---
+[2026-10-26 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-26 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-26 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 21:43:12 UTC] --- New API Request ---
+[2026-10-26 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-26 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-26 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-26 21:43:12 UTC] --- New API Request ---
+[2026-10-26 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-26 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-26 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-27 07:27:02 UTC] --- New API Request ---
+[2026-10-27 07:27:02 UTC] --- New API Request ---
+[2026-10-27 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-27 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-27 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-27 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-27 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-27 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-27 07:27:02 UTC] --- New API Request ---
+[2026-10-27 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-27 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-27 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-27 07:27:02 UTC] --- New API Request ---
+[2026-10-27 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-27 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-27 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-27 09:11:04 UTC] --- New API Request ---
+[2026-10-27 09:11:04 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-27 09:11:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-27 09:11:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 07:13:00 UTC] --- New API Request ---
+[2026-10-28 07:13:00 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 07:13:00 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 07:13:00 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 08:31:08 UTC] --- New API Request ---
+[2026-10-28 08:31:08 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 08:31:08 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-28 08:31:08 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 08:33:15 UTC] --- New API Request ---
+[2026-10-28 08:33:15 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 08:33:15 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-28 08:33:15 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-28 08:37:16 UTC] --- New API Request ---
+[2026-10-28 08:37:16 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 08:37:16 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-28 08:37:16 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 09:11:20 UTC] --- New API Request ---
+[2026-10-28 09:11:20 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-28 09:11:20 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-28 09:11:20 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 11:41:27 UTC] --- New API Request ---
+[2026-10-28 11:41:27 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-10-28 11:41:27 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-10-28 11:41:27 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 12:20:51 UTC] --- New API Request ---
+[2026-10-28 12:20:51 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 12:20:51 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 12:20:51 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 12:41:04 UTC] --- New API Request ---
+[2026-10-28 12:41:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 12:41:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 12:41:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:12:59 UTC] --- New API Request ---
+[2026-10-28 14:12:59 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:12:59 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:12:59 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:41:39 UTC] --- New API Request ---
+[2026-10-28 14:41:39 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 14:41:39 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-28 14:41:39 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-28 14:42:37 UTC] --- New API Request ---
+[2026-10-28 14:42:37 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 14:42:37 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-28 14:42:37 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:02 UTC] --- New API Request ---
+[2026-10-28 14:44:02 UTC] --- New API Request ---
+[2026-10-28 14:44:02 UTC] --- New API Request ---
+[2026-10-28 14:44:02 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:44:02 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:44:02 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:44:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:03 UTC] --- New API Request ---
+[2026-10-28 14:44:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:03 UTC] --- New API Request ---
+[2026-10-28 14:44:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 14:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 14:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 14:44:17 UTC] --- New API Request ---
+[2026-10-28 14:44:17 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 14:44:17 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-28 14:44:17 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-28 14:53:27 UTC] --- New API Request ---
+[2026-10-28 14:53:27 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 14:53:27 UTC] FAILURE: License key '*****' does not exist.
+[2026-10-28 14:53:27 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-10-28 19:05:15 UTC] --- New API Request ---
+[2026-10-28 19:05:15 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-28 19:05:15 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-28 19:05:15 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 19:44:03 UTC] --- New API Request ---
+[2026-10-28 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-10-28 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-28 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 19:44:03 UTC] --- New API Request ---
+[2026-10-28 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-10-28 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-28 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 19:44:04 UTC] --- New API Request ---
+[2026-10-28 19:44:04 UTC] Received key for domain jikabiz.com
+[2026-10-28 19:44:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-28 19:44:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 20:16:03 UTC] --- New API Request ---
+[2026-10-28 20:16:03 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 20:16:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-28 20:16:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 21:05:06 UTC] --- New API Request ---
+[2026-10-28 21:05:06 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-28 21:05:06 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-28 21:05:06 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-28 21:43:12 UTC] --- New API Request ---
+[2026-10-28 21:43:12 UTC] --- New API Request ---
+[2026-10-28 21:43:12 UTC] --- New API Request ---
+[2026-10-28 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-28 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-28 21:43:12 UTC] Received key for domain haritz.com.ng
+[2026-10-28 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-28 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-28 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-28 21:43:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-28 21:43:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 07:27:03 UTC] --- New API Request ---
+[2026-10-29 07:27:03 UTC] Received key for domain app.mzeevtu.com
+[2026-10-29 07:27:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-29 07:27:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 07:27:03 UTC] --- New API Request ---
+[2026-10-29 07:27:03 UTC] Received key for domain app.mzeevtu.com
+[2026-10-29 07:27:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-29 07:27:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 07:27:03 UTC] --- New API Request ---
+[2026-10-29 07:27:03 UTC] Received key for domain app.mzeevtu.com
+[2026-10-29 07:27:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-29 07:27:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 07:27:04 UTC] --- New API Request ---
+[2026-10-29 07:27:04 UTC] Received key for domain app.mzeevtu.com
+[2026-10-29 07:27:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-29 07:27:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 09:11:42 UTC] --- New API Request ---
+[2026-10-29 09:11:42 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-29 09:11:42 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-29 09:11:42 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 13:08:39 UTC] --- New API Request ---
+[2026-10-29 13:08:39 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-29 13:08:39 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-29 13:08:39 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-29 14:06:54 UTC] --- New API Request ---
+[2026-10-29 14:06:54 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-29 14:06:54 UTC] FAILURE: Domain 'dgv7saas.pmhserver.name.ng' not authorized for key 'MAN-********7210'. Limit is 1.
+[2026-10-29 14:06:54 UTC] Responding with: {"status":0,"message":"Domain not authorized. Limit exceeded."}
+[2026-10-29 14:09:24 UTC] --- New API Request ---
+[2026-10-29 14:09:24 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-29 14:09:24 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-29 14:09:24 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 09:12:02 UTC] --- New API Request ---
+[2026-10-30 09:12:02 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-30 09:12:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-30 09:12:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 11:42:08 UTC] --- New API Request ---
+[2026-10-30 11:42:08 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-10-30 11:42:08 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-10-30 11:42:08 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 19:05:38 UTC] --- New API Request ---
+[2026-10-30 19:05:38 UTC] Received key for domain v6.datagifting.com.ng
+[2026-10-30 19:05:38 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-10-30 19:05:38 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 19:44:02 UTC] --- New API Request ---
+[2026-10-30 19:44:02 UTC] --- New API Request ---
+[2026-10-30 19:44:02 UTC] Received key for domain jikabiz.com
+[2026-10-30 19:44:02 UTC] Received key for domain jikabiz.com
+[2026-10-30 19:44:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-30 19:44:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-30 19:44:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 19:44:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 19:44:03 UTC] --- New API Request ---
+[2026-10-30 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-10-30 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-10-30 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 21:44:11 UTC] --- New API Request ---
+[2026-10-30 21:44:11 UTC] Received key for domain haritz.com.ng
+[2026-10-30 21:44:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-30 21:44:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 21:44:11 UTC] --- New API Request ---
+[2026-10-30 21:44:11 UTC] Received key for domain haritz.com.ng
+[2026-10-30 21:44:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-30 21:44:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-30 21:44:11 UTC] --- New API Request ---
+[2026-10-30 21:44:11 UTC] Received key for domain haritz.com.ng
+[2026-10-30 21:44:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-10-30 21:44:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 07:27:02 UTC] --- New API Request ---
+[2026-10-31 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-31 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-31 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 07:27:02 UTC] --- New API Request ---
+[2026-10-31 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-31 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-31 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 07:27:02 UTC] --- New API Request ---
+[2026-10-31 07:27:02 UTC] --- New API Request ---
+[2026-10-31 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-31 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-10-31 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-31 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-10-31 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 09:12:22 UTC] --- New API Request ---
+[2026-10-31 09:12:22 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-10-31 09:12:22 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-10-31 09:12:22 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-10-31 14:12:46 UTC] --- New API Request ---
+[2026-10-31 14:12:46 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-10-31 14:12:46 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-10-31 14:12:46 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 09:12:43 UTC] --- New API Request ---
+[2026-11-01 09:12:43 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-01 09:12:43 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-01 09:12:43 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 11:42:48 UTC] --- New API Request ---
+[2026-11-01 11:42:48 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-01 11:42:48 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-01 11:42:48 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:06:02 UTC] --- New API Request ---
+[2026-11-01 19:06:02 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-01 19:06:02 UTC] --- New API Request ---
+[2026-11-01 19:06:02 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-01 19:06:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-01 19:06:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-01 19:06:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:06:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:06:03 UTC] --- New API Request ---
+[2026-11-01 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-01 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-01 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:06:03 UTC] --- New API Request ---
+[2026-11-01 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-01 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-01 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:06:03 UTC] --- New API Request ---
+[2026-11-01 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-01 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-01 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:44:02 UTC] --- New API Request ---
+[2026-11-01 19:44:02 UTC] Received key for domain jikabiz.com
+[2026-11-01 19:44:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-01 19:44:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:44:03 UTC] --- New API Request ---
+[2026-11-01 19:44:03 UTC] --- New API Request ---
+[2026-11-01 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-11-01 19:44:03 UTC] Received key for domain jikabiz.com
+[2026-11-01 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-01 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 19:44:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-01 19:44:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 21:44:12 UTC] --- New API Request ---
+[2026-11-01 21:44:12 UTC] Received key for domain haritz.com.ng
+[2026-11-01 21:44:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-01 21:44:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 21:44:12 UTC] --- New API Request ---
+[2026-11-01 21:44:12 UTC] Received key for domain haritz.com.ng
+[2026-11-01 21:44:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-01 21:44:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-01 21:44:12 UTC] --- New API Request ---
+[2026-11-01 21:44:12 UTC] Received key for domain haritz.com.ng
+[2026-11-01 21:44:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-01 21:44:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 07:27:01 UTC] --- New API Request ---
+[2026-11-02 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-02 07:27:01 UTC] --- New API Request ---
+[2026-11-02 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-02 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-02 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-02 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 07:27:02 UTC] --- New API Request ---
+[2026-11-02 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-02 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-02 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 07:27:02 UTC] --- New API Request ---
+[2026-11-02 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-02 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-02 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 07:59:51 UTC] --- New API Request ---
+[2026-11-02 07:59:51 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-02 07:59:51 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-02 07:59:51 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 09:13:11 UTC] --- New API Request ---
+[2026-11-02 09:13:11 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-02 09:13:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-02 09:13:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 14:13:23 UTC] --- New API Request ---
+[2026-11-02 14:13:23 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-02 14:13:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-02 14:13:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 14:43:32 UTC] --- New API Request ---
+[2026-11-02 14:43:32 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-02 14:43:32 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-02 14:43:32 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-02 20:46:03 UTC] --- New API Request ---
+[2026-11-02 20:46:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-02 20:46:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-02 20:46:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 02:46:03 UTC] --- New API Request ---
+[2026-11-03 02:46:05 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-03 02:46:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-03 02:46:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 08:47:03 UTC] --- New API Request ---
+[2026-11-03 08:47:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-03 08:47:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-03 08:47:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 09:13:34 UTC] --- New API Request ---
+[2026-11-03 09:13:34 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-03 09:13:34 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-03 09:13:34 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 11:43:28 UTC] --- New API Request ---
+[2026-11-03 11:43:28 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-03 11:43:28 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-03 11:43:28 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 12:44:42 UTC] --- New API Request ---
+[2026-11-03 12:44:42 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-03 12:44:42 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-03 12:44:42 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 14:47:03 UTC] --- New API Request ---
+[2026-11-03 14:47:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-03 14:47:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-03 14:47:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 18:49:03 UTC] --- New API Request ---
+[2026-11-03 18:49:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-03 18:49:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-03 18:49:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:06:03 UTC] --- New API Request ---
+[2026-11-03 19:06:03 UTC] --- New API Request ---
+[2026-11-03 19:06:03 UTC] --- New API Request ---
+[2026-11-03 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-03 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-03 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-03 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-03 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-03 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-03 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:06:03 UTC] --- New API Request ---
+[2026-11-03 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-03 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-03 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:06:03 UTC] --- New API Request ---
+[2026-11-03 19:06:03 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-03 19:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-03 19:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:45:04 UTC] --- New API Request ---
+[2026-11-03 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-03 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-03 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:45:04 UTC] --- New API Request ---
+[2026-11-03 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-03 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-03 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 19:45:04 UTC] --- New API Request ---
+[2026-11-03 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-03 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-03 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 20:47:03 UTC] --- New API Request ---
+[2026-11-03 20:47:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-03 20:47:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-03 20:47:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 21:45:18 UTC] --- New API Request ---
+[2026-11-03 21:45:18 UTC] Received key for domain haritz.com.ng
+[2026-11-03 21:45:18 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-03 21:45:18 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 21:45:18 UTC] --- New API Request ---
+[2026-11-03 21:45:18 UTC] Received key for domain haritz.com.ng
+[2026-11-03 21:45:18 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-03 21:45:18 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-03 21:45:19 UTC] --- New API Request ---
+[2026-11-03 21:45:19 UTC] Received key for domain haritz.com.ng
+[2026-11-03 21:45:19 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-03 21:45:19 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 00:50:05 UTC] --- New API Request ---
+[2026-11-04 00:50:05 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-04 00:50:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-04 00:50:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 02:47:04 UTC] --- New API Request ---
+[2026-11-04 02:47:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-04 02:47:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-04 02:47:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 06:51:03 UTC] --- New API Request ---
+[2026-11-04 06:51:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-04 06:51:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-04 06:51:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 07:27:01 UTC] --- New API Request ---
+[2026-11-04 07:27:01 UTC] --- New API Request ---
+[2026-11-04 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-04 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-04 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-04 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-04 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 07:27:01 UTC] --- New API Request ---
+[2026-11-04 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-04 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-04 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 07:27:01 UTC] --- New API Request ---
+[2026-11-04 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-04 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-04 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 08:48:04 UTC] --- New API Request ---
+[2026-11-04 08:48:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-04 08:48:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-04 08:48:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 09:13:42 UTC] --- New API Request ---
+[2026-11-04 09:13:42 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-04 09:13:42 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-04 09:13:42 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 12:52:03 UTC] --- New API Request ---
+[2026-11-04 12:52:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-04 12:52:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-04 12:52:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 14:14:02 UTC] --- New API Request ---
+[2026-11-04 14:14:02 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-04 14:14:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-04 14:14:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 14:49:02 UTC] --- New API Request ---
+[2026-11-04 14:49:02 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-04 14:49:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-04 14:49:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 18:53:05 UTC] --- New API Request ---
+[2026-11-04 18:53:05 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-04 18:53:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-04 18:53:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-04 20:49:03 UTC] --- New API Request ---
+[2026-11-04 20:49:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-04 20:49:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-04 20:49:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 00:54:03 UTC] --- New API Request ---
+[2026-11-05 00:54:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-05 00:54:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-05 00:54:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 02:49:04 UTC] --- New API Request ---
+[2026-11-05 02:49:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-05 02:49:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-05 02:49:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 06:55:04 UTC] --- New API Request ---
+[2026-11-05 06:55:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-05 06:55:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-05 06:55:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 08:50:05 UTC] --- New API Request ---
+[2026-11-05 08:50:05 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-05 08:50:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-05 08:50:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 09:14:02 UTC] --- New API Request ---
+[2026-11-05 09:14:02 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-05 09:14:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-05 09:14:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 11:44:09 UTC] --- New API Request ---
+[2026-11-05 11:44:09 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-05 11:44:09 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-05 11:44:09 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 12:55:05 UTC] --- New API Request ---
+[2026-11-05 12:55:05 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-05 12:55:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-05 12:55:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 14:51:03 UTC] --- New API Request ---
+[2026-11-05 14:51:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-05 14:51:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-05 14:51:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 18:56:03 UTC] --- New API Request ---
+[2026-11-05 18:56:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-05 18:56:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-05 18:56:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:06:04 UTC] --- New API Request ---
+[2026-11-05 19:06:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-05 19:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-05 19:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:06:04 UTC] --- New API Request ---
+[2026-11-05 19:06:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-05 19:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-05 19:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:06:04 UTC] --- New API Request ---
+[2026-11-05 19:06:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-05 19:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-05 19:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:06:04 UTC] --- New API Request ---
+[2026-11-05 19:06:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-05 19:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-05 19:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:06:04 UTC] --- New API Request ---
+[2026-11-05 19:06:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-05 19:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-05 19:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 19:45:03 UTC] --- New API Request ---
+[2026-11-05 19:45:03 UTC] Received key for domain jikabiz.com
+[2026-11-05 19:45:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-05 19:45:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 20:51:03 UTC] --- New API Request ---
+[2026-11-05 20:51:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-05 20:51:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-05 20:51:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 21:46:13 UTC] --- New API Request ---
+[2026-11-05 21:46:13 UTC] --- New API Request ---
+[2026-11-05 21:46:13 UTC] Received key for domain haritz.com.ng
+[2026-11-05 21:46:13 UTC] Received key for domain haritz.com.ng
+[2026-11-05 21:46:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-05 21:46:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-05 21:46:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 21:46:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-05 21:46:13 UTC] --- New API Request ---
+[2026-11-05 21:46:13 UTC] Received key for domain haritz.com.ng
+[2026-11-05 21:46:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-05 21:46:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 00:56:04 UTC] --- New API Request ---
+[2026-11-06 00:56:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-06 00:56:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-06 00:56:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 01:08:54 UTC] --- New API Request ---
+[2026-11-06 01:08:54 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-06 01:08:54 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-06 01:08:54 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 01:14:29 UTC] --- New API Request ---
+[2026-11-06 01:14:29 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-06 01:14:29 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-06 01:14:29 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 02:52:03 UTC] --- New API Request ---
+[2026-11-06 02:52:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-06 02:52:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-06 02:52:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 06:57:03 UTC] --- New API Request ---
+[2026-11-06 06:57:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-06 06:57:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-06 06:57:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 07:27:01 UTC] --- New API Request ---
+[2026-11-06 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-06 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-06 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 07:27:01 UTC] --- New API Request ---
+[2026-11-06 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-06 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-06 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 07:27:02 UTC] --- New API Request ---
+[2026-11-06 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-06 07:27:02 UTC] --- New API Request ---
+[2026-11-06 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-06 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-06 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-06 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 08:52:03 UTC] --- New API Request ---
+[2026-11-06 08:52:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-06 08:52:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-06 08:52:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 08:58:56 UTC] --- New API Request ---
+[2026-11-06 08:58:56 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-06 08:58:56 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-06 08:58:56 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 09:14:23 UTC] --- New API Request ---
+[2026-11-06 09:14:23 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-06 09:14:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-06 09:14:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 10:12:36 UTC] --- New API Request ---
+[2026-11-06 10:12:36 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-06 10:12:36 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-06 10:12:36 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 11:21:37 UTC] --- New API Request ---
+[2026-11-06 11:21:37 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-06 11:21:37 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-06 11:21:37 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 12:58:03 UTC] --- New API Request ---
+[2026-11-06 12:58:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-06 12:58:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-06 12:58:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 14:14:44 UTC] --- New API Request ---
+[2026-11-06 14:14:44 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-06 14:14:44 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-06 14:14:44 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 14:53:03 UTC] --- New API Request ---
+[2026-11-06 14:53:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-06 14:53:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-06 14:53:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 18:59:03 UTC] --- New API Request ---
+[2026-11-06 18:59:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-06 18:59:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-06 18:59:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-06 20:54:04 UTC] --- New API Request ---
+[2026-11-06 20:54:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-06 20:54:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-06 20:54:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 01:00:06 UTC] --- New API Request ---
+[2026-11-07 01:00:06 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-07 01:00:06 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-07 01:00:06 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 02:55:05 UTC] --- New API Request ---
+[2026-11-07 02:55:05 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-07 02:55:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-07 02:55:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 07:01:03 UTC] --- New API Request ---
+[2026-11-07 07:01:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-07 07:01:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-07 07:01:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 08:56:03 UTC] --- New API Request ---
+[2026-11-07 08:56:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-07 08:56:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-07 08:56:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 09:14:44 UTC] --- New API Request ---
+[2026-11-07 09:14:44 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-07 09:14:44 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-07 09:14:44 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 11:44:49 UTC] --- New API Request ---
+[2026-11-07 11:44:49 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-07 11:44:49 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-07 11:44:49 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 13:02:03 UTC] --- New API Request ---
+[2026-11-07 13:02:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-07 13:02:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-07 13:02:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 14:57:03 UTC] --- New API Request ---
+[2026-11-07 14:57:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-07 14:57:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-07 14:57:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:03:03 UTC] --- New API Request ---
+[2026-11-07 19:03:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-07 19:03:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-07 19:03:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:06:05 UTC] --- New API Request ---
+[2026-11-07 19:06:05 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-07 19:06:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-07 19:06:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:10:23 UTC] --- New API Request ---
+[2026-11-07 19:10:23 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-07 19:10:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-07 19:10:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:45:04 UTC] --- New API Request ---
+[2026-11-07 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-07 19:45:04 UTC] --- New API Request ---
+[2026-11-07 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-07 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:45:04 UTC] --- New API Request ---
+[2026-11-07 19:45:04 UTC] --- New API Request ---
+[2026-11-07 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-07 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-07 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-07 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-07 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 19:45:04 UTC] Received key for domain jikabiz.com
+[2026-11-07 19:45:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-07 19:45:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 20:57:03 UTC] --- New API Request ---
+[2026-11-07 20:57:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-07 20:57:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-07 20:57:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 21:47:11 UTC] --- New API Request ---
+[2026-11-07 21:47:11 UTC] --- New API Request ---
+[2026-11-07 21:47:11 UTC] Received key for domain haritz.com.ng
+[2026-11-07 21:47:11 UTC] Received key for domain haritz.com.ng
+[2026-11-07 21:47:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-07 21:47:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-07 21:47:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 21:47:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-07 21:47:11 UTC] --- New API Request ---
+[2026-11-07 21:47:11 UTC] Received key for domain haritz.com.ng
+[2026-11-07 21:47:11 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-07 21:47:11 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 01:03:04 UTC] --- New API Request ---
+[2026-11-08 01:03:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-08 01:03:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-08 01:03:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 02:57:03 UTC] --- New API Request ---
+[2026-11-08 02:57:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-08 02:57:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-08 02:57:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 07:04:03 UTC] --- New API Request ---
+[2026-11-08 07:04:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-08 07:04:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-08 07:04:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 07:27:02 UTC] --- New API Request ---
+[2026-11-08 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-08 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-08 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 07:27:02 UTC] --- New API Request ---
+[2026-11-08 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-08 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-08 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 07:27:02 UTC] --- New API Request ---
+[2026-11-08 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-08 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-08 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 07:27:02 UTC] --- New API Request ---
+[2026-11-08 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-08 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-08 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 08:58:03 UTC] --- New API Request ---
+[2026-11-08 08:58:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-08 08:58:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-08 08:58:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 09:15:04 UTC] --- New API Request ---
+[2026-11-08 09:15:04 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-08 09:15:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-08 09:15:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 13:04:03 UTC] --- New API Request ---
+[2026-11-08 13:04:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-08 13:04:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-08 13:04:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 14:15:25 UTC] --- New API Request ---
+[2026-11-08 14:15:25 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-08 14:15:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-08 14:15:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 14:59:03 UTC] --- New API Request ---
+[2026-11-08 14:59:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-08 14:59:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-08 14:59:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 17:12:38 UTC] --- New API Request ---
+[2026-11-08 17:12:38 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-08 17:12:38 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-08 17:12:38 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:05:06 UTC] --- New API Request ---
+[2026-11-08 19:05:06 UTC] --- New API Request ---
+[2026-11-08 19:05:08 UTC] ERROR: Missing key or domain in POST request. Fields present: 
+[2026-11-08 19:05:08 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-08 19:05:08 UTC] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-08 19:05:08 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-08 19:05:08 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:05:59 UTC] --- New API Request ---
+[2026-11-08 19:06:00 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:06:00 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:06:00 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:06:19 UTC] --- New API Request ---
+[2026-11-08 19:06:19 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:06:19 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:06:19 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:06:19 UTC] --- New API Request ---
+[2026-11-08 19:06:20 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:06:20 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:06:20 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:06:36 UTC] --- New API Request ---
+[2026-11-08 19:06:36 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:06:36 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:06:36 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:13:57 UTC] --- New API Request ---
+[2026-11-08 19:13:57 UTC] ERROR: Missing key or domain in POST request. Fields present: 
+[2026-11-08 19:13:57 UTC] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-08 19:27:10 UTC] --- New API Request ---
+[2026-11-08 19:27:10 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:27:10 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:27:10 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:27:10 UTC] --- New API Request ---
+[2026-11-08 19:27:10 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:27:10 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:27:10 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:29:48 UTC] --- New API Request ---
+[2026-11-08 19:29:48 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:29:48 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:29:48 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:29:48 UTC] --- New API Request ---
+[2026-11-08 19:29:48 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:29:48 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:29:48 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:30:25 UTC] --- New API Request ---
+[2026-11-08 19:30:25 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:30:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:30:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:30:25 UTC] --- New API Request ---
+[2026-11-08 19:30:25 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:30:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 19:30:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 19:30:25 UTC] --- New API Request ---
+[2026-11-08 19:30:25 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:30:25 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 19:30:25 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 19:31:37 UTC] --- New API Request ---
+[2026-11-08 19:31:37 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 19:31:37 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 19:31:37 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 19:41:10 UTC] --- New API Request ---
+[2026-11-08 19:41:11 UTC] ERROR: Missing key or domain in POST request. Fields present: 
+[2026-11-08 19:41:11 UTC] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-08 19:41:39 UTC] --- New API Request ---
+[2026-11-08 19:41:39 UTC] ERROR: Missing key or domain in POST request. Fields present: 
+[2026-11-08 19:41:39 UTC] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-08 20:12:59 UTC] --- New API Request ---
+[2026-11-08 20:12:59 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:12:59 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:12:59 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:13:50 UTC] --- New API Request ---
+[2026-11-08 20:13:50 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:13:50 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 20:13:50 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 20:14:07 UTC] --- New API Request ---
+[2026-11-08 20:14:07 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:14:07 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:14:07 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:15:29 UTC] --- New API Request ---
+[2026-11-08 20:15:29 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:15:29 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:15:29 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:15:29 UTC] --- New API Request ---
+[2026-11-08 20:15:29 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:15:29 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:15:29 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:36:39 UTC] --- New API Request ---
+[2026-11-08 20:36:39 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:36:39 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:36:39 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:36:48 UTC] --- New API Request ---
+[2026-11-08 20:36:48 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:36:48 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:36:48 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:37:14 UTC] --- New API Request ---
+[2026-11-08 20:37:14 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:37:14 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:37:14 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:37:17 UTC] --- New API Request ---
+[2026-11-08 20:37:17 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:37:17 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:37:17 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:38:46 UTC] --- New API Request ---
+[2026-11-08 20:38:46 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:38:46 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:38:46 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:42:47 UTC] --- New API Request ---
+[2026-11-08 20:42:47 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:42:47 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:42:47 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:43:35 UTC] --- New API Request ---
+[2026-11-08 20:43:35 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:43:35 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:43:35 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:43:36 UTC] --- New API Request ---
+[2026-11-08 20:43:36 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:43:36 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:43:36 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:43:51 UTC] --- New API Request ---
+[2026-11-08 20:43:51 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:43:51 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:43:51 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:43:51 UTC] --- New API Request ---
+[2026-11-08 20:43:51 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:43:51 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:43:51 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:43:51 UTC] --- New API Request ---
+[2026-11-08 20:43:51 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:43:51 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:43:51 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:44:02 UTC] --- New API Request ---
+[2026-11-08 20:44:02 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:44:02 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:44:02 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:44:05 UTC] --- New API Request ---
+[2026-11-08 20:44:05 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:44:05 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:44:05 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:53:06 UTC] --- New API Request ---
+[2026-11-08 20:53:06 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:53:06 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 20:53:06 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 20:53:06 UTC] --- New API Request ---
+[2026-11-08 20:53:06 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:53:06 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 20:53:06 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 20:57:21 UTC] --- New API Request ---
+[2026-11-08 20:57:21 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:57:21 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:57:21 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 20:59:04 UTC] --- New API Request ---
+[2026-11-08 20:59:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-08 20:59:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-08 20:59:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-08 20:59:22 UTC] --- New API Request ---
+[2026-11-08 20:59:22 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 20:59:22 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 20:59:22 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:04:13 UTC] --- New API Request ---
+[2026-11-08 21:04:13 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:04:13 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 21:04:13 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:10:27 UTC] --- New API Request ---
+[2026-11-08 21:10:27 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:10:27 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 21:10:27 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:11:17 UTC] --- New API Request ---
+[2026-11-08 21:11:17 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:11:17 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 21:11:17 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:15:00 UTC] --- New API Request ---
+[2026-11-08 21:15:00 UTC] ERROR: Missing key or domain in POST request. Fields present: 
+[2026-11-08 21:15:00 UTC] Responding with: {"status":0,"message":"Missing key or domain parameter."}
+[2026-11-08 21:15:31 UTC] --- New API Request ---
+[2026-11-08 21:15:31 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:15:31 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 21:15:31 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:15:31 UTC] --- New API Request ---
+[2026-11-08 21:15:31 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:15:31 UTC] FAILURE: License key '*****' does not exist.
+[2026-11-08 21:15:31 UTC] Responding with: {"status":0,"message":"Invalid license key or domain."}
+[2026-11-08 21:21:46 UTC] --- New API Request ---
+[2026-11-08 21:21:46 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-08 21:21:46 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-08 21:21:46 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 01:06:04 UTC] --- New API Request ---
+[2026-11-09 01:06:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-09 01:06:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-09 01:06:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 03:01:03 UTC] --- New API Request ---
+[2026-11-09 03:01:05 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-09 03:01:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-09 03:01:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 03:33:36 UTC] --- New API Request ---
+[2026-11-09 03:33:36 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-09 03:33:36 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-09 03:33:36 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 07:07:03 UTC] --- New API Request ---
+[2026-11-09 07:07:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-09 07:07:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-09 07:07:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 09:02:03 UTC] --- New API Request ---
+[2026-11-09 09:02:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-09 09:02:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-09 09:02:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 09:15:26 UTC] --- New API Request ---
+[2026-11-09 09:15:26 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-09 09:15:26 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-09 09:15:26 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 09:37:28 UTC] --- New API Request ---
+[2026-11-09 09:37:28 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-09 09:37:28 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-09 09:37:28 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 11:45:32 UTC] --- New API Request ---
+[2026-11-09 11:45:32 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-09 11:45:32 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-09 11:45:32 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 13:08:03 UTC] --- New API Request ---
+[2026-11-09 13:08:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-09 13:08:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-09 13:08:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 15:02:03 UTC] --- New API Request ---
+[2026-11-09 15:02:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-09 15:02:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-09 15:02:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 15:45:49 UTC] --- New API Request ---
+[2026-11-09 15:45:49 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-09 15:45:49 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-09 15:45:49 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:08:03 UTC] --- New API Request ---
+[2026-11-09 19:08:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-09 19:08:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-09 19:08:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:11:04 UTC] --- New API Request ---
+[2026-11-09 19:11:04 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-09 19:11:04 UTC] --- New API Request ---
+[2026-11-09 19:11:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-09 19:11:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:11:04 UTC] --- New API Request ---
+[2026-11-09 19:11:04 UTC] --- New API Request ---
+[2026-11-09 19:11:13 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-09 19:11:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-09 19:11:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:11:18 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-09 19:11:18 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-09 19:11:18 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:11:21 UTC] Received key for domain v6.datagifting.com.ng
+[2026-11-09 19:11:21 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'v6.datagifting.com.ng'.
+[2026-11-09 19:11:21 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:45:05 UTC] --- New API Request ---
+[2026-11-09 19:45:05 UTC] Received key for domain jikabiz.com
+[2026-11-09 19:45:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-09 19:45:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:45:05 UTC] --- New API Request ---
+[2026-11-09 19:45:05 UTC] Received key for domain jikabiz.com
+[2026-11-09 19:45:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-09 19:45:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 19:45:05 UTC] --- New API Request ---
+[2026-11-09 19:45:05 UTC] Received key for domain jikabiz.com
+[2026-11-09 19:45:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-09 19:45:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 20:32:50 UTC] --- New API Request ---
+[2026-11-09 20:32:50 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-09 20:32:50 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-09 20:32:50 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:02:03 UTC] --- New API Request ---
+[2026-11-09 21:02:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-09 21:02:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-09 21:02:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:32:54 UTC] --- New API Request ---
+[2026-11-09 21:32:54 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-09 21:32:54 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-09 21:32:54 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:46:21 UTC] --- New API Request ---
+[2026-11-09 21:46:21 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-09 21:46:21 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-09 21:46:21 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:47:13 UTC] --- New API Request ---
+[2026-11-09 21:47:13 UTC] --- New API Request ---
+[2026-11-09 21:47:13 UTC] --- New API Request ---
+[2026-11-09 21:47:14 UTC] Received key for domain haritz.com.ng
+[2026-11-09 21:47:14 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-09 21:47:14 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:47:16 UTC] Received key for domain haritz.com.ng
+[2026-11-09 21:47:16 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-09 21:47:16 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-09 21:47:23 UTC] Received key for domain haritz.com.ng
+[2026-11-09 21:47:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-09 21:47:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 00:04:25 UTC] --- New API Request ---
+[2026-11-10 00:04:25 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 00:04:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 00:04:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 01:09:03 UTC] --- New API Request ---
+[2026-11-10 01:09:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-10 01:09:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-10 01:09:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 03:02:04 UTC] --- New API Request ---
+[2026-11-10 03:02:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-10 03:02:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-10 03:02:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 04:16:00 UTC] --- New API Request ---
+[2026-11-10 04:16:00 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-10 04:16:00 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-10 04:16:00 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 04:45:00 UTC] --- New API Request ---
+[2026-11-10 04:45:00 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 04:45:00 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 04:45:00 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 07:10:07 UTC] --- New API Request ---
+[2026-11-10 07:10:07 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-10 07:10:07 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-10 07:10:07 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 07:27:01 UTC] --- New API Request ---
+[2026-11-10 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-10 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-10 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 07:27:01 UTC] --- New API Request ---
+[2026-11-10 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-10 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-10 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 07:27:01 UTC] --- New API Request ---
+[2026-11-10 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-10 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-10 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 07:27:01 UTC] --- New API Request ---
+[2026-11-10 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-10 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-10 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 09:03:03 UTC] --- New API Request ---
+[2026-11-10 09:03:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-10 09:03:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-10 09:03:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 09:16:51 UTC] --- New API Request ---
+[2026-11-10 09:16:51 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-10 09:16:51 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-10 09:16:51 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 09:17:41 UTC] --- New API Request ---
+[2026-11-10 09:17:41 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 09:17:41 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 09:17:41 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 10:16:05 UTC] --- New API Request ---
+[2026-11-10 10:16:05 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-10 10:16:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-10 10:16:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 12:31:26 UTC] --- New API Request ---
+[2026-11-10 12:31:28 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 12:31:28 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 12:31:28 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 13:11:03 UTC] --- New API Request ---
+[2026-11-10 13:11:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-10 13:11:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-10 13:11:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 14:16:09 UTC] --- New API Request ---
+[2026-11-10 14:16:09 UTC] Received key for domain dgv7saas.pmhserver.name.ng
+[2026-11-10 14:16:09 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7saas.pmhserver.name.ng'.
+[2026-11-10 14:16:09 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 15:03:23 UTC] --- New API Request ---
+[2026-11-10 15:03:23 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 15:03:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 15:03:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 15:04:04 UTC] --- New API Request ---
+[2026-11-10 15:04:04 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-10 15:04:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-10 15:04:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 16:16:10 UTC] --- New API Request ---
+[2026-11-10 16:16:10 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-10 16:16:10 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-10 16:16:10 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 16:35:30 UTC] --- New API Request ---
+[2026-11-10 16:35:30 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 16:35:30 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 16:35:30 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 19:12:04 UTC] --- New API Request ---
+[2026-11-10 19:12:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-10 19:12:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-10 19:12:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 21:05:05 UTC] --- New API Request ---
+[2026-11-10 21:05:05 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-10 21:05:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-10 21:05:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 22:16:24 UTC] --- New API Request ---
+[2026-11-10 22:16:24 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-10 22:16:24 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-10 22:16:24 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-10 22:28:12 UTC] --- New API Request ---
+[2026-11-10 22:28:12 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-10 22:28:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-10 22:28:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 01:13:04 UTC] --- New API Request ---
+[2026-11-11 01:13:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-11 01:13:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-11 01:13:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 03:06:03 UTC] --- New API Request ---
+[2026-11-11 03:06:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-11 03:06:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-11 03:06:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 04:16:25 UTC] --- New API Request ---
+[2026-11-11 04:16:25 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-11 04:16:25 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-11 04:16:25 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 06:55:37 UTC] --- New API Request ---
+[2026-11-11 06:55:37 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 06:55:37 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 06:55:37 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 07:14:04 UTC] --- New API Request ---
+[2026-11-11 07:14:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-11 07:14:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-11 07:14:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 08:21:56 UTC] --- New API Request ---
+[2026-11-11 08:21:56 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 08:21:56 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 08:21:56 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 09:07:03 UTC] --- New API Request ---
+[2026-11-11 09:07:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-11 09:07:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-11 09:07:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 09:25:02 UTC] --- New API Request ---
+[2026-11-11 09:25:02 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 09:25:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 09:25:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 09:35:20 UTC] --- New API Request ---
+[2026-11-11 09:35:20 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-11 09:35:20 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-11 09:35:20 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 10:31:00 UTC] --- New API Request ---
+[2026-11-11 10:31:00 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 10:31:00 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 10:31:00 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 10:34:55 UTC] --- New API Request ---
+[2026-11-11 10:34:55 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-11 10:34:56 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-11 10:34:56 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 12:05:06 UTC] --- New API Request ---
+[2026-11-11 12:05:06 UTC] Received key for domain dgv7.pmhserver.name.ng
+[2026-11-11 12:05:06 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'dgv7.pmhserver.name.ng'.
+[2026-11-11 12:05:06 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 12:10:02 UTC] --- New API Request ---
+[2026-11-11 12:10:02 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 12:10:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 12:10:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 13:15:04 UTC] --- New API Request ---
+[2026-11-11 13:15:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-11 13:15:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-11 13:15:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 15:08:03 UTC] --- New API Request ---
+[2026-11-11 15:08:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-11 15:08:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-11 15:08:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:28:31 UTC] --- New API Request ---
+[2026-11-11 16:28:31 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 16:28:31 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 16:28:31 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:30:37 UTC] --- New API Request ---
+[2026-11-11 16:30:37 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 16:30:37 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 16:30:37 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:35:01 UTC] --- New API Request ---
+[2026-11-11 16:35:01 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-11 16:35:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-11 16:35:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:36:33 UTC] --- New API Request ---
+[2026-11-11 16:36:33 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 16:36:33 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 16:36:33 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:42:01 UTC] --- New API Request ---
+[2026-11-11 16:42:01 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 16:42:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 16:42:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 16:43:08 UTC] --- New API Request ---
+[2026-11-11 16:43:08 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 16:43:08 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 16:43:08 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 18:41:38 UTC] --- New API Request ---
+[2026-11-11 18:41:38 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 18:41:38 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 18:41:38 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 19:15:04 UTC] --- New API Request ---
+[2026-11-11 19:15:04 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-11 19:15:04 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-11 19:15:04 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 19:46:02 UTC] --- New API Request ---
+[2026-11-11 19:46:02 UTC] Received key for domain jikabiz.com
+[2026-11-11 19:46:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-11 19:46:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 19:46:02 UTC] --- New API Request ---
+[2026-11-11 19:46:02 UTC] Received key for domain jikabiz.com
+[2026-11-11 19:46:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-11 19:46:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 19:46:02 UTC] --- New API Request ---
+[2026-11-11 19:46:02 UTC] Received key for domain jikabiz.com
+[2026-11-11 19:46:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'jikabiz.com'.
+[2026-11-11 19:46:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 20:03:20 UTC] --- New API Request ---
+[2026-11-11 20:03:20 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-11 20:03:20 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-11 20:03:20 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 21:08:03 UTC] --- New API Request ---
+[2026-11-11 21:08:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-11 21:08:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-11 21:08:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 21:48:12 UTC] --- New API Request ---
+[2026-11-11 21:48:12 UTC] Received key for domain haritz.com.ng
+[2026-11-11 21:48:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-11 21:48:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 21:48:13 UTC] --- New API Request ---
+[2026-11-11 21:48:13 UTC] Received key for domain haritz.com.ng
+[2026-11-11 21:48:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-11 21:48:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 21:48:13 UTC] --- New API Request ---
+[2026-11-11 21:48:13 UTC] Received key for domain haritz.com.ng
+[2026-11-11 21:48:13 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'haritz.com.ng'.
+[2026-11-11 21:48:13 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-11 22:35:16 UTC] --- New API Request ---
+[2026-11-11 22:35:16 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-11 22:35:16 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-11 22:35:16 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 01:15:05 UTC] --- New API Request ---
+[2026-11-12 01:15:05 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-12 01:15:05 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-12 01:15:05 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 02:20:23 UTC] --- New API Request ---
+[2026-11-12 02:20:23 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-12 02:20:23 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-12 02:20:23 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 03:08:03 UTC] --- New API Request ---
+[2026-11-12 03:08:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-12 03:08:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-12 03:08:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 05:05:12 UTC] --- New API Request ---
+[2026-11-12 05:05:12 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-12 05:05:12 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-12 05:05:12 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 07:16:03 UTC] --- New API Request ---
+[2026-11-12 07:16:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-12 07:16:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-12 07:16:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 07:27:01 UTC] --- New API Request ---
+[2026-11-12 07:27:01 UTC] Received key for domain app.mzeevtu.com
+[2026-11-12 07:27:01 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-12 07:27:01 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 07:27:02 UTC] --- New API Request ---
+[2026-11-12 07:27:02 UTC] --- New API Request ---
+[2026-11-12 07:27:02 UTC] --- New API Request ---
+[2026-11-12 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-12 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-12 07:27:02 UTC] Received key for domain app.mzeevtu.com
+[2026-11-12 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-12 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-12 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 07:27:02 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'app.mzeevtu.com'.
+[2026-11-12 07:27:02 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 08:10:27 UTC] --- New API Request ---
+[2026-11-12 08:10:27 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-12 08:10:27 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-12 08:10:27 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 09:09:03 UTC] --- New API Request ---
+[2026-11-12 09:09:03 UTC] Received key for domain gamio.pmhserver.name.ng
+[2026-11-12 09:09:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'gamio.pmhserver.name.ng'.
+[2026-11-12 09:09:03 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 09:35:33 UTC] --- New API Request ---
+[2026-11-12 09:35:33 UTC] Received key for domain resultpins.payhub.com.ng
+[2026-11-12 09:35:33 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'resultpins.payhub.com.ng'.
+[2026-11-12 09:35:33 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 10:22:29 UTC] --- New API Request ---
+[2026-11-12 10:22:29 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-12 10:22:29 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-12 10:22:29 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 11:05:17 UTC] --- New API Request ---
+[2026-11-12 11:05:17 UTC] Received key for domain buildroom.rccglp63yaya.org.ng
+[2026-11-12 11:05:17 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'buildroom.rccglp63yaya.org.ng'.
+[2026-11-12 11:05:17 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 11:36:27 UTC] --- New API Request ---
+[2026-11-12 11:36:27 UTC] Received key for domain remit.rccglp63yaya.org.ng
+[2026-11-12 11:36:27 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'remit.rccglp63yaya.org.ng'.
+[2026-11-12 11:36:27 UTC] Responding with: {"status":1,"message":"License is valid."}
+[2026-11-12 13:17:03 UTC] --- New API Request ---
+[2026-11-12 13:17:03 UTC] Received key for domain kingdombuilders.pmhserver.name.ng
+[2026-11-12 13:17:03 UTC] SUCCESS: Found matching active license (Type: standard) for domain 'kingdombuilders.pmhserver.name.ng'.
+[2026-11-12 13:17:03 UTC] Responding with: {"status":1,"message":"License is valid."}

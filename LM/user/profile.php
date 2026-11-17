@@ -1,287 +1,189 @@
 <?php
-session_start();
+/**
+ * user/profile.php — the customer's own details.
+ *
+ * Same session-backed fields as before (there is no users table in the schema),
+ * rebuilt on the shared shell and given a real summary of what the account
+ * holds, so the page is not just a form in the middle of a screen.
+ *
+ * @package LicenseManager
+ */
 
-$user_email = $_SESSION['user_email'] ?? null;
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+lm_security_headers();
+require_once __DIR__ . '/../includes/ui.php';
 
-if (!$user_email) {
-    header('Location: login.php');
-    exit();
+$user_email = lm_public_user();
+
+if ($user_email === '') {
+    lm_safe_redirect('login.php');
 }
 
-require_once('../db.php');
+require_once __DIR__ . '/../db.php';
 
-$success_message = '';
-$error_message = '';
+$ok = '';
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = $_POST['name'] ?? '';
-    $phone = $_POST['phone'] ?? '';
-    $company = $_POST['company'] ?? '';
+    $name = trim((string) ($_POST['name'] ?? ''));
+    $phone = trim((string) ($_POST['phone'] ?? ''));
+    $company = trim((string) ($_POST['company'] ?? ''));
 
-    if (empty($name)) {
-        $error_message = 'Name cannot be empty.';
+    if ($name === '') {
+        $error = 'Your name cannot be empty.';
+    } elseif (strlen($name) > 120 || strlen($company) > 120 || strlen($phone) > 40) {
+        $error = 'One of those values is longer than the field allows.';
     } else {
-        // In a real application, you would store this in a users table
+        // The schema has no users table: the profile lives with the session.
         $_SESSION['user_name'] = $name;
         $_SESSION['user_phone'] = $phone;
         $_SESSION['user_company'] = $company;
-        $success_message = 'Profile updated successfully!';
+        $ok = 'Your details were saved.';
     }
 }
 
-$user_name = $_SESSION['user_name'] ?? '';
-$user_phone = $_SESSION['user_phone'] ?? '';
-$user_company = $_SESSION['user_company'] ?? '';
+$user_name = (string) ($_SESSION['user_name'] ?? '');
+$user_phone = (string) ($_SESSION['user_phone'] ?? '');
+$user_company = (string) ($_SESSION['user_company'] ?? '');
+
+$licenceCount = 0;
+$activeCount = 0;
+
+try {
+    $stmt = $pdo->prepare('SELECT status FROM licenses WHERE customer_email = ?');
+    $stmt->execute(array($user_email));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $licenceCount++;
+        if (strtolower((string) $row['status']) === 'active') {
+            $activeCount++;
+        }
+    }
+} catch (PDOException $e) {
+    $licenceCount = 0;
+}
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Profile - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .navbar h1 {
-            font-size: 1.5rem;
-            color: #667eea;
-            margin: 0;
-        }
-        .navbar-links {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-        }
-        .navbar-links a {
-            color: #475569;
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s ease;
-        }
-        .navbar-links a:hover {
-            color: #667eea;
-        }
-        .logout-btn {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-        }
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
-        }
-        .container {
-            max-width: 600px;
-            margin: 3rem auto;
-            padding: 2rem;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .card-header {
-            padding: 2rem;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-        }
-        .card-header h2 {
-            margin: 0;
-            font-size: 1.75rem;
-        }
-        .card-body {
-            padding: 2rem;
-        }
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #1e293b;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            font-family: 'Inter', sans-serif;
-        }
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        .form-group input[readonly] {
-            background: #f8fafc;
-            cursor: not-allowed;
-        }
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            flex-grow: 1;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-        .btn-secondary {
-            background: #e2e8f0;
-            color: #475569;
-            flex-grow: 1;
-        }
-        .btn-secondary:hover {
-            background: #cbd5e1;
-        }
-        .success {
-            background: #d1fae5;
-            color: #065f46;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #a7f3d0;
-        }
-        .error {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #fca5a5;
-        }
-        .info-box {
-            background: #eef2ff;
-            border-left: 4px solid #667eea;
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1.5rem;
-        }
-        .info-box p {
-            color: #4c1d95;
-            margin: 0;
-        }
-        @media (max-width: 768px) {
-            .navbar {
-                flex-direction: column;
-                gap: 1rem;
-            }
-            .navbar-links {
-                flex-direction: column;
-                width: 100%;
-                gap: 0.5rem;
-            }
-            .navbar-links a,
-            .logout-btn {
-                width: 100%;
-                text-align: center;
-            }
-            .container {
-                margin: 1rem;
-                padding: 1rem;
-            }
-            .button-group {
-                flex-direction: column;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="navbar">
-        <h1>🔐 License Manager</h1>
-        <div class="navbar-links">
-            <a href="index.php">📜 My Licenses</a>
-            <a href="profile.php">👤 Profile</a>
-            <a href="logout.php" class="logout-btn">Logout</a>
-        </div>
-    </div>
+<?php lm_public_page_start('account', array('title' => 'Profile', 'account' => true)); ?>
 
-    <div class="container">
-        <div class="card">
-            <div class="card-header">
-                <h2>👤 My Profile</h2>
+<main class="lm-page" id="main">
+    <div class="lm-wrap">
+        <a class="lm-backlink" href="index.php"><?= lm_icon('arrow-left') ?> Back to my licences</a>
+
+        <div class="lm-pagehead">
+            <div class="lm-pagehead__text">
+                <h1>Your profile</h1>
+                <p>The name we use when we write to you, and the email every licence is attached to.</p>
             </div>
-            <div class="card-body">
-                <?php if ($success_message): ?>
-                    <div class="success">✓ <?= htmlspecialchars($success_message) ?></div>
-                <?php endif; ?>
-                
-                <?php if ($error_message): ?>
-                    <div class="error">✗ <?= htmlspecialchars($error_message) ?></div>
-                <?php endif; ?>
+            <div class="lm-pagehead__actions">
+                <a class="lm-btn lm-btn--ghost" href="index.php"><?= lm_icon('grid') ?> Dashboard</a>
+                <a class="lm-btn lm-btn--ghost" href="<?= lm_e(lm_public_url('user/logout.php')) ?>">
+                    <?= lm_icon('logout') ?> Sign out
+                </a>
+            </div>
+        </div>
 
-                <div class="info-box">
-                    <p><strong>Email:</strong> <?= htmlspecialchars($user_email) ?></p>
+        <?php if ($ok !== ''): ?>
+            <?php lm_alert('ok', $ok); ?>
+        <?php endif; ?>
+        <?php if ($error !== ''): ?>
+            <?php lm_alert('error', $error); ?>
+        <?php endif; ?>
+
+        <div class="lm-order-layout">
+            <section class="lm-panel">
+                <div class="lm-panel__head">
+                    <div>
+                        <h2><?= lm_icon('user') ?> Your details</h2>
+                        <p>Only the name is required. The rest is used on invoices and support replies.</p>
+                    </div>
+                </div>
+                <div class="lm-panel__body">
+                    <div class="lm-note">
+                        <?= lm_icon('mail') ?>
+                        <span><strong><?= lm_e($user_email) ?></strong> is the address your licences are registered to.
+                            To move them to another address, contact support — keys cannot be re-parented from here.</span>
+                    </div>
+
+                    <form class="lm-form" method="POST">
+                        <div class="lm-field">
+                            <label for="name">Full name</label>
+                            <input class="lm-input" type="text" id="name" name="name" autocomplete="name"
+                                   value="<?= lm_e($user_name) ?>" placeholder="Ada Lovelace">
+                        </div>
+
+                        <div class="lm-field">
+                            <label for="company">Company <span class="lm-help">(optional)</span></label>
+                            <input class="lm-input" type="text" id="company" name="company" autocomplete="organization"
+                                   value="<?= lm_e($user_company) ?>" placeholder="Acme Studio">
+                        </div>
+
+                        <div class="lm-field">
+                            <label for="phone">Phone <span class="lm-help">(optional)</span></label>
+                            <input class="lm-input" type="tel" id="phone" name="phone" autocomplete="tel"
+                                   value="<?= lm_e($user_phone) ?>" placeholder="+234 800 000 0000">
+                        </div>
+
+                        <div class="lm-flex" style="flex-wrap:nowrap">
+                            <button type="submit" class="lm-btn lm-btn--glow lm-btn--block">
+                                <?= lm_icon('check') ?> Save changes
+                            </button>
+                            <a class="lm-btn lm-btn--ghost lm-btn--block" href="index.php">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <aside class="lm-order-aside">
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('chart') ?> At a glance</h2>
+                    </div>
+                    <div class="lm-panel__body">
+                        <dl class="lm-deflist">
+                            <div>
+                                <dt>Licences</dt>
+                                <dd><?= (int) $licenceCount ?></dd>
+                            </div>
+                            <div>
+                                <dt>Active</dt>
+                                <dd><?= (int) $activeCount ?></dd>
+                            </div>
+                            <div>
+                                <dt>Email</dt>
+                                <dd style="word-break:break-all"><?= lm_e($user_email) ?></dd>
+                            </div>
+                        </dl>
+                    </div>
                 </div>
 
-                <form method="POST">
-                    <div class="form-group">
-                        <label for="name">Full Name</label>
-                        <input type="text" id="name" name="name" value="<?= htmlspecialchars($user_name) ?>" placeholder="Enter your full name">
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('bell') ?> Notifications</h2>
                     </div>
+                    <div class="lm-panel__body">
+                        <p class="lm-help">Update reminders are sent to the address above. You can stop them at any time
+                            without losing your licence.</p>
+                        <a class="lm-btn lm-btn--ghost lm-btn--block lm-mt-16" href="<?= lm_e(lm_public_url('unsubscribe.php')) ?>">
+                            <?= lm_icon('mail') ?> Email preferences
+                        </a>
+                    </div>
+                </div>
 
-                    <div class="form-group">
-                        <label for="company">Company</label>
-                        <input type="text" id="company" name="company" value="<?= htmlspecialchars($user_company) ?>" placeholder="Enter your company name">
+                <div class="lm-panel">
+                    <div class="lm-panel__head">
+                        <h2><?= lm_icon('shield') ?> Security</h2>
                     </div>
-
-                    <div class="form-group">
-                        <label for="phone">Phone Number</label>
-                        <input type="tel" id="phone" name="phone" value="<?= htmlspecialchars($user_phone) ?>" placeholder="Enter your phone number">
+                    <div class="lm-panel__body">
+                        <p class="lm-help">Your licence key is the credential — there is no password on this account.
+                            Treat the key like a password and never publish it in a public repository.</p>
+                        <a class="lm-btn lm-btn--ghost lm-btn--block lm-mt-16" href="<?= lm_e(lm_public_url('api-docs.php')) ?>">
+                            <?= lm_icon('book') ?> Safe integration guide
+                        </a>
                     </div>
-
-                    <div class="button-group">
-                        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
-                        <a href="index.php" class="btn btn-secondary">← Back to Licenses</a>
-                    </div>
-                </form>
-            </div>
+                </div>
+            </aside>
         </div>
     </div>
-</body>
-</html>
+</main>
+
+<?php lm_public_page_end(array('active' => 'account', 'no_tabbar' => true)); ?>

@@ -33,8 +33,8 @@ targets:
         SWIFT_VERSION: "5.0"
         # Kept in step with JIKABIZ-Android (versionName 1.0.3 / versionCode 4). They had
         # drifted apart, so the same build was reporting two different versions per platform.
-        MARKETING_VERSION: "1.0.3"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "1.0.6"
+        CURRENT_PROJECT_VERSION: "7"
         CODE_SIGN_STYLE: Automatic
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         # AIChatView drives SFSpeechRecognizer + AVAudioEngine. iOS KILLS the app on the first

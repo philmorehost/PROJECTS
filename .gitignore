@@ -1,11 +1,30 @@
-# Runtime OTA Backups, Temporary Update Staging & Logs
+
+# Upload bundles built for the host
+/KINGDOMBUILDERS-*-upload.zip
+# Release signing material and build artifacts (never commit)
+# A committed .jks permanently leaks the upload key for every clone, fork and backup.
+VTU/play-signing-keys/
+*.jks
+*.keystore
+*.p12
+*.pfx
+*-cert.pem
+*-cert.der
+key.properties
+keystore.properties
+
+# Signed bundles/APKs produced for upload, and their hand-off notes
+**/release-output/
+*.aab
+
+# Node tooling for the repo's own checks (installed, never committed)
+tools/**/node_modules/
+
+# Runtime OTA backups, temporary update staging and logs (SMSP + LM)
 SMSP/backups/
 SMSP/tmp_update/
 SMSP/logs/
 SMSP/config/.sys_cache
 secure_updates/
-LM/api_create_license.log
-LM/api_upgrade_license.log
-LM/github_webhook.log
-LM/api_check_update.log
 LM/*.log
+LM/storage/logs/*.log

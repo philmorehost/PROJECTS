@@ -1,6 +1,16 @@
 <?php
-session_start();
-require_once('db.php');
+/**
+ * request_license.php — accept the form on order.php and queue the request.
+ *
+ * The logic is unchanged; the bootstrap now goes through the hardened session
+ * (see health.php → "files that still open the legacy session") and the inputs
+ * are length-checked before they reach the database.
+ */
+
+require_once __DIR__ . '/includes/security.php';
+lm_session_start();
+lm_security_headers();
+require_once __DIR__ . '/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: order.php');
@@ -13,6 +23,12 @@ $domain = trim($_POST['domain'] ?? '');
 // Clean the domain (remove http://, https://, and trailing slashes)
 $domain = preg_replace('#^https?://#', '', $domain);
 $domain = rtrim($domain, '/');
+
+if (strlen($email) > 190 || strlen($domain) > 190) {
+    $_SESSION['error'] = 'That email or domain is too long.';
+    header('Location: order.php');
+    exit();
+}
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || empty($domain)) {
     $_SESSION['error'] = 'Please provide a valid email and domain.';

@@ -1,370 +1,667 @@
 <?php
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    header('Location: index.php');
-    exit();
-}
+/**
+ * admin/projects.php — the script projects this manager serves.
+ *
+ * A project is a row in script_tiers. The moment one exists it appears in Push
+ * Updates and GitHub Pull, gets its own storage folder, its own version history
+ * and its own licence pool. Create, edit, archive, rotate the key and delete
+ * all go through ajax_projects.php; the delete flow asks the server what it
+ * would destroy before it lets you confirm.
+ *
+ * @package LicenseManager
+ */
 
-require_once('../db.php');
-require_once('../includes/ota_github_helper.php');
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
 
-$settings = OTAGitHubHelper::loadSettings();
-$defaultRepo = $settings['github_default_repo'] ?? 'philmorehost/PROJECTS';
-$defaultBranch = $settings['github_default_branch'] ?? 'main';
+$pdo = lm_app_boot();
 
-$flash = null;
+require_once __DIR__ . '/../includes/updates.php';
 
-// Handle Add / Edit / Delete Project Tier
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $formAction = $_POST['form_action'] ?? '';
+$siteUrl = lm_site_url();
+$tiers = array();
+$licenceCounts = array();
+$versionCounts = array();
+$latestVersions = array();
+$problem = '';
 
-    if ($formAction === 'save_project') {
-        $id = intval($_POST['id'] ?? 0);
-        $tier_name = trim($_POST['tier_name'] ?? '');
-        $tier_code = strtoupper(preg_replace('/[^a-zA-Z0-9_-]/', '-', trim($_POST['tier_code'] ?? '')));
-        $description = trim($_POST['description'] ?? '');
-        $github_repo = trim($_POST['github_repo'] ?? '');
-        $github_branch = trim($_POST['github_branch'] ?? 'main') ?: 'main';
-        $github_subdir = trim(str_replace('\\', '/', trim($_POST['github_subdir'] ?? '')), '/');
-        $exclude_paths = trim($_POST['exclude_paths'] ?? '');
-        $signal_endpoint = '/' . ltrim(trim($_POST['signal_endpoint'] ?? '/api/v1/ota-signal.php') ?: '/api/v1/ota-signal.php', '/');
-        $auto_pull_github = isset($_POST['auto_pull_github']) ? 1 : 0;
-        $auto_signal = isset($_POST['auto_signal']) ? 1 : 0;
+if ($pdo instanceof PDO) {
+    try {
+        $tiers = $pdo->query('SELECT * FROM script_tiers ORDER BY sort_order ASC, id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $problem = 'The script_tiers table could not be read. Run Database Repair, then reload.';
+    }
 
-        if ($tier_name === '' || $tier_code === '') {
-            $flash = ['type' => 'error', 'text' => 'Project Name and Tier Code are required.'];
-        } else {
-            try {
-                if ($id > 0) {
-                    // Protect legacy DGV7.0 tier codes on IDs 1 & 2 from accidental rename
-                    if ($id === 1) {
-                        $tier_code = 'SAAS';
-                    } elseif ($id === 2) {
-                        $tier_code = 'NON-SAAS';
-                    }
-
-                    $stmt = $pdo->prepare("
-                        UPDATE script_tiers
-                        SET tier_name = ?, tier_code = ?, description = ?, github_repo = ?, github_branch = ?,
-                            github_subdir = ?, exclude_paths = ?, signal_endpoint = ?, auto_pull_github = ?, auto_signal = ?
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([
-                        $tier_name, $tier_code, $description, $github_repo ?: null, $github_branch,
-                        $github_subdir ?: null, $exclude_paths ?: null, $signal_endpoint, $auto_pull_github, $auto_signal, $id
-                    ]);
-                    header('Location: projects.php?saved=1');
-                    exit();
-                } else {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO script_tiers
-                            (tier_name, tier_code, description, github_repo, github_branch, github_subdir, exclude_paths, signal_endpoint, auto_pull_github, auto_signal)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([
-                        $tier_name, $tier_code, $description, $github_repo ?: null, $github_branch,
-                        $github_subdir ?: null, $exclude_paths ?: null, $signal_endpoint, $auto_pull_github, $auto_signal
-                    ]);
-                    header('Location: projects.php?added=1');
-                    exit();
-                }
-            } catch (PDOException $e) {
-                $flash = ['type' => 'error', 'text' => 'Database error (check if Tier Code already exists): ' . $e->getMessage()];
-            }
+    try {
+        foreach ($pdo->query('SELECT tier_id, COUNT(*) AS total FROM licenses WHERE tier_id IS NOT NULL GROUP BY tier_id') as $row) {
+            $licenceCounts[(int) $row['tier_id']] = (int) $row['total'];
         }
-    } elseif ($formAction === 'delete_project') {
-        $delId = intval($_POST['id'] ?? 0);
-        if (in_array($delId, [1, 2], true)) {
-            $flash = ['type' => 'error', 'text' => 'Default DGV7.0 tiers (IDs 1 & 2) are protected to preserve backward compatibility.'];
-        } elseif ($delId > 2) {
-            try {
-                $licCountStmt = $pdo->prepare("SELECT COUNT(*) FROM licenses WHERE tier_id = ?");
-                $licCountStmt->execute([$delId]);
-                $licCount = (int)$licCountStmt->fetchColumn();
-                if ($licCount > 0) {
-                    $flash = ['type' => 'error', 'text' => "Cannot delete this project while {$licCount} license(s) are assigned to it. Reassign those licenses first."];
-                } else {
-                    $delStmt = $pdo->prepare("DELETE FROM script_tiers WHERE id = ?");
-                    $delStmt->execute([$delId]);
-                    header('Location: projects.php?deleted=1');
-                    exit();
-                }
-            } catch (PDOException $e) {
-                $flash = ['type' => 'error', 'text' => 'Delete failed: ' . $e->getMessage()];
-            }
+    } catch (PDOException $e) {
+        // licenses.tier_id does not exist on a very old schema
+    }
+
+    try {
+        foreach ($pdo->query('SELECT tier_id, COUNT(*) AS total FROM script_updates GROUP BY tier_id') as $row) {
+            $versionCounts[(int) $row['tier_id']] = (int) $row['total'];
         }
+    } catch (PDOException $e) {
+        // no releases yet
+    }
+
+    foreach ($tiers as $tier) {
+        $latest = lm_latest_update_for_tier($pdo, (int) $tier['id'], false);
+        $latestVersions[(int) $tier['id']] = $latest ? (string) $latest['version_number'] : '';
     }
 }
 
-if (isset($_GET['saved'])) {
-    $flash = ['type' => 'success', 'text' => 'Project configuration updated successfully.'];
-} elseif (isset($_GET['added'])) {
-    $flash = ['type' => 'success', 'text' => 'New project registered successfully! You can now assign licenses and pull updates from GitHub.'];
-} elseif (isset($_GET['deleted'])) {
-    $flash = ['type' => 'success', 'text' => 'Project removed successfully.'];
+$activeProjects = 0;
+foreach ($tiers as $tier) {
+    if (!isset($tier['is_active']) || (int) $tier['is_active'] === 1) {
+        $activeProjects++;
+    }
 }
 
-$editProject = null;
-if (isset($_GET['edit'])) {
-    $editStmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ? LIMIT 1");
-    $editStmt->execute([intval($_GET['edit'])]);
-    $editProject = $editStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-}
+$storageRoot = lm_updates_root();
 
-// Fetch all projects with license & update stats
-$projects = $pdo->query("
-    SELECT t.*,
-           (SELECT COUNT(*) FROM licenses l WHERE l.tier_id = t.id AND l.status = 'active') AS active_licenses,
-           (SELECT u.version_number FROM script_updates u WHERE u.tier_id = t.id AND u.is_released = 1 ORDER BY u.release_date DESC, u.id DESC LIMIT 1) AS latest_version
-    FROM script_tiers t
-    ORDER BY t.id ASC
-")->fetchAll(PDO::FETCH_ASSOC);
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="github-updates.php">' . lm_icon('layers') . ' GitHub pull</a>'
+    . '<button class="lm-btn lm-btn--glow" type="button" data-lm-new-project>' . lm_icon('plus') . ' New project</button>';
+
+lm_app_start('Script projects', array(
+    'subtitle' => 'Each project is a target for updates, a storage folder in cPanel and its own licence pool.',
+    'active'   => 'projects',
+    'actions'  => $actionsHtml,
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Projects - License Manager</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); display: flex; min-height: 100vh; color: #1e293b; }
-        .sidebar { width: 260px; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); color: #fff; display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); }
-        .sidebar h1 { font-size: 1.5rem; padding: 2rem 1.5rem; text-align: center; background: rgba(15, 23, 42, 0.5); margin: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-        .sidebar nav { flex-grow: 1; padding: 2rem 0; }
-        .sidebar nav a { display: flex; align-items: center; padding: 1rem 1.5rem; color: #cbd5e1; text-decoration: none; transition: all 0.3s ease; }
-        .sidebar nav a:hover, .sidebar nav a.active { background: rgba(59, 130, 246, 0.2); color: #fff; border-left: 3px solid #3b82f6; padding-left: calc(1.5rem - 3px); }
-        .main-content { margin-left: 260px; flex-grow: 1; padding: 2rem; overflow-y: auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem; }
-        .header h2 { font-size: 2rem; font-weight: 700; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); overflow: hidden; margin-bottom: 2rem; }
-        .card-header { padding: 1.25rem 2rem; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%); display: flex; justify-content: space-between; align-items: center; }
-        .card-header h3 { font-size: 1.15rem; font-weight: 700; }
-        .card-body { padding: 2rem; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
-        .form-group { margin-bottom: 1.25rem; }
-        .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 600; color: #334155; font-size: 0.875rem; }
-        .form-group small { display: block; margin-top: 0.35rem; color: #64748b; font-size: 0.78rem; line-height: 1.4; }
-        .form-control { width: 100%; padding: 0.72rem 0.95rem; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 0.875rem; }
-        .form-control:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
-        .toggle-box { display: flex; align-items: center; gap: 0.65rem; padding: 0.85rem 1rem; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; font-size: 0.875rem; font-weight: 500; }
-        .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.7rem 1.35rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; font-size: 0.875rem; transition: all 0.2s ease; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-primary:hover { background: #2563eb; }
-        .btn-secondary { background: #e2e8f0; color: #334155; }
-        .btn-danger { background: #fee2e2; color: #b91c1c; }
-        .btn-danger:hover { background: #ef4444; color: white; }
-        .btn-sm { padding: 0.38rem 0.75rem; font-size: 0.75rem; border-radius: 6px; }
-        .alert { padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; font-size: 0.9rem; font-weight: 500; }
-        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #f8fafc; padding: 0.9rem 1rem; text-align: left; font-weight: 600; color: #475569; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 0.95rem 1rem; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; vertical-align: middle; }
-        .badge { display: inline-block; padding: 0.22rem 0.6rem; border-radius: 999px; font-size: 0.73rem; font-weight: 700; background: #e0e7ff; color: #3730a3; }
-        .badge-green { background: #dcfce7; color: #166534; }
-        .badge-gray { background: #f1f5f9; color: #64748b; }
-        @media (max-width: 900px) { .sidebar { position: relative; width: 100%; height: auto; } .main-content { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } body { flex-direction: column; } }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h1>🔐 License Manager</h1>
-        <nav>
-            <a href="dashboard.php">📊 Dashboard</a>
-            <a href="projects.php" class="active">📦 Projects</a>
-            <a href="licenses.php">📜 Licenses</a>
-            <a href="updates.php">🚀 Push Updates</a>
-            <a href="transactions.php">💳 Transactions</a>
-            <a href="settings.php">⚙️ Settings</a>
-            <a href="profile.php">👤 Profile</a>
-            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0;">
-            <a href="logout.php">🚪 Logout</a>
-        </nav>
-    </div>
 
-    <div class="main-content">
-        <div class="header">
-            <div>
-                <h2>Projects &amp; GitHub Directory Mapping</h2>
-                <p style="color:#64748b; font-size:0.9rem; margin-top:0.25rem;">Register any software project, map it to its GitHub directory (e.g. <code>philmorehost/PROJECTS</code> &rarr; <code>SMSP</code>), and configure live client update signals.</p>
-            </div>
-            <?php if ($editProject): ?>
-                <a href="projects.php" class="btn btn-secondary">+ Add New Project</a>
-            <?php endif; ?>
-        </div>
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
 
-        <?php if ($flash): ?>
-            <div class="alert alert-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>">
-                <?= htmlspecialchars($flash['text']) ?>
-            </div>
-        <?php endif; ?>
+<div class="lm-stats">
+    <?php
+    lm_app_stat('Projects', (string) count($tiers), $activeProjects . ' active · ' . (count($tiers) - $activeProjects) . ' archived');
+    lm_app_stat('Licences', (string) array_sum($licenceCounts), 'Across every project');
+    lm_app_stat('Published', (string) array_sum($versionCounts), 'Packages on record', 'indigo');
+    ?>
+</div>
 
-        <div class="card">
-            <div class="card-header">
-                <h3><?= $editProject ? '✏️ Edit Project: ' . htmlspecialchars($editProject['tier_name']) : '➕ Register New Project / Script Tier' ?></h3>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    <input type="hidden" name="form_action" value="save_project">
-                    <input type="hidden" name="id" value="<?= intval($editProject['id'] ?? 0) ?>">
+<div class="lm-note">
+    <?= lm_icon('database') ?>
+    <span><strong>Storage folder:</strong> <code><?= lm_e($storageRoot) ?></code> — visible in cPanel → File Manager.
+        Packages are written here and removed from here.</span>
+</div>
 
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label>Project / Edition Name *</label>
-                            <input type="text" name="tier_name" class="form-control" required
-                                   placeholder="e.g. SchoolApp Multi-Tenant SaaS"
-                                   value="<?= htmlspecialchars($editProject['tier_name'] ?? '') ?>">
+<?php if (empty($tiers)): ?>
+    <section class="lm-panel">
+        <?php lm_app_empty(
+            'layers',
+            'No projects yet',
+            'Create one to start publishing. The code is permanent: the target script sends it with every update check.',
+            '<button class="lm-btn lm-btn--glow" type="button" data-lm-new-project>' . lm_icon('plus') . ' Create the first project</button>'
+        ); ?>
+    </section>
+<?php else: ?>
+    <div class="lm-grid-2" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+        <?php foreach ($tiers as $tier): ?>
+            <?php
+            $tierId = (int) $tier['id'];
+            $isActive = !isset($tier['is_active']) || (int) $tier['is_active'] === 1;
+            $latest = isset($latestVersions[$tierId]) ? $latestVersions[$tierId] : '';
+            $licences = isset($licenceCounts[$tierId]) ? $licenceCounts[$tierId] : 0;
+            $versions = isset($versionCounts[$tierId]) ? $versionCounts[$tierId] : 0;
+            $hasRepo = trim((string) ($tier['github_repo'] ?? '')) !== '';
+            $tierDir = lm_tier_storage_dir($tier, false);
+            $size = 0;
+            foreach ((array) glob($tierDir . '/*.zip') as $file) {
+                $size += (int) @filesize($file);
+            }
+
+            $editPayload = array(
+                'id'            => $tierId,
+                'tier_name'     => (string) $tier['tier_name'],
+                'tier_code'     => (string) $tier['tier_code'],
+                'description'   => (string) ($tier['description'] ?? ''),
+                'license_price' => (string) ($tier['license_price'] ?? ''),
+                'max_domains'   => (string) ($tier['max_domains'] ?? ''),
+                'sort_order'    => (string) ($tier['sort_order'] ?? '0'),
+            );
+
+            $guidePayload = array(
+                'id'   => $tierId,
+                'name' => (string) $tier['tier_name'],
+                'code' => (string) $tier['tier_code'],
+                'key'  => (string) ($tier['project_key'] ?? ''),
+                'dir'  => $tierDir,
+                'next' => lm_next_version($pdo, $tierId, 'patch'),
+            );
+            ?>
+            <section class="lm-panel" <?= $isActive ? '' : 'style="opacity:.72"' ?>>
+                <div class="lm-panel__head">
+                    <div>
+                        <div class="lm-flex" style="gap:6px;margin-bottom:8px">
+                            <?= lm_app_badge((string) $tier['tier_code'], 'info') ?>
+                            <?= lm_app_badge($isActive ? 'Active' : 'Archived', $isActive ? 'ok' : '') ?>
                         </div>
-                        <div class="form-group">
-                            <label>Unique Tier Code *</label>
-                            <?php $lockedCode = isset($editProject['id']) && in_array((int)$editProject['id'], [1, 2], true); ?>
-                            <input type="text" name="tier_code" class="form-control" required
-                                   placeholder="e.g. SMSP-SAAS or HOSPITAL-ERP"
-                                   value="<?= htmlspecialchars($editProject['tier_code'] ?? '') ?>"
-                                   <?= $lockedCode ? 'readonly style="background:#f1f5f9;"' : '' ?>>
-                            <small><?= $lockedCode ? 'Protected legacy code for live DGV7.0 backward compatibility.' : 'Used by client scripts in expected_tier / project_family (uppercase letters, numbers, hyphens).' ?></small>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" name="description" class="form-control"
-                               placeholder="Brief summary of this project or license edition"
-                               value="<?= htmlspecialchars($editProject['description'] ?? '') ?>">
-                    </div>
-
-                    <div class="grid-3">
-                        <div class="form-group">
-                            <label>GitHub Repository (owner/repo)</label>
-                            <input type="text" name="github_repo" class="form-control"
-                                   placeholder="<?= htmlspecialchars($defaultRepo) ?>"
-                                   value="<?= htmlspecialchars($editProject['github_repo'] ?? $defaultRepo) ?>">
-                            <small>Repository containing this project.</small>
-                        </div>
-                        <div class="form-group">
-                            <label>GitHub Branch</label>
-                            <input type="text" name="github_branch" class="form-control"
-                                   placeholder="main"
-                                   value="<?= htmlspecialchars($editProject['github_branch'] ?? $defaultBranch) ?>">
-                            <small>Branch tracked for releases (e.g. <code>main</code>).</small>
-                        </div>
-                        <div class="form-group">
-                            <label>Subdirectory inside Repo</label>
-                            <input type="text" name="github_subdir" class="form-control"
-                                   placeholder="e.g. SMSP or VTU/DGV7.0-SAAS"
-                                   value="<?= htmlspecialchars($editProject['github_subdir'] ?? '') ?>">
-                            <small>Leave blank only if the entire repository is this single project.</small>
-                        </div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label>Excluded Paths when Packaging from GitHub</label>
-                            <textarea name="exclude_paths" class="form-control" rows="3" placeholder="config/config.php, install/, dataimg/, uploads/, mobile-android/, mobile-ios/"><?= htmlspecialchars($editProject['exclude_paths'] ?? 'config/config.php, config/.sys_cache, install/, backups/, tmp_update/, logs/, dataimg/, uploads/') ?></textarea>
-                            <small>Comma- or newline-separated files/folders relative to the project folder that must NOT overwrite live tenant configs or uploads.</small>
-                        </div>
-                        <div class="form-group">
-                            <label>Client Website Update Signal Endpoint</label>
-                            <input type="text" name="signal_endpoint" class="form-control"
-                                   placeholder="/api/v1/ota-signal.php"
-                                   value="<?= htmlspecialchars($editProject['signal_endpoint'] ?? '/api/v1/ota-signal.php') ?>">
-                            <small>Relative URL on licensed websites where LM POSTs signed <code>X-LM-Signature</code> update notifications.</small>
-
-                            <div class="grid-2" style="margin-top: 0.85rem;">
-                                <label class="toggle-box">
-                                    <input type="checkbox" name="auto_pull_github" value="1" <?= (!isset($editProject) || !empty($editProject['auto_pull_github'])) ? 'checked' : '' ?>>
-                                    <span>Auto-pull on GitHub push</span>
-                                </label>
-                                <label class="toggle-box">
-                                    <input type="checkbox" name="auto_signal" value="1" <?= (!isset($editProject) || !empty($editProject['auto_signal'])) ? 'checked' : '' ?>>
-                                    <span>Auto-signal licensed sites</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
-                        <?php if ($editProject): ?>
-                            <a href="projects.php" class="btn btn-secondary">Cancel</a>
+                        <h2 style="font-size:17px"><?= lm_e((string) $tier['tier_name']) ?></h2>
+                        <?php if (!empty($tier['description'])): ?>
+                            <p><?= lm_e((string) $tier['description']) ?></p>
                         <?php endif; ?>
-                        <button type="submit" class="btn btn-primary"><?= $editProject ? '💾 Save Project Changes' : '➕ Register Project' ?></button>
                     </div>
-                </form>
+                    <div style="text-align:right">
+                        <span class="lm-help">Latest</span>
+                        <div class="lm-mono" style="font-weight:700;font-size:15px">
+                            <?= $latest !== '' ? 'v' . lm_e($latest) : '—' ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lm-panel__body">
+                    <dl class="lm-deflist">
+                        <div>
+                            <dt>Licences</dt>
+                            <dd><?= (int) $licences ?></dd>
+                        </div>
+                        <div>
+                            <dt>Versions</dt>
+                            <dd><?= (int) $versions ?></dd>
+                        </div>
+                        <div>
+                            <dt>Packages</dt>
+                            <dd><?= lm_e(lm_format_bytes($size)) ?></dd>
+                        </div>
+                    </dl>
+
+                    <div class="lm-field lm-mt-16" style="margin-bottom:10px">
+                        <span class="lm-label">Project key</span>
+                        <div class="lm-keyrow">
+                            <code class="lm-key"><?= lm_e((string) ($tier['project_key'] ?? '—')) ?></code>
+                            <?= lm_app_copy((string) ($tier['project_key'] ?? ''), 'Copy') ?>
+                        </div>
+                    </div>
+
+                    <p class="lm-help lm-mb-0">
+                        <?php if ($hasRepo): ?>
+                            <?= lm_icon('layers') ?>
+                            <?= lm_e((string) $tier['github_repo']) ?><?= !empty($tier['github_branch']) ? ' @ ' . lm_e((string) $tier['github_branch']) : '' ?>
+                        <?php else: ?>
+                            No GitHub repository linked.
+                        <?php endif; ?>
+                    </p>
+
+                    <div class="lm-btnrow lm-mt-16" data-project="<?= $tierId ?>"
+                         data-edit="<?= lm_e(json_encode($editPayload, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>"
+                         data-guide="<?= lm_e(json_encode($guidePayload, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>"
+                         data-name="<?= lm_e((string) $tier['tier_name']) ?>"
+                         data-active="<?= $isActive ? '1' : '0' ?>">
+                        <button class="lm-btn lm-btn--sm lm-btn--ghost" type="button" data-lm-edit>Edit</button>
+                        <button class="lm-btn lm-btn--sm lm-btn--ghost" type="button" data-lm-guide>Integration</button>
+                        <button class="lm-btn lm-btn--sm lm-btn--ghost" type="button" data-lm-toggle>
+                            <?= $isActive ? 'Archive' : 'Restore' ?>
+                        </button>
+                        <button class="lm-btn lm-btn--sm lm-btn--ghost" type="button" data-lm-rotate>Rotate key</button>
+                        <button class="lm-btn lm-btn--sm lm-btn--danger" type="button" data-lm-delete>Delete</button>
+                    </div>
+                </div>
+            </section>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+<!-- Create / edit -->
+<div class="lm-modal" id="projectModal" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle">
+    <div class="lm-modal__card" style="max-width:600px">
+        <div class="lm-modal__head">
+            <div>
+                <h3 id="projectModalTitle">New project</h3>
+                <p class="lm-help" style="margin-top:5px">The project code is permanent — the target script sends it on every check.</p>
             </div>
+            <button class="lm-modal__close" type="button" data-lm-modal-close aria-label="Close"><?= lm_icon('close') ?></button>
+        </div>
+        <form id="projectForm" class="lm-form">
+            <input type="hidden" name="id" id="projectId" value="0">
+            <div class="lm-formgrid">
+                <div class="lm-field">
+                    <label for="projectName">Project name</label>
+                    <input class="lm-input" type="text" id="projectName" name="tier_name" maxlength="50" required placeholder="DGV7.0 SAAS">
+                </div>
+                <div class="lm-field">
+                    <label for="projectCode">Project code</label>
+                    <input class="lm-input lm-mono" type="text" id="projectCode" name="tier_code" maxlength="20" required placeholder="SAAS">
+                    <p class="lm-help">A–Z, 0–9, _ and -. Cannot be changed later.</p>
+                </div>
+            </div>
+            <div class="lm-field">
+                <label for="projectDescription">Description <span class="lm-help">(optional)</span></label>
+                <input class="lm-input" type="text" id="projectDescription" name="description" maxlength="255"
+                       placeholder="SaaS edition of the DGV7 platform">
+            </div>
+            <div class="lm-formgrid">
+                <div class="lm-field">
+                    <label for="projectPrice">Licence price (NGN)</label>
+                    <input class="lm-input" type="number" step="0.01" min="0" id="projectPrice" name="license_price" placeholder="5000.00">
+                    <p class="lm-help">Empty = the global price from Settings.</p>
+                </div>
+                <div class="lm-field">
+                    <label for="projectDomains">Max domains per licence</label>
+                    <input class="lm-input" type="number" min="1" max="100" id="projectDomains" name="max_domains" placeholder="1">
+                    <p class="lm-help">Empty = the global limit.</p>
+                </div>
+            </div>
+            <div class="lm-field" id="sortOrderField" hidden>
+                <label for="projectSort">Sort order</label>
+                <input class="lm-input" type="number" id="projectSort" name="sort_order" value="0">
+            </div>
+            <div class="lm-btnrow" style="justify-content:flex-end">
+                <button class="lm-btn lm-btn--ghost" type="button" data-lm-modal-close>Cancel</button>
+                <button class="lm-btn lm-btn--glow" type="submit" id="projectSaveBtn">Save project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Integration guide -->
+<div class="lm-modal" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideHeading">
+    <div class="lm-modal__card">
+        <div class="lm-modal__head">
+            <div>
+                <h3 id="guideHeading">Connect <?= lm_icon('plug') ?> <span id="guideName">project</span></h3>
+                <p class="lm-help" style="margin-top:5px">Three steps: call the OTA endpoint, download the package, apply it.</p>
+            </div>
+            <button class="lm-modal__close" type="button" data-lm-modal-close aria-label="Close"><?= lm_icon('close') ?></button>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h3>📦 Registered Projects (<?= count($projects) ?>)</h3>
-                <a href="updates.php" class="btn btn-primary btn-sm">🚀 Go to Push / Pull Updates</a>
+        <div class="lm-note lm-note--ok">
+            <?= lm_icon('spark') ?>
+            <span>The target script only needs its <strong>project code</strong> and its <strong>licence key</strong>.
+                The License Manager handles versions, packages, emails and reminders.</span>
+        </div>
+
+        <div class="lm-field">
+            <span class="lm-label">1. Check for an update</span>
+            <div class="lm-keyrow">
+                <code class="lm-key" id="guideEndpoint"></code>
+                <button class="lm-copybtn lm-copybtn--light" type="button" id="guideEndpointCopy">
+                    <?= lm_icon('copy') ?><span>Copy</span>
+                </button>
             </div>
-            <div class="card-body" style="padding: 0; overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Project &amp; Tier Code</th>
-                            <th>GitHub Source</th>
-                            <th>Signal Endpoint</th>
-                            <th>Automation</th>
-                            <th>Active Licenses</th>
-                            <th>Latest Release</th>
-                            <th style="text-align:right; padding-right:1.5rem;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($projects as $p): ?>
-                        <tr>
-                            <td>#<?= (int)$p['id'] ?></td>
-                            <td>
-                                <div style="font-weight:700; color:#0f172a;"><?= htmlspecialchars($p['tier_name']) ?></div>
-                                <span class="badge" style="margin-top:0.25rem;"><?= htmlspecialchars($p['tier_code']) ?></span>
-                            </td>
-                            <td>
-                                <?php if (!empty($p['github_repo'])): ?>
-                                    <code style="font-size:0.78rem; color:#334155;"><?= htmlspecialchars($p['github_repo']) ?>@<?= htmlspecialchars($p['github_branch'] ?: 'main') ?></code>
-                                    <div style="font-size:0.75rem; color:#64748b; margin-top:0.2rem;">
-                                        📁 <code><?= htmlspecialchars($p['github_subdir'] ?: '(repo root)') ?></code>
-                                        <?php if (!empty($p['last_github_sha'])): ?>
-                                            &bull; SHA <code><?= htmlspecialchars(substr($p['last_github_sha'], 0, 7)) ?></code>
-                                        <?php endif; ?>
-                                    </div>
-                                <?php else: ?>
-                                    <span style="color:#94a3b8;">Manual ZIP only</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><code style="font-size:0.76rem; color:#475569;"><?= htmlspecialchars($p['signal_endpoint'] ?? '/api/v1/ota-signal.php') ?></code></td>
-                            <td>
-                                <span class="badge <?= !empty($p['auto_pull_github']) ? 'badge-green' : 'badge-gray' ?>">GH Push: <?= !empty($p['auto_pull_github']) ? 'ON' : 'OFF' ?></span>
-                                <span class="badge <?= !empty($p['auto_signal']) ? 'badge-green' : 'badge-gray' ?>" style="margin-top:0.25rem;">Signal: <?= !empty($p['auto_signal']) ? 'ON' : 'OFF' ?></span>
-                            </td>
-                            <td><strong><?= (int)$p['active_licenses'] ?></strong></td>
-                            <td>
-                                <?php if (!empty($p['latest_version'])): ?>
-                                    <span class="badge badge-green">v<?= htmlspecialchars($p['latest_version']) ?></span>
-                                <?php else: ?>
-                                    <span style="color:#94a3b8;">None yet</span>
-                                <?php endif; ?>
-                            </td>
-                            <td style="text-align:right; padding-right:1.5rem; white-space:nowrap;">
-                                <a href="projects.php?edit=<?= (int)$p['id'] ?>" class="btn btn-secondary btn-sm">Edit</a>
-                                <?php if (!in_array((int)$p['id'], [1, 2], true)): ?>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Delete project <?= htmlspecialchars(addslashes($p['tier_name'])) ?>?');">
-                                        <input type="hidden" name="form_action" value="delete_project">
-                                        <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                    </form>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+            <p class="lm-help">The same call the script makes: licence key, domain, current version, project code.</p>
+        </div>
+
+        <div class="lm-field">
+            <span class="lm-label">2. Drop-in client for the target script</span>
+            <pre class="lm-code" id="guideSnippet"></pre>
+        </div>
+
+        <div class="lm-field">
+            <span class="lm-label">3. Package manifest (added automatically when missing)</span>
+            <pre class="lm-code">{
+  "version": "1.0.1",
+  "tier": "PROJECT_CODE",
+  "changelog": "What changed",
+  "files_to_delete": [],
+  "database_queries": []
+}</pre>
+        </div>
+
+        <div class="lm-field" style="margin-bottom:0">
+            <span class="lm-label">Storage folder in cPanel</span>
+            <code class="lm-key" id="guideDir"></code>
+            <p class="lm-help">Packages are written here and deleted from here when you remove or clean up an update.</p>
         </div>
     </div>
-</body>
-</html>
+</div>
+
+<!-- Delete confirmation: impact comes from the server, never guessed -->
+<div class="lm-modal" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+    <div class="lm-modal__card" style="max-width:560px">
+        <div class="lm-modal__head">
+            <div>
+                <h3 id="deleteTitle">Delete project</h3>
+                <p class="lm-help" style="margin-top:5px">This removes the project, its versions and its packages. It cannot be undone.</p>
+            </div>
+            <button class="lm-modal__close" type="button" data-lm-modal-close aria-label="Close"><?= lm_icon('close') ?></button>
+        </div>
+
+        <div id="deleteImpact" style="display:grid;gap:9px;margin-bottom:18px"></div>
+
+        <div id="deleteLicenceChoice" style="margin-bottom:16px">
+            <span class="lm-label" style="display:block;margin-bottom:8px">What happens to the licences?</span>
+
+            <label class="lm-check" style="margin-bottom:10px">
+                <input type="radio" name="deleteLicenceMode" value="detach" checked>
+                <span class="txt">
+                    <strong>Keep them</strong>
+                    <small>Customer keys keep working and stay in Licences. They stop receiving updates from this project.</small>
+                    <span style="display:block;margin-top:10px">
+                        <span class="lm-label" style="display:block;margin-bottom:5px">Move them to</span>
+                        <select class="lm-select" id="deleteMoveTo">
+                            <option value="0">— No project (unassigned) —</option>
+                        </select>
+                    </span>
+                </span>
+            </label>
+
+            <label class="lm-check">
+                <input type="radio" name="deleteLicenceMode" value="delete">
+                <span class="txt">
+                    <strong>Delete them too</strong>
+                    <small>The keys stop validating immediately and the customer cannot recover them. Payment history is kept.</small>
+                </span>
+            </label>
+        </div>
+
+        <label class="lm-check" style="margin-bottom:18px">
+            <input type="checkbox" id="deleteUnderstand">
+            <span class="txt">
+                <strong>I understand this cannot be undone</strong>
+                <small id="deleteUnderstandHint">Tick to enable the delete button.</small>
+            </span>
+        </label>
+
+        <div class="lm-btnrow" style="justify-content:flex-end">
+            <button class="lm-btn lm-btn--ghost" type="button" data-lm-modal-close>Cancel</button>
+            <button class="lm-btn lm-btn--danger" type="button" id="deleteConfirmBtn" disabled>Delete project</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var siteUrl = <?= json_encode($siteUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var editingId = 0;
+    var pendingDelete = { id: 0, name: '' };
+
+    function el(id) { return document.getElementById(id); }
+
+    function post(data) {
+        if (!window.lmPost) {
+            return Promise.reject(new Error('The console script did not load. Reload the page.'));
+        }
+        return window.lmPost('ajax_projects.php', data);
+    }
+
+    function done(result) {
+        if (window.toast) { window.toast(result.message, result.status === 'error' ? 'err' : 'ok'); }
+    }
+
+    function reloadSoon() {
+        window.setTimeout(function () { window.location.reload(); }, 900);
+    }
+
+    /* ------------------------------------------------------------- create */
+
+    function openCreate() {
+        editingId = 0;
+        el('projectModalTitle').textContent = 'New project';
+        el('projectForm').reset();
+        el('projectId').value = '0';
+        el('projectCode').readOnly = false;
+        el('sortOrderField').hidden = true;
+        if (window.openModal) { window.openModal('projectModal'); }
+    }
+
+    function openEdit(project) {
+        editingId = project.id;
+        el('projectModalTitle').textContent = 'Edit ' + project.tier_name;
+        el('projectId').value = project.id;
+        el('projectName').value = project.tier_name;
+        el('projectCode').value = project.tier_code;
+        el('projectCode').readOnly = true;
+        el('projectDescription').value = project.description || '';
+        el('projectPrice').value = project.license_price || '';
+        el('projectDomains').value = project.max_domains || '';
+        el('projectSort').value = project.sort_order || '0';
+        el('sortOrderField').hidden = false;
+        if (window.openModal) { window.openModal('projectModal'); }
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lm-new-project]'), function (button) {
+        button.addEventListener('click', openCreate);
+    });
+
+    el('projectForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        var button = el('projectSaveBtn');
+        button.disabled = true;
+        button.textContent = 'Saving…';
+
+        var data = Object.fromEntries(new FormData(el('projectForm')).entries());
+        data.action = editingId > 0 ? 'update' : 'create';
+
+        post(data).then(function (result) {
+            done(result);
+            button.disabled = false;
+            button.textContent = 'Save project';
+            if (result.status !== 'error') {
+                if (window.closeModal) { window.closeModal('projectModal'); }
+                reloadSoon();
+            }
+        }).catch(function (error) {
+            button.disabled = false;
+            button.textContent = 'Save project';
+            if (window.toast) { window.toast(error.message || 'Save failed.', 'err'); }
+        });
+    });
+
+    /* ------------------------------------------------------- per project */
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-project]'), function (bar, index) {
+        var id = parseInt(bar.getAttribute('data-project'), 10);
+        var name = bar.getAttribute('data-name') || '';
+        var active = bar.getAttribute('data-active') === '1';
+        var edit = JSON.parse(bar.getAttribute('data-edit') || '{}');
+        var guide = JSON.parse(bar.getAttribute('data-guide') || '{}');
+
+        bar.querySelector('[data-lm-edit]').addEventListener('click', function () { openEdit(edit); });
+        bar.querySelector('[data-lm-guide]').addEventListener('click', function () { openGuide(guide); });
+
+        bar.querySelector('[data-lm-toggle]').addEventListener('click', function () {
+            var verb = active ? 'archive' : 'restore';
+            if (!window.confirm('Really ' + verb + ' ' + name + '?')) { return; }
+            post({ action: 'toggle', id: id, is_active: active ? 1 : 0 }).then(function (result) {
+                done(result);
+                if (result.status !== 'error') { reloadSoon(); }
+            }).catch(function (error) {
+                if (window.toast) { window.toast(error.message || 'Failed.', 'err'); }
+            });
+        });
+
+        bar.querySelector('[data-lm-rotate]').addEventListener('click', function () {
+            if (!window.confirm('Rotate the key for ' + name + '?\n\nEvery script still sending the old key stops receiving updates until you update it.')) {
+                return;
+            }
+            post({ action: 'rotate_key', id: id }).then(function (result) {
+                done(result);
+                if (result.status !== 'error') { reloadSoon(); }
+            }).catch(function (error) {
+                if (window.toast) { window.toast(error.message || 'Failed.', 'err'); }
+            });
+        });
+
+        bar.querySelector('[data-lm-delete]').addEventListener('click', function () {
+            startDelete(id, name);
+        });
+
+        // The "new project" button in the empty state is separate.
+        void index;
+    });
+
+    /* ------------------------------------------------------------- guide */
+
+    function openGuide(project) {
+        el('guideName').textContent = project.name;
+
+        var endpoint = siteUrl + '/check-update.php?license_key=YOUR_LICENSE_KEY&domain=example.com'
+            + '&current_version=CURRENT&project=' + encodeURIComponent(project.code);
+
+        el('guideEndpoint').textContent = 'GET ' + endpoint;
+        el('guideDir').textContent = project.dir;
+
+        var lines = [
+            '\x3C?php',
+            '// Save as includes/ota-client.php inside ' + project.name,
+            '',
+            'function ota_check($licenseKey, $domain, $currentVersion) {',
+            '    $url = ' + JSON.stringify(siteUrl + '/check-update.php') + ' . "?" . http_build_query(array(',
+            '        "license_key"     => $licenseKey,',
+            '        "domain"          => $domain,',
+            '        "current_version" => $currentVersion,',
+            '        "project"         => ' + JSON.stringify(project.code) + ',',
+            '    ));',
+            '',
+            '    $context = stream_context_create(array("http" => array("timeout" => 12)));',
+            '    $raw = @file_get_contents($url, false, $context);',
+            '    if ($raw === false) { return null; }',
+            '',
+            '    $data = json_decode($raw, true);',
+            '    if (!is_array($data) || empty($data["update_required"])) { return null; }',
+            '',
+            '    return $data; // latest_version, changelog, download_url, checksum',
+            '}',
+            '',
+            '// Download the package with the one-time token',
+            'function ota_download($downloadUrl, $target) {',
+            '    $context = stream_context_create(array("http" => array("timeout" => 120)));',
+            '    $raw = @file_get_contents($downloadUrl, false, $context);',
+            '    if ($raw === false) { return false; }',
+            '    return file_put_contents($target, $raw) !== false;',
+            '}'
+        ];
+
+        el('guideSnippet').textContent = lines.join('\n');
+
+        // A copy button per open, because the URL changes with the project.
+        var copyButton = el('guideEndpointCopy');
+        copyButton.setAttribute('data-lm-copy', endpoint);
+        copyButton.setAttribute('type', 'button');
+        if (window.openModal) { window.openModal('guideModal'); }
+    }
+
+    /* ------------------------------------------------------------ delete */
+
+    function impactRow(label, value, bad) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;gap:14px;padding:10px 13px;border-radius:10px;background:#f8fafc;font-size:13px;';
+
+        var left = document.createElement('span');
+        left.style.color = '#475569';
+        left.textContent = label;
+
+        var right = document.createElement('strong');
+        right.style.color = bad ? '#b91c1c' : '#0f172a';
+        right.textContent = value;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        return row;
+    }
+
+    /**
+     * Ask what deleting this project would destroy, show it, then send the
+     * licence decision with the confirmation. The panel never deletes a
+     * customer key without that being chosen first.
+     */
+    function startDelete(id, name) {
+        pendingDelete = { id: id, name: name };
+
+        post({ action: 'delete', id: id }).then(function (result) {
+            if (result.status === 'error') {
+                done(result);
+                return;
+            }
+
+            var impact = result.impact || {};
+            var list = el('deleteImpact');
+            list.innerHTML = '';
+
+            el('deleteTitle').textContent = 'Delete ' + name + '?';
+            list.appendChild(impactRow('Licences', String(impact.licences || 0), impact.licences));
+            list.appendChild(impactRow('Published versions', String(impact.updates || 0), impact.updates));
+            list.appendChild(impactRow('Packages on disk',
+                (impact.package_files || 0) + ' file(s) · ' + (impact.package_size || '0 B'), impact.package_files));
+            list.appendChild(impactRow('Queued customer notices', String(impact.notifications || 0), impact.notifications));
+            list.appendChild(impactRow('Pull history / jobs', (impact.pulls || 0) + ' / ' + (impact.jobs || 0), false));
+            if (impact.jobs_running) {
+                list.appendChild(impactRow('Pull running right now',
+                    impact.jobs_running + ' — it will be cancelled', true));
+            }
+
+            el('deleteLicenceChoice').hidden = !(impact.licences > 0);
+            var radios = el('deleteLicenceChoice').querySelectorAll('input[name="deleteLicenceMode"]');
+            if (radios.length) { radios[0].checked = true; }
+
+            var moveTo = el('deleteMoveTo');
+            moveTo.innerHTML = '';
+            var none = document.createElement('option');
+            none.value = '0';
+            none.textContent = '— No project (unassigned) —';
+            moveTo.appendChild(none);
+
+            (result.targets || []).forEach(function (target) {
+                var option = document.createElement('option');
+                option.value = String(target.id);
+                option.textContent = target.name + ' (' + target.code + ')';
+                moveTo.appendChild(option);
+            });
+            moveTo.disabled = false;
+
+            el('deleteUnderstand').checked = false;
+            var confirmButton = el('deleteConfirmBtn');
+            confirmButton.disabled = true;
+            confirmButton.textContent = 'Delete project';
+
+            if (window.openModal) { window.openModal('deleteModal'); }
+        }).catch(function (error) {
+            if (window.toast) { window.toast(error.message || 'Could not read the impact.', 'err'); }
+        });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="deleteLicenceMode"]'), function (radio) {
+        radio.addEventListener('change', function () {
+            el('deleteMoveTo').disabled = this.value !== 'detach';
+        });
+    });
+
+    el('deleteUnderstand').addEventListener('change', function () {
+        el('deleteConfirmBtn').disabled = !this.checked;
+        el('deleteUnderstandHint').textContent = this.checked
+            ? 'Deleting ' + pendingDelete.name + '.'
+            : 'Tick to enable the delete button.';
+    });
+
+    el('deleteConfirmBtn').addEventListener('click', function () {
+        var button = this;
+        var chosen = document.querySelector('input[name="deleteLicenceMode"]:checked');
+        var mode = chosen ? chosen.value : 'detach';
+        var moveTo = el('deleteMoveTo');
+
+        button.disabled = true;
+        button.textContent = 'Deleting…';
+
+        post({
+            action: 'delete',
+            id: pendingDelete.id,
+            confirm: '1',
+            licence_mode: mode,
+            move_to: mode === 'detach' ? moveTo.value : '0'
+        }).then(function (result) {
+            done(result);
+            if (result.status === 'error') {
+                button.disabled = false;
+                button.textContent = 'Delete project';
+                return;
+            }
+            if (window.closeModal) { window.closeModal('deleteModal'); }
+            window.setTimeout(function () { window.location.reload(); }, 1100);
+        }).catch(function (error) {
+            button.disabled = false;
+            button.textContent = 'Delete project';
+            if (window.toast) { window.toast(error.message || 'Delete failed.', 'err'); }
+        });
+    });
+})();
+</script>
+
+<?php lm_app_end(); ?>

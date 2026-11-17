@@ -1,0 +1,22 @@
+RewriteEngine On
+
+# Ensure Authorization header is passed to PHP
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Redirect /api/virtual-accounts to /api/virtual-accounts.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^virtual-accounts$ virtual-accounts.php [L,QSA]
+
+# Account Resolution Alias (/api/resolve-account and /api/verify-account)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(resolve-account|verify-account|resolve)$ bank/resolve.php [L,QSA]
+
+# Bank List Alias (/api/banks)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^banks$ bank/list.php [L,QSA]
+
+# Redirect /api/:email to /api/virtual-accounts.php?email=:email
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_URI} !^/api/(transaction|virtual-accounts|bank|payout|resolve|verify|banks)
+RewriteRule ^([^/]+)$ virtual-accounts.php?email=$1 [L,QSA]

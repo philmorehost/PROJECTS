@@ -93,6 +93,10 @@ function bc_is_rate_limited(string $action, string $key, int $max = 5, int $wind
     global $connection_server;
     if (!$connection_server) return false;
 
+    // The table is created lazily: /web/api/* endpoints include bc-connect.php only, so the
+    // migration pass in bc-tables.php may never have run on this host.
+    bc_ensure_security_tables();
+
     $action_esc = mysqli_real_escape_string($connection_server, $action);
     $key_esc    = mysqli_real_escape_string($connection_server, $key);
     $now        = time();
@@ -539,6 +543,470 @@ function bc_check_spending_anomaly(string $username, float $amount): bool {
     return false;
 }
 
+
+
+// 5. ONE-TIME CODES (OTP) AND ONE-TIME LOGIN TOKENS
+//
+// Both are stored as SHA-256 hashes: a dump of these tables (or a backup that
+// leaks) can never be replayed as a credential. They are single-use, expire
+// quickly, and are scoped to one vendor + username + purpose.
+// ─────────────────────────────────────────────────────────────
+
+/** Ensure the user-login policy column exists without re-running unrelated migrations.
+ * Recheck after ALTER because another request may have added it concurrently. Never
+ * silently fall back to an unset vendor policy if the schema cannot be inspected.
+ */
+function bc_ensure_user_login_otp_column(): bool {
+    global $connection_server;
+    if (!$connection_server) return false;
+    static $ready = false;
+    if ($ready) return true;
+    $column = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
+    if (!$column) {
+        error_log('[DGV-OTP] Could not inspect the vendor login OTP policy column.');
+        return false;
+    }
+    if (mysqli_num_rows($column) === 0) {
+        @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN user_login_otp_enabled TINYINT(1) NULL DEFAULT NULL");
+        $column = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'user_login_otp_enabled'");
+    }
+    $ready = (bool)($column && mysqli_num_rows($column) > 0);
+    if (!$ready) error_log('[DGV-OTP] Could not migrate the vendor login OTP policy column.');
+    return $ready;
+}
+
+/**
+ * Creates the tables backing OTPs and one-time impersonation links.
+ * Called lazily so /web/api/* endpoints work even when the migrations page
+ * has never run on this host.
+ */
+function bc_ensure_security_tables(): void {
+    global $connection_server;
+    if (!$connection_server) return;
+    static $done = false;
+    if ($done) return;
+    $done = true;
+
+    mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_otp_codes (
+        id INT NOT NULL AUTO_INCREMENT,
+        vendor_id INT UNSIGNED NOT NULL,
+        username VARCHAR(225) NOT NULL,
+        purpose VARCHAR(60) NOT NULL,
+        code_hash CHAR(64) NOT NULL,
+        meta TEXT DEFAULT NULL,
+        attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_otp_lookup (vendor_id, username, purpose),
+        KEY idx_otp_expiry (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_rate_limits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        action VARCHAR(100) NOT NULL,
+        rate_key VARCHAR(150) NOT NULL,
+        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_lookup (action, rate_key, attempted_at)
+    )");
+
+    mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_login_tokens (
+        id INT NOT NULL AUTO_INCREMENT,
+        token_hash CHAR(64) NOT NULL,
+        vendor_id INT UNSIGNED NOT NULL,
+        username VARCHAR(225) NOT NULL,
+        purpose VARCHAR(40) NOT NULL DEFAULT 'impersonate',
+        created_by VARCHAR(225) DEFAULT NULL,
+        ip_address VARCHAR(60) DEFAULT NULL,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_token_hash (token_hash),
+        KEY idx_token_lookup (vendor_id, username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Registration that has been submitted but not yet proven by an emailed code.
+    // The mobile apps have no reliable cookie session, so the pending account has to live
+    // server-side; the client only ever holds the random token, never the data.
+    mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_registrations_pending (
+        id INT NOT NULL AUTO_INCREMENT,
+        token_hash CHAR(64) NOT NULL,
+        vendor_id INT UNSIGNED NOT NULL,
+        username VARCHAR(225) NOT NULL,
+        email VARCHAR(225) NOT NULL,
+        payload LONGTEXT NOT NULL,
+        attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_reg_token (token_hash),
+        KEY idx_reg_lookup (vendor_id, username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // API-only hosts do not load bc-tables.php; repair the policy column independently.
+    bc_ensure_user_login_otp_column();
+
+    // sas_users.email_verified is also written by /web/api/register.php, which reaches the DB
+    // through bc-connect.php only - bc-tables.php (where the column is normally migrated) is
+    // never loaded on that path. Without this, a fresh host answered the registration INSERT
+    // with "Unknown column 'email_verified'". Existing rows default to 1 so nobody is locked out.
+    $bc_user_column_exists = false;
+    $bc_cols_res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users LIKE 'email_verified'");
+    if ($bc_cols_res) {
+        $bc_user_column_exists = (mysqli_num_rows($bc_cols_res) > 0);
+    }
+    if (!$bc_user_column_exists) {
+        @mysqli_query($connection_server, "ALTER TABLE sas_users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
+    }
+}
+
+/**
+ * Stores a pending registration and emails a 6-digit code for it.
+ *
+ * @return array{token:string, otp:string} token is what the client sends back with the code.
+ */
+function bc_reg_pending_create(int $vendor_id, array $payload, string $purpose = 'register', int $ttl_seconds = 1800): array {
+    global $connection_server;
+    if (!$connection_server) return ['token' => '', 'otp' => ''];
+    bc_ensure_security_tables();
+
+    $username = (string)($payload['username'] ?? '');
+    $email    = (string)($payload['email'] ?? '');
+    if ($username === '' || $email === '') return ['token' => '', 'otp' => ''];
+
+    // Bind the payload to the vendor that created it: a token minted on vendor A must never be
+    // replayable on vendor B's host to create an account from A's submitted data.
+    $payload['vendor_id'] = (int)$vendor_id;
+
+    // One live registration per username: a resubmit supersedes the previous attempt.
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+    mysqli_query($connection_server, "UPDATE sas_registrations_pending SET used_at=NOW()
+        WHERE vendor_id='" . (int)$vendor_id . "' AND username='$username_esc' AND used_at IS NULL");
+
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $email_esc = mysqli_real_escape_string($connection_server, $email);
+    $payload_json = mysqli_real_escape_string($connection_server, json_encode($payload));
+    $ttl_seconds = max(300, min(3600, $ttl_seconds));
+
+    mysqli_query($connection_server, "INSERT INTO sas_registrations_pending (token_hash, vendor_id, username, email, payload, expires_at)
+        VALUES ('$hash', '" . (int)$vendor_id . "', '$username_esc', '$email_esc', '$payload_json', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
+
+    $otp = bc_issue_otp($purpose, $username, $vendor_id, array('email' => $email), 600);
+    return ['token' => $token, 'otp' => $otp];
+}
+
+/** Looks up a live pending registration without consuming it. */
+function bc_reg_pending_get(string $token, string $purpose = 'register'): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash = hash('sha256', $token);
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_registrations_pending
+        WHERE token_hash='$hash' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+
+    $row = mysqli_fetch_assoc($q);
+    $payload = json_decode((string)$row['payload'], true);
+    if (!is_array($payload)) return null;
+    $row['payload_decoded'] = $payload;
+    return $row;
+}
+
+/** Re-sends a code for an existing pending registration. */
+function bc_reg_pending_resend(string $token, string $purpose = 'register'): string {
+    global $connection_server;
+    $row = bc_reg_pending_get($token, $purpose);
+    if (!$row) return '';
+    return bc_issue_otp($purpose, (string)$row['username'], (int)$row['vendor_id'], array('email' => $row['email']), 600);
+}
+
+/**
+ * Verifies the code for a pending registration, burns the token and returns the payload.
+ * Returns null on a wrong/expired code so the caller cannot accidentally create the account.
+ */
+function bc_reg_pending_consume(string $token, string $code, string $purpose = 'register', int $max_attempts = 5): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+
+    $row = bc_reg_pending_get($token, $purpose);
+    if (!$row) return null;
+    if ((int)$row['attempts'] >= $max_attempts) return null;
+
+    if (!bc_verify_otp($purpose, (string)$row['username'], (int)$row['vendor_id'], $code)) {
+        mysqli_query($connection_server, "UPDATE sas_registrations_pending SET attempts=attempts+1 WHERE id='" . (int)$row['id'] . "'");
+        return null;
+    }
+
+    mysqli_query($connection_server, "UPDATE sas_registrations_pending SET used_at=NOW() WHERE id='" . (int)$row['id'] . "' AND used_at IS NULL");
+    if (mysqli_affected_rows($connection_server) !== 1) return null;
+
+    return $row['payload_decoded'];
+}
+
+/**
+ * Issues a numeric OTP for a purpose and returns the plaintext code.
+ * The plaintext is never stored — only its hash.
+ */
+function bc_issue_otp(string $purpose, string $username, int $vendor_id, array $meta = [], int $ttl_seconds = 600): string {
+    global $connection_server;
+    if (!$connection_server) return '';
+    bc_ensure_security_tables();
+
+    // Invalidate any earlier live code for the same scope: a user can only
+    // have one active code at a time, so an old email cannot be replayed.
+    $purpose_esc  = mysqli_real_escape_string($connection_server, $purpose);
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+    mysqli_query($connection_server, "UPDATE sas_otp_codes SET used_at=NOW()
+        WHERE vendor_id='" . (int)$vendor_id . "' AND username='$username_esc' AND purpose='$purpose_esc' AND used_at IS NULL");
+
+    $ttl_seconds = max(60, min(1800, $ttl_seconds));
+    $code = generateOTP(6);
+    $hash = hash('sha256', $code);
+    $meta_json = mysqli_real_escape_string($connection_server, json_encode($meta));
+
+    $inserted = mysqli_query($connection_server, "INSERT INTO sas_otp_codes (vendor_id, username, purpose, code_hash, meta, expires_at)
+        VALUES ('" . (int)$vendor_id . "', '$username_esc', '$purpose_esc', '$hash', '$meta_json', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
+
+    return $inserted ? $code : '';
+}
+
+/**
+ * Verifies and consumes an OTP. Wrong codes count against a hard attempt cap.
+ */
+function bc_verify_otp(string $purpose, string $username, int $vendor_id, string $code, int $max_attempts = 5): bool {
+    global $connection_server;
+    if (!$connection_server) return false;
+    bc_ensure_security_tables();
+
+    $code = preg_replace('/\D/', '', $code);
+    if (strlen($code) !== 6) return false;
+
+    $purpose_esc  = mysqli_real_escape_string($connection_server, $purpose);
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+
+    $row = null;
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_otp_codes
+        WHERE vendor_id='" . (int)$vendor_id . "' AND username='$username_esc' AND purpose='$purpose_esc'
+          AND used_at IS NULL AND expires_at > NOW() AND attempts < " . (int)$max_attempts . "
+        ORDER BY id DESC LIMIT 1");
+    if ($q && mysqli_num_rows($q) === 1) {
+        $row = mysqli_fetch_assoc($q);
+    }
+    if (!$row) return false;
+
+    if (!hash_equals((string)$row['code_hash'], hash('sha256', $code))) {
+        mysqli_query($connection_server, "UPDATE sas_otp_codes SET attempts=attempts+1 WHERE id='" . (int)$row['id'] . "'");
+        bc_log_security_event('OTP_FAILED', $purpose, $username, 'Wrong code for OTP id ' . (int)$row['id']);
+        return false;
+    }
+
+    // Consume atomically: only one concurrent request can win.
+    mysqli_query($connection_server, "UPDATE sas_otp_codes SET used_at=NOW() WHERE id='" . (int)$row['id'] . "' AND used_at IS NULL");
+    if (mysqli_affected_rows($connection_server) !== 1) return false;
+
+    return true;
+}
+
+/** Returns the meta payload attached to the last consumed/live OTP, if any. */
+function bc_otp_meta(string $purpose, string $username, int $vendor_id): array {
+    global $connection_server;
+    if (!$connection_server) return [];
+    $purpose_esc  = mysqli_real_escape_string($connection_server, $purpose);
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+    $q = mysqli_query($connection_server, "SELECT meta FROM sas_otp_codes
+        WHERE vendor_id='" . (int)$vendor_id . "' AND username='$username_esc' AND purpose='$purpose_esc' AND used_at IS NOT NULL
+        ORDER BY id DESC LIMIT 1");
+    if ($q && ($r = mysqli_fetch_assoc($q))) {
+        $decoded = json_decode((string)$r['meta'], true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    return [];
+}
+
+/** Removes expired OTP / token rows; safe to call from cron or a page load. */function bc_cleanup_security_tokens(): void {
+    global $connection_server;
+    if (!$connection_server) return;
+    bc_ensure_security_tables();
+    mysqli_query($connection_server, "DELETE FROM sas_otp_codes WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    mysqli_query($connection_server, "DELETE FROM sas_login_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+}
+
+/**
+ * Mints a one-time login link token. Only the hash is stored, so the URL that
+ * travels through the super-admin's browser cannot be replayed from a log.
+ */
+function bc_create_login_token(string $username, int $vendor_id, string $purpose = 'impersonate', int $ttl_seconds = 120, string $created_by = ''): string {
+    global $connection_server;
+    if (!$connection_server) return '';
+    bc_ensure_security_tables();
+
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $username_esc = mysqli_real_escape_string($connection_server, $username);
+    $purpose_esc  = mysqli_real_escape_string($connection_server, $purpose);
+    $created_esc  = mysqli_real_escape_string($connection_server, $created_by);
+    $ip_esc       = mysqli_real_escape_string($connection_server, $_SERVER['REMOTE_ADDR'] ?? '');
+    $ttl_seconds  = max(60, min(900, $ttl_seconds));
+
+    $inserted = mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
+        VALUES ('$hash', '" . (int)$vendor_id . "', '$username_esc', '$purpose_esc', '$created_esc', '$ip_esc', DATE_ADD(NOW(), INTERVAL $ttl_seconds SECOND))");
+
+    return $inserted ? $token : '';
+}
+
+/**
+ * Mints a one-time token that lets a super admin open a vendor's bc-admin.
+ * Replaces base64(email:base64(password)) in the URL - base64 is transport
+ * encoding, not protection, so that link handed out the vendor password.
+ */
+function bc_create_vendor_login_token(int $vendor_id, string $created_by = ''): string {
+    global $connection_server;
+    if (!$connection_server || $vendor_id <= 0) return '';
+    bc_ensure_security_tables();
+
+    $vq = mysqli_query($connection_server, "SELECT email FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
+    if (!$vq || mysqli_num_rows($vq) !== 1) return '';
+    $vrow = mysqli_fetch_assoc($vq);
+
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $email_esc   = mysqli_real_escape_string($connection_server, (string)$vrow['email']);
+    $created_esc = mysqli_real_escape_string($connection_server, $created_by);
+    $ip_esc      = mysqli_real_escape_string($connection_server, $_SERVER['REMOTE_ADDR'] ?? '');
+
+    mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
+        VALUES ('$hash', '" . (int)$vendor_id . "', '$email_esc', 'vendor_admin', '$created_esc', '$ip_esc', DATE_ADD(NOW(), INTERVAL 120 SECOND))");
+
+    return $token;
+}
+
+/** Validates and burns a vendor one-time login token. Returns the sas_vendors row, or null. */
+function bc_consume_vendor_login_token(string $token): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash = hash('sha256', $token);
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_login_tokens
+        WHERE token_hash='$hash' AND purpose='vendor_admin' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+    $row = mysqli_fetch_assoc($q);
+
+    mysqli_query($connection_server, "UPDATE sas_login_tokens SET used_at=NOW() WHERE id='" . (int)$row['id'] . "' AND used_at IS NULL");
+    if (mysqli_affected_rows($connection_server) !== 1) return null;
+
+    $vendor_id = (int)$row['vendor_id'];
+    $vq = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+    if (!$vq || mysqli_num_rows($vq) !== 1) return null;
+
+    bc_log_security_event('VENDOR_IMPERSONATION_LOGIN', 'vendor_admin', (string)$row['username'], 'By ' . (string)$row['created_by'] . ' from ' . (string)$row['ip_address']);
+    return mysqli_fetch_assoc($vq);
+}
+
+/**
+ * Validates and burns a one-time login token. Returns the sas_users row, or null.
+ */
+function bc_consume_login_token(string $token, string $purpose = 'impersonate'): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash        = hash('sha256', $token);
+    $purpose_esc = mysqli_real_escape_string($connection_server, $purpose);
+
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_login_tokens
+        WHERE token_hash='$hash' AND purpose='$purpose_esc' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+    $row = mysqli_fetch_assoc($q);
+
+    mysqli_query($connection_server, "UPDATE sas_login_tokens SET used_at=NOW() WHERE id='" . (int)$row['id'] . "' AND used_at IS NULL");
+    if (mysqli_affected_rows($connection_server) !== 1) return null;
+
+    $vendor_id = (int)$row['vendor_id'];
+    $username  = mysqli_real_escape_string($connection_server, $row['username']);
+    $u = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' LIMIT 1");
+    if (!$u || mysqli_num_rows($u) !== 1) return null;
+
+    $user = mysqli_fetch_assoc($u);
+    bc_log_security_event('IMPERSONATION_LOGIN', $purpose, (string)$user['username'], 'By ' . (string)$row['created_by'] . ' from ' . (string)$row['ip_address']);
+    return $user;
+}
+
+/**
+ * Reads a one-time login token without consuming it. Used by the two-step app login, where
+ * the token is a challenge that must survive a wrong OTP so the user can retry.
+ */
+function bc_peek_login_token(string $token, string $purpose = 'user_login'): ?array {
+    global $connection_server;
+    if (!$connection_server) return null;
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) return null;
+    bc_ensure_security_tables();
+
+    $hash        = hash('sha256', $token);
+    $purpose_esc = mysqli_real_escape_string($connection_server, $purpose);
+
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_login_tokens
+        WHERE token_hash='$hash' AND purpose='$purpose_esc' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+    return mysqli_fetch_assoc($q);
+}
+
+/** Marks a peeked login token as used. */
+function bc_burn_login_token(int $token_id): void {
+    global $connection_server;
+    if (!$connection_server || $token_id <= 0) return;
+    mysqli_query($connection_server, "UPDATE sas_login_tokens SET used_at=NOW() WHERE id='" . (int)$token_id . "' AND used_at IS NULL");
+}
+
+/**
+ * PIN verification with per-account throttling. Endpoints that move money must
+ * use this instead of calling verifyUserPIN() directly, otherwise a stolen
+ * session can brute-force the 4-digit PIN in a few hundred requests.
+ */
+function bc_verify_pin_secure(string $pin, array $user_details, string $context = 'transaction'): bool {
+    global $connection_server;
+
+    $username  = (string)($user_details['username'] ?? '');
+    $vendor_id = (int)($user_details['vendor_id'] ?? 0);
+    if ($username === '' || $vendor_id <= 0) return false;
+
+    $action  = 'pin_fail_' . preg_replace('/[^a-z0-9_]/i', '', $context);
+    $rate_key = $vendor_id . ':' . strtolower($username);
+
+    // Only WRONG PINs are counted, so a busy but legitimate user is never locked out.
+    if ($connection_server) {
+        bc_ensure_security_tables();
+        $action_esc = mysqli_real_escape_string($connection_server, $action);
+        $key_esc    = mysqli_real_escape_string($connection_server, $rate_key);
+        $window_start = time() - 300;
+        $q = mysqli_query($connection_server, "SELECT COUNT(*) AS cnt FROM sas_rate_limits
+            WHERE action='$action_esc' AND rate_key='$key_esc' AND attempted_at > FROM_UNIXTIME($window_start)");
+        $cnt = ($q && ($r = mysqli_fetch_assoc($q))) ? (int)$r['cnt'] : 0;
+        if ($cnt >= 5) {
+            bc_log_security_event('PIN_LOCKED', $context, $username, 'Too many wrong PIN attempts');
+            return false;
+        }
+    }
+
+    $ok = verifyUserPIN($pin, $user_details);
+    if (!$ok) {
+        if ($connection_server) {
+            $action_esc = mysqli_real_escape_string($connection_server, $action);
+            $key_esc    = mysqli_real_escape_string($connection_server, $rate_key);
+            mysqli_query($connection_server, "INSERT INTO sas_rate_limits (action, rate_key, attempted_at) VALUES ('$action_esc', '$key_esc', NOW())");
+        }
+        bc_log_security_event('PIN_FAILED', $context, $username, 'Wrong PIN');
+    }
+    return $ok;
+}
 
 // ── Password hashing ─────────────────────────────────────────────────────────────────────────────
 // Passwords are stored with password_hash() (bcrypt). Rows written by older releases hold a bare MD5
@@ -1080,4 +1548,5 @@ if (!function_exists('bc_kyc_ai_check_satisfied')) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────
 

@@ -128,7 +128,7 @@ elseif ($action === 'swap') {
             exit;
         }
 
-        if (!verifyUserPIN($pin, $user)) {
+        if (!bc_verify_pin_secure($pin, $user)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
             exit;
         }
@@ -201,7 +201,7 @@ elseif ($action === 'withdraw') {
     $__pin_is_person = (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android') || isset($api_post_info_from_app);
     $__pin_supplied  = ($pin !== '' && $pin !== null);
     if ($__pin_is_person || $__pin_supplied) {
-        if (!verifyUserPIN($pin, $user)) {
+        if (!bc_verify_pin_secure($pin, $user)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
             exit();
         }

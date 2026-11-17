@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.10.29-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.17-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -90,7 +90,10 @@ if ($create_vendor_table) {
         "identity_api_enabled" => "TINYINT(1) DEFAULT 0",
         // NULL = inherit the super-admin global default; 1 = this vendor forces login OTP on;
         // 0 = this vendor has opted out (their own account only).
-        "login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL"
+        "login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL",
+        // END USER accounts: 1 requires OTP for this vendor; the platform policy
+        // can require it for all vendors regardless of this value.
+        "user_login_otp_enabled" => "TINYINT(1) NULL DEFAULT NULL"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors");
     $existing = []; while($r = mysqli_fetch_assoc($res)) $existing[] = $r['Field'];
@@ -194,6 +197,16 @@ if ($create_vendor_table) {
 
     if (!in_array('reg_otp_enabled', $existing_columns)) {
         mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN reg_otp_enabled TINYINT(1) DEFAULT 1");
+    }
+
+    // Proof that the address on an account actually receives mail. Existing rows are grandfathered
+    // (DEFAULT 1) so nobody is locked out by the upgrade; new registrations are written as 0 and
+    // flipped to 1 only when the emailed code is confirmed.
+    $bc_user_cols = [];
+    $bc_user_cols_res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users");
+    if ($bc_user_cols_res) { while ($bc_user_col = mysqli_fetch_assoc($bc_user_cols_res)) { $bc_user_cols[] = $bc_user_col['Field']; } }
+    if (!in_array('email_verified', $bc_user_cols)) {
+        mysqli_query($connection_server, "ALTER TABLE sas_users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
     }
 
     if (!in_array('trans_email_enabled', $existing_columns)) {
@@ -457,7 +470,14 @@ if ($create_user_table) {
         "tx_fail_service"      => "VARCHAR(40) DEFAULT NULL",
         "tx_lock_until"        => "DATETIME NULL",
         "tx_lock_service"      => "VARCHAR(40) DEFAULT NULL",
-        "tx_lock_reason"       => "VARCHAR(255) DEFAULT NULL"
+        "tx_lock_reason"       => "VARCHAR(255) DEFAULT NULL",
+        // Referral ("Refer and Earn"). These two columns are created by the CREATE TABLE above on a
+        // fresh install, but CREATE TABLE IF NOT EXISTS never alters an existing table - so every
+        // upgraded install was missing them. web/api/referral.php then hit an SQL error, and PHP 8
+        // turns "mysqli_stmt_get_result(false)" into a fatal TypeError, which surfaced in the apps
+        // as "The server returned an error (HTTP 500)" on the Refer and Earn screen.
+        "referral_id"            => "VARCHAR(225)",
+        "referral_bonus_awarded" => "TINYINT(1) DEFAULT 0"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users");
     $existing = []; while($r = mysqli_fetch_assoc($res)) $existing[] = $r['Field'];

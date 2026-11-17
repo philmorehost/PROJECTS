@@ -1,179 +1,216 @@
 <?php
-// fix_license_tiers.php
-// Diagnostic & repair tool for license tier assignments
-// DELETE THIS FILE after use.
+/**
+ * admin/fix_license_tiers.php — inspect and correct licence tier assignments.
+ *
+ * A licence with no tier_id falls back to its license_type, which is guesswork:
+ * `extended` means SAAS, anything else means NON-SAAS. This page shows the
+ * effective tier for every licence so a wrong fallback is visible, and lets it
+ * be pinned to the right project.
+ *
+ * @package LicenseManager
+ */
 
-session_start();
-if (!isset($_SESSION['admin_logged_in'])) {
-    die('Unauthorized. Log in to the License Manager admin first.');
-}
+require_once __DIR__ . '/../includes/app_ui.php';
+lm_session_start();
+lm_security_headers();
 
-require_once('../db.php');
+$pdo = lm_app_boot();
 
-$action = $_POST['action'] ?? '';
-$messages = [];
+$messages = array();
+$licenses = array();
+$tiers = array();
+$logLines = array();
+$problem = '';
 
-// ── REPAIR: assign correct tier_id to a license ───────────────────────────────
-if ($action === 'assign_tier') {
-    $license_id = intval($_POST['license_id'] ?? 0);
-    $new_tier_id = intval($_POST['tier_id'] ?? 0);
-    if ($license_id && $new_tier_id) {
-        $stmt = $pdo->prepare("UPDATE licenses SET tier_id = ? WHERE id = ?");
-        $stmt->execute([$new_tier_id, $license_id]);
-        $messages[] = ['type' => 'success', 'text' => "License ID #{$license_id} updated to tier_id = {$new_tier_id}."];
+if (!$pdo instanceof PDO) {
+    $problem = 'The database is not connected, so this page cannot read any licences.';
+} else {
+    /* -------------------------------------------------------------- write */
+
+    if (lm_app_handle_post() && (string) ($_POST['action'] ?? '') === 'assign_tier') {
+        $licenseId = (int) ($_POST['license_id'] ?? 0);
+        $tierId = (int) ($_POST['tier_id'] ?? 0);
+
+        if ($licenseId <= 0 || $tierId <= 0) {
+            $messages[] = array('type' => 'error', 'text' => 'Pick a licence and a project.');
+        } else {
+            try {
+                $stmt = $pdo->prepare('UPDATE licenses SET tier_id = ? WHERE id = ?');
+                $stmt->execute(array($tierId, $licenseId));
+                $messages[] = array('type' => 'success', 'text' => 'Licence #' . $licenseId . ' is now pinned to tier_id ' . $tierId . '.');
+            } catch (PDOException $e) {
+                $messages[] = array('type' => 'error', 'text' => 'That change failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /* -------------------------------------------------------------- reads */
+
+    try {
+        $licenses = $pdo->query(
+            'SELECT l.id, l.license_key, l.license_type, l.status, l.tier_id, t.tier_code, t.tier_name '
+            . 'FROM licenses l LEFT JOIN script_tiers t ON l.tier_id = t.id ORDER BY l.id DESC'
+        )->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $problem = 'The licences could not be read: ' . $e->getMessage();
+    }
+
+    try {
+        $tiers = $pdo->query('SELECT * FROM script_tiers ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $tiers = array();
     }
 }
 
-// ── Fetch all licenses with their tier info ────────────────────────────────────
-$licenses = $pdo->query("
-    SELECT l.id, l.license_key, l.license_type, l.status, l.tier_id,
-           t.tier_code, t.tier_name
-    FROM licenses l
-    LEFT JOIN script_tiers t ON l.tier_id = t.id
-    ORDER BY l.id DESC
-")->fetchAll(PDO::FETCH_ASSOC);
-
-// ── Fetch all tiers for the repair dropdown ────────────────────────────────────
-$tiers = $pdo->query("SELECT * FROM script_tiers ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-
-// ── Fetch last 30 lines of the update check log ───────────────────────────────
-$log_file = dirname(__DIR__) . '/api_check_update.log';
-$log_lines = [];
-if (file_exists($log_file)) {
-    $all_lines = file($log_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    $log_lines = array_slice($all_lines, -30);
+$logFile = lm_lm_dir() . '/api_check_update.log';
+if (is_file($logFile)) {
+    $lines = @file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (is_array($lines)) {
+        $logLines = array_slice($lines, -30);
+    }
 }
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>License Tier Diagnostic – License Manager</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; margin: 0; padding: 2rem; color: #1e293b; }
-        h1 { color: #0f172a; margin-bottom: 0.25rem; }
-        .subtitle { color: #64748b; margin-bottom: 2rem; font-size: 0.9rem; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 1.5rem 2rem; margin-bottom: 2rem; }
-        h2 { font-size: 1.1rem; margin: 0 0 1rem; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th { background: #f8fafc; padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-        tr:hover td { background: #f8fafc; }
-        .badge { padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
-        .badge-saas { background: #dbeafe; color: #1d4ed8; }
-        .badge-nonsaas { background: #fef9c3; color: #a16207; }
-        .badge-null { background: #fee2e2; color: #b91c1c; }
-        .badge-active { background: #dcfce7; color: #15803d; }
-        .badge-inactive { background: #f3f4f6; color: #6b7280; }
-        select { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; }
-        button { padding: 0.3rem 0.8rem; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; }
-        button:hover { background: #2563eb; }
-        .alert { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
-        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .log-box { background: #0f172a; color: #94a3b8; font-family: monospace; font-size: 0.78rem; padding: 1rem; border-radius: 8px; max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-        .log-warn { color: #fbbf24; }
-        .log-info { color: #6ee7b7; }
-        .warning-bar { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: #78350f; margin-bottom: 1.5rem; }
-    </style>
-</head>
-<body>
-<h1>🔧 License Tier Diagnostic & Repair</h1>
-<p class="subtitle">Use this tool to inspect and correct license tier assignments. <strong>Delete this file after use.</strong></p>
 
-<div class="warning-bar">
-    ⚠️ <strong>Important:</strong> Each license must have the correct <code>tier_id</code> assigned.
-    SAAS licenses → <strong>tier_id = 1 (SAAS)</strong> &nbsp;|&nbsp; NON-SAAS licenses → <strong>tier_id = 2 (NON-SAAS)</strong>.<br>
-    A <span style="background:#fee2e2;color:#b91c1c;padding:0 4px;border-radius:4px;">NULL tier</span> means the fallback logic is used, which relies on <code>license_type</code> (<code>extended</code> = SAAS, anything else = NON-SAAS).
-</div>
+$fallback = 0;
+foreach ($licenses as $lic) {
+    if (empty($lic['tier_id'])) {
+        $fallback++;
+    }
+}
+
+$actionsHtml = '<a class="lm-btn lm-btn--ghost" href="licenses.php">' . lm_icon('key') . ' All licences</a>'
+    . '<a class="lm-btn lm-btn--ghost" href="projects.php">' . lm_icon('layers') . ' Projects</a>';
+
+lm_app_start('Licence tiers', array(
+    'subtitle' => 'A licence with no tier falls back to its type. This page shows which ones are still guessing.',
+    'active'   => 'tiers',
+    'actions'  => $actionsHtml,
+));
+?>
+
+<?php if ($problem !== ''): ?>
+    <?php lm_alert('error', $problem); ?>
+<?php endif; ?>
 
 <?php foreach ($messages as $msg): ?>
-    <div class="alert alert-<?= $msg['type'] ?>"><?= htmlspecialchars($msg['text']) ?></div>
+    <?php lm_alert($msg['type'] === 'success' ? 'ok' : 'error', (string) $msg['text']); ?>
 <?php endforeach; ?>
 
-<div class="card">
-    <h2>📜 All Licenses & Their Tier Assignments</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>License Key</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Tier ID</th>
-                <th>Tier Code</th>
-                <th>Effective Tier (Resolved)</th>
-                <th>Fix Tier</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($licenses as $lic): 
-            // Compute the effective tier the same way check-update.php does
-            if (!empty($lic['tier_code'])) {
-                $effective = $lic['tier_code'];
-                $effective_id = $lic['tier_id'];
-            } elseif ($lic['license_type'] === 'extended') {
-                $effective = 'SAAS (fallback)';
-                $effective_id = 1;
-            } else {
-                $effective = 'NON-SAAS (fallback)';
-                $effective_id = 2;
-            }
-            $is_null_tier = empty($lic['tier_id']);
-        ?>
-        <tr>
-            <td><?= $lic['id'] ?></td>
-            <td><code style="font-size:0.75rem"><?= htmlspecialchars(substr($lic['license_key'], 0, 24)) ?>...</code></td>
-            <td><?= htmlspecialchars($lic['license_type'] ?? '—') ?></td>
-            <td><span class="badge badge-<?= $lic['status'] === 'active' ? 'active' : 'inactive' ?>"><?= htmlspecialchars($lic['status']) ?></span></td>
-            <td>
-                <?php if ($is_null_tier): ?>
-                    <span class="badge badge-null">NULL ⚠️</span>
-                <?php else: ?>
-                    <?= htmlspecialchars($lic['tier_id']) ?>
-                <?php endif; ?>
-            </td>
-            <td>
-                <?php if ($lic['tier_code']): ?>
-                    <span class="badge badge-<?= strtolower(str_replace('-', '', $lic['tier_code'])) ?>"><?= htmlspecialchars($lic['tier_code']) ?></span>
-                <?php else: ?>
-                    <span style="color:#94a3b8">—</span>
-                <?php endif; ?>
-            </td>
-            <td>
-                <strong style="color:<?= str_contains($effective, 'fallback') ? '#a16207' : '#166534' ?>">
-                    <?= htmlspecialchars($effective) ?>
-                </strong>
-            </td>
-            <td>
-                <form method="POST" style="display:flex;gap:0.4rem;align-items:center;">
-                    <input type="hidden" name="action" value="assign_tier">
-                    <input type="hidden" name="license_id" value="<?= $lic['id'] ?>">
-                    <select name="tier_id">
-                        <?php foreach ($tiers as $t): ?>
-                            <option value="<?= $t['id'] ?>" <?= ($t['id'] == $lic['tier_id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($t['tier_code']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="submit">Fix</button>
-                </form>
-            </td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
+<?php if ($fallback > 0): ?>
+    <div class="lm-note lm-note--warn">
+        <?= lm_icon('alert') ?>
+        <span><strong><?= (int) $fallback ?> licence(s) have no tier pinned.</strong>
+            The update check guesses from <code>license_type</code>: <code>extended</code> → SAAS, anything else →
+            NON-SAAS. If a customer is on the wrong update track, fix it below.</span>
+    </div>
+<?php endif; ?>
+
+<div class="lm-stats">
+    <?php
+    lm_app_stat('Licences', (string) count($licenses), 'Total rows');
+    lm_app_stat('Pinned', (string) (count($licenses) - $fallback), 'Tier set explicitly', 'green');
+    lm_app_stat('On fallback', (string) $fallback, 'Resolved from license_type', $fallback > 0 ? 'amber' : '');
+    lm_app_stat('Projects', (string) count($tiers), 'Tiers available', 'indigo');
+    ?>
 </div>
 
-<div class="card">
-    <h2>📋 Recent Update Check Log (last 30 lines)</h2>
-    <?php if (empty($log_lines)): ?>
-        <p style="color:#94a3b8">No log file found at: <code><?= htmlspecialchars($log_file) ?></code></p>
-    <?php else: ?>
-        <div class="log-box"><?php foreach ($log_lines as $line): 
-            $cls = str_contains($line, 'WARNING') ? 'log-warn' : (str_contains($line, 'INFO') ? 'log-info' : '');
-        ?><span class="<?= $cls ?>"><?= htmlspecialchars($line) ?></span>
-<?php endforeach; ?></div>
-    <?php endif; ?>
-</div>
-</body>
-</html>
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('key') ?> Every licence and its effective tier</h2>
+            <p>“Effective tier” is what <code>check-update.php</code> will actually use.</p>
+        </div>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($licenses)): ?>
+            <?php lm_app_empty('key', 'No licences', 'Nothing to reconcile on this install yet.', ''); ?>
+        <?php else: ?>
+            <div class="lm-tablewrap">
+                <table class="lm-table lm-table--stack">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Key</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Tier</th>
+                            <th>Effective</th>
+                            <th>Pin to</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($licenses as $lic): ?>
+                            <?php
+                            $pinned = !empty($lic['tier_id']);
+                            if (!empty($lic['tier_code'])) {
+                                $effective = (string) $lic['tier_code'];
+                            } elseif ((string) ($lic['license_type'] ?? '') === 'extended') {
+                                $effective = 'SAAS (fallback)';
+                            } else {
+                                $effective = 'NON-SAAS (fallback)';
+                            }
+                            $status = strtolower((string) ($lic['status'] ?? ''));
+                            ?>
+                            <tr>
+                                <td data-label="ID"><?= (int) $lic['id'] ?></td>
+                                <td data-label="Key"><code><?= lm_e(substr((string) $lic['license_key'], 0, 22)) ?>…</code></td>
+                                <td data-label="Type"><?= lm_e((string) ($lic['license_type'] ?? '—')) ?></td>
+                                <td data-label="Status"><?= lm_app_badge(ucfirst($status !== '' ? $status : '—'), $status === 'active' ? 'ok' : 'bad') ?></td>
+                                <td data-label="Tier">
+                                    <?php if ($pinned): ?>
+                                        <?= lm_app_badge((string) $lic['tier_code'], 'info') ?>
+                                    <?php else: ?>
+                                        <?= lm_app_badge('NULL', 'bad') ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Effective">
+                                    <?= lm_app_badge($effective, $pinned ? 'ok' : 'warn') ?>
+                                </td>
+                                <td data-label="Pin to">
+                                    <?php if (empty($tiers)): ?>
+                                        <span class="lm-help">No projects</span>
+                                    <?php else: ?>
+                                        <form method="POST" class="lm-actions">
+                                            <?= lm_csrf_field() ?>
+                                            <input type="hidden" name="action" value="assign_tier">
+                                            <input type="hidden" name="license_id" value="<?= (int) $lic['id'] ?>">
+                                            <label class="lm-sr" for="tier<?= (int) $lic['id'] ?>">Project for licence <?= (int) $lic['id'] ?></label>
+                                            <select class="lm-select" id="tier<?= (int) $lic['id'] ?>" name="tier_id" style="width:auto">
+                                                <?php foreach ($tiers as $tier): ?>
+                                                    <option value="<?= (int) $tier['id'] ?>" <?= (int) $lic['tier_id'] === (int) $tier['id'] ? 'selected' : '' ?>>
+                                                        <?= lm_e((string) $tier['tier_code']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" class="lm-btn lm-btn--sm lm-btn--ghost">Pin</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<section class="lm-panel">
+    <div class="lm-panel__head">
+        <div>
+            <h2><?= lm_icon('terminal') ?> Update check log</h2>
+            <p>The last 30 lines of <code>api_check_update.log</code> — who asked for what, and what they got.</p>
+        </div>
+        <?= lm_app_badge($logLines ? 'Present' : 'Absent', $logLines ? 'ok' : '') ?>
+    </div>
+    <div class="lm-panel__body lm-panel__body--flush">
+        <?php if (empty($logLines)): ?>
+            <div class="lm-empty" style="padding:24px 20px">
+                <p class="lm-help lm-mb-0">Nothing logged yet at <code><?= lm_e($logFile) ?></code>.</p>
+            </div>
+        <?php else: ?>
+            <pre class="lm-code" style="border-radius:0;margin:0"><?= lm_e(implode("\n", $logLines)) ?></pre>
+        <?php endif; ?>
+    </div>
+</section>
+
+<?php lm_app_end(); ?>

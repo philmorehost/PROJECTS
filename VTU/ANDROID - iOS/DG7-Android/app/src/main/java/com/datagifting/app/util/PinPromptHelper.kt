@@ -5,6 +5,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.widget.EditText
 import android.widget.FrameLayout
+import com.datagifting.app.api.TransactionPin
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
@@ -50,7 +51,13 @@ object PinPromptHelper {
             .setTitle("Transaction PIN Required")
             .setMessage("Enter your PIN to authorize this purchase.")
             .setView(container)
-            .setPositiveButton("Confirm") { _, _ -> onReady(input.text?.toString()?.trim() ?: "") }
+            .setPositiveButton("Confirm") { _, _ ->
+                val entered = input.text?.toString()?.trim() ?: ""
+                // Hand the PIN to the request interceptor as well, so purchase screens that do
+                // not accept a `pin` parameter still satisfy the server's forced-PIN rule.
+                TransactionPin.current = entered
+                onReady(entered)
+            }
             .setNegativeButton("Cancel", null)
             .show()
     }

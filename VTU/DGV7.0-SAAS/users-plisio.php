@@ -78,7 +78,9 @@ if ($r) {
     $status_code = (int)($data['status_code'] ?? 0);
 
     if ($status == 'completed' || $status == 'mismatch' || $status_code === 31) {
-        $amount = $data['amount'] ?? $r['amount'];
+        // Amount comes from a signature-verified payload, but cast it anyway: it is interpolated
+        // into an UPDATE below and into the wallet credit.
+        $amount = (float)($data['amount'] ?? $r['amount']);
         $blockchain_txid = $data['tx_id'] ?? '';
         if (is_array($blockchain_txid)) $blockchain_txid = implode(',', $blockchain_txid);
         $blockchain_txid_esc = mysqli_real_escape_string($connection_server, $blockchain_txid);

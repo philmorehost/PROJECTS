@@ -44,26 +44,24 @@ if ($connection_server) {
     $checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");
     if ($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1) {
         //Admin To Vendor Login Method
-        if (isset($_GET["logVendorAdmin"]) && !empty($_GET["logVendorAdmin"])) {
-            $getLogVendorAdmin = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["logVendorAdmin"])));
-            $decode_vendors_auth_login_text = base64_decode($getLogVendorAdmin);
-            $exp_decode_vendors_auth_login_text = array_filter(explode(":", trim($decode_vendors_auth_login_text)));
-            $vendors_auth_email = trim($exp_decode_vendors_auth_login_text[0]);
-            $vendors_auth_pass = base64_decode(trim($exp_decode_vendors_auth_login_text[1]));
-            if (!empty($vendors_auth_email) && !empty($vendors_auth_pass)) {
-                $select_vendor_from_table = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE email='" . $vendors_auth_email . "' && password='" . $vendors_auth_pass . "'");
-                if (mysqli_num_rows($select_vendor_from_table) == 1) {
-                    $_SESSION["admin_session"] = $vendors_auth_email;
-                    $_SESSION["spadmin_vendor_auth"] = true;
-                    $getRedirectUrl = isset($_GET["redirectAdminTo"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirectAdminTo"]))) : "";
-                    if (!empty($getRedirectUrl)) {
-                        header("Location: /bc-admin/" . $getRedirectUrl);
-                    } else {
-                        header("Location: /bc-admin/Dashboard.php");
-                    }
-                    exit();
+        // One-time token only. The old ?logVendorAdmin=base64(email:base64(password)) handed the
+        // vendor's real password to anyone who saw the URL. bc_consume_vendor_login_token() rejects
+        // anything that is not a live, unused, 64-hex token minted for one vendor.
+        if (isset($_GET["logVendorToken"]) && !empty($_GET["logVendorToken"])) {
+            $vendor_login_row = bc_consume_vendor_login_token((string)$_GET["logVendorToken"]);
+            if ($vendor_login_row) {
+                session_regenerate_id(true);
+                $_SESSION["admin_session"] = $vendor_login_row["email"];
+                $_SESSION["spadmin_vendor_auth"] = true;
+                $getRedirectUrl = isset($_GET["redirectAdminTo"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirectAdminTo"]))) : "";
+                if (!empty($getRedirectUrl)) {
+                    header("Location: /bc-admin/" . $getRedirectUrl);
+                } else {
+                    header("Location: /bc-admin/Dashboard.php");
                 }
+                exit();
             }
+            $_SESSION["product_purchase_response"] = "This login link is invalid or has expired.";
         }
 
         if (bc_is_temporary_vendor_host() && !bc_temporary_vendor_admin_session_is_valid()) {

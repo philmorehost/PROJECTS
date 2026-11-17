@@ -29,7 +29,7 @@ if ($action === 'reveal_security') {
     $u_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vid' AND username='$uname' LIMIT 1");
     $u_r = mysqli_fetch_assoc($u_q);
 
-    if (verifyUserPIN($pin, $u_r)) {
+    if (bc_verify_pin_secure($pin, $u_r)) {
         $ref_esc = mysqli_real_escape_string($connection_server, $ref);
         $c_q = mysqli_query($connection_server, "SELECT masked_pan, cvv, expiry_month, expiry_year FROM sas_virtual_cards_v2 WHERE reference='$ref_esc' AND username='$uname' LIMIT 1");
         $c_r = mysqli_fetch_assoc($c_q);

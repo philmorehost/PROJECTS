@@ -1,0 +1,17 @@
+{
+  "name": "BlockPayne Crypto Gateway",
+  "short_name": "BlockPayne",
+  "description": "Direct-to-Wallet Non-Custodial Crypto Payment Gateway",
+  "start_url": "./dashboard",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

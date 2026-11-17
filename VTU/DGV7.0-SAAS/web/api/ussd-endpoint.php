@@ -95,7 +95,8 @@ if ($is_global) {
             $vendor_id = $r['id'];
         }
     } else {
-        $get_v2 = mysqli_query($connection_server, "SELECT id, ussd_access FROM sas_vendors WHERE (hollatags_ussd_code LIKE '%$clean_from%' OR hollatags_ussd_code='$session_from_esc') AND status=1 LIMIT 1");
+        $clean_from_esc = mysqli_real_escape_string($connection_server, $clean_from);
+        $get_v2 = mysqli_query($connection_server, "SELECT id, ussd_access FROM sas_vendors WHERE (hollatags_ussd_code LIKE '%$clean_from_esc%' OR hollatags_ussd_code='$session_from_esc') AND status=1 LIMIT 1");
         if ($get_v2 && $r2 = mysqli_fetch_assoc($get_v2)) {
             if ($r2['ussd_access'] == 1) {
                 $vendor_id = $r2['id'];

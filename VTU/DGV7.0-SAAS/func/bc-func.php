@@ -563,7 +563,12 @@ function base64url_encode($data) {
  * Handles both modern hashed security_pin and legacy numeric transaction_pin.
  */
 function verifyUserPIN($input_pin, $user_details) {
+    $input_pin = (string)$input_pin;
     if (empty($input_pin) && $input_pin !== '0' && $input_pin !== '0000') return false;
+
+    // A PIN is always four digits. Enforcing the shape here stops "0"/"" from ever matching a
+    // hashed legacy value that was migrated from a BIGINT 0.
+    if (!preg_match('/^\d{4}$/', $input_pin)) return false;
 
     $db_security_pin = $user_details['security_pin'] ?? '';
     // transaction_pin is BIGINT in DB, so it comes as a string representation of a number or null
@@ -585,9 +590,17 @@ function verifyUserPIN($input_pin, $user_details) {
 
     // 2. Fallback to legacy numeric transaction_pin (BIGINT column)
     if ($db_transaction_pin !== null && $db_transaction_pin !== '') {
-        // Use numeric comparison to handle leading zeros (e.g. "0123" matches 123)
-        // and specifically handle "0000" which is stored as 0 in BIGINT.
-        return (int)$input_pin === (int)$db_transaction_pin;
+        // A BIGINT of 0 is ambiguous: it is what a never-set PIN looks like *and* what the weak
+        // default "0000" is stored as. Treating 0 as a match let anybody debit an account whose
+        // owner had never chosen a PIN by sending "0000" (or any zero-padded number). Require a
+        // real, non-zero PIN here; users who genuinely want 0000 must set a hashed security_pin.
+        if ((int)$db_transaction_pin === 0) {
+            return false;
+        }
+        $input_digits = preg_replace('/\D/', '', (string)$input_pin);
+        if ($input_digits === '') return false;
+        // Numeric comparison keeps leading-zero PINs (e.g. "0123" stored as 123) working.
+        return (int)$input_digits === (int)$db_transaction_pin;
     }
 
     return false;
@@ -2430,7 +2443,9 @@ function beeMailer($recipient_email, $email_subject, $email_body)
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, true);
 	$sent = customBCMailSender('', $recipient_email, $email_subject, $mail_html_body, $mail_headers);
-	@fwrite(@fopen("./email-msg.txt", "a++"), "\n" . $recipient_email . " || " . strtoupper($email_subject) . " || " . $email_body . "\n");
+	// SECURITY: do not write the recipient/subject/body to email-msg.txt. Those files sit in the
+	// web root, so every password-reset code, login OTP and new-password email was downloadable by
+	// anyone who guessed the filename.
 	return $sent;
 }
 
@@ -6530,38 +6545,90 @@ function bc_is_password_reset_blocked($username, $ip, $vendor_id) {
 }
 
 /**
- * bc_release_expired_blocks()
- * Lazy auto-release of EXPIRED brute-force auto-blocks — this is what makes a
- * "1-day block" automatically lift WITHOUT a cronjob.
- *
- * If an account/IP has a sas_blocked_accounts / sas_blocked_ips row whose
- * block_until has already passed, that row is removed and the is_blocked flag on
- * the matching user/vendor is cleared. MANUAL blocks (is_blocked=1 with no block
- * row, e.g. set from the admin panel) are never touched.
+ * Release every expired automatic brute-force block.
+ * Expiry checks deliberately use the database clock (NOW()) throughout. Comparing a
+ * database DATETIME with PHP time() can leave the is_blocked flag set when the DB and
+ * PHP hosts use different time zones. Only rows with expired auto-block records qualify;
+ * manual blocks without such a record are never cleared.
+ */
+function bc_release_all_expired_bruteforce_blocks($db = null) {
+    global $connection_server;
+    if (!$db) $db = $connection_server;
+    if (!$db) return ['ok' => false, 'error' => 'Database connection is unavailable.'];
+
+    $accounts_q = @mysqli_query($db, "SELECT COUNT(*) AS total FROM sas_blocked_accounts WHERE block_until <= NOW()");
+    $ips_q = @mysqli_query($db, "SELECT COUNT(*) AS total FROM sas_blocked_ips WHERE block_until <= NOW()");
+    if (!$accounts_q || !$ips_q) {
+        return ['ok' => false, 'error' => 'Unable to inspect expired brute-force blocks: ' . mysqli_error($db)];
+    }
+    $expired_accounts = (int)(mysqli_fetch_assoc($accounts_q)['total'] ?? 0);
+    $expired_ips = (int)(mysqli_fetch_assoc($ips_q)['total'] ?? 0);
+
+    $users_unblocked = 0;
+    if (!mysqli_query($db, "UPDATE sas_users
+        SET is_blocked=0
+        WHERE is_blocked=1
+          AND EXISTS (SELECT 1 FROM sas_blocked_accounts e
+                      WHERE e.username=sas_users.username AND e.vendor_id=sas_users.vendor_id AND e.block_until <= NOW())
+          AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts a
+                          WHERE a.username=sas_users.username AND a.vendor_id=sas_users.vendor_id AND a.block_until > NOW())")) {
+        return ['ok' => false, 'error' => 'Unable to clear expired user lock flags: ' . mysqli_error($db)];
+    }
+    $users_unblocked = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "UPDATE sas_vendors
+        SET is_blocked=0
+        WHERE is_blocked=1
+          AND EXISTS (SELECT 1 FROM sas_blocked_accounts e
+                      WHERE e.username=sas_vendors.email AND e.vendor_id=sas_vendors.id AND e.block_until <= NOW())
+          AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts a
+                          WHERE a.username=sas_vendors.email AND a.vendor_id=sas_vendors.id AND a.block_until > NOW())")) {
+        return ['ok' => false, 'error' => 'Unable to clear expired vendor lock flags: ' . mysqli_error($db)];
+    }
+    $vendors_unblocked = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "DELETE FROM sas_blocked_accounts WHERE block_until <= NOW()")) {
+        return ['ok' => false, 'error' => 'Unable to remove expired account blocks: ' . mysqli_error($db)];
+    }
+    $accounts_removed = max(0, mysqli_affected_rows($db));
+
+    if (!mysqli_query($db, "DELETE FROM sas_blocked_ips WHERE block_until <= NOW()")) {
+        return ['ok' => false, 'error' => 'Unable to remove expired IP blocks: ' . mysqli_error($db)];
+    }
+    $ips_removed = max(0, mysqli_affected_rows($db));
+
+    return [
+        'ok' => true,
+        'expired_accounts' => $expired_accounts,
+        'expired_ips' => $expired_ips,
+        'accounts_removed' => $accounts_removed,
+        'ips_removed' => $ips_removed,
+        'users_unblocked' => $users_unblocked,
+        'vendors_unblocked' => $vendors_unblocked,
+    ];
+}
+
+/**
+ * Lazy release for the account/IP currently being checked at login or in a session.
+ * Uses database-side expiry comparisons to stay consistent with the blocking queries.
  */
 function bc_release_expired_blocks($username, $ip, $vendor_id) {
     global $connection_server;
     if ($vendor_id <= 0 || !$connection_server) return;
 
-    // 1) Account auto-block
     if ($username !== '') {
         $esc_user = mysqli_real_escape_string($connection_server, (string)$username);
-        $row = @mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT block_until FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id' LIMIT 1"));
-        if ($row && isset($row['block_until']) && strtotime($row['block_until']) <= time()) {
-            mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id'");
-            // Release the flag only if no OTHER active auto-block remains for this account.
+        $delete = @mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE username='$esc_user' AND vendor_id='$vendor_id' AND block_until <= NOW()");
+        if ($delete && mysqli_affected_rows($connection_server) > 0) {
+            // Only clear a matching account flag when no active automatic lock remains.
             mysqli_query($connection_server, "UPDATE sas_users SET is_blocked=0 WHERE username='$esc_user' AND vendor_id='$vendor_id' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$esc_user' AND b.vendor_id='$vendor_id' AND b.block_until > NOW())");
             mysqli_query($connection_server, "UPDATE sas_vendors SET is_blocked=0 WHERE email='$esc_user' AND id='$vendor_id' AND is_blocked=1 AND NOT EXISTS (SELECT 1 FROM sas_blocked_accounts b WHERE b.username='$esc_user' AND b.vendor_id='$vendor_id' AND b.block_until > NOW())");
         }
     }
 
-    // 2) IP auto-block
     if ($ip !== '') {
         $esc_ip = mysqli_real_escape_string($connection_server, (string)$ip);
-        $row = @mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT block_until FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id' LIMIT 1"));
-        if ($row && isset($row['block_until']) && strtotime($row['block_until']) <= time()) {
-            mysqli_query($connection_server, "DELETE FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id'");
-        }
+        @mysqli_query($connection_server, "DELETE FROM sas_blocked_ips WHERE ip_address='$esc_ip' AND vendor_id='$vendor_id' AND block_until <= NOW()");
     }
 }
 
@@ -6619,6 +6686,76 @@ function bc_admin_login_otp_required($vendor) {
         return ((string)$pref === '1');
     }
     return ((string)getSuperAdminOption('force_bcadmin_login_otp', '0') === '1');
+}
+
+/**
+ * Should an END USER (website or mobile app) prove an emailed code at login?
+ *
+ * This is separate from bc_admin_login_otp_required(): that one gates the vendor's own
+ * bc-admin console, this one gates the customer accounts that sit behind /web and the apps.
+ * The platform policy is a mandatory minimum; vendors may additionally enable it
+ * for their own customers when the platform policy is off.
+ */
+function bc_user_login_otp_required($vendor) {
+    if ((string)getSuperAdminOption('force_user_login_otp', '0') === '1') return true;
+    $pref = is_array($vendor) ? ($vendor['user_login_otp_enabled'] ?? null) : $vendor;
+    return ((string)$pref === '1');
+}
+
+/**
+ * The JSON body returned to a mobile client after a fully authenticated login.
+ * Shared by web/api/login.php (password step) and web/api/login-otp.php (code step) so both
+ * paths return byte-identical fields - the app stores api_key/balance from whichever it gets.
+ */
+function bc_user_login_payload($user_detail, $vendor) {
+    if (empty($user_detail['api_key'])) {
+        global $connection_server;
+        $new_key = bin2hex(random_bytes(25));
+        $user_id = (int)($user_detail['id'] ?? 0);
+        if ($connection_server && $user_id > 0) {
+            mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key' WHERE id='$user_id'");
+            $user_detail['api_key'] = $new_key;
+        }
+    }
+    return [
+        "status" => "success",
+        "message" => "Login successful",
+        "data" => [
+            "username" => $user_detail['username'],
+            "firstname" => $user_detail['firstname'],
+            "lastname" => $user_detail['lastname'],
+            "api_key" => $user_detail['api_key'],
+            "balance" => $user_detail['balance'],
+            "account_level" => $user_detail['account_level'],
+            "level_name" => accountLevel($user_detail['account_level']),
+            "email" => $user_detail['email'],
+            "phone" => $user_detail['phone_number'],
+            "kyc_verified" => ((int)$user_detail['kyc_status'] === 2) ? "Yes" : "No",
+            "kyc_status" => (int)$user_detail['kyc_status'],
+            "security_pin_set" => !empty($user_detail['security_pin']),
+            "ai_status" => (int)($vendor['ai_status'] ?? 0),
+        ],
+    ];
+}
+
+/** Emails a login verification code for a user account. Returns the plaintext code ('' on failure). */
+function bc_send_user_login_otp($user_detail, $vendor_id) {
+    $username = (string)($user_detail['username'] ?? '');
+    $email    = trim((string)($user_detail['email'] ?? ''));
+    if ($username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return '';
+
+    $otp = bc_issue_otp('user_login', $username, (int)$vendor_id, array('ip' => $_SERVER['REMOTE_ADDR'] ?? ''), 600);
+    if ($otp === '') return '';
+
+    $body = "Hello <strong>" . htmlspecialchars((string)$user_detail['firstname'], ENT_QUOTES, 'UTF-8') . "</strong>,<br><br>"
+          . "Your sign-in verification code is:<br><br>"
+          . "<div style=\"font-size:34px;font-weight:bold;letter-spacing:10px;text-align:center;background:#f0f4ff;padding:18px 10px;border-radius:8px;\">"
+          . $otp . "</div><br>"
+          . "This code expires in <strong>10 minutes</strong> and can be used once.<br><br>"
+          . "If you did not try to sign in, change your password immediately - someone has your password.";
+
+    if (!sendVendorEmail($email, "Your Sign-In Verification Code", $body)) return '';
+    return $otp;
 }
 
 function seedVendorBlog($vendor_id) {
@@ -6993,9 +7130,8 @@ function setVendorOption($vid, $name, $value) {
 function getSuperAdminOption($name, $default = '') {
     global $connection_server;
     static $admin_options_cache = [];
-    // Temporary portal host changes in bc-spadmin must reach existing vendor sessions
-    // immediately, so do not reuse this value from request or session cache.
-    $always_fresh = ($name === 'temporary_vendor_domain');
+    // Security policy and temporary portal host changes must reach existing sessions immediately.
+    $always_fresh = in_array($name, ['temporary_vendor_domain', 'force_user_login_otp'], true);
 
     if (!$always_fresh && isset($admin_options_cache[$name])) return $admin_options_cache[$name];
 

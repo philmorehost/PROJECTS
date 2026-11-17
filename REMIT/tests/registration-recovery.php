@@ -1,0 +1,14 @@
+<?php
+declare(strict_types=1);ob_start();require __DIR__.'/church-portal.php';ob_end_clean();
+$db->exec("UPDATE registration_limits SET attempts=0;DELETE FROM security_audit_logs WHERE event_type='registration_attempt';INSERT INTO church_hierarchy(id,node_name,node_type,parent_id) VALUES(10,'TEST AREA','area',3)");
+for($i=0;$i<7;$i++){ChurchPortal::register($db,array_replace($input,['email'=>'shared-'.$i.'@example.org','parish_id'=>[1,3,10][$i%3]]));}
+check((int)$db->query("SELECT COUNT(*) FROM church_registrations WHERE email LIKE 'shared-%'")->fetchColumn()===7,'more than five different reps can register behind one shared IP');
+$row=$db->query("SELECT * FROM church_registrations WHERE email='shared-0@example.org'")->fetch();$hash=$row['password_hash'];
+ChurchPortal::register($db,array_replace($input,['email'=>'shared-0@example.org','password'=>'changed-attack-password','password_confirm'=>'changed-attack-password']));check($db->query("SELECT password_hash FROM church_registrations WHERE email='shared-0@example.org'")->fetchColumn()===$hash,'pending application cannot be overwritten');
+ChurchPortal::reviewRegistration($db,$admin,(int)$row['id'],'rejected');
+ChurchPortal::register($db,array_replace($input,['email'=>'shared-0@example.org','password'=>'corrected-password-123','password_confirm'=>'corrected-password-123']));$resubmitted=$db->query("SELECT * FROM church_registrations WHERE email='shared-0@example.org'")->fetch();check($resubmitted['status']==='pending'&&password_verify('corrected-password-123',$resubmitted['password_hash']),'rejected applicant can resubmit for approval');check((int)$resubmitted['id']===(int)$row['id'],'resubmission does not duplicate identity');
+ChurchPortal::reviewRegistration($db,$admin,(int)$row['id'],'approved');check($db->query("SELECT role FROM users WHERE email='shared-0@example.org'")->fetchColumn()==='parish_officer','reapplication still needs real approval');
+$db->exec("UPDATE registration_limits SET attempts=0;DELETE FROM security_audit_logs WHERE event_type='registration_attempt'");for($i=0;$i<5;$i++)ChurchPortal::register($db,array_replace($input,['email'=>'rate-limited@example.org']));refuses(fn()=>ChurchPortal::register($db,array_replace($input,['email'=>'rate-limited@example.org'])),'per-email rate limit remains five per hour');
+$db->exec('UPDATE registration_limits SET attempts=30');refuses(fn()=>ChurchPortal::register($db,array_replace($input,['email'=>'another@example.org'])),'shared-IP cap remains bounded');
+$db->exec("UPDATE registration_limits SET attempts=0;UPDATE security_settings SET setting_value='0' WHERE setting_key='registration_enabled'");refuses(fn()=>ChurchPortal::register($db,array_replace($input,['email'=>'disabled@example.org'])),'explicit closed registration respected');
+echo "PASS: $checks combined portal/registration recovery assertions (SQLite compatibility)\n";

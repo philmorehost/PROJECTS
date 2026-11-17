@@ -1,15 +1,26 @@
 <?php
-session_start();
+/**
+ * admin/approve_request.php — approve or decline a licence request.
+ */
+
+require_once __DIR__ . '/../includes/security.php';
+lm_session_start();
+
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: index.php');
     exit();
 }
 
-require_once('../db.php');
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../includes/lm_config.php';
 
-$id = $_POST['id'] ?? null;
-action:
-$action = $_POST['action'] ?? null;
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' || !lm_verify_csrf()) {
+    header('Location: licenses.php');
+    exit();
+}
+
+$id = (int) ($_POST['id'] ?? 0);
+$action = (string) ($_POST['action'] ?? '');
 if (!$id || !$action) {
     header('Location: licenses.php');
     exit();
@@ -35,7 +46,8 @@ try {
     // Approve: create license and mark request approved
     $pdo->beginTransaction();
     $new_license_key = 'MAN-' . strtoupper(bin2hex(random_bytes(6)));
-    $max_domain_changes = $settings['max_domain_changes'] ?? 3;
+    $settings = function_exists('lm_settings') ? lm_settings() : array();
+    $max_domain_changes = (int) ($settings['max_domain_changes'] ?? 3);
 
     // create license
     $licenseInsert = getLicenseInsertDefinition($pdo);
