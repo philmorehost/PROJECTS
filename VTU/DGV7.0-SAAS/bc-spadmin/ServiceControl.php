@@ -117,6 +117,14 @@ if ($qvb) {
 }
 
 $available_gateways = ['monnify', 'payvessel', 'payhub', 'paystack', 'beewave'];
+// DGV7: per-tier service matrix. This console manages EVERY tenant, so the operator picks one
+// and the choice is validated in the shared controller before any write.
+$matrix_selectable = true;
+$matrix_vendor_id = 0;
+$matrix_return_url = 'ServiceControl.php';
+include(__DIR__ . "/../func/bc-service-matrix.php");
+include(__DIR__ . "/../func/bc-account-backfill.php");
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -151,6 +159,9 @@ $available_gateways = ['monnify', 'payvessel', 'payhub', 'paystack', 'beewave'];
                 </div>
             </div>
         </div>
+
+        <?php include(__DIR__ . "/../func/bc-service-matrix-render.php"); ?>
+        <?php include(__DIR__ . "/../func/bc-account-backfill-render.php"); ?>
 
         <div class="row">
             <!-- Core Services -->

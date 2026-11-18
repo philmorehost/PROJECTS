@@ -138,6 +138,7 @@
     include_once(__DIR__ . "/bc-app-token.php");
     include_once(__DIR__ . "/bc-fintech-gate.php");
     include_once(__DIR__ . "/bc-gateway-policy.php");
+    include_once(__DIR__ . "/bc-fintech-accounts.php");
 
     // License Verification & Grace Period Logic
     if ($connection_server) {

@@ -70,6 +70,14 @@ function bc_fintech_ensure_schema() {
         'kyb_submitted_at'    => "DATETIME NULL DEFAULT NULL",
         'kyb_reviewed_at'     => "DATETIME NULL DEFAULT NULL",
         'kyb_reviewed_by'     => "VARCHAR(120) NULL DEFAULT NULL",
+        // What the business told us, and the evidence file it uploaded. The document itself is
+        // stored under /uploads/kyb/ (denied at the web server) and served only through the
+        // authenticated reviewer, never linked directly.
+        'kyb_business_name'   => "VARCHAR(200) NULL DEFAULT NULL",
+        'kyb_registration_no' => "VARCHAR(80) NULL DEFAULT NULL",
+        'kyb_category'        => "VARCHAR(80) NULL DEFAULT NULL",
+        'kyb_document'        => "VARCHAR(255) NULL DEFAULT NULL",
+        'kyb_note'            => "TEXT NULL DEFAULT NULL",
     ];
     foreach ($user_columns as $column => $definition) {
         if (!bc_fintech_ensure_column('sas_users', $column, $definition)) return false;

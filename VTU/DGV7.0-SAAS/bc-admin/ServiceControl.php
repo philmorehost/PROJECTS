@@ -108,6 +108,13 @@ $qvb = mysqli_query($connection_server, "SELECT * FROM sas_vendor_banks WHERE ve
 while($rvb = mysqli_fetch_assoc($qvb)) $vendor_banks[] = $rvb;
 
 $available_gateways = ['monnify', 'payvessel', 'payhub', 'paystack', 'beewave'];
+// DGV7: per-tier service matrix (personal/business/provider readiness). Shared partial so the
+// vendor console and the platform console cannot drift apart.
+$matrix_vendor_id = (int)$get_logged_admin_details['id'];
+$matrix_return_url = 'ServiceControl.php';
+include(__DIR__ . "/../func/bc-service-matrix.php");
+include(__DIR__ . "/../func/bc-account-backfill.php");
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -183,6 +190,9 @@ $available_gateways = ['monnify', 'payvessel', 'payhub', 'paystack', 'beewave'];
                     </div>
                 </div>
             </div>
+
+            <?php include(__DIR__ . "/../func/bc-service-matrix-render.php"); ?>
+            <?php include(__DIR__ . "/../func/bc-account-backfill-render.php"); ?>
 
             <div class="col-lg-6">
                 <div class="card shadow-sm border-0 rounded-4">
