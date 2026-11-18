@@ -139,6 +139,14 @@
     include_once(__DIR__ . "/bc-fintech-gate.php");
     include_once(__DIR__ . "/bc-gateway-policy.php");
     include_once(__DIR__ . "/bc-fintech-accounts.php");
+    // DGV7 phase 3 provider adapters. All are side-effect free: they define the
+    // registry, the ledger primitive and the webhook idempotency layer, and refuse
+    // to call anything while the provider specification is unconfigured.
+    include_once(__DIR__ . "/bc-fintech-providers.php");
+    include_once(__DIR__ . "/bc-fintech-ledger.php");
+    include_once(__DIR__ . "/bc-fintech-webhook.php");
+    include_once(__DIR__ . "/bc-fintech-klasha.php");
+    include_once(__DIR__ . "/bc-fintech-flutterwave.php");
 
     // License Verification & Grace Period Logic
     if ($connection_server) {

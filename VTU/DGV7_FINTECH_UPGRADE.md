@@ -337,6 +337,189 @@ deposit, payout or conversion is routed to them yet, and the crypto hub must not
 working until a provider agreement, sandbox entitlement and verified webhook signature handling
 exist.
 
+## Phase 3 in this change — provider adapters (Klasha & Flutterwave v3)
+
+**Status: implemented, not live.** No provider call has been made to a real host and no
+provider is contracted. Every specification-dependent value ships EMPTY and every adapter
+refuses while it is empty.
+
+### The documentation blocker
+
+The build sandbox cannot reach the Klasha or Flutterwave documentation hosts. No endpoint
+path, payload field name, error code or crypto scheme in this change was invented. The
+registry (`bc_fintech_provider_registry()` in `func/bc-fintech-providers.php`) holds:
+
+| Value | Klasha | Flutterwave v3 |
+| --- | --- | --- |
+| `base_url` | **EMPTY** | **EMPTY** |
+| endpoint paths | **EMPTY** (7 keys) | **EMPTY** (11 new keys) |
+| webhook `fields` map | **EMPTY** (9 keys) | carried over from the live handler |
+| `signature` | **EMPTY** header + algorithm | `verif-hash` / `plain_compare` (verified in production) |
+| `crypto.scheme` | **EMPTY** | n/a |
+| `assets` | `USDC`, `USDT` (no RLUSD) | `USDC`, `USDT` (no RLUSD) |
+
+An empty value is a refusal, never a guess. `bc_fintech_provider_configured()` returns a
+stable reason code — `credentials_not_configured`, `base_url_not_configured`,
+`endpoint_not_configured`, `field_mapping_not_configured`,
+`signature_scheme_not_configured` — and `bc_fintech_provider_request()` returns **before**
+the HTTP seam, so an unconfigured adapter cannot call a guessed URL. The refusal message for
+an endpoint is exactly `endpoint not configured`.
+
+The one exception, deliberately documented: `bc_flw_verify_transaction()` keeps the
+`https://api.flutterwave.com/v3/transactions/{id}/verify` URL that the **live**
+`users-flutterwave.php` handler already calls. That is a carried-over production value, not a
+guess, and a registry `base_url` overrides it the moment the Phase 3 spec is supplied.
+
+### Decision 1 — durable webhook idempotency
+
+`sas_webhook_events (provider, event_id, vendor_id, status, created_at, completed_at)` with
+`UNIQUE KEY uniq_provider_event (provider, event_id)`, created by `bc-fintech-schema.php`.
+
+`bc_fintech_webhook_claim()` is **insert-then-check**: it attempts the INSERT and treats a
+duplicate-key error (1062) as `already_processed`. A retried delivery is therefore skipped,
+never re-applied, and the endpoint still answers 200 so the provider stops retrying.
+`bc_fintech_webhook_release()` deletes a claim **only when nothing was credited**, so a
+genuine retry can proceed; nothing after a credit ever releases it.
+
+Pipeline (`bc_fintech_webhook_handle()`), identical for both providers:
+
+```
+signature -> claim -> provider API verification -> match -> ledger credit -> complete
+```
+
+A failure before the credit releases the claim and answers 200; a failure after it cannot.
+Every delivery that is received and classified is acknowledged with 200 — including a forged
+signature (which will never become valid, so retrying is pointless) — with the machine-readable
+reason in the JSON body and the detail in logs/<provider>_webhook.log. Only a request that
+cannot be processed at all (malformed JSON, no event id, or a server-side state such as a failed
+claim) gets a non-200 status.
+
+### Decision 2 — one atomic ledger primitive
+
+`bc_fintech_ledger_post()` in `func/bc-fintech-ledger.php` is the **only** writer for provider
+money movement. Adapters never run their own `UPDATE` (CI greps for it).
+
+- **NGN** → `sas_users.balance` (`DECIMAL(65,30)`), and mirrored into `sas_transactions` so the
+  credit appears in the customer's history, which is what `chargeUser()` does for every other
+  NGN credit.
+- **USD / GHS / ZAR / USDC / USDT** → `sas_user_crypto_wallets`, whose `balance` and
+  `ledger_balance` both move. No third balance store exists.
+
+Each post is one MySQL transaction: lock the balance row `FOR UPDATE`, apply the delta with
+`sprintf('%.18F', $amount)` (exponent notation is rejected by MySQL), read the fresh balance,
+write the `sas_fintech_ledger` audit row, commit. Any failure rolls back, so a refused post
+leaves **no** balance change and **no** audit row. Non-numeric, non-finite, zero and negative
+amounts are rejected — the direction argument carries the sign.
+
+The NGN path mirrors `bc_atomic_debit_user()` (`func/bc-security.php`) rather than calling it,
+because the audit row must commit in the same transaction as the balance change; a helper that
+commits internally could leave a committed debit with no audit row.
+
+### Decision 3 — `provider_ready` stays 0
+
+Unchanged. `bc_fintech_tier_effective()` still requires `status` + `provider_ready` + the tier
+switch, and `sas_service_control` keeps `UNIQUE (vendor_id, service_name)`. No adapter is
+reachable while `provider_ready = 0`.
+
+### Provider credential storage
+
+No new table. `bc_fintech_provider_credentials()` reads the tables that already hold provider
+keys, in the order each provider declares:
+
+- `sas_bank_transfer_gateways (vendor_id, gateway_name, public_key, secret_key, encrypt_key,
+  transfer_fee, status, PRIMARY KEY (vendor_id, gateway_name))` — **Klasha**, editable in
+  `bc-admin/PaymentGateway.php` (the withdrawal/payout credentials screen now offers Klasha).
+- `sas_payment_gateways (...)` — **Flutterwave**, whose `encrypt_key` is already the
+  `verif-hash` secret.
+
+Both screens already implement the write-only rule: a blank field keeps the stored value.
+
+### Klasha
+
+`func/bc-fintech-klasha.php`. Intended products are exposed as endpoint-keyed wrappers that
+all refuse while their path is empty: China wire (`beneficiary`, `payout`), multi-currency
+`wallet`, `fx`, `quote`, USDC/USDT `collection`, and transaction `verify`.
+
+**The "3DES payload encryption" in the brief is UNVERIFIED and is NOT implemented.**
+`bc_klasha_payload_encrypt()` / `_decrypt()` are an explicit seam that defaults to TLS-only
+JSON and logs a warning; a configured-but-unimplemented scheme also falls back rather than
+guessing a cipher. Authenticated encryption done wrong is a security defect, not a gap. CI
+fails the build if a cipher appears in the adapter.
+
+Klasha webhooks currently refuse with `signature_scheme_not_configured` — the honest state
+until the signature scheme is confirmed.
+
+### Flutterwave v3
+
+`func/bc-fintech-flutterwave.php` **extends** the existing handler rather than duplicating it.
+The verification approach is the one already proven in `users-flutterwave.php` and is the
+reference for the new adapters: `hash_equals` on the `verif-hash`, then confirm the transaction
+with the v3 verify endpoint, then require the verified `tx_ref` to equal the posted reference
+before any credit.
+
+New endpoint-keyed wrappers, all config-driven and all refusing while empty:
+`/v3/bill-categories`, bill validation and payment, payment links (`payments`), payment plans
+and invoices (`payment_plans`), USD/GBP/EUR virtual accounts, single and bulk transfers,
+regional payment toggles, and the Android POS request workflow. Payload field names are **not**
+invented — payloads are forwarded unchanged.
+
+`users-flutterwave.php` now delegates to the shared pipeline: same verification, but the credit
+goes through `bc_fintech_ledger_post()` and the delivery is claimed in `sas_webhook_events`
+first.
+
+**Known behaviour change.** The ledger primitive deliberately does not send mail or apply
+referral/loyalty logic — those are presentation concerns, and `chargeUser()` mixing them into
+the balance write is part of why a second writer was dangerous. A Flutterwave wallet deposit
+therefore no longer emits the receipt email the old path produced. Re-adding a receipt
+notification (from the webhook endpoint, not from the ledger) is a follow-up, not an oversight.
+
+**Known legacy duplicate.** `web/api/flutterwave_webhook.php` still exists, still credits through
+`chargeOtherUser()`, and is still published in `web/APIDocs.php` and
+`web/api/MOBILE_APP_SPEC.md`. It is not in the admin webhook map (which points Flutterwave at
+`users-flutterwave.php`), it has no `sas_webhook_events` claim, and its duplicate check is a
+plain SELECT, so a merchant that configured the APIDocs URL has a second, non-idempotent credit
+path. It is deliberately left untouched here (retiring it changes live fee semantics: it applies
+the gateway `percentage`), but it must be retired or routed through the same pipeline before
+Phase 3 is declared live.
+
+### Per-provider asset gating
+
+`bc_fintech_provider_asset_enabled()` — the catalogue lists what a provider *could* support and
+is not consent. **RLUSD is never in a catalogue**: it is enabled only by an explicit
+merchant-profile entry (`sas_settings` `provider_assets_<provider>`, a JSON list, written by
+`bc_fintech_provider_profile_assets_save()`). A profile entry for an asset the provider does not
+list does not enable it. Merchant profiles are per tenant, so one tenant's opt-in never leaks to
+another.
+
+### Test coverage added
+
+`tests/fintech_gate_test.php` grew from 576 to **780 checks** across five new sections:
+provider registry/configuration and refusal reasons, the HTTP seam (asserting an unconfigured
+adapter makes **no** call), per-provider asset gating including RLUSD, the atomic ledger
+(NGN and stablecoin credits/debits, overdraft rollback, negative/NaN/INF rejection, inactive
+account, history mirror), and webhook behaviour — idempotency (same event twice → one credit),
+signature rejection (bad hash → no claim, no ledger row, no balance change, no provider call),
+claim release on an unconfirmed transaction, reference matching, unknown-reference refusal, and
+a fully configured Klasha delivery.
+
+`tests/provider_smoke.php` is a standalone CLI that reports `not configured` per provider and
+does nothing else — no HTTP, no credential read — until keys and the specification are supplied.
+Run it with `php VTU/tests/provider_smoke.php [edition] [--vendor=N]`.
+
+### Before any of this can go live
+
+1. Supply the signed-off Klasha and Flutterwave v3 specifications (base URLs, endpoint paths,
+   field maps, signature schemes, settlement assets) and put them in
+   `bc_fintech_provider_registry()`.
+2. Confirm the Klasha payload crypto scheme from the provider, then implement the seam.
+3. Obtain sandbox entitlements and confirm which assets each merchant profile may settle.
+4. Save credentials in `bc-admin/PaymentGateway.php`, then set `provider_ready = 1` for the
+   specific tenant/service.
+5. Replay webhooks in staging, including a duplicated delivery and a forged signature.
+6. Retire or re-route `web/api/flutterwave_webhook.php` (the legacy second credit path
+   described above) and keep the retirement of Plisio unchanged until the new adapters have run
+   in sandbox.
+
 ## Existing implementation facts that affect rollout
 
 1. Both editions primarily use `sas_users.account_level` for legacy user tiers and the three pricing tables. Existing account-level and prices must remain intact during migration and upgrades. `sas_user_upgrade_price.account_type` is a different field: it stores legacy level identifiers, not the new account tier.
