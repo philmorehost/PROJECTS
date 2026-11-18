@@ -76,7 +76,7 @@ $gateways = [
     'payvessel' => 'PayVessel',
     'beewave' => 'BeeWave',
     'payhub' => 'PayHub',
-    'plisio' => 'Plisio (Crypto)',
+    // 'plisio' => 'Plisio (Crypto)', // DGV7: retired, provider defunct
     'manual_funding' => 'Manual Bank Funding'
 ];
 

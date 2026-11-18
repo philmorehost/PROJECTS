@@ -1,4 +1,18 @@
 <?php
+/**
+ * Plisio webhook — RETIRED (DGV7).
+ *
+ * Plisio.net is defunct, so no new callback can be trusted or fulfilled. This endpoint no longer
+ * credits wallets or changes any balance; it records the receipt and returns 410 Gone so the
+ * caller stops retrying. Historical rows created before retirement are untouched.
+ */
+require_once __DIR__ . '/func/bc-gateway-policy.php';
+if (!headers_sent()) { http_response_code(410); header('Content-Type: application/json'); }
+error_log('[DGV-GATEWAY] Retired Plisio webhook called; ignored. ip=' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+echo json_encode(['status' => 'error', 'code' => 'GATEWAY_RETIRED', 'message' => bc_retired_gateway_message('plisio')]);
+exit;
+
+
 function logPlisio($msg) {
     $logFile = __DIR__ . '/logs/plisio_webhook.log';
     if(!is_dir(dirname($logFile))) mkdir(dirname($logFile), 0777, true);

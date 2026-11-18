@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 include("../../func/bc-connect.php");
 
-$api_key = mysqli_real_escape_string($connection_server, $_GET['api_key'] ?? '');
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? '', 0));
 if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
 
 $vendor_id = resolveVendorID();

@@ -41,7 +41,7 @@ $other     = mysqli_real_escape_string($connection_server, $d['other']);
 $email     = mysqli_real_escape_string($connection_server, $d['email']);
 $phone     = mysqli_real_escape_string($connection_server, $d['phone']);
 $address   = mysqli_real_escape_string($connection_server, $d['address']);
-$api_key   = mysqli_real_escape_string($connection_server, $d['api_key']);
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($d['api_key'], 0));
 
 // Re-check username uniqueness (guards against race condition)
 $check_user = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND username='$user' LIMIT 1");

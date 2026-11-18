@@ -9,7 +9,7 @@ if ($action === 'verify_mobile_login') {
     if (empty($input)) $input = $_REQUEST;
 
     $username = mysqli_real_escape_string($connection_server, $input['username'] ?? '');
-    $api_key = mysqli_real_escape_string($connection_server, $input['api_key'] ?? '');
+    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($input['api_key'] ?? '', 0));
 
     if (empty($username) || empty($api_key)) {
         echo json_encode(["status" => "error", "message" => "Invalid parameters"]);

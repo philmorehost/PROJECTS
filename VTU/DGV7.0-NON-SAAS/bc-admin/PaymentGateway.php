@@ -2,8 +2,8 @@
     include("../func/bc-admin-config.php");
 	
 	$kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
-    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "payhub", "plisio", "beewave");
-	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/users-monnify.php", "flutterwave" => $web_http_host . "/users-flutterwave.php", "paystack" => $web_http_host . "/users-paystack.php", "payvessel" => $web_http_host . "/users-payvessel.php", "payhub" => $web_http_host . "/users-payhub.php", "plisio" => $web_http_host . "/users-plisio.php", "beewave" => $web_http_host . "/web/api/beewave-webhook.php");
+    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "payhub", "beewave");
+	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/users-monnify.php", "flutterwave" => $web_http_host . "/users-flutterwave.php", "paystack" => $web_http_host . "/users-paystack.php", "payvessel" => $web_http_host . "/users-payvessel.php", "payhub" => $web_http_host . "/users-payhub.php", "beewave" => $web_http_host . "/web/api/beewave-webhook.php");
 	
 	if(isset($_POST["update-kyc-details"])){
         $force_kyc = isset($_POST["force_kyc"]) ? 1 : 0;

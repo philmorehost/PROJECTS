@@ -8,7 +8,7 @@ if (empty($input)) {
     $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
 
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
@@ -26,6 +26,19 @@ $username = $user['username'];
 
 if(!isServiceEnabled('crypto_hub')){
     echo json_encode(["status" => "error", "message" => "Crypto Hub is currently disabled"]);
+    exit;
+}
+
+// DGV7: Plisio is retired. Reads of existing wallets/balances/history stay available so users
+// can still see funds and support can reconcile, but no NEW invoice, swap or payout is created
+// against a provider that no longer exists. Replacement adapters are Phase 3.
+$bc_crypto_retired_actions = ['create_invoice', 'deposit', 'swap', 'convert', 'cash_out', 'withdraw', 'payout'];
+if (in_array(strtolower((string)$action), $bc_crypto_retired_actions, true) && bc_gateway_is_retired('plisio')) {
+    echo json_encode([
+        "status" => "error",
+        "code" => "GATEWAY_RETIRED",
+        "message" => bc_retired_gateway_message('plisio'),
+    ]);
     exit;
 }
 
@@ -69,6 +82,11 @@ if ($action === 'get_wallets') {
 }
 
 elseif ($action === 'get_rate') {
+    // Rates came from the retired provider, so no quote can be issued until Phase 3 adapters.
+    if (bc_gateway_is_retired('plisio')) {
+        echo json_encode(["status" => "error", "code" => "GATEWAY_RETIRED", "message" => bc_retired_gateway_message('plisio')]);
+        exit;
+    }
     $from = strtoupper($input['from'] ?? '');
     $to = strtoupper($input['to'] ?? '');
     if (empty($from) || empty($to)) {

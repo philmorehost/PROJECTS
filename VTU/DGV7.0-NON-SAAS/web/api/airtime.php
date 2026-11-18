@@ -26,7 +26,7 @@ if ($select_vendor_table) {
 	}
 
 	$get_vendor_details = $select_vendor_table;
-	$api_key_sanitized = mysqli_real_escape_string($connection_server, trim(strip_tags($get_api_post_info["api_key"] ?? "")));
+	$api_key_sanitized = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($get_api_post_info["api_key"] ?? "")), $vendor_id));
 	$get_user_detail_via_apikey = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $get_vendor_details["id"] . "' && api_key='" . $api_key_sanitized . "' LIMIT 1");
 	$get_logged_user_details = mysqli_fetch_array($get_user_detail_via_apikey);
 	if (mysqli_num_rows($get_user_detail_via_apikey) == 1) {

@@ -13,7 +13,7 @@ if ($select_vendor_table) {
         $input = json_decode(file_get_contents('php://input'), true) ?? [];
     }
 
-    $api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"] ?? "")));
+    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), $vendor_id));
 
     if (!empty($api_key)) {
         $get_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $select_vendor_table["id"] . "' && api_key='" . $api_key . "' LIMIT 1");

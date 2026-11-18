@@ -43,11 +43,64 @@ Blueprint: *Project Kickoff Blueprint — DGV7.0 Scripts Fintech Platform Upgrad
 - Not deployed. No staging database, provider sandbox or live traffic has exercised any of it.
 
 **Phase 1C checklist (next)**
-1. Migrate the remaining app endpoints to `bc_fintech_require_app_account()`, then — only after that — reject `api_key` requests from personal accounts on developer routes.
+1. ~~Dual-auth across every app endpoint.~~ **Done** (see the Phase 1C section).
 2. Publish `app_token` in the DG7 / JIKABIZ / MZEEVTU Android and iOS clients, send it as `Authorization: Bearer`, call `web/api/logout.php` on sign-out, and handle the Business 403 with the web-only message.
 3. Add a reviewed, auditable `account_type` backfill (level 1/2 → personal, level 3 → business) with rollback; keep `account_level` and every price untouched.
 4. Add bc-admin/service UI for `personal_enabled` / `business_enabled` / `provider_ready` and a KYB review screen; do not enable any new fintech service without provider confirmation.
 5. Staging: run the lazy migration against a restored production snapshot, verify duplicate-row `sas_site_details`, confirm logout/impersonation paths, then load-test the redirect gate.
+
+## Phase 1C step 1 in this change — dual-auth bridge (staged, no hard lockdown)
+
+**Why staged, in this order.** Live Android builds authenticate every `web/api/*` endpoint with
+`sas_users.api_key`. Locking `api_key` before the app ships a bearer token would sign every
+personal user out of airtime, data, bills and profile at once. The endpoints therefore learn both
+credentials first, and the lockdown stays a separate, later switch.
+
+- `bc_fintech_api_credential()` (in `func/bc-fintech-gate.php`) is now the credential resolver for
+  **114 call sites across 57 endpoint files per edition**. Each endpoint keeps its existing
+  `WHERE api_key='...'` lookup untouched:
+  - valid `Authorization: Bearer <app_token>` → substitutes the token owner's `api_key`, so the
+    query resolves to that account; the posted key is ignored and cannot be spoofed;
+  - invalid/expired/revoked token → **HTTP 401 `APP_SESSION_INVALID`**, never a silent fallback;
+  - no token → the supplied `api_key` passes through, keeping current app builds and merchant
+    integrations working;
+  - a Business account is refused here too, reusing the Phase 1B decision and message.
+- Endpoints that call the resolver before `resolveVendorID()` pass `0`; the vendor then comes from
+  the session row (`bc_app_session_user_any_vendor()`), never from the request.
+- `tests/fintech_gate_test.php` asserts every endpoint resolves through the bridge and that **no
+  endpoint is left on the raw `api_key` path**.
+
+**Still outstanding, in this order**
+1. Ship the DG7 / JIKABIZ / MZEEVTU Android + iOS builds that store `app_token` and send
+   `Authorization: Bearer`. Until then the token path is unused in production.
+2. Run the reviewed `account_type` backfill (`1,2 → personal`, `3 → business`).
+3. Only then make `bc_fintech_api_credential()` refuse `api_key` for personal accounts, and hide
+   `APIDocs.php` / key regeneration from them.
+
+**Known limits**
+- `security-quest.php`, `set-pin.php`, `biometric.php` and `databundle-card*.php` read the key from
+  query/POST fields; they resolve through the same helper but need the token as a header, which
+  the app update will send.
+- Merchant `api_key` traffic is intentionally unaffected at this stage.
+
+## Phase 1C gateway change — Plisio retired
+
+Plisio.net is defunct. It is retired **without deleting history**:
+
+| Surface | Behaviour now |
+| --- | --- |
+| `func/bc-gateway-policy.php` | New and identical in both editions: `bc_gateway_is_retired()`, `bc_gateway_allowed_for_new_traffic()`, `bc_retired_gateway_message()`. |
+| `web/api/crypto.php` | `create_invoice`, `swap`, `withdraw`, `get_rate` and other new-traffic actions return `GATEWAY_RETIRED`. `get_wallets` and `history` still work so users can see and reconcile existing funds. |
+| `users-plisio.php` | Returns **410 Gone**, logs the attempt, and exits before any legacy fulfilment code. |
+| `bc-admin/ServiceControl.php`, `bc-spadmin/ServiceControl.php` | Plisio removed from the active gateway list; the label is kept commented for support. |
+| `bc-admin/PaymentGateway.php` | Removed from the gateway screen and webhook map; the SAAS activation purchase is refused **before** `chargeVendor`, so nobody pays a fee for a dead provider. |
+| `bc-tables.php` | Fresh installs seed `plisio` as disabled. An **existing** row is never flipped, so a deliberate later decision or rollback is not overwritten. |
+| Preserved | `sas_vendors.plisio_activated`, `plisio_activation_fee`, `plisio_tx_id`, gateway keys and every transaction row. |
+
+**Replacement is not implemented.** Klasha and Flutterwave stablecoin adapters are Phase 3. No
+deposit, payout or conversion is routed to them yet, and the crypto hub must not be advertised as
+working until a provider agreement, sandbox entitlement and verified webhook signature handling
+exist.
 
 ## Existing implementation facts that affect rollout
 
@@ -68,7 +121,7 @@ Blueprint: *Project Kickoff Blueprint — DGV7.0 Scripts Fintech Platform Upgrad
 
 1. **Account and authorization foundation:** inventory all registration, login, developer, merchant and app routes in both editions; design separate first-party authentication; additive account-type/KYB schema and controlled backfill; per-account service matrix and SAAS marketplace entitlements; Business upgrade and approval with a server-validated payment ledger; enforce access consistently across web and mobile. Migrate and test existing users, agent pricing and API-earner keys before enabling.
 2. **Design and experience:** create an original fintech design inspired by the requested references, not copied assets or representations of unimplemented services. Apply responsive landing, customer dashboard, support flows and agreed mobile variants while retaining working purchase flows and accessibility.
-3. **Provider adapters:** confirm the contracted provider product, environment-specific official API specification, merchant entitlements, settlement regions/assets, webhook signatures and idempotency. Start in sandbox; do not assume that a listed endpoint or asset is available. Keep credentials in deployment secret storage, never source code or chat. Reconcile idempotently, use exact decimal/integer money units and auditable ledger entries, and never credit on an unverified webhook or request alone.
+3. **Provider adapters:** Klasha and Flutterwave replace the retired Plisio for stablecoin collection, payout and FX; confirm the contracted product, environment-specific official API specification, merchant entitlements, settlement regions/assets, webhook signatures and idempotency for each. Start in sandbox; do not assume that a listed endpoint or asset is available. Keep credentials in deployment secret storage, never source code or chat. Reconcile idempotently, use exact decimal/integer money units and auditable ledger entries, and never credit on an unverified webhook or request alone.
 4. **Tuition, eSIM, referrals and support:** only offer supported institutions/products after a verified provider catalog exists. The referral reward must be based on final, eligible, non-reversed transfers, with unique awards and fraud controls. Human chat needs tenant-scoped authorization and auditable escalation. Treat KYB documents and eSIM details as sensitive.
 5. **Staging and release:** separately stage both editions, replay webhooks, test refund/reversal and multi-tenant isolation, migrate a representative snapshot and verify backups. Complete security and compliance review, mobile signing and release, then explicitly approve production rollout. Never label sandbox integrations as live.
 

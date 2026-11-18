@@ -62,7 +62,7 @@ if (isset($_SESSION['user_session']) && !empty($_SESSION['user_session'])) {
     }
 } elseif (isset($_POST['api_key']) && !empty($_POST['api_key'])) {
     // App API key authentication
-    $api_key = mysqli_real_escape_string($connection_server, $_POST['api_key']);
+    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_POST['api_key'], $vendor_id));
     $app_user_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 LIMIT 1");
     if ($app_user_q && $au = mysqli_fetch_assoc($app_user_q)) {
         $user_id = (int)$au['id'];

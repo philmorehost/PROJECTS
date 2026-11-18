@@ -24,7 +24,7 @@ if (empty($input)) {
     $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
 $prompt  = trim($input["prompt"] ?? '');
 
 if (empty($api_key)) {

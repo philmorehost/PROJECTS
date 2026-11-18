@@ -7,7 +7,7 @@ if (empty($input)) {
     $input = json_decode(file_get_contents('php://input'), true) ?? [];
 }
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"] ?? "")));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), 0));
 $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["type"] ?? ""))));
 $id = mysqli_real_escape_string($connection_server, trim(strip_tags($input["id"] ?? "")));
 

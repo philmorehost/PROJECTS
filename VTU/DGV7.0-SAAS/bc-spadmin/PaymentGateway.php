@@ -2,8 +2,8 @@
     include("../func/bc-spadmin-config.php");
 
     $kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
-    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "payhub", "plisio");
-	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/vendors-monnify.php", "flutterwave" => $web_http_host . "/vendors-flutterwave.php", "paystack" => $web_http_host . "/vendors-paystack.php", "payvessel" => $web_http_host . "/vendors-payvessel.php", "payhub" => $web_http_host . "/vendors-payhub.php", "plisio" => $web_http_host . "/users-plisio.php");
+    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "payhub");
+	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/vendors-monnify.php", "flutterwave" => $web_http_host . "/vendors-flutterwave.php", "paystack" => $web_http_host . "/vendors-paystack.php", "payvessel" => $web_http_host . "/vendors-payvessel.php", "payhub" => $web_http_host . "/vendors-payhub.php");
 	
 	if(isset($_POST["update-kyc-details"])){
         $force_kyc = isset($_POST["force_kyc"]) ? 1 : 0;

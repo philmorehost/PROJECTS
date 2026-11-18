@@ -23,7 +23,7 @@ if (!$select_vendor_table) {
     exit;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, $_GET['api_key'] ?? '');
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? '', 0));
 if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
 
 $purchase_method = ((isset($api_post_info_from_app) && is_array($api_post_info_from_app)) || (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android')) ? "app" : "api";
