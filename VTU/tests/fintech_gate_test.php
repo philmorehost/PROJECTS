@@ -39,8 +39,17 @@ $GLOBALS['db'] = [
     'tables' => [],          // table => true (SHOW TABLES)
     'chat_threads' => [],    // id => row
     'chat_messages' => [],   // id => row
-    'chat_events' => [],     // id => row
+    'chat_events' => [],    // id => row
     'insert_id' => 0,
+    // ── phase 3: provider adapters ──
+    'gateways' => [],        // "table:vendor:gateway" => row
+    'webhook_events' => [],  // "provider:event_id" => row
+    'ledger' => [],          // id => row
+    'crypto_wallets' => [],  // "vendor:username:currency" => row
+    'checkouts' => [],       // "vendor:reference" => username
+    'fintech_tx' => [],      // id => sas_transactions mirror row
+    'errno' => 0,
+    'error' => '',
 ];
 
 /**
@@ -77,11 +86,20 @@ function fake_mysqli_fetch_assoc($rows) {
 }
 function fake_mysqli_affected_rows($db) { return $GLOBALS['db']['affected']; }
 function fake_mysqli_insert_id($db) { return $GLOBALS['db']['insert_id']; }
+function fake_mysqli_errno($db) { return $GLOBALS['db']['errno']; }
+function fake_mysqli_error($db) { return $GLOBALS['db']['error']; }
+function fake_mysqli_begin_transaction($db) { $GLOBALS['db']['errno'] = 0; $GLOBALS['db']['error'] = ''; return true; }
+function fake_mysqli_commit($db) { return true; }
+function fake_mysqli_rollback($db) { return true; }
 
 function fake_mysqli_query($db, $sql) { return fake_result(fake_mysqli_query_raw($db, $sql)); }
 
 function fake_mysqli_query_raw($db, $sql) {
     $GLOBALS['db']['affected'] = 0;
+    // Real SQL is whitespace-insensitive, so the fake matches a collapsed copy. The
+    // shipped statements are formatted for reading; without this every line break
+    // would have to be mirrored in a regex.
+    $sql = preg_replace('/\s+/', ' ', $sql);
 
     // schema: SHOW COLUMNS FROM `t` LIKE 'c'
     if (preg_match('/^SHOW COLUMNS FROM `([a-z0-9_]+)` LIKE \'([a-z0-9_]+)\'$/i', $sql, $m)) {
@@ -442,6 +460,175 @@ function fake_mysqli_query_raw($db, $sql) {
             if ((int)$u['vendor_id'] === (int)$m[1] && (int)($u['kyb_status'] ?? 0) === 1) $rows[] = $u;
         }
         return array_slice($rows, 0, (int)$m[2]);
+    }
+
+    // ══ phase 3: provider adapters ══════════════════════════════════════════
+
+    // credentials (sas_bank_transfer_gateways / sas_payment_gateways)
+    if (preg_match("/^SELECT \\* FROM `(sas_bank_transfer_gateways|sas_payment_gateways)` WHERE vendor_id='(\d+)' AND gateway_name='([^']*)' LIMIT 1$/", $sql, $m)) {
+        $row = $GLOBALS['db']['gateways'][$m[1] . ':' . $m[2] . ':' . stripslashes($m[3])] ?? null;
+        return $row ? [$row] : [];
+    }
+
+    // provider asset profile (single setting read)
+    if (preg_match("/^SELECT setting_value FROM sas_settings WHERE vendor_id='(\d+)' AND setting_name='([^']*)' LIMIT 1$/", $sql, $m)) {
+        $key = $m[1] . ':' . stripslashes($m[2]);
+        return array_key_exists($key, $GLOBALS['db']['settings'])
+            ? [['setting_value' => $GLOBALS['db']['settings'][$key]]] : [];
+    }
+
+    // webhook idempotency table
+    if (preg_match("/^INSERT INTO sas_webhook_events \(provider, event_id, vendor_id, status, created_at\) VALUES \('([^']*)', '([^']*)', '(\d+)', 'processing', NOW\(\)\)$/", $sql, $m)) {
+        $key = stripslashes($m[1]) . ':' . stripslashes($m[2]);
+        if (isset($GLOBALS['db']['webhook_events'][$key])) {
+            $GLOBALS['db']['errno'] = 1062; // duplicate key — the whole idempotency mechanism
+            return false;
+        }
+        $GLOBALS['db']['webhook_events'][$key] = [
+            'provider' => stripslashes($m[1]), 'event_id' => stripslashes($m[2]),
+            'vendor_id' => (int)$m[3], 'status' => 'processing',
+            'created_at' => date('Y-m-d H:i:s'), 'completed_at' => null,
+        ];
+        $GLOBALS['db']['errno'] = 0;
+        return true;
+    }
+    if (preg_match("/^UPDATE sas_webhook_events\s+SET status='processed', completed_at=NOW\(\)\s+WHERE provider='([^']*)' AND event_id='([^']*)'$/s", $sql, $m)) {
+        $key = stripslashes($m[1]) . ':' . stripslashes($m[2]);
+        if (!isset($GLOBALS['db']['webhook_events'][$key])) return false;
+        $GLOBALS['db']['webhook_events'][$key]['status'] = 'processed';
+        $GLOBALS['db']['webhook_events'][$key]['completed_at'] = date('Y-m-d H:i:s');
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^DELETE FROM sas_webhook_events\s+WHERE provider='([^']*)' AND event_id='([^']*)' AND status='processing'$/s", $sql, $m)) {
+        $key = stripslashes($m[1]) . ':' . stripslashes($m[2]);
+        if (!isset($GLOBALS['db']['webhook_events'][$key])) return false;
+        unset($GLOBALS['db']['webhook_events'][$key]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^SELECT status FROM sas_webhook_events WHERE provider='([^']*)' AND event_id='([^']*)' LIMIT 1$/", $sql, $m)) {
+        $key = stripslashes($m[1]) . ':' . stripslashes($m[2]);
+        return isset($GLOBALS['db']['webhook_events'][$key])
+            ? [['status' => $GLOBALS['db']['webhook_events'][$key]['status']]] : [];
+    }
+
+    // NGN balance row (locked)
+    if (preg_match("/^SELECT id, balance, status FROM sas_users WHERE vendor_id='(\d+)' AND username='([^']*)' LIMIT 1 FOR UPDATE$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] === (int)$m[1] && (string)($u['username'] ?? '') === stripslashes($m[2])) return [$u];
+        }
+        return [];
+    }
+    if (preg_match("/^UPDATE sas_users SET balance=balance([+-])([0-9.]+) WHERE id='(\d+)'$/", $sql, $m)) {
+        $u = $GLOBALS['db']['users'][$m[3]] ?? null;
+        if (!$u || !isset($u['balance'])) { $GLOBALS['db']['affected'] = 0; return false; }
+        $delta = (float)$m[2];
+        $u['balance'] = $m[1] === '+' ? (float)$u['balance'] + $delta : (float)$u['balance'] - $delta;
+        $GLOBALS['db']['users'][$m[3]] = $u;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^SELECT balance FROM sas_users WHERE id='(\d+)' LIMIT 1$/", $sql, $m)) {
+        $u = $GLOBALS['db']['users'][$m[1]] ?? null;
+        return ($u && isset($u['balance'])) ? [['balance' => $u['balance']]] : [];
+    }
+    if (preg_match("/^SELECT balance FROM sas_users WHERE vendor_id='(\d+)' AND username='([^']*)' LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] === (int)$m[1] && (string)($u['username'] ?? '') === stripslashes($m[2])) {
+                return isset($u['balance']) ? [['balance' => $u['balance']]] : [];
+            }
+        }
+        return [];
+    }
+    if (preg_match("/^SELECT username FROM sas_users WHERE vendor_id='(\d+)' AND \(username='([^']*)' OR email='([^']*)'\) LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] !== (int)$m[1]) continue;
+            if ((string)($u['username'] ?? '') === stripslashes($m[2]) || (string)($u['email'] ?? '') === stripslashes($m[3])) {
+                return [['username' => $u['username']]];
+            }
+        }
+        return [];
+    }
+
+    // crypto wallet rows
+    if (preg_match("/^INSERT IGNORE INTO sas_user_crypto_wallets \(vendor_id, username, currency_code\) VALUES \('(\d+)', '([^']*)', '([^']*)'\)$/", $sql, $m)) {
+        $key = $m[1] . ':' . stripslashes($m[2]) . ':' . stripslashes($m[3]);
+        if (!isset($GLOBALS['db']['crypto_wallets'][$key])) {
+            $GLOBALS['db']['crypto_wallets'][$key] = [
+                'id' => count($GLOBALS['db']['crypto_wallets']) + 1,
+                'vendor_id' => (int)$m[1], 'username' => stripslashes($m[2]),
+                'currency_code' => stripslashes($m[3]),
+                'balance' => 0, 'ledger_balance' => 0,
+            ];
+        }
+        return true;
+    }
+    if (preg_match("/^SELECT id, balance, ledger_balance FROM sas_user_crypto_wallets WHERE vendor_id='(\d+)' AND username='([^']*)' AND currency_code='([^']*)' LIMIT 1 FOR UPDATE$/", $sql, $m)) {
+        $key = $m[1] . ':' . stripslashes($m[2]) . ':' . stripslashes($m[3]);
+        return isset($GLOBALS['db']['crypto_wallets'][$key]) ? [$GLOBALS['db']['crypto_wallets'][$key]] : [];
+    }
+    if (preg_match("/^UPDATE sas_user_crypto_wallets\s+SET balance=balance([+-])([0-9.]+), ledger_balance=ledger_balance([+-])([0-9.]+)\s+WHERE id='(\d+)'$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['crypto_wallets'] as $key => $w) {
+            if ((int)$w['id'] !== (int)$m[5]) continue;
+            $w['balance'] = $m[1] === '+' ? (float)$w['balance'] + (float)$m[2] : (float)$w['balance'] - (float)$m[2];
+            $w['ledger_balance'] = $m[3] === '+' ? (float)$w['ledger_balance'] + (float)$m[4] : (float)$w['ledger_balance'] - (float)$m[4];
+            $GLOBALS['db']['crypto_wallets'][$key] = $w;
+            $GLOBALS['db']['affected'] = 1;
+            return true;
+        }
+        $GLOBALS['db']['affected'] = 0;
+        return false;
+    }
+    if (preg_match("/^SELECT balance FROM sas_user_crypto_wallets WHERE id='(\d+)' LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['crypto_wallets'] as $w) {
+            if ((int)$w['id'] === (int)$m[1]) return [['balance' => $w['balance']]];
+        }
+        return [];
+    }
+    if (preg_match("/^SELECT balance FROM sas_user_crypto_wallets WHERE vendor_id='(\d+)' AND username='([^']*)' AND currency_code='([^']*)' LIMIT 1$/", $sql, $m)) {
+        $key = $m[1] . ':' . stripslashes($m[2]) . ':' . stripslashes($m[3]);
+        return isset($GLOBALS['db']['crypto_wallets'][$key]) ? [['balance' => $GLOBALS['db']['crypto_wallets'][$key]['balance']]] : [];
+    }
+
+    // checkout reference -> username
+    if (preg_match("/^SELECT username FROM sas_user_payment_checkouts WHERE vendor_id='(\d+)' AND reference='([^']*)' LIMIT 1$/", $sql, $m)) {
+        $key = $m[1] . ':' . stripslashes($m[2]);
+        return isset($GLOBALS['db']['checkouts'][$key]) ? [['username' => $GLOBALS['db']['checkouts'][$key]]] : [];
+    }
+
+    // ledger audit row
+    if (preg_match("/^INSERT INTO sas_fintech_ledger \(vendor_id, username, currency_code, direction, amount, balance_before, balance_after, provider, event_id, reference, context, created_at\) VALUES \('([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '(.*)', NOW\(\)\)$/", $sql, $m)) {
+        $id = count($GLOBALS['db']['ledger']) + 1;
+        $GLOBALS['db']['ledger'][$id] = [
+            'id' => $id, 'vendor_id' => (int)$m[1], 'username' => stripslashes($m[2]),
+            'currency_code' => stripslashes($m[3]), 'direction' => stripslashes($m[4]),
+            'amount' => stripslashes($m[5]), 'balance_before' => stripslashes($m[6]),
+            'balance_after' => stripslashes($m[7]), 'provider' => stripslashes($m[8]),
+            'event_id' => stripslashes($m[9]), 'reference' => stripslashes($m[10]),
+            'context' => json_decode(stripslashes($m[11]), true),
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+        $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // NGN history mirror
+    if (preg_match("/^INSERT INTO sas_transactions \(vendor_id, product_unique_id, type_alternative, reference, api_reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status\) VALUES \('([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '(.*)', '([^']*)', '([^']*)', (\d+)\)$/", $sql, $m)) {
+        $id = count($GLOBALS['db']['fintech_tx']) + 1;
+        $GLOBALS['db']['fintech_tx'][$id] = [
+            'id' => $id, 'vendor_id' => (int)$m[1], 'product_unique_id' => stripslashes($m[2]),
+            'type_alternative' => stripslashes($m[3]), 'reference' => stripslashes($m[4]),
+            'api_reference' => stripslashes($m[5]), 'username' => stripslashes($m[6]),
+            'amount' => stripslashes($m[7]), 'discounted_amount' => stripslashes($m[8]),
+            'balance_before' => stripslashes($m[9]), 'balance_after' => stripslashes($m[10]),
+            'description' => stripslashes($m[11]), 'mode' => stripslashes($m[12]),
+            'api_website' => stripslashes($m[13]), 'status' => (int)$m[14],
+        ];
+        $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
     }
 
     throw new Exception('Unexpected SQL: ' . $sql);
@@ -1423,4 +1610,451 @@ foreach ([
     gcheck("edition parity: $file", md5_file($root . '/DGV7.0-SAAS/' . $file), md5_file($root . '/DGV7.0-NON-SAAS/' . $file));
 }
 
-echo "\n$checks phase 1 checks passed\n";
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3 — provider adapters (Klasha & Flutterwave v3)
+// ═══════════════════════════════════════════════════════════════════════════
+load_edition($root, 'DGV7.0-SAAS', [
+    'func/bc-fintech-providers.php',
+    'func/bc-fintech-ledger.php',
+    'func/bc-fintech-webhook.php',
+    'func/bc-fintech-klasha.php',
+    'func/bc-fintech-flutterwave.php',
+]);
+
+// ── 19. provider registry and configuration ────────────────────────────────
+$registry = bc_fintech_provider_registry();
+gtrue('registry lists klasha', isset($registry['klasha']));
+gtrue('registry lists flutterwave', isset($registry['flutterwave']));
+gcheck('provider list is stable', bc_fintech_provider_list(), ['klasha', 'flutterwave']);
+gcheck('unknown provider has no config', bc_fintech_provider_config('teleport'), null);
+
+// Klasha is genuinely unconfigured: nothing is guessed.
+gcheck('klasha base URL is empty', $registry['klasha']['base_url'], '');
+foreach (['verify', 'quote', 'beneficiary', 'payout', 'wallet', 'fx', 'collection'] as $ep) {
+    gcheck("klasha endpoint $ep is empty", $registry['klasha']['endpoints'][$ep], '');
+}
+foreach (['event_id', 'reference', 'amount', 'currency', 'status'] as $field) {
+    gcheck("klasha field $field is unmapped", bc_fintech_provider_field('klasha', $field), '');
+}
+gcheck('klasha signature scheme is empty', $registry['klasha']['signature']['header'], '');
+gcheck('klasha payload crypto scheme is empty', bc_klasha_crypto_scheme(), '');
+
+// The new Flutterwave endpoints are empty too; only the live verify shape is known.
+gcheck('flutterwave base URL is empty', $registry['flutterwave']['base_url'], '');
+foreach (['bills_categories', 'bills_validate', 'bills', 'payments', 'payment_plans', 'virtual_accounts', 'transfers', 'bulk_transfers', 'pos_request', 'regional_toggles'] as $ep) {
+    gcheck("flutterwave endpoint $ep is empty", $registry['flutterwave']['endpoints'][$ep], '');
+}
+gcheck('flutterwave verify field map is the live one', bc_fintech_provider_field('flutterwave', 'reference'), 'data.tx_ref');
+
+// Refusal reasons, in order.
+$GLOBALS['db']['gateways'] = [];
+gcheck('no credentials -> credentials_not_configured',
+    bc_fintech_provider_configured(7, 'klasha', 'quote')['reason'], 'credentials_not_configured');
+$GLOBALS['db']['gateways']['sas_bank_transfer_gateways:7:klasha'] = [
+    'vendor_id' => 7, 'gateway_name' => 'klasha', 'public_key' => 'pk', 'secret_key' => 'sk', 'encrypt_key' => 'eh', 'status' => 1,
+];
+gcheck('credentials but no base URL -> base_url_not_configured',
+    bc_fintech_provider_configured(7, 'klasha', 'quote')['reason'], 'base_url_not_configured');
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = 'https://sandbox.klasha.test';
+gcheck('base URL but no endpoint -> endpoint_not_configured',
+    bc_fintech_provider_configured(7, 'klasha', 'quote')['reason'], 'endpoint_not_configured');
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['endpoints']['quote'] = '/v1/quote';
+gcheck('fully configured -> ready', bc_fintech_provider_configured(7, 'klasha', 'quote')['ready'], true);
+gcheck('endpoint refusal message is the documented one',
+    bc_fintech_provider_refusal_message('endpoint_not_configured'), 'endpoint not configured');
+
+// The URL builder never guesses.
+gcheck('url builder refuses an empty endpoint',
+    bc_fintech_provider_url('klasha', 'payout', 7)['reason'], 'endpoint_not_configured');
+unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
+gcheck('url builder refuses an empty base URL',
+    bc_fintech_provider_url('klasha', 'quote', 7)['reason'], 'base_url_not_configured');
+
+// An unconfigured adapter must refuse BEFORE any network activity.
+$GLOBALS['bc_fintech_http_calls'] = [];
+$GLOBALS['bc_fintech_http_transport'] = function () { return ['ok' => true, 'status' => 200, 'body' => '{}', 'json' => [], 'error' => '']; };
+$refused = bc_klasha_request(7, 'quote', 'POST', ['a' => 1]);
+gfalse('unconfigured adapter refuses', $refused['ok']);
+gcheck('unconfigured adapter reason', $refused['reason'], 'base_url_not_configured');
+gcheck('unconfigured adapter made no HTTP call', count($GLOBALS['bc_fintech_http_calls']), 0);
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = 'https://sandbox.klasha.test';
+$refused_ep = bc_klasha_request(7, 'quote', 'POST', ['a' => 1]);
+gcheck('an adapter with no endpoint path refuses', $refused_ep['reason'], 'endpoint_not_configured');
+gcheck('still no HTTP call', count($GLOBALS['bc_fintech_http_calls']), 0);
+unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
+$refused_fw = bc_flw_bills_categories(7);
+gfalse('unconfigured flutterwave bills refuses', $refused_fw['ok']);
+gcheck('unconfigured flutterwave bills reason', $refused_fw['reason'], 'credentials_not_configured');
+gcheck('still no HTTP call', count($GLOBALS['bc_fintech_http_calls']), 0);
+
+// Config-driven calls DO reach the seam.
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha'] = [
+    'base_url' => 'https://sandbox.klasha.test',
+    'endpoints' => ['quote' => '/v1/quote'],
+];
+$calls = [];
+$GLOBALS['bc_fintech_http_calls'] = [];
+$GLOBALS['bc_fintech_http_transport'] = function ($provider, $method, $url, $headers, $payload) use (&$calls) {
+    $calls[] = ['provider' => $provider, 'method' => $method, 'url' => $url, 'headers' => $headers, 'payload' => $payload];
+    return ['ok' => true, 'status' => 200, 'body' => '{"ok":true}', 'json' => ['ok' => true], 'error' => ''];
+};
+$ok_call = bc_klasha_request(7, 'quote', 'POST', ['amount' => 10]);
+gtrue('configured adapter calls the provider', $ok_call['ok']);
+gcheck('configured adapter made exactly one call', count($calls), 1);
+gcheck('call URL is base + configured path', $calls[0]['url'], 'https://sandbox.klasha.test/v1/quote');
+gtrue('call carries the bearer secret', strpos($calls[0]['headers']['Authorization'], 'sk') !== false);
+gcheck('call payload is forwarded unchanged', $calls[0]['payload'], ['amount' => 10]);
+unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
+
+// Field path helper.
+gcheck('array path reads a nested value', bc_fintech_array_path(['a' => ['b' => 5]], 'a.b'), 5);
+gcheck('array path supports an escaped dot', bc_fintech_array_path(['a.b' => 7], 'a\.b'), 7);
+gcheck('array path returns null when a segment is missing', bc_fintech_array_path(['a' => []], 'a.b'), null);
+gcheck('array path returns null on an empty path', bc_fintech_array_path(['a' => 1], ''), null);
+
+// ── 20. per-provider asset gating ──────────────────────────────────────────
+gtrue('USDC is in the klasha catalogue', bc_klasha_asset_enabled(7, 'USDC'));
+gtrue('USDT is in the flutterwave catalogue', bc_flw_asset_enabled(7, 'USDT'));
+gfalse('RLUSD is NOT enabled from the catalogue (klasha)', bc_klasha_asset_enabled(7, 'RLUSD'));
+gfalse('RLUSD is NOT enabled from the catalogue (flutterwave)', bc_flw_asset_enabled(7, 'RLUSD'));
+gfalse('an unknown asset is never enabled', bc_klasha_asset_enabled(7, 'DOGE'));
+gcheck('klasha assets are the catalogue only', bc_fintech_provider_assets('klasha', 7), ['USDC', 'USDT']);
+
+// The merchant profile can add RLUSD, and only RLUSD-style explicit opt-ins work.
+gtrue('saving a profile asset list works', bc_fintech_provider_profile_assets_save(7, 'klasha', ['RLUSD']));
+gcheck('the profile round-trips', bc_fintech_provider_profile_assets(7, 'klasha'), ['RLUSD']);
+gtrue('RLUSD is enabled once the merchant profile says so', bc_klasha_asset_enabled(7, 'RLUSD'));
+gtrue('a profile asset appears in the asset list', in_array('RLUSD', bc_fintech_provider_assets('klasha', 7), true));
+gfalse('a profile cannot invent a non-catalogue asset', bc_klasha_asset_enabled(7, 'DOGE'));
+gfalse('another merchant doesn\'t inherit the profile', bc_klasha_asset_enabled(8, 'RLUSD'));
+bc_fintech_provider_profile_assets_save(7, 'klasha', []);
+gcheck('clearing the profile removes RLUSD', bc_klasha_asset_enabled(7, 'RLUSD'), false);
+gfalse('an unknown provider has no assets', bc_fintech_provider_asset_enabled(7, 'teleport', 'USDC'));
+
+// ── 21. the atomic ledger ──────────────────────────────────────────────────
+gcheck('ledger currency list', bc_fintech_ledger_currencies(), ['NGN', 'USD', 'GHS', 'ZAR', 'USDC', 'USDT']);
+gtrue('a positive amount is valid', bc_fintech_ledger_valid_amount('250.5'));
+gfalse('a negative amount is refused', bc_fintech_ledger_valid_amount(-5));
+gfalse('zero is refused', bc_fintech_ledger_valid_amount(0));
+gfalse('NaN is refused', bc_fintech_ledger_valid_amount(NAN));
+gfalse('infinity is refused', bc_fintech_ledger_valid_amount(INF));
+gfalse('a non-number is refused', bc_fintech_ledger_valid_amount('abc'));
+
+$GLOBALS['db']['users'][30] = ['id' => 30, 'vendor_id' => 7, 'username' => 'payer', 'status' => 1, 'balance' => 100.0, 'email' => 'payer@example.com'];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['crypto_wallets'] = [];
+
+$credit = bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 250, 'FLW-REF-1', ['provider' => 'flutterwave', 'event_id' => '9001']);
+gtrue('NGN credit succeeds', $credit['ok']);
+gcheck('NGN credit reason', $credit['reason'], 'ok');
+gcheck('NGN balance is 350', $GLOBALS['db']['users'][30]['balance'], 350.0);
+gcheck('NGN credit writes one audit row', count($GLOBALS['db']['ledger']), 1);
+gcheck('the audit row records the amount', $GLOBALS['db']['ledger'][1]['amount'], '250.000000000000000000');
+gcheck('the audit row records the balance after', $GLOBALS['db']['ledger'][1]['balance_after'], '350.000000000000000000');
+gcheck('the audit row names the provider', $GLOBALS['db']['ledger'][1]['provider'], 'flutterwave');
+gcheck('NGN credit mirrors into the history', count($GLOBALS['db']['fintech_tx']), 1);
+gcheck('the mirror carries the reference', $GLOBALS['db']['fintech_tx'][1]['reference'], 'FLW-REF-1');
+gcheck('the ledger balance reader agrees', bc_fintech_ledger_balance(7, 'payer', 'NGN'), 350.0);
+
+$debit = bc_fintech_ledger_post(7, 'payer', 'NGN', 'debit', 40, 'FLW-REF-2', ['provider' => 'flutterwave']);
+gtrue('NGN debit succeeds', $debit['ok']);
+gcheck('NGN balance is 310', $GLOBALS['db']['users'][30]['balance'], 310.0);
+gcheck('two audit rows now', count($GLOBALS['db']['ledger']), 2);
+
+// Refusals leave NO balance change and NO audit row (rollback).
+$before = count($GLOBALS['db']['ledger']);
+$short = bc_fintech_ledger_post(7, 'payer', 'NGN', 'debit', 9999, 'FLW-REF-3', []);
+gfalse('an overdraft is refused', $short['ok']);
+gcheck('overdraft reason', $short['reason'], 'insufficient_balance');
+gcheck('overdraft leaves the balance alone', $GLOBALS['db']['users'][30]['balance'], 310.0);
+gcheck('overdraft writes no audit row', count($GLOBALS['db']['ledger']), $before);
+
+$bad = bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', -50, 'FLW-REF-4', []);
+gfalse('a negative amount is refused', $bad['ok']);
+gcheck('negative amount reason', $bad['reason'], 'invalid_amount');
+gcheck('negative amount writes nothing', count($GLOBALS['db']['ledger']), $before);
+gcheck('negative amount leaves the balance alone', $GLOBALS['db']['users'][30]['balance'], 310.0);
+
+gcheck('an unknown currency is refused', bc_fintech_ledger_post(7, 'payer', 'BTC', 'credit', 1, 'R')['reason'], 'invalid_currency');
+gcheck('an unknown direction is refused', bc_fintech_ledger_post(7, 'payer', 'NGN', 'mint', 1, 'R')['reason'], 'invalid_direction');
+gcheck('an empty reference is refused', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, '  ')['reason'], 'invalid_reference');
+gcheck('an unknown user is refused', bc_fintech_ledger_post(7, 'ghost', 'NGN', 'credit', 1, 'R')['reason'], 'user_not_found');
+$GLOBALS['db']['users'][30]['status'] = 0;
+gfalse('an inactive account cannot be credited', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, 'R')['ok']);
+$GLOBALS['db']['users'][30]['status'] = 1;
+gcheck('still no extra audit rows', count($GLOBALS['db']['ledger']), $before);
+
+// Stablecoin path: the wallet is created on demand and both counters move.
+$mirror_before = count($GLOBALS['db']['fintech_tx']);
+$usdc = bc_fintech_ledger_post(7, 'payer', 'USDC', 'credit', 12.5, 'KL-1', ['provider' => 'klasha']);
+gtrue('USDC credit succeeds', $usdc['ok']);
+gcheck('the USDC wallet was created', $GLOBALS['db']['crypto_wallets']['7:payer:USDC']['balance'], 12.5);
+gcheck('ledger_balance moves with balance', $GLOBALS['db']['crypto_wallets']['7:payer:USDC']['ledger_balance'], 12.5);
+gcheck('the crypto balance reader agrees', bc_fintech_ledger_balance(7, 'payer', 'USDC'), 12.5);
+gcheck('a crypto post does not touch the NGN history', count($GLOBALS['db']['fintech_tx']), $mirror_before);
+$usdc_debit = bc_fintech_ledger_post(7, 'payer', 'USDC', 'debit', 2.5, 'KL-2', []);
+gtrue('USDC debit succeeds', $usdc_debit['ok']);
+gcheck('USDC balance is 10', $GLOBALS['db']['crypto_wallets']['7:payer:USDC']['balance'], 10.0);
+gfalse('a stablecoin overdraft is refused', bc_fintech_ledger_post(7, 'payer', 'USDC', 'debit', 50, 'KL-3')['ok']);
+gcheck('a stablecoin overdraft writes nothing', count($GLOBALS['db']['ledger']), $before + 2);
+gcheck('NGN balance untouched by crypto posts', $GLOBALS['db']['users'][30]['balance'], 310.0);
+
+// ── 22. webhook signature verification ─────────────────────────────────────
+$secret = 'verifhash';
+gcheck('a matching verif-hash verifies',
+    bc_fintech_webhook_signature_verify('flutterwave', 'raw', ['verif-hash' => $secret], $secret)['mode'], 'verified');
+gcheck('a wrong verif-hash is a mismatch',
+    bc_fintech_webhook_signature_verify('flutterwave', 'raw', ['verif-hash' => 'nope'], $secret)['reason'], 'signature_mismatch');
+gcheck('a missing header is refused',
+    bc_fintech_webhook_signature_verify('flutterwave', 'raw', [], $secret)['reason'], 'signature_missing');
+gtrue('flutterwave allows an unset secret (API verification still runs)',
+    bc_fintech_webhook_signature_verify('flutterwave', 'raw', [], '')['ok']);
+gcheck('klasha has no verified scheme and refuses',
+    bc_fintech_webhook_signature_verify('klasha', 'raw', ['x' => 'y'], 'secret')['reason'], 'signature_scheme_not_configured');
+
+// Header lookup is case-insensitive.
+gtrue('header lookup is case-insensitive',
+    bc_fintech_webhook_signature_verify('flutterwave', 'raw', ['VERIF-HASH' => $secret], $secret)['ok']);
+
+// ── 23. webhook idempotency and the full delivery pipeline ─────────────────
+$GLOBALS['db']['users'][30] = ['id' => 30, 'vendor_id' => 7, 'username' => 'payer', 'status' => 1, 'balance' => 100.0, 'email' => 'payer@example.com'];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['crypto_wallets'] = [];
+$GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
+$GLOBALS['db']['gateways']['sas_payment_gateways:7:flutterwave'] = [
+    'vendor_id' => 7, 'gateway_name' => 'flutterwave', 'public_key' => 'pk',
+    'secret_key' => 'sk_live_x', 'encrypt_key' => 'verifhash', 'status' => 1,
+];
+
+$GLOBALS['bc_fintech_http_calls'] = [];
+$GLOBALS['bc_fintech_http_responses'] = [];
+$GLOBALS['bc_fintech_http_transport'] = function ($provider, $method, $url, $headers, $payload) {
+    $GLOBALS['bc_fintech_http_calls'][] = [
+        'provider' => $provider, 'method' => $method, 'url' => $url,
+        'headers' => $headers, 'payload' => $payload,
+    ];
+    foreach (($GLOBALS['bc_fintech_http_responses'] ?? []) as $needle => $response) {
+        if ($needle !== '' && strpos($url, $needle) !== false) return $response;
+    }
+    return ['ok' => false, 'status' => 404, 'body' => '', 'json' => null, 'error' => 'no mock for ' . $url];
+};
+
+$flw_payload = json_encode([
+    'event' => 'charge.completed',
+    'data' => [
+        'id' => '9001', 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN',
+        'status' => 'successful', 'app_fee' => 50, 'customer' => ['email' => 'payer@example.com'],
+    ],
+]);
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9001/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9001, 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful', 'app_fee' => 50]],
+        'error' => '',
+    ],
+];
+
+$first = bc_flw_handle_webhook(7, $flw_payload, ['verif-hash' => 'verifhash']);
+gtrue('a verified delivery is credited', $first['ok']);
+gcheck('credit reason', $first['reason'], 'credited');
+gcheck('the net amount is credited (5000 - 50 fee)', $GLOBALS['db']['users'][30]['balance'], 5050.0);
+gcheck('the event is recorded as processed', $GLOBALS['db']['webhook_events']['flutterwave:9001']['status'], 'processed');
+gcheck('one audit row for the credit', count($GLOBALS['db']['ledger']), 1);
+gcheck('the audit row records the fee context', $GLOBALS['db']['ledger'][1]['context']['fee'], 50);
+gcheck('the delivery used the provider verify endpoint', $GLOBALS['bc_fintech_http_calls'][0]['url'], 'https://api.flutterwave.com/v3/transactions/9001/verify');
+
+// The same event again: skipped, never credited twice.
+$before_balance = $GLOBALS['db']['users'][30]['balance'];
+$before_ledger = count($GLOBALS['db']['ledger']);
+$second = bc_flw_handle_webhook(7, $flw_payload, ['verif-hash' => 'verifhash']);
+gtrue('a retried delivery is acknowledged', $second['ok']);
+gcheck('a retried delivery is recognised', $second['reason'], 'already_processed');
+gcheck('a retry does not credit again', $GLOBALS['db']['users'][30]['balance'], $before_balance);
+gcheck('a retry writes no audit row', count($GLOBALS['db']['ledger']), $before_ledger);
+
+// A bad signature must produce NO write at all.
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['users'][30]['balance'] = 100.0;
+$bad_sig_payload = json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9002', 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful',
+]]);
+$bad_sig = bc_flw_handle_webhook(7, $bad_sig_payload, ['verif-hash' => 'forged']);
+gfalse('a bad signature is refused', $bad_sig['ok']);
+gcheck('a bad signature is a 401', $bad_sig['status'], 401);
+gcheck('a bad signature is a mismatch', $bad_sig['reason'], 'signature_mismatch');
+gcheck('a bad signature writes no webhook event', count($GLOBALS['db']['webhook_events']), 0);
+gcheck('a bad signature writes no ledger row', count($GLOBALS['db']['ledger']), 0);
+gcheck('a bad signature credits nothing', $GLOBALS['db']['users'][30]['balance'], 100.0);
+gcheck('a bad signature never reaches the provider', count($GLOBALS['bc_fintech_http_calls']), 1);
+
+// A transaction the provider does not confirm is not credited, and the claim is
+// released so a later, genuine retry can proceed.
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9003/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9003, 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'failed']],
+        'error' => '',
+    ],
+];
+$pending_payload = json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9003', 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful',
+]]);
+$not_verified = bc_flw_handle_webhook(7, $pending_payload, ['verif-hash' => 'verifhash']);
+gfalse('an unconfirmed transaction is not credited', $not_verified['ok']);
+gcheck('unconfirmed reason', $not_verified['reason'], 'not_successful');
+gcheck('an unconfirmed delivery writes no ledger row', count($GLOBALS['db']['ledger']), 0);
+gcheck('the claim was released for a retry', isset($GLOBALS['db']['webhook_events']['flutterwave:9003']), false);
+
+// A reference that does not belong to a checkout is not credited.
+$GLOBALS['db']['checkouts'] = [];
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9004/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9004, 'tx_ref' => 'FLW-REF-X', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful']],
+        'error' => '',
+    ],
+];
+$unknown_ref = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9004', 'tx_ref' => 'FLW-REF-X', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful',
+]]), ['verif-hash' => 'verifhash']);
+gfalse('an unknown reference is not credited', $unknown_ref['ok']);
+gcheck('unknown reference reason', $unknown_ref['reason'], 'unknown_reference');
+
+// A verified transaction paired with another reference is refused (users-flutterwave.php:59 rule).
+$GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9005/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9005, 'tx_ref' => 'FLW-REF-1', 'amount' => 100, 'currency' => 'NGN', 'status' => 'successful']],
+        'error' => '',
+    ],
+];
+$mismatch = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9005', 'tx_ref' => 'FLW-REF-OTHER', 'amount' => 100, 'currency' => 'NGN', 'status' => 'successful',
+]]), ['verif-hash' => 'verifhash']);
+gfalse('a verified tx paired with another reference is refused', $mismatch['ok']);
+gcheck('reference mismatch reason', $mismatch['reason'], 'reference_mismatch');
+
+// Klasha: unconfigured field mapping refuses before any write.
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['ledger'] = [];
+$klasha_unconfigured = bc_klasha_handle_webhook(7, json_encode(['data' => ['id' => '1']]), ['x-klasha-signature' => 's']);
+gfalse('an unmapped klasha payload is refused', $klasha_unconfigured['ok']);
+gcheck('klasha refusal is the signature scheme', $klasha_unconfigured['reason'], 'signature_scheme_not_configured');
+gcheck('klasha refusal writes nothing', count($GLOBALS['db']['webhook_events']) + count($GLOBALS['db']['ledger']), 0);
+
+// Klasha configured end-to-end through the same pipeline.
+$GLOBALS['db']['gateways']['sas_bank_transfer_gateways:7:klasha'] = [
+    'vendor_id' => 7, 'gateway_name' => 'klasha', 'public_key' => 'pk',
+    'secret_key' => 'kl_secret', 'encrypt_key' => 'kl_verify', 'status' => 1,
+];
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha'] = [
+    'base_url' => 'https://sandbox.klasha.test',
+    'endpoints' => ['verify' => '/v1/transactions/verify', 'quote' => '/v1/quote'],
+    'fields' => [
+        'event_id' => 'data.id', 'event_type' => 'event', 'reference' => 'data.tx_ref',
+        'amount' => 'data.amount', 'currency' => 'data.currency', 'status' => 'data.status',
+        'account' => 'data.customer.email', 'fee' => 'data.fee',
+    ],
+    'verify_request' => ['reference' => 'reference'],
+    'response_fields' => [
+        'reference' => 'data.reference', 'amount' => 'data.amount', 'currency' => 'data.currency',
+        'status' => 'data.status', 'success_values' => 'SUCCESSFUL,SUCCESS', 'fee' => 'data.fee',
+    ],
+    'signature' => ['mode' => 'required', 'header' => 'x-klasha-signature', 'algorithm' => 'plain_compare'],
+];
+$GLOBALS['db']['checkouts']['7:KL-REF-9'] = 'payer';
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v1/transactions/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['data' => ['reference' => 'KL-REF-9', 'amount' => 10, 'currency' => 'USDC', 'status' => 'SUCCESSFUL', 'fee' => 0]],
+        'error' => '',
+    ],
+];
+$klasha_payload = json_encode(['event' => 'collection.completed', 'data' => [
+    'id' => 'KL-9001', 'tx_ref' => 'KL-REF-9', 'amount' => 10, 'currency' => 'USDC',
+    'status' => 'SUCCESSFUL', 'customer' => ['email' => 'payer@example.com'],
+]]);
+$klasha_good = bc_klasha_handle_webhook(7, $klasha_payload, ['x-klasha-signature' => 'kl_verify']);
+gtrue('a configured klasha delivery is credited', $klasha_good['ok']);
+gcheck('klasha credit currency', $klasha_good['currency'], 'USDC');
+gcheck('klasha credit lands in the crypto wallet', $GLOBALS['db']['crypto_wallets']['7:payer:USDC']['balance'], 10.0);
+gcheck('klasha event recorded', $GLOBALS['db']['webhook_events']['klasha:KL-9001']['status'], 'processed');
+gcheck('klasha verify used the configured URL', $GLOBALS['bc_fintech_http_calls'][count($GLOBALS['bc_fintech_http_calls']) - 1]['url'], 'https://sandbox.klasha.test/v1/transactions/verify');
+
+// Klasha's payload crypto seam: TLS-only by default, never a guessed cipher.
+gcheck('klasha encrypt defaults to plaintext JSON', bc_klasha_payload_encrypt('{"a":1}'), '{"a":1}');
+gcheck('klasha decrypt defaults to plaintext JSON', bc_klasha_payload_decrypt('{"a":1}'), '{"a":1}');
+unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
+
+// ── 24. structural wiring and security greps ───────────────────────────────
+foreach ($editions as $edition) {
+    $connect = file_get_contents($root . '/' . $edition . '/func/bc-connect.php');
+    foreach (['bc-fintech-providers.php', 'bc-fintech-ledger.php', 'bc-fintech-webhook.php', 'bc-fintech-klasha.php', 'bc-fintech-flutterwave.php'] as $inc) {
+        gtrue("$edition bootstrap loads $inc", strpos($connect, $inc) !== false);
+    }
+    gtrue("$edition ships the klasha webhook endpoint", is_file($root . '/' . $edition . '/users-klasha.php'));
+    $hook = file_get_contents($root . '/' . $edition . '/users-klasha.php');
+    gtrue("$edition klasha webhook reads the raw body", strpos($hook, 'bc_fintech_webhook_raw_input()') !== false);
+    gtrue("$edition klasha webhook logs", strpos($hook, 'bc_fintech_webhook_log(') !== false);
+    gtrue("$edition flutterwave webhook goes through the shared handler", strpos(file_get_contents($root . '/' . $edition . '/users-flutterwave.php'), 'bc_flw_handle_webhook(') !== false);
+    // Comments are stripped first: the file's own header explains that it no longer
+    // calls chargeUser(), and a plain strpos would match that sentence.
+    $flw_hook_src = php_strip_whitespace($root . '/' . $edition . '/users-flutterwave.php');
+    gtrue("$edition flutterwave webhook no longer calls chargeUser directly", strpos($flw_hook_src, 'chargeUser(') === false);
+
+    // The new credential screen must offer Klasha.
+    $pg = file_get_contents($root . '/' . $edition . '/bc-admin/PaymentGateway.php');
+    gtrue("$edition gateway screen offers klasha credentials", strpos($pg, '"payhub", "paystack", "klasha"') !== false);
+}
+
+// The ledger is the only writer of provider balances: the adapters never UPDATE a balance.
+foreach (['func/bc-fintech-klasha.php', 'func/bc-fintech-flutterwave.php'] as $adapter) {
+    $src = php_strip_whitespace($root . '/DGV7.0-SAAS/' . $adapter);
+    gfalse("$adapter never updates a balance itself", (bool)preg_match('/UPDATE\s+sas_(users|user_crypto_wallets)/i', $src));
+    gfalse("$adapter never calls chargeUser", (bool)preg_match('/\bchargeUser\s*\(/', $src));
+    gfalse("$adapter never calls updateUserCryptoBalance", (bool)preg_match('/\bupdateUserCryptoBalance\s*\(/', $src));
+    gfalse("$adapter runs no DROP/TRUNCATE", (bool)preg_match('/\b(DROP|TRUNCATE)\b/i', $src));
+}
+$ledger_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-ledger.php');
+gtrue('the ledger writes both balance stores', strpos($ledger_src, 'sas_users') !== false && strpos($ledger_src, 'sas_user_crypto_wallets') !== false);
+gtrue('the ledger uses row locking', strpos($ledger_src, 'FOR UPDATE') !== false);
+gtrue('the ledger rejects negative amounts', strpos($ledger_src, 'bc_fintech_ledger_valid_amount') !== false);
+
+// Webhook idempotency is a UNIQUE constraint on (provider, event_id).
+$schema_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-schema.php');
+gtrue('schema creates sas_webhook_events', strpos($schema_src, 'sas_webhook_events') !== false);
+gtrue('schema creates sas_fintech_ledger', strpos($schema_src, 'sas_fintech_ledger') !== false);
+gtrue('webhook uniqueness is enforced', strpos($schema_src, 'uniq_provider_event (provider, event_id)') !== false);
+gfalse('schema runs no DROP/TRUNCATE', (bool)preg_match('/\b(DROP|TRUNCATE)\b/i', $schema_src));
+
+// TheKlasha crypto seam must not ship a cipher.
+$klasha_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-klasha.php');
+gfalse('klasha ships no openssl cipher', (bool)preg_match('/openssl_(encrypt|decrypt)|CRYPT_(3DES|BF|CRYPT)/i', $klasha_src));
+
+// Smoke-test script exists and reports the unconfigured state.
+gtrue('provider smoke test exists', is_file($root . '/tests/provider_smoke.php'));
+$smoke = file_get_contents($root . '/tests/provider_smoke.php');
+gtrue('smoke test reports "not configured"', strpos($smoke, 'not configured') !== false);
+gtrue('smoke test covers both providers', strpos($smoke, 'klasha') !== false && strpos($smoke, 'flutterwave') !== false);
+
+// Parity: the new shared files are byte-identical across editions.
+foreach ([
+    'func/bc-fintech-providers.php',
+    'func/bc-fintech-ledger.php',
+    'func/bc-fintech-webhook.php',
+    'func/bc-fintech-klasha.php',
+    'func/bc-fintech-flutterwave.php',
+    'users-klasha.php',
+    'users-flutterwave.php',
+    'func/bc-fintech-schema.php',
+] as $file) {
+    gcheck("edition parity: $file", md5_file($root . '/DGV7.0-SAAS/' . $file), md5_file($root . '/DGV7.0-NON-SAAS/' . $file));
+}
+
+echo "\n$checks phase 1+3 checks passed\n";

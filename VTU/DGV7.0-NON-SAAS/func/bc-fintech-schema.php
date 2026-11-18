@@ -124,6 +124,49 @@ function bc_fintech_ensure_schema() {
         return false;
     }
 
+    // ── Phase 3: durable webhook idempotency ──────────────────────────────────
+    // UNIQUE (provider, event_id) is the whole mechanism: a retried delivery hits the
+    // duplicate key and is skipped, so a webhook can never credit twice.
+    if (mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_webhook_events (
+        id BIGINT NOT NULL AUTO_INCREMENT,
+        provider VARCHAR(40) NOT NULL,
+        event_id VARCHAR(225) NOT NULL,
+        vendor_id INT UNSIGNED NULL DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'processing',
+        raw_hash CHAR(64) NULL DEFAULT NULL,
+        created_at DATETIME NOT NULL,
+        completed_at DATETIME NULL DEFAULT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_provider_event (provider, event_id),
+        KEY idx_webhook_status (status, created_at)
+    )") === false) {
+        return false;
+    }
+
+    // ── Phase 3: the single provider money-movement audit ledger ─────────────
+    // One row per bc_fintech_ledger_post(). Additive; no existing table is rewritten.
+    if (mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_fintech_ledger (
+        id BIGINT NOT NULL AUTO_INCREMENT,
+        vendor_id INT UNSIGNED NOT NULL,
+        username VARCHAR(225) NOT NULL,
+        currency_code VARCHAR(20) NOT NULL,
+        direction VARCHAR(10) NOT NULL,
+        amount DECIMAL(65,30) NOT NULL,
+        balance_before DECIMAL(65,30) NOT NULL,
+        balance_after DECIMAL(65,30) NOT NULL,
+        provider VARCHAR(40) NULL DEFAULT NULL,
+        event_id VARCHAR(225) NULL DEFAULT NULL,
+        reference VARCHAR(225) NOT NULL,
+        context TEXT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        KEY idx_ledger_user (vendor_id, username, currency_code),
+        KEY idx_ledger_ref (reference),
+        KEY idx_ledger_provider (provider, reference)
+    )") === false) {
+        return false;
+    }
+
     $ready = true;
     return $ready;
 }

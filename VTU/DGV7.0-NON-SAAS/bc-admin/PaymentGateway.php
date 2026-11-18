@@ -397,7 +397,11 @@
                         <form method="post">
                             <div class="row g-4">
                                 <?php
-                                $withdrawal_gateways = ["payhub", "paystack"];
+                                // Klasha lives here too: sas_bank_transfer_gateways is the provider-key
+                                // table the Phase 3 adapter reads (func/bc-fintech-providers.php). It stays
+                                // unusable until bc_fintech_provider_registry() is filled from the signed-off
+                                // Klasha specification and provider_ready is switched on.
+                                $withdrawal_gateways = ["payhub", "paystack", "klasha"];
                                 foreach($withdrawal_gateways as $wg_name):
                                     // Same ordering as getWithdrawalGatewayDetails(), so the credentials shown
                                     // here are the ones the payout API will actually use.
@@ -423,7 +427,7 @@
                                             <input name="secret-key[]" type="password" value="<?php echo $wg_data['secret_key'] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Secret Key" />
                                         </div>
                                         <div class="mb-0">
-                                            <label class="form-label small fw-bold text-muted"><?php echo ($wg_name == 'paystack') ? 'NOT REQUIRED' : 'ENCRYPT KEY / APP ID'; ?></label>
+                                            <label class="form-label small fw-bold text-muted"><?php echo ($wg_name == 'paystack') ? 'NOT REQUIRED' : (($wg_name == 'klasha') ? 'VERIF-HASH / ENCRYPT KEY' : 'ENCRYPT KEY / APP ID'); ?></label>
                                             <input name="encrypt-key[]" type="text" value="<?php echo $wg_data['encrypt_key'] ?? ''; ?>" class="form-control rounded-3" placeholder="Optional" />
                                         </div>
                                     </div>
