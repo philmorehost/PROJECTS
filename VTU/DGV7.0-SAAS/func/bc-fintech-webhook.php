@@ -256,6 +256,10 @@ if (!function_exists('bc_fintech_webhook_resolve_user')) {
             if (!empty($row['username'])) return (string)$row['username'];
         }
 
+        // Fallback only: the checkout row is missing (expired, cleaned, or a provider that
+        // does not echo our reference). The provider's own account field must name the
+        // customer, and the transaction has already been verified with the provider, but
+        // this path is weaker than the checkout row, so it is logged for audit.
         $account = trim((string)$account);
         if ($account !== '') {
             $acc_esc = mysqli_real_escape_string($connection_server, $account);
@@ -263,7 +267,10 @@ if (!function_exists('bc_fintech_webhook_resolve_user')) {
                 WHERE vendor_id='$vendor_id' AND (username='$acc_esc' OR email='$acc_esc') LIMIT 1");
             if ($q && mysqli_num_rows($q) === 1) {
                 $row = mysqli_fetch_assoc($q);
-                if (!empty($row['username'])) return (string)$row['username'];
+                if (!empty($row['username'])) {
+                    error_log("[DGV-FINTECH] webhook credited by account fallback (no checkout row): vendor=$vendor_id account=$account username=" . $row['username']);
+                    return (string)$row['username'];
+                }
             }
         }
         return null;

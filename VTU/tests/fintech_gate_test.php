@@ -2037,6 +2037,10 @@ gfalse('schema runs no DROP/TRUNCATE', (bool)preg_match('/\b(DROP|TRUNCATE)\b/i'
 $klasha_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-klasha.php');
 gfalse('klasha ships no openssl cipher', (bool)preg_match('/openssl_(encrypt|decrypt)|CRYPT_(3DES|BF|CRYPT)/i', $klasha_src));
 
+// The legacy second Flutterwave credit path is a known retirement item, not a silent one.
+$doc = file_get_contents($root . '/DGV7_FINTECH_UPGRADE.md');
+gtrue('the legacy flutterwave credit path is documented', strpos($doc, 'web/api/flutterwave_webhook.php') !== false);
+
 // Smoke-test script exists and reports the unconfigured state.
 gtrue('provider smoke test exists', is_file($root . '/tests/provider_smoke.php'));
 $smoke = file_get_contents($root . '/tests/provider_smoke.php');
