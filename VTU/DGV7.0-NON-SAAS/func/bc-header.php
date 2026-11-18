@@ -1,4 +1,31 @@
 <?php
+// DGV7 phase 2: tier-aware navigation.
+//
+// $bc_nav_tier_service($slug) answers "may THIS account use this service right now?", combining the
+// account's tier with the per-tier matrix (status + that tier + provider_ready). The isServiceEnabled()
+// checks below are vendor-wide switches and stay as they are; a menu entry that belongs to a new
+// fintech service is wrapped in this helper too, so a Personal user never sees a Business-only entry
+// and a not-yet-contracted provider never appears in the menu at all.
+require_once(__DIR__ . '/bc-fintech-accounts.php');
+
+// Some pages include this header before the session user is loaded. Those pages have no fintech nav
+// entries to gate anyway, so an absent user must not raise a notice here.
+$bc_nav_user      = isset($get_logged_user_details) && is_array($get_logged_user_details) ? $get_logged_user_details : null;
+$bc_nav_tier      = bc_fintech_account_type($bc_nav_user);
+$bc_nav_vendor_id = (int)($bc_nav_user['vendor_id'] ?? 0);
+
+// Read the matrix at most once per request: the menu evaluates several services and this header is
+// included by every signed-in page.
+$bc_nav_matrix = null;
+$bc_nav_tier_service = function ($service) use ($bc_nav_tier, $bc_nav_vendor_id, &$bc_nav_matrix) {
+    if (!in_array($bc_nav_tier, ['personal', 'business'], true)) return false;
+    if ($bc_nav_matrix === null) $bc_nav_matrix = bc_fintech_matrix_read($bc_nav_vendor_id);
+    if (!isset($bc_nav_matrix[$service])) return false;
+    $row = $bc_nav_matrix[$service];
+    $row['service_name'] = $service;
+    return bc_fintech_tier_effective($row, $bc_nav_tier);
+};
+
 $select_user_vendor_status_message = mysqli_query($connection_server, "SELECT * FROM sas_vendor_status_messages WHERE vendor_id='" . $get_logged_user_details["vendor_id"] . "'");
 if (mysqli_num_rows($select_user_vendor_status_message) == 1) {
   $get_user_vendor_status_message = mysqli_fetch_array($select_user_vendor_status_message);
@@ -620,19 +647,26 @@ if (mysqli_num_rows($select_user_vendor_status_message) == 1) {
         </a>
       </li><!-- End Contact Page Nav -->
 
+      <?php /* Only for accounts that have not already become (or applied to become) business. */ ?>
+      <?php if ($bc_nav_tier !== 'business' && (int)($bc_nav_user['kyb_status'] ?? 0) !== 1): ?>
       <li class="nav-item">
         <a class="nav-link <?php echo ($current_page == 'BusinessUpgrade.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/BusinessUpgrade.php">
           <i class="bi bi-briefcase"></i>
           <span>Business Upgrade</span>
         </a>
       </li>
+      <?php endif; ?>
 
+      <?php /* Business-only, and only once developer_api is actually live for the tier. This entry
+                previously appeared for every signed-in user regardless of account type. */ ?>
+      <?php if ($bc_nav_tier_service('developer_api')): ?>
       <li class="nav-item">
         <a class="nav-link <?php echo ($current_page == 'APIDocs.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/APIDocs.php">
           <i class="bi bi-code-slash"></i>
           <span>Developer API </span>
         </a>
       </li>
+      <?php endif; ?>
 
       <li class="nav-item">
         <a class="nav-link collapsed" href="javascript:void(0)" onclick="startUserGuide()">

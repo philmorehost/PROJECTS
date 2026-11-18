@@ -218,6 +218,9 @@ $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
         </div>
         <?php endif; ?>
 
+        <!-- DGV7 Phase 2: wallets, tier badge, live rates, upgrade trigger -->
+        <?php include(__DIR__ . "/../func/bc-dashboard-accounts.php"); ?>
+
         <!-- Balance Hero -->
         <div class="balance-hero shadow">
             <div class="row align-items-center">

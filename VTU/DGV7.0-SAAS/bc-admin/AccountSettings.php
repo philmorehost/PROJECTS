@@ -253,7 +253,10 @@ if (mysqli_num_rows($check_col) == 0) {
     mysqli_query($connection_server, "ALTER TABLE `sas_vendor_style_templates` ADD `primary_color` VARCHAR(20) DEFAULT '#287bff'");
 }
 
-$style_templates = array("bc-style-template-1.css", "bc-style-template-2.css", "bc-style-template-3.css", "bc-style-template-4.css", "bc-style-template-5.css");
+// Only templates that have a real index-bc-style-template-N.php page are offered: index.php falls back
+// to template 1 when the file is missing, so listing 4 and 5 would look like a working choice and
+// silently do nothing.
+$style_templates = array("bc-style-template-1.css", "bc-style-template-2.css", "bc-style-template-3.css", "bc-style-template-6.css");
 
 if (isset($_POST["update-theme"])) {
     bc_demo_guard_edit($connection_server);
@@ -1408,7 +1411,7 @@ if ($q_site_details && mysqli_num_rows($q_site_details) > 0) {
                                             <?php foreach($style_templates as $tmpl):
                                                 $selected = (($current_theme['template_name'] ?? '') == $tmpl) ? 'selected' : '';
                                             ?>
-                                                <option value="<?php echo $tmpl; ?>" <?php echo $selected; ?>><?php echo str_replace(".css", "", strtoupper($tmpl)); ?></option>
+                                                <option value="<?php echo $tmpl; ?>" <?php echo $selected; ?>><?php echo str_replace(".css", "", strtoupper($tmpl)); ?><?php echo ($tmpl === "bc-style-template-6.css") ? " &#8212; PLATE" : ""; ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
