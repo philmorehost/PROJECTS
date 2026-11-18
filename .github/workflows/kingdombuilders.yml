@@ -69,6 +69,9 @@ jobs:
       - name: SMTP diagnosis panel rendering
         working-directory: KINGDOMBUILDERS
         run: bash tests/ci-run.sh php tests/smtp_view_render.php
+      - name: Sign-up protection rendering
+        working-directory: KINGDOMBUILDERS
+        run: bash tests/ci-run.sh php tests/auth_views.php
       - name: Prepare disposable databases
         run: |
           mysql -h127.0.0.1 -uroot -pci-root-only -e 'CREATE DATABASE kingdombuilders_http_test; GRANT ALL ON kingdombuilders_http_test.* TO "root"@"%";'

@@ -37,8 +37,31 @@ final class Security {
             if ($normalized !== $expected) json_response(['error' => 'Cross-origin request rejected.'], 403);
         }
     }
+    /**
+     * The visitor's address.
+     *
+     * Behind a CDN or reverse proxy REMOTE_ADDR is the proxy, so every visitor
+     * would share one rate-limit bucket and one audit fingerprint. When the
+     * proxy is explicitly trusted (config `trusted_proxy`, or a local preview),
+     * the address it forwards is used instead. Without that trust the header is
+     * ignored, because a client can forge it.
+     */
+    public static function clientIp(): string {
+        $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli');
+        if (!self::trustedProxy()) return $remote;
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP'] as $header) {
+            $value = trim((string) ($_SERVER[$header] ?? ''));
+            if (filter_var($value, FILTER_VALIDATE_IP)) return $value;
+        }
+        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($forwarded !== '') {
+            $first = trim(explode(',', $forwarded)[0]);
+            if (filter_var($first, FILTER_VALIDATE_IP)) return $first;
+        }
+        return $remote;
+    }
     public static function sourceHash(string $extra = ''): string {
-        return hash_hmac('sha256', ($_SERVER['REMOTE_ADDR'] ?? 'cli') . '|' . $extra, (string)config('key', 'installer-only'));
+        return hash_hmac('sha256', self::clientIp() . '|' . $extra, (string)config('key', 'installer-only'));
     }
     public static function throttle(string $purpose, string $identity, int $limit = 10, int $window = 900): void {
         $key = hash_hmac('sha256', $purpose . '|' . strtolower($identity), (string)config('key', 'installer-only'));

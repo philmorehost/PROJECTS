@@ -3,9 +3,11 @@ declare(strict_types=1);
 namespace KB;
 
 final class Mail {
-    public static function queue(string $recipient, string $subject, string $body, string $key): void {
+    /** Queue a message and return its id (0 when an identical key was already queued). */
+    public static function queue(string $recipient, string $subject, string $body, string $key): int {
         if (!valid_email($recipient)) throw new \InvalidArgumentException('Invalid notification recipient');
         DB::run('INSERT IGNORE INTO mail_queue(idempotency_key,recipient,subject,body,available_at,created_at) VALUES (?,?,?,?,?,?)', [substr($key,0,160),$recipient,$subject,$body,now(),now()]);
+        return DB::id();
     }
 
     /**

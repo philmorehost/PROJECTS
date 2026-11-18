@@ -13,6 +13,7 @@ try {
     $stats=Mail::process(20);
     DB::run('DELETE FROM rate_limits WHERE expires_at<?',[time()-86400]);
     DB::run('DELETE FROM access_tokens WHERE expires_at<?',[gmdate('Y-m-d H:i:s',time()-86400)]);
+    \KB\Otp::purge();
     DB::run('DELETE FROM audit_events WHERE created_at<? LIMIT 1000',[gmdate('Y-m-d H:i:s',time()-90*86400)]);
     DB::run('DELETE FROM mail_queue WHERE status="sent" AND sent_at<? LIMIT 1000',[gmdate('Y-m-d H:i:s',time()-30*86400)]);
     try { Cron::record(['ok'=>true,'sent'=>$stats['sent'],'failed'=>$stats['failed'],'expired'=>$count,'php'=>PHP_BINARY]); }
