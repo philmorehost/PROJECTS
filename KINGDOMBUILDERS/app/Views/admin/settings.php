@@ -16,6 +16,48 @@
     <a class="text-link" href="<?= e(url('admin/authorization')) ?>">Manage site access →</a>
   </section>
 
+  <section class="panel" id="registration-protection">
+    <div class="section-heading">
+      <div><h2>Registration protection</h2><p>Everything here guards the public “Join the community” form. Accounts you create on the Members page are unaffected.</p></div>
+      <span class="badge <?= KB\Captcha::enabled() ? 'green' : 'neutral' ?>"><?= KB\Captcha::enabled() ? 'reCAPTCHA active' : (KB\Settings::get('recaptcha_enabled') ? 'reCAPTCHA needs keys' : 'reCAPTCHA off') ?></span>
+    </div>
+    <?php if (KB\Settings::get('otp_register') && !KB\Settings::get('smtp_enabled')): ?>
+      <div class="notice warning"><p><strong>Email codes are on, but email delivery is off.</strong> Visitors cannot finish signing up until a test message succeeds on <a href="<?= e(url('admin/smtp')) ?>">Email &amp; SMTP</a>. Fix delivery, or clear the box below.</p></div>
+    <?php endif; ?>
+
+    <div class="settings-checks">
+      <label class="check-label"><input type="checkbox" name="otp_register" value="1" <?= $settings['otp_register'] ? 'checked' : '' ?>> Email a six-digit code before an account is created <small>Recommended. The member row is written only after the code is entered, so automated form filling creates nothing at all.</small></label>
+      <label class="check-label"><input type="checkbox" name="otp_login" value="1" <?= $settings['otp_login'] ? 'checked' : '' ?>> Email a six-digit code when signing in from an unrecognised device <small>A second factor. A trusted device is remembered for 30 days. Requires working email delivery.</small></label>
+    </div>
+    <?php if (KB\Settings::get('otp_login')): ?><div class="notice warning"><p><strong>If email delivery stops, sign-in is blocked for everyone — including you.</strong> Keep the SMTP test message working. Server recovery, if you are ever locked out: <code>UPDATE settings SET setting_value='false' WHERE setting_key='otp_login';</code></p></div><?php endif; ?>
+    <label>Sign-ups allowed per hour<input type="number" name="registration_cap" min="0" max="1000" required value="<?= (int)$settings['registration_cap'] ?>"><small>Counted across the whole site, including blocked attempts. 0 removes the limit. When a flood hits, further submissions are paused with a friendly message instead of filling the database.</small></label>
+
+    <hr class="panel-rule">
+    <input type="hidden" name="recaptcha_enabled" value="0">
+    <div class="section-heading">
+      <div><h2>reCAPTCHA</h2><p>A second, independent barrier for the registration form. Members see a single checkbox.</p></div>
+      <span class="badge <?= KB\Settings::get('recaptcha_enabled') ? 'green' : 'neutral' ?>"><?= KB\Settings::get('recaptcha_enabled') ? 'On' : 'Off' ?></span>
+    </div>
+    <label class="check-label"><input type="checkbox" name="recaptcha_enabled" value="1" <?= $settings['recaptcha_enabled'] ? 'checked' : '' ?>> Require reCAPTCHA on the registration form</label>
+    <div class="form-grid">
+      <label>reCAPTCHA site key<input name="recaptcha_site_key" value="<?= e($settings['recaptcha_site_key']) ?>" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="6Lc…" maxlength="200"><small>Public. It is rendered into the page.</small></label>
+      <label>reCAPTCHA secret key<input name="recaptcha_secret" type="password" autocomplete="new-password" spellcheck="false" placeholder="<?= $settings['recaptcha_secret'] ? 'Saved securely — leave blank to keep it' : 'Paste the secret key' ?>" maxlength="512"><small>Encrypted at rest and never shown again.</small></label>
+    </div>
+    <details class="cron-help">
+      <summary><span>How to set up reCAPTCHA (5 minutes)</span><span aria-hidden="true">+</span></summary>
+      <div>
+        <ol class="cron-steps">
+          <li>Open <strong>google.com/recaptcha/admin/create</strong> and sign in with a Google account.</li>
+          <li>Give the site a label, choose <strong>reCAPTCHA v2 → “I’m not a robot” Checkbox</strong>, and accept the terms.</li>
+          <li><strong>Domains:</strong> add <code><?= e(KB\Security::domain()) ?></code> exactly (no <code>https://</code>, no path).</li>
+          <li>Submit, then copy the <strong>site key</strong> and <strong>secret key</strong> into the fields above.</li>
+          <li>Tick <em>Require reCAPTCHA</em>, save, and open your sign-up page in a private window to confirm the checkbox appears and passes.</li>
+        </ol>
+        <p class="muted">The check is verified on the server; the secret key never reaches the browser. If Google cannot be reached, registration is paused rather than silently unprotected. The site’s Content-Security-Policy allows Google’s two script and frame hosts only while this is switched on.</p>
+      </div>
+    </details>
+  </section>
+
   <section class="panel">
     <div class="section-heading"><h2>Assessment settings</h2><label class="check-label"><input type="checkbox" name="quiz_open" value="1" <?= $settings['quiz_open'] ? 'checked' : '' ?>> Open for new attempts</label></div>
     <div class="form-grid">

@@ -8,6 +8,8 @@ import http.cookiejar
 import json
 import os
 import re
+import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +17,15 @@ import uuid
 
 BASE = os.environ.get("KB_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 RUN = uuid.uuid4().hex[:8]
+
+
+def probe(*args):
+    """Read state from the disposable test database (tests/otp_probe.php)."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otp_probe.php")
+    result = subprocess.run(["php", script, *args], capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "otp_probe failed")
+    return result.stdout.strip()
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -127,7 +138,12 @@ html = admin.get("/admin/notifications")[2]
 ok("cron-command" in html, "notifications page exposes the cron command")
 ok("Deliver queued messages now" in html, "notifications page can deliver without cron")
 ok("scheduled task" in admin.get("/admin")[2].lower(), "dashboard warns when the worker has never run")
-site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1"}
+html = admin.get("/admin/settings")[2]
+ok("registration-protection" in html and "Registration protection" in html, "administrator can configure registration protection")
+ok("reCAPTCHA off" in html and "Sign-ups allowed per hour" in html, "protection settings render their state")
+ok('name="recaptcha_site_key" value=""' in html, "no reCAPTCHA key is stored before configuration")
+site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1", "otp_register": "1", "registration_cap": "60"}
+
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "save quiz settings")
 html = admin.get("/admin/settings")[2]
 ok("cron-command" in html and "Copy command" in html, "settings page offers the copyable cron command")
@@ -182,12 +198,48 @@ uid = re.search(r'name="id" value="(\d+)"><button name="action"', html).group(1)
 ok(admin.post("/admin/users", {"action": "suspend", "id": uid})[0] == 200, "suspend member")
 ok(admin.post("/admin/users", {"action": "unsuspend", "id": uid})[0] == 200, "unsuspend member")
 ok(admin.post("/admin/users", {"action": "delete", "id": uid})[0] == 200, "delete member")
+
+# Public sign-up: a hidden field, a timing seal and an emailed code, and no
+# member row until the code is confirmed.
+trapped = Client()
+trap_page = trapped.get("/register")[2]
+trap_seal = re.search(r'name="form_seal" value="([^"]+)"', trap_page).group(1)
+ok('name="website"' in trap_page and 'class="hp-field"' in trap_page, "registration form carries a hidden trap field")
+ok("g-recaptcha" not in trap_page, "reCAPTCHA stays off until an administrator configures it")
+trap_email = f"trap-{RUN}@example.test"
+code, _, html = trapped.post("/register", {"name": "Spam Bot", "email": trap_email, "password": password, "password_confirm": password, "accept": "1", "website": "https://spam.example", "form_seal": trap_seal})
+ok(code == 400 and "Reload the page" in html, "a filled trap field is rejected")
+ok(probe("user", trap_email) == "0", "a trapped submission creates no member row")
+
 reg = Client()
 reg_email = f"register-{RUN}@example.test"
-code, _, html = reg.post("/register", {"name": "Registered Member", "email": reg_email, "password": password, "password_confirm": password, "accept": "1"})
-ok(code == 200 and "confirmation message has been queued" in html, "public registration queues confirmation")
-ok(reg.post("/login", {"email": reg_email, "password": password})[1].endswith("/dashboard"), "registered member can sign in")
-ok("confirm" in reg.get("/dashboard")[2].lower(), "unverified member is gated")
+reg_seal = re.search(r'name="form_seal" value="([^"]+)"', reg.get("/register")[2]).group(1)
+time.sleep(1.2)  # the timing seal rejects submissions that arrive instantly
+code, _, html = reg.post("/register", {"name": "Registered Member", "email": reg_email, "password": password, "password_confirm": password, "accept": "1", "website": "", "form_seal": reg_seal})
+ok(code == 200 and "Check your email." in html and "six-digit code" in html, "registration asks for the emailed code")
+ok(probe("user", reg_email) == "0", "no member row exists before the code is confirmed")
+otp = probe("code", reg_email)
+ok(len(otp) == 6 and otp.isdigit(), "a six-digit code is emailed")
+ok(otp not in html, "the page never reveals the code")
+wrong = "%06d" % ((int(otp) + 1) % 1000000)
+code, _, wrong_html = reg.post("/register/verify", {"code": wrong})
+ok(code == 200 and "not correct" in wrong_html, "a wrong code is refused")
+ok(probe("user", reg_email) == "0", "a wrong code still creates nothing")
+ok(reg.post("/register/verify", {"code": otp})[1].endswith("/dashboard"), "the emailed code creates and signs in the account")
+ok(probe("user", reg_email) == "1", "the member row exists after confirmation")
+ok("Confirm your email" not in reg.get("/dashboard")[2], "a confirmed member is not gated")
+
+# Sign-in codes: an unfamiliar device has to prove it has the mailbox.
+ok(admin.post("/admin/settings", dict(site_settings, otp_login="1"))[0] == 200, "administrator can require sign-in codes")
+ok("Sign-up activity" in admin.get("/admin/users?q=" + RUN)[2], "administrator sees the sign-up watch panel")
+device = Client()
+code, _, html = device.post("/login", {"email": reg_email, "password": password})
+ok(code == 200 and "six-digit sign-in code" in html, "an unfamiliar device is asked for a code")
+ok(device.get("/dashboard")[1].endswith("/login"), "password alone does not sign in while a code is pending")
+login_code = probe("code", reg_email)
+ok(device.post("/login/verify", {"code": login_code, "remember": "1"})[1].endswith("/dashboard"), "the sign-in code completes the login")
+ok(device.get("/dashboard")[1].endswith("/dashboard"), "the session is active after the code")
+ok(admin.post("/admin/settings", dict(site_settings, otp_login="0"))[0] == 200, "administrator can switch sign-in codes off")
 html = admin.get("/admin/users?q=" + RUN)[2]
 rid = re.search(r'name="id" value="(\d+)"><button name="action"', html).group(1)
 ok(admin.post("/admin/users", {"action": "delete", "id": rid})[0] == 200, "cleanup registered member")

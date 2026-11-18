@@ -14,6 +14,9 @@ final class Settings {
         'smtp_username' => '', 'smtp_secret' => '', 'from_email' => '', 'from_name' => 'KINGDOMBUILDERS',
         'admin_email' => '', 'php_cli_path' => '', 'large_text' => false,
         'google_enabled' => false, 'google_client_id' => '', 'google_client_secret' => '',
+        // Registration protection
+        'otp_register' => true, 'otp_login' => false, 'registration_cap' => 60,
+        'recaptcha_enabled' => false, 'recaptcha_site_key' => '', 'recaptcha_secret' => '',
     ];
     public static function all(): array {
         if (self::$cache === null) {
@@ -43,7 +46,7 @@ final class Settings {
         }
         if (mb_strlen($out['site_title']) < 2 || mb_strlen($out['site_title']) > 80) throw new UserError('Site title must be between 2 and 80 characters.');
         if (mb_strlen($out['site_tagline']) > 200 || mb_strlen($out['from_name']) > 120) throw new UserError('Please shorten the tagline or sender name.');
-        foreach (['questions_per_attempt'=>[1,100], 'seconds_per_question'=>[5,300], 'pass_mark'=>[0,100], 'max_tab_switches'=>[0,100], 'smtp_port'=>[1,65535]] as $key=>$range) {
+        foreach (['questions_per_attempt'=>[1,100], 'seconds_per_question'=>[5,300], 'pass_mark'=>[0,100], 'max_tab_switches'=>[0,100], 'smtp_port'=>[1,65535], 'registration_cap'=>[0,1000]] as $key=>$range) {
             if ($out[$key] < $range[0] || $out[$key] > $range[1]) throw new UserError($key . ' is outside its permitted range.');
         }
         if (!in_array($out['smtp_security'], ['tls','ssl','none'], true)) throw new UserError('Choose a supported SMTP security mode.');
@@ -56,6 +59,11 @@ final class Settings {
             throw new UserError('Paste the Google client ID before turning on Google sign-in.');
         }
         unset($out['google_client_secret']);
+        $out['recaptcha_site_key'] = trim($out['recaptcha_site_key']);
+        if ($out['recaptcha_site_key'] !== '' && !preg_match('/^[A-Za-z0-9_-]{20,200}$/', $out['recaptcha_site_key'])) {
+            throw new UserError('Enter the reCAPTCHA site key exactly as shown in the Google reCAPTCHA console (letters, numbers, dashes and underscores).');
+        }
+        unset($out['recaptcha_secret']);
         if ($out['php_cli_path'] !== '' && (!str_starts_with($out['php_cli_path'], '/') || !preg_match('#^/[A-Za-z0-9_./-]+$#', $out['php_cli_path']))) throw new UserError('Enter the absolute PHP command-line path, for example /usr/local/bin/php, or leave it blank to detect automatically.');
         if (!valid_email($out['admin_email'])) throw new UserError('Enter a valid administrator notification email.');
         $out['smtp_host'] = strtolower(rtrim($out['smtp_host'], '.'));
@@ -71,6 +79,15 @@ final class Settings {
         }
         unset($out['smtp_secret']);
         return $out;
+    }
+    /** Keep the stored reCAPTCHA secret unless a new one was pasted, then seal it. */
+    public static function captchaSecret(array $input): string {
+        $new = password_value('recaptcha_secret');
+        if ($new !== '') {
+            if (strlen($new) > 512 || preg_match('/[\r\n\0]/', $new)) throw new UserError('The reCAPTCHA secret key contains unsupported characters.');
+            return Security::seal(['value' => $new]);
+        }
+        return (string) self::get('recaptcha_secret');
     }
     /** Keep the stored Google secret unless a new one was pasted, then seal it. */
     public static function googleSecret(array $input): string {

@@ -3,14 +3,14 @@ declare(strict_types=1);
 /** Integration tests. ONLY run against a disposable DB whose name ends in _test. */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require dirname(__DIR__).'/app/bootstrap.php';
-use KB\{DB,Settings,Security,Auth,Quiz,Mail,Activation,Audit,Cron,MailError,Google};
+use KB\{DB,Settings,Security,Auth,Quiz,Mail,Activation,Audit,Cron,MailError,Google,Otp,Registration,Captcha,Migrator};
 use function KB\{hash_password,valid_password,now};
 if (!KB\installed() || !str_ends_with((string)KB\config('db')['name'],'_test') || !KB\config('local_preview',false)) {
     fwrite(STDERR,"Refusing to run: use an installed, local-preview configuration with a *_test database.\n"); exit(1);
 }
 $pdo=DB::connection();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['attempt_items','attempts','access_tokens','mail_queue','audit_events','rate_limits','questions','users','settings'] as $table) $pdo->exec('DELETE FROM '.$table);
+foreach (['one_time_codes','attempt_items','attempts','access_tokens','mail_queue','audit_events','rate_limits','questions','users','settings'] as $table) $pdo->exec('DELETE FROM '.$table);
 $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 $pass=0;$fail=0;
 function test(string $name,callable $fn): void {
@@ -70,4 +70,98 @@ test('Google links verified emails, creates members and honours suspension',func
 test('Google proves ownership of an existing unverified account',function(){Settings::put('google_client_id','123-abc.apps.googleusercontent.com');Settings::put('google_enabled',true);$email='google-unverified@example.test';DB::run('DELETE FROM users WHERE email=?',[$email]);DB::run('INSERT INTO users(name,email,password_hash,email_verified_at,created_at,updated_at) VALUES (?,?,?,?,?,?)',['Pending Member',$email,hash_password('Correct-Horse-Battery-Staple!'),null,now(),now()]);$id=(int)DB::value('SELECT id FROM users WHERE email=?',[$email]);$user=Google::accountFor(['email'=>$email,'name'=>'Pending Member','email_verified'=>true,'sub'=>'google-sub-2']);assert_true((int)$user['id']===$id);assert_true(!empty(DB::value('SELECT email_verified_at FROM users WHERE id=?',[$id])));DB::run('DELETE FROM users WHERE id=?',[$id]);});
 test('Google respects closed registration for new accounts only',function(){Settings::put('google_client_id','123-abc.apps.googleusercontent.com');Settings::put('google_enabled',true);Settings::put('registration_open',false);rejects(fn()=>Google::accountFor(['email'=>'closed-registration@example.test','email_verified'=>true]),403);assert_true(Google::accountFor(['email'=>'member@example.test','email_verified'=>true])['id']===(int)DB::value('SELECT id FROM users WHERE email=?',['member@example.test']));Settings::put('registration_open',true);});
 test('Google settings require a client id and never expose the secret',function(){$base=array_merge(Settings::all(),['site_title'=>'KINGDOMBUILDERS','admin_email'=>'admin@example.test','google_enabled'=>'1','google_client_id'=>'123-abc.apps.googleusercontent.com']);$values=Settings::validate($base);assert_true($values['google_client_id']==='123-abc.apps.googleusercontent.com');assert_true($values['google_enabled']===true);assert_true(!array_key_exists('google_client_secret',$values),'Secret must never be copied into validated settings');rejects(fn()=>Settings::validate(array_merge($base,['google_client_id'=>''])));rejects(fn()=>Settings::validate(array_merge($base,['google_client_id'=>'https://not a client id'])));$disabled=Settings::validate(array_merge($base,['google_enabled'=>'0','google_client_id'=>'']));assert_true($disabled['google_enabled']===false);});
+
+$smtpStub=static function(bool $enabled=true): void {
+    Settings::put('smtp_enabled',$enabled);
+    Settings::put('smtp_host','127.0.0.1'); Settings::put('smtp_port',1); Settings::put('smtp_security','tls');
+    Settings::put('from_email','notifications@example.test'); Settings::put('from_name','Test');
+};
+$codeFromMail=static function(string $email): string {
+    foreach (DB::all('SELECT body FROM mail_queue WHERE recipient=? ORDER BY id DESC LIMIT 5',[$email]) as $row) {
+        if (preg_match('/^\s*(\d{6})\s*$/m',(string)$row['body'],$m)) return $m[1];
+    }
+    throw new RuntimeException('No six-digit code in the queued email');
+};
+test('Email codes are hashed, single-use and attempt-limited',function()use($smtpStub,$codeFromMail){
+    $smtpStub(true);
+    $email='otp-lifecycle@example.test';
+    $issued=Otp::issue('login',$email,null);
+    assert_true($issued['created']===true,'The challenge must exist even when delivery fails');
+    assert_true($issued['ok']===false,'No mail server is listening, so delivery must report failure');
+    $row=DB::one('SELECT * FROM one_time_codes WHERE selector=?',[$issued['selector']]);
+    assert_true($row!==null && preg_match('/^[a-f0-9]{64}$/',(string)$row['code_hash'])===1,'Only a hash is stored');
+    $code=$codeFromMail($email);
+    assert_true(strlen($code)===6,'The email carries six digits');
+    assert_true(!str_contains((string)$row['code_hash'],$code),'The code is not stored in clear');
+    $wrong=$code==='000000'?'000001':'000000';
+    rejects(fn()=>Otp::verify($issued['selector'],'login',$wrong));
+    assert_true((int)DB::value('SELECT attempts FROM one_time_codes WHERE selector=?',[$issued['selector']])===1,'A wrong guess is counted');
+    $used=Otp::verify($issued['selector'],'login',$code);
+    assert_true($used['email']===$email,'The right code returns the challenge');
+    rejects(fn()=>Otp::verify($issued['selector'],'login',$code),422);
+    $smtpStub(false);
+});
+test('A sign-up writes no member row until the emailed code is entered',function()use($smtpStub,$codeFromMail){
+    $smtpStub(true); Settings::put('registration_open',true);
+    $email='pending-'.bin2hex(random_bytes(3)).'@example.test';
+    $start=Registration::begin('Pending Person',$email,'Correct-Horse-Battery-Staple!');
+    assert_true($start['pending']===true,'A pending sign-up is created');
+    assert_true(DB::one('SELECT id FROM users WHERE email=?',[$email])===null,'No member row exists before the code');
+    $code=$codeFromMail($email);
+    rejects(fn()=>Registration::complete($code==='000000'?'000001':'000000'));
+    $user=Registration::complete($code);
+    assert_true($user['email']===$email,'The account is created once the code is confirmed');
+    assert_true(!empty($user['email_verified_at']),'The address counts as confirmed');
+    assert_true(DB::one('SELECT id FROM one_time_codes WHERE email=? AND consumed_at IS NULL',[$email])===null,'The code is consumed');
+    DB::run('DELETE FROM users WHERE id=?',[$user['id']]);
+    $smtpStub(false);
+});
+test('A sign-up for an existing address creates nothing and reveals nothing',function()use($member){
+    Settings::put('registration_open',true);
+    $before=(int)DB::value('SELECT COUNT(*) FROM users');
+    $result=Registration::begin('Someone Else','member@example.test','Another-Passphrase-2026!');
+    assert_true($result['pending']===false,'No second sign-up is started');
+    assert_true((int)DB::value('SELECT COUNT(*) FROM users')===$before,'No account is created');
+    assert_true(DB::one('SELECT id FROM one_time_codes WHERE email=?',['member@example.test'])===null,'No code is issued for an existing account');
+    assert_true(str_contains($result['message'],'If this address can be registered'),'The response stays generic');
+});
+test('Email codes stop working after their expiry',function()use($smtpStub,$codeFromMail){
+    $smtpStub(true);
+    $email='otp-expiry@example.test';
+    $issued=Otp::issue('login',$email,null);
+    DB::run('UPDATE one_time_codes SET expires_at=? WHERE selector=?',[gmdate('Y-m-d H:i:s',time()-5),$issued['selector']]);
+    rejects(fn()=>Otp::verify($issued['selector'],'login',$codeFromMail($email)));
+    $smtpStub(false);
+});
+test('reCAPTCHA decisions reject forgeries and accept this site',function(){
+    assert_true(Captcha::evaluate(['success'=>true,'hostname'=>'example.test'],'example.test','register')['ok'],'A valid response passes');
+    assert_true(Captcha::evaluate(['success'=>true,'hostname'=>'www.example.test'],'example.test')['ok'],'The www form of the domain passes');
+    $bad=Captcha::evaluate(['success'=>false,'error-codes'=>['invalid-input-response']],'example.test');
+    assert_true(!$bad['ok'] && $bad['reason']==='invalid-input-response','A rejected token fails with its reason');
+    assert_true(!Captcha::evaluate(['success'=>false],'example.test')['ok'],'An empty response fails');
+    assert_true(!Captcha::evaluate(['success'=>true,'hostname'=>'evil.test'],'example.test')['ok'],'Another hostname fails');
+    assert_true(!Captcha::evaluate(['success'=>true,'hostname'=>'example.test','action'=>'login'],'example.test','register')['ok'],'A token minted for another form fails');
+    assert_true(Captcha::evaluate(['success'=>true,'hostname'=>'example.test','action'=>'register'],'example.test','register')['ok'],'The matching action passes');
+});
+test('Registration settings validate keys and the hourly cap',function(){
+    $base=array_merge(Settings::all(),['site_title'=>'KINGDOMBUILDERS','admin_email'=>'admin@example.test','registration_cap'=>'30','recaptcha_site_key'=>'6LcExampleKey_1234567890','recaptcha_enabled'=>'1','otp_register'=>'1']);
+    $values=Settings::validate($base);
+    assert_true($values['registration_cap']===30);
+    assert_true($values['recaptcha_site_key']==='6LcExampleKey_1234567890');
+    assert_true($values['otp_register']===true);
+    assert_true(!array_key_exists('recaptcha_secret',$values),'The sealed secret is never copied into settings');
+    rejects(fn()=>Settings::validate(array_merge($base,['registration_cap'=>'5000'])));
+    rejects(fn()=>Settings::validate(array_merge($base,['recaptcha_site_key'=>'https://wrong value'])));
+    Settings::put('recaptcha_site_key','6LcExampleKey_1234567890');
+    Settings::put('recaptcha_secret',Security::seal(['value'=>'secret-key']));
+    assert_true(Captcha::configured(),'Both keys together make the check usable');
+    Settings::put('recaptcha_site_key',''); Settings::put('recaptcha_secret',''); Settings::put('recaptcha_enabled',false);
+    assert_true(!Captcha::enabled(),'Clearing a key disables the check');
+});
+test('The schema is upgraded for existing installations',function(){
+    assert_true(Migrator::version()>=Migrator::VERSION,'Expected schema '.Migrator::VERSION.', found '.Migrator::version());
+    assert_true((int)DB::value("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='one_time_codes'")===1,'one_time_codes exists');
+    assert_true((int)DB::value('SELECT COUNT(*) FROM one_time_codes WHERE code_hash NOT REGEXP "^[a-f0-9]{64}$"')===0,'Every stored code is a hash');
+});
+
 echo "\n{$pass} passed; {$fail} failed.\n";exit($fail?1:0);

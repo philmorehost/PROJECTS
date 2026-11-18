@@ -239,3 +239,42 @@ withdraws it again. PHP lint, CSS parse and the email/dock suites all pass.
 
 Verification: PHP lint, the SMTP fixture (send, auth, silent, non-SMTP, diagnosis), the HTTP
 smoke suite, and the email/dock/CSS suites.
+
+### Build 0.11.0: registration under control
+
+- **Investigation.** Only three code paths create members (public sign-up, Google
+  sign-in, the administrator form); none of them loops. A registration every 30
+  seconds is a client repeatedly submitting `/register`. Two real defects made it
+  cheap: the member row was written before any proof of email ownership, and
+  every submission for the same unverified address minted a new token and sent a
+  new message. The audit fingerprint also used `REMOTE_ADDR`, which collapses to
+  one value behind a CDN.
+- **Email codes.** `Otp` stores a keyed hash only, expires in 10 minutes, allows
+  six guesses and three re-sends (60-second cooldown), and consumes the code
+  atomically. `Registration` keeps the pending sign-up — with the password
+  sealed, not hashed for every bot — in `one_time_codes`; the member row is
+  created only after the code is confirmed, so a form filler creates nothing.
+  An existing address never reveals itself and is told once an hour by email.
+- **Sign-in codes.** Optional, off by default. A correct password opens a
+  challenge instead of a session; the code completes it and can trust the device
+  for 30 days with an HMAC-signed cookie bound to `session_version`.
+- **reCAPTCHA.** `Captcha` verifies v2/v3 tokens server-side, compares the
+  hostname and action, fails closed when Google is unreachable, and relaxes the
+  Content-Security-Policy for Google's script and frame hosts only while enabled.
+- **Barriers in front of all of it:** a hidden trap field, a sealed timing check,
+  a per-address pending-sign-up limit, a per-visitor limit and a site-wide hourly
+  cap that pauses sign-up during a flood rather than filling the database.
+- **Visibility and clean-up:** Admin → Members shows sign-ups in the last 24
+  hours and seven days, outstanding codes, and the five busiest source
+  fingerprints, with a one-click purge of unverified accounts older than a day.
+- **Proxy-aware identity:** `Security::clientIp()` honours forwarded addresses
+  only from a configured `trusted_proxy` (or a local preview), so rate limits and
+  audit fingerprints are per visitor again.
+- **Schema upgrades:** `Migrator` applies `database/migrations/*.sql` to an
+  existing installation on the next page load; `schema_migrations` is now at 2.
+
+Verification: PHP lint, `tests/auth_views.php` (honeypot, seal, reCAPTCHA on/off,
+both code screens), `tests/run.php` (code hashing, single use, expiry, no row
+before confirmation, existing-address behaviour, reCAPTCHA decisions, settings
+validation, schema version), and the HTTP smoke suite (trap field, no row before
+the code, wrong code, confirmation, sign-in code with a trusted device) in CI.

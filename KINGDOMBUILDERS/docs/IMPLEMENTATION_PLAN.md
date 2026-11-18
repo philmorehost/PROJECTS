@@ -92,9 +92,17 @@ Optional at scale → Redis sessions/rate limits, read replica, object/CDN stora
 - Run cross-browser/mobile, keyboard/screen-reader, security and load tests.
 - Train administrators and publish a changelog, operating runbook and incident/rollback procedure.
 
+### Milestone F — sign-up integrity (0.11.0)
+- Treat automated registrations as a scripted client problem, not a scheduling loop: verify by audit fingerprints before changing anything.
+- Require proof of mailbox ownership before a member row exists (six-digit code, hashed at rest, 10-minute expiry, single use, attempt and resend caps).
+- Layer cheap barriers ahead of the expensive ones: hidden trap field, sealed timing check, server-verified reCAPTCHA, per-visitor limit, site-wide hourly cap.
+- Optional email codes at sign-in with a 30-day trusted device; fail closed, and document the recovery SQL.
+- Make the visitor address reliable behind a CDN by trusting forwarded headers only from a configured proxy; keep audit fingerprints keyed hashes.
+- Give administrators a sign-up activity panel and a one-click purge of unverified accounts.
+
 ## 4. Security and privacy decisions
 
-- Passwords are never stored or emailed in plaintext. Reset/verification tokens are random, stored as SHA-256 hashes and consumed atomically.
+- Passwords are never stored or emailed in plaintext. Reset/verification tokens are random, stored as SHA-256 hashes and consumed atomically. A password entered before email confirmation is held only inside the sealed (AES-256-GCM) sign-up payload for ten minutes, until the code is confirmed.
 - Session cookies are HttpOnly, SameSite=Lax and Secure on HTTPS; strict session mode and ID rotation are enabled.
 - State-changing requests require a session-bound CSRF token. Browser JSON endpoints are same-origin and do not enable CORS.
 - Login/reset responses do not reveal whether an account exists. Rate-limit both account and source address; trust forwarded headers only from explicitly configured proxies.
@@ -118,6 +126,7 @@ Optional at scale → Redis sessions/rate limits, read replica, object/CDN stora
 | audit_events | Actor, effective administrator, action, subject and sanitized metadata |
 | mail_queue | Durable outbox, idempotency key, lease, retry time and sanitized failure state |
 | rate_limits | Atomic fixed-window counters keyed by purpose and hashed identifier |
+| one_time_codes | Hashed six-digit codes for sign-up confirmation and sign-in, with pending sign-up payload (password sealed), attempt and resend counters, expiry and single-use marker |
 | schema_migrations | Applied schema version and installation time |
 
 ## 6. Scaling roadmap and trade-offs

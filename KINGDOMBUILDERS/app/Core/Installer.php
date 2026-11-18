@@ -48,7 +48,7 @@ final class Installer {
                     try { $pdo = DB::connect($db); }
                     catch (\PDOException $e) { throw new UserError('Could not connect. Check the credentials and confirm the database exists and allows this web server.'); }
                     $existing = $pdo->query('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
-                    $allowed = ['schema_migrations','users','settings','access_tokens','questions','attempts','attempt_items','audit_events','mail_queue','rate_limits'];
+                    $allowed = ['schema_migrations','users','settings','access_tokens','questions','attempts','attempt_items','audit_events','mail_queue','rate_limits','one_time_codes'];
                     if ($existing && (array_diff($existing,$allowed) || !in_array('users',$existing,true))) throw new UserError('This database is not empty. Choose a dedicated empty database; existing tables will never be overwritten.');
                     if ($existing && (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0) throw new UserError('This database already contains an installation.');
                     {

@@ -40,7 +40,8 @@ final class Controllers {
         }
     }
     public static function auth(string $route): never {
-        if (in_array($route,['login','register','forgot-password','reset-password','verify-email'],true) && Auth::user() && !in_array($route,['reset-password','verify-email'],true)) redirect('dashboard');
+        if (in_array($route,['login','login/verify','register','register/verify','forgot-password','reset-password','verify-email'],true) && Auth::user() && !in_array($route,['reset-password','verify-email'],true)) redirect('dashboard');
+        // A half-finished sign-in stays reachable even though no session exists yet.
         $error=null; $notice=null; $token=query('token');
         if (is_post()) Security::check();
         if ($route==='login') {
@@ -54,6 +55,15 @@ final class Controllers {
                     $ok=password_verify($password,$hash);
                     if (!$user || !$ok || $user['status']!=='active') throw new UserError('The email or password is incorrect, or this account is unavailable.',401);
                     if (password_needs_rehash($hash,defined('PASSWORD_ARGON2ID')?PASSWORD_ARGON2ID:PASSWORD_BCRYPT,defined('PASSWORD_ARGON2ID')?[]:['cost'=>12])) DB::run('UPDATE users SET password_hash=? WHERE id=?',[hash_password($password),$user['id']]);
+                    // A second factor for everyone signing in from an unfamiliar device.
+                    if (Otp::loginEnabled() && !Otp::deviceTrusted((int)$user['id'],(int)$user['session_version'])) {
+                        $issued=Otp::issue('login',(string)$user['email'],(int)$user['id']);
+                        if (!$issued['created']) throw new UserError('Your password is correct, but a sign-in code cannot be sent. '.$issued['message'],503);
+                        Otp::remember(Otp::LOGIN_SESSION,['selector'=>$issued['selector'],'purpose'=>'login','email'=>$user['email'],'uid'=>(int)$user['id'],'expires'=>$issued['expires']]);
+                        Audit::log('account.sign_in_challenge','user',$user['id'],['method'=>'email_code']);
+                        flash($issued['message'],$issued['ok']?'info':'error');
+                        redirect('login/verify');
+                    }
                     Auth::signIn($user);
                     Audit::activity('account.signed_in','user',$user['id'],[],$user,'A sign-in to your account was recorded.');
                     redirect($user['role']==='admin'?'admin':'dashboard');
@@ -61,27 +71,71 @@ final class Controllers {
             }
             render('auth/login',['error'=>$error]);
         }
-        if ($route==='register') {
-            if (!Settings::get('registration_open')) throw new UserError('Registration is currently closed.',403);
+        if ($route==='login/verify') {
+            $pending=Otp::pending(Otp::LOGIN_SESSION,'login');
+            if (!$pending) { flash('Sign in again to continue.','info'); redirect('login'); }
             if (is_post()) {
                 try {
-                    Security::throttle('register',Security::sourceHash(),5,3600);
-                    $name=post('name'); $email=strtolower(post('email')); $password=password_value('password');
-                    if (mb_strlen($name)<2 || mb_strlen($name)>120 || !valid_email($email) || !valid_password($password) || $password!==password_value('password_confirm') || post('accept')!=='1') throw new UserError('Check your name, email, acceptance of the terms, and matching passwords of 12–72 bytes.');
-                    $existing=DB::one('SELECT id,email_verified_at FROM users WHERE email=?',[$email]);
-                    if (!$existing) {
-                        try {
-                            DB::transaction(static function () use ($name,$email,$password): void {
-                                DB::run('INSERT INTO users(name,email,password_hash,created_at,updated_at) VALUES (?,?,?,?,?)',[$name,$email,hash_password($password),now(),now()]);
-                                $id=DB::id(); Audit::activity('account.registered','user',$id,[],DB::one('SELECT * FROM users WHERE id=?',[$id]),'Welcome! Confirm your email to begin learning.');
-                                Auth::sendAccess($id,'verify');
-                            });
-                        } catch(\PDOException $e) { if ($e->getCode()!=='23000') throw $e; }
-                    } elseif (!$existing['email_verified_at']) Auth::sendAccess((int)$existing['id'],'verify');
-                    $notice='If this address can be registered, a confirmation message has been queued. Check your inbox and spam folder.';
+                    if (post('action')==='resend') {
+                        $issued=Otp::resend((string)$pending['selector'],'login');
+                        Otp::remember(Otp::LOGIN_SESSION,array_merge($pending,['expires'=>$issued['expires']]));
+                        flash($issued['message'],'info'); redirect('login/verify');
+                    }
+                    Security::throttle('otp.verify',Security::sourceHash(),15,900);
+                    $row=Otp::verify((string)$pending['selector'],'login',post('code'));
+                    $user=DB::one('SELECT * FROM users WHERE id=?',[(int)$row['user_id']]);
+                    if(!$user || $user['status']!=='active' || strtolower((string)$user['email'])!==strtolower((string)$pending['email'])) throw new UserError('This sign-in can no longer be completed. Sign in again.',403);
+                    Otp::forget(Otp::LOGIN_SESSION);
+                    Auth::signIn($user);
+                    if(post('remember')==='1') Otp::trustDevice((int)$user['id'],(int)$user['session_version']);
+                    Audit::activity('account.signed_in','user',$user['id'],['method'=>'email_code'],$user,'A sign-in to your account was recorded.');
+                    redirect($user['role']==='admin'?'admin':'dashboard');
                 } catch(UserError $e) { $error=$e->getMessage(); }
             }
-            render('auth/register',['error'=>$error,'notice'=>$notice]);
+            render('auth/login-verify',['email'=>$pending['email'],'error'=>$error]);
+        }
+        if ($route==='register') {
+            if (!Settings::get('registration_open')) throw new UserError('Registration is currently closed.',403);
+            $status=200;
+            if (is_post()) {
+                try {
+                    self::guardRegistration();
+                    $name=post('name'); $email=strtolower(post('email')); $password=password_value('password');
+                    if (mb_strlen($name)<2 || mb_strlen($name)>120 || !valid_email($email) || !valid_password($password) || $password!==password_value('password_confirm') || post('accept')!=='1') throw new UserError('Check your name, email, acceptance of the terms, and matching passwords of 12–72 bytes.');
+                    $result=Registration::begin($name,$email,$password);
+                    // No account exists yet: the emailed code creates it, so a form
+                    // filler cannot add rows to the members table.
+                    if ($result['pending']) {
+                        flash($result['message'], $result['ok'] ? 'info' : 'error');
+                        redirect('register/verify');
+                    }
+                    if (!$result['ok']) throw new UserError($result['message']);
+                    $notice=$result['message'];
+                } catch(UserError $e) {
+                    $error=$e->getMessage();
+                    // A blocked submission keeps its real status for monitoring and logs.
+                    if (in_array($e->status,[400,429],true)) $status=$e->status;
+                }
+            }
+            render('auth/register',['error'=>$error,'notice'=>$notice],$status);
+        }
+        if ($route==='register/verify') {
+            $pending=Registration::pending();
+            if (!$pending) { flash('Enter your details to start again.','info'); redirect('register'); }
+            if (is_post()) {
+                try {
+                    if (post('action')==='resend') {
+                        $issued=Registration::resend();
+                        flash($issued['message'],'info'); redirect('register/verify');
+                    }
+                    $user=Registration::complete(post('code'));
+                    Auth::signIn($user);
+                    Audit::activity('account.signed_in','user',$user['id'],['method'=>'email_code'],$user,'A sign-in to your account was recorded.');
+                    flash('Your email is confirmed and your account is ready. Welcome!','success');
+                    redirect('dashboard');
+                } catch(UserError $e) { $error=$e->getMessage(); }
+            }
+            render('auth/register-verify',['email'=>$pending['email'],'error'=>$error]);
         }
         if ($route==='forgot-password') {
             if (is_post()) {
@@ -138,6 +192,32 @@ final class Controllers {
             redirect('login');
         }
         throw new UserError('Page not found.',404);
+    }
+    /**
+     * Cheap, layered checks that stop automated form filling before any work is
+     * done (and before an email is sent). Each layer is independent: the hidden
+     * field catches naive bots, the timing seal catches instant submissions,
+     * reCAPTCHA catches the rest, and the hourly cap limits a distributed run.
+     */
+    private static function guardRegistration(): void {
+        if (post('website') !== '') { Registration::block('honeypot'); throw new UserError('We could not complete that request. Reload the page and try again.',400); }
+        try { $seal=Security::unseal(post('form_seal')); }
+        catch(\Throwable $e) { $seal=[]; }
+        $started=(int)($seal['t'] ?? 0);
+        if ($started<1 || time()-$started<1 || time()-$started>7200) {
+            Registration::block('timing');
+            throw new UserError('Please reload the page, check your details, and submit the form again.',400);
+        }
+        Captcha::verify('register');
+        $cap=(int)Settings::get('registration_cap');
+        if ($cap>0) {
+            try { Security::throttle('register.global','site',$cap,3600); }
+            catch(UserError $e) {
+                Audit::log('registration.blocked','site',null,['reason'=>'hourly_cap','cap'=>$cap]);
+                throw new UserError('Sign-up is paused for a short while because of unusual activity. Please try again later, or contact the administrator.',429);
+            }
+        }
+        Security::throttle('register',Security::sourceHash(),5,3600);
     }
     private static function tokenRecord(string $token,string $purpose): ?array {
         if (!preg_match('/^[a-f0-9]{64}$/',$token)) return null;

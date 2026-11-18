@@ -6,6 +6,7 @@ use KB\Admin;
 use KB\Auth;
 use KB\Controllers;
 use KB\Installer;
+use KB\Migrator;
 use KB\Security;
 use KB\UserError;
 use function KB\{render,installed,redirect,url,json_response,header_security};
@@ -49,10 +50,14 @@ try {
     }
     if (!installed() && $route !== 'install') redirect('install');
     if ($route === 'install') Installer::handle();
+    // Bring an existing installation up to the current schema before any page
+    // touches the new tables. Fresh installs are already current, so this is a
+    // single indexed lookup.
+    Migrator::run();
     if (!\KB\Activation::allowed() && !in_array($route,['admin/authorization','login','logout'],true)) redirect('admin/authorization');
     if ($route === '') Controllers::home();
     elseif ($route === 'support/return') { Security::check(); if(\KB\is_post()) { Auth::returnToAdmin(); redirect('admin'); } redirect('dashboard'); }
-    elseif (in_array($route,['login','register','forgot-password','reset-password','verify-email','logout'],true)) Controllers::auth($route);
+    elseif (in_array($route,['login','login/verify','register','register/verify','forgot-password','reset-password','verify-email','logout'],true)) Controllers::auth($route);
     elseif ($route === 'auth/google') Controllers::google('start');
     elseif ($route === 'auth/google/callback') Controllers::google('callback');
     elseif (in_array($route,['dashboard','account'],true)) Controllers::$route();

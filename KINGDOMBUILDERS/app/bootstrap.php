@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace KB;
 
-const VERSION = '0.10.0';
+const VERSION = '0.11.0';
 const ROOT = __DIR__ . '/..';
 const MIN_PHP = '8.2.0';
 
@@ -81,7 +81,30 @@ function header_security(): void {
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-    header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'");
+    // reCAPTCHA loads one script and renders inside an iframe. Nothing is relaxed
+    // unless the administrator has switched the check on and both keys exist.
+    $script = "'self'"; $connect = "'self'"; $directives = [];
+    try {
+        if (installed() && Captcha::enabled()) {
+            $script .= ' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/';
+            $connect .= ' https://www.google.com';
+            $directives[] = "frame-src https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/";
+        }
+    } catch (\Throwable $e) { /* never let a policy option break the page */ }
+    $policy = implode('; ', array_merge([
+        "default-src 'self'",
+        "script-src {$script}",
+        "style-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "connect-src {$connect}",
+    ], $directives, [
+        "form-action 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+    ]));
+    header('Content-Security-Policy: ' . $policy);
     header('Cache-Control: private, no-store');
     if (Security::requestHttps()) header('Strict-Transport-Security: max-age=31536000');
 }

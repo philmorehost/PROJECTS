@@ -74,14 +74,24 @@ final class Admin {
         }
         if($route==='admin/users') {
             if(is_post()) {
-                try { DB::transaction(static fn()=>self::mutateUser($admin)); redirect('admin/users'); }
+                try {
+                    if(post('action')==='purge-unverified') {
+                        Security::throttle('users.purge',(string)$admin['id'],5,3600);
+                        $removed=Registration::purgeUnverified(24,200);
+                        Audit::activity('account.purged_unverified','site',null,['removed'=>$removed]);
+                        flash($removed>0?$removed.' unverified account'.($removed===1?'':'s').' removed.':'No unverified accounts were older than 24 hours.', $removed>0?'success':'info');
+                    } else {
+                        DB::transaction(static fn()=>self::mutateUser($admin));
+                    }
+                    redirect('admin/users');
+                }
                 catch(UserError $e) {$error=$e->getMessage();}
             }
             $search=mb_substr(query('q'),0,100); $where=$search!==''?' WHERE name LIKE ? OR email LIKE ?':''; $params=$search!==''?['%'.$search.'%','%'.$search.'%']:[];
             [$page,$pages,$offset]=paginate((int)DB::value('SELECT COUNT(*) FROM users'.$where,$params));
             $users=DB::all('SELECT id,name,email,role,status,email_verified_at,created_at,last_login_at FROM users'.$where.' ORDER BY id DESC LIMIT 20 OFFSET '.$offset,$params);
             $edit=query('edit')?DB::one('SELECT id,name,email,role,status,email_verified_at FROM users WHERE id=?',[(int)query('edit')]):null;
-            render('admin/users',['users'=>$users,'edit'=>$edit,'search'=>$search,'page'=>$page,'pages'=>$pages,'error'=>$error]);
+            render('admin/users',['users'=>$users,'edit'=>$edit,'search'=>$search,'page'=>$page,'pages'=>$pages,'error'=>$error,'watch'=>Registration::watch()]);
         }
         if($route==='admin/impersonate') {
             if(!is_post()) throw new UserError('Method not allowed.',405);
@@ -141,8 +151,16 @@ final class Admin {
                 $action=post('action');
                 try {
                     $input=$_POST;
-                    if($smtp) { $input=array_merge(Settings::all(),$_POST); $input['smtp_enabled']=isset($_POST['smtp_enabled']); }
-                    else { $input=array_merge(Settings::all(),$_POST); foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','large_text','google_enabled'] as $key) $input[$key]=isset($_POST[$key]); }
+                    if($smtp) { $input=array_merge(Settings::all(),$_POST); $value=$_POST['smtp_enabled'] ?? '0'; $input['smtp_enabled']=is_string($value) && $value==='1'; }
+                    else {
+                        $input=array_merge(Settings::all(),$_POST);
+                        // A hidden "0" plus a checked "1" means the last value wins; an
+                        // unchecked box with no hidden field simply sends nothing.
+                        foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','large_text','google_enabled','otp_register','otp_login','recaptcha_enabled'] as $key) {
+                            $value=$_POST[$key] ?? '0';
+                            $input[$key]=is_string($value) && $value==='1';
+                        }
+                    }
                     $values=Settings::validate($input,$smtp);
                     if($smtp) {
                         try { $values['smtp_secret']=Settings::smtpPassword($input); }
@@ -152,6 +170,9 @@ final class Admin {
                         try { $values['google_client_secret']=Settings::googleSecret($input); }
                         catch(\Throwable $sealError) { error_log('KB Google seal: '.get_class($sealError)); throw new UserError('The Google client secret could not be encrypted on this server. Ask your host to enable the PHP OpenSSL extension, then try again.'); }
                         if (!empty($values['google_enabled']) && $values['google_client_secret']==='') throw new UserError('Paste the Google client secret before turning on Google sign-in.');
+                        try { $values['recaptcha_secret']=Settings::captchaSecret($input); }
+                        catch(\Throwable $sealError) { error_log('KB reCAPTCHA seal: '.get_class($sealError)); throw new UserError('The reCAPTCHA secret key could not be encrypted on this server. Ask your host to enable the PHP OpenSSL extension, then try again.'); }
+                        if (!empty($values['recaptcha_enabled']) && ($values['recaptcha_site_key']==='' || $values['recaptcha_secret']==='')) throw new UserError('Paste both reCAPTCHA keys (site key and secret key) before switching the check on.');
                     }
                     if(!$smtp || $action!=='test') {
                         try {

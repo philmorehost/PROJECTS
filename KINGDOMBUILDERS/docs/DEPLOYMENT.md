@@ -38,6 +38,8 @@ Never commit these files. Back them up with the same access controls as the data
 
 Create an empty database and a dedicated user. The installer needs CREATE/ALTER/INDEX/REFERENCES plus SELECT/INSERT/UPDATE/DELETE. After installation you may revoke CREATE/ALTER if you apply future migrations manually.
 
+**Upgrading an existing site:** upload the new files and open any page. `Migrator::run()` compares `schema_migrations` with the build's version and applies the numbered files in `database/migrations/` once (0.11.0 adds `one_time_codes`). Statements are idempotent, so an interrupted upgrade is retried on the next request. `php bin/check.php` prints the resulting schema version. If the database user cannot create tables, run the file in `database/migrations/` manually.
+
 The schema is versioned in `database/schema.sql` (migration 1). The installer refuses databases containing unrelated tables or existing users. A partially created schema with zero users can be retried safely.
 
 ## 3a. Verifying an upload (do this first when a change "does not appear")
@@ -214,6 +216,71 @@ Answers are final once saved, by design: the API rejects changes with HTTP 409, 
 interface disables the options and shows a lock notice. `Settings → "Let members move back to
 review earlier questions"` (stored key `allow_back`) only controls whether the **Previous**
 button is offered; it never permits changing a saved answer. Skipped questions lock too.
+
+## 7c. Unexpected or automated registrations
+
+If the member count climbs without real people, work through this list.
+
+**What the application itself can do.** Nothing in the code schedules or loops a
+registration; every `users` row comes from a POST to `/register`, a Google
+sign-in, or the administrator form. A fixed cadence (for example one every 30
+seconds) therefore means a client is repeatedly submitting the public form.
+
+**Look at the evidence first.**
+
+```sql
+-- Who appeared, from where, and did they ever confirm?
+SELECT id, email, created_at, email_verified_at, last_login_at
+FROM users ORDER BY id DESC LIMIT 30;
+
+-- Registration and blocked-attempt fingerprints (SHA-256 of the visitor address)
+SELECT action, subject_id, source_hash, created_at
+FROM audit_events
+WHERE action IN ('account.registered','registration.blocked','security.captcha_failed')
+ORDER BY id DESC LIMIT 30;
+```
+
+One repeating `source_hash` means a single script; many different values means a
+distributed run. Before 0.11.0 the fingerprint was based on `REMOTE_ADDR`, so
+behind a CDN every visitor shared one value — see *Behind a proxy* below.
+
+**Turn the protections on** (Admin → Settings → Registration protection):
+
+1. **Email codes for sign-up** (on by default). The account is created only
+   after the six digits are entered, so form filling writes nothing. Requires
+   working SMTP — send a test message first.
+2. **reCAPTCHA** — create a v2 “I’m not a robot” key for the exact domain at
+   `google.com/recaptcha/admin/create` and paste both keys. Verification happens
+   server-side, including a hostname comparison. If Google is unreachable,
+   registration pauses instead of silently losing the check.
+3. **Sign-ups per hour** (default 60, `0` = unlimited) — a circuit breaker for
+   the whole site. Blocked attempts return a friendly “try again later”.
+4. **Clean up** what earlier runs created: Admin → Members → *Remove unverified
+   accounts* deletes members who never confirmed an email and are older than
+   24 hours (batches of 200, audited).
+
+**Second factor at sign-in.** *Email a six-digit code when signing in from an
+unrecognised device* is off by default. Turn it on only when the SMTP test
+message succeeds: if mail delivery stops, sign-in stops too. A trusted device is
+remembered for 30 days. If you are ever locked out, run:
+
+```sql
+UPDATE settings SET setting_value='false' WHERE setting_key='otp_login';
+```
+
+**Behind a proxy or CDN.** `Security::clientIp()` only trusts
+`CF-Connecting-IP`, `X-Real-IP` or the first `X-Forwarded-For` entry when the
+request comes from the address in the `trusted_proxy` configuration value (or
+during an explicit local preview). Without that trust, per-visitor rate limits
+collapse into one shared bucket. Add to `site.php`:
+
+```php
+'trusted_proxy' => '203.0.113.10',   // the CDN edge or reverse proxy address
+```
+
+**Housekeeping.** `bin/worker.php` deletes expired codes hourly (with the other
+retention jobs). Codes are stored only as keyed hashes and expire after ten
+minutes.
 
 ## 8. Backups and recovery
 
