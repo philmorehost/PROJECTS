@@ -499,3 +499,43 @@ if (!function_exists('bc_chat_ai_reply')) {
         return bc_chat_post_message($vendor_id, (int)$thread['id'], 'ai', 'Assistant', $reply);
     }
 }
+
+if (!function_exists('bc_chat_public_thread')) {
+    /**
+     * The thread fields the browser is allowed to see.
+     *
+     * An allow-list, not a redaction: assigned_admin and the internal counters are simply absent,
+     * so a field added to the table later cannot leak by default.
+     */
+    function bc_chat_public_thread($thread) {
+        if (!is_array($thread)) return null;
+        return [
+            'id'        => (int)$thread['id'],
+            'status'    => (string)$thread['status'],
+            'ai_active' => ((int)$thread['ai_enabled'] === 1 && $thread['status'] === 'open'),
+            'subject'   => (string)$thread['subject'],
+        ];
+    }
+}
+
+if (!function_exists('bc_chat_public_messages')) {
+    /**
+     * The message fields the browser is allowed to see.
+     *
+     * author_type is passed through because the widget styles the speaker differently; nothing
+     * here is trusted for rendering — the widget builds text nodes, never innerHTML.
+     */
+    function bc_chat_public_messages(array $messages) {
+        $out = [];
+        foreach ($messages as $m) {
+            $out[] = [
+                'id'    => (int)$m['id'],
+                'who'   => (string)$m['author_type'],
+                'name'  => (string)$m['author_name'],
+                'body'  => (string)$m['body'],
+                'at'    => (string)$m['created_at'],
+            ];
+        }
+        return $out;
+    }
+}
