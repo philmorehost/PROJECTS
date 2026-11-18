@@ -16,7 +16,7 @@ $data = json_decode(file_get_contents('php://input'), true);
 if (empty($data)) $data = $_REQUEST;
 if (!is_array($data)) $data = array();
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($data['api_key'] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($data['api_key'] ?? '')), $vendor_id));
 $pin = trim((string)($data['pin'] ?? ''));
 $current_pin = trim((string)($data['current_pin'] ?? ($data['old_pin'] ?? '')));
 

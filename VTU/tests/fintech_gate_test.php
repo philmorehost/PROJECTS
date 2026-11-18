@@ -86,6 +86,12 @@ function fake_mysqli_query($db, $sql) {
         }
         return [];
     }
+    if (preg_match("/SELECT vendor_id FROM sas_app_tokens\\s+WHERE token_hash='([a-f0-9]{64})' AND revoked_at IS NULL/", $sql, $m)) {
+        foreach ($GLOBALS['db']['app_tokens'] as $row) {
+            if ($row['token_hash'] === $m[1] && $row['revoked_at'] === null) return [['vendor_id' => $row['vendor_id']]];
+        }
+        return [];
+    }
     if (preg_match("/UPDATE sas_app_tokens SET last_used_at=NOW\(\) WHERE id='(\\d+)'/", $sql, $m)) {
         $GLOBALS['db']['app_tokens'][(int)$m[1]]['last_used_at'] = date('Y-m-d H:i:s');
         return true;
@@ -152,6 +158,14 @@ $global_behaviour_files = [
 ];
 
 $connection_server = new FakeDb();
+
+// The real denial helper exits the process. Replace it BEFORE the gate is loaded (every gate
+// function is guarded by function_exists) so refusals can be asserted instead of ending the run.
+function bc_fintech_send_app_denial(array $decision) {
+    $GLOBALS['bc_denial'] = $decision;
+    throw new RuntimeException('APP_DENIAL');
+}
+
 load_edition($root, 'DGV7.0-SAAS', $global_behaviour_files);
 
 // ═══════════════════════ 1. schema migration ═══════════════════════
@@ -193,7 +207,7 @@ unset($GLOBALS['db']['site']['9']);
 gcheck('tenant with no settings row is unset', bc_fintech_tenant_android_app_url(9)['state'], 'unset');
 
 // ═══════════════════════ 3. app account policy ═══════════════════════
-$personal = ['id' => 1, 'vendor_id' => 7, 'username' => 'smart', 'status' => 1, 'account_level' => 1, 'password' => 'x'];
+$personal = ['id' => 1, 'vendor_id' => 7, 'username' => 'smart', 'status' => 1, 'account_level' => 1, 'password' => 'x', 'api_key' => 'personal-legacy-key'];
 $agent    = ['id' => 2, 'vendor_id' => 7, 'username' => 'agent', 'status' => 1, 'account_level' => 2];
 $business = ['id' => 3, 'vendor_id' => 7, 'username' => 'api', 'status' => 1, 'account_level' => 3];
 
@@ -405,5 +419,118 @@ foreach ($editions as $edition) {
     gtrue("$edition has an app logout endpoint", is_file($root . '/' . $edition . '/web/api/logout.php'));
 }
 gcheck('logout endpoints are identical', md5_file($root . '/DGV7.0-SAAS/web/api/logout.php'), md5_file($root . '/DGV7.0-NON-SAAS/web/api/logout.php'));
+
+
+// ═══════════════════════ 9. dual-auth bridge for the legacy endpoints ═══════════════════════
+$GLOBALS['db']['site']['7'] = '';
+$GLOBALS['db']['users'][1] = $personal;
+$key_user = bc_app_token_issue($personal, 7, 'android');
+
+unset($_SERVER['HTTP_AUTHORIZATION'], $_SERVER['HTTP_X_APP_TOKEN']);
+$_POST = [];
+
+// Branch 1: no token -> the legacy api_key passes through (existing apps + merchants).
+gcheck('no token: legacy api_key passes through', bc_fintech_api_credential('legacy-key-123', 7), 'legacy-key-123');
+gcheck('no token: auth mode stays api_key', $GLOBALS['bc_api_auth_mode'], 'api_key');
+
+// Branch 2: valid token -> the owner's own api_key is substituted, so the untouched
+// `WHERE api_key='...'` lookup resolves to the token owner rather than the posted key.
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $key_user['token'];
+gcheck('valid token: credential becomes the token owner\'s api_key', bc_fintech_api_credential('attacker-supplied-key', 7), 'personal-legacy-key');
+gcheck('valid token: auth mode is app_token', $GLOBALS['bc_api_auth_mode'], 'app_token');
+gcheck('valid token: resolved user is the token owner', $GLOBALS['bc_api_auth_user']['username'], 'smart');
+
+// Vendor may be unknown at call time; the session row supplies it.
+gcheck('valid token without a known vendor still authenticates', bc_fintech_api_credential('', 0), 'personal-legacy-key');
+unset($_SERVER['HTTP_AUTHORIZATION']);
+
+// Branch 3: a presented-but-dead token must never fall back to api_key.
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . str_repeat('Z', 43);
+$denied = null;
+try { bc_fintech_api_credential('legacy-key-123', 7); }
+catch (Throwable $e) { $denied = $e->getMessage(); }
+unset($_SERVER['HTTP_AUTHORIZATION']);
+gcheck('invalid token is refused, never silently downgraded', $denied, 'APP_DENIAL');
+gcheck('invalid token denial is 401', $GLOBALS['bc_denial']['http'] ?? 0, 401);
+gcheck('invalid token denial code', $GLOBALS['bc_denial']['code'] ?? '', 'APP_SESSION_INVALID');
+
+// A business account still cannot obtain an app token, so it can never reach branch 2.
+gcheck('business still cannot obtain an app token', bc_app_token_issue($business, 7), null);
+
+// ═══════════════════════ 10. every endpoint uses the bridge ═══════════════════════
+foreach ($editions as $edition) {
+    $dir = $root . '/' . $edition . '/web/api';
+    $using = 0;
+    $leftover = [];
+    foreach (glob($dir . '/*.php') as $file) {
+        $src = file_get_contents($file);
+        if (strpos($src, 'bc_fintech_api_credential(') !== false) { $using++; continue; }
+        if (preg_match('/^\s*\$api_key\w*\s*=\s*mysqli_real_escape_string\(/m', $src)) $leftover[] = basename($file);
+    }
+    gtrue("$edition: endpoints resolve credentials through the bridge", $using >= 50);
+    gcheck("$edition: no endpoint left on the raw api_key path", $leftover, []);
+}
+
+gcheck('bridge parity: bc-fintech-gate.php', md5_file($root . '/DGV7.0-SAAS/func/bc-fintech-gate.php'), md5_file($root . '/DGV7.0-NON-SAAS/func/bc-fintech-gate.php'));
+gcheck('bridge parity: bc-app-token.php', md5_file($root . '/DGV7.0-SAAS/func/bc-app-token.php'), md5_file($root . '/DGV7.0-NON-SAAS/func/bc-app-token.php'));
+
+// The bridge must not accept api_key as a token, or the separation is cosmetic.
+$gate_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-fintech-gate.php');
+gfalse('bridge does not treat api_key as an app token', (bool)preg_match('/bc_app_session_user\(\s*\$provided_api_key/', $gate_src));
+
+// ═══════════════════════ 11. retired gateway (Plisio) ═══════════════════════
+require_once $root . '/DGV7.0-SAAS/func/bc-gateway-policy.php';
+
+gtrue('plisio is retired', bc_gateway_is_retired('plisio'));
+gtrue('plisio matching is case-insensitive', bc_gateway_is_retired('Plisio'));
+gtrue('plisio variants are retired too', bc_gateway_is_retired('plisio-v2'));
+gfalse('a live gateway is not retired', bc_gateway_is_retired('flutterwave'));
+gfalse('klasha is not retired', bc_gateway_is_retired('klasha'));
+gfalse('empty gateway name is not retired', bc_gateway_is_retired(''));
+gfalse('unrelated gateway is not affected', bc_gateway_is_retired('paystack'));
+gfalse('new plisio traffic is refused', bc_gateway_allowed_for_new_traffic('plisio'));
+gtrue('new flutterwave traffic is allowed', bc_gateway_allowed_for_new_traffic('flutterwave'));
+gtrue('retirement message names the replacement', strpos(bc_retired_gateway_message('plisio'), 'Klasha') !== false);
+gcheck('unknown gateway has no retirement message', bc_retired_gateway_message('paystack'), '');
+
+$policy_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-gateway-policy.php');
+gfalse('gateway policy runs no DELETE/UPDATE/ALTER', (bool)preg_match('/\b(DELETE|UPDATE|ALTER|DROP|TRUNCATE)\b/i', $policy_src));
+gfalse('gateway policy does not touch transaction history', (bool)preg_match('/plisio_tx_id|sas_crypto/i', $policy_src));
+
+$crypto_func = file_get_contents($root . '/DGV7.0-SAAS/func/bc-crypto-func.php');
+gtrue('legacy plisio key lookup is preserved for reconciliation', strpos($crypto_func, 'sas_payment_gateways') !== false);
+
+foreach ($editions as $edition) {
+    $api = file_get_contents($root . '/' . $edition . '/web/api/crypto.php');
+    gtrue("$edition crypto API refuses retired-provider actions", strpos($api, 'GATEWAY_RETIRED') !== false);
+    $guard = strpos($api, 'bc_gateway_is_retired(');
+    $invoice = strpos($api, "action === 'create_invoice'");
+    gtrue("$edition refusal precedes invoice creation", $guard !== false && $invoice !== false && $guard < $invoice);
+    gtrue("$edition trading rates are refused while retired", substr_count($api, 'bc_gateway_is_retired(') >= 2);
+
+    $hook = file_get_contents($root . '/' . $edition . '/users-plisio.php');
+    gtrue("$edition retired webhook returns 410", strpos($hook, '410') !== false);
+    $retire_at = strpos($hook, 'bc_retired_gateway_message');
+    $first_exit = strpos($hook, 'exit;');
+    gtrue("$edition retired webhook exits before any legacy handling", $retire_at !== false && $first_exit !== false && $retire_at < $first_exit);
+
+    $sc = file_get_contents($root . '/' . $edition . '/bc-admin/ServiceControl.php');
+    gfalse("$edition vendor service control no longer lists plisio as active", (bool)preg_match("/^\s*'plisio'\s*=>/m", $sc));
+    $pg = file_get_contents($root . '/' . $edition . '/bc-admin/PaymentGateway.php');
+    gfalse("$edition gateway screen no longer offers plisio", (bool)preg_match('/"(payhub|payvessel)", "plisio"/', $pg));
+    gfalse("$edition plisio webhook is not advertised as active", (bool)preg_match('/"plisio"\s*=>\s*\$web_http_host/', $pg));
+
+    $tables = file_get_contents($root . '/' . $edition . '/func/bc-tables.php');
+    gtrue("$edition fresh installs seed plisio as disabled", strpos($tables, "'plisio', 0") !== false);
+    gfalse("$edition migration does not disable an existing plisio row", (bool)preg_match("/UPDATE sas_global_service_control[^;]*plisio/i", $tables));
+}
+
+$sass_pg = file_get_contents($root . '/DGV7.0-SAAS/bc-admin/PaymentGateway.php');
+$block  = strpos($sass_pg, 'activate-plisio-wallet');
+$charge = strpos($sass_pg, 'chargeVendor("debit", "plisio_activation"', $block);
+$guard  = strpos($sass_pg, "bc_gateway_is_retired('plisio')", $block);
+gtrue('SAAS refuses a plisio activation fee before billing', $guard !== false && $charge !== false && $guard < $charge);
+
+gcheck('gateway policy parity', md5_file($root . '/DGV7.0-SAAS/func/bc-gateway-policy.php'), md5_file($root . '/DGV7.0-NON-SAAS/func/bc-gateway-policy.php'));
 
 echo "\n$checks phase 1B checks passed\n";

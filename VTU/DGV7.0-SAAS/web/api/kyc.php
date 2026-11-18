@@ -25,7 +25,7 @@ if (!$select_vendor_table) {
     exit;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['api_key'] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($_POST['api_key'] ?? '')), $vendor_id));
 if (empty($api_key)) {
     echo json_encode(["status" => "failed", "desc" => "Missing API key"]);
     exit;

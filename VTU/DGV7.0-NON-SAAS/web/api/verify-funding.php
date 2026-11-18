@@ -10,7 +10,7 @@ include_once("../../func/bc-connect.php");
 $input = json_decode(file_get_contents('php://input'), true);
 if (empty($input)) $input = array_merge($_GET, $_POST);
 
-$api_key   = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"]   ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"]   ?? '')), 0));
 $reference = mysqli_real_escape_string($connection_server, trim(strip_tags($input["reference"] ?? '')));
 $gateway   = strtolower(trim(strip_tags($input["gateway"] ?? '')));
 

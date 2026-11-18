@@ -20,7 +20,7 @@ if ($get_vendor_details['nin_card_enabled'] != 1) {
 $purchase_method = (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android') ? "app" : "api";
 $get_api_post_info = json_decode(file_get_contents('php://input'), true) ?? [];
 
-$api_key_sanitized = mysqli_real_escape_string($connection_server, trim(strip_tags($get_api_post_info["api_key"] ?? "")));
+$api_key_sanitized = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($get_api_post_info["api_key"] ?? "")), $vendor_id));
 $get_user_detail_via_apikey = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_vendor_details["id"]."' AND api_key='$api_key_sanitized' LIMIT 1");
 $get_logged_user_details = mysqli_fetch_array($get_user_detail_via_apikey);
 

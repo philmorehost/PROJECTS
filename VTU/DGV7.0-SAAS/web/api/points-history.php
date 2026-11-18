@@ -26,7 +26,7 @@ if (isset($api_post_info_from_app) && is_array($api_post_info_from_app)) {
     if (empty($input)) $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($input["api_key"] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     exit;

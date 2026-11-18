@@ -2213,7 +2213,14 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_global_service_
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_control (id INT AUTO_INCREMENT PRIMARY KEY, vendor_id INT UNSIGNED NOT NULL, service_name VARCHAR(100) NOT NULL, status TINYINT(1) DEFAULT 1, date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY (vendor_id, service_name))");
 
 // Seed Global Service Control with virtual_bank_display=0 (Disabled by default as requested)
-$check_vb = mysqli_query($connection_server, "SELECT id FROM sas_global_service_control WHERE service_name='virtual_bank_display'");
+// DGV7: Plisio.net is defunct. Seed it OFF for installs that have no row yet. An existing row
+    // is left exactly as it is so a deliberate later decision (or a rollback) is not overwritten.
+    $bc_plisio_retired = mysqli_query($connection_server, "SELECT id FROM sas_global_service_control WHERE service_name='plisio'");
+    if ($bc_plisio_retired && mysqli_num_rows($bc_plisio_retired) === 0) {
+        mysqli_query($connection_server, "INSERT INTO sas_global_service_control (service_name, status) VALUES ('plisio', 0)");
+    }
+
+    $check_vb = mysqli_query($connection_server, "SELECT id FROM sas_global_service_control WHERE service_name='virtual_bank_display'");
 if ($check_vb && mysqli_num_rows($check_vb) == 0) {
     mysqli_query($connection_server, "INSERT INTO sas_global_service_control (service_name, status) VALUES ('virtual_bank_display', 0)");
 }

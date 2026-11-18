@@ -41,7 +41,7 @@ if (!$get_vendor) {
 $data = json_decode(file_get_contents('php://input'), true);
 if (empty($data)) $data = $_REQUEST;
 
-$api_key = mysqli_real_escape_string($connection_server, trim(strip_tags($data['api_key'] ?? '')));
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($data['api_key'] ?? '')), $vendor_id));
 $action = trim($data['action'] ?? '');
 
 if (empty($api_key) || empty($action)) {

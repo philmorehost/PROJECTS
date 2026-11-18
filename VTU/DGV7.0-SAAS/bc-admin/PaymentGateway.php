@@ -2,8 +2,8 @@
     include("../func/bc-admin-config.php");
 	
 	$kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
-    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "beewave", "payhub", "plisio");
-	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/users-monnify.php", "flutterwave" => $web_http_host . "/users-flutterwave.php", "paystack" => $web_http_host . "/users-paystack.php", "payvessel" => $web_http_host . "/users-payvessel.php", "beewave" => $web_http_host . "/users-beewave.php", "payhub" => $web_http_host . "/users-payhub.php", "plisio" => $web_http_host . "/users-plisio.php");
+    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "beewave", "payhub");
+	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/users-monnify.php", "flutterwave" => $web_http_host . "/users-flutterwave.php", "paystack" => $web_http_host . "/users-paystack.php", "payvessel" => $web_http_host . "/users-payvessel.php", "beewave" => $web_http_host . "/users-beewave.php", "payhub" => $web_http_host . "/users-payhub.php");
 	
 	if(isset($_POST["update-kyc-details"])){
         $force_kyc = isset($_POST["force_kyc"]) ? 1 : 0;
@@ -68,6 +68,13 @@
     }
 
     if (isset($_POST["activate-plisio-wallet"])) {
+        // DGV7: Plisio is retired. Charging an activation fee for a defunct provider would take
+        // money and deliver nothing, so the purchase is refused before any billing runs.
+        if (bc_gateway_is_retired('plisio')) {
+            $_SESSION["product_purchase_response"] = bc_retired_gateway_message('plisio');
+            header("Location: " . $_SERVER["REQUEST_URI"]);
+            exit;
+        }
         $vid = $get_logged_admin_details['id'];
         $q_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='plisio_activation_fee'");
         $fee = (float)(mysqli_fetch_assoc($q_fee)['option_value'] ?? 10000);

@@ -173,6 +173,29 @@ function bc_app_session_user($token, $vendor_id) {
     return $user;
 }
 
+/**
+ * Resolves a bearer token without a caller-supplied vendor.
+ *
+ * Used only where an endpoint has not resolved its tenant yet. The token hash is globally
+ * unique, so the vendor comes from the session row itself; all account checks are identical
+ * to bc_app_session_user().
+ */
+function bc_app_session_user_any_vendor($token) {
+    global $connection_server;
+    if (!($connection_server instanceof mysqli)) return null;
+    if (!bc_app_token_well_formed($token)) return null;
+    if (!bc_fintech_schema_ready()) return null;
+
+    $hash = mysqli_real_escape_string($connection_server, bc_app_token_hash(trim($token)));
+    $q = mysqli_query($connection_server, "SELECT vendor_id FROM sas_app_tokens
+        WHERE token_hash='$hash' AND revoked_at IS NULL LIMIT 1");
+    if (!$q || mysqli_num_rows($q) !== 1) return null;
+    $vendor_id = (int)mysqli_fetch_assoc($q)['vendor_id'];
+    if ($vendor_id <= 0) return null;
+
+    return bc_app_session_user($token, $vendor_id);
+}
+
 /** Revokes one session (device logout). Returns true when a live row was closed. */
 function bc_app_token_revoke($session_id, $vendor_id, $reason = 'logout') {
     global $connection_server;

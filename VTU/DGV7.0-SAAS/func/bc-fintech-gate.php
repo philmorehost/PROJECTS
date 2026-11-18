@@ -384,3 +384,68 @@ if (!function_exists('bc_fintech_web_access_blocked')) {
         return ['state' => 'redirect', 'location' => $target];
     }
 }
+
+if (!function_exists('bc_fintech_api_credential')) {
+    /**
+     * Dual-auth bridge for the legacy /web/api/* endpoints.
+     *
+     * Every one of those endpoints authenticates by looking up `api_key=...`. Rewriting 100+
+     * auth blocks by hand is exactly how an app-wide outage happens, so instead this resolves
+     * the CREDENTIAL and leaves each query untouched:
+     *
+     *   - Bearer app token present and valid  -> returns that account's api_key, so the
+     *     existing `WHERE api_key='...'` lookup resolves to the same row the token belongs to.
+     *   - Bearer token present but invalid/dead -> HTTP 401 + JSON, no fallback. A client that
+     *     presented a session must not silently succeed through a leftover api_key.
+     *   - No token -> the supplied api_key is returned unchanged (legacy + merchant traffic).
+     *
+     * This is a TRANSITION layer. The hard-lockdown step flips the third branch to refuse
+     * api_key for personal accounts; that switch lives here, in one place.
+     *
+     * Returns a string safe to interpolate into the existing escaped queries.
+     */
+    function bc_fintech_api_credential($provided_api_key, $vendor_id = 0) {
+        global $connection_server;
+        $provided_api_key = (string)$provided_api_key;
+        $GLOBALS['bc_api_auth_mode'] = 'api_key';
+        $GLOBALS['bc_api_auth_user'] = null;
+
+        $input = null;
+        if (isset($_POST) && is_array($_POST)) $input = $_POST;
+
+        $token = bc_app_token_from_request($input);
+        if ($token === '') return $provided_api_key;
+
+        // Endpoints that call this before resolveVendorID() pass 0; the token row itself is
+        // vendor-scoped and unique, so the vendor is derived from the session rather than
+        // trusted from the request.
+        $vendor_id = (int)$vendor_id;
+        $user = $vendor_id > 0
+            ? bc_app_session_user($token, $vendor_id)
+            : bc_app_session_user_any_vendor($token);
+
+        if (!$user) {
+            bc_fintech_send_app_denial([
+                'http' => 401, 'code' => 'APP_SESSION_INVALID',
+                'message' => 'Your app session has expired. Please sign in again.',
+            ]);
+        }
+
+        $decision = bc_fintech_app_access($user);
+        if (!$decision['allowed']) bc_fintech_send_app_denial($decision);
+
+        $GLOBALS['bc_api_auth_mode'] = 'app_token';
+        $GLOBALS['bc_api_auth_user'] = $user;
+
+        $key = (string)($user['api_key'] ?? '');
+        if ($key === '') {
+            // The account exists but has never been issued a legacy key. It cannot satisfy the
+            // existing lookups, so fail closed rather than matching an empty string.
+            bc_fintech_send_app_denial([
+                'http' => 401, 'code' => 'APP_SESSION_INVALID',
+                'message' => 'Your app session is not usable. Please sign in again.',
+            ]);
+        }
+        return mysqli_real_escape_string($connection_server, $key);
+    }
+}
