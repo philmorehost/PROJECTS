@@ -2,6 +2,9 @@
 // Academics Management View — Sessions, Classes, Class Categories, Terms, Subjects, Timetable, Live Classes
 if (!defined('PORTAL_PATH')) exit;
 
+// Shared class-identity resolution (same rules the Registry and CBT use).
+require_once PORTAL_PATH . '/include/cbt_helper.php';
+
 $msg = '';
 $msg_type = 'green';
 $action = isset($_GET['action']) ? $_GET['action'] : 'overview';
@@ -81,8 +84,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // ── Delete Class ─────────────────────────────────────────────
         elseif (isset($_POST['delete_class'])) {
             $id = (int)$_POST['class_id'];
-            $pdo->prepare("DELETE FROM sm_classes WHERE id = ? AND school_id_number = ?")->execute([$id, $school_id]);
-            $msg = "Class removed.";
+            $stmtDel = $pdo->prepare("SELECT class_name, numeric_class_name FROM sm_classes WHERE id = ? AND school_id_number = ? LIMIT 1");
+            $stmtDel->execute([$id, $school_id]);
+            $delClass = $stmtDel->fetch(PDO::FETCH_ASSOC);
+
+            if (!$delClass) {
+                $msg = "That class no longer exists.";
+                $msg_type = 'red';
+            } else {
+                // Removing a class that students or exams still point at leaves
+                // papers nobody can be assigned to. Block it and say what to do.
+                $usage = CbtHelper::classUsage($pdo, $school_id ?? null, $delClass['numeric_class_name']);
+                if ($usage['students'] > 0 || $usage['exams'] > 0) {
+                    $parts = [];
+                    if ($usage['students'] > 0) {
+                        $parts[] = $usage['students'] . ' student(s) in the Registry';
+                    }
+                    if ($usage['exams'] > 0) {
+                        $parts[] = $usage['exams'] . ' scheduled exam(s)';
+                    }
+                    $msg = '“' . $delClass['class_name'] . '” is still used by ' . implode(' and ', $parts)
+                        . '. Move those students to another class and re-point the exams first (CBT → 👁️ Visibility → “Change the class on this exam”), then delete it.';
+                    $msg_type = 'red';
+                } else {
+                    $pdo->prepare("DELETE FROM sm_classes WHERE id = ? AND school_id_number = ?")->execute([$id, $school_id]);
+                    CbtHelper::flushCache();
+                    $msg = "Class removed.";
+                }
+            }
         }
 
         // ── Add Term ────────────────────────────────────────────────

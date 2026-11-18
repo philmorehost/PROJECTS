@@ -55,6 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['create_cbt'])) {
         $title = trim($_POST['paper_title']);
         $cls = trim($_POST['numeric_class_name']);
+        // Store the canonical class code, never a label or a bare number, so the
+        // paper can never drift away from the class it was meant for.
+        $clsResolution = CbtHelper::resolveClass($pdo, $school_id ?? null, $cls);
+        if ($clsResolution['code'] !== '') {
+            $cls = $clsResolution['code'];
+        }
         $sess = trim($_POST['session']);
         $term = trim($_POST['term_id_number']);
         $sub = trim($_POST['subject_code']);
@@ -181,6 +187,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $approvedCount = 0;
             $msg = "Could not approve pending exams: " . $e->getMessage();
         }
+    } elseif (isset($_POST['reassign_cbt_class'])) {
+        // Repair path: the paper was scheduled against a class value that no
+        // longer exists (or was never a real code). Point it at a real class.
+        try {
+            if ($user_role !== 'school_admin' && $user_role !== 'teacher') {
+                throw new RuntimeException('Only school staff can move an examination to another class.');
+            }
+            $cbt_id = (int)($_POST['cbt_id'] ?? 0);
+            $target = trim((string)($_POST['target_class'] ?? ''));
+            if ($cbt_id <= 0 || $target === '') {
+                throw new RuntimeException('Choose the class this examination belongs to.');
+            }
+            if (!CbtHelper::reassignExamClass($pdo, $school_id ?? null, $cbt_id, $target)) {
+                throw new RuntimeException('That class could not be applied. Pick a class from the list of classes in Academics → Classes.');
+            }
+            $newResolution = CbtHelper::resolveClass($pdo, $school_id ?? null, $target);
+            $msg = "Examination moved to " . ($newResolution['label'] !== '' ? $newResolution['label'] : $target)
+                . " (" . $newResolution['code'] . "). Every student in that class now sees it.";
+        } catch (Throwable $e) {
+            $msg = "Could not move the examination: " . $e->getMessage();
+        }
+    } elseif (isset($_POST['assign_students_class'])) {
+        // Repair path: pull students who carry a stray class value into the
+        // class the paper is actually aimed at.
+        try {
+            if ($user_role !== 'school_admin' && $user_role !== 'teacher') {
+                throw new RuntimeException('Only school staff can move students between classes.');
+            }
+            $target = trim((string)($_POST['target_class'] ?? ''));
+            $admissions = $_POST['admissions'] ?? [];
+            if (!is_array($admissions)) {
+                $admissions = [$admissions];
+            }
+            if ($target === '' || empty($admissions)) {
+                throw new RuntimeException('Tick at least one student and choose the class to move them into.');
+            }
+            $moved = CbtHelper::assignStudentsToClass($pdo, $school_id ?? null, $admissions, $target);
+            $targetResolution = CbtHelper::resolveClass($pdo, $school_id ?? null, $target);
+            $msg = $moved > 0
+                ? $moved . " student(s) moved to " . ($targetResolution['label'] !== '' ? $targetResolution['label'] : $target) . ". They now see this examination."
+                : "No student record changed. They may already be in that class.";
+        } catch (Throwable $e) {
+            $msg = "Could not move the students: " . $e->getMessage();
+        }
     } elseif (isset($_POST['bulk_delete_cbt'])) {
         $ids = $_POST['bulk_ids'] ?? [];
         if (!empty($ids)) {
@@ -201,8 +251,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($orig) {
             $is_approved = CbtHelper::approvalForRole($pdo, $school_id ?? null, $_SESSION['user_role'] ?? '');
+            $origClass = (string)($orig['numeric_class_name'] ?? '');
+            $origResolution = CbtHelper::resolveClass($pdo, $school_id ?? null, $origClass);
+            if ($origResolution['code'] !== '') {
+                $origClass = $origResolution['code'];
+            }
             $stmt = $pdo->prepare("INSERT INTO sm_cbt_schedules (school_id_number, paper_title, numeric_class_name, session, term_id_number, subject_code, cbt_type, exam_json, exam_date, exam_time, exam_questions, exam_duration, attempt_questions, is_approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$school_id, $new_title, $orig['numeric_class_name'], $new_session, $new_term, $orig['subject_code'], $orig['cbt_type'], $orig['exam_json'], $orig['exam_date'], $orig['exam_time'], $orig['exam_questions'], $orig['exam_duration'], $orig['attempt_questions'], $is_approved]);
+            $stmt->execute([$school_id, $new_title, $origClass, $new_session, $new_term, $orig['subject_code'], $orig['cbt_type'], $orig['exam_json'], $orig['exam_date'], $orig['exam_time'], $orig['exam_questions'], $orig['exam_duration'], $orig['attempt_questions'], $is_approved]);
             $new_cbt_id = $pdo->lastInsertId();
             echo "<script>window.location.href = 'dashboard.php?page=evaluation&action=add_cbt_quiz&cbt_id=" . $new_cbt_id . "&msg=" . urlencode("CBT Test cloned successfully! You can now edit the questions.") . "';</script>";
             exit;
@@ -238,8 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ((int)($examRow['is_approved'] ?? 1) !== 1) {
                 throw new Exception("This examination is awaiting approval by the school administrator.");
             }
-            $examAliases = CbtHelper::classAliases($pdo, $school_id, $student_info['current_class'] ?? '');
-            if (!CbtHelper::classMatches($examRow['numeric_class_name'], $examAliases)) {
+            if (!CbtHelper::classSameAs($pdo, $school_id, $examRow['numeric_class_name'], $student_info['current_class'] ?? '')) {
                 throw new Exception("This examination is not available for your class.");
             }
             $startState = CbtHelper::state($examRow);
@@ -568,7 +622,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                             🕓 <?php echo count($student_pending_tests); ?> exam(s) have been scheduled for your class and are <strong>waiting for the school administrator to approve them</strong>.
                         </p>
                     <?php else : ?>
-                        <p class="text-xs text-gray-400 mt-2">Your class code is <code class="text-indigo-300"><?php echo htmlspecialchars($student_info['current_class'] ?? 'not set'); ?></code>. If your school scheduled an exam, ask them to confirm it targets this exact class and has been approved.</p>
+                        <?php $classStatus = CbtHelper::studentClassStatus($pdo, $school_id, $student_info); ?>
+                        <p class="text-xs text-gray-400 mt-2"><?php echo htmlspecialchars($classStatus['message']); ?></p>
+                        <p class="text-[11px] text-gray-500 mt-1">Your class: <code class="text-indigo-300"><?php echo htmlspecialchars($classStatus['class'] !== '' ? $classStatus['class'] : 'not set'); ?></code></p>
                     <?php endif; ?>
                 </div>
             <?php else : ?>
@@ -693,10 +749,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                 <div class="text-[10px] text-yellow-300/80 font-normal mt-1">⛔ Hidden from students until approved</div>
                             <?php else: ?>
                                 <?php $classPop = CbtHelper::classStudentCount($pdo, $school_id, $cbt['numeric_class_name'], $cbt_class_population); ?>
+                                <?php $classSummary = $classPop > 0 ? null : CbtHelper::examClassSummary($pdo, $school_id, $cbt['numeric_class_name']); ?>
                                 <?php if ($classPop > 0): ?>
                                     <div class="text-[10px] text-emerald-400/90 font-normal mt-1">✅ Visible to <?php echo $classPop; ?> student<?php echo $classPop === 1 ? '' : 's'; ?> in this class</div>
                                 <?php else: ?>
-                                    <div class="text-[10px] text-rose-400 font-normal mt-1">⚠️ No student is assigned to class code <code><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></code></div>
+                                    <div class="text-[10px] text-rose-400 font-normal mt-1">
+                                        ⚠️ <?php echo htmlspecialchars($classSummary['text']); ?>
+                                        <?php if (!empty($classSummary['fixable'])): ?>
+                                            · <a href="?page=evaluation&action=cbt_visibility&cbt_id=<?php echo (int)$cbt['cbt_id']; ?>" class="underline font-semibold text-rose-200 hover:text-white">Fix this</a>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
@@ -1106,10 +1168,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                                 <?php else: ?>
                                                     <?php $cbt_class_population = $cbt_class_population ?? []; ?>
                                                     <?php $classPop = CbtHelper::classStudentCount($pdo, $school_id, $cbt['numeric_class_name'], $cbt_class_population); ?>
+                                                    <?php $classSummary = $classPop > 0 ? null : CbtHelper::examClassSummary($pdo, $school_id, $cbt['numeric_class_name']); ?>
                                                     <?php if ($classPop > 0): ?>
                                                         <div class="text-[10px] text-emerald-400/90 font-normal mt-1">✅ Visible to <?php echo $classPop; ?> student<?php echo $classPop === 1 ? '' : 's'; ?> in this class</div>
                                                     <?php else: ?>
-                                                        <div class="text-[10px] text-rose-400 font-normal mt-1">⚠️ No student is assigned to class code <code><?php echo htmlspecialchars($cbt['numeric_class_name']); ?></code></div>
+                                                        <div class="text-[10px] text-rose-400 font-normal mt-1">
+                                                            ⚠️ <?php echo htmlspecialchars($classSummary['text']); ?>
+                                                            <?php if (!empty($classSummary['fixable'])): ?>
+                                                                · <a href="?page=evaluation&action=cbt_visibility&cbt_id=<?php echo (int)$cbt['cbt_id']; ?>" class="underline font-semibold text-rose-200 hover:text-white">Fix this</a>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     <?php endif; ?>
                                                 <?php endif; ?>
                                             </td>
@@ -1230,7 +1298,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                                             🕓 <?php echo count($student_pending_tests); ?> exam(s) have been scheduled for your class and are <strong>waiting for the school administrator to approve them</strong>.
                                         </p>
                                     <?php else : ?>
-                                        <p class="text-xs text-gray-400 mt-2">Your class code is <code class="text-indigo-300"><?php echo htmlspecialchars($student_info['current_class'] ?? 'not set'); ?></code>. If your school scheduled an exam, ask them to confirm it targets this exact class and has been approved.</p>
+                                        <?php $classStatus = CbtHelper::studentClassStatus($pdo, $school_id, $student_info); ?>
+                                        <p class="text-xs text-gray-400 mt-2"><?php echo htmlspecialchars($classStatus['message']); ?></p>
+                                        <p class="text-[11px] text-gray-500 mt-1">Your class: <code class="text-indigo-300"><?php echo htmlspecialchars($classStatus['class'] !== '' ? $classStatus['class'] : 'not set'); ?></code></p>
                                     <?php endif; ?>
                                 </div>
                             <?php else : ?>
@@ -2011,8 +2081,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
             $stmtClassStudents = $pdo->prepare("SELECT admission_number, firstname, lastname, current_class, session FROM sm_students WHERE school_id_number = ? ORDER BY firstname ASC");
             $stmtClassStudents->execute([$school_id]);
             foreach ($stmtClassStudents->fetchAll() as $stu) {
-                $stuAliases = CbtHelper::classAliases($pdo, $school_id, $stu['current_class'] ?? '');
-                if (CbtHelper::classMatches($visExam['numeric_class_name'] ?? '', $stuAliases)) {
+                if (CbtHelper::classSameAs($pdo, $school_id, $visExam['numeric_class_name'] ?? '', $stu['current_class'] ?? '')) {
+                    $stu['resolved_class'] = CbtHelper::resolveClass($pdo, $school_id, $stu['current_class'] ?? '')['label'];
                     $visStudents[] = $stu;
                 }
             }
@@ -2020,6 +2090,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
             $stmtVisSubs = $pdo->prepare("SELECT COUNT(*) FROM sm_cbt_submitted WHERE school_id_number = ? AND cbt_id = ?");
             $stmtVisSubs->execute([$school_id, $cbt_id]);
             $visSubmissions = (int)$stmtVisSubs->fetchColumn();
+
+            // Repair data: the classes this paper can be moved to, and the
+            // students whose stored class does not line up with it.
+            $visClasses = CbtHelper::classesForSchool($pdo, $school_id);
+            $visUnassigned = [];
+            foreach (CbtHelper::classRoster($pdo, $school_id)['students'] as $visStu) {
+                $res = CbtHelper::resolveClass($pdo, $school_id, $visStu['current_class'] ?? '');
+                if ($res['key'] === '') {
+                    $visUnassigned[] = $visStu;
+                }
+            }
         }
 
         $visApproved = $visExam ? ((int)($visExam['is_approved'] ?? 1) === 1) : false;
@@ -2083,6 +2164,82 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                 </form>
             <?php endif; ?>
 
+            <?php if (!empty($visClasses)) : ?>
+                <details class="bg-sky-500/10 border border-sky-500/25 rounded-2xl overflow-hidden" <?php echo !empty($visReport['needs_repair']) ? 'open' : ''; ?>>
+                    <summary class="px-4 py-3 cursor-pointer select-none text-sm font-semibold text-sky-200">
+                        🛠️ Change the class on this exam
+                        <?php if (!empty($visReport['needs_repair'])) : ?>
+                            <span class="ml-2 text-[11px] font-bold uppercase tracking-wider text-amber-300">needs fixing</span>
+                        <?php endif; ?>
+                    </summary>
+                    <form method="post" class="px-4 pb-4 space-y-3">
+                        <p class="text-xs text-sky-100/80">
+                            This paper is stored against <span class="font-mono font-bold"><?php echo htmlspecialchars($visExam['numeric_class_name'] !== '' ? $visExam['numeric_class_name'] : '(empty)'); ?></span>.
+                            <?php if (!empty($visReport['needs_repair'])) : ?>
+                                That value does not line up with any class in Academics → Classes, so nobody receives the paper.
+                            <?php endif; ?>
+                            Move it to the right class and it publishes to that class immediately.
+                        </p>
+                        <div class="flex flex-wrap items-end gap-3">
+                            <label class="flex-1 min-w-[220px]">
+                                <span class="block text-[11px] uppercase tracking-wider text-sky-200/80 font-semibold mb-1">Class this paper belongs to</span>
+                                <select name="target_class" required class="w-full bg-slate-900 border border-white/15 rounded-lg px-3 py-2 text-sm text-white">
+                                    <option value="">Select a class…</option>
+                                    <?php foreach ($visClasses as $visCls) : ?>
+                                        <option value="<?php echo htmlspecialchars($visCls['numeric_class_name']); ?>">
+                                            <?php echo htmlspecialchars($visCls['class_name']); ?> (<?php echo htmlspecialchars($visCls['numeric_class_name']); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <input type="hidden" name="cbt_id" value="<?php echo (int)$cbt_id; ?>" />
+                            <button type="submit" name="reassign_cbt_class" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-lg text-xs font-bold transition">Move exam</button>
+                        </div>
+                    </form>
+                </details>
+            <?php endif; ?>
+
+            <?php if (empty($visClasses)) : ?>
+                <div class="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs text-amber-200">
+                    This school has no classes yet. Create the class in <a href="?page=academics" class="underline font-semibold">Academics → Classes</a> first, then come back here and move this exam onto it.
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($visUnassigned)) : ?>
+                <form method="post" class="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                    <div class="px-5 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h4 class="text-sm font-semibold text-white">Students with an unrecognised class</h4>
+                            <p class="text-[11px] text-gray-400 mt-0.5">These students are in the Registry but their Current Class does not match any class. Tick them, choose a class and save — they will start seeing papers for that class.</p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30"><?php echo count($visUnassigned); ?> student(s)</span>
+                    </div>
+                    <div class="max-h-72 overflow-y-auto divide-y divide-white/5">
+                        <?php foreach ($visUnassigned as $visStu) : ?>
+                            <label class="px-5 py-2.5 flex items-center justify-between gap-3 text-xs cursor-pointer hover:bg-white/5">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <input type="checkbox" name="admissions[]" value="<?php echo htmlspecialchars($visStu['admission_number']); ?>" class="rounded border-white/20 bg-slate-900" />
+                                    <span class="text-white font-semibold truncate"><?php echo htmlspecialchars(trim($visStu['firstname'] . ' ' . $visStu['lastname'])); ?></span>
+                                </span>
+                                <span class="text-gray-400 font-mono"><?php echo htmlspecialchars($visStu['admission_number']); ?> · <?php echo htmlspecialchars($visStu['current_class'] !== '' ? $visStu['current_class'] : 'no class'); ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="px-5 py-3 border-t border-white/10 flex flex-wrap items-end gap-3">
+                        <label class="flex-1 min-w-[220px]">
+                            <span class="block text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Move selected students to</span>
+                            <select name="target_class" required class="w-full bg-slate-900 border border-white/15 rounded-lg px-3 py-2 text-sm text-white">
+                                <option value="">Select a class…</option>
+                                <?php foreach ($visClasses as $visCls) : ?>
+                                    <option value="<?php echo htmlspecialchars($visCls['numeric_class_name']); ?>"><?php echo htmlspecialchars($visCls['class_name']); ?> (<?php echo htmlspecialchars($visCls['numeric_class_name']); ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <button type="submit" name="assign_students_class" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Save students</button>
+                    </div>
+                </form>
+            <?php endif; ?>
+
             <?php if (!empty($visStudents)) : ?>
                 <div class="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <div class="px-5 py-3 border-b border-white/10">
@@ -2122,8 +2279,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
                 $cbt_authorized = false;
                 $cbt_denied_reason = 'This examination is still awaiting approval by the school administrator.';
             } else {
-                $studentAliases = CbtHelper::classAliases($pdo, $school_id, $student_info['current_class'] ?? '');
-                if (!CbtHelper::classMatches($cbt['numeric_class_name'], $studentAliases)) {
+                if (!CbtHelper::classSameAs($pdo, $school_id, $cbt['numeric_class_name'], $student_info['current_class'] ?? '')) {
                     $cbt_authorized = false;
                     $cbt_denied_reason = 'This examination was scheduled for a different class (' . htmlspecialchars($cbt['numeric_class_name']) . ').';
                 } else {
