@@ -1,0 +1,39 @@
+name: Fintech account policy
+
+on:
+  push:
+    paths:
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/tests/fintech_policy_test.php'
+      - 'VTU/DGV7_FINTECH_UPGRADE.md'
+      - '.github/workflows/fintech-policy.yml'
+  pull_request:
+    paths:
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/tests/fintech_policy_test.php'
+      - 'VTU/DGV7_FINTECH_UPGRADE.md'
+      - '.github/workflows/fintech-policy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: PHP ${{ matrix.php }} fintech policy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Syntax and policy tests
+        run: |
+          php -l VTU/DGV7.0-SAAS/func/bc-fintech-policy.php
+          php -l VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php
+          php -n VTU/tests/fintech_policy_test.php
