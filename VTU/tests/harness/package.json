@@ -1,0 +1,9 @@
+{
+  "name": "dgv7-php-wasm-harness",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "php-wasm": "0.1.0"
+  }
+}
