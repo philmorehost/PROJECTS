@@ -271,8 +271,7 @@ try {
                 exit;
             }
             if (!empty($target_adm)) {
-                $aliases = CbtHelper::classAliases($pdo, $school_id, $current_class);
-                if (!CbtHelper::classMatches($examRow['numeric_class_name'], $aliases)) {
+                if (!CbtHelper::classSameAs($pdo, $school_id, $examRow['numeric_class_name'], $current_class)) {
                     http_response_code(403);
                     echo json_encode(["error" => "This examination is not available for your class (" . $current_class . ")."]);
                     exit;
@@ -380,8 +379,7 @@ try {
                 exit;
             }
             if (!empty($target_adm)) {
-                $aliases = CbtHelper::classAliases($pdo, $school_id, $current_class);
-                if (!CbtHelper::classMatches($examRow['numeric_class_name'], $aliases)) {
+                if (!CbtHelper::classSameAs($pdo, $school_id, $examRow['numeric_class_name'], $current_class)) {
                     http_response_code(403);
                     echo json_encode(["error" => "This examination is not available for your class."]);
                     exit;

@@ -2,6 +2,10 @@
 // Registry Management View (Admit Students, CSV Import, Parents, Teachers)
 if (!defined('PORTAL_PATH')) exit;
 
+// Shared class-identity resolution: one place decides what "JSS 1", "JSS-1"
+// and "1" mean, so the Registry and CBT can never disagree about a class.
+require_once PORTAL_PATH . '/include/cbt_helper.php';
+
 $msg = '';
 $msg_type = 'success';
 $action = isset($_GET['action']) ? $_GET['action'] : 'list';
@@ -153,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $first = trim($_POST['firstname']);
         $email = trim($_POST['email']);
         $pass = password_hash($_POST['password'], PASSWORD_DEFAULT);
-        $cls = trim($_POST['current_class']);
+        $cls = CbtHelper::canonicalClass($pdo, $school_id ?? null, $_POST['current_class'] ?? '');
         $sess = trim($_POST['session']);
 
         if (empty($adm)) {
@@ -236,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $first = trim($data[2]);
                         $email = trim($data[3]);
                         $pass = password_hash(trim($data[4]), PASSWORD_DEFAULT);
-                        $cls = isset($data[5]) ? trim($data[5]) : '';
+                        $cls = CbtHelper::canonicalClass($pdo, $school_id ?? null, $data[5] ?? '');
                         $sess = isset($data[6]) ? trim($data[6]) : '2026/2027';
 
                         // Pre-check for duplicate admission number
@@ -418,7 +422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $last = trim($_POST['lastname']);
         $first = trim($_POST['firstname']);
         $email = trim($_POST['email']);
-        $cls = trim($_POST['current_class']);
+        $cls = CbtHelper::canonicalClass($pdo, $school_id ?? null, $_POST['current_class'] ?? '');
         $sess = trim($_POST['session']);
         $pass = $_POST['password'];
 
@@ -1280,7 +1284,16 @@ if ($action === 'list') {
             $stmtTInfo->execute([$_SESSION['user_session'], $_SESSION['user_session'], $school_id]);
             $t_classes_str = $stmtTInfo->fetchColumn();
             $teacher_classes = array_filter(array_map('trim', explode("\n", $t_classes_str ?? '')));
-            if (!in_array($stu['current_class'], $teacher_classes)) {
+            // Compare through the shared class resolver: a teacher recorded
+            // against "JSS-1" still owns the student whose class reads "JSS 1".
+            $teacherOwnsClass = false;
+            foreach ($teacher_classes as $teacherClass) {
+                if (CbtHelper::classSameAs($pdo, $school_id, $teacherClass, $stu['current_class'])) {
+                    $teacherOwnsClass = true;
+                    break;
+                }
+            }
+            if (!$teacherOwnsClass) {
                 echo '<div class="p-6 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl max-w-xl mx-auto mt-6">⛔ Access Denied. You do not have permission to view students from this class.</div>';
                 return;
             }
@@ -1368,7 +1381,36 @@ if ($action === 'list') {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">Current Class</label>
-                            <input type="text" name="current_class" value="<?php echo htmlspecialchars($stu['current_class']); ?>" required class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 text-sm" />
+                            <?php
+                            $stuClassValue = (string)($stu['current_class'] ?? '');
+                            $stuClassResolved = CbtHelper::resolveClass($pdo, $school_id ?? null, $stuClassValue);
+                            $stuClassCode = $stuClassResolved['code'] !== '' ? $stuClassResolved['code'] : $stuClassValue;
+                            $stuClassInList = false;
+                            foreach ($school_classes as $clsOpt) {
+                                if ($clsOpt['numeric_class_name'] === $stuClassCode) {
+                                    $stuClassInList = true;
+                                    break;
+                                }
+                            }
+                            ?>
+                            <?php if (!empty($school_classes)) : ?>
+                                <select name="current_class" required class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 text-sm">
+                                    <?php foreach ($school_classes as $clsOpt) : ?>
+                                        <option value="<?php echo htmlspecialchars($clsOpt['numeric_class_name']); ?>" <?php echo $clsOpt['numeric_class_name'] === $stuClassCode ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($clsOpt['class_name']); ?> (<?php echo htmlspecialchars($clsOpt['numeric_class_name']); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                    <?php if (!$stuClassInList && $stuClassValue !== '') : ?>
+                                        <option value="<?php echo htmlspecialchars($stuClassValue); ?>" selected>
+                                            <?php echo htmlspecialchars($stuClassValue); ?> — not in your class list
+                                        </option>
+                                    <?php endif; ?>
+                                </select>
+                                <p class="text-[11px] text-gray-500 mt-1">Pick the class from your class list so this student receives that class's tests, results and report cards.</p>
+                            <?php else : ?>
+                                <input type="text" name="current_class" value="<?php echo htmlspecialchars($stuClassValue); ?>" required class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 text-sm" />
+                                <p class="text-[11px] text-amber-400/90 mt-1">No classes exist yet — create them in Academics → Classes so this student can be placed automatically.</p>
+                            <?php endif; ?>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">Session</label>
