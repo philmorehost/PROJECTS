@@ -141,7 +141,7 @@ ok("scheduled task" in admin.get("/admin")[2].lower(), "dashboard warns when the
 html = admin.get("/admin/settings")[2]
 ok("registration-protection" in html and "Registration protection" in html, "administrator can configure registration protection")
 ok("reCAPTCHA off" in html and "Sign-ups allowed per hour" in html, "protection settings render their state")
-ok("6Lc" not in html, "no reCAPTCHA key is shown before configuration")
+ok('name="recaptcha_site_key" value=""' in html, "no reCAPTCHA key is stored before configuration")
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "save quiz settings")
 html = admin.get("/admin/settings")[2]
 ok("cron-command" in html and "Copy command" in html, "settings page offers the copyable cron command")
