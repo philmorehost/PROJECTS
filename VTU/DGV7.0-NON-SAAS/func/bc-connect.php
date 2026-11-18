@@ -52,6 +52,7 @@
     include_once(__DIR__ . "/bc-app-token.php");
     include_once(__DIR__ . "/bc-fintech-gate.php");
     include_once(__DIR__ . "/bc-gateway-policy.php");
+    include_once(__DIR__ . "/bc-fintech-accounts.php");
 
     // Connect Platform Validation & Integrity Engine
     include_once(__DIR__ . "/bc-integrity.php");

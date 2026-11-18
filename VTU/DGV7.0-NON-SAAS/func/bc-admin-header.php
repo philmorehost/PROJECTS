@@ -464,6 +464,11 @@ function hex2rgb($hex) {
             </a>
           </li>
           <li>
+            <a href="<?php echo $web_http_host; ?>/bc-admin/BusinessKYB.php" class="<?php echo ($current_page == 'BusinessKYB.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Business KYB</span>
+            </a>
+          </li>
+          <li>
             <a href="<?php echo $web_http_host; ?>/bc-admin/BruteForceSecurity.php" class="<?php echo ($current_page == 'BruteForceSecurity.php') ? 'active' : ''; ?>">
               <i class="bi bi-circle"></i><span>Brute Force Security</span>
             </a>

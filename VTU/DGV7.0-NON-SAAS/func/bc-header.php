@@ -621,6 +621,13 @@ if (mysqli_num_rows($select_user_vendor_status_message) == 1) {
       </li><!-- End Contact Page Nav -->
 
       <li class="nav-item">
+        <a class="nav-link <?php echo ($current_page == 'BusinessUpgrade.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/BusinessUpgrade.php">
+          <i class="bi bi-briefcase"></i>
+          <span>Business Upgrade</span>
+        </a>
+      </li>
+
+      <li class="nav-item">
         <a class="nav-link <?php echo ($current_page == 'APIDocs.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/APIDocs.php">
           <i class="bi bi-code-slash"></i>
           <span>Developer API </span>

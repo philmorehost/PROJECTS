@@ -73,15 +73,106 @@ credentials first, and the lockdown stays a separate, later switch.
 **Still outstanding, in this order**
 1. Ship the DG7 / JIKABIZ / MZEEVTU Android + iOS builds that store `app_token` and send
    `Authorization: Bearer`. Until then the token path is unused in production.
-2. Run the reviewed `account_type` backfill (`1,2 → personal`, `3 → business`).
+2. ~~Run the reviewed `account_type` backfill.~~ Done in Step 2 below — the operator still has to
+   press the button in each tenant's Service Control page.
 3. Only then make `bc_fintech_api_credential()` refuse `api_key` for personal accounts, and hide
-   `APIDocs.php` / key regeneration from them.
+   `APIDocs.php` / key regeneration from them. **On hold** until (1) is confirmed deployed.
 
 **Known limits**
 - `security-quest.php`, `set-pin.php`, `biometric.php` and `databundle-card*.php` read the key from
   query/POST fields; they resolve through the same helper but need the token as a header, which
   the app update will send.
 - Merchant `api_key` traffic is intentionally unaffected at this stage.
+
+## Phase 1C step 2 in this change — backfill, service matrix, KYB
+
+Step 2 turns the account tiers into something an operator can actually run. It is deliberately
+**not** the hard `api_key` lockdown (step 3, on hold until the Bearer-token apps are deployed).
+
+### 1. `account_type` backfill (idempotent)
+
+`bc_fintech_backfill_account_types($vendor_id, $dry_run)` in `func/bc-fintech-accounts.php`
+(both editions, byte-identical):
+
+| Rule | Behaviour |
+| --- | --- |
+| Levels `1`, `2` | → `account_type = 'personal'` |
+| Level `3` | → `account_type = 'business'` |
+| Levels `0`, `4`, malformed | Left `NULL`, counted as `unknown_level` — a guessed tier would grant or remove access nobody approved |
+| Rows that already have a tier | Never touched, so a manual correction survives a re-run |
+| `account_level` | **Read only.** It still drives prices, parameter tables and the legacy API |
+| Provenance | `account_type_source = 'backfill_2026_11'`, `account_type_at = NOW()` |
+
+The console runs a **dry run first** and only writes when the operator ticks the confirmation box,
+so a stray submit or a prefetch cannot reclassify accounts. `bc_fintech_backfill_dry_run()`
+returns per-bucket counts (`personal`, `business`, `already_set`, `unknown_level`, `invalid_tier`).
+
+### 2. Per-tier service matrix in both consoles
+
+`bc_fintech_matrix_services()` defines the tier-aware services:
+`developer_api`, `airtime`, `esim`, `tuition`, `bills`, `invoices`, `pos`, `transfers`,
+`cross_border`, `stablecoin`, `fx`, `virtual_accounts`, `referrals`.
+
+Per row the matrix exposes four switches on `sas_service_control`: `status`, `personal_enabled`,
+`business_enabled`, `provider_ready`. A tier may use a service only when **all** of them are on:
+
+```
+usable(tier) = status && provider_ready && <tier>_enabled && !locked_off(service, tier)
+```
+
+- **`developer_api` is permanently off for Personal.** This is enforced in
+  `bc_fintech_matrix_set()` (an enable attempt is refused with a message) **and** in
+  `bc_fintech_tier_effective()`, so the UI and the runtime cannot disagree even if a row is edited
+  in SQL. The switch renders disabled with a `locked` badge.
+- New fintech services ship with `provider_ready = 0`, so turning a service on in the UI cannot
+  expose an uncontracted provider.
+- **Vendor console** (`bc-admin/ServiceControl.php`): scoped to the logged-in vendor.
+- **Platform console** (`bc-spadmin/ServiceControl.php`): `$matrix_selectable = true` — a tenant
+  selector validated against `sas_vendors` before any write, session-pinned. The platform console
+  has no vendor context of its own and does not invent one.
+
+Controller and view are separate files (`bc-service-matrix.php` / `-render.php`, and the same split
+for the backfill card) so the page can include logic in its PHP preamble without emitting output
+before the post/redirect/get redirect.
+
+### 3. Personal → Business upgrade (KYB) flow
+
+| Piece | Path | What it does |
+| --- | --- | --- |
+| User form | `web/BusinessUpgrade.php` | Business name, registration number, category, document upload. Linked from the user navigation and from the dashboard area. |
+| Submit primitive | `bc_fintech_kyb_submit()` | Validates and records `kyb_status = 1`. **Never** sets `account_type`. |
+| Review queue | `bc-admin/BusinessKYB.php` | `bc_fintech_kyb_pending()` — tenant-scoped, oldest first; approve / reject with a reason; recently decided list. Linked from the admin navigation. |
+| Approve | `bc_fintech_kyb_approve()` | The **only** code path that sets `account_type = 'business'` (source `kyb_approved`), guarded on `kyb_status = 1`, records the reviewer, and calls `bc_app_token_revoke_all(..., 'account_type')` in the same operation. |
+| Reject | `bc_fintech_kyb_reject()` | Requires pending status, keeps the account personal, stores `kyb_note` (≤ 2000 chars) for the applicant. |
+
+`kyb_status`: **0** not started, **1** under review, **2** approved, **3** rejected.
+Categories: `sole_trader`, `limited_co`, `partnership`, `ngo`, `fintech`, `other`.
+
+Guards worth knowing:
+
+- A second submit while a request is under review is refused **inside the primitive**, so the
+  evidence a reviewer is looking at cannot be overwritten by a replayed POST.
+- New columns: `kyb_business_name`, `kyb_registration_no`, `kyb_category`, `kyb_document`,
+  `kyb_note` (plus the existing `kyb_status`, `kyb_reference`, `kyb_submitted_at`,
+  `kyb_reviewed_at`, `kyb_reviewed_by`) — additive, handled by `bc_fintech_ensure_schema()`.
+- **Documents are private.** Stored in `/uploads/kyb/` with a deny-all `.htaccess`, named
+  `kyb_{user_id}_{16 hex}.{ext}`, accepted only as PDF/JPG/PNG/WebP ≤ 8 MB with `getimagesize()`
+  confirming images and `is_uploaded_file()` confirming the upload. They are served **only** by
+  `bc-admin/BusinessKYB.php?doc=1&uid=…`, which re-checks the document belongs to that vendor,
+  resolves the path with `realpath()` and requires it to sit inside the upload root, releases the
+  session lock before streaming, and sends `nosniff` + `no-store`.
+- **No fee is charged on submit.** The existing `sas_user_upgrade_price` / `handle_upgrade.php`
+  path still bills `account_level` changes and is deliberately untouched; a Business upgrade fee,
+  if configured later, belongs after approval and never before it.
+- `account_level` is not changed by the upgrade, so the account keeps its existing pricing.
+
+### Test coverage added
+
+`tests/fintech_gate_test.php` grew from 193 to **402 checks**: dry-run vs. write counts, unknown
+levels left `NULL`, explicit tiers never overwritten, `account_level` untouched, re-run idempotency,
+the `developer_api` lock at both layers, matrix writes and refusals, tenant isolation of the queue
+and of document access, the full submit→approve/reject lifecycle, session revocation on approval,
+and structural assertions that every new page routes through the shared primitives.
 
 ## Phase 1C gateway change — Plisio retired
 

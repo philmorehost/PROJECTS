@@ -36,12 +36,43 @@ $GLOBALS['db'] = [
     'affected' => 0,
 ];
 
+/**
+ * Result-set cursor. The first version of this fake returned plain arrays and always handed back
+ * $rows[0], which was fine while every query returned at most one row — but a GROUP BY (the
+ * backfill dry run) returns several, and `while ($r = mysqli_fetch_assoc($q))` spun forever.
+ * Faithful rows-with-a-cursor semantics cost a few lines and remove that class of hang.
+ */
+class FakeResult implements IteratorAggregate, Countable {
+    public $rows; public $pos = 0;
+    public function __construct(array $rows) { $this->rows = array_values($rows); }
+    public function count(): int { return count($this->rows); }
+    public function getIterator(): Iterator { return new ArrayIterator($this->rows); }
+}
+
+function fake_result($result) {
+    if ($result instanceof FakeResult || is_array($result) || is_bool($result) || $result === null) {
+        return is_array($result) ? new FakeResult($result) : $result;
+    }
+    return $result;
+}
+
 function fake_mysqli_real_escape_string($db, $value) { return addslashes((string)$value); }
-function fake_mysqli_num_rows($rows) { return is_array($rows) ? count($rows) : 0; }
-function fake_mysqli_fetch_assoc($rows) { return is_array($rows) && $rows ? $rows[0] : null; }
+function fake_mysqli_num_rows($rows) {
+    if ($rows instanceof FakeResult) return count($rows);
+    return is_array($rows) ? count($rows) : 0;
+}
+function fake_mysqli_fetch_assoc($rows) {
+    if ($rows instanceof FakeResult) {
+        if (!isset($rows->rows[$rows->pos])) return null;
+        return $rows->rows[$rows->pos++];
+    }
+    return is_array($rows) && $rows ? $rows[0] : null;
+}
 function fake_mysqli_affected_rows($db) { return $GLOBALS['db']['affected']; }
 
-function fake_mysqli_query($db, $sql) {
+function fake_mysqli_query($db, $sql) { return fake_result(fake_mysqli_query_raw($db, $sql)); }
+
+function fake_mysqli_query_raw($db, $sql) {
     $GLOBALS['db']['affected'] = 0;
 
     // schema: SHOW COLUMNS FROM `t` LIKE 'c'
@@ -129,6 +160,127 @@ function fake_mysqli_query($db, $sql) {
         return $row ? [$row] : [];
     }
 
+    // ── phase 1C step 2: backfill ──
+    if (preg_match("/SELECT account_type, account_level, COUNT\\(\\*\\) AS n\\s+FROM sas_users WHERE vendor_id='(\\d+)' GROUP BY account_type, account_level/s", $sql, $m)) {
+        $groups = [];
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] !== (int)$m[1]) continue;
+            $key = json_encode([(string)($u['account_type'] ?? null), (string)($u['account_level'] ?? null)]);
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['account_type' => $u['account_type'] ?? null, 'account_level' => $u['account_level'] ?? null, 'n' => 0];
+            }
+            $groups[$key]['n']++;
+        }
+        return array_values($groups);
+    }
+    if (preg_match("/UPDATE sas_users\\s+SET account_type='(personal|business)', account_type_source='backfill_2026_11', account_type_at=NOW\\(\\)\\s+WHERE vendor_id='(\\d+)'\\s+AND \\(account_type IS NULL OR account_type=''\\)\\s+AND account_level IN \\('(\\d+)', '(\\d+)'\\)/s", $sql, $m)) {
+        $n = 0;
+        foreach ($GLOBALS['db']['users'] as $id => $u) {
+            if ((int)$u['vendor_id'] !== (int)$m[2]) continue;
+            if (isset($u['account_type']) && $u['account_type'] !== null && $u['account_type'] !== '') continue;
+            $level = (string)($u['account_level'] ?? '');
+            if ($level !== $m[3] && $level !== $m[4]) continue;
+            $GLOBALS['db']['users'][$id]['account_type'] = $m[1];
+            $GLOBALS['db']['users'][$id]['account_type_source'] = 'backfill_2026_11';
+            $n++;
+        }
+        $GLOBALS['db']['affected'] = $n;
+        return true;
+    }
+
+    // ── phase 1C step 2: service matrix ──
+    if (preg_match("/SELECT service_name, status, personal_enabled, business_enabled, provider_ready\\s+FROM sas_service_control WHERE vendor_id='(\\d+)'/s", $sql, $m)) {
+        $rows = [];
+        foreach ($GLOBALS['db']['service'] as $key => $row) {
+            if (strpos($key, $m[1] . ':') === 0) {
+                $rows[] = array_merge(['service_name' => substr($key, strlen($m[1]) + 1)], $row);
+            }
+        }
+        return $rows;
+    }
+    if (preg_match("/SELECT id FROM sas_service_control WHERE vendor_id='(\\d+)' AND service_name='([^']*)' LIMIT 1/s", $sql, $m)) {
+        return isset($GLOBALS['db']['service'][$m[1] . ':' . stripslashes($m[2])]) ? [['id' => 1]] : [];
+    }
+    if (preg_match("/UPDATE sas_service_control SET `([a-z_]+)`='(\\d+)' WHERE vendor_id='(\\d+)' AND service_name='([^']*)'/s", $sql, $m)) {
+        $key = $m[3] . ':' . stripslashes($m[4]);
+        $GLOBALS['db']['service'][$key][$m[1]] = (int)$m[2];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/INSERT INTO sas_service_control \\(vendor_id, service_name, `([a-z_]+)`\\) VALUES \\('(\\d+)', '([^']*)', '(\\d+)'\\)/s", $sql, $m)) {
+        $key = $m[2] . ':' . stripslashes($m[3]);
+        $GLOBALS['db']['service'][$key] = $GLOBALS['db']['service'][$key] ?? [
+            'status' => 1, 'personal_enabled' => 1, 'business_enabled' => 1, 'provider_ready' => 0,
+        ];
+        $GLOBALS['db']['service'][$key][$m[1]] = (int)$m[4];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // ── phase 1C step 2: KYB ──
+    if (preg_match("/SELECT kyb_status FROM sas_users WHERE id='(\\d+)' AND vendor_id='(\\d+)' LIMIT 1/s", $sql, $m)) {
+        $u = $GLOBALS['db']['users'][$m[1]] ?? null;
+        return ($u && (int)$u['vendor_id'] === (int)$m[2]) ? [['kyb_status' => (int)($u['kyb_status'] ?? 0)]] : [];
+    }
+    if (preg_match("/UPDATE sas_users SET\\s+kyb_status=1,\\s+kyb_business_name='([^']*)',\\s+kyb_registration_no='([^']*)',\\s+kyb_category='([^']*)',\\s+kyb_document='([^']*)',\\s+kyb_reference='([^']*)',\\s+kyb_submitted_at=NOW\\(\\),\\s+kyb_reviewed_at=NULL,\\s+kyb_reviewed_by=NULL\\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
+        $id = (int)$m[6];
+        $u = $GLOBALS['db']['users'][$id] ?? null;
+        if (!$u || (int)$u['vendor_id'] !== (int)$m[7]) { $GLOBALS['db']['affected'] = 0; return true; }
+        $GLOBALS['db']['users'][$id] = array_merge($u, [
+            'kyb_status' => 1,
+            'kyb_business_name' => stripslashes($m[1]),
+            'kyb_registration_no' => stripslashes($m[2]),
+            'kyb_category' => stripslashes($m[3]),
+            'kyb_document' => stripslashes($m[4]),
+            'kyb_reference' => stripslashes($m[5]),
+            'kyb_submitted_at' => date('Y-m-d H:i:s'),
+            'kyb_reviewed_at' => null,
+            'kyb_reviewed_by' => null,
+        ]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("~UPDATE sas_users SET\\s+account_type='business', account_type_source='kyb_approved', account_type_at=NOW[(][)],\\s+kyb_status=2, kyb_reviewed_at=NOW[(][)], kyb_reviewed_by='([^']*)'\\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)' AND kyb_status=1~s", $sql, $m)) {
+        $id = (int)$m[2];
+        $u = $GLOBALS['db']['users'][$id] ?? null;
+        if (!$u || (int)$u['vendor_id'] !== (int)$m[3] || (int)($u['kyb_status'] ?? 0) !== 1) {
+            $GLOBALS['db']['affected'] = 0;
+            return true;
+        }
+        $GLOBALS['db']['users'][$id] = array_merge($u, [
+            'account_type' => 'business',
+            'account_type_source' => 'kyb_approved',
+            'kyb_status' => 2,
+            'kyb_reviewed_at' => date('Y-m-d H:i:s'),
+            'kyb_reviewed_by' => stripslashes($m[1]),
+        ]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("~UPDATE sas_users SET\\s+kyb_status=3, kyb_note='([^']*)', kyb_reviewed_at=NOW[(][)], kyb_reviewed_by='([^']*)'\\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)' AND kyb_status=1~s", $sql, $m)) {
+        $id = (int)$m[3];
+        $u = $GLOBALS['db']['users'][$id] ?? null;
+        if (!$u || (int)$u['vendor_id'] !== (int)$m[4] || (int)($u['kyb_status'] ?? 0) !== 1) {
+            $GLOBALS['db']['affected'] = 0;
+            return true;
+        }
+        $GLOBALS['db']['users'][$id] = array_merge($u, [
+            'kyb_status' => 3,
+            'kyb_note' => stripslashes($m[1]),
+            'kyb_reviewed_at' => date('Y-m-d H:i:s'),
+            'kyb_reviewed_by' => stripslashes($m[2]),
+        ]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/SELECT \\* FROM sas_users\\s+WHERE vendor_id='(\\d+)' AND kyb_status=1\\s+ORDER BY kyb_submitted_at ASC LIMIT (\\d+)/s", $sql, $m)) {
+        $rows = [];
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] === (int)$m[1] && (int)($u['kyb_status'] ?? 0) === 1) $rows[] = $u;
+        }
+        return array_slice($rows, 0, (int)$m[2]);
+    }
+
     throw new Exception('Unexpected SQL: ' . $sql);
 }
 
@@ -141,6 +293,9 @@ function load_edition($root, $edition, $files) {
         $source = preg_replace('/^<\?php/', '', $source, 1);
         // Drop the runtime require_once chain in the gate: the test loads the same files itself.
         $source = preg_replace("#\s*require_once \\\$dir \. '/bc-(?:fintech-policy|fintech-schema|app-token)\.php';#", '', $source);
+        // bc-fintech-accounts.php pulls gateway-policy in by __DIR__; in the eval'd copies that path
+        // points at the test directory, so drop it too (the test already required the real one).
+        $source = preg_replace("#\s*require_once __DIR__ \. '/bc-gateway-policy\.php';#", '', $source);
         $source = str_replace(['instanceof mysqli', 'mysqli_'], ['instanceof FakeDb', 'fake_mysqli_'], $source);
         eval($source);
     }
@@ -533,4 +688,281 @@ gtrue('SAAS refuses a plisio activation fee before billing', $guard !== false &&
 
 gcheck('gateway policy parity', md5_file($root . '/DGV7.0-SAAS/func/bc-gateway-policy.php'), md5_file($root . '/DGV7.0-NON-SAAS/func/bc-gateway-policy.php'));
 
-echo "\n$checks phase 1B checks passed\n";
+// ═══════════════════════ 12. phase 1C step 2: account-type backfill ═══════════════════════
+// Load through the fake-DB shim so the real shipped SQL is exercised (mysqli is absent here).
+load_edition($root, 'DGV7.0-SAAS', ['func/bc-fintech-accounts.php']);
+
+$GLOBALS['db']['users'] = [
+    10 => ['id' => 10, 'vendor_id' => 7, 'username' => 'lvl1', 'account_level' => '1'],
+    11 => ['id' => 11, 'vendor_id' => 7, 'username' => 'lvl2', 'account_level' => '2'],
+    12 => ['id' => 12, 'vendor_id' => 7, 'username' => 'lvl3', 'account_level' => '3'],
+    13 => ['id' => 13, 'vendor_id' => 7, 'username' => 'lvl0', 'account_level' => '0'],
+    14 => ['id' => 14, 'vendor_id' => 7, 'username' => 'explicit', 'account_level' => '3', 'account_type' => 'personal'],
+    15 => ['id' => 15, 'vendor_id' => 8, 'username' => 'other-tenant', 'account_level' => '3'],
+];
+
+$dry = bc_fintech_backfill_dry_run(7);
+gcheck('dry run counts levels 1-2 as personal', $dry['personal'], 2);
+gcheck('dry run counts level 3 as business', $dry['business'], 1);
+gcheck('dry run counts explicit tiers as already set', $dry['already_set'], 1);
+gcheck('dry run leaves unknown levels unclassified', $dry['unknown_level'], 1);
+gfalse('dry run writes nothing', isset($GLOBALS['db']['users'][10]['account_type']));
+
+$run = bc_fintech_backfill_account_types(7);
+gcheck('backfill reports two rows written', $run['updated'], 3);
+gcheck('backfill reports the unknown level as skipped', $run['skipped_unknown'], 1);
+gcheck('level 1 became personal', $GLOBALS['db']['users'][10]['account_type'], 'personal');
+gcheck('level 2 became personal', $GLOBALS['db']['users'][11]['account_type'], 'personal');
+gcheck('level 3 became business', $GLOBALS['db']['users'][12]['account_type'], 'business');
+gcheck('backfill stamps its source', $GLOBALS['db']['users'][12]['account_type_source'], 'backfill_2026_11');
+gfalse('unknown level 0 is left NULL', isset($GLOBALS['db']['users'][13]['account_type']));
+gcheck('an explicit tier is never overwritten', $GLOBALS['db']['users'][14]['account_type'], 'personal');
+gfalse('other tenants are untouched', isset($GLOBALS['db']['users'][15]['account_type']));
+
+// account_level is the pricing key: the backfill must not rewrite it.
+gcheck('account_level survives the backfill (1)', $GLOBALS['db']['users'][10]['account_level'], '1');
+gcheck('account_level survives the backfill (3)', $GLOBALS['db']['users'][12]['account_level'], '3');
+gcheck('account_level of an explicit tier survives too', $GLOBALS['db']['users'][14]['account_level'], '3');
+
+// idempotency: a second run has nothing left to do
+$again = bc_fintech_backfill_account_types(7);
+gcheck('re-running the backfill writes nothing', $again['updated'], 0);
+gcheck('re-run still reports the unknown level', $again['skipped_unknown'], 1);
+
+$accounts_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-accounts.php');
+gfalse('backfill helper never writes account_level', (bool)preg_match('/account_level\s*=\s*[\'"]?\d/', $accounts_src));
+gfalse('backfill helper never drops or truncates', (bool)preg_match('/\b(DROP|TRUNCATE)\b/i', $accounts_src));
+gfalse('backfill helper does not delete rows', (bool)preg_match('/\bDELETE\s+FROM\b/i', $accounts_src));
+
+// ── levels 0/4/malformed stay unclassified; an explicit tier is never re-mapped ──
+$GLOBALS['db']['users'][16] = ['id' => 16, 'vendor_id' => 7, 'username' => 'lvl4', 'account_level' => '4'];
+$GLOBALS['db']['users'][17] = ['id' => 17, 'vendor_id' => 7, 'username' => 'junk', 'account_level' => 'agent'];
+$run2 = bc_fintech_backfill_account_types(7);
+gcheck('second tenant pass writes only the new valid rows', $run2['updated'], 0);
+gfalse('level 4 stays NULL', isset($GLOBALS['db']['users'][16]['account_type']));
+gfalse('a malformed level stays NULL', isset($GLOBALS['db']['users'][17]['account_type']));
+
+// ═══════════════════════ 13. service matrix ═══════════════════════
+$services = bc_fintech_matrix_services();
+foreach (['developer_api', 'esim', 'tuition', 'bills', 'invoices', 'pos', 'transfers', 'cross_border', 'stablecoin', 'fx', 'virtual_accounts', 'referrals', 'airtime'] as $slug) {
+    gtrue("matrix lists $slug", array_key_exists($slug, $services));
+}
+gtrue('every matrix slug is lower_snake', count(array_filter(array_keys($services), fn($k) => !preg_match('/^[a-z_]+$/', $k))) === 0);
+
+gtrue('developer_api is locked off for personal', bc_fintech_service_locked_off('developer_api', 'personal'));
+gfalse('developer_api is NOT locked off for business', bc_fintech_service_locked_off('developer_api', 'business'));
+gfalse('other services are not locked off', bc_fintech_service_locked_off('esim', 'personal'));
+gtrue('lock check is case/space tolerant', bc_fintech_service_locked_off(' DEVELOPER_API ', 'Personal'));
+
+$GLOBALS['db']['service'] = [];
+$GLOBALS['db']['service']['7:esim'] = ['status' => 1, 'personal_enabled' => 1, 'business_enabled' => 0, 'provider_ready' => 1];
+$m = bc_fintech_matrix_read(7);
+gcheck('matrix reads the personal switch', $m['esim']['personal_enabled'], 1);
+gcheck('matrix reads the business switch', $m['esim']['business_enabled'], 0);
+gtrue('matrix reports the live personal tier', bc_fintech_tier_effective(['service_name' => 'esim'] + $m['esim'], 'personal'));
+gfalse('matrix reports the disabled business tier', bc_fintech_tier_effective(['service_name' => 'esim'] + $m['esim'], 'business'));
+
+$GLOBALS['db']['service']['7:esim']['provider_ready'] = 0;
+gfalse('provider readiness gates the tier summary', bc_fintech_tier_effective(['service_name' => 'esim'] + $GLOBALS['db']['service']['7:esim'], 'personal'));
+$GLOBALS['db']['service']['7:esim']['provider_ready'] = 1;
+$GLOBALS['db']['service']['7:esim']['status'] = 0;
+gfalse('the global status gates the tier summary', bc_fintech_tier_effective(['service_name' => 'esim'] + $GLOBALS['db']['service']['7:esim'], 'personal'));
+$GLOBALS['db']['service']['7:esim']['status'] = 1;
+
+// developer_api can never be live for personal, whatever the row says
+$GLOBALS['db']['service']['7:developer_api'] = ['status' => 1, 'personal_enabled' => 1, 'business_enabled' => 1, 'provider_ready' => 1];
+gfalse('a forced developer_api row still reports personal: off',
+    bc_fintech_tier_effective(['service_name' => 'developer_api'] + $GLOBALS['db']['service']['7:developer_api'], 'personal'));
+gtrue('developer_api can be live for business',
+    bc_fintech_tier_effective(['service_name' => 'developer_api'] + $GLOBALS['db']['service']['7:developer_api'], 'business'));
+
+// matrix writes
+gcheck('matrix refuses to enable developer_api for personal',
+    bc_fintech_matrix_set(7, 'developer_api', 'personal_enabled', 1), 'Developer API can never be enabled for personal accounts.');
+gcheck('the refused write left the switch unchanged', $GLOBALS['db']['service']['7:developer_api']['personal_enabled'], 1);
+gtrue('matrix can still disable developer_api for personal', bc_fintech_matrix_set(7, 'developer_api', 'personal_enabled', 0));
+gcheck('the disable was written', $GLOBALS['db']['service']['7:developer_api']['personal_enabled'], 0);
+gcheck('matrix refuses an unknown service', bc_fintech_matrix_set(7, 'teleport', 'status', 1), 'Unknown service.');
+gcheck('matrix refuses an unknown switch', bc_fintech_matrix_set(7, 'esim', 'free_stuff', 1), 'Unknown switch.');
+gcheck('matrix refuses a write with no tenant', bc_fintech_matrix_set(0, 'esim', 'status', 1), 'No tenant context.');
+gtrue('matrix writes an existing row', bc_fintech_matrix_set(7, 'esim', 'business_enabled', 1));
+gcheck('the business switch was written', $GLOBALS['db']['service']['7:esim']['business_enabled'], 1);
+gtrue('matrix creates a missing row', bc_fintech_matrix_set(7, 'tuition', 'provider_ready', 1));
+gcheck('the new row carries the switch', $GLOBALS['db']['service']['7:tuition']['provider_ready'], 1);
+
+// ── the console wiring really is in both editions, and the platform console has a selector ──
+foreach ($editions as $edition) {
+    $sc = file_get_contents($root . '/' . $edition . '/bc-admin/ServiceControl.php');
+    gtrue("$edition vendor console includes the matrix controller", strpos($sc, 'bc-service-matrix.php') !== false);
+    gtrue("$edition vendor console renders the matrix", strpos($sc, 'bc-service-matrix-render.php') !== false);
+    gtrue("$edition vendor console includes the backfill controller", strpos($sc, 'bc-account-backfill.php') !== false);
+    gtrue("$edition vendor console renders the backfill", strpos($sc, 'bc-account-backfill-render.php') !== false);
+    gtrue("$edition vendor console scopes the matrix to the logged-in vendor", strpos($sc, "\$matrix_vendor_id = (int)\$get_logged_admin_details['id'];") !== false);
+
+    $render = file_get_contents($root . '/' . $edition . '/func/bc-service-matrix-render.php');
+    gtrue("$edition matrix shows a personal column", strpos($render, 'personal_enabled') !== false);
+    gtrue("$edition matrix shows a business column", strpos($render, 'business_enabled') !== false);
+    gtrue("$edition matrix shows provider readiness", strpos($render, 'provider_ready') !== false);
+    gtrue("$edition matrix marks the locked tier", strpos($render, 'locked') !== false);
+    // The controller and view must stay split: an echoing include in a page preamble breaks redirects.
+    $controller = file_get_contents($root . '/' . $edition . '/func/bc-service-matrix.php');
+    gfalse("$edition matrix controller emits no markup", (bool)preg_match('/^\s*<div/m', $controller));
+
+    $backfill_view = file_get_contents($root . '/' . $edition . '/func/bc-account-backfill-render.php');
+    gtrue("$edition backfill UI shows a dry-run count", strpos($backfill_view, 'bc_backfill_counts') !== false);
+    gtrue("$edition backfill UI demands confirmation before writing", strpos($backfill_view, 'bc_backfill_confirm') !== false);
+
+    // The backfill controller must call the shared primitive, not its own SQL.
+    $backfill_ctl = file_get_contents($root . '/' . $edition . '/func/bc-account-backfill.php');
+    gtrue("$edition backfill controller uses the shared dry run", strpos($backfill_ctl, 'bc_fintech_backfill_dry_run(') !== false);
+    gtrue("$edition backfill controller uses the shared writer", strpos($backfill_ctl, 'bc_fintech_backfill_account_types(') !== false);
+    gfalse("$edition backfill controller runs no raw UPDATE", (bool)preg_match('/UPDATE\s+sas_users/i', $backfill_ctl));
+}
+
+$sp = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/ServiceControl.php');
+gtrue('platform console includes the matrix controller', strpos($sp, 'bc-service-matrix.php') !== false);
+gtrue('platform console renders the matrix', strpos($sp, 'bc-service-matrix-render.php') !== false);
+gtrue('platform console includes the backfill', strpos($sp, 'bc-account-backfill.php') !== false);
+gtrue('platform console enables the tenant selector', strpos($sp, '$matrix_selectable = true') !== false);
+gfalse('platform console does not invent a tenant id', (bool)preg_match('/\$matrix_vendor_id\s*=\s*\(int\)\s*\$get_logged_super_admin_details/', $sp));
+
+// the selector validates the chosen tenant before a write is allowed
+$ctl = file_get_contents($root . '/DGV7.0-SAAS/func/bc-service-matrix.php');
+gtrue('selector resolves the tenant from the request', strpos($ctl, "\$_SESSION['bc_matrix_vendor']") !== false);
+gtrue('selector validates the tenant against sas_vendors', strpos($ctl, 'FROM sas_vendors WHERE id=') !== false);
+gtrue('an invalid tenant collapses to zero', (bool)preg_match('/mysqli_num_rows\(\$mv\)\s*!==\s*1\)\s*\$matrix_vendor_id\s*=\s*0/', $ctl) || strpos($ctl, '$matrix_vendor_id = 0;') !== false);
+
+// ═══════════════════════ 14. KYB upgrade flow ═══════════════════════
+gcheck('kyb status 0 is not started', bc_fintech_kyb_status_label(0), 'Not started');
+gcheck('kyb status 1 is under review', bc_fintech_kyb_status_label(1), 'Under review');
+gcheck('kyb status 2 is approved', bc_fintech_kyb_status_label(2), 'Approved');
+gcheck('kyb status 3 is rejected', bc_fintech_kyb_status_label(3), 'Rejected');
+$cats = bc_fintech_kyb_categories();
+foreach (['sole_trader', 'limited_co', 'partnership', 'ngo', 'fintech', 'other'] as $c) gtrue("kyb offers $c", isset($cats[$c]));
+
+$GLOBALS['db']['users'] = [
+    20 => ['id' => 20, 'vendor_id' => 7, 'username' => 'upgrader', 'status' => 1, 'account_level' => '1', 'account_type' => 'personal', 'kyb_status' => 0],
+    21 => ['id' => 21, 'vendor_id' => 7, 'username' => 'alreadybiz', 'status' => 1, 'account_level' => '3', 'account_type' => 'business', 'kyb_status' => 2],
+    22 => ['id' => 22, 'vendor_id' => 8, 'username' => 'other', 'status' => 1, 'account_level' => '1', 'account_type' => 'personal', 'kyb_status' => 1],
+];
+$GLOBALS['db']['app_tokens'] = [];
+
+$applicant = $GLOBALS['db']['users'][20];
+$good = ['business_name' => 'Acme Payments Ltd', 'registration_no' => 'RC1234567', 'category' => 'limited_co', 'document' => 'kyb_20_abc123.pdf'];
+
+gcheck('business account cannot apply again', bc_fintech_kyb_submit($GLOBALS['db']['users'][21], 7, $good), 'This account is already a business account.');
+gcheck('unknown tier cannot apply', bc_fintech_kyb_submit(['id' => 99, 'account_level' => '9'], 7, $good), 'This account is not eligible for a business upgrade.');
+gcheck('empty business name is refused', bc_fintech_kyb_submit($applicant, 7, ['business_name' => ''] + $good), 'Enter the registered business name (200 characters max).');
+gcheck('over-long business name is refused', bc_fintech_kyb_submit($applicant, 7, ['business_name' => str_repeat('a', 201)] + $good), 'Enter the registered business name (200 characters max).');
+gcheck('missing registration number is refused', bc_fintech_kyb_submit($applicant, 7, ['registration_no' => '  '] + $good), 'Enter the business registration number.');
+gcheck('unknown category is refused', bc_fintech_kyb_submit($applicant, 7, ['category' => 'wizardry'] + $good), 'Choose a valid business category.');
+gcheck('missing document is refused', bc_fintech_kyb_submit($applicant, 7, ['document' => ''] + $good), 'Upload your business registration document.');
+gfalse('refused submissions did not change the row', ($GLOBALS['db']['users'][20]['kyb_status'] ?? 0) === 1);
+
+gtrue('a valid request is recorded', bc_fintech_kyb_submit($applicant, 7, $good) === true);
+gcheck('the request is pending', $GLOBALS['db']['users'][20]['kyb_status'], 1);
+gcheck('the business name is stored', $GLOBALS['db']['users'][20]['kyb_business_name'], 'Acme Payments Ltd');
+gcheck('the document name is stored', $GLOBALS['db']['users'][20]['kyb_document'], 'kyb_20_abc123.pdf');
+gtrue('a reference is generated', (bool)preg_match('/^KYB-[A-F0-9]{10}$/', (string)$GLOBALS['db']['users'][20]['kyb_reference']));
+gcheck('submitting does NOT promote the account', $GLOBALS['db']['users'][20]['account_type'], 'personal');
+gcheck('submitting does not touch account_level', $GLOBALS['db']['users'][20]['account_level'], '1');
+
+// a second submit while the first is under review is refused
+$applicant2 = $GLOBALS['db']['users'][20];
+gcheck('a pending request cannot be overwritten', bc_fintech_kyb_submit($applicant2, 7, ['business_name' => 'Acme TWO'] + $good), 'Your request is already under review.');
+gcheck('the reviewed evidence is unchanged', $GLOBALS['db']['users'][20]['kyb_business_name'], 'Acme Payments Ltd');
+
+// the review queue is tenant-scoped
+$pending = bc_fintech_kyb_pending(7);
+gcheck('the queue returns this tenant request', count($pending), 1);
+gcheck('the queue does not leak other tenants', count(bc_fintech_kyb_pending(8)), 1);
+gcheck('the queue is empty for an unrelated tenant', count(bc_fintech_kyb_pending(99)), 0);
+
+// approval: the only path to business, and it kills app sessions
+$issued = bc_app_token_issue($GLOBALS['db']['users'][20] ?: $applicant, 7, 'android');
+gtrue('the applicant had a live app session first', isset($issued['token']));
+
+gcheck('approval requires a reviewer', bc_fintech_kyb_approve(20, 7, '   '), 'Reviewer is required.');
+gcheck('approval refuses another tenant', bc_fintech_kyb_approve(20, 8, 'admin'), 'Account not found.');
+gcheck('approval refuses an account that is not pending', bc_fintech_kyb_approve(21, 7, 'admin'), 'This request is not awaiting review.');
+gtrue('approval succeeds for a pending request', bc_fintech_kyb_approve(20, 7, 'reviewer.jane') === true);
+gcheck('approval promotes the account to business', $GLOBALS['db']['users'][20]['account_type'], 'business');
+gcheck('approval records its source', $GLOBALS['db']['users'][20]['account_type_source'], 'kyb_approved');
+gcheck('approval closes the request as approved', $GLOBALS['db']['users'][20]['kyb_status'], 2);
+gcheck('approval records the reviewer', $GLOBALS['db']['users'][20]['kyb_reviewed_by'], 'reviewer.jane');
+gcheck('approval leaves account_level alone', $GLOBALS['db']['users'][20]['account_level'], '1');
+gtrue('approval revokes the live app session', $GLOBALS['db']['app_tokens'][1]['revoked_at'] !== null);
+gcheck('revocation reason is account_type', $GLOBALS['db']['app_tokens'][1]['revoke_reason'], 'account_type');
+gcheck('the app can no longer use the revoked token', bc_app_session_user($issued['token'], 7), null);
+gfalse('approving twice is refused', bc_fintech_kyb_approve(20, 7, 'admin') === true);
+
+// rejection keeps the account personal and records the reason
+$GLOBALS['db']['users'][23] = ['id' => 23, 'vendor_id' => 7, 'username' => 'rejectme', 'status' => 1, 'account_level' => '2', 'account_type' => 'personal', 'kyb_status' => 1];
+gcheck('rejection requires a reviewer', bc_fintech_kyb_reject(23, 7, ''), 'Reviewer is required.');
+gcheck('rejection refuses another tenant', bc_fintech_kyb_reject(23, 9, 'admin'), 'Account not found.');
+gcheck('rejection refuses a non-pending account', bc_fintech_kyb_reject(21, 7, 'admin'), 'This request is not awaiting review.');
+gtrue('rejection succeeds for a pending request', bc_fintech_kyb_reject(23, 7, 'reviewer.jane', 'Blurred certificate') === true);
+gcheck('rejection closes the request', $GLOBALS['db']['users'][23]['kyb_status'], 3);
+gcheck('rejection keeps the account personal', $GLOBALS['db']['users'][23]['account_type'], 'personal');
+gcheck('rejection stores the reason', $GLOBALS['db']['users'][23]['kyb_note'], 'Blurred certificate');
+gcheck('rejection records the reviewer', $GLOBALS['db']['users'][23]['kyb_reviewed_by'], 'reviewer.jane');
+gcheck('the note is stored verbatim', $GLOBALS['db']['users'][23]['kyb_note'] ?? '', 'Blurred certificate');
+
+// A long reason must be truncated, not rejected and not allowed to overflow the column.
+$GLOBALS['db']['users'][24] = ['id' => 24, 'vendor_id' => 7, 'username' => 'longnote', 'status' => 1, 'account_level' => '1', 'account_type' => 'personal', 'kyb_status' => 1];
+gtrue('a long rejection reason is accepted', bc_fintech_kyb_reject(24, 7, 'admin', str_repeat('x', 5000)) === true);
+gcheck('the stored reason is capped at 2000 chars', strlen((string)$GLOBALS['db']['users'][24]['kyb_note']), 2000);
+
+// a rejected applicant may try again
+$GLOBALS['db']['users'][23]['kyb_status'] = 3;
+gtrue('a rejected applicant can resubmit', bc_fintech_kyb_submit($GLOBALS['db']['users'][23], 7, $good) === true);
+gcheck('the resubmission goes back under review', $GLOBALS['db']['users'][23]['kyb_status'], 1);
+
+// structural: the user page and the console
+foreach ($editions as $edition) {
+    $page = $root . '/' . $edition . '/web/BusinessUpgrade.php';
+    gtrue("$edition ships the upgrade page", is_file($page));
+    $src = file_get_contents($page);
+    gtrue("$edition upgrade page posts multibyte-safe", strpos($src, 'enctype="multipart/form-data"') !== false);
+    gtrue("$edition upgrade page accepts a document", strpos($src, 'name="kyb_document"') !== false);
+    gtrue("$edition upgrade page calls the shared submit", strpos($src, 'bc_fintech_kyb_submit(') !== false);
+    gfalse("$edition upgrade page never writes account_type itself", (bool)preg_match('/UPDATE\s+sas_users[^;]*account_type\s*=\s*[\'"]business/i', $src));
+    gtrue("$edition upgrade page writes an upload deny file", strpos($src, 'Require all denied') !== false);
+    gtrue("$edition upgrade page validates the upload is a real file", strpos($src, 'is_uploaded_file(') !== false);
+    gtrue("$edition upgrade page sniffs images", strpos($src, 'getimagesize(') !== false);
+    gtrue("$edition upgrade page caps the upload size", strpos($src, '8 * 1024 * 1024') !== false);
+    gtrue("$edition upgrade documents are stored outside the web root pattern (kyb folder)", strpos($src, '/uploads/kyb/') !== false);
+    gtrue("$edition user navigation links the upgrade page", strpos(file_get_contents($root . '/' . $edition . '/func/bc-header.php'), 'BusinessUpgrade.php') !== false);
+
+    $admin = $root . '/' . $edition . '/bc-admin/BusinessKYB.php';
+    gtrue("$edition ships the KYB console", is_file($admin));
+    $asrc = file_get_contents($admin);
+    gtrue("$edition KYB console uses the shared queue", strpos($asrc, 'bc_fintech_kyb_pending(') !== false);
+    gtrue("$edition KYB console uses the shared approve", strpos($asrc, 'bc_fintech_kyb_approve(') !== false);
+    gtrue("$edition KYB console uses the shared reject", strpos($asrc, 'bc_fintech_kyb_reject(') !== false);
+    gtrue("$edition KYB console scopes documents to the vendor", (bool)preg_match('/FROM sas_users WHERE id=\'\$uid\' AND vendor_id=\'\$vid\'/', $asrc));
+    gtrue("$edition KYB console checks the document path with realpath", strpos($asrc, 'realpath(') !== false);
+    gtrue("$edition KYB console refuses a path outside the upload root", strpos($asrc, 'strpos($path, $base) !== 0') !== false);
+    gtrue("$edition KYB console closes the session before streaming", strpos($asrc, 'session_write_close()') !== false);
+    gtrue("$edition KYB console sends nosniff", strpos($asrc, 'nosniff') !== false);
+    gtrue("$edition admin navigation links the KYB console", strpos(file_get_contents($root . '/' . $edition . '/func/bc-admin-header.php'), 'BusinessKYB.php') !== false);
+    gtrue("$edition ships an upload deny file for kyb documents", is_file($root . '/' . $edition . '/uploads/kyb/.htaccess'));
+}
+
+// parity: the shared new files must be byte-identical between editions
+foreach ([
+    'func/bc-fintech-accounts.php',
+    'func/bc-service-matrix.php',
+    'func/bc-service-matrix-render.php',
+    'func/bc-account-backfill.php',
+    'func/bc-account-backfill-render.php',
+    'web/BusinessUpgrade.php',
+    'bc-admin/BusinessKYB.php',
+    'uploads/kyb/.htaccess',
+    // bc-header.php / bc-admin-header.php are NOT parity files: the SAAS edition carries extra
+    // service gating and vendor-portal links by design. Their Step 2 nav links are asserted above.
+] as $file) {
+    gcheck("edition parity: $file", md5_file($root . '/DGV7.0-SAAS/' . $file), md5_file($root . '/DGV7.0-NON-SAAS/' . $file));
+}
+
+echo "\n$checks phase 1 checks passed\n";
