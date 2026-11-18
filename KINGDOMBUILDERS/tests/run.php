@@ -152,6 +152,7 @@ test('Registration settings validate keys and the hourly cap',function(){
     assert_true(!array_key_exists('recaptcha_secret',$values),'The sealed secret is never copied into settings');
     rejects(fn()=>Settings::validate(array_merge($base,['registration_cap'=>'5000'])));
     rejects(fn()=>Settings::validate(array_merge($base,['recaptcha_site_key'=>'https://wrong value'])));
+    Settings::put('recaptcha_site_key','6LcExampleKey_1234567890');
     Settings::put('recaptcha_secret',Security::seal(['value'=>'secret-key']));
     assert_true(Captcha::configured(),'Both keys together make the check usable');
     Settings::put('recaptcha_site_key',''); Settings::put('recaptcha_secret',''); Settings::put('recaptcha_enabled',false);
