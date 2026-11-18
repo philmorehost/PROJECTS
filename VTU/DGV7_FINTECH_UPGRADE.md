@@ -318,6 +318,33 @@ the 4000-character cap at the boundary, tenant isolation on read and write, and 
 silent on an escalated thread), and structural wiring — including byte parity for the nine shared
 Phase 2 files and a guard that the chat engine contains no money-moving calls.
 
+### 5. Sidebar regrouped into service groups
+
+The signed-in sidebar was ~23 flat top-level entries. It is now **six groups plus Dashboard**, in the
+order a customer actually uses them:
+
+| Group | Contents |
+| --- | --- |
+| **Dashboard** | single entry |
+| **Pay Bills** | data, airtime, bulk data, bulk airtime, cable TV, electric token, betting, card printing, exam pins |
+| **Wallet & Transfers** | fund with ATM card, fund via bank transfer, wallet to bank, share fund, share fund history, convert coins, virtual card |
+| **Financial Services** | NIN slip + history, BVN verification, number filter, gift card, crypto |
+| **Business & API** | AI Suite, AI Assistant Terminal, bulk SMS, submit SMS ID, account pricing, business upgrade, developer API |
+| **History & Records** | transactions (nested: all, batch, points, calculator, number credit checker), Print Hub (nested: vending dashboard + the six print types), payment orders, submit payment |
+| **Settings & Help** | account settings, help / guide |
+
+Every existing `isServiceEnabled(...)` gate and the `$bc_nav_tier_service('developer_api')` /
+Business-upgrade tier rules are preserved verbatim, so regrouping changed no entitlement. No service
+link was dropped or added — asserted by the test suite against a fixed list of 40 pages, and the
+`data-bs-target` of every collapse resolves to an `id` in the same block. The two nested groups use
+`data-bs-parent` pointing at their own parent group so the accordion behaviour is correct at both
+levels. The flat `Services` heading is gone.
+
+`bc-header.php` and `bc-admin-header.php` legitimately differ between editions and are not parity
+checked; the regrouped block itself is identical, and the only remaining differences are the
+pre-existing ones (the standalone edition has no `ai_suite` / `vtu_coins` gates and keeps its own AI
+widget condition).
+
 ## Phase 1C gateway change — Plisio retired
 
 Plisio.net is defunct. It is retired **without deleting history**:

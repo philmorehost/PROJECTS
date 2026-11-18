@@ -28,3 +28,6 @@ SMSP/config/.sys_cache
 secure_updates/
 LM/*.log
 LM/storage/logs/*.log
+
+# Local PHP-wasm test harness (installed, never committed)
+VTU/tests/harness/node_modules/

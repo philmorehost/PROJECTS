@@ -2146,6 +2146,33 @@ foreach ($editions as $edition) {
     gtrue("$edition gateway screen offers klasha credentials", strpos($pg, '"payhub", "paystack", "klasha"') !== false);
 }
 
+// The sidebar is grouped, and regrouping must never drop a service link.
+$required_nav_pages = [
+    'Dashboard.php', 'Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php',
+    'Electric.php', 'Betting.php', 'Card.php', 'Exam.php', 'Fund.php', 'VirtualBanks.php',
+    'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php',
+    'NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php',
+    'CryptoHub.php', 'AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php',
+    'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php', 'Transactions.php', 'BatchTransactions.php',
+    'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php',
+    'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php', 'AccountSettings.php',
+];
+foreach ($editions as $edition) {
+    $header_src = php_strip_whitespace($root . '/' . $edition . '/func/bc-header.php');
+    foreach (['pay-bills-nav', 'wallet-transfers-nav', 'financial-services-nav', 'business-api-nav', 'history-records-nav', 'settings-help-nav'] as $group) {
+        gtrue("$edition sidebar groups $group", strpos($header_src, 'id="' . $group . '"') !== false);
+    }
+    gfalse("$edition sidebar has no flat Services heading", strpos($header_src, 'nav-heading">Services') !== false);
+    $missing = [];
+    foreach ($required_nav_pages as $pg) {
+        if (strpos($header_src, '/web/' . $pg) === false) $missing[] = $pg;
+    }
+    gcheck("$edition nav keeps every service link", implode(',', $missing), '');
+    // The two nested groups inside History & Records must exist and be addressed.
+    gtrue("$edition history groups transactions", strpos($header_src, 'id="history-transactions-nav"') !== false);
+    gtrue("$edition history groups print hub", strpos($header_src, 'id="history-print-nav"') !== false);
+}
+
 // The ledger is the only writer of provider balances: the adapters never UPDATE a balance.
 foreach (['func/bc-fintech-klasha.php', 'func/bc-fintech-flutterwave.php'] as $adapter) {
     $src = php_strip_whitespace($root . '/DGV7.0-SAAS/' . $adapter);

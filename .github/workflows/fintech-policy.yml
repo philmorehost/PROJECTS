@@ -245,6 +245,13 @@ jobs:
             grep -q 'bc_flw_handle_webhook(' "VTU/${edition}/web/api/flutterwave_webhook.php"
             # The published developer docs must point at the canonical endpoint.
             grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
+            # The sidebar is grouped into the six service groups; the flat "Services" heading is gone.
+            for group in pay-bills-nav wallet-transfers-nav financial-services-nav business-api-nav history-records-nav settings-help-nav; do
+              grep -q "id=\"${group}\"" "VTU/${edition}/func/bc-header.php"
+            done
+            if grep -q 'nav-heading">Services' "VTU/${edition}/func/bc-header.php"; then
+              echo "${edition} sidebar still has the flat Services heading"; exit 1
+            fi
             # The ledger moves money and nothing else: the receipt is re-attached by the
             # delivery pipeline, never from inside bc_fintech_ledger_post().
             if grep -qE 'sendVendorEmail|mail[[:space:]]*\(|getUserEmailTemplate' "VTU/${edition}/func/bc-fintech-ledger.php"; then

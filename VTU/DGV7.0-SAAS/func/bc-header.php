@@ -303,14 +303,15 @@ if ($select_user_vendor_status_message && mysqli_num_rows($select_user_vendor_st
       </li><!-- End AI Assistant Terminal Nav -->
       <?php endif; ?>
 
-      <li class="nav-heading">Services</li>
-
+      <?php /* ── Pay Bills ────────────────────────────────────────────────────────────
+          Every routine bill purchase. Previously a "Payment Hub" of nine entries; the group
+          is unchanged, only placed first among the service groups. */ ?>
       <li class="nav-item">
-        <?php $payment_hub_active = in_array($current_page, ['Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Card.php', 'Exam.php']); ?>
-        <a class="nav-link <?php echo $payment_hub_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#payment-hub-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-lightning-charge"></i><span>Payment Hub</span><i class="bi bi-chevron-down ms-auto"></i>
+        <?php $pay_bills_active = in_array($current_page, ['Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Card.php', 'Exam.php']); ?>
+        <a class="nav-link <?php echo $pay_bills_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#pay-bills-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-lightning-charge"></i><span>Pay Bills</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-        <ul id="payment-hub-nav" class="nav-content collapse <?php echo $payment_hub_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+        <ul id="pay-bills-nav" class="nav-content collapse <?php echo $pay_bills_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
           <?php if(isServiceEnabled('data')): ?>
           <li>
             <a href="<?php echo $web_http_host; ?>/web/Data.php" class="<?php echo ($current_page == 'Data.php') ? 'active' : ''; ?>">
@@ -377,21 +378,31 @@ if ($select_user_vendor_status_message && mysqli_num_rows($select_user_vendor_st
         </ul>
       </li>
 
-      <?php if(isServiceEnabled('bank_transfer')): ?>
+      <?php /* ── Wallet & Transfers ───────────────────────────────────────────────────
+          Funding the wallet and moving money out. */ ?>
       <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'SendFund.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/SendFund.php">
-          <i class="bi bi-bank"></i>
-          <span>Wallet to Bank</span>
+        <?php $wallet_transfers_active = in_array($current_page, ['Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php']); ?>
+        <a class="nav-link <?php echo $wallet_transfers_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#wallet-transfers-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-wallet2"></i><span>Wallet &amp; Transfers</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-      </li>
-      <?php endif; ?>
-
-      <li class="nav-item">
-        <?php $manage_fund_active = in_array($current_page, ['ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php']); ?>
-        <a class="nav-link <?php echo $manage_fund_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#manage-fund-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-wallet2"></i><span>Manage Funds</span><i class="bi bi-chevron-down ms-auto"></i>
-        </a>
-        <ul id="manage-fund-nav" class="nav-content collapse <?php echo $manage_fund_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+        <ul id="wallet-transfers-nav" class="nav-content collapse <?php echo $wallet_transfers_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/Fund.php" class="<?php echo ($current_page == 'Fund.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Fund with ATM Card</span>
+            </a>
+          </li>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/VirtualBanks.php" class="<?php echo ($current_page == 'VirtualBanks.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Fund via Bank Transfer</span>
+            </a>
+          </li>
+          <?php if(isServiceEnabled('bank_transfer')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/SendFund.php" class="<?php echo ($current_page == 'SendFund.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Wallet to Bank</span>
+            </a>
+          </li>
+          <?php endif; ?>
           <li>
             <a href="<?php echo $web_http_host; ?>/web/ShareFund.php" class="<?php echo ($current_page == 'ShareFund.php') ? 'active' : ''; ?>">
               <i class="bi bi-circle"></i><span>Share Fund</span>
@@ -409,110 +420,215 @@ if ($select_user_vendor_status_message && mysqli_num_rows($select_user_vendor_st
             </a>
           </li>
           <?php endif; ?>
-        </ul>
-      </li>
-
-      <?php if(isServiceEnabled('data_card')): ?>
-      <li class="nav-item">
-        <?php $print_hub_active = in_array($current_page, ['PrintHub.php', 'DataBundleCard.php', 'DataBundleCardHistory.php', 'ViewDataBundleCard.php']); ?>
-        <a class="nav-link <?php echo $print_hub_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#print-hub-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-printer"></i><span>Print Hub</span><i class="bi bi-chevron-down ms-auto"></i>
-        </a>
-        <ul id="print-hub-nav" class="nav-content collapse <?php echo $print_hub_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+          <?php if(isServiceEnabled('virtual_card')): ?>
           <li>
-            <a href="<?php echo $web_http_host; ?>/web/PrintHub.php" class="<?php echo ($current_page == 'PrintHub.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Vending Dashboard</span>
-            </a>
-          </li>
-          <?php if(isServiceEnabled('print_airtime')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=airtime" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'airtime') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Airtime Card</span>
-            </a>
-          </li>
-          <?php endif; ?>
-          <?php if(isServiceEnabled('print_data')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=data" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && ($_GET['type'] == 'data' || !isset($_GET['type']))) ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Data Card</span>
-            </a>
-          </li>
-          <?php endif; ?>
-          <?php if(isServiceEnabled('print_cable')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=cable" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'cable') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Cable Card</span>
-            </a>
-          </li>
-          <?php endif; ?>
-          <?php if(isServiceEnabled('print_electric')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=electric" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'electric') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Electric Card</span>
-            </a>
-          </li>
-          <?php endif; ?>
-          <?php if(isServiceEnabled('print_exam')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=exam" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'exam') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Exam Pin</span>
-            </a>
-          </li>
-          <?php endif; ?>
-          <?php if(isServiceEnabled('print_betting')): ?>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=betting" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'betting') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Print Betting Card</span>
+            <a href="<?php echo $web_http_host; ?>/web/VirtualCard.php" class="<?php echo ($current_page == 'VirtualCard.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Virtual Card</span>
             </a>
           </li>
           <?php endif; ?>
         </ul>
       </li>
-      <?php endif; ?>
 
-      <?php if(isServiceEnabled('nin_card')): ?>
+      <?php /* ── Financial Services ───────────────────────────────────────────────────
+          Identity, verification and value-holding services. */ ?>
       <li class="nav-item">
-        <?php $nin_active = in_array($current_page, ['NINCard.php', 'NINCardHistory.php']); ?>
-        <a class="nav-link <?php echo $nin_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#nin-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-person-badge"></i><span>NIN Card</span><i class="bi bi-chevron-down ms-auto"></i>
+        <?php $financial_services_active = in_array($current_page, ['NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php', 'CryptoHub.php']); ?>
+        <a class="nav-link <?php echo $financial_services_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#financial-services-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-shield-check"></i><span>Financial Services</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-        <ul id="nin-nav" class="nav-content collapse <?php echo $nin_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+        <ul id="financial-services-nav" class="nav-content collapse <?php echo $financial_services_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+          <?php if(isServiceEnabled('nin_card')): ?>
           <li>
             <a href="<?php echo $web_http_host; ?>/web/NINCard.php" class="<?php echo ($current_page == 'NINCard.php') ? 'active' : ''; ?>">
-              <i class="bi bi-person-badge"></i><span>Print NIN Slip</span>
+              <i class="bi bi-circle"></i><span>Print NIN Slip</span>
             </a>
           </li>
           <li>
             <a href="<?php echo $web_http_host; ?>/web/NINCardHistory.php" class="<?php echo ($current_page == 'NINCardHistory.php') ? 'active' : ''; ?>">
-              <i class="bi bi-clock-history"></i><span>NIN Slip History</span>
+              <i class="bi bi-circle"></i><span>NIN Slip History</span>
             </a>
           </li>
+          <?php endif; ?>
+          <?php if(isServiceEnabled('bvn_verify')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/BVNVerification.php" class="<?php echo ($current_page == 'BVNVerification.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>BVN Verification</span>
+            </a>
+          </li>
+          <?php endif; ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/NumberFilter.php" class="<?php echo ($current_page == 'NumberFilter.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Number Filter</span>
+            </a>
+          </li>
+          <?php if(isServiceEnabled('gift_card')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/GiftCard.php" class="<?php echo ($current_page == 'GiftCard.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Gift Card</span>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if(isServiceEnabled('crypto_hub')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/CryptoHub.php" class="<?php echo ($current_page == 'CryptoHub.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Crypto</span>
+            </a>
+          </li>
+          <?php endif; ?>
         </ul>
       </li>
-      <?php endif; ?>
 
-      <?php if(isServiceEnabled('bvn_verify')): ?>
+      <?php /* ── Business & API ───────────────────────────────────────────────────────
+          Growth, automation and developer tooling. */ ?>
       <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'BVNVerification.php') ? 'active_item' : 'collapsed'; ?>"
-           href="<?php echo $web_http_host; ?>/web/BVNVerification.php">
-          <i class="bi bi-fingerprint"></i><span>BVN Verification</span>
+        <?php $business_api_active = in_array($current_page, ['AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php']); ?>
+        <a class="nav-link <?php echo $business_api_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#business-api-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-briefcase"></i><span>Business &amp; API</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
+        <ul id="business-api-nav" class="nav-content collapse <?php echo $business_api_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+          <?php if(isServiceEnabled('ai_suite')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/AISuite.php" class="<?php echo ($current_page == 'AISuite.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>AI Suite <span class="badge-new ms-1">NEW</span></span>
+            </a>
+          </li>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/AI-Assistant.php" class="<?php echo ($current_page == 'AI-Assistant.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>AI Assistant Terminal</span>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if(isServiceEnabled('bulk_sms')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/BulkSMS.php" class="<?php echo ($current_page == 'BulkSMS.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Bulk SMS</span>
+            </a>
+          </li>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/SubmitSenderID.php" class="<?php echo ($current_page == 'SubmitSenderID.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Submit SMS ID</span>
+            </a>
+          </li>
+          <?php endif; ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/Pricing.php" class="<?php echo ($current_page == 'Pricing.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Account Pricing</span>
+            </a>
+          </li>
+          <?php if ($bc_nav_tier !== 'business' && (int)($bc_nav_user['kyb_status'] ?? 0) !== 1): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/BusinessUpgrade.php" class="<?php echo ($current_page == 'BusinessUpgrade.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Business Upgrade</span>
+            </a>
+          </li>
+          <?php endif; ?>
+          <?php if ($bc_nav_tier_service('developer_api')): ?>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/web/APIDocs.php" class="<?php echo ($current_page == 'APIDocs.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Developer API</span>
+            </a>
+          </li>
+          <?php endif; ?>
+        </ul>
       </li>
-      <?php endif; ?>
 
+      <?php /* ── History & Records ─────────────────────────────────────────────────────
+          Everything that already happened: transactions, printed stock, payment orders. */ ?>
       <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'NumberFilter.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/NumberFilter.php">
-          <i class="bi bi-filter-square"></i>
-          <span>Number Filter</span>
+        <?php $history_records_active = in_array($current_page, ['Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php', 'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php']); ?>
+        <a class="nav-link <?php echo $history_records_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#history-records-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-clock-history"></i><span>History &amp; Records</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-      </li>
-
-      <li class="nav-item">
-        <?php $payment_order_active = in_array($current_page, ['PaymentOrders.php', 'SubmitPayment.php']); ?>
-        <a class="nav-link <?php echo $payment_order_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#payment-order-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-cart-check"></i><span>Payment Order</span><i class="bi bi-chevron-down ms-auto"></i>
-        </a>
-        <ul id="payment-order-nav" class="nav-content collapse <?php echo $payment_order_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+        <ul id="history-records-nav" class="nav-content collapse <?php echo $history_records_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+          <li>
+            <a class="nav-link <?php echo ($current_page == 'Transactions.php') ? 'active_item' : 'collapsed'; ?>" data-bs-target="#history-transactions-nav" data-bs-toggle="collapse" href="#">
+              <i class="bi bi-receipt"></i><span>Transactions</span><i class="bi bi-chevron-down ms-auto"></i>
+            </a>
+            <ul id="history-transactions-nav" class="nav-content collapse <?php echo ($current_page == 'Transactions.php' || $current_page == 'BatchTransactions.php' || $current_page == 'PointsHistory.php' || $current_page == 'TransactionCalculator.php' || $current_page == 'NumberChecker.php') ? 'show' : ''; ?>" data-bs-parent="#history-records-nav">
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/Transactions.php" class="<?php echo ($current_page == 'Transactions.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>All Transactions</span>
+                </a>
+              </li>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/BatchTransactions.php" class="<?php echo ($current_page == 'BatchTransactions.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Batch Transactions</span>
+                </a>
+              </li>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/PointsHistory.php" class="<?php echo ($current_page == 'PointsHistory.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Points History</span>
+                </a>
+              </li>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/TransactionCalculator.php" class="<?php echo ($current_page == 'TransactionCalculator.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Transaction Calculator</span>
+                </a>
+              </li>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/NumberChecker.php" class="<?php echo ($current_page == 'NumberChecker.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Number Credit Checker</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+          <?php if(isServiceEnabled('data_card')): ?>
+          <li>
+            <a class="nav-link <?php echo ($current_page == 'PrintHub.php' || $current_page == 'DataBundleCard.php') ? 'active_item' : 'collapsed'; ?>" data-bs-target="#history-print-nav" data-bs-toggle="collapse" href="#">
+              <i class="bi bi-printer"></i><span>Print Hub</span><i class="bi bi-chevron-down ms-auto"></i>
+            </a>
+            <ul id="history-print-nav" class="nav-content collapse <?php echo ($current_page == 'PrintHub.php' || $current_page == 'DataBundleCard.php') ? 'show' : ''; ?>" data-bs-parent="#history-records-nav">
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/PrintHub.php" class="<?php echo ($current_page == 'PrintHub.php') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Vending Dashboard</span>
+                </a>
+              </li>
+              <?php if(isServiceEnabled('print_airtime')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=airtime" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'airtime') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Airtime Card</span>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if(isServiceEnabled('print_data')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=data" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && ($_GET['type'] == 'data' || !isset($_GET['type']))) ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Data Card</span>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if(isServiceEnabled('print_cable')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=cable" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'cable') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Cable Card</span>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if(isServiceEnabled('print_electric')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=electric" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'electric') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Electric Card</span>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if(isServiceEnabled('print_exam')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=exam" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'exam') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Exam Pin</span>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if(isServiceEnabled('print_betting')): ?>
+              <li>
+                <a href="<?php echo $web_http_host; ?>/web/DataBundleCard.php?type=betting" class="<?php echo ($current_page == 'DataBundleCard.php' && isset($_GET['type']) && $_GET['type'] == 'betting') ? 'active' : ''; ?>">
+                  <i class="bi bi-circle"></i><span>Print Betting Card</span>
+                </a>
+              </li>
+              <?php endif; ?>
+            </ul>
+          </li>
+          <?php endif; ?>
           <li>
             <a href="<?php echo $web_http_host; ?>/web/PaymentOrders.php" class="<?php echo ($current_page == 'PaymentOrders.php') ? 'active' : ''; ?>">
               <i class="bi bi-circle"></i><span>Payment Orders</span>
@@ -525,158 +641,26 @@ if ($select_user_vendor_status_message && mysqli_num_rows($select_user_vendor_st
             </a>
           </li>
           <?php endif; ?>
-
         </ul>
       </li>
 
+      <?php /* ── Settings & Help ─────────────────────────────────────────────────────── */ ?>
       <li class="nav-item">
-        <?php $trans_active = in_array($current_page, ['Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php']); ?>
-        <a class="nav-link <?php echo $trans_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#transaction-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-receipt"></i><span>Transactions</span><i class="bi bi-chevron-down ms-auto"></i>
+        <a class="nav-link <?php echo ($current_page == 'AccountSettings.php') ? 'active_item' : 'collapsed'; ?>" data-bs-target="#settings-help-nav" data-bs-toggle="collapse" href="#">
+          <i class="bi bi-gear"></i><span>Settings &amp; Help</span><i class="bi bi-chevron-down ms-auto"></i>
         </a>
-        <ul id="transaction-nav" class="nav-content collapse <?php echo $trans_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
+        <ul id="settings-help-nav" class="nav-content collapse <?php echo ($current_page == 'AccountSettings.php') ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
           <li>
-            <a href="<?php echo $web_http_host; ?>/web/Transactions.php" class="<?php echo ($current_page == 'Transactions.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>All Transactions</span>
+            <a href="<?php echo $web_http_host; ?>/web/AccountSettings.php" class="<?php echo ($current_page == 'AccountSettings.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Account Settings</span>
             </a>
           </li>
           <li>
-            <a href="<?php echo $web_http_host; ?>/web/BatchTransactions.php" class="<?php echo ($current_page == 'BatchTransactions.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Batch Transactions</span>
-            </a>
-          </li>
-
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/PointsHistory.php" class="<?php echo ($current_page == 'PointsHistory.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Points History</span>
-            </a>
-          </li>
-
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/TransactionCalculator.php" class="<?php echo ($current_page == 'TransactionCalculator.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Transaction Calculator</span>
-            </a>
-          </li>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/NumberChecker.php" class="<?php echo ($current_page == 'NumberChecker.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Number Credit Checker</span>
-            </a>
-          </li>
-
-        </ul>
-      </li>
-
-      <li class="nav-item">
-        <?php $add_money_active = in_array($current_page, ['Fund.php', 'VirtualBanks.php']); ?>
-        <a class="nav-link <?php echo $add_money_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#tables-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-bank"></i><span>Add Money</span><i class="bi bi-chevron-down ms-auto"></i>
-        </a>
-        <ul id="tables-nav" class="nav-content collapse <?php echo $add_money_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/Fund.php" class="<?php echo ($current_page == 'Fund.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>With ATM Card (ATM)</span>
-            </a>
-          </li>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/VirtualBanks.php" class="<?php echo ($current_page == 'VirtualBanks.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Bank-Deposit/Transfer</span>
+            <a href="javascript:void(0)" onclick="startUserGuide()">
+              <i class="bi bi-circle"></i><span>Help / Guide</span>
             </a>
           </li>
         </ul>
-
-      </li><!-- End Tables Nav -->
-
-      <?php if(isServiceEnabled('virtual_card')): ?>
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'VirtualCard.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/VirtualCard.php">
-          <i class="bi bi-credit-card"></i><span>Virtual Card</span>
-        </a>
-      </li>
-      <?php endif; ?>
-
-
-      <?php if(isServiceEnabled('bulk_sms')): ?>
-      <li class="nav-item">
-        <?php $sms_active = in_array($current_page, ['BulkSMS.php', 'SubmitSenderID.php']); ?>
-        <a class="nav-link <?php echo $sms_active ? 'active_item' : 'collapsed'; ?>" data-bs-target="#bulksms-nav" data-bs-toggle="collapse" href="#">
-          <i class="bi bi-chat-dots"></i><span>Send SMS</span><i class="bi bi-chevron-down ms-auto"></i>
-        </a>
-        <ul id="bulksms-nav" class="nav-content collapse <?php echo $sms_active ? 'show' : ''; ?>" data-bs-parent="#sidebar-nav">
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/BulkSMS.php" class="<?php echo ($current_page == 'BulkSMS.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Bulk SMS</span>
-            </a>
-          </li>
-          <li>
-            <a href="<?php echo $web_http_host; ?>/web/SubmitSenderID.php" class="<?php echo ($current_page == 'SubmitSenderID.php') ? 'active' : ''; ?>">
-              <i class="bi bi-circle"></i><span>Submit SMS ID</span>
-            </a>
-          </li>
-
-        </ul>
-      </li>
-      <?php endif; ?>
-
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'Pricing.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/Pricing.php">
-          <i class="bi bi-tags"></i>
-          <span>Account Pricing</span>
-        </a>
-      </li><!-- End Contact Page Nav -->
-
-      <?php if(isServiceEnabled('gift_card')): ?>
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'GiftCard.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/GiftCard.php">
-          <i class="bi bi-gift"></i>
-          <span>Gift Card</span>
-        </a>
-      </li><!-- End Profile Page Nav -->
-      <?php endif; ?>
-
-      <?php if(isServiceEnabled('crypto_hub')): ?>
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'CryptoHub.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/CryptoHub.php">
-          <i class="bi bi-currency-bitcoin"></i>
-          <span>Crypto</span>
-        </a>
-      </li>
-      <?php endif; ?>
-
-
-
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'AccountSettings.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/AccountSettings.php">
-          <i class="bi bi-gear"></i>
-          <span>Account Settings</span>
-        </a>
-      </li><!-- End Contact Page Nav -->
-
-      <?php /* Only for accounts that have not already become (or applied to become) business. */ ?>
-      <?php if ($bc_nav_tier !== 'business' && (int)($bc_nav_user['kyb_status'] ?? 0) !== 1): ?>
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'BusinessUpgrade.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/BusinessUpgrade.php">
-          <i class="bi bi-briefcase"></i>
-          <span>Business Upgrade</span>
-        </a>
-      </li>
-      <?php endif; ?>
-
-      <?php /* Business-only, and only once developer_api is actually live for the tier. This entry
-                previously appeared for every signed-in user regardless of account type. */ ?>
-      <?php if ($bc_nav_tier_service('developer_api')): ?>
-      <li class="nav-item">
-        <a class="nav-link <?php echo ($current_page == 'APIDocs.php') ? 'active_item' : 'collapsed'; ?>" href="<?php echo $web_http_host; ?>/web/APIDocs.php">
-          <i class="bi bi-code-slash"></i>
-          <span>Developer API </span>
-        </a>
-      </li>
-      <?php endif; ?>
-
-      <li class="nav-item">
-        <a class="nav-link collapsed" href="javascript:void(0)" onclick="startUserGuide()">
-          <i class="bi bi-question-circle"></i>
-          <span>Help / Guide</span>
-        </a>
       </li>
     <?php } else { ?>
       <li class="nav-item">
