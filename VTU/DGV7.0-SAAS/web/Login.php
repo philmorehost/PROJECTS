@@ -2,6 +2,10 @@
 	
     include("../func/bc-config.php");
     if(isset($get_logged_user_details["username"]) && !empty($get_logged_user_details["username"]) && ($get_logged_user_details["status"] == 1)){
+        // DGV7: a signed-in personal account follows the tenant's app destination (if set);
+        // a business account always stays on the website. Runs before any redirecturl so a
+        // crafted redirecturl cannot be used to walk around the policy.
+        bc_fintech_web_login_flow($get_logged_user_details, (int)($select_vendor_table['id'] ?? 0));
     	$redirecturl = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirecturl"] ?? '')));
         $redirect_path = explode("?", $redirecturl)[0];
 		if(!empty(trim($redirecturl)) && file_exists("..".$redirect_path)){
@@ -114,6 +118,10 @@
                 }
                 sendVendorEmail($pending_row["email"], $raw_log_template_subject, $raw_log_template_body);
 
+                // DGV7: only now, with the session established and OTP passed, does the
+                // personal-app redirect apply. It can never run before authentication.
+                bc_fintech_web_login_flow($pending_row, $pending_vendor_id);
+
                 header("Location: Dashboard.php");
                 exit();
             }
@@ -158,6 +166,8 @@
                     if (empty($user_detail['google_id'])) {
                         mysqli_query($connection_server, "UPDATE sas_users SET google_id='$google_id' WHERE id='".$user_detail['id']."'");
                     }
+                    // DGV7: same post-authentication app routing as the password path.
+                    bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
                     header("Location: Dashboard.php");
                     exit();
                 } else {
@@ -247,6 +257,12 @@
 							}
 							sendVendorEmail($user_detail["email"], $raw_log_template_subject, $raw_log_template_body);
 							// Email End
+
+                            // DGV7: placed AFTER the sign-in notice so the security email still
+                            // goes out, and after the session exists so the redirect can never
+                            // run pre-authentication. Business accounts are never sent to the
+                            // app; a malformed saved URL blocks instead of opening Dashboard.
+                            bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
 
     						//Welcome Back Message
     						$json_response_array = array("desc" => "Welcome Back, ".ucwords($user_detail["firstname"]));

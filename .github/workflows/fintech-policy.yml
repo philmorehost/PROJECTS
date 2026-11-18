@@ -5,6 +5,25 @@ on:
     paths:
       - 'VTU/DGV7.0-SAAS/func/bc-fintech-policy.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-*.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-app-token.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-app-token.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-connect.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-connect.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-SAAS/web/api/logout.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/logout.php'
+      - 'VTU/DGV7.0-SAAS/web/api/profile.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/profile.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/AccountSettings.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
+      - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/fintech_policy_test.php'
       - 'VTU/DGV7_FINTECH_UPGRADE.md'
       - '.github/workflows/fintech-policy.yml'
@@ -12,6 +31,25 @@ on:
     paths:
       - 'VTU/DGV7.0-SAAS/func/bc-fintech-policy.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-*.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-app-token.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-app-token.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-connect.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-connect.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-config.php'
+      - 'VTU/DGV7.0-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Login.php'
+      - 'VTU/DGV7.0-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/login*.php'
+      - 'VTU/DGV7.0-SAAS/web/api/logout.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/logout.php'
+      - 'VTU/DGV7.0-SAAS/web/api/profile.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/api/profile.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/AccountSettings.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
+      - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/fintech_policy_test.php'
       - 'VTU/DGV7_FINTECH_UPGRADE.md'
       - '.github/workflows/fintech-policy.yml'
@@ -32,8 +70,27 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-      - name: Syntax and policy tests
+      - name: Syntax check
         run: |
-          php -l VTU/DGV7.0-SAAS/func/bc-fintech-policy.php
-          php -l VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php
+          set -e
+          for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+            for file in func/bc-fintech-policy.php func/bc-fintech-schema.php func/bc-app-token.php \
+                        func/bc-fintech-gate.php func/bc-connect.php func/bc-config.php \
+                        web/Login.php web/api/login.php web/api/logout.php web/api/profile.php \
+                        bc-admin/AccountSettings.php; do
+              php -l "VTU/${edition}/${file}"
+            done
+          done
+          php -l VTU/DGV7.0-SAAS/web/api/login-otp.php
+      - name: Policy and gate tests
+        run: |
+          set -e
           php -n VTU/tests/fintech_policy_test.php
+          php -n VTU/tests/fintech_gate_test.php
+      - name: Editions must ship identical policy files
+        run: |
+          set -e
+          for file in bc-fintech-policy.php bc-fintech-schema.php bc-app-token.php bc-fintech-gate.php; do
+            cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
+          done
+          cmp VTU/DGV7.0-SAAS/web/api/logout.php VTU/DGV7.0-NON-SAAS/web/api/logout.php

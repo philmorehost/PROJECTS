@@ -75,8 +75,25 @@ if (mysqli_num_rows($check_user) == 1) {
                 exit;
             }
 
+            // ── DGV7: mobile apps are personal-account only ──────────────────────
+            // Business accounts are web-only. Checked after the password (and after OTP when
+            // enabled) but BEFORE any api_key/balance is returned or an app session is minted.
+            $bc_app_decision = bc_fintech_app_access($user_detail);
+            if (!$bc_app_decision['allowed']) {
+                recordLoginAttempt($user, $ip, 0, $vendor_id);
+                bc_fintech_send_app_denial($bc_app_decision);
+            }
+
             recordLoginAttempt($user, $ip, 1, $vendor_id);
-            echo json_encode(bc_user_login_payload($user_detail, $get_vendor));
+            $bc_login_payload = bc_user_login_payload($user_detail, $get_vendor);
+            // Issue a revocable first-party app session alongside the legacy payload. api_key is
+            // still returned for existing app builds; it is NOT the app session going forward.
+            $bc_app_session = bc_app_token_issue($user_detail, $vendor_id, $input['platform'] ?? 'android', $input['device_label'] ?? null);
+            if ($bc_app_session) {
+                $bc_login_payload['data']['app_token'] = $bc_app_session['token'];
+                $bc_login_payload['data']['app_token_expires_at'] = $bc_app_session['expires_at'];
+            }
+            echo json_encode($bc_login_payload);
         } else {
             recordLoginAttempt($user, $ip, 0, $vendor_id);
             echo json_encode(["status" => "error", "message" => "Account is not active. Status: " . accountStatus($user_detail['status'])]);

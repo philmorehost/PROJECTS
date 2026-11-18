@@ -52,7 +52,15 @@ if (mysqli_num_rows($check_user) == 1) {
             $is_kyc_compliant = ($user_detail['kyc_status'] == 2);
             $pin_set = !empty($user_detail['security_pin']);
 
-            echo json_encode([
+            // DGV7: mobile apps are personal-account only. Refused before any credential,
+            // balance or app session is returned.
+            $bc_app_decision = bc_fintech_app_access($user_detail);
+            if (!$bc_app_decision['allowed']) {
+                recordLoginAttempt($user, $ip, 0, $vendor_id);
+                bc_fintech_send_app_denial($bc_app_decision);
+            }
+
+            $bc_login_payload = [
                 "status" => "success",
                 "message" => "Login successful",
                 "data" => [
@@ -70,7 +78,15 @@ if (mysqli_num_rows($check_user) == 1) {
                     "security_pin_set" => $pin_set,
                     "ai_status" => (int)$get_vendor['ai_status']
                 ]
-            ]);
+            ];
+            // Revocable first-party app session; api_key stays for existing app builds but is
+            // no longer the app credential of record.
+            $bc_app_session = bc_app_token_issue($user_detail, $vendor_id, $input['platform'] ?? 'android', $input['device_label'] ?? null);
+            if ($bc_app_session) {
+                $bc_login_payload['data']['app_token'] = $bc_app_session['token'];
+                $bc_login_payload['data']['app_token_expires_at'] = $bc_app_session['expires_at'];
+            }
+            echo json_encode($bc_login_payload);
         } else {
             recordLoginAttempt($user, $ip, 0, $vendor_id);
             echo json_encode(["status" => "error", "message" => "Account is not active. Status: " . accountStatus($user_detail['status'])]);

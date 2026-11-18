@@ -1142,6 +1142,21 @@ if (isset($_POST["update-site-details"])) {
     }
     $app_redirect_mode = mysqli_real_escape_string($connection_server, strtolower(trim($_POST["app-redirect-mode"] ?? "off")));
     if (!in_array($app_redirect_mode, ["off", "prompt", "force"], true)) $app_redirect_mode = "off";
+
+    // DGV7: authenticated post-login destination for personal accounts. Kept separate from
+    // apk-download-url/app-redirect-mode (anonymous landing prompt) on purpose.
+    $android_app_url_raw = trim((string)($_POST["android-app-url"] ?? ""));
+    $android_app_url = mysqli_real_escape_string($connection_server, $android_app_url_raw);
+    if (!bc_fintech_gate_boot()) {
+        $_SESSION["product_purchase_response"] = "Account policy tables are not ready on this server. Please run the update and try again.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit;
+    }
+    if (!bc_fintech_android_app_url_valid($android_app_url_raw)) {
+        $_SESSION["product_purchase_response"] = "Android app URL was not saved: use an https:// address (Play Store or APK link), http://localhost for staging, or a path beginning with '/'. Unsafe or malformed URLs are rejected.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit;
+    }
     $meta_keywords      = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["meta-keywords"] ?? "")));
     // The column is custom_head_code (see func/bc-tables.php and the live schema). It was written as
     // custom_header_code here, which made MySQL reject the WHOLE statement - so the APK download URL
@@ -1162,7 +1177,7 @@ if (isset($_POST["update-site-details"])) {
         if (mysqli_num_rows($get_site_details) > 0) {
             // Result checked on purpose: this used to report success no matter what, so a wrong column
             // name looked like a saving bug in the UI while nothing was actually written.
-            $site_updated = mysqli_query($connection_server, "UPDATE sas_site_details SET site_title='$site_title', site_desc='$site_desc', apk_download_url='$apk_download_url', app_redirect_mode='$app_redirect_mode', meta_keywords='$meta_keywords', custom_head_code='$custom_head_code', custom_footer_code='$custom_footer_code', robots_txt='$robots_txt' WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
+            $site_updated = mysqli_query($connection_server, "UPDATE sas_site_details SET site_title='$site_title', site_desc='$site_desc', apk_download_url='$apk_download_url', app_redirect_mode='$app_redirect_mode', android_app_url='$android_app_url', meta_keywords='$meta_keywords', custom_head_code='$custom_head_code', custom_footer_code='$custom_footer_code', robots_txt='$robots_txt' WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
             if ($site_updated) {
                 //Site Information Updated Successfully
                 $json_response_array = array("desc" => "Site Information Updated Successfully");
@@ -1170,7 +1185,7 @@ if (isset($_POST["update-site-details"])) {
                 $json_response_array = array("desc" => "Site Information Could Not Be Updated: " . mysqli_error($connection_server));
             }
         } else {
-            $site_created = mysqli_query($connection_server, "INSERT INTO sas_site_details (vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode, meta_keywords, custom_head_code, custom_footer_code, robots_txt) VALUES ('" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode', '$meta_keywords', '$custom_head_code', '$custom_footer_code', '$robots_txt')");
+            $site_created = mysqli_query($connection_server, "INSERT INTO sas_site_details (vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode, android_app_url, meta_keywords, custom_head_code, custom_footer_code, robots_txt) VALUES ('" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode', '$android_app_url', '$meta_keywords', '$custom_head_code', '$custom_footer_code', '$robots_txt')");
             if ($site_created) {
                 //Site Information Created Successfully
                 $json_response_array = array("desc" => "Site Information Created Successfully");
@@ -1220,7 +1235,7 @@ $q_min_funding = mysqli_query($connection_server, "SELECT * FROM sas_user_minimu
 $get_user_minimum_funding_details = ($q_min_funding && mysqli_num_rows($q_min_funding) > 0) ? mysqli_fetch_array($q_min_funding) : ['min_amount' => 0];
 
 $q_site_details = mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='" . $get_logged_admin_details["id"] . "' LIMIT 1");
-$get_site_details = ($q_site_details && mysqli_num_rows($q_site_details) > 0) ? mysqli_fetch_array($q_site_details) : ['site_title' => '', 'site_desc' => '', 'apk_download_url' => '', 'app_redirect_mode' => 'off', 'meta_keywords' => '', 'custom_head_code' => '', 'custom_footer_code' => '', 'robots_txt' => ''];
+$get_site_details = ($q_site_details && mysqli_num_rows($q_site_details) > 0) ? mysqli_fetch_array($q_site_details) : ['site_title' => '', 'site_desc' => '', 'apk_download_url' => '', 'android_app_url' => '', 'app_redirect_mode' => 'off', 'meta_keywords' => '', 'custom_head_code' => '', 'custom_footer_code' => '', 'robots_txt' => ''];
 
 
 ?>
@@ -1442,6 +1457,14 @@ $get_site_details = ($q_site_details && mysqli_num_rows($q_site_details) > 0) ? 
                                         <option value="force" <?php echo (($get_site_details['app_redirect_mode'] ?? '') === 'force') ? 'selected' : ''; ?>>Force — Always redirect to app</option>
                                     </select>
                                     <div class="form-text text-muted">Choose how visitors are directed to your App Download URL above. "Prompt" lets users decide to install the app or keep using the website.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold text-muted" for="android-app-url-input">ANDROID APP URL FOR PERSONAL ACCOUNT LOGINS</label>
+                                    <input id="android-app-url-input" name="android-app-url" type="text" inputmode="url" value="<?php echo htmlspecialchars($get_site_details['android_app_url'] ?? ''); ?>" class="form-control" placeholder="https://play.google.com/store/apps/details?id=... or /downloads/app.apk" />
+                                    <div class="form-text text-muted">
+                                        Independent of the download URL above. <strong>Personal</strong> accounts are sent here after signing in; leave blank and they keep using the website.
+                                        <strong>Business</strong> accounts always stay on the website and are never redirected.
+                                    </div>
                                 </div>
                                 <button name="update-site-details" class="btn btn-primary px-5 rounded-pill fw-bold">Update SEO & Settings</button>
                             </form>

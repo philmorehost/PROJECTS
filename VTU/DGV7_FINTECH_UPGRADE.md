@@ -13,7 +13,34 @@ Blueprint: *Project Kickoff Blueprint — DGV7.0 Scripts Fintech Platform Upgrad
 - `bc_fintech_web_redirect_target($user, $androidAppUrl)` returns the destination a personal website login must follow, or `null` when none applies. Business and unknown accounts always get `null`; a blank setting also gets `null`, so personal users keep normal website access. A non-empty but invalid setting also gets `null`: callers must detect that state with `bc_fintech_android_app_url_valid()` and fail closed with a configuration error, never fall through to the dashboard or emit an unsafe `Location` header.
 - Tested in `tests/fintech_policy_test.php` across both copies: legacy/persisted tiers, business grandfathering and upgrades, unknown users, blank/whitespace/null settings, Play Store/localhost/same-origin URLs, and rejection of unsafe or malformed destinations.
 
-**Not enabled:** These files are not yet connected to routes or user records. They do not change database schema, service controls, website design, apps, or existing API permissions. In particular, personal developer API lockdown, the mobile Business-account restriction, the app URL setting, and web-to-app redirects are **not yet enforced** and must not be advertised as complete.
+**Wiring status:** Phase 1B wires the policy into app login, app token issue/refresh, profile, website login and page access (see the Phase 1B section below). It is still **not deployed**, and personal developer-API lockdown remains unimplemented.
+
+## Phase 1B in this change (implemented, not yet active in production)
+
+**Schema — additive and lazy**
+- `func/bc-fintech-schema.php` adds `sas_users.account_type` (NULLable — NULL keeps the legacy `account_level` mapping), `account_type_source/at`, and KYB state (`kyb_status`, `kyb_reference`, `kyb_submitted_at/reviewed_at/reviewed_by`). New columns are NULL/default so existing INSERTs keep working.
+- `sas_site_details.android_app_url` is a new, separate setting. It never inherits `apk_download_url` or `app_redirect_mode`.
+- `sas_service_control` gains `personal_enabled`, `business_enabled`, `provider_ready`. The existing `status` column keeps its current meaning, so no live VTU service changes behaviour.
+- `sas_app_tokens` stores only a SHA-256 of each first-party app session token.
+- Everything runs lazily from `bc-connect.php` with per-column `SHOW COLUMNS` guards. **`SYSTEM_VERSION` was deliberately not touched**: changing that marker re-runs the large legacy migration block (the OTP outage). No `DROP`/`TRUNCATE`, no row rewrites, no backfill of `account_type`.
+
+**First-party app tokens**
+- `func/bc-app-token.php`: 32-byte opaque token, hash-at-rest, 30-day expiry, `last_used_at`, per-device revoke and revoke-all. Issued on app login, returned as `data.app_token` with `data.app_token_expires_at`.
+- `api_key` is **not** rotated or invalidated; existing app builds and merchant integrations keep working during migration.
+- Every lookup re-reads the account and re-applies the policy, so an upgrade to Business kills live sessions immediately. `web/api/logout.php` revokes exactly the presented token.
+
+**Enforcement (`func/bc-fintech-gate.php`)**
+- App login (`web/api/login.php`, SAAS `login-otp.php`) refuses **before** any credential, balance or token is returned: HTTP 403 `Business accounts are accessible via web only`.
+- `profile.php` re-applies the policy when an app token is presented; merchant requests without one are unaffected.
+- Website login applies `bc_fintech_web_login_flow()` only **after** the session exists and OTP (if enabled) has passed.
+- Ordinary pages are gated by `bc_fintech_web_access_blocked()` in `bc-config.php`, active only when a valid `android_app_url` is saved. Logout, login, lockout, API and AJAX routes stay reachable; super-admin impersonation keeps the website.
+- A saved URL that fails validation shows a configuration error instead of the dashboard — never treated as "no redirect configured".
+
+**Known limits of this phase**
+- The **other** ~60 app endpoints still authenticate with `api_key`; they do not yet require an app token, so a Business account holding its old key could still call them until they are migrated. `profile.php` + login/token issue/refresh are done.
+- Personal developer-API lockdown is still **not** enforced, and must not be until those endpoints accept app tokens.
+- No `account_type` backfill has run; until then policy resolves entirely from `account_level`.
+- Not deployed. No staging database, provider sandbox or live traffic has exercised any of it.
 
 ## Existing implementation facts that affect rollout
 

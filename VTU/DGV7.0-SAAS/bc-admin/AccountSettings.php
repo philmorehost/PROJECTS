@@ -1098,6 +1098,22 @@ if (isset($_POST["update-site-details"])) {
     $apk_download_url = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["apk-download-url"] ?? "")));
     $app_redirect_mode = mysqli_real_escape_string($connection_server, strtolower(trim($_POST["app-redirect-mode"] ?? "off")));
     if (!in_array($app_redirect_mode, ["off", "prompt", "force"], true)) $app_redirect_mode = "off";
+
+    // DGV7: the authenticated post-login app destination. Deliberately NOT derived from
+    // apk-download-url above: that setting drives an anonymous landing-page prompt/force and
+    // must stay independent so business users can always reach the web login page.
+    $android_app_url_raw = trim((string)($_POST["android-app-url"] ?? ""));
+    $android_app_url = mysqli_real_escape_string($connection_server, $android_app_url_raw);
+    if (!bc_fintech_gate_boot()) {
+        $_SESSION["product_purchase_response"] = "Account policy tables are not ready on this server. Please run the update and try again.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit;
+    }
+    if (!bc_fintech_android_app_url_valid($android_app_url_raw)) {
+        $_SESSION["product_purchase_response"] = "Android app URL was not saved: use an https:// address (Play Store or APK link), http://localhost for staging, or a path beginning with '/'. Unsafe or malformed URLs are rejected.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit;
+    }
     
     // New SEO Fields
     $meta_keywords = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["meta-keywords"] ?? "")));
@@ -1136,6 +1152,7 @@ if (isset($_POST["update-site-details"])) {
                 site_desc='$site_desc', 
                 apk_download_url='$apk_download_url',
                 app_redirect_mode='$app_redirect_mode',
+                android_app_url='$android_app_url',
                 meta_keywords='$meta_keywords',
                 meta_author='$meta_author',
                 favicon_url='$favicon_url',
@@ -1162,14 +1179,14 @@ if (isset($_POST["update-site-details"])) {
         } else {
             if (mysqli_num_rows($get_site_details_check) == 0) {
                 mysqli_query($connection_server, "INSERT INTO sas_site_details (
-                    vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode,
+                    vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode, android_app_url,
                     meta_keywords, meta_author, favicon_url, og_image,
                     ga_tracking_id, gtm_id, fb_pixel_id, custom_head_code,
                     custom_footer_code, robots_txt, sitemap_enabled,
                     social_twitter, social_facebook, social_instagram, social_whatsapp,
                     schema_org_type, schema_org_phone, schema_org_address
                 ) VALUES (
-                    '" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode',
+                    '" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode', '$android_app_url',
                     '$meta_keywords', '$meta_author', '$favicon_url', '$og_image',
                     '$ga_tracking_id', '$gtm_id', '$fb_pixel_id', '$custom_head_code',
                     '$custom_footer_code', '$robots_txt', '$sitemap_enabled',
@@ -1231,6 +1248,7 @@ $seo_defaults = [
     'site_title' => '',
     'site_desc' => '',
     'apk_download_url' => '',
+    'android_app_url' => '',
     'meta_keywords' => '',
     'meta_author' => '',
     'favicon_url' => '',
@@ -1499,6 +1517,14 @@ if ($q_site_details && mysqli_num_rows($q_site_details) > 0) {
                                                 <option value="force" <?php echo (($get_site_details['app_redirect_mode'] ?? '') === 'force') ? 'selected' : ''; ?>>Force — Always redirect to app</option>
                                             </select>
                                             <div class="form-text small text-muted">Choose how visitors are directed to your App Download URL above. "Prompt" lets users decide to install the app or keep using the website.</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold text-muted" for="android-app-url-input">ANDROID APP URL FOR PERSONAL ACCOUNT LOGINS</label>
+                                            <input id="android-app-url-input" name="android-app-url" type="text" inputmode="url" value="<?php echo htmlspecialchars($get_site_details['android_app_url'] ?? ''); ?>" class="form-control rounded-3" placeholder="https://play.google.com/store/apps/details?id=... or /downloads/app.apk" />
+                                            <div class="form-text small text-muted">
+                                                Independent of the download URL above. <strong>Personal</strong> accounts are sent here after signing in; leave blank and they keep using the website.
+                                                <strong>Business</strong> accounts always stay on the website and are never redirected. Use https:// (http://localhost is allowed for staging) or a path beginning with <code>/</code>.
+                                            </div>
                                         </div>
                                     </div>
                                     
