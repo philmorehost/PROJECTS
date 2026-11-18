@@ -488,6 +488,29 @@ if ($connection_server) {
 				if (($get_logged_user_details["status"] == 1 && $get_logged_user_details["is_blocked"] == 0) || isset($_SESSION["admin_session"])) {
 					// STANDALONE: Billing suspension checks disabled in standalone mode
 
+					// ── DGV7: personal accounts required to use the app ────────────────────
+					// Applied only after the session is fully established, and only when the
+					// tenant saved a valid android_app_url. Business accounts, API/AJAX routes
+					// and logout stay reachable (see bc_fintech_web_access_blocked()).
+					$bc_web_gate = bc_fintech_web_access_blocked($get_logged_user_details, (int)$vendor_id);
+					if ($bc_web_gate !== null) {
+						if ($bc_web_gate['state'] === 'redirect') {
+							bc_fintech_app_landing($bc_web_gate['location'], (int)$vendor_id, $get_logged_user_details);
+							exit;
+						}
+						if (!headers_sent()) {
+							http_response_code(503);
+							header('Content-Type: text/html; charset=UTF-8');
+						}
+						echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Account Access Unavailable</title></head>'
+						   . '<body style="font-family:system-ui,sans-serif;background:#0b0f19;color:#f3f4f6;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;">'
+						   . '<main style="max-width:520px;background:#111827;border:1px solid #374151;border-radius:14px;padding:32px;text-align:center;">'
+						   . '<h1 style="font-size:1.25rem;margin:0 0 12px;">Account Access Unavailable</h1>'
+						   . '<p style="color:#9ca3af;line-height:1.6;margin:0 0 20px;">Mobile app access is not configured correctly for this website. Please contact support.</p>'
+						   . '<a href="/logout.php" style="color:#93c5fd;text-decoration:underline;">Sign out</a>'
+						   . '</main></body></html>';
+						exit;
+					}
 					// Master KYC Toggle Check (Super Admin Global OR Vendor Local)
 					$master_force_kyc = isKYCEnforced($vendor_id);
 

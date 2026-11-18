@@ -130,6 +130,13 @@
     include_once(__DIR__ . "/bc-bulk-queue.php");
     include_once(__DIR__ . "/bc-mail-queue.php");
     include_once(__DIR__ . "/bc-demo-mode.php");
+    // DGV7 fintech access policy. The policy file is side-effect free; the gate adds the
+    // schema, app-token and route-decision helpers. Loading them here means /web/api/* (which
+    // includes only bc-connect.php) has the same helpers as web pages.
+    include_once(__DIR__ . "/bc-fintech-policy.php");
+    include_once(__DIR__ . "/bc-fintech-schema.php");
+    include_once(__DIR__ . "/bc-app-token.php");
+    include_once(__DIR__ . "/bc-fintech-gate.php");
 
     // License Verification & Grace Period Logic
     if ($connection_server) {

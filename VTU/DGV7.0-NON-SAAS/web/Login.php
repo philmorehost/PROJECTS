@@ -2,6 +2,8 @@
 	
     include("../func/bc-config.php");
     if(isset($get_logged_user_details["username"]) && !empty($get_logged_user_details["username"]) && ($get_logged_user_details["status"] == 1)){
+        // DGV7: applied before redirecturl so a crafted redirect cannot bypass the policy.
+        bc_fintech_web_login_flow($get_logged_user_details, (int)($select_vendor_table['id'] ?? 0));
     	$redirecturl = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirecturl"] ?? '')));
         $redirect_path = explode("?", $redirecturl)[0];
 		if(!empty(trim($redirecturl)) && file_exists("..".$redirect_path)){
@@ -50,6 +52,8 @@
                     if (empty($user_detail['google_id'])) {
                         mysqli_query($connection_server, "UPDATE sas_users SET google_id='$google_id' WHERE id='".$user_detail['id']."'");
                     }
+                    // DGV7: post-authentication app routing, business accounts stay on web.
+                    bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
                     header("Location: Dashboard.php");
                     exit();
                 } else {
@@ -107,6 +111,10 @@
 							}
 							sendVendorEmail($user_detail["email"], $raw_log_template_subject, $raw_log_template_body);
 							// Email End
+
+                            // DGV7: after the sign-in notice and after the session exists, so a
+                            // personal account is routed to the app only once fully signed in.
+                            bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
 
     						//Welcome Back Message
     						$json_response_array = array("desc" => "Welcome Back, ".ucwords($user_detail["firstname"]));

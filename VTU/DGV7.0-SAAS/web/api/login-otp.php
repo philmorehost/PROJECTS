@@ -68,10 +68,25 @@ if (!bc_verify_otp('user_login', (string)$user_detail['username'], (int)$vendor_
     exit;
 }
 
+// DGV7: the OTP step is a token issue too, so the mobile account policy is re-applied here.
+// Otherwise a business account could be refused at the password step and still succeed here.
+$bc_app_decision = bc_fintech_app_access($user_detail);
+if (!$bc_app_decision['allowed']) {
+    bc_burn_login_token((int)$token_row['id']);
+    recordLoginAttempt($user_detail['username'], $app_ip, 0, $vendor_id);
+    bc_fintech_send_app_denial($bc_app_decision);
+}
+
 bc_burn_login_token((int)$token_row['id']);
 recordLoginAttempt($user_detail['username'], $app_ip, 1, $vendor_id);
 
-echo json_encode(bc_user_login_payload($user_detail, $get_vendor));
+$bc_login_payload = bc_user_login_payload($user_detail, $get_vendor);
+$bc_app_session = bc_app_token_issue($user_detail, $vendor_id, $input['platform'] ?? 'android', $input['device_label'] ?? null);
+if ($bc_app_session) {
+    $bc_login_payload['data']['app_token'] = $bc_app_session['token'];
+    $bc_login_payload['data']['app_token_expires_at'] = $bc_app_session['expires_at'];
+}
+echo json_encode($bc_login_payload);
 
 mysqli_close($connection_server);
 ?>

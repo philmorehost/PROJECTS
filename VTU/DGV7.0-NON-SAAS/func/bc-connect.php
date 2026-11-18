@@ -46,6 +46,11 @@
     include_once(__DIR__ . "/bc-mail-queue.php");
     include_once(__DIR__ . "/bc-demo-mode.php");
     include_once(__DIR__ . "/voveid-client.php");
+    // DGV7 fintech access policy (identical to the SAAS edition; see bc-fintech-policy.php).
+    include_once(__DIR__ . "/bc-fintech-policy.php");
+    include_once(__DIR__ . "/bc-fintech-schema.php");
+    include_once(__DIR__ . "/bc-app-token.php");
+    include_once(__DIR__ . "/bc-fintech-gate.php");
 
     // Connect Platform Validation & Integrity Engine
     include_once(__DIR__ . "/bc-integrity.php");

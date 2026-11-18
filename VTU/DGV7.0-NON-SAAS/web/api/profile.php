@@ -36,6 +36,23 @@ if (mysqli_num_rows($check_user) == 1) {
         exit;
     }
 
+    // DGV7: this endpoint is used by BOTH the first-party apps and merchant integrations.
+    // When the request carries an app session, re-apply the mobile account policy so a
+    // Business account (or an upgraded one) cannot keep using the app. Merchant requests
+    // without an app token are unaffected here; their lockdown is a separate, later step.
+    $bc_profile_app_token = bc_app_token_from_request($input);
+    if ($bc_profile_app_token !== '') {
+        $bc_profile_app_user = bc_app_session_user($bc_profile_app_token, $vendor_id);
+        if (!$bc_profile_app_user) {
+            echo json_encode(["status" => "error", "code" => "APP_SESSION_INVALID", "message" => "Your app session has expired. Please sign in again."]);
+            exit;
+        }
+        $bc_profile_decision = bc_fintech_app_access($bc_profile_app_user);
+        if (!$bc_profile_decision['allowed']) {
+            bc_fintech_send_app_denial($bc_profile_decision);
+        }
+    }
+
     $vtu_details = get_user_vtu_details($user['username']);
 
     $is_kyc_compliant = ($user['kyc_status'] == 2);
