@@ -34,6 +34,13 @@ $GLOBALS['db'] = [
     'service' => [],   // "vendor:service" => row
     'global_service' => [],
     'affected' => 0,
+    // ── phase 2: support chat + settings ──
+    'settings' => [],        // "vendor:name" => value
+    'tables' => [],          // table => true (SHOW TABLES)
+    'chat_threads' => [],    // id => row
+    'chat_messages' => [],   // id => row
+    'chat_events' => [],     // id => row
+    'insert_id' => 0,
 ];
 
 /**
@@ -69,6 +76,7 @@ function fake_mysqli_fetch_assoc($rows) {
     return is_array($rows) && $rows ? $rows[0] : null;
 }
 function fake_mysqli_affected_rows($db) { return $GLOBALS['db']['affected']; }
+function fake_mysqli_insert_id($db) { return $GLOBALS['db']['insert_id']; }
 
 function fake_mysqli_query($db, $sql) { return fake_result(fake_mysqli_query_raw($db, $sql)); }
 
@@ -188,6 +196,161 @@ function fake_mysqli_query_raw($db, $sql) {
         return true;
     }
 
+    // ── phase 2: support chat schema + settings ──
+    if (preg_match("/SHOW TABLES LIKE '([a-z0-9_]+)'/", $sql, $m)) {
+        return empty($GLOBALS['db']['tables'][$m[1]]) ? [] : [[$m[1] => $m[1]]];
+    }
+    if (preg_match('/^SELECT setting_name, setting_value FROM sas_settings\s+WHERE vendor_id=\'(\d+)\' AND setting_name IN \((.*)\)$/s', $sql, $m)) {
+        $wanted = array_map(function ($v) { return trim($v, " '\t\n"); }, explode(',', $m[2]));
+        $rows = [];
+        foreach ($wanted as $name) {
+            $key = $m[1] . ':' . $name;
+            if (array_key_exists($key, $GLOBALS['db']['settings'])) {
+                $rows[] = ['setting_name' => $name, 'setting_value' => $GLOBALS['db']['settings'][$key]];
+            }
+        }
+        return $rows;
+    }
+    if (preg_match("/SELECT id FROM sas_settings\s+WHERE vendor_id='(\\d+)' AND setting_name='([^']*)' LIMIT 1/s", $sql, $m)) {
+        return array_key_exists($m[1] . ':' . stripslashes($m[2]), $GLOBALS['db']['settings']) ? [['id' => 1]] : [];
+    }
+    if (preg_match("/UPDATE sas_settings SET setting_value='([^']*)'\s+WHERE vendor_id='(\\d+)' AND setting_name='([^']*)'/s", $sql, $m)) {
+        $GLOBALS['db']['settings'][$m[2] . ':' . stripslashes($m[3])] = stripslashes($m[1]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/INSERT INTO sas_settings \(vendor_id, setting_name, setting_value\)\s+VALUES \('(\d+)', '([^']*)', '([^']*)'\)/s", $sql, $m)) {
+        $GLOBALS['db']['settings'][$m[1] . ':' . stripslashes($m[2])] = stripslashes($m[3]);
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // threads
+    if (preg_match("/SELECT \\* FROM sas_chat_threads\s+WHERE vendor_id='(\\d+)' AND user_id='(\\d+)' AND status<>'closed'\s+ORDER BY id DESC LIMIT 1/s", $sql, $m)) {
+        $best = null;
+        foreach ($GLOBALS['db']['chat_threads'] as $row) {
+            if ((int)$row['vendor_id'] === (int)$m[1] && (int)$row['user_id'] === (int)$m[2] && $row['status'] !== 'closed') {
+                if (!$best || (int)$row['id'] > (int)$best['id']) $best = $row;
+            }
+        }
+        return $best ? [$best] : [];
+    }
+    if (preg_match("/SELECT \\* FROM sas_chat_threads\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)' LIMIT 1/s", $sql, $m)) {
+        $row = $GLOBALS['db']['chat_threads'][(int)$m[1]] ?? null;
+        return ($row && (int)$row['vendor_id'] === (int)$m[2]) ? [$row] : [];
+    }
+    if (preg_match("/INSERT INTO sas_chat_threads\s+\(vendor_id, user_id, username, subject, status, ai_enabled, created_at, last_message_at, last_message_by\)\s+VALUES \('(\d+)', '(\d+)', '([^']*)', '([^']*)', 'open', '(\d)', NOW\(\), NOW\(\), 'system'\)/s", $sql, $m)) {
+        $id = count($GLOBALS['db']['chat_threads']) + 1;
+        $GLOBALS['db']['chat_threads'][$id] = [
+            'id' => $id, 'vendor_id' => (int)$m[1], 'user_id' => (int)$m[2],
+            'username' => stripslashes($m[3]), 'subject' => stripslashes($m[4]),
+            'status' => 'open', 'assigned_admin' => '', 'last_message_at' => date('Y-m-d H:i:s'),
+            'last_message_by' => 'system', 'unread_for_agent' => 0, 'unread_for_user' => 0,
+            'ai_enabled' => (int)$m[5], 'created_at' => date('Y-m-d H:i:s'), 'closed_at' => null,
+        ];
+        $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET status='pending_agent', ai_enabled=0\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['status'] = 'pending_agent';
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['ai_enabled'] = 0;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET status='with_agent', ai_enabled=0, assigned_admin='([^']*)', unread_for_agent=0\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
+        $id = (int)$m[2];
+        $current = $GLOBALS['db']['chat_threads'][$id] ?? null;
+        if (!$current) return false;
+        if ((string)$current['assigned_admin'] !== '' && (string)$current['assigned_admin'] !== $m[1]) {
+            $GLOBALS['db']['affected'] = 0;
+            return true;
+        }
+        $GLOBALS['db']['chat_threads'][$id]['status'] = 'with_agent';
+        $GLOBALS['db']['chat_threads'][$id]['ai_enabled'] = 0;
+        $GLOBALS['db']['chat_threads'][$id]['assigned_admin'] = $m[1];
+        $GLOBALS['db']['chat_threads'][$id]['unread_for_agent'] = 0;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET status='closed', ai_enabled=0, closed_at=NOW\(\), unread_for_agent=0\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['status'] = 'closed';
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['ai_enabled'] = 0;
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['closed_at'] = date('Y-m-d H:i:s');
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET last_message_at=NOW\(\), last_message_by='user', unread_for_agent=unread_for_agent\+1\s+WHERE id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['unread_for_agent']++;
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['last_message_by'] = 'user';
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET last_message_at=NOW\(\), last_message_by='agent', unread_for_user=unread_for_user\+1\s+WHERE id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['unread_for_user']++;
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['last_message_by'] = 'agent';
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads\s+SET last_message_at=NOW\(\), last_message_by='([a-z]+)'\s+WHERE id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[2]]['last_message_by'] = $m[1];
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads SET ai_enabled=0\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['ai_enabled'] = 0;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/UPDATE sas_chat_threads SET unread_for_user=0\s+WHERE id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['chat_threads'][(int)$m[1]]['unread_for_user'] = 0;
+        return true;
+    }
+    if (preg_match("/SELECT \\* FROM sas_chat_threads\s+WHERE vendor_id='(\\d+)' AND status='([a-z_]+)'\s+ORDER BY last_message_at (ASC|DESC) LIMIT (\\d+)/s", $sql, $m)) {
+        $rows = [];
+        foreach ($GLOBALS['db']['chat_threads'] as $row) {
+            if ((int)$row['vendor_id'] === (int)$m[1] && $row['status'] === $m[2]) $rows[] = $row;
+        }
+        usort($rows, function ($a, $b) use ($m) {
+            return $m[3] === 'ASC'
+                ? strcmp((string)$a['last_message_at'], (string)$b['last_message_at'])
+                : strcmp((string)$b['last_message_at'], (string)$a['last_message_at']);
+        });
+        return array_slice($rows, 0, (int)$m[4]);
+    }
+
+    // messages
+    if (preg_match("/SELECT \\* FROM sas_chat_messages\s+WHERE thread_id='(\\d+)' AND vendor_id='(\\d+)' AND id > (\\d+)\s+ORDER BY id ASC LIMIT (\\d+)/s", $sql, $m)) {
+        $rows = [];
+        foreach ($GLOBALS['db']['chat_messages'] as $row) {
+            if ((int)$row['thread_id'] === (int)$m[1] && (int)$row['vendor_id'] === (int)$m[2] && (int)$row['id'] > (int)$m[3]) {
+                $rows[] = $row;
+            }
+        }
+        usort($rows, function ($a, $b) { return $a['id'] <=> $b['id']; });
+        return array_slice($rows, 0, (int)$m[4]);
+    }
+    if (preg_match("/INSERT INTO sas_chat_messages\s+\(thread_id, vendor_id, author_type, author_name, body, created_at\)\s+VALUES \('(\d+)', '(\d+)', '([a-z]+)', '([^']*)', '([^']*)', NOW\(\)\)/s", $sql, $m)) {
+        $id = count($GLOBALS['db']['chat_messages']) + 1;
+        $GLOBALS['db']['chat_messages'][$id] = [
+            'id' => $id, 'thread_id' => (int)$m[1], 'vendor_id' => (int)$m[2],
+            'author_type' => $m[3], 'author_name' => stripslashes($m[4]),
+            'body' => stripslashes($m[5]), 'created_at' => date('Y-m-d H:i:s'),
+        ];
+        $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // events
+    if (preg_match("/INSERT INTO sas_chat_events\s+\(thread_id, vendor_id, event, actor, detail, created_at\)\s+VALUES \('(\d+)', '(\d+)', '([^']*)', '([^']*)', '([^']*)', NOW\(\)\)/s", $sql, $m)) {
+        $id = count($GLOBALS['db']['chat_events']) + 1;
+        $GLOBALS['db']['chat_events'][$id] = [
+            'id' => $id, 'thread_id' => (int)$m[1], 'vendor_id' => (int)$m[2],
+            'event' => stripslashes($m[3]), 'actor' => stripslashes($m[4]),
+            'detail' => stripslashes($m[5]), 'created_at' => date('Y-m-d H:i:s'),
+        ];
+        $GLOBALS['db']['insert_id'] = $id;
+        return true;
+    }
+
     // ── phase 1C step 2: service matrix ──
     if (preg_match("/SELECT service_name, status, personal_enabled, business_enabled, provider_ready\\s+FROM sas_service_control WHERE vendor_id='(\\d+)'/s", $sql, $m)) {
         $rows = [];
@@ -292,10 +455,17 @@ function load_edition($root, $edition, $files) {
         if ($source === false) throw new RuntimeException('Cannot read ' . $path);
         $source = preg_replace('/^<\?php/', '', $source, 1);
         // Drop the runtime require_once chain in the gate: the test loads the same files itself.
-        $source = preg_replace("#\s*require_once \\\$dir \. '/bc-(?:fintech-policy|fintech-schema|app-token)\.php';#", '', $source);
-        // bc-fintech-accounts.php pulls gateway-policy in by __DIR__; in the eval'd copies that path
-        // points at the test directory, so drop it too (the test already required the real one).
-        $source = preg_replace("#\s*require_once __DIR__ \. '/bc-gateway-policy\.php';#", '', $source);
+        //
+        // Two spellings occur in the shipped source and BOTH have to go:
+        //   require_once $dir . '/x.php';            -- bc_fintech_gate_boot()
+        //   require_once(__DIR__ . '/x.php');        -- the phase 2 chat/schema files
+        // Matching only the first is what previously made the chat schema try to open a file beside
+        // the test instead of beside the code.
+        $source = preg_replace("#\s*require_once \(?\s*\\\$dir\s*\.\s*'/bc-[a-z0-9-]+\.php'\s*\)?;#", '', $source);
+        // Parentheses are optional in the shipped code, and both forms appear:
+        //   require_once __DIR__ . '/bc-gateway-policy.php';      (bc-fintech-accounts.php)
+        //   require_once(__DIR__ . '/bc-support-chat-schema.php'); (the chat files)
+        $source = preg_replace("#\s*require_once\s*\(?\s*__DIR__\s*\.\s*'/bc-[a-z0-9-]+\.php'\s*\)?\s*;#", '', $source);
         $source = str_replace(['instanceof mysqli', 'mysqli_'], ['instanceof FakeDb', 'fake_mysqli_'], $source);
         eval($source);
     }
@@ -949,6 +1119,284 @@ foreach ($editions as $edition) {
     gtrue("$edition ships an upload deny file for kyb documents", is_file($root . '/' . $edition . '/uploads/kyb/.htaccess'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 — marketing gating, wallets, support chat
+// ═══════════════════════════════════════════════════════════════════════════
+
+// The wallet/tier presentation helpers are pure functions over rows, so load them for real.
+load_edition($root, 'DGV7.0-SAAS', ['func/bc-fintech-wallet.php']);
+// The chat engine and its schema loader. The engine's require of the schema is stripped by
+// load_edition, so load both explicitly.
+load_edition($root, 'DGV7.0-SAAS', ['func/bc-support-chat-schema.php', 'func/bc-support-chat.php']);
+
+// ── 15. marketing partition ────────────────────────────────────────────────
+$GLOBALS['db']['service'] = [];
+$pid = 7;
+foreach (['transfers', 'fx', 'cross_border', 'esim', 'tuition', 'invoices', 'pos', 'developer_api'] as $svc) {
+    $GLOBALS['db']['service'][$pid . ':' . $svc] = [
+        'status' => 0, 'personal_enabled' => 0, 'business_enabled' => 0, 'provider_ready' => 0,
+    ];
+}
+
+// Nothing switched on: everything is "soon", and nothing is dropped from the page.
+$part = bc_fintech_marketing_partition($pid, 'personal');
+gcheck('a dark tenant advertises nothing live', count($part['live']), 0);
+gtrue('a dark tenant still lists cards as soon', count($part['soon']) > 0);
+
+// Personal sees eSIM, never tuition or the developer API.
+$personal_names = array_column($part['soon'], 'service');
+gtrue('personal tab has the eSIM card', in_array('esim', $personal_names, true));
+gtrue('personal tab has no tuition card', !in_array('tuition', $personal_names, true));
+gtrue('developer_api is never advertised to personal', !in_array('developer_api', $personal_names, true));
+
+$bpart = bc_fintech_marketing_partition($pid, 'business');
+$business_names = array_column($bpart['soon'], 'service');
+gtrue('business tab has the tuition card', in_array('tuition', $business_names, true));
+gtrue('business tab has no eSIM card', !in_array('esim', $business_names, true));
+
+// One service fully live.
+$GLOBALS['db']['service'][$pid . ':transfers'] = [
+    'status' => 1, 'personal_enabled' => 1, 'business_enabled' => 1, 'provider_ready' => 1,
+];
+$part = bc_fintech_marketing_partition($pid, 'personal');
+gtrue('provider ready + switch on makes the card live', in_array('transfers', array_column($part['live'], 'service'), true));
+gtrue('a live card is not also listed as soon', !in_array('transfers', array_column($part['soon'], 'service'), true));
+
+// The provider_ready gate is the one that keeps Phase 3 services honest.
+$GLOBALS['db']['service'][$pid . ':transfers']['provider_ready'] = 0;
+$part = bc_fintech_marketing_partition($pid, 'personal');
+gcheck('provider_ready=0 keeps the card unavailable', count($part['live']), 0);
+
+// The tier switch still gates independently of provider readiness.
+$GLOBALS['db']['service'][$pid . ':transfers'] = [
+    'status' => 1, 'personal_enabled' => 0, 'business_enabled' => 1, 'provider_ready' => 1,
+];
+gcheck('the tier switch still gates the card', count(bc_fintech_marketing_partition($pid, 'personal')['live']), 0);
+gtrue('the other tier still sees it', count(bc_fintech_marketing_partition($pid, 'business')['live']) > 0);
+
+// Fail closed on nonsense inputs.
+gcheck('a zero tenant is never live', count(bc_fintech_marketing_partition(0, 'personal')['live']), 0);
+gcheck('an unknown tier is never live', count(bc_fintech_marketing_partition($pid, 'enterprise')['live']), 0);
+gtrue('an unknown service is never live', bc_fintech_marketing_live($pid, 'personal', 'teleportation') === false);
+gtrue('developer_api refuses personal even when the flags say yes', bc_fintech_marketing_live(
+    $pid, 'personal', 'developer_api',
+    ['developer_api' => ['name' => 'API', 'copy' => '', 'tiers' => ['personal', 'business']]]
+) === false);
+
+// ── 16. wallet + rate presentation ────────────────────────────────────────
+$wallets = bc_wallet_cards(['NGN' => 25000]);
+$by_code = [];
+foreach ($wallets as $w) $by_code[$w['code']] = $w;
+gtrue('NGN with a balance is open', $by_code['NGN']['open'] === true);
+gtrue('NGN shows the amount', strpos($by_code['NGN']['amount'], '25,000') !== false);
+gtrue('USD stays closed without custody', $by_code['USD']['open'] === false);
+gcheck('a closed wallet reports "Not open yet"', $by_code['USD']['note'], 'Not open yet');
+gtrue('a closed wallet shows no amount', $by_code['USD']['amount'] === null);
+
+$wallets = bc_wallet_cards(['NGN' => 0]);
+$by_code = [];
+foreach ($wallets as $w) $by_code[$w['code']] = $w;
+gtrue('a zero balance does not open the wallet', $by_code['NGN']['open'] === false);
+
+gcheck('formatting rejects a non-number', bc_wallet_format('abc'), null);
+gtrue('formatting rejects infinity', bc_wallet_format(INF) === null);
+
+$snap = bc_fx_rate_snapshot(null);
+gtrue('no feed means unavailable', $snap['available'] === false);
+gcheck('unavailable strip explains itself', $snap['note'], 'Live rates are temporarily unavailable.');
+gtrue('an unavailable strip has no rates', $snap['rates'] === []);
+
+$snap = bc_fx_rate_snapshot(['USD/NGN' => 0]);
+gtrue('a zero rate is treated as unavailable', $snap['available'] === false);
+
+$snap = bc_fx_rate_snapshot(['USD/NGN' => 1550.5]);
+gtrue('a real feed is available', $snap['available'] === true);
+gcheck('the rate is carried through', $snap['rates']['USD/NGN'], 1550.5);
+
+gcheck('business badge', bc_fintech_tier_badge('business')['label'], 'Business account');
+gcheck('personal badge', bc_fintech_tier_badge('personal')['label'], 'Personal account');
+gcheck('unknown tier is labelled honestly', bc_fintech_tier_badge(null)['label'], 'Account type not set');
+
+// ── 17. support chat behaviour ────────────────────────────────────────────
+$GLOBALS['db']['tables'] = ['sas_chat_threads' => true, 'sas_chat_messages' => true, 'sas_chat_events' => true];
+$GLOBALS['db']['chat_threads'] = [];
+$GLOBALS['db']['chat_messages'] = [];
+$GLOBALS['db']['chat_events'] = [];
+$GLOBALS['db']['settings'] = [];
+
+gtrue('schema reports ready when all three tables exist', bc_chat_schema_ready() === true);
+unset($GLOBALS['db']['tables']['sas_chat_events']);
+gtrue('schema reports NOT ready when a table is missing', bc_chat_schema_ready() === false);
+$GLOBALS['db']['tables']['sas_chat_events'] = true;
+
+// Chat is off by default: the widget must not render for a tenant that never enabled it.
+gtrue('chat is off by default', bc_chat_widget_enabled($pid) === false);
+bc_chat_setting_save($pid, 'chat_enabled', '1');
+gtrue('the widget renders once the tenant enables chat', bc_chat_widget_enabled($pid) === true);
+gtrue('a zero tenant never gets a widget', bc_chat_widget_enabled(0) === false);
+
+// Opening a thread.
+$thread = bc_chat_open_thread($pid, 55, 'ada', 'Wallet question');
+gtrue('a thread is created', is_array($thread) && (int)$thread['id'] > 0);
+gcheck('a new thread starts open', $thread['status'], 'open');
+gcheck('the AI is off without a key, even with AI enabled elsewhere', (int)$thread['ai_enabled'], 0);
+
+$again = bc_chat_open_thread($pid, 55, 'ada');
+gcheck('re-opening reuses the live thread', (int)$again['id'], (int)$thread['id']);
+
+// Tenant scoping: another vendor cannot read the thread.
+gtrue('another tenant cannot read the thread', bc_chat_thread_get(999, (int)$thread['id']) === null);
+gtrue('another tenant cannot post into it', bc_chat_post_message(999, (int)$thread['id'], 'user', 'x', 'hi') === 0);
+
+// Messages.
+$tid = (int)$thread['id'];
+gtrue('the body cap rejects an over-long message', bc_chat_post_message($pid, $tid, 'user', 'ada', str_repeat('x', 4001)) === 0);
+gtrue('the body cap accepts a long-but-legal message', bc_chat_post_message($pid, $tid, 'user', 'ada', str_repeat('x', 4000)) > 0);
+gtrue('an empty body is rejected', bc_chat_post_message($pid, $tid, 'user', 'ada', '   ') === 0);
+gtrue('an unknown author type is rejected', bc_chat_post_message($pid, $tid, 'root', 'ada', 'hi') === 0);
+
+$mid = bc_chat_post_message($pid, $tid, 'user', 'ada', 'Where is my transfer?');
+gtrue('a user message is stored', $mid > 0);
+$msgs = bc_chat_messages($pid, $tid, $mid);
+gcheck('"after id" returns nothing older', count($msgs), 0);
+$msgs = bc_chat_messages($pid, $tid, 0);
+// Exactly the two that were accepted above: the 4000-char one and the real question. The welcome
+// line is posted by the endpoint for a brand-new thread, not by the engine.
+gcheck('the transcript holds the accepted messages', count($msgs), 2);
+gcheck('the transcript is in order', (int)$msgs[1]['id'] > (int)$msgs[0]['id'], true);
+
+// Escalation silences the assistant.
+bc_chat_escalate($pid, $tid, 'user_request');
+$t = bc_chat_thread_get($pid, $tid);
+gcheck('escalation moves the thread to pending_agent', $t['status'], 'pending_agent');
+gcheck('escalation clears ai_enabled', (int)$t['ai_enabled'], 0);
+gtrue('escalation is idempotent', bc_chat_escalate($pid, $tid, 'user_request') === true);
+
+// The AI must not speak on an escalated thread, even if the tenant turns AI on.
+bc_chat_setting_save($pid, 'chat_ai_enabled', '1');
+bc_chat_setting_save($pid, 'chat_ai_key', str_repeat('k', 32));
+$t = bc_chat_thread_get($pid, $tid);
+gcheck('AI reply is 0 on an escalated thread', bc_chat_ai_reply($pid, $t), 0);
+
+// Claiming.
+gtrue('an agent can claim a waiting thread', bc_chat_claim_thread($pid, $tid, 12, 'agent-ann') === true);
+$t = bc_chat_thread_get($pid, $tid);
+gcheck('claiming moves the thread to with_agent', $t['status'], 'with_agent');
+gcheck('claiming records the agent', (string)$t['assigned_admin'], '12');
+gtrue('a second agent cannot steal it', bc_chat_claim_thread($pid, $tid, 13, 'agent-bob') === false);
+gtrue('another tenant cannot claim it', bc_chat_claim_thread(999, $tid, 12, 'agent-x') === false);
+
+$before = count(bc_chat_messages($pid, $tid, 0));
+bc_chat_post_message($pid, $tid, 'agent', 'agent-ann', 'Looking into it now.');
+gcheck('an agent reply lands in the transcript', count(bc_chat_messages($pid, $tid, 0)), $before + 1);
+
+// Closing.
+gtrue('closing succeeds', bc_chat_close_thread($pid, $tid, 'agent-ann') === true);
+$t = bc_chat_thread_get($pid, $tid);
+gcheck('a closed thread reports closed', $t['status'], 'closed');
+gtrue('the closed thread is not resumed', bc_chat_thread_for_user($pid, 55) === null);
+$fresh = bc_chat_open_thread($pid, 55, 'ada');
+gtrue('a new thread is opened instead', (int)$fresh['id'] !== $tid);
+
+// The queue.
+$queue = bc_chat_agent_queue($pid);
+gtrue('the queue only lists open work', count($queue['pending']) === 0 && count($queue['active']) === 0);
+gtrue('another tenant queue is empty', count(bc_chat_agent_queue(999)['pending']) === 0);
+
+// Unread counters are per side.
+$t2 = bc_chat_open_thread($pid, 66, 'bob');
+bc_chat_post_message($pid, (int)$t2['id'], 'user', 'bob', 'hello');
+$t2 = bc_chat_thread_get($pid, (int)$t2['id']);
+gtrue('a user message raises the agent unread count', (int)$t2['unread_for_agent'] > 0);
+gcheck('and does not touch the user unread count', (int)$t2['unread_for_user'], 0);
+
+// The public payloads must not leak internal fields.
+$pub = bc_chat_public_thread($t2);
+gtrue('the public thread hides the assigned admin', !array_key_exists('assigned_admin', $pub));
+gtrue('the public thread reports AI state', array_key_exists('ai_active', $pub));
+$pubm = bc_chat_public_messages(bc_chat_messages($pid, (int)$t2['id'], 0));
+$allowed = ['id', 'who', 'name', 'body', 'at'];
+gtrue('public messages expose an allow-list of fields only', array_diff(array_keys($pubm[0]), $allowed) === []);
+
+// ── 18. structural wiring ─────────────────────────────────────────────────
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
+    $b = $root . '/' . $edition;
+
+    // landing page
+    $tpl = file_get_contents($b . '/index-bc-style-template-6.php');
+    gtrue("$edition template 6 gates cards through the partition", strpos($tpl, 'bc_fintech_marketing_partition(') !== false);
+    gtrue("$edition template 6 renders both panels server-side", substr_count($tpl, 'pc-panel') >= 2);
+    gtrue("$edition template 6 marks unavailable cards", strpos($tpl, 'Coming soon') !== false);
+    gtrue("$edition template 6 uses the SEO head hook", strpos($tpl, 'seo_render_head_tags(') !== false);
+    gtrue("$edition template 6 uses the SEO footer hook", strpos($tpl, 'seo_render_custom_footer(') !== false);
+    gtrue("$edition template 6 validates the brand colour", strpos($tpl, "preg_match('/^#[0-9a-fA-F]{6}$/'") !== false);
+    // Check for the class in markup, not in prose: the file's own comment explains why it avoids
+    // icon-font classes, and a plain strpos() would match that sentence.
+    gtrue("$edition template 6 avoids icon-font classes", !preg_match('/class="[^"]*\bbi bi-/', $tpl));
+
+    // account settings
+    $acs = file_get_contents($b . '/bc-admin/AccountSettings.php');
+    gtrue("$edition Account Settings offers template 6", strpos($acs, 'bc-style-template-6.css') !== false);
+    gtrue("$edition Account Settings no longer offers template 4", strpos($acs, 'bc-style-template-4.css') === false);
+    gtrue("$edition Account Settings no longer offers template 5", strpos($acs, 'bc-style-template-5.css') === false);
+
+    // dashboard
+    $dash = file_get_contents($b . '/web/Dashboard.php');
+    gtrue("$edition dashboard includes the accounts block", strpos($dash, 'bc-dashboard-accounts.php') !== false);
+    $blk = file_get_contents($b . '/func/bc-dashboard-accounts.php');
+    gtrue("$edition dashboard block renders wallet cards", strpos($blk, 'bc_wallet_cards(') !== false);
+    gtrue("$edition dashboard block renders the rate strip", strpos($blk, 'bc_fx_rate_snapshot(') !== false);
+    gtrue("$edition dashboard block shows the tier badge", strpos($blk, 'bc_fintech_tier_badge(') !== false);
+    gtrue("$edition dashboard block links the upgrade flow", strpos($blk, 'BusinessUpgrade.php') !== false);
+    gtrue("$edition dashboard block fails safe without its helpers", strpos($blk, 'function_exists(\'bc_wallet_cards\')') !== false);
+
+    // header nav
+    $hdr = file_get_contents($b . '/func/bc-header.php');
+    gtrue("$edition header resolves the tier from a null-safe copy", strpos($hdr, 'bc_fintech_account_type($bc_nav_user)') !== false);
+    gtrue("$edition header tolerates a missing session user", strpos($hdr, 'is_array($get_logged_user_details) ? $get_logged_user_details : null') !== false);
+    gtrue("$edition header gates nav through the matrix", strpos($hdr, 'bc_fintech_tier_effective($row, $bc_nav_tier)') !== false);
+    gtrue("$edition Developer API nav is tier-gated", strpos($hdr, "\$bc_nav_tier_service('developer_api')") !== false);
+    gtrue("$edition upgrade nav is conditional", strpos($hdr, "\$bc_nav_tier !== 'business'") !== false);
+    gtrue("$edition header reads the matrix at most once", strpos($hdr, 'if ($bc_nav_matrix === null)') !== false);
+
+    // chat wiring
+    gtrue("$edition footer includes the chat widget", strpos(file_get_contents($b . '/func/bc-footer.php'), 'bc-support-chat-widget.php') !== false);
+    gtrue("$edition ships the chat endpoint", is_file($b . '/web/ajax-support-chat.php'));
+    $ep = file_get_contents($b . '/web/ajax-support-chat.php');
+    gtrue("$edition endpoint rejects non-POST", strpos($ep, "'POST required.'") !== false);
+    gtrue("$edition endpoint binds the user to the session", strpos($ep, '$bc_chat_user_id   = (int)$get_logged_user_details[\'id\']') !== false);
+    gtrue("$edition endpoint never reads a client user id", !preg_match('/\$_(POST|GET|REQUEST)\[.user_id.\]/', $ep));
+    gtrue("$edition endpoint sends no-store", strpos($ep, 'no-store') !== false);
+
+    $widget = file_get_contents($b . '/func/bc-support-chat-widget.php');
+    gtrue("$edition widget self-gates on a signed-in user", strpos($widget, 'empty($get_logged_user_details[\'id\'])') !== false);
+    gtrue("$edition widget paints with text nodes", strpos($widget, 'createTextNode') !== false);
+    gtrue("$edition widget never assigns innerHTML from a message", strpos($widget, 'innerHTML = m.body') === false);
+    gtrue("$edition widget exposes no API key", strpos($widget, 'chat_ai_key') === false);
+
+    // admin console
+    gtrue("$edition admin nav links the chat console", strpos(file_get_contents($b . '/func/bc-admin-header.php'), 'SupportChat.php') !== false);
+    gtrue("$edition admin nav links chat settings", strpos(file_get_contents($b . '/func/bc-admin-header.php'), 'ChatSettings.php') !== false);
+    $console = file_get_contents($b . '/bc-admin/SupportChat.php');
+    gtrue("$edition console scopes queue by the admin tenant", strpos($console, 'bc_chat_agent_queue($vid)') !== false);
+    gtrue("$edition console escapes transcript bodies", strpos($console, 'htmlspecialchars((string)$m[\'body\'])') !== false);
+    gtrue("$edition console redirects after posting", strpos($console, 'header("Location: SupportChat.php")') !== false);
+
+    $cfg = file_get_contents($b . '/bc-admin/ChatSettings.php');
+    gtrue("$edition settings never echo the key into the form", strpos($cfg, 'value="<?php echo htmlspecialchars((string)$settings[\'chat_ai_key\'])') === false);
+    gtrue("$edition settings keep the key when the field is blank", strpos($cfg, "if (\$new_key !== '')") !== false);
+    gtrue("$edition settings require an explicit clear", strpos($cfg, "isset(\$_POST['chat_ai_key_clear'])") !== false);
+    gtrue("$edition settings warn on AI without a key", strpos($cfg, '$warn_ai_without_key') !== false);
+    gtrue("$edition settings validate the provider list", strpos($cfg, "in_array(\$provider, ['gemini', 'deepseek'], true)") !== false);
+
+    // the assistant must never be able to move money
+    $engine = file_get_contents($b . '/func/bc-support-chat.php');
+    gtrue("$edition chat engine moves no money", !preg_match('/(sas_payments|sas_transactions|UPDATE sas_users SET balance|wallet_credit|wallet_debit)/', $engine));
+    gtrue("$edition chat prompt forbids balances", strpos($engine, 'state, estimate or confirm an account balance') !== false);
+    gtrue("$edition chat prompt forbids refunds", strpos($engine, 'promise, approve or estimate a refund') !== false);
+    gtrue("$edition chat prompt forbids credential requests", strpos($engine, 'ask for a password, PIN, OTP') !== false);
+}
+
 // parity: the shared new files must be byte-identical between editions
 foreach ([
     'func/bc-fintech-accounts.php',
@@ -959,6 +1407,16 @@ foreach ([
     'web/BusinessUpgrade.php',
     'bc-admin/BusinessKYB.php',
     'uploads/kyb/.htaccess',
+    // phase 2
+    'index-bc-style-template-6.php',
+    'func/bc-fintech-wallet.php',
+    'func/bc-dashboard-accounts.php',
+    'func/bc-support-chat.php',
+    'func/bc-support-chat-schema.php',
+    'func/bc-support-chat-widget.php',
+    'web/ajax-support-chat.php',
+    'bc-admin/SupportChat.php',
+    'bc-admin/ChatSettings.php',
     // bc-header.php / bc-admin-header.php are NOT parity files: the SAAS edition carries extra
     // service gating and vendor-portal links by design. Their Step 2 nav links are asserted above.
 ] as $file) {
