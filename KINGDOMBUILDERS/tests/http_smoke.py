@@ -142,6 +142,8 @@ html = admin.get("/admin/settings")[2]
 ok("registration-protection" in html and "Registration protection" in html, "administrator can configure registration protection")
 ok("reCAPTCHA off" in html and "Sign-ups allowed per hour" in html, "protection settings render their state")
 ok('name="recaptcha_site_key" value=""' in html, "no reCAPTCHA key is stored before configuration")
+site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1", "otp_register": "1", "registration_cap": "60"}
+
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "save quiz settings")
 html = admin.get("/admin/settings")[2]
 ok("cron-command" in html and "Copy command" in html, "settings page offers the copyable cron command")
@@ -196,7 +198,6 @@ uid = re.search(r'name="id" value="(\d+)"><button name="action"', html).group(1)
 ok(admin.post("/admin/users", {"action": "suspend", "id": uid})[0] == 200, "suspend member")
 ok(admin.post("/admin/users", {"action": "unsuspend", "id": uid})[0] == 200, "unsuspend member")
 ok(admin.post("/admin/users", {"action": "delete", "id": uid})[0] == 200, "delete member")
-site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1", "otp_register": "1", "registration_cap": "60"}
 
 # Public sign-up: a hidden field, a timing seal and an emailed code, and no
 # member row until the code is confirmed.
