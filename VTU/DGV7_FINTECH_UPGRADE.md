@@ -488,14 +488,29 @@ immediately after a successful credit:
 Referral/loyalty logic is still **not** in the ledger. It is awarded on the debit (purchase) path
 inside `chargeUser()`, not on wallet funding, so no provider credit loses it.
 
-**Known legacy duplicate.** `web/api/flutterwave_webhook.php` still exists, still credits through
-`chargeOtherUser()`, and is still published in `web/APIDocs.php` and
-`web/api/MOBILE_APP_SPEC.md`. It is not in the admin webhook map (which points Flutterwave at
-`users-flutterwave.php`), it has no `sas_webhook_events` claim, and its duplicate check is a
-plain SELECT, so a merchant that configured the APIDocs URL has a second, non-idempotent credit
-path. It is deliberately left untouched here (retiring it changes live fee semantics: it applies
-the gateway `percentage`), but it must be retired or routed through the same pipeline before
-Phase 3 is declared live.
+**Legacy duplicate retired.** `web/api/flutterwave_webhook.php` was a second Flutterwave credit
+path: it compared the verif-hash only when the merchant had configured one, never confirmed the
+transaction with Flutterwave's API, had no `sas_webhook_events` claim (a plain SELECT on
+`sas_transactions`), and credited through `chargeOtherUser()` with its own `UPDATE`. A merchant
+who configured that URL from `web/APIDocs.php` while the admin gateway screen pointed at
+`users-flutterwave.php` therefore had two credit paths for one provider.
+
+It is now a **URL alias**: the file resolves the vendor (host, then the checkout row) and
+delegates to `bc_flw_handle_webhook()`, so the delivery goes through the same
+signature → claim → provider verify → reference match → ledger pipeline as the canonical
+endpoint. Nothing is credited in the file itself.
+
+The one behaviour carried across is the fee. That endpoint always deducted the gateway's
+**FEE (%)** before crediting, while `users-flutterwave.php` credits net of Flutterwave's app fee
+only. `bc_flw_handle_webhook()` takes an optional `$merchant_fee_percent` so the legacy URL keeps
+crediting exactly what it always credited; the canonical path passes `null`. **This divergence is
+deliberate and still open** — the admin screen labels the value "FEE (%)" and the other provider
+webhooks (`users-monnify.php`, `users-paystack.php`, `users-beewave.php`) and
+`verify-funding.php` all apply it, so the canonical Flutterwave path is the outlier. Unifying the
+fee is a product decision, not a security one, and is not made silently here.
+
+`web/APIDocs.php` and `web/api/MOBILE_APP_SPEC.md` now publish `/users-flutterwave.php`, matching
+every other provider and the admin webhook map.
 
 ### Per-provider asset gating
 
@@ -508,14 +523,18 @@ another.
 
 ### Test coverage added
 
-`tests/fintech_gate_test.php` grew from 576 to **780 checks** across five new sections:
+`tests/fintech_gate_test.php` grew from 576 to **815 checks** across seven new sections:
 provider registry/configuration and refusal reasons, the HTTP seam (asserting an unconfigured
 adapter makes **no** call), per-provider asset gating including RLUSD, the atomic ledger
 (NGN and stablecoin credits/debits, overdraft rollback, negative/NaN/INF rejection, inactive
-account, history mirror), and webhook behaviour — idempotency (same event twice → one credit),
+account, history mirror), webhook behaviour — idempotency (same event twice → one credit),
 signature rejection (bad hash → no claim, no ledger row, no balance change, no provider call),
 claim release on an unconfirmed transaction, reference matching, unknown-reference refusal, and
-a fully configured Klasha delivery.
+a fully configured Klasha delivery — then the receipt notification (both recipients, `gross @ net`,
+a throwing mailer leaving the credit and claim intact, an unresolved template as a no-op) and
+the legacy-URL re-route (the historical FEE (%) still applied, the delivery still claimed, and
+structural assertions that the legacy file credits nothing itself and that the docs point at the
+canonical URL).
 
 `tests/provider_smoke.php` is a standalone CLI that reports `not configured` per provider and
 does nothing else — no HTTP, no credential read — until keys and the specification are supplied.
@@ -531,9 +550,9 @@ Run it with `php VTU/tests/provider_smoke.php [edition] [--vendor=N]`.
 4. Save credentials in `bc-admin/PaymentGateway.php`, then set `provider_ready = 1` for the
    specific tenant/service.
 5. Replay webhooks in staging, including a duplicated delivery and a forged signature.
-6. Retire or re-route `web/api/flutterwave_webhook.php` (the legacy second credit path
-   described above) and keep the retirement of Plisio unchanged until the new adapters have run
-   in sandbox.
+6. ~~Retire or re-route `web/api/flutterwave_webhook.php`.~~ **Done** — it is now a URL alias
+   for the shared pipeline (see "Legacy duplicate retired" above). Keep the retirement of Plisio
+   unchanged until the new adapters have run in sandbox.
 
 ## Existing implementation facts that affect rollout
 

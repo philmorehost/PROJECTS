@@ -2081,7 +2081,43 @@ $GLOBALS['db']['email_templates'] = [];
 gfalse('an unresolved template is a no-op, not an error', bc_fintech_webhook_notify('flutterwave', 7, 'payer', 'NGN', 10, 'R', 0, 100));
 unset($GLOBALS['bc_fintech_email_sender']);
 
-// ── 25. structural wiring and security greps ───────────────────────────────
+// ── 25. the legacy Flutterwave URL is re-routed, not a second credit path ──
+// web/api/flutterwave_webhook.php used to credit wallets itself. It is now a URL alias for
+// the shared pipeline; the only behaviour carried across is its historical FEE (%) rule.
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['crypto_wallets'] = [];
+$GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
+$GLOBALS['db']['users'][30]['balance'] = 100.0;
+$GLOBALS['db']['email_templates'] = [
+    '7:user-funding' => ['subject' => 'Wallet funding', 'body' => 'Credited {amount}.'],
+    '7:user-transactions' => ['subject' => 'Transaction', 'body' => '{amount} {type}.'],
+];
+$GLOBALS['sent_mail'] = [];
+$GLOBALS['bc_fintech_email_sender'] = function ($to, $subject, $body) {
+    $GLOBALS['sent_mail'][] = ['to' => $to, 'subject' => $subject, 'body' => $body];
+    return true;
+};
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9008/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9008, 'tx_ref' => 'FLW-REF-1', 'amount' => 1000, 'currency' => 'NGN', 'status' => 'successful', 'app_fee' => 0]],
+        'error' => '',
+    ],
+];
+$legacy = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9008', 'tx_ref' => 'FLW-REF-1', 'amount' => 1000, 'currency' => 'NGN', 'status' => 'successful',
+]]), ['verif-hash' => 'verifhash'], 10);
+gtrue('the re-routed delivery is credited', $legacy['ok']);
+gcheck('the legacy 10% fee is still applied', $GLOBALS['db']['users'][30]['balance'], 1000.0);
+gcheck('the ledger records the net actually credited', $GLOBALS['db']['ledger'][1]['amount'], '900.000000000000000000');
+gcheck('the ledger records the fee context', $GLOBALS['db']['ledger'][1]['context']['fee'], 100);
+gtrue('the receipt reports gross @ net', strpos($GLOBALS['sent_mail'][0]['body'], '1000.00 @ 900.00') !== false);
+gcheck('the legacy delivery is claimed durably', $GLOBALS['db']['webhook_events']['flutterwave:9008']['status'], 'processed');
+unset($GLOBALS['bc_fintech_email_sender']);
+
+// ── 26. structural wiring and security greps ───────────────────────────────
 foreach ($editions as $edition) {
     $connect = file_get_contents($root . '/' . $edition . '/func/bc-connect.php');
     foreach (['bc-fintech-providers.php', 'bc-fintech-ledger.php', 'bc-fintech-webhook.php', 'bc-fintech-klasha.php', 'bc-fintech-flutterwave.php'] as $inc) {
@@ -2092,6 +2128,14 @@ foreach ($editions as $edition) {
     gtrue("$edition klasha webhook reads the raw body", strpos($hook, 'bc_fintech_webhook_raw_input()') !== false);
     gtrue("$edition klasha webhook logs", strpos($hook, 'bc_fintech_webhook_log(') !== false);
     gtrue("$edition flutterwave webhook goes through the shared handler", strpos(file_get_contents($root . '/' . $edition . '/users-flutterwave.php'), 'bc_flw_handle_webhook(') !== false);
+    // The legacy URL must be an alias, not a second writer.
+    $legacy_hook = php_strip_whitespace($root . '/' . $edition . '/web/api/flutterwave_webhook.php');
+    gtrue("$edition legacy flutterwave URL delegates to the shared handler", strpos($legacy_hook, 'bc_flw_handle_webhook(') !== false);
+    gfalse("$edition legacy flutterwave URL credits nothing itself", (bool)preg_match('/\b(chargeUser|chargeOtherUser|updateUserCryptoBalance)\s*\(/', $legacy_hook));
+    gfalse("$edition legacy flutterwave URL writes no balance", (bool)preg_match('/UPDATE\s+sas_(users|user_crypto_wallets)/i', $legacy_hook));
+    gtrue("$edition legacy flutterwave URL reads the raw body", strpos($legacy_hook, 'bc_fintech_webhook_raw_input()') !== false);
+    // The published developer docs must point at the canonical URL.
+    gtrue("$edition api docs point at the canonical flutterwave webhook", strpos(file_get_contents($root . '/' . $edition . '/web/APIDocs.php'), '/users-flutterwave.php') !== false);
     // Comments are stripped first: the file's own header explains that it no longer
     // calls chargeUser(), and a plain strpos would match that sentence.
     $flw_hook_src = php_strip_whitespace($root . '/' . $edition . '/users-flutterwave.php');
