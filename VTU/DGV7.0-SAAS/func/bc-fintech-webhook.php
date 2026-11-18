@@ -397,6 +397,13 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         }
 
         bc_fintech_webhook_complete($provider, $event_id);
+        // Receipt notification. The ledger is deliberately presentation-free, so the
+        // customer/vendor emails that chargeUser() used to send are re-attached here.
+        bc_fintech_webhook_notify(
+            $provider, $vendor_id, $username, $currency,
+            (float)$verified['amount'], $verified_ref,
+            $verified['fee'] ?? null, $post['balance_after'] ?? null
+        );
         bc_fintech_webhook_log($provider, $event_id, 'credited', [
             'username' => $username, 'currency' => $currency,
             'amount' => (float)$verified['amount'], 'balance_after' => $post['balance_after'],
@@ -409,5 +416,141 @@ if (!function_exists('bc_fintech_webhook_handle')) {
             'reference' => $verified_ref,
             'balance_after' => $post['balance_after'],
         ]);
+    }
+}
+
+if (!function_exists('bc_fintech_email_template')) {
+    /**
+     * Vendor-explicit email template lookup.
+     *
+     * getUserEmailTemplate() resolves the vendor from the request host. A webhook
+     * cannot use that: the delivery arrives on whatever host the provider was
+     * configured with, and the vendor is recovered from the checkout row instead
+     * (see bc_fintech_webhook_resolve_user). This is the same lookup with the vendor
+     * id supplied explicitly, falling back to the super-admin template exactly as
+     * getUserEmailTemplate() does.
+     */
+    function bc_fintech_email_template($vendor_id, $email_type, $column_name) {
+        global $connection_server;
+        $vendor_id = (int)$vendor_id;
+        if (($connection_server instanceof mysqli) && $vendor_id > 0) {
+            $type_esc = mysqli_real_escape_string($connection_server, $email_type);
+            $q = mysqli_query($connection_server, "SELECT * FROM sas_email_templates WHERE vendor_id='$vendor_id' && email_type='$type_esc'");
+            if ($q && mysqli_num_rows($q) >= 1) {
+                $row = mysqli_fetch_assoc($q);
+                if (!empty($row[$column_name])) return $row[$column_name];
+            }
+        }
+        return function_exists('getSuperAdminEmailTemplate') ? getSuperAdminEmailTemplate($email_type, $column_name) : '';
+    }
+}
+
+if (!function_exists('bc_fintech_webhook_notify')) {
+    /**
+     * Receipt notification for a provider-funded wallet credit.
+     *
+     * bc_fintech_ledger_post() is deliberately presentation-free: it moves money and
+     * writes the audit row, nothing else. The receipt that chargeUser() used to send
+     * therefore has to be re-attached here, at the delivery layer, or a provider
+     * wallet funding silently stops emailing both the customer and the vendor.
+     *
+     * Both templates and both recipients match chargeUser()'s credit branch:
+     *   user-funding      -> the customer
+     *   user-transactions -> the vendor
+     * The gross figure and the net actually credited are both reported, exactly as
+     * the {amount} placeholder always has been.
+     *
+     * A notification failure is logged and swallowed. The money has already moved and
+     * the delivery is already claimed, so a mail problem must never turn into a failed
+     * webhook, a released claim, or a second credit.
+     *
+     * $GLOBALS['bc_fintech_email_sender'] = callable($recipient, $subject, $body): bool
+     * overrides the sender (tests, or a future queue).
+     */
+    function bc_fintech_webhook_notify($provider, $vendor_id, $username, $currency, $amount, $reference, $fee = null, $balance_after = null) {
+        $vendor_id = (int)$vendor_id;
+        $amount = (float)$amount;
+        $fee = ($fee === null || !is_numeric($fee)) ? 0.0 : (float)$fee;
+        if ($vendor_id <= 0 || $amount <= 0) return false;
+
+        // Resolve the sender BEFORE touching the database: with no mailer available
+        // (CLI, or a context that does not load bc-func.php) this is a no-op.
+        $sender = null;
+        if (isset($GLOBALS['bc_fintech_email_sender']) && is_callable($GLOBALS['bc_fintech_email_sender'])) {
+            $sender = $GLOBALS['bc_fintech_email_sender'];
+        } elseif (function_exists('sendVendorEmail')) {
+            $sender = 'sendVendorEmail';
+        }
+        if ($sender === null) return false;
+
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return false;
+
+        // sendVendorEmail() takes the sender identity from this global. Set it to the
+        // vendor the webhook was for, not whatever host the provider posted to. Everything
+        // below runs inside the try so that NO failure — a missing template, a DB error, a
+        // throwing mailer — can escape into the endpoint after the credit has been made.
+        $prev = isset($GLOBALS['get_logged_user_details']) ? $GLOBALS['get_logged_user_details'] : null;
+        $GLOBALS['get_logged_user_details'] = ['vendor_id' => $vendor_id, 'username' => $username];
+        try {
+            $u_esc = mysqli_real_escape_string($connection_server, $username);
+            $q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$u_esc' LIMIT 1");
+            if (!$q || mysqli_num_rows($q) !== 1) return false;
+            $user = mysqli_fetch_assoc($q);
+            if (empty($user['email'])) return false;
+
+            $v_q = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+            $vendor = ($v_q && mysqli_num_rows($v_q) === 1) ? mysqli_fetch_assoc($v_q) : null;
+
+            $dec = function ($n) {
+                return function_exists('toDecimal') ? toDecimal($n, 2) : number_format((float)$n, 2, '.', '');
+            };
+
+            $gross = $amount + $fee;
+            $after = ($balance_after === null || !is_numeric($balance_after)) ? null : (float)$balance_after;
+            $before = ($after === null) ? null : $after - $amount;
+            $description = 'Wallet Funding via ' . strtoupper((string)$provider) . ' (' . strtoupper((string)$currency) . ')';
+
+            $funding_subject = bc_fintech_email_template($vendor_id, 'user-funding', 'subject');
+            $funding_body    = bc_fintech_email_template($vendor_id, 'user-funding', 'body');
+            $tx_subject      = bc_fintech_email_template($vendor_id, 'user-transactions', 'subject');
+            $tx_body         = bc_fintech_email_template($vendor_id, 'user-transactions', 'body');
+            if ($funding_subject === '' || $funding_body === '' || $tx_subject === '' || $tx_body === '') {
+                // No template resolved: never send a half-built receipt.
+                return false;
+            }
+
+            $shared = [
+                '{firstname}' => (string)($user['firstname'] ?? ''),
+                '{lastname}' => (string)($user['lastname'] ?? ''),
+                '{balance_before}' => $before === null ? '' : $dec($before),
+                '{balance_after}' => $after === null ? '' : $dec($after),
+                '{amount}' => $dec($gross) . ' @ ' . $dec($amount),
+                '{type}' => 'credit',
+                '{description}' => $description,
+            ];
+            $funding_vars = $shared;
+            $tx_vars = $shared + [
+                '{admin_firstname}' => (string)($vendor['firstname'] ?? ''),
+                '{admin_lastname}' => (string)($vendor['lastname'] ?? ''),
+                '{username}' => (string)($user['username'] ?? ''),
+            ];
+
+            $funding_subject = str_replace(array_keys($funding_vars), array_values($funding_vars), $funding_subject);
+            $funding_body    = str_replace(array_keys($funding_vars), array_values($funding_vars), $funding_body);
+            $tx_subject      = str_replace(array_keys($tx_vars), array_values($tx_vars), $tx_subject);
+            $tx_body         = str_replace(array_keys($tx_vars), array_values($tx_vars), $tx_body);
+
+            $ok = ($sender($user['email'], $funding_subject, $funding_body) !== false);
+            if ($vendor && !empty($vendor['email'])) {
+                $ok = ($sender($vendor['email'], $tx_subject, $tx_body) !== false) && $ok;
+            }
+            return $ok;
+        } catch (\Throwable $e) {
+            error_log('[DGV-FINTECH] receipt notification failed for ' . $provider . ' ref=' . $reference . ': ' . $e->getMessage());
+            return false;
+        } finally {
+            $GLOBALS['get_logged_user_details'] = $prev;
+        }
     }
 }

@@ -231,6 +231,12 @@ jobs:
             # exact delivered bytes.
             grep -q 'bc_fintech_webhook_raw_input()' "VTU/${edition}/users-klasha.php"
             grep -q 'bc_fintech_webhook_raw_input()' "VTU/${edition}/users-flutterwave.php"
+            # The ledger moves money and nothing else: the receipt is re-attached by the
+            # delivery pipeline, never from inside bc_fintech_ledger_post().
+            if grep -qE 'sendVendorEmail|mail[[:space:]]*\(|getUserEmailTemplate' "VTU/${edition}/func/bc-fintech-ledger.php"; then
+              echo "bc-fintech-ledger.php does presentation work"; exit 1
+            fi
+            grep -q 'bc_fintech_webhook_notify(' "VTU/${edition}/func/bc-fintech-webhook.php"
           done
           # The smoke test must stay runnable without a database.
           php -n VTU/tests/provider_smoke.php | grep -q 'not configured'
