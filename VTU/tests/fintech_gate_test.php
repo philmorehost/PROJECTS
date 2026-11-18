@@ -1538,6 +1538,23 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
     // Check for the class in markup, not in prose: the file's own comment explains why it avoids
     // icon-font classes, and a plain strpos() would match that sentence.
     gtrue("$edition template 6 avoids icon-font classes", !preg_match('/class="[^"]*\bbi bi-/', $tpl));
+    // Landing structure follows the reference fintech homepage idiom: a navbar, a two-line
+    // display headline, a scrolling category band, then alternating feature sections.
+    gtrue("$edition template 6 renders a sticky navbar", strpos($tpl, 'class="pc-header"') !== false);
+    gtrue("$edition template 6 renders the two-line display headline", strpos($tpl, 'pk-h1-outline') !== false);
+    gtrue("$edition template 6 renders the scrolling category band", strpos($tpl, 'pk-marquee') !== false);
+    gtrue("$edition template 6 alternates feature split rows", strpos($tpl, 'pk-split--rev') !== false);
+    gtrue("$edition template 6 renders a dark analytics band", strpos($tpl, 'pc-section--ink') !== false);
+    gtrue("$edition template 6 renders a multi-column footer", strpos($tpl, 'pc-footer__grid') !== false);
+    gtrue("$edition template 6 marks the phone mockup decorative", strpos($tpl, 'aria-hidden="true"') !== false);
+    gtrue("$edition template 6 has a no-JS fallback panel visible by default", strpos($tpl, 'id="pc-services-personal" role="tabpanel"') !== false && strpos($tpl, 'id="pc-services-business" role="tabpanel" aria-labelledby="pc-tab-business" hidden') !== false);
+    gtrue("$edition template 6 switches on aria-selected", strpos($tpl, 'aria-selected') !== false);
+    gtrue("$edition template 6 honours prefers-reduced-motion", strpos($tpl, 'prefers-reduced-motion') !== false);
+    // Every section anchor resolves to a real id so the navbar never dead-ends.
+    preg_match_all('/href="#([a-z0-9_-]+)"/', $tpl, $anchors);
+    preg_match_all('/\sid="([a-z0-9_-]+)"/', $tpl, $ids);
+    $missing = array_diff($anchors[1], $ids[1]);
+    gtrue("$edition template 6 anchors all resolve to an id", $missing === [], 'unresolved: ' . implode(',', $missing));
 
     // account settings
     $acs = file_get_contents($b . '/bc-admin/AccountSettings.php');

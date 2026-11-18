@@ -252,6 +252,23 @@ jobs:
             if grep -q 'nav-heading">Services' "VTU/${edition}/func/bc-header.php"; then
               echo "${edition} sidebar still has the flat Services heading"; exit 1
             fi
+            # The landing page keeps the reference homepage structure: a sticky navbar, a
+            # two-line display headline, a scrolling band, alternating feature rows, a dark
+            # analytics band and a multi-column footer. Anchors must resolve to real ids.
+            for marker in 'class="pc-header"' 'pk-h1-outline' 'pk-marquee' 'pk-split--rev' 'pc-section--ink' 'pc-footer__grid' 'prefers-reduced-motion'; do
+              grep -q "$marker" "VTU/${edition}/index-bc-style-template-6.php"
+            done
+            # Both account panels render server-side; only visibility is scripted.
+            grep -q 'id="pc-services-personal" role="tabpanel"' "VTU/${edition}/index-bc-style-template-6.php"
+            grep -q 'id="pc-services-business" role="tabpanel" aria-labelledby="pc-tab-business" hidden' "VTU/${edition}/index-bc-style-template-6.php"
+            # No icon font: the landing draws its own inline SVG.
+            if grep -qE 'class="[^"]*\bbi bi-' "VTU/${edition}/index-bc-style-template-6.php"; then
+              echo "${edition} landing uses an icon-font class"; exit 1
+            fi
+            # Every in-page anchor must land on an id that exists in the same file.
+            if [ -n "$(grep -oE 'href="#[a-z0-9_-]+"' "VTU/${edition}/index-bc-style-template-6.php" | sed 's/href="#//; s/"//' | sort -u | while read -r a; do grep -q "id=\"$a\"" "VTU/${edition}/index-bc-style-template-6.php" || echo "$a"; done)" ]; then
+              echo "${edition} landing has an anchor with no matching id"; exit 1
+            fi
             # The ledger moves money and nothing else: the receipt is re-attached by the
             # delivery pipeline, never from inside bc_fintech_ledger_post().
             if grep -qE 'sendVendorEmail|mail[[:space:]]*\(|getUserEmailTemplate' "VTU/${edition}/func/bc-fintech-ledger.php"; then

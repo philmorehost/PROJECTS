@@ -188,8 +188,14 @@ Templates 4 and 5 were **removed from that list**. They have no `index-bc-style-
 `index.php` falls back to template 1 when the file is missing — so offering them presented a choice
 that silently did nothing. Re-add them only when a page exists.
 
-Layout: brand bar → hero with the Personal/Business switch → three-step cross-border flow → service
-grid → trust strip → footer. Conventions it obeys:
+Layout follows the reference fintech homepage (platnova.com), redrawn with original assets: sticky
+navbar → two-line display hero (second line outlined) with proof row and a CSS phone mockup →
+scrolling category band → alternating feature split rows (send money, feature grid, bills, cards) →
+service grid with the Personal/Business switch → dark analytics band → accounts, savings, tuition
+rows → multi-column footer. Nothing is copied: copy, icons, mockups and the colour system are drawn
+in the file; `platnova.com` was used for layout and visual language only.
+
+Conventions it obeys:
 
 - The SEO hooks `seo_start_ob_auto_alt()`, `seo_render_head_tags()` and `seo_render_custom_footer()`
   are called in the same order as the older templates.
@@ -202,9 +208,10 @@ grid → trust strip → footer. Conventions it obeys:
   the Personal panel stays visible and the Business content is still in the markup. The switch
   implements the tablist keyboard pattern (arrow keys move between tabs).
 
-**The three-step flow is illustrative, not a promise of live rails.** "Create USD wallet → fund it →
-send to China" describes the intended cross-border path. Until the Phase 3 adapters exist the copy
-must not imply a funded USD balance is available.
+**The feature rows are descriptive, not a promise of live rails.** Send-money corridors, multi-currency
+accounts, savings and tuition describe the intended product. Until the Phase 3 adapters exist the copy
+must not imply those rails are funded. Every section that names a service carries its card in the
+gated service grid, so the copy and the gate stay in one file.
 
 ### 2. Marketing gating — `bc_fintech_marketing_partition()`
 
@@ -344,6 +351,28 @@ levels. The flat `Services` heading is gone.
 checked; the regrouped block itself is identical, and the only remaining differences are the
 pre-existing ones (the standalone edition has no `ai_suite` / `vtu_coins` gates and keeps its own AI
 widget condition).
+
+### 6. Landing rebuilt onto the reference homepage layout
+
+Template 6 was restructured to follow the reference fintech homepage, keeping the original copy and
+assets. Section order is now the reference order: navbar → display hero → scrolling band → send money
+→ feature grid → bills → gated services → cards → analytics → accounts → savings → tuition → footer.
+
+What the rebuild changed and what it deliberately did not:
+
+- **Original assets only.** The phone mockup, card mockups, analytics panel and every icon are drawn
+  in the file. No `/_next/image` URL, no reference logo, no reference copy.
+- **Gating unchanged.** The service grid is still fed by `bc_fintech_marketing_partition()`, and the
+  panel ids are now `pc-services-personal` / `pc-services-business`; the switch only toggles
+  `hidden`. Tests assert both panels render server-side and that Personal is visible without JS.
+- **Accessibility.** Mockups are `aria-hidden`; the band is decorative; the tabs implement the
+  tablist pattern; `prefers-reduced-motion` disables the marquee and transitions; every in-page
+  anchor resolves to an `id` in the same file (asserted by the suite and by a CI grep).
+- **Brand colour** is still validated before use. The hero "Download app" link honours
+  `bc_fintech_tenant_android_app_url()` and falls back to the register page.
+
+The suite grew from **835 to 857 checks**; the CI workflow gained matching landing greps and the
+anchor check.
 
 ## Phase 1C gateway change — Plisio retired
 
