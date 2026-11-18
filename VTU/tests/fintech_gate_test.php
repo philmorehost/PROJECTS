@@ -48,6 +48,8 @@ $GLOBALS['db'] = [
     'crypto_wallets' => [],  // "vendor:username:currency" => row
     'checkouts' => [],       // "vendor:reference" => username
     'fintech_tx' => [],      // id => sas_transactions mirror row
+    'email_templates' => [], // "vendor:email_type" => row (receipt notifications)
+    'vendors' => [],         // id => vendor row
     'errno' => 0,
     'error' => '',
 ];
@@ -589,6 +591,22 @@ function fake_mysqli_query_raw($db, $sql) {
     if (preg_match("/^SELECT balance FROM sas_user_crypto_wallets WHERE vendor_id='(\d+)' AND username='([^']*)' AND currency_code='([^']*)' LIMIT 1$/", $sql, $m)) {
         $key = $m[1] . ':' . stripslashes($m[2]) . ':' . stripslashes($m[3]);
         return isset($GLOBALS['db']['crypto_wallets'][$key]) ? [['balance' => $GLOBALS['db']['crypto_wallets'][$key]['balance']]] : [];
+    }
+
+    // receipt notification: the wallet owner, the vendor, and the email templates
+    if (preg_match("/^SELECT \* FROM sas_users WHERE vendor_id='(\d+)' AND username='([^']*)' LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['users'] as $u) {
+            if ((int)$u['vendor_id'] === (int)$m[1] && (string)($u['username'] ?? '') === stripslashes($m[2])) return [$u];
+        }
+        return [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_vendors WHERE id='(\d+)' LIMIT 1$/", $sql, $m)) {
+        $v = $GLOBALS['db']['vendors'][(int)$m[1]] ?? null;
+        return $v ? [$v] : [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_email_templates WHERE vendor_id='(\d+)' && email_type='([^']*)'$/", $sql, $m)) {
+        $row = $GLOBALS['db']['email_templates'][$m[1] . ':' . stripslashes($m[2])] ?? null;
+        return $row ? [$row] : [];
     }
 
     // checkout reference -> username
@@ -1992,7 +2010,78 @@ gcheck('klasha encrypt defaults to plaintext JSON', bc_klasha_payload_encrypt('{
 gcheck('klasha decrypt defaults to plaintext JSON', bc_klasha_payload_decrypt('{"a":1}'), '{"a":1}');
 unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
 
-// ── 24. structural wiring and security greps ───────────────────────────────
+// ── 24. receipt notification ───────────────────────────────────────────────
+// The ledger is deliberately presentation-free, so the customer/vendor receipts that
+// chargeUser() used to send are re-attached in the delivery layer. They must never
+// influence the money: a mail problem may not fail the credit or release the claim.
+$GLOBALS['db']['email_templates'] = [
+    '7:user-funding' => ['subject' => 'Wallet funding for {firstname}', 'body' => 'Credited {amount}; balance {balance_before} -> {balance_after}. {description}'],
+    '7:user-transactions' => ['subject' => 'Transaction for {username}', 'body' => '{amount} {type} for {username} ({firstname} {lastname}).'],
+];
+$GLOBALS['db']['vendors'][7] = ['id' => 7, 'firstname' => 'Vendor', 'lastname' => 'One', 'email' => 'vendor@example.com'];
+$GLOBALS['db']['users'][30] = ['id' => 30, 'vendor_id' => 7, 'username' => 'payer', 'status' => 1, 'balance' => 100.0,
+    'email' => 'payer@example.com', 'firstname' => 'Pay', 'lastname' => 'Er'];
+$GLOBALS['sent_mail'] = [];
+$GLOBALS['bc_fintech_email_sender'] = function ($to, $subject, $body) {
+    $GLOBALS['sent_mail'][] = ['to' => $to, 'subject' => $subject, 'body' => $body];
+    return true;
+};
+
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
+$GLOBALS['db']['users'][30]['balance'] = 100.0;
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9006/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9006, 'tx_ref' => 'FLW-REF-1', 'amount' => 2000, 'currency' => 'NGN', 'status' => 'successful', 'app_fee' => 20]],
+        'error' => '',
+    ],
+];
+$with_mail = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9006', 'tx_ref' => 'FLW-REF-1', 'amount' => 2000, 'currency' => 'NGN', 'status' => 'successful',
+]]), ['verif-hash' => 'verifhash']);
+gtrue('the credit still succeeds with a mailer present', $with_mail['ok']);
+gcheck('two receipts are sent', count($GLOBALS['sent_mail']), 2);
+gcheck('the customer receipt goes to the wallet owner', $GLOBALS['sent_mail'][0]['to'], 'payer@example.com');
+gcheck('the vendor receipt goes to the vendor', $GLOBALS['sent_mail'][1]['to'], 'vendor@example.com');
+gtrue('the customer subject is personalised', strpos($GLOBALS['sent_mail'][0]['subject'], 'Wallet funding for Pay') === 0);
+// The ledger credits the NET amount; the receipt reports gross @ net, as chargeUser() always did.
+// toDecimal() formats with no thousands separator, so the expectation matches it exactly.
+gtrue('gross and net are both reported', strpos($GLOBALS['sent_mail'][0]['body'], '2000.00 @ 1980.00') !== false);
+gtrue('the balance movement is reported', strpos($GLOBALS['sent_mail'][0]['body'], '100.00 -> 2080.00') !== false);
+gtrue('the vendor receipt names the account', strpos($GLOBALS['sent_mail'][1]['body'], 'for payer (Pay Er)') !== false);
+gtrue('the receipt carries the provider description', strpos($GLOBALS['sent_mail'][0]['body'], 'Wallet Funding via FLUTTERWAVE (NGN)') !== false);
+
+// A mailer that throws must not fail the credit, release the claim, or credit twice.
+$GLOBALS['sent_mail'] = [];
+$GLOBALS['bc_fintech_email_sender'] = function ($to, $subject, $body) { throw new RuntimeException('mail down'); };
+$GLOBALS['db']['webhook_events'] = [];
+$GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['fintech_tx'] = [];
+$GLOBALS['db']['users'][30]['balance'] = 100.0;
+$GLOBALS['bc_fintech_http_responses'] = [
+    '/v3/transactions/9007/verify' => [
+        'ok' => true, 'status' => 200, 'body' => '{}',
+        'json' => ['status' => 'success', 'data' => ['id' => 9007, 'tx_ref' => 'FLW-REF-1', 'amount' => 2000, 'currency' => 'NGN', 'status' => 'successful', 'app_fee' => 20]],
+        'error' => '',
+    ],
+];
+$mail_down = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
+    'id' => '9007', 'tx_ref' => 'FLW-REF-1', 'amount' => 2000, 'currency' => 'NGN', 'status' => 'successful',
+]]), ['verif-hash' => 'verifhash']);
+gtrue('a mail failure does not fail the credit', $mail_down['ok']);
+gcheck('the money still moved', $GLOBALS['db']['users'][30]['balance'], 2080.0);
+gcheck('the claim is still completed', $GLOBALS['db']['webhook_events']['flutterwave:9007']['status'], 'processed');
+gcheck('a mail failure writes exactly one audit row', count($GLOBALS['db']['ledger']), 1);
+
+// No resolved template means no half-built receipt.
+$GLOBALS['db']['email_templates'] = [];
+gfalse('an unresolved template is a no-op, not an error', bc_fintech_webhook_notify('flutterwave', 7, 'payer', 'NGN', 10, 'R', 0, 100));
+unset($GLOBALS['bc_fintech_email_sender']);
+
+// ── 25. structural wiring and security greps ───────────────────────────────
 foreach ($editions as $edition) {
     $connect = file_get_contents($root . '/' . $edition . '/func/bc-connect.php');
     foreach (['bc-fintech-providers.php', 'bc-fintech-ledger.php', 'bc-fintech-webhook.php', 'bc-fintech-klasha.php', 'bc-fintech-flutterwave.php'] as $inc) {
@@ -2025,6 +2114,13 @@ $ledger_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-ledger.
 gtrue('the ledger writes both balance stores', strpos($ledger_src, 'sas_users') !== false && strpos($ledger_src, 'sas_user_crypto_wallets') !== false);
 gtrue('the ledger uses row locking', strpos($ledger_src, 'FOR UPDATE') !== false);
 gtrue('the ledger rejects negative amounts', strpos($ledger_src, 'bc_fintech_ledger_valid_amount') !== false);
+// The ledger moves money and nothing else; the receipt is re-attached by the delivery layer.
+gfalse('the ledger sends no mail itself', (bool)preg_match('/sendVendorEmail|mail\s*\(|getUserEmailTemplate/i', $ledger_src));
+
+$webhook_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-webhook.php');
+gtrue('the delivery pipeline re-attaches the receipt', strpos($webhook_src, 'bc_fintech_webhook_notify(') !== false);
+gtrue('the receipt template lookup is vendor-explicit', strpos($webhook_src, 'bc_fintech_email_template') !== false);
+gtrue('the receipt sender is overridable', strpos($webhook_src, 'bc_fintech_email_sender') !== false);
 
 // Webhook idempotency is a UNIQUE constraint on (provider, event_id).
 $schema_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-schema.php');

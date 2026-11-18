@@ -467,11 +467,26 @@ invented — payloads are forwarded unchanged.
 goes through `bc_fintech_ledger_post()` and the delivery is claimed in `sas_webhook_events`
 first.
 
-**Known behaviour change.** The ledger primitive deliberately does not send mail or apply
-referral/loyalty logic — those are presentation concerns, and `chargeUser()` mixing them into
-the balance write is part of why a second writer was dangerous. A Flutterwave wallet deposit
-therefore no longer emits the receipt email the old path produced. Re-adding a receipt
-notification (from the webhook endpoint, not from the ledger) is a follow-up, not an oversight.
+**Receipts are re-attached at the delivery layer.** The ledger primitive deliberately does not
+send mail or apply referral/loyalty logic — those are presentation concerns, and `chargeUser()`
+mixing them into the balance write is part of why a second writer was dangerous. Because the
+ledger is presentation-free, the receipt the old path produced through `chargeUser()` is
+re-attached by `bc_fintech_webhook_notify()` in `func/bc-fintech-webhook.php`, which runs
+immediately after a successful credit:
+
+- `user-funding` to the wallet owner and `user-transactions` to the vendor — the same two
+  templates, the same recipients, and the same `gross @ net` amount that `chargeUser()` reported;
+- the template lookup is **vendor-explicit** (`bc_fintech_email_template()`), because a webhook
+  cannot use `getUserEmailTemplate()`'s host-based vendor resolution — the delivery arrives on
+  whatever host the provider was configured with, and the vendor is recovered from the checkout row;
+- the sender is `sendVendorEmail()` in production and can be overridden with
+  `$GLOBALS['bc_fintech_email_sender']` (tests, or a future queue);
+- a mail failure is logged and swallowed. The money has already moved and the delivery is already
+  claimed, so a mail problem can never fail the webhook, release the claim, or cause a second
+  credit. This is asserted by the test suite.
+
+Referral/loyalty logic is still **not** in the ledger. It is awarded on the debit (purchase) path
+inside `chargeUser()`, not on wallet funding, so no provider credit loses it.
 
 **Known legacy duplicate.** `web/api/flutterwave_webhook.php` still exists, still credits through
 `chargeOtherUser()`, and is still published in `web/APIDocs.php` and
