@@ -388,6 +388,11 @@ signature -> claim -> provider API verification -> match -> ledger credit -> com
 ```
 
 A failure before the credit releases the claim and answers 200; a failure after it cannot.
+Every delivery that is received and classified is acknowledged with 200 — including a forged
+signature (which will never become valid, so retrying is pointless) — with the machine-readable
+reason in the JSON body and the detail in logs/<provider>_webhook.log. Only a request that
+cannot be processed at all (malformed JSON, no event id, or a server-side state such as a failed
+claim) gets a non-200 status.
 
 ### Decision 2 — one atomic ledger primitive
 
@@ -461,6 +466,12 @@ invented — payloads are forwarded unchanged.
 `users-flutterwave.php` now delegates to the shared pipeline: same verification, but the credit
 goes through `bc_fintech_ledger_post()` and the delivery is claimed in `sas_webhook_events`
 first.
+
+**Known behaviour change.** The ledger primitive deliberately does not send mail or apply
+referral/loyalty logic — those are presentation concerns, and `chargeUser()` mixing them into
+the balance write is part of why a second writer was dangerous. A Flutterwave wallet deposit
+therefore no longer emits the receipt email the old path produced. Re-adding a receipt
+notification (from the webhook endpoint, not from the ledger) is a follow-up, not an oversight.
 
 **Known legacy duplicate.** `web/api/flutterwave_webhook.php` still exists, still credits through
 `chargeOtherUser()`, and is still published in `web/APIDocs.php` and

@@ -1885,7 +1885,7 @@ $bad_sig_payload = json_encode(['event' => 'charge.completed', 'data' => [
 ]]);
 $bad_sig = bc_flw_handle_webhook(7, $bad_sig_payload, ['verif-hash' => 'forged']);
 gfalse('a bad signature is refused', $bad_sig['ok']);
-gcheck('a bad signature is a 401', $bad_sig['status'], 401);
+gcheck('a bad signature is acknowledged fast with 200', $bad_sig['status'], 200);
 gcheck('a bad signature is a mismatch', $bad_sig['reason'], 'signature_mismatch');
 gcheck('a bad signature writes no webhook event', count($GLOBALS['db']['webhook_events']), 0);
 gcheck('a bad signature writes no ledger row', count($GLOBALS['db']['ledger']), 0);

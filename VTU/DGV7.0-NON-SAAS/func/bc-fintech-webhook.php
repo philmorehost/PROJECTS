@@ -312,9 +312,10 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         $secret = (string)$creds['encrypt_key'];
         $signature = bc_fintech_webhook_signature_verify($provider, $raw_body, $headers, $secret);
         if (!$signature['ok']) {
+            // A forged signature will never become valid, so retrying is pointless: acknowledge
+            // with 200 and let the log carry the diagnosis. Nothing was written.
             bc_fintech_webhook_log($provider, '', 'refused: ' . $signature['reason'], ['mode' => $signature['mode']]);
-            $status = $signature['reason'] === 'signature_mismatch' || $signature['reason'] === 'signature_missing' ? 401 : 503;
-            return bc_fintech_webhook_result($provider, '', false, $status, $signature['reason'], 'Signature not accepted.');
+            return bc_fintech_webhook_result($provider, '', false, 200, $signature['reason'], 'Signature not accepted.');
         }
 
         // 2) Mapped fields. An empty mapping is a configuration gap, not a guess.
