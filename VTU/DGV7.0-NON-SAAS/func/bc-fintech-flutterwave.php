@@ -99,9 +99,15 @@ if (!function_exists('bc_flw_verify_transaction')) {
 if (!function_exists('bc_flw_handle_webhook')) {
     /**
      * Flutterwave v3 webhook: signature -> durable claim -> v3 verify -> match -> ledger.
+     *
+     * $merchant_fee_percent reproduces the fee rule the retired web/api/flutterwave_webhook.php
+     * endpoint applied (the gateway's FEE (%) on the verified gross, which that endpoint always
+     * deducted before crediting). It is null on the canonical users-flutterwave.php path, which
+     * credits net of Flutterwave's app fee only. The parameter exists so the legacy URL can be
+     * re-routed without silently changing what a merchant's customers were charged.
      */
-    function bc_flw_handle_webhook($vendor_id, $raw_body, array $headers) {
-        return bc_fintech_webhook_handle('flutterwave', $vendor_id, $raw_body, $headers, function ($vendor_id, $extracted) {
+    function bc_flw_handle_webhook($vendor_id, $raw_body, array $headers, $merchant_fee_percent = null) {
+        return bc_fintech_webhook_handle('flutterwave', $vendor_id, $raw_body, $headers, function ($vendor_id, $extracted) use ($merchant_fee_percent) {
             $txn_id = trim((string)($extracted['event_id'] ?? ''));
             $posted_ref = trim((string)($extracted['reference'] ?? ''));
             if ($txn_id === '') {
@@ -113,6 +119,15 @@ if (!function_exists('bc_flw_handle_webhook')) {
             // being credited. A valid id paired with somebody else's tx_ref is refused.
             if ($posted_ref === '' || !hash_equals($posted_ref, (string)$verified['reference'])) {
                 return ['ok' => false, 'reason' => 'reference_mismatch', 'reference' => '', 'amount' => null, 'currency' => '', 'status' => '', 'fee' => null, 'channel' => 'flutterwave'];
+            }
+            // Legacy fee rule: FEE (%) of the gross, deducted before crediting. The reported
+            // fee stays "gross minus credited" so the receipt still shows gross @ net.
+            if ($merchant_fee_percent !== null && is_numeric($merchant_fee_percent) && (float)$merchant_fee_percent > 0) {
+                $gross = (float)$verified['amount'] + (float)($verified['fee'] ?? 0);
+                $net = $gross - ($gross * ((float)$merchant_fee_percent / 100));
+                if (!is_finite($net) || $net < 0) $net = 0;
+                $verified['fee'] = $gross - $net;
+                $verified['amount'] = $net;
             }
             return $verified;
         });

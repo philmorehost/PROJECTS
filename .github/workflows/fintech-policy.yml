@@ -189,6 +189,10 @@ jobs:
           # Phase 3 provider webhooks are shared infrastructure and must match.
           cmp VTU/DGV7.0-SAAS/users-klasha.php VTU/DGV7.0-NON-SAAS/users-klasha.php
           cmp VTU/DGV7.0-SAAS/users-flutterwave.php VTU/DGV7.0-NON-SAAS/users-flutterwave.php
+          # The retired legacy URL and the developer docs that point at the canonical one.
+          cmp VTU/DGV7.0-SAAS/web/api/flutterwave_webhook.php VTU/DGV7.0-NON-SAAS/web/api/flutterwave_webhook.php
+          cmp VTU/DGV7.0-SAAS/web/APIDocs.php VTU/DGV7.0-NON-SAAS/web/APIDocs.php
+          cmp VTU/DGV7.0-SAAS/web/api/MOBILE_APP_SPEC.md VTU/DGV7.0-NON-SAAS/web/api/MOBILE_APP_SPEC.md
           # Step 2 pages and the private upload guard must match too.
           cmp VTU/DGV7.0-SAAS/web/BusinessUpgrade.php VTU/DGV7.0-NON-SAAS/web/BusinessUpgrade.php
           cmp VTU/DGV7.0-SAAS/bc-admin/BusinessKYB.php VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php
@@ -231,6 +235,16 @@ jobs:
             # exact delivered bytes.
             grep -q 'bc_fintech_webhook_raw_input()' "VTU/${edition}/users-klasha.php"
             grep -q 'bc_fintech_webhook_raw_input()' "VTU/${edition}/users-flutterwave.php"
+            # The legacy Flutterwave URL must stay an alias: no writer of its own.
+            if grep -qE '\b(chargeUser|chargeOtherUser|updateUserCryptoBalance)[[:space:]]*\(' "VTU/${edition}/web/api/flutterwave_webhook.php"; then
+              echo "legacy flutterwave webhook credits on its own"; exit 1
+            fi
+            if grep -qE 'UPDATE[[:space:]]+sas_(users|user_crypto_wallets)' "VTU/${edition}/web/api/flutterwave_webhook.php"; then
+              echo "legacy flutterwave webhook writes a balance"; exit 1
+            fi
+            grep -q 'bc_flw_handle_webhook(' "VTU/${edition}/web/api/flutterwave_webhook.php"
+            # The published developer docs must point at the canonical endpoint.
+            grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
             # The ledger moves money and nothing else: the receipt is re-attached by the
             # delivery pipeline, never from inside bc_fintech_ledger_post().
             if grep -qE 'sendVendorEmail|mail[[:space:]]*\(|getUserEmailTemplate' "VTU/${edition}/func/bc-fintech-ledger.php"; then

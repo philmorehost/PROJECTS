@@ -639,7 +639,7 @@ if (isset($_POST["generate-apikey"])) {
 									</tr>
 									<tr>
 										<td><span class="fw-bold">Flutterwave</span></td>
-										<td><code><?php echo $web_http_host; ?>/web/api/flutterwave_webhook.php</code></td>
+										<td><code><?php echo $web_http_host; ?>/users-flutterwave.php</code></td>
 									</tr>
 									<tr>
 										<td><span class="fw-bold">Payvessel</span></td>
@@ -1404,7 +1404,7 @@ if (isset($_POST["generate-apikey"])) {
 								<tbody>
 									<tr>
 										<td>Flutterwave</td>
-										<td><code><?php echo $web_http_host; ?>/web/api/flutterwave_webhook.php</code></td>
+										<td><code><?php echo $web_http_host; ?>/users-flutterwave.php</code></td>
 										<td>HTTP_VERIF_HASH</td>
 									</tr>
 									<tr>

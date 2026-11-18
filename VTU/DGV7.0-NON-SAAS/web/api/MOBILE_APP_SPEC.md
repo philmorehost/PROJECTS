@@ -300,7 +300,7 @@ If you distribute a single APK for all vendors:
 The App should support standard JSON webhooks for payment notifications if using automated funding gateways.
 - **Monnify:** `/users-monnify.php`
 - **Paystack:** `/users-paystack.php`
-- **Flutterwave:** `/web/api/flutterwave_webhook.php`
+- **Flutterwave:** `/users-flutterwave.php`
 - **PayHub:** `/users-payhub.php`
 
 ## 5. Security Features
