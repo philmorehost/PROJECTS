@@ -1,4 +1,11 @@
 
+<?php
+// DGV7 phase 2: support chat. The partial decides for itself whether to render, so pages that
+// never had a widget keep working unchanged.
+if (file_exists(__DIR__ . '/bc-support-chat-widget.php')) {
+    include(__DIR__ . '/bc-support-chat-widget.php');
+}
+?>
 <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>

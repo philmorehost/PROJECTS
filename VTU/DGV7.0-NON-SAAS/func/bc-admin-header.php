@@ -469,6 +469,16 @@ function hex2rgb($hex) {
             </a>
           </li>
           <li>
+            <a href="<?php echo $web_http_host; ?>/bc-admin/SupportChat.php" class="<?php echo ($current_page == 'SupportChat.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Support Chat</span>
+            </a>
+          </li>
+          <li>
+            <a href="<?php echo $web_http_host; ?>/bc-admin/ChatSettings.php" class="<?php echo ($current_page == 'ChatSettings.php') ? 'active' : ''; ?>">
+              <i class="bi bi-circle"></i><span>Chat Settings</span>
+            </a>
+          </li>
+          <li>
             <a href="<?php echo $web_http_host; ?>/bc-admin/BruteForceSecurity.php" class="<?php echo ($current_page == 'BruteForceSecurity.php') ? 'active' : ''; ?>">
               <i class="bi bi-circle"></i><span>Brute Force Security</span>
             </a>

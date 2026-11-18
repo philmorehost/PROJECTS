@@ -17,6 +17,20 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php'
       - 'VTU/DGV7.0-SAAS/uploads/kyb/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess'
+      - 'VTU/DGV7.0-SAAS/index-bc-style-template-6.php'
+      - 'VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-support-chat*.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-support-chat*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-wallet.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-wallet.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-dashboard-accounts.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-dashboard-accounts.php'
+      - 'VTU/DGV7.0-SAAS/web/ajax-support-chat.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ajax-support-chat.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/SupportChat.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/SupportChat.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/ChatSettings.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/ChatSettings.php'
       - 'VTU/DGV7.0-SAAS/func/bc-app-token.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-app-token.php'
       - 'VTU/DGV7.0-SAAS/func/bc-connect.php'
@@ -64,6 +78,20 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php'
       - 'VTU/DGV7.0-SAAS/uploads/kyb/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess'
+      - 'VTU/DGV7.0-SAAS/index-bc-style-template-6.php'
+      - 'VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-support-chat*.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-support-chat*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-fintech-wallet.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-wallet.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-dashboard-accounts.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-dashboard-accounts.php'
+      - 'VTU/DGV7.0-SAAS/web/ajax-support-chat.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ajax-support-chat.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/SupportChat.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/SupportChat.php'
+      - 'VTU/DGV7.0-SAAS/bc-admin/ChatSettings.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/ChatSettings.php'
       - 'VTU/DGV7.0-SAAS/func/bc-app-token.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-app-token.php'
       - 'VTU/DGV7.0-SAAS/func/bc-connect.php'
@@ -113,7 +141,11 @@ jobs:
                         func/bc-config.php web/Login.php web/api/login.php web/api/logout.php \
                         web/api/profile.php web/BusinessUpgrade.php bc-admin/AccountSettings.php \
                         bc-admin/PaymentGateway.php bc-admin/ServiceControl.php \
-                        bc-admin/BusinessKYB.php users-plisio.php; do
+                        bc-admin/BusinessKYB.php bc-admin/SupportChat.php bc-admin/ChatSettings.php \
+                        func/bc-support-chat.php func/bc-support-chat-schema.php \
+                        func/bc-support-chat-widget.php func/bc-fintech-wallet.php \
+                        func/bc-dashboard-accounts.php web/ajax-support-chat.php \
+                        index-bc-style-template-6.php users-plisio.php; do
               php -l "VTU/${edition}/${file}"
             done
             # Every app endpoint must parse: these carry the dual-auth bridge.
@@ -130,7 +162,9 @@ jobs:
           set -e
           for file in bc-fintech-policy.php bc-fintech-schema.php bc-app-token.php bc-fintech-gate.php \
                       bc-gateway-policy.php bc-fintech-accounts.php bc-service-matrix.php \
-                      bc-service-matrix-render.php bc-account-backfill.php bc-account-backfill-render.php; do
+                      bc-service-matrix-render.php bc-account-backfill.php bc-account-backfill-render.php \
+                      bc-support-chat.php bc-support-chat-schema.php bc-support-chat-widget.php \
+                      bc-fintech-wallet.php bc-dashboard-accounts.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
           done
           cmp VTU/DGV7.0-SAAS/web/api/logout.php VTU/DGV7.0-NON-SAAS/web/api/logout.php
@@ -138,6 +172,21 @@ jobs:
           cmp VTU/DGV7.0-SAAS/web/BusinessUpgrade.php VTU/DGV7.0-NON-SAAS/web/BusinessUpgrade.php
           cmp VTU/DGV7.0-SAAS/bc-admin/BusinessKYB.php VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php
           cmp VTU/DGV7.0-SAAS/uploads/kyb/.htaccess VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess
+          # Phase 2: shared customer-facing pages must match across editions.
+          cmp VTU/DGV7.0-SAAS/index-bc-style-template-6.php VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php
+          cmp VTU/DGV7.0-SAAS/web/ajax-support-chat.php VTU/DGV7.0-NON-SAAS/web/ajax-support-chat.php
+          cmp VTU/DGV7.0-SAAS/bc-admin/SupportChat.php VTU/DGV7.0-NON-SAAS/bc-admin/SupportChat.php
+          cmp VTU/DGV7.0-SAAS/bc-admin/ChatSettings.php VTU/DGV7.0-NON-SAAS/bc-admin/ChatSettings.php
+          # The chat endpoint must bind the user to the session, never to the request body.
+          for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+            if grep -qE '\$_(POST|GET|REQUEST)\[.user_id.\]' "VTU/${edition}/web/ajax-support-chat.php"; then
+              echo "chat endpoint accepts a client-supplied user id"; exit 1
+            fi
+            # Neither the widget nor the console may print a stored API key.
+            if grep -q 'chat_ai_key' "VTU/${edition}/func/bc-support-chat-widget.php"; then
+              echo "chat widget references the API key"; exit 1
+            fi
+          done
           # KYB documents must never be reachable over HTTP.
           grep -q 'Require all denied' VTU/DGV7.0-SAAS/uploads/kyb/.htaccess
           grep -q 'Require all denied' VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess

@@ -347,3 +347,128 @@ if (!function_exists('bc_fintech_kyb_pending')) {
         return $rows;
     }
 }
+
+/**
+ * DGV7 phase 2 — marketing presentation helpers.
+ *
+ * The landing page and the dashboard both list services the tenant may not be able to sell yet.
+ * These helpers answer one question honestly: "can a customer actually use this today?" — and
+ * they answer it from the SAME three-way rule as the service matrix (status + provider_ready +
+ * the tier switch), so a card can never advertise something the account gate would refuse.
+ */
+
+if (!function_exists('bc_fintech_marketing_services')) {
+    /**
+     * The marketing catalogue, in display order. Each entry declares which tiers it belongs to and
+     * the blurb shown on its card. Keep this list presentational only: availability comes from the
+     * matrix, never from here.
+     */
+    function bc_fintech_marketing_services() {
+        return [
+            'transfers' => [
+                'name'  => 'USD Wallet',
+                'copy'  => 'Hold NGN and receive USD from abroad into one account.',
+                'tiers' => ['personal', 'business'],
+            ],
+            'cross_border' => [
+                'name'  => 'Cross-border transfers',
+                'copy'  => 'Send money to China and other corridors at a transparent rate.',
+                'tiers' => ['personal', 'business'],
+            ],
+            'fx' => [
+                'name'  => 'FX & conversion',
+                'copy'  => 'Convert between supported currencies without hidden spread.',
+                'tiers' => ['personal', 'business'],
+            ],
+            'esim' => [
+                'name'  => '1GLOBAL eSIM',
+                'copy'  => 'Stay connected in 100+ countries with a data eSIM.',
+                'tiers' => ['personal'],
+            ],
+            'tuition' => [
+                'name'  => 'Global tuition',
+                'copy'  => 'Pay school and university fees abroad directly.',
+                'tiers' => ['business'],
+            ],
+            'invoices' => [
+                'name'  => 'Invoices',
+                'copy'  => 'Bill international clients and get paid in your currency.',
+                'tiers' => ['business'],
+            ],
+            'pos' => [
+                'name'  => 'POS terminals',
+                'copy'  => 'Take card payments at the counter with settlement to your wallet.',
+                'tiers' => ['business'],
+            ],
+            'developer_api' => [
+                'name'  => 'Developer API',
+                'copy'  => 'Build on the platform with merchant keys and webhooks.',
+                'tiers' => ['business'],
+            ],
+        ];
+    }
+}
+
+if (!function_exists('bc_fintech_marketing_live')) {
+    /**
+     * Is one service buyable right now for this tenant and tier?
+     *
+     * Everything fails closed: an unknown service, a missing matrix row, a zero tenant or a null
+     * tier all come back false. That matters because the card copy invites a purchase.
+     */
+    function bc_fintech_marketing_live($vendor_id, $tier, $service, array $catalogue = null) {
+        $vendor_id = (int)$vendor_id;
+        if ($vendor_id <= 0) return false;
+
+        $tier = strtolower(trim((string)$tier));
+        if (!in_array($tier, ['personal', 'business'], true)) return false;
+
+        $service = strtolower(trim((string)$service));
+        if ($service === '') return false;
+
+        $catalogue = $catalogue === null ? bc_fintech_marketing_services() : $catalogue;
+        // A service the catalogue does not describe is never advertised, live or otherwise.
+        if (!isset($catalogue[$service])) return false;
+        if (!in_array($tier, $catalogue[$service]['tiers'], true)) return false;
+
+        $matrix = bc_fintech_matrix_read($vendor_id);
+        if (!isset($matrix[$service])) return false;
+
+        $row = $matrix[$service];
+        $row['service_name'] = $service;
+        return bc_fintech_tier_effective($row, $tier);
+    }
+}
+
+if (!function_exists('bc_fintech_marketing_partition')) {
+    /**
+     * Split the catalogue into what can be sold now and what cannot, for one tier.
+     *
+     * Returns ['live' => [...], 'soon' => [...]], each entry carrying name/copy/service. The
+     * "soon" bucket is NOT hidden by the callers: unavailable cards render dashed and labelled
+     * "Coming soon". Hiding them would make the product look smaller than it is and would give a
+     * tenant no signal that the service exists at all.
+     */
+    function bc_fintech_marketing_partition($vendor_id, $tier) {
+        $tier = strtolower(trim((string)$tier));
+        $catalogue = bc_fintech_marketing_services();
+        $live = [];
+        $soon = [];
+
+        foreach ($catalogue as $service => $meta) {
+            if (!in_array($tier, $meta['tiers'], true)) continue;
+            $entry = [
+                'service' => $service,
+                'name'    => $meta['name'],
+                'copy'    => $meta['copy'],
+            ];
+            if (bc_fintech_marketing_live($vendor_id, $tier, $service, $catalogue)) {
+                $live[] = $entry;
+            } else {
+                $soon[] = $entry;
+            }
+        }
+
+        return ['live' => $live, 'soon' => $soon];
+    }
+}

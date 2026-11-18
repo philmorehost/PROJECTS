@@ -174,6 +174,150 @@ the `developer_api` lock at both layers, matrix writes and refusals, tenant isol
 and of document access, the full submit→approve/reject lifecycle, session revocation on approval,
 and structural assertions that every new page routes through the shared primitives.
 
+## Phase 2 in this change — Platnova-style web redesign and human + AI support chat
+
+Phase 2 is the design-and-support slice of the delivery sequence. It ships presentation, navigation
+gating and a support channel; it wires **no new provider** and moves no money.
+
+### 1. Landing page template 6 ("Plate") — `index-bc-style-template-6.php`
+
+A tenant-selectable landing page alongside templates 1–3. Selection runs through **bc-admin →
+Account Settings**, whose list now offers `bc-style-template-6.css` (labelled `— PLATE`).
+
+Templates 4 and 5 were **removed from that list**. They have no `index-bc-style-template-N.php`, and
+`index.php` falls back to template 1 when the file is missing — so offering them presented a choice
+that silently did nothing. Re-add them only when a page exists.
+
+Layout: brand bar → hero with the Personal/Business switch → three-step cross-border flow → service
+grid → trust strip → footer. Conventions it obeys:
+
+- The SEO hooks `seo_start_ob_auto_alt()`, `seo_render_head_tags()` and `seo_render_custom_footer()`
+  are called in the same order as the older templates.
+- The logo resolves from `uploaded-image/{host with . → -}_logo.png`, as the other templates do.
+- The brand colour is validated against `^#[0-9a-fA-F]{6}$` and falls back to `#0f766e`, so a bad
+  tenant value cannot inject CSS.
+- Icons are inline SVG (`bc_plate_icon()`). The landing page loads no icon font, so a `bi bi-*`
+  class would render as an empty box.
+- **Both panels are rendered server-side and the switch only toggles visibility.** With JS disabled
+  the Personal panel stays visible and the Business content is still in the markup. The switch
+  implements the tablist keyboard pattern (arrow keys move between tabs).
+
+**The three-step flow is illustrative, not a promise of live rails.** "Create USD wallet → fund it →
+send to China" describes the intended cross-border path. Until the Phase 3 adapters exist the copy
+must not imply a funded USD balance is available.
+
+### 2. Marketing gating — `bc_fintech_marketing_partition()`
+
+Every card on the landing page and the dashboard comes from
+`bc_fintech_marketing_partition($vendor_id, $tier)` in `func/bc-fintech-accounts.php`, which returns
+live and soon buckets. A card is **live** only when the tenant row has `status = 1` **and**
+`provider_ready = 1` **and** the tier switch (`personal_enabled` / `business_enabled`) is on — the
+same three-way rule as the service matrix, so a card can never advertise something the account gate
+would refuse.
+
+Unavailable cards are **shown as "Coming soon" with a dashed outline, never hidden.** Hiding them
+would make the product look smaller than it is and would leave a tenant with no signal that the
+service exists. This is what keeps Klasha, Flutterwave Global, eSIM and Global Tuition cleanly gated
+until the Phase 3 adapters land: they are advertised, visibly not purchasable, and unreachable.
+
+Tier placement: eSIM is personal-only; tuition, invoices, POS and `developer_api` are business-only;
+wallet, cross-border and FX appear for both. `developer_api` is never advertised to personal — the
+partition helper refuses it even if a caller passes a catalogue that claims otherwise, and the gate
+tests assert it.
+
+### 3. Dashboard accounts block — `func/bc-dashboard-accounts.php`
+
+Included by `web/Dashboard.php` above the existing balance hero. It renders:
+
+- **Multi-currency wallet cards** from `bc_wallet_cards()`. Only **NGN is custodied**; USD, GBP and
+  EUR read "Not open yet" unless a real balance exists. A custodied currency with a zero balance also
+  reads "Not open yet" rather than `0.00`, because a zero that looks like a balance invites a
+  "where is my money" ticket.
+- **Rate strip** from `bc_fx_rate_snapshot()`. With no feed wired it reports *"Live rates are
+  temporarily unavailable."* A zero rate is treated as unavailable too: a zero is indistinguishable
+  from a real quotation of zero and would be acted upon.
+- **Tier pill** from `bc_fintech_tier_badge()`: `tier-personal`, `tier-business` or `tier-unknown`.
+  Unknown is labelled honestly rather than defaulted to personal.
+- **KYB status** translated from `kyb_status` `[0 Not started, 1 Under review, 2 Approved, 3 Rejected]`.
+- **Upgrade callout** to `web/BusinessUpgrade.php`, shown only when `tier === 'personal'` and
+  `kyb_status ∉ {1, 2}` — not while a review is open, and not once approved.
+
+The block loads its own dependencies and **returns early if any helper is missing**. Dashboard.php
+includes only `bc-config.php`, so a partial deployed ahead of its helper file must render nothing
+rather than fatal the busiest page in the product.
+
+Navigation in `func/bc-header.php` is tier-aware via `$bc_nav_tier_service()`: **Developer API** and
+**Business Upgrade** are gated by the same matrix. The matrix is read at most once per request, and
+the header tolerates a page that includes it before the session user is loaded.
+
+### 4. Human + AI support chat
+
+Four shared files per edition, byte-identical across editions (CI `cmp`s them):
+
+| File | Role |
+| --- | --- |
+| `func/bc-support-chat-schema.php` | `bc_chat_ensure_schema()` creates `sas_chat_threads`, `sas_chat_messages`, `sas_chat_events`; `bc_chat_settings()` / `bc_chat_setting_save()` over `sas_settings` |
+| `func/bc-support-chat.php` | Engine: thread lifecycle, messages, escalation, agent queue, AI reply |
+| `func/bc-support-chat-widget.php` | Customer widget, included from `func/bc-footer.php` |
+| `web/ajax-support-chat.php` | JSON endpoint the widget polls |
+
+**Schema.** `sas_chat_threads(id, vendor_id, user_id, username, subject, status, assigned_admin,
+last_message_at, last_message_by, unread_for_agent, unread_for_user, ai_enabled, created_at,
+closed_at)`; `sas_chat_messages(id, thread_id, vendor_id, author_type, author_name, body,
+created_at)`; `sas_chat_events(...)` for the audit trail. `status` is
+`open | pending_agent | with_agent | closed`.
+
+The schema file deliberately does **not** include the fintech schema. "We cannot take payments" and
+"we cannot answer the customer asking why" are different failures and must not become one.
+
+**State machine.** `open` with `ai_enabled = 1` → the assistant answers. "Talk to a person" calls
+`bc_chat_escalate()`, which moves the thread to `pending_agent` and clears `ai_enabled`. An agent
+claiming it calls `bc_chat_claim_thread()` → `with_agent`, records the agent and posts the handoff
+line. Closing ends the thread; the customer's next message opens a **new** one rather than resuming
+a transcript they just finished with. **The assistant is silent whenever `ai_enabled != 1` or
+`status != open`** — including after a tenant switches AI on mid-conversation, so it can never talk
+over an agent.
+
+**Escalation is not a dead end.** If the provider call fails, the customer still gets a message
+saying a human will follow up, and the thread is escalated. A dead AI must not look like a dead chat.
+
+**Key handling.** The key lives in `sas_settings` and is **write-only through the UI**:
+`bc-admin/ChatSettings.php` renders a blank password field and shows only the last four characters as
+a hint that a key exists. Leaving the field blank **keeps** the stored key, so editing the welcome
+text cannot silently wipe the credential; clearing it requires an explicit checkbox. A key shorter
+than 16 characters saves with a warning. The page warns when the assistant is on with no key — the
+failure that otherwise looks like "the assistant ignores everyone". The endpoint never returns the
+key, and the widget contains no key, model or prompt.
+
+**AI providers.** Settings expose gemini and deepseek with **model optional** (the provider default
+is used when blank). `bc_chat_ai_call()` prefers the platform `AIEngine` when the build ships it and
+falls back to a direct HTTP call; both failing is what triggers escalation.
+
+The prompt hard-forbids stating balances, promising refunds or requesting credentials, and instructs
+the assistant to reply `ESCALATE` when the question needs account truth. It is a first-line helper,
+not a source of account data.
+
+**Agent console.** `bc-admin/SupportChat.php` gives waiting/in-progress lists, the transcript, and
+claim / reply / close / pause-assistant. Actions are POST with a redirect, so a refresh cannot replay
+a reply. Tenant scope comes from the admin's own id, and another tenant's thread id resolves to
+"not found" rather than to their conversation. Flash messages use `bc_chat_flash`, not the purchase
+flash.
+
+**Endpoint security.** `web/ajax-support-chat.php` is POST-only, 401s without a session, binds the
+user to `$get_logged_user_details` (**`user_id` is never read from the request body** — CI greps for
+this), caps bodies at 4000 characters, sends `Cache-Control: no-store`, and 404s unknown threads so
+ids cannot be probed across tenants. The public thread/message payloads are allow-lists, so a column
+added later cannot leak by default.
+
+### Test coverage added
+
+`tests/fintech_gate_test.php` grew from 402 to **576 checks** across four new sections: marketing
+partition gating (per tier and per `provider_ready`), wallet and rate presentation (including that a
+zero rate is never quoted), the full chat lifecycle (open → escalate → claim → close → reopen,
+the 4000-character cap at the boundary, tenant isolation on read and write, and the assistant staying
+silent on an escalated thread), and structural wiring — including byte parity for the nine shared
+Phase 2 files and a guard that the chat engine contains no money-moving calls.
+
 ## Phase 1C gateway change — Plisio retired
 
 Plisio.net is defunct. It is retired **without deleting history**:
