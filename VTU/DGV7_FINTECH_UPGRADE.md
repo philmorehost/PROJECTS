@@ -37,10 +37,17 @@ Blueprint: *Project Kickoff Blueprint — DGV7.0 Scripts Fintech Platform Upgrad
 - A saved URL that fails validation shows a configuration error instead of the dashboard — never treated as "no redirect configured".
 
 **Known limits of this phase**
-- The **other** ~60 app endpoints still authenticate with `api_key`; they do not yet require an app token, so a Business account holding its old key could still call them until they are migrated. `profile.php` + login/token issue/refresh are done.
+- The **other** ~60 app endpoints still authenticate with `api_key`; they do not yet require an app token, so a Business account holding its old key could still call them until they are migrated. `profile.php` + login/token issue/revoke are done.
 - Personal developer-API lockdown is still **not** enforced, and must not be until those endpoints accept app tokens.
 - No `account_type` backfill has run; until then policy resolves entirely from `account_level`.
 - Not deployed. No staging database, provider sandbox or live traffic has exercised any of it.
+
+**Phase 1C checklist (next)**
+1. Migrate the remaining app endpoints to `bc_fintech_require_app_account()`, then — only after that — reject `api_key` requests from personal accounts on developer routes.
+2. Publish `app_token` in the DG7 / JIKABIZ / MZEEVTU Android and iOS clients, send it as `Authorization: Bearer`, call `web/api/logout.php` on sign-out, and handle the Business 403 with the web-only message.
+3. Add a reviewed, auditable `account_type` backfill (level 1/2 → personal, level 3 → business) with rollback; keep `account_level` and every price untouched.
+4. Add bc-admin/service UI for `personal_enabled` / `business_enabled` / `provider_ready` and a KYB review screen; do not enable any new fintech service without provider confirmation.
+5. Staging: run the lazy migration against a restored production snapshot, verify duplicate-row `sas_site_details`, confirm logout/impersonation paths, then load-test the redirect gate.
 
 ## Existing implementation facts that affect rollout
 
