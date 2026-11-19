@@ -904,3 +904,26 @@ Four changes, both editions throughout:
 Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
 plate_admin **692**, plate_migration **880** (down from 896 — the two deleted Card.php
 pages no longer contribute per-page checks), htaccess **158**.
+
+## 17. Root .htaccess re-enabled; VirtualCard.php redesigned (stylesheet restored)
+
+- **Root `.htaccess` is active again** in both editions (byte-identical, 224 context
+  checks). The §16 disable was conditional on files actually being blocked from update;
+  no such blocking exists — every file in this programme has updated cleanly — so the
+  condition is not met and the file is restored exactly as it was, with its tests and CI
+  parity checks back in force. The per-directory guards never went away in any case.
+- **`web/VirtualCard.php` redesigned (both editions).** The page "had no stylesheet"
+  for two compounding reasons: its CSS (`assets/css/fintech-cards.css`) was never
+  linked after the shell migration, and a residual pagetitle `</div>` left in the body
+  closed `.pk-app__wrap` early, so the shell's compat layer never applied to the page
+  either. The redesign links the stylesheet, removes the stray close (the New Card
+  button now sits in a proper page-head row), and adds a Platnova page style on the
+  shell tokens: brand-gradient card face at real card proportions, gold chip, status
+  dots, glass reveal button, styled empty state and quick actions. All queries, modal
+  ids, form fields and the `virtual-card-ajax.php` contracts are unchanged. The
+  body-verbatim pin for this page is retired in `plate_migration_test.php` (same
+  treatment as `Dashboard.php`), replaced by a guard asserting the stylesheet link
+  stays in place.
+
+Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
+plate_admin **692**, plate_migration **876**, htaccess **224**.
