@@ -127,6 +127,24 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // CryptoHub.php is redesigned on the shell (2026-11): the coin art is
+        // sized, and the withdraw / self-help modals the page's JS has always
+        // posted to are restored. Its PHP handlers, queries and JS are
+        // preserved, so pin the behaviour contract instead of the old body.
+        if ($name === 'CryptoHub.php') {
+            chk(strpos($cur, 'data-pkx="page-redesign"') !== false, "$label carries the redesign layer");
+            chk(strpos($cur, 'coin-icons-row') !== false, "$label keeps the coin icon row");
+            foreach (array('create_invoice', 'swap', 'send_otp', 'manual_sync', 'withdraw') as $act) {
+                chk(strpos($cur, "'$act'") !== false, "$label keeps the $act handler");
+            }
+            foreach (array('id="depositModal"', 'id="swapModal"', 'id="withdrawModal"', 'id="selfHelpModal"',
+                           'id="swapForm"', 'id="withdrawForm"', 'id="withdrawCid"', 'id="syncRef"') as $id) {
+                chk(strpos($cur, $id) !== false, "$label renders $id");
+            }
+            chk(strpos($cur, 'LIMIT 3, 7') !== false, "$label keeps its activity window");
+            continue;
+        }
+
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             continue;

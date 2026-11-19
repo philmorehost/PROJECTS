@@ -1339,6 +1339,90 @@ if (!function_exists('lm_github_tree')) {
     }
 }
 
+if (!function_exists('lm_github_filter_changelog_files')) {
+    /**
+     * Keep only the changed files that will actually ship in this project's
+     * package. The GitHub compare lists every file in the monorepo; without
+     * this filter a SAAS release's "files changed" names NON-SAAS paths and
+     * reads as the wrong edition to the admin about to install it.
+     */
+    function lm_github_filter_changelog_files(array $files, array $selectors)
+    {
+        if (empty($selectors)) {
+            return $files;
+        }
+        $kept = array();
+        foreach ($files as $file) {
+            $name = isset($file['filename']) ? (string) $file['filename'] : '';
+            if ($name === '') {
+                continue;
+            }
+            foreach ($selectors as $selector) {
+                $selector = trim((string) $selector, '/');
+                if ($selector !== '' && ($name === $selector || strpos($name, $selector . '/') === 0)) {
+                    $kept[] = $file;
+                    break;
+                }
+            }
+        }
+        return $kept;
+    }
+}
+
+if (!function_exists('lm_github_edition_violation')) {
+    /**
+     * Cross-edition package guard: returns a human-readable violation, or ''
+     * when the package matches the project's edition. Catches the monorepo
+     * mis-selection (e.g. the SAAS project ticking VTU/ or the NON-SAAS folder)
+     * before a zip that would overwrite the other edition is published.
+     *
+     * @param string $tierCode  e.g. SAAS / NON-SAAS ('' = not an edition tier)
+     * @param array  $files     package-relative paths (package root stripped)
+     * @param array  $repoFiles repository-relative paths in the package
+     */
+    function lm_github_edition_violation($tierCode, array $files, array $repoFiles = array())
+    {
+        $code = strtoupper(str_replace(array('_', ' '), '-', (string) $tierCode));
+        $tierEdition = '';
+        if (strpos($code, 'NON-SAAS') !== false || strpos($code, 'NONSAAS') !== false) {
+            $tierEdition = 'NON-SAAS';
+        } elseif (strpos($code, 'SAAS') !== false) {
+            $tierEdition = 'SAAS';
+        }
+        if ($tierEdition === '') {
+            return '';
+        }
+        $other = ($tierEdition === 'SAAS') ? 'NON-SAAS' : 'SAAS';
+
+        foreach ($repoFiles as $path) {
+            foreach (explode('/', str_replace('\\', '/', (string) $path)) as $segment) {
+                $seg = strtoupper(str_replace(array('_', ' '), '-', $segment));
+                $segEdition = '';
+                if (strpos($seg, 'NON-SAAS') !== false || strpos($seg, 'NONSAAS') !== false) {
+                    $segEdition = 'NON-SAAS';
+                } elseif (strpos($seg, 'SAAS') !== false) {
+                    $segEdition = 'SAAS';
+                }
+                if ($segEdition === $other) {
+                    return "the selection includes '" . $segment . "' (" . $other . " edition) but this project is the " . $tierEdition . " edition";
+                }
+            }
+        }
+
+        foreach ($files as $path) {
+            $p = strtolower(str_replace('\\', '/', (string) $path));
+            if ($tierEdition === 'SAAS' && $p === 'func/bc-integrity.php') {
+                return 'the package contains func/bc-integrity.php, which only exists in the NON-SAAS edition';
+            }
+            if ($tierEdition === 'NON-SAAS' && ($p === 'func/bc-levelup.php' || $p === 'func/bc-spadmin-config.php')) {
+                return 'the package contains SAAS-only files (func/bc-levelup.php / func/bc-spadmin-config.php)';
+            }
+        }
+
+        return '';
+    }
+}
+
 if (!function_exists('lm_github_expand_selection')) {
     /**
      * Turn the admin's ticked folders/files into an exact list of files.
@@ -2137,6 +2221,12 @@ if (!function_exists('lm_github_pull')) {
             }
         }
 
+        // The changelog must describe this project's package, not the whole
+        // monorepo (see lm_github_filter_changelog_files).
+        if (!empty($selectors) && !empty($files)) {
+            $files = lm_github_filter_changelog_files($files, $selectors);
+        }
+
         $latestLocal = lm_latest_update_for_tier($pdo, (int) $tier['id'], false);
         $result['previous_version'] = $latestLocal ? $latestLocal['version_number'] : '';
 
@@ -2212,6 +2302,23 @@ if (!function_exists('lm_github_pull')) {
 
             if (empty($filesToPackage)) {
                 $result['message'] = 'The selected folders contain no files.';
+                return $result;
+            }
+
+            // Never publish the other edition's package under this project's
+            // name: a SAAS install applies whatever this tier serves.
+            $packageFiles = array();
+            foreach ($filesToPackage as $pkgFile) {
+                $rel = (string) $pkgFile;
+                if ($packageRoot !== '' && strpos($rel, $packageRoot . '/') === 0) {
+                    $rel = substr($rel, strlen($packageRoot) + 1);
+                }
+                $packageFiles[] = $rel;
+            }
+            $editionViolation = lm_github_edition_violation($tier['tier_code'] ?? '', $packageFiles, $filesToPackage);
+            if ($editionViolation !== '') {
+                $result['message'] = 'Refused to publish a cross-edition package: ' . $editionViolation
+                    . '. Fix this project\'s folder selection (Projects > GitHub) so it contains only its own edition, then pull again.';
                 return $result;
             }
         }
@@ -2295,6 +2402,7 @@ if (!function_exists('lm_github_pull')) {
         $manifest = array(
             'version' => $version,
             'tier' => strtoupper((string) $tier['tier_code']),
+            'edition' => strtoupper((string) $tier['tier_code']),
             'project' => (string) $tier['tier_name'],
             'source' => 'github',
             'repository' => $config['owner'] . '/' . $config['repo'],

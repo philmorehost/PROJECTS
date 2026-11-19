@@ -25,6 +25,7 @@ $force_version = trim($_GET['force_version'] ?? '');
 $post_fields = [
     'license_key' => $license_key,
     'edition' => 'SAAS',
+    'expected_tier' => 'SAAS',
     'product' => 'DGV7',
     'domain' => $license_domain
 ];

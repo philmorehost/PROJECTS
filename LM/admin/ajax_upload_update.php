@@ -114,11 +114,29 @@ if ($zip->open($target_path) === TRUE) {
         $manifest = [
             'version'          => ltrim(strtolower($version_number), 'v'),
             'tier'             => strtoupper($tier['tier_code']),
+            'edition'          => strtoupper($tier['tier_code']),
             'changelog'        => $changelog,
             'files_to_delete'  => [],
             'database_queries' => []
         ];
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        // A bundled manifest must not override the tier this zip was uploaded
+        // to: a NON-SAAS package uploaded under the SAAS tier would otherwise
+        // keep declaring the wrong edition (and newer clients refuse it).
+        // Restamp tier/edition to the target tier, in place.
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if ($name === 'manifest.json' || preg_match('#^[^/]+/manifest\.json$#', $name)) {
+                $decoded = json_decode((string) $zip->getFromIndex($i), true);
+                if (is_array($decoded)) {
+                    $decoded['tier'] = strtoupper($tier['tier_code']);
+                    $decoded['edition'] = strtoupper($tier['tier_code']);
+                    $zip->addFromString($name, json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                }
+                break;
+            }
+        }
     }
 
     $zip->close();

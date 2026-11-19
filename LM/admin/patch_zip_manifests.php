@@ -85,6 +85,7 @@ if (!$pdo instanceof PDO) {
             $manifest = array(
                 'version'          => ltrim(strtolower((string) $row['version_number']), 'v'),
                 'tier'             => strtoupper((string) $row['tier_code']),
+                'edition'          => strtoupper((string) $row['tier_code']),
                 'changelog'        => (string) ($row['changelog'] ?? ''),
                 'files_to_delete'  => array(),
                 'database_queries' => array(),

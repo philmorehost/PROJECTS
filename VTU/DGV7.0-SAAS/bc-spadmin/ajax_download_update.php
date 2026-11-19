@@ -64,6 +64,7 @@ $api_url = "https://manager.pmhserver.name.ng/check-update.php";
 $post_fields = [
     'license_key' => $license_key,
     'edition' => 'SAAS',
+    'expected_tier' => 'SAAS',
     'product' => 'DGV7',
     'domain' => $license_domain
 ];
@@ -89,6 +90,14 @@ if ($http_code !== 200 || empty($response)) {
 $res_data = json_decode($response, true);
 if (!$res_data || $res_data['status'] !== 'success') {
     die(json_encode(['status' => 'error', 'message' => $res_data['message'] ?? 'Inactive or invalid license.']));
+}
+
+// Edition guard: the manager reports which tier it issued this token for. If it
+// names the other edition (a license record mapped to the wrong package), stop
+// here instead of downloading a zip that would overwrite this edition's files.
+$lm_tier = strtoupper(trim((string)($res_data['tier_detected'] ?? $res_data['edition'] ?? '')));
+if ($lm_tier !== '' && $lm_tier !== 'SAAS') {
+    die(json_encode(['status' => 'error', 'message' => 'The License Manager issued an update for tier ' . $lm_tier . ', but this is a SAAS installation. No files were changed. Ask the provider to move your license to the SAAS tier.']));
 }
 
 $download_url = $res_data['download_url'] ?? '';
