@@ -410,8 +410,8 @@ jobs:
             grep -q 'bc_flw_handle_webhook(' "VTU/${edition}/web/api/flutterwave_webhook.php"
             # The published developer docs must point at the canonical endpoint.
             grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
-            # The sidebar is grouped into the six service groups; the flat "Services" heading is gone.
-            for group in pay-bills wallet-transfers financial-services business-api history-tools settings-help; do
+            # The sidebar is grouped into service groups; the flat "Services" heading is gone.
+            for group in pay-bills wallet-transfers verify-print tools-api history-tools settings-help; do
               grep -q "'id' => '${group}'" "VTU/${edition}/func/bc-plate-app.php"
             done
             if grep -q "'label' => 'Services'" "VTU/${edition}/func/bc-plate-app.php"; then
