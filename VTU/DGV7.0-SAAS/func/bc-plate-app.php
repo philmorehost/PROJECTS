@@ -1001,7 +1001,16 @@ if (!function_exists('bc_app_css')) {
             background: linear-gradient(135deg, var(--brand), var(--brand-dark));
             box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 8px 16px -8px rgba(0,0,0,.8);
         }
-        .pk-matrix__label { font-weight: 700; font-size: .95rem; line-height: 1.25; }
+        .pk-matrix__label { font-weight: 700; font-size: .95rem; line-height: 1.25; color: #f8fafc; }
+        /* The generic `.pk-app__wrap a { color: var(--brand) }` rule above outranks
+           .pk-matrix__card (0,1,1 beats 0,1,0), so on sites whose brand colour is
+           dark the card labels inherited it and vanished against the dark card.
+           Pin every card text colour explicitly. */
+        .pk-app__wrap .pk-matrix__card { color: #e2e8f0; }
+        .pk-app__wrap .pk-matrix__card:hover { color: #fff; }
+        .pk-app__wrap .pk-matrix__label { color: #f8fafc; }
+        .pk-app__wrap .pk-matrix__label small { color: rgba(226, 232, 240, .72); }
+        .pk-app__wrap .pk-matrix__go { color: #e2e8f0; }
         .pk-matrix__badge {
             position: absolute; top: 10px; right: 12px;
             background: var(--warn); color: #fff; font-size: .62rem; font-weight: 800;

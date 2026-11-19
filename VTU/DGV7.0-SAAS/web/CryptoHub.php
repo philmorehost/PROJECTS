@@ -313,12 +313,20 @@ include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 ?>
 <style data-pkx="page-redesign">
-/* CryptoHub — modern fintech redesign layer (2026-11) */
-.pk-app__wrap .crypto-card{border-radius:22px!important;background:linear-gradient(145deg,#16213a,#0b1220 65%);color:#e2e8f0;border:1px solid rgba(148,163,184,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 18px 34px -16px rgba(2,6,23,.65)}
-.pk-app__wrap .crypto-card .text-muted{color:#94a3b8!important}
-.pk-app__wrap .quick-action-btn{border-radius:16px!important;font-weight:700;transition:transform .15s ease,box-shadow .15s ease}
-.pk-app__wrap .quick-action-btn:hover{transform:translateY(-2px);box-shadow:0 14px 26px -14px rgba(2,6,23,.6)}
-.pk-app__wrap .nav-pills .nav-link{border-radius:999px;font-weight:700}
+/* CryptoHub — fintech redesign (2026-11): sized coin art, glass hero actions,
+   wallet cards and an action rail on the shared console shell. */
+.pk-app__wrap .coin-icons-row{display:flex;align-items:center;flex-wrap:wrap}
+.pk-app__wrap .coin-icons-row img{width:40px;height:40px;border-radius:50%;object-fit:contain;background:#fff;padding:3px;border:2px solid rgba(255,255,255,.75);box-shadow:0 4px 10px rgba(2,6,23,.35);margin-left:-10px}
+.pk-app__wrap .coin-icons-row img:first-child{margin-left:0}
+.pk-app__wrap .quick-action-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;font-weight:700;font-size:.78rem;text-decoration:none;backdrop-filter:blur(6px);transition:transform .15s ease,background .15s ease,box-shadow .15s ease}
+.pk-app__wrap .quick-action-btn:hover{background:rgba(255,255,255,.2);color:#fff;transform:translateY(-2px);box-shadow:0 14px 26px -14px rgba(2,6,23,.6)}
+.pk-app__wrap .quick-action-btn i{font-size:1.1rem}
+.pk-app__wrap .cw-card{transition:transform .15s ease,box-shadow .15s ease}
+.pk-app__wrap .cw-card:hover{transform:translateY(-3px);box-shadow:0 16px 30px -16px rgba(2,6,23,.35)!important}
+.pk-app__wrap .cw-icon{width:46px;height:46px;border-radius:14px;background:var(--wash);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.pk-app__wrap .cw-icon img{width:26px;height:26px;object-fit:contain}
+.pk-app__wrap .crypto-side-icon{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem}
+.pk-app__wrap .crypto-side-icon img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 </style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "CRYPTO", "crumb" => "Home / Crypto")); ?>
@@ -333,7 +341,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         </div>
 
         <!-- Balance Hero -->
-        <div class="balance-hero shadow">
+        <div class="balance-hero shadow mb-4">
             <div class="row align-items-center">
                 <div class="col-md-7 mb-3 mb-md-0" style="position: relative; z-index: 10;">
                     <div class="small fw-semibold opacity-75 mb-1">AVAILABLE BALANCE</div>
@@ -356,7 +364,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                         <img src="../asset/crypto/doge.png" alt="DOGE" title="Dogecoin">
                     </div>
 
-                    <div class="row row-cols-5 g-2 mt-4" style="position: relative; z-index: 20;">
+                    <div class="row row-cols-3 row-cols-md-5 g-2 mt-4" style="position: relative; z-index: 20;">
                         <div class="col"><a href="javascript:void(0)" onclick="openGeneralDepositModal()" class="quick-action-btn"><i class="bi bi-plus-lg"></i>Deposit</a></div>
                         <div class="col"><a href="javascript:void(0)" onclick="openGeneralWithdrawModal()" class="quick-action-btn"><i class="bi bi-send"></i>Send</a></div>
                         <div class="col"><a href="javascript:void(0)" onclick="openSwapModal()" class="quick-action-btn"><i class="bi bi-arrow-left-right"></i>Swap</a></div>
@@ -385,8 +393,11 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         </div>
 
         <!-- Wallet Balances Section -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="fw-bold mb-0">My Wallets</h6>
+            <span class="text-muted small">Balances update after network confirmation</span>
+        </div>
         <div class="row g-3 mb-4">
-            <div class="col-12"><h6 class="fw-bold mb-0">My Wallets</h6></div>
             <?php
             $display_coins = ['BTC', 'ETH', 'LTC', 'USDT_TRX', 'TRX', 'USDC', 'BCH', 'DOGE'];
             foreach($display_coins as $cid):
@@ -398,11 +409,11 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                 if(!$is_active && $bal <= 0) continue;
             ?>
             <div class="col-lg-3 col-md-4 col-6">
-                <div class="card shadow-sm border-0 h-100 position-relative overflow-hidden">
+                <div class="card cw-card shadow-sm border-0 h-100 position-relative overflow-hidden">
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div class="bg-light rounded-circle p-2 d-flex align-items-center justify-content-center" style="width:40px; height:40px;">
-                                <img src="../asset/crypto/<?php echo $icon; ?>" style="width:24px; height:24px;">
+                            <div class="cw-icon">
+                                <img src="../asset/crypto/<?php echo $icon; ?>" alt="<?php echo $label; ?>">
                             </div>
                             <span class="badge bg-light text-dark rounded-pill" style="font-size:0.65rem;"><?php echo $cid; ?></span>
                         </div>
@@ -436,7 +447,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         <div class="row g-4">
             <!-- Main Content Area -->
             <div class="col-lg-8">
-                <div class="card shadow-sm border-0 rounded-4">
+                <div class="card crypto-card shadow-sm border-0 rounded-4">
                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                         <h6 class="fw-bold mb-0">Latest Invoices</h6>
                         <a href="CryptoInvoices.php" class="btn btn-sm btn-outline-primary rounded-pill px-3">View History</a>
@@ -475,7 +486,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                     </div>
                 </div>
 
-                <div class="card shadow-sm border-0 rounded-4 mt-4">
+                <div class="card crypto-card shadow-sm border-0 rounded-4 mt-4">
                     <div class="card-header bg-white py-3">
                         <h6 class="fw-bold mb-0">Other Activity</h6>
                     </div>
@@ -525,9 +536,9 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 
             <!-- Actions Sidebar -->
             <div class="col-lg-4">
-                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                <div class="card crypto-card shadow-sm border-0 rounded-4 mb-4">
                     <div class="card-body p-4 text-center">
-                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 60px; height: 60px;">
+                        <div class="crypto-side-icon bg-success bg-opacity-10 text-success">
                             <i class="bi bi-arrow-left-right fs-3"></i>
                         </div>
                         <h5 class="fw-bold">Instant Swap</h5>
@@ -536,10 +547,10 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                     </div>
                 </div>
 
-                <div class="card shadow-sm border-0 rounded-4 mb-4 border-primary border-opacity-10">
+                <div class="card crypto-card shadow-sm border-0 rounded-4 mb-4">
                     <div class="card-body p-4 text-center">
-                        <div class="bg-primary bg-opacity-10 text-dark-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 overflow-hidden" style="width: 60px; height: 60px;">
-                            <img src="../asset/crypto/bank.png" alt="Withdraw" style="width:100%; height:100%; object-fit:cover;">
+                        <div class="crypto-side-icon bg-primary bg-opacity-10 overflow-hidden">
+                            <img src="../asset/crypto/bank.png" alt="Withdraw">
                         </div>
                         <h5 class="fw-bold">Withdraw Funds</h5>
                         <p class="small text-muted">Withdraw your NGN balance to any Nigerian bank account.</p>
@@ -634,6 +645,60 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                         <button type="submit" class="btn btn-success w-100 py-2 rounded-3 mt-2">Execute Swap</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdraw Modal (restored: the Send flow posts currency/amount/address/pin/otp) -->
+    <div class="modal fade" id="withdrawModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold">Send Crypto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="withdrawForm">
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="currency" id="withdrawCid">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Amount</label>
+                            <input type="number" name="amount" class="form-control" step="0.00000001" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Destination Address</label>
+                            <input type="text" name="address" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Email OTP</label>
+                            <div class="input-group">
+                                <input type="text" name="otp" class="form-control" required>
+                                <button type="button" class="btn btn-outline-primary" onclick="sendWithdrawalOTP(this)">Get Code</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Transaction PIN</label>
+                            <input type="password" name="pin" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100 py-2 rounded-3">Send Now</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Self Help Modal (restored: manual_sync posts the reference to CryptoHub.php) -->
+    <div class="modal fade" id="selfHelpModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="fw-bold">Sync a Payment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small">Paid but not credited after 5-10 minutes? Enter your Transaction Reference or Blockchain TXID and we will check the status with the provider.</p>
+                    <input type="text" id="syncRef" class="form-control mb-3" placeholder="Transaction Reference or Blockchain TXID">
+                    <button class="btn btn-warning w-100 py-2 rounded-3 fw-bold" onclick="triggerManualSync(this)">Check Status</button>
+                </div>
             </div>
         </div>
     </div>

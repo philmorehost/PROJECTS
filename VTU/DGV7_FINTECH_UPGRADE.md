@@ -1109,3 +1109,45 @@ htaccess **224**.
 Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
 plate_admin **708**, plate_migration **882**, backoffice_regression **99**,
 htaccess **224**.
+
+## 22. Update edition mix-up (server side), matrix label contrast, CryptoHub redesign
+
+The §21 client fix was only half the story: the DGV7.0 clients sent `edition`,
+but `LM/check-update.php` never read it — it honoured only `expected_tier` /
+`project_family`, so the tier still came solely from the license record.
+
+- **LM `check-update.php`** now normalises the client's `edition`
+  (`lm_check_edition_tier()`) and feeds it into the enforced `expected_tier`,
+  so a license whose tier names the other edition is rejected with a clear
+  message instead of being served the wrong zip. For legacy licenses with a
+  NULL `tier_id`, `license_type` (the pre-tier edition record) still outranks
+  a conflicting client claim; the declared edition decides when `license_type`
+  carries none. Tier ids are resolved by `tier_code` (no longer hardcoded
+  1/2) and the license record is healed. Responses now also carry `edition`.
+- **LM package building** (`includes/github.php`): manifests declare
+  `edition` as well as `tier`; the changelog's "files changed" is filtered to
+  the project's packaged folder selection (a SAAS release no longer lists
+  `VTU/DGV7.0-NON-SAAS/...` paths); and `lm_github_edition_violation()`
+  refuses to publish a package whose selection contains the other edition's
+  folder or marker files (`func/bc-integrity.php` vs `func/bc-levelup.php`).
+  Manual uploads restamp the bundled manifest to the target tier
+  (`ajax_upload_update.php`, `patch_zip_manifests.php`).
+- **Clients**: all six update clients also send `expected_tier` (enforced by
+  the already-deployed manager), `ajax_download_update.php` refuses a token
+  issued for the other tier, and the execute/cron package guard now reads the
+  `tier`/`project` manifest keys LM has always written.
+- **Matrix labels invisible**: `.pk-app__wrap a { color: var(--brand) }`
+  (specificity 0,1,1) beat `.pk-matrix__card`'s light text (0,1,0), so hub
+  card labels took the site's dark brand colour on the dark card. Card, label,
+  sub-label and go-arrow colours are now pinned in the shell (both editions).
+- **CryptoHub redesign**: coin art is sized (40px overlapping chips; 26px
+  wallet tiles), hero actions are glass pills, wallet/invoice/activity cards
+  sit on the console shell, and the **Withdraw (`withdrawModal`) and Self
+  Help (`selfHelpModal`) modals the page's JS posts to are restored** — they
+  were lost when the legacy chrome was retired, so Send and Self Help have
+  been throwing since. Handlers, queries and the JS block are unchanged.
+
+New test `VTU/tests/lm_edition_test.php` (30 checks; runs in CI against the
+real LM tree, mirrored locally by the harness). Counts: gate **1053**, policy
+**70**, plate_app **149**, plate_admin **708**, plate_migration **908**,
+backoffice_regression **110**, lm_edition **30**, htaccess **224**.

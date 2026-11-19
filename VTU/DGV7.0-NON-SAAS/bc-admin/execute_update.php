@@ -41,7 +41,7 @@ function bc_update_edition_of($declared) {
 }
 function bc_assert_update_edition($manifest, $staging_dir_actual, $expected) {
     $declared = '';
-    foreach (array('edition', 'product', 'channel', 'package') as $key) {
+    foreach (array('edition', 'tier', 'product', 'project', 'channel', 'package') as $key) {
         if (!empty($manifest[$key]) && is_string($manifest[$key])) { $declared = $manifest[$key]; break; }
     }
     $declared_edition = bc_update_edition_of($declared);

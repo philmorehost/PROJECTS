@@ -230,6 +230,27 @@ if (preg_match('/function bc_update_edition_of.*?\n\}\n/s', $exec_src, $mm)) {
 rchk(strpos($adm_src, "'label' => 'System Update'") !== false && strpos($adm_src, "'href' => 'UpdateSystem.php'") !== false,
     'System Update is in the back-office menu (System Function + spadmin)');
 
+// ------------------------------------------------------- update edition, round 2
+foreach (array($saas . '/bc-spadmin/UpdateSystem.php' => 'SAAS', $saas . '/bc-spadmin/ajax_download_update.php' => 'SAAS',
+               $saas . '/bc-spadmin/cron_update.php' => 'SAAS', $nons . '/bc-admin/UpdateSystem.php' => 'NON-SAAS',
+               $nons . '/bc-admin/ajax_download_update.php' => 'NON-SAAS', $nons . '/bc-admin/cron_update.php' => 'NON-SAAS') as $file => $ed) {
+    rchk(strpos(rsrc($file), "'expected_tier' => '$ed'") !== false,
+        basename($file) . " also sends expected_tier=$ed (enforced by the manager today)");
+}
+foreach (array($saas . '/bc-spadmin/ajax_download_update.php', $nons . '/bc-admin/ajax_download_update.php') as $file) {
+    rchk(strpos(rsrc($file), '$lm_tier') !== false && strpos(rsrc($file), 'tier_detected') !== false,
+        basename(dirname($file)) . '/ajax_download_update refuses a token issued for the other tier');
+}
+foreach (array($saas . '/bc-spadmin/execute_update.php', $nons . '/bc-admin/execute_update.php') as $file) {
+    rchk(strpos(rsrc($file), "array('edition', 'tier'") !== false,
+        basename(dirname($file)) . '/execute_update reads the tier key LM manifests actually declare');
+}
+// Matrix labels must not inherit the (possibly dark) brand link colour.
+$app_css_src = rsrc($saas . '/func/bc-plate-app.php');
+rchk(strpos($app_css_src, '.pk-app__wrap .pk-matrix__label { color: #f8fafc; }') !== false
+     && strpos($app_css_src, '.pk-app__wrap .pk-matrix__card { color: #e2e8f0; }') !== false,
+    'matrix card text colours are pinned against the brand link colour');
+
 echo "backoffice_regression_test: $checks checks, $failures failures\n";
 if ($failures > 0) {
     exit(1);

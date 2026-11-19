@@ -37,6 +37,26 @@ if (!is_array($whitelisted_ips)) {
 $expected_tier = strtoupper(trim($_REQUEST['expected_tier'] ?? ''));
 $project_family = strtoupper(trim($_REQUEST['project_family'] ?? ''));
 
+// Edition declared by the client itself. DGV7.0 clients send `edition` (SAAS /
+// NON-SAAS) with every check: the running code knows which edition it is, and a
+// SAAS install must never be handed the NON-SAAS package because its license
+// record was created without a tier. Feeding it into $expected_tier makes the
+// existing mismatch guard (and the whitelist tier pick) honour it.
+if (!function_exists('lm_check_edition_tier')) {
+    function lm_check_edition_tier($raw) {
+        $e = strtoupper(trim((string) $raw));
+        if ($e === '') return '';
+        $e = str_replace(array('_', ' '), '-', $e);
+        if (strpos($e, 'NON') !== false || strpos($e, 'STANDALONE') !== false || strpos($e, 'STANDARD') !== false) return 'NON-SAAS';
+        if (strpos($e, 'SAAS') !== false) return 'SAAS';
+        return '';
+    }
+}
+$client_edition = lm_check_edition_tier($_REQUEST['edition'] ?? '');
+if ($expected_tier === '' && $client_edition !== '') {
+    $expected_tier = $client_edition;
+}
+
 // Check if IP is in the whitelist
 if (in_array($requester_ip, $whitelisted_ips)) {
     $whitelist_tier = !empty($expected_tier) ? $expected_tier : (!empty($project_family) ? ($project_family . '-SAAS') : 'SAAS');
@@ -85,7 +105,8 @@ if (in_array($requester_ip, $whitelisted_ips)) {
             'changelog' => $latest_update['changelog'],
             'download_url' => $download_url,
             'checksum' => $latest_update['checksum'],
-            'tier_detected' => $latest_update['tier_code']
+            'tier_detected' => $latest_update['tier_code'],
+            'edition' => $latest_update['tier_code']
         ]);
         exit;
     } catch (PDOException $e) {
@@ -111,7 +132,7 @@ if (empty($license_key) || empty($requesting_domain)) {
 $requesting_domain = preg_replace('#^https?://#', '', $requesting_domain);
 $requesting_domain = rtrim($requesting_domain, '/');
 
-check_update_log("Licensing Request: Key: {$license_key}, Domain: {$requesting_domain}");
+check_update_log("Licensing Request: Key: {$license_key}, Domain: {$requesting_domain}" . ($client_edition !== '' ? ", Edition: {$client_edition}" : ''));
 
 try {
     // Query license details with tier
@@ -137,15 +158,36 @@ try {
     $tier_code = $license['tier_code'];
     $tier_id = $license['tier_id'];
     if (empty($tier_code)) {
-        // Fallback mapping for legacy DGV7.0 licenses with NULL tier_id
-        if ($license['license_type'] === 'extended') {
-            $tier_code = 'SAAS';
-            $tier_id = 1;
-        } else {
-            $tier_code = 'NON-SAAS';
-            $tier_id = 2;
+        // Fallback mapping for legacy DGV7.0 licenses with NULL tier_id. The
+        // edition the client declares wins over the license_type guess, tier ids
+        // are resolved by tier_code (never assumed to be 1/2), and the record is
+        // healed so later checks resolve the tier straight from the database.
+        // license_type is the pre-tier edition record ('extended' = SAAS,
+        // 'standard' = NON-SAAS), so it wins on conflict - a standard license
+        // must not pull SAAS packages just because the client asks. The
+        // client-declared edition decides only when license_type carries no
+        // edition (the usual NULL-tier case).
+        $type_edition = ($license['license_type'] === 'extended') ? 'SAAS'
+            : (($license['license_type'] === 'standard') ? 'NON-SAAS' : '');
+        if ($client_edition !== '' && $type_edition !== '' && $client_edition !== $type_edition) {
+            check_update_log("WARNING: License '{$license_key}' declares edition '{$client_edition}' but license_type '{$license['license_type']}' maps to '{$type_edition}'. Serving '{$type_edition}'; fix the license tier if the client is right.");
         }
-        check_update_log("WARNING: License '{$license_key}' has no tier_id set. Fell back to tier '{$tier_code}' (tier_id={$tier_id}) based on license_type='{$license['license_type']}'.");
+        $tier_code = ($type_edition !== '') ? $type_edition
+            : ($client_edition !== '' ? $client_edition : 'NON-SAAS');
+        $tier_id = ($tier_code === 'SAAS') ? 1 : 2;
+        try {
+            $tier_stmt = $pdo->prepare("SELECT id FROM script_tiers WHERE UPPER(tier_code) = ? LIMIT 1");
+            $tier_stmt->execute([$tier_code]);
+            $found_tier_id = $tier_stmt->fetchColumn();
+            if ($found_tier_id) {
+                $tier_id = (int) $found_tier_id;
+                $pdo->prepare("UPDATE licenses SET tier_id = ? WHERE id = ? AND tier_id IS NULL")
+                    ->execute([$tier_id, $license['id']]);
+            }
+        } catch (PDOException $e) {
+            check_update_log("WARNING: could not resolve/heal tier for license '{$license_key}': " . $e->getMessage());
+        }
+        check_update_log("WARNING: License '{$license_key}' has no tier_id set. Fell back to tier '{$tier_code}' (tier_id={$tier_id}) based on " . ($type_edition !== '' ? "license_type='{$license['license_type']}'" : 'client-declared edition') . ".");
     } else {
         check_update_log("INFO: License '{$license_key}' resolved to tier '{$tier_code}' (tier_id={$tier_id}) from DB.");
     }
@@ -246,7 +288,8 @@ try {
         'checksum' => $latest_update['checksum'],
         'changelog' => $latest_update['changelog'],
         'download_url' => $download_url,
-        'tier_detected' => $tier_code
+        'tier_detected' => $tier_code,
+        'edition' => $tier_code
     ]);
     exit;
 

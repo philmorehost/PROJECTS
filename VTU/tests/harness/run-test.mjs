@@ -48,6 +48,8 @@ function collect() {
   };
   for (const ed of ['DGV7.0-SAAS', 'DGV7.0-NON-SAAS']) walk(path.join(VTU, ed), ed);
   walk(path.join(VTU, 'tests'), 'tests');
+  // The License Manager lives outside VTU/ but its edition guard is tested too.
+  walk(path.join(REPO, 'LM'), 'LM');
   // Top-level VTU docs (DGV7_FINTECH_UPGRADE.md is read by the tests).
   for (const e of fs.readdirSync(VTU, { withFileTypes: true })) {
     if (e.isFile() && e.name.endsWith('.md')) out.push({ abs: path.join(VTU, e.name), rel: e.name });

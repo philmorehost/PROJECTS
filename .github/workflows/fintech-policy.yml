@@ -77,6 +77,11 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'LM/check-update.php'
+      - 'LM/includes/github.php'
+      - 'LM/admin/ajax_upload_update.php'
+      - 'LM/admin/patch_zip_manifests.php'
+      - 'VTU/tests/lm_edition_test.php'
       - 'VTU/DGV7.0-SAAS/func/bc-levelup.php'
       - 'VTU/DGV7.0-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
@@ -172,6 +177,11 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'LM/check-update.php'
+      - 'LM/includes/github.php'
+      - 'LM/admin/ajax_upload_update.php'
+      - 'LM/admin/patch_zip_manifests.php'
+      - 'VTU/tests/lm_edition_test.php'
       - 'VTU/DGV7.0-SAAS/func/bc-levelup.php'
       - 'VTU/DGV7.0-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
@@ -269,6 +279,11 @@ jobs:
           php -l VTU/tests/backoffice_regression_test.php
           php -l VTU/DGV7.0-SAAS/func/bc-spadmin-config.php
           php -l VTU/DGV7.0-SAAS/func/bc-levelup.php
+          php -l LM/check-update.php
+          php -l LM/includes/github.php
+          php -l LM/admin/ajax_upload_update.php
+          php -l LM/admin/patch_zip_manifests.php
+          php -l VTU/tests/lm_edition_test.php
       - name: Policy and gate tests
         run: |
           set -e
@@ -278,6 +293,7 @@ jobs:
           php -n VTU/tests/plate_admin_test.php
           php -n VTU/tests/plate_migration_test.php
           php -n VTU/tests/backoffice_regression_test.php
+          php -n VTU/tests/lm_edition_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e
