@@ -226,4 +226,14 @@ bc_app_foot();
 $html6 = ob_get_clean();
 chk(strpos($html6, 'Failed') !== false, 'a failure message is classified as an error');
 
+// ---------------------------------------------------------------- visual pass
+// The 2026-11 visual pass lives in the shell CSS so every console page picks it up
+// without a markup change (the migration body contract stays intact).
+$app_src = file_get_contents($shell);
+chk(strpos($app_src, 'Visual pass (2026-11)') !== false, 'visual pass CSS block is present');
+foreach (array('.transition-hover:hover', '.balance-hero {', 'linear-gradient(135deg, var(--brand)', '.table thead th', '.nav-pills .nav-link.active', '.progress-bar') as $marker) {
+    chk(strpos($app_src, $marker) !== false, 'visual pass covers ' . $marker);
+}
+chk(strpos($html, 'linear-gradient(135deg, var(--brand)') !== false, 'visual pass CSS reaches the rendered head');
+
 echo "plate_app_test: $checks checks\n";
