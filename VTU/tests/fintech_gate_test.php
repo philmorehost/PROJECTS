@@ -1466,7 +1466,7 @@ foreach ($editions as $edition) {
     gtrue("$edition upgrade page sniffs images", strpos($src, 'getimagesize(') !== false);
     gtrue("$edition upgrade page caps the upload size", strpos($src, '8 * 1024 * 1024') !== false);
     gtrue("$edition upgrade documents are stored outside the web root pattern (kyb folder)", strpos($src, '/uploads/kyb/') !== false);
-    gtrue("$edition user navigation links the upgrade page", strpos(file_get_contents($root . '/' . $edition . '/func/bc-header.php'), 'BusinessUpgrade.php') !== false);
+    gtrue("$edition user navigation links the upgrade page", strpos(file_get_contents($root . '/' . $edition . '/func/bc-plate-app.php'), 'BusinessUpgrade.php') !== false);
 
     $admin = $root . '/' . $edition . '/bc-admin/BusinessKYB.php';
     gtrue("$edition ships the KYB console", is_file($admin));
@@ -1479,7 +1479,7 @@ foreach ($editions as $edition) {
     gtrue("$edition KYB console refuses a path outside the upload root", strpos($asrc, 'strpos($path, $base) !== 0') !== false);
     gtrue("$edition KYB console closes the session before streaming", strpos($asrc, 'session_write_close()') !== false);
     gtrue("$edition KYB console sends nosniff", strpos($asrc, 'nosniff') !== false);
-    gtrue("$edition admin navigation links the KYB console", strpos(file_get_contents($root . '/' . $edition . '/func/bc-admin-header.php'), 'BusinessKYB.php') !== false);
+    gtrue("$edition admin navigation links the KYB console", strpos(file_get_contents($root . '/' . $edition . '/func/bc-plate-admin.php'), 'BusinessKYB.php') !== false);
     gtrue("$edition ships an upload deny file for kyb documents", is_file($root . '/' . $edition . '/uploads/kyb/.htaccess'));
 }
 
@@ -1748,17 +1748,17 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
     gtrue("$edition dashboard block links the upgrade flow", strpos($blk, 'BusinessUpgrade.php') !== false);
     gtrue("$edition dashboard block fails safe without its helpers", strpos($blk, 'function_exists(\'bc_wallet_cards\')') !== false);
 
-    // header nav
-    $hdr = file_get_contents($b . '/func/bc-header.php');
-    gtrue("$edition header resolves the tier from a null-safe copy", strpos($hdr, 'bc_fintech_account_type($bc_nav_user)') !== false);
-    gtrue("$edition header tolerates a missing session user", strpos($hdr, 'is_array($get_logged_user_details) ? $get_logged_user_details : null') !== false);
-    gtrue("$edition header gates nav through the matrix", strpos($hdr, 'bc_fintech_tier_effective($row, $bc_nav_tier)') !== false);
-    gtrue("$edition Developer API nav is tier-gated", strpos($hdr, "\$bc_nav_tier_service('developer_api')") !== false);
-    gtrue("$edition upgrade nav is conditional", strpos($hdr, "\$bc_nav_tier !== 'business'") !== false);
-    gtrue("$edition header reads the matrix at most once", strpos($hdr, 'if ($bc_nav_matrix === null)') !== false);
+    // shell nav (ported from the retired bc-header.php in the Plate migration)
+    $hdr = file_get_contents($b . '/func/bc-plate-app.php');
+    gtrue("$edition shell resolves the tier from the session user", strpos($hdr, 'bc_fintech_account_type($user)') !== false);
+    gtrue("$edition shell tolerates a missing session user", strpos($hdr, 'isset($GLOBALS[' . "'get_logged_user_details'" . '])') !== false);
+    gtrue("$edition shell gates nav through the matrix", strpos($hdr, 'bc_fintech_tier_effective($row, $tier)') !== false);
+    gtrue("$edition Developer API nav is tier-gated", strpos($hdr, "'tier' => 'developer_api'") !== false);
+    gtrue("$edition upgrade nav is conditional", strpos($hdr, 'return $tier !== ') !== false);
+    gtrue("$edition shell hides gated items centrally", strpos($hdr, 'function bc_app_item_visible') !== false);
 
     // chat wiring
-    gtrue("$edition footer includes the chat widget", strpos(file_get_contents($b . '/func/bc-footer.php'), 'bc-support-chat-widget.php') !== false);
+    gtrue("$edition shell foot includes the chat widget", strpos(file_get_contents($b . '/func/bc-plate-app.php'), 'bc-support-chat-widget.php') !== false);
     gtrue("$edition ships the chat endpoint", is_file($b . '/web/ajax-support-chat.php'));
     $ep = file_get_contents($b . '/web/ajax-support-chat.php');
     gtrue("$edition endpoint rejects non-POST", strpos($ep, "'POST required.'") !== false);
@@ -1773,8 +1773,8 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
     gtrue("$edition widget exposes no API key", strpos($widget, 'chat_ai_key') === false);
 
     // admin console
-    gtrue("$edition admin nav links the chat console", strpos(file_get_contents($b . '/func/bc-admin-header.php'), 'SupportChat.php') !== false);
-    gtrue("$edition admin nav links chat settings", strpos(file_get_contents($b . '/func/bc-admin-header.php'), 'ChatSettings.php') !== false);
+    gtrue("$edition admin nav links the chat console", strpos(file_get_contents($b . '/func/bc-plate-admin.php'), 'SupportChat.php') !== false);
+    gtrue("$edition admin nav links chat settings", strpos(file_get_contents($b . '/func/bc-plate-admin.php'), 'ChatSettings.php') !== false);
     $console = file_get_contents($b . '/bc-admin/SupportChat.php');
     gtrue("$edition console scopes queue by the admin tenant", strpos($console, 'bc_chat_agent_queue($vid)') !== false);
     gtrue("$edition console escapes transcript bodies", strpos($console, 'htmlspecialchars((string)$m[\'body\'])') !== false);
@@ -1815,8 +1815,8 @@ foreach ([
     'web/ajax-support-chat.php',
     'bc-admin/SupportChat.php',
     'bc-admin/ChatSettings.php',
-    // bc-header.php / bc-admin-header.php are NOT parity files: the SAAS edition carries extra
-    // service gating and vendor-portal links by design. Their Step 2 nav links are asserted above.
+    // The retired bc-header.php / bc-admin-header.php were NOT parity files; their replacements
+    // (bc-plate-app.php / bc-plate-admin.php) ARE, and are asserted byte-identical below.
 ] as $file) {
     gcheck("edition parity: $file", md5_file($root . '/DGV7.0-SAAS/' . $file), md5_file($root . '/DGV7.0-NON-SAAS/' . $file));
 }
@@ -2351,19 +2351,19 @@ $required_nav_pages = [
     'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php', 'AccountSettings.php',
 ];
 foreach ($editions as $edition) {
-    $header_src = php_strip_whitespace($root . '/' . $edition . '/func/bc-header.php');
-    foreach (['pay-bills-nav', 'wallet-transfers-nav', 'financial-services-nav', 'business-api-nav', 'history-records-nav', 'settings-help-nav'] as $group) {
-        gtrue("$edition sidebar groups $group", strpos($header_src, 'id="' . $group . '"') !== false);
+    $header_src = php_strip_whitespace($root . '/' . $edition . '/func/bc-plate-app.php');
+    foreach (['pay-bills', 'wallet-transfers', 'financial-services', 'business-api', 'history-records', 'settings-help'] as $group) {
+        gtrue("$edition sidebar groups $group", strpos($header_src, "'id' => '" . $group . "'") !== false);
     }
-    gfalse("$edition sidebar has no flat Services heading", strpos($header_src, 'nav-heading">Services') !== false);
+    gfalse("$edition sidebar has no flat Services heading", strpos($header_src, "'label' => 'Services'") !== false);
     $missing = [];
     foreach ($required_nav_pages as $pg) {
-        if (strpos($header_src, '/web/' . $pg) === false) $missing[] = $pg;
+        if (strpos($header_src, "'" . $pg . "'") === false) $missing[] = $pg;
     }
     gcheck("$edition nav keeps every service link", implode(',', $missing), '');
-    // The two nested groups inside History & Records must exist and be addressed.
-    gtrue("$edition history groups transactions", strpos($header_src, 'id="history-transactions-nav"') !== false);
-    gtrue("$edition history groups print hub", strpos($header_src, 'id="history-print-nav"') !== false);
+    // History & Records carries the transaction and print items in the shell menu.
+    gtrue("$edition history groups transactions", strpos($header_src, "'href' => 'Transactions.php'") !== false);
+    gtrue("$edition history groups print hub", strpos($header_src, "'href' => 'PrintHub.php'") !== false);
 }
 
 // The ledger is the only writer of provider balances: the adapters never UPDATE a balance.

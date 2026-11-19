@@ -236,4 +236,13 @@ foreach (array('.transition-hover:hover', '.balance-hero {', 'linear-gradient(13
 }
 chk(strpos($html, 'linear-gradient(135deg, var(--brand)') !== false, 'visual pass CSS reaches the rendered head');
 
+// ---------------------------------------------------------------- legacy widgets
+// The retired bc-header/bc-footer injected the AI assistant, the referral modal and
+// the support chat widget; bc_app_widgets() must keep all three alive.
+chk(strpos($html5, 'referralModal') !== false, 'referral modal is rendered by the shell foot');
+chk(strpos($html5, 'copyReferLinkModal') !== false, 'referral copy helper is rendered');
+chk(strpos($html5, 'ai-assistant.js') !== false, 'AI assistant is injected for an ai_suite tenant');
+chk(strpos($html5, '__ai_handler_url') !== false, 'AI assistant handler URL is rendered');
+chk(strpos($html5, '/web/Register.php?referral=adaobi') !== false, 'referral link carries the username');
+
 echo "plate_app_test: $checks checks\n";

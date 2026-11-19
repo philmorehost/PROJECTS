@@ -996,6 +996,9 @@ if (!function_exists('bc_app_topbar')) {
         <a class="pk-app__iconbtn" href="<?php echo htmlspecialchars(bc_app_url('SiteMap.php')); ?>" title="Platform Guide">
             <i class="bi bi-map" aria-hidden="true"></i><span class="pk-app__hide-sm">Guide</span>
         </a>
+        <button class="pk-app__iconbtn" type="button" data-bs-toggle="modal" data-bs-target="#referralModal" title="Refer and Earn">
+            <i class="bi bi-gift" aria-hidden="true"></i><span class="pk-app__hide-sm">Refer</span>
+        </button>
         <?php if ($notification !== ''): ?>
             <button class="pk-app__iconbtn" type="button" id="pkAppNotice" title="Message from support">
                 <i class="bi bi-bell" aria-hidden="true"></i><span class="pk-app__dot">1</span>
@@ -1100,6 +1103,92 @@ if (!function_exists('bc_app_flash')) {
     }
 }
 
+if (!function_exists('bc_app_widgets')) {
+    /**
+     * Page-level features the retired bc-header.php / bc-footer.php injected on every
+     * console page, ported with their original gates:
+     *
+     *  - the AI assistant (signed-in + `ai_suite`, skipped on the VTU purchase pages
+     *    that favour the dedicated terminal),
+     *  - the Refer-and-Earn modal (its trigger lives in the topbar),
+     *  - the support chat widget, which self-gates on tenant settings and session.
+     */
+    function bc_app_widgets() {
+        $user = isset($GLOBALS['get_logged_user_details']) && is_array($GLOBALS['get_logged_user_details'])
+            ? $GLOBALS['get_logged_user_details'] : null;
+        $host = isset($GLOBALS['web_http_host']) && $GLOBALS['web_http_host'] !== ''
+            ? (string)$GLOBALS['web_http_host'] : bc_app_base();
+
+        if ($user && function_exists('isServiceEnabled') && isServiceEnabled('ai_suite')) {
+            $current_page = basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '');
+            $vtu_pages = array('Airtime.php', 'Data.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Exam.php', 'BulkAirtime.php', 'BulkData.php', 'BulkSMS.php', 'AI-Assistant.php');
+            if (!in_array($current_page, $vtu_pages, true)):
+                $ai_token_bal = (int)($user['ai_token_balance'] ?? 0);
+                $ai_user_ctx  = function_exists('bc_get_ai_user_context') ? bc_get_ai_user_context($user) : array();
+                $init_msg = "Hello! I'm your AI Assistant. How can I help you?";
+                $page_tips = array(
+                    'Airtime.php'  => 'Try: "Buy MTN 100 airtime for 08012345678"',
+                    'Data.php'     => 'Try: "Buy Airtel 2GB SME data for 08123456789"',
+                    'Electric.php' => 'Try: "Pay 2000 for IKEDC Prepaid 010123456789"',
+                    'Cable.php'    => 'Try: "Renew DSTV Compact for 123456789"',
+                );
+                if (isset($page_tips[$current_page])) {
+                    $init_msg .= ' You can say something like: ' . $page_tips[$current_page];
+                }
+                ?>
+<script>
+  window.__ai_enabled     = true;
+  window.__ai_page_slug   = <?php echo json_encode(preg_replace('/[^a-z0-9_]/', '_', strtolower(basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '', '.php')))); ?>;
+  window.__ai_handler_url = <?php echo json_encode($host . '/web/ai-handler.php?context=user'); ?>;
+  window.__ai_guide_url   = <?php echo json_encode($host . '/web/ai-guide-cache.php?context=user'); ?>;
+  window.__ai_tokens      = <?php echo (int)$ai_token_bal; ?>;
+  window.__ai_context     = <?php echo json_encode($ai_user_ctx, JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?: '{}'; ?>;
+  window.__ai_auto_open   = false;
+  window.__ai_init_msg    = <?php echo json_encode($init_msg, JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
+</script>
+<script src="<?php echo htmlspecialchars($host, ENT_QUOTES, 'UTF-8'); ?>/jsfile/ai-assistant.js" defer></script>
+                <?php
+            endif;
+        }
+
+        if ($user && !empty($user['username'])):
+            ?>
+<!-- Referral Modal -->
+<div class="modal" id="referralModal" tabindex="-1" aria-labelledby="referralModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="referralModalLabel">Refer and Earn</h5>
+        <button type="button" class="btn-close" data-pk-close aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Share your referral link with friends and earn rewards!</p>
+        <div class="input-group">
+            <input type="text" class="form-control" value="<?php echo htmlspecialchars($host . '/web/Register.php?referral=' . $user['username'], ENT_QUOTES, 'UTF-8'); ?>" id="referralLinkInput" readonly>
+            <button class="btn btn-primary" type="button" onclick="copyReferLinkModal()">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function copyReferLinkModal() {
+    var copyText = document.getElementById("referralLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value);
+    alert("Referral link copied!");
+}
+</script>
+            <?php
+        endif;
+
+        if (file_exists(__DIR__ . '/bc-support-chat-widget.php')) {
+            include(__DIR__ . '/bc-support-chat-widget.php');
+        }
+    }
+}
+
 if (!function_exists('bc_app_foot')) {
     /**
      * Closes the content column and the document, and prints the shell script.
@@ -1109,6 +1198,9 @@ if (!function_exists('bc_app_foot')) {
     function bc_app_foot($opts = array()) {
         $site = bc_app_site();
         $base = bc_app_base();
+        // Page-level widgets the old chrome injected (AI assistant, referral modal,
+        // support chat) — still inside the wrap so the shell's modal CSS applies.
+        bc_app_widgets();
         // 'bare' is for pages that own their own layout (print targets, full-screen terminals):
         // they still get the flash dialog and the shell script, but not the wrapper-closing tags.
         if (empty($opts['bare'])): ?></div>

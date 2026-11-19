@@ -547,6 +547,12 @@ if (!function_exists('bc_adm_topbar')) {
     </div>
 </header>
 <main class="pk-app__wrap">
+<?php if ($area === 'admin' && function_exists('bc_is_temporary_vendor_host') && bc_is_temporary_vendor_host() && !empty($_SESSION['tmp_vendor_override'])): ?>
+    <div class="alert alert-warning" role="status" style="margin-bottom:18px;">
+        <strong>Temporary vendor website.</strong>
+        Changes saved here are stored for your website and will appear there as soon as your domain is accessible.
+    </div>
+<?php endif; ?>
         <?php
     }
 }
@@ -594,6 +600,117 @@ if (!function_exists('bc_adm_flash')) {
     }
 }
 
+if (!function_exists('bc_adm_widgets')) {
+    /**
+     * Page-level features the retired bc-admin-header.php injected on every admin
+     * page, ported with their original gates:
+     *
+     *  - the AI assistant (vendor `ai_status` = 1, admin context),
+     *  - the forced Security PIN setup modal (shown while the vendor has no PIN;
+     *    it saves through AccountSettings.php's `quick_set_pin` AJAX action).
+     *
+     * The modal is shown/hidden with the shell's `.show` class instead of the
+     * retired Bootstrap bundle; the fetch contract is unchanged.
+     */
+    function bc_adm_widgets($area) {
+        if ($area !== 'admin') return;
+        $details = isset($GLOBALS['get_logged_admin_details']) && is_array($GLOBALS['get_logged_admin_details'])
+            ? $GLOBALS['get_logged_admin_details'] : null;
+
+        if ($details && isset($details['ai_status']) && (int)$details['ai_status'] === 1):
+            $ai_token_bal = (int)($details['ai_token_balance'] ?? 0);
+            ?>
+<script>
+  window.__ai_enabled     = true;
+  window.__ai_page_slug   = '<?php echo preg_replace('/[^a-z0-9_]/', '_', strtolower(basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '', '.php'))); ?>';
+  window.__ai_handler_url = '/web/ai-handler.php?context=admin';
+  window.__ai_guide_url   = '/web/ai-guide-cache.php?context=admin';
+  window.__ai_tokens      = <?php echo $ai_token_bal; ?>;
+</script>
+<script src="<?php echo htmlspecialchars(bc_adm_base(), ENT_QUOTES, 'UTF-8'); ?>/jsfile/ai-assistant.js" defer></script>
+            <?php
+        endif;
+
+        if (!empty($GLOBALS['bc_admin_needs_pin'])):
+            ?>
+<!-- Forced Security PIN setup — required to self-unblock via the anti-brute-force
+     lockout flow (web/LockoutResolution.php). Modal, not a redirect, so it works
+     on whatever page the admin is already on. -->
+<div class="modal" id="forcePinModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-body" style="padding:8px;">
+        <div style="text-align:center; margin-bottom:14px;">
+          <h5 style="font-weight:800; margin:0 0 6px;">Set Your Security PIN</h5>
+          <p class="pk-app__crumb" style="margin:0;">You'll need this 4-digit PIN to unblock your own account if our anti-brute-force system ever locks you out. It only takes a second.</p>
+        </div>
+        <div id="forcePinError" class="alert alert-danger" style="display:none; margin-bottom:14px;"></div>
+        <div style="margin-bottom:14px;">
+          <label class="pk-app__crumb" for="forcePinInput" style="display:block; font-weight:700; margin-bottom:6px;">NEW 4-DIGIT PIN</label>
+          <input type="password" id="forcePinInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="****" style="width:100%; text-align:center; font-weight:700; letter-spacing:10px; padding:12px; border:1px solid var(--line); border-radius:12px;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label class="pk-app__crumb" for="forcePinConfirm" style="display:block; font-weight:700; margin-bottom:6px;">CONFIRM PIN</label>
+          <input type="password" id="forcePinConfirm" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="****" style="width:100%; text-align:center; font-weight:700; letter-spacing:10px; padding:12px; border:1px solid var(--line); border-radius:12px;">
+        </div>
+        <button type="button" id="forcePinSubmit" class="pk-app__action" style="width:100%; justify-content:center;">Save PIN &amp; Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('forcePinModal');
+    if (!modalEl) return;
+    modalEl.classList.add('show');
+
+    var errBox = document.getElementById('forcePinError');
+    var submitBtn = document.getElementById('forcePinSubmit');
+
+    function showErr(msg) {
+        errBox.textContent = msg;
+        errBox.style.display = 'block';
+    }
+
+    submitBtn.addEventListener('click', function () {
+        var pin = document.getElementById('forcePinInput').value.trim();
+        var con = document.getElementById('forcePinConfirm').value.trim();
+        errBox.style.display = 'none';
+
+        if (!/^\d{4}$/.test(pin)) { showErr('PIN must be exactly 4 digits.'); return; }
+        if (pin !== con) { showErr('PIN and Confirm PIN do not match.'); return; }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving…';
+
+        fetch('AccountSettings.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ action: 'quick_set_pin', admin_pin: pin, admin_pin_con: con })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                modalEl.classList.remove('show');
+            } else {
+                showErr(data.msg || 'Could not save PIN. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save PIN & Continue';
+            }
+        })
+        .catch(function () {
+            showErr('Network error — please try again.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save PIN & Continue';
+        });
+    });
+});
+</script>
+            <?php
+        endif;
+    }
+}
+
 if (!function_exists('bc_adm_foot')) {
     /**
      * Closes the content column and the document, and prints the back-office script.
@@ -604,6 +721,9 @@ if (!function_exists('bc_adm_foot')) {
         $area = bc_adm_area($opts);
         $site = bc_adm_site($area);
         $base = bc_adm_base();
+        // Page-level features the retired bc-admin-header.php injected (admin AI
+        // assistant, forced PIN setup) — inside the wrap so the modal CSS applies.
+        bc_adm_widgets($area);
         if (empty($opts['bare'])): ?></div>
 </main>
 </div>

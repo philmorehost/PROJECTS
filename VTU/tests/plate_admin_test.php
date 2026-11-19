@@ -222,4 +222,19 @@ achk($shell_pages >= 180, 'at least 180 back-office pages are on the admin shell
 achk(file_get_contents($shell) === file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-plate-admin.php'), 'admin shell is byte-identical across editions');
 achk(strpos(file_get_contents($shell), "</body>\n</html>") !== false, 'admin foot closes the document');
 
+// ---------------------------------------------------------------- legacy widgets
+// The retired bc-admin-header.php injected the admin AI assistant and the forced
+// PIN setup modal; bc_adm_widgets() must keep both, with the same AJAX contract.
+$GLOBALS['bc_admin_needs_pin'] = true;
+$GLOBALS['get_logged_admin_details'] = array('username' => 'adaobi', 'firstname' => 'Ada', 'ai_status' => 1, 'ai_token_balance' => 42);
+$_SERVER['PHP_SELF'] = '/bc-admin/Users.php';
+ob_start();
+bc_adm_foot(array('area' => 'admin'));
+$widgets = ob_get_clean();
+achk(strpos($widgets, 'forcePinModal') !== false, 'forced PIN modal is rendered while no PIN is set');
+achk(strpos($widgets, 'quick_set_pin') !== false, 'forced PIN modal keeps the quick_set_pin contract');
+achk(strpos($widgets, 'ai-assistant.js') !== false, 'admin AI assistant is injected when ai_status is on');
+achk(strpos($widgets, 'context=admin') !== false, 'admin AI assistant uses the admin context');
+unset($GLOBALS['bc_admin_needs_pin']);
+
 echo "plate_admin_test: $checks checks\n";

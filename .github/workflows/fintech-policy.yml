@@ -355,12 +355,18 @@ jobs:
             # The published developer docs must point at the canonical endpoint.
             grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
             # The sidebar is grouped into the six service groups; the flat "Services" heading is gone.
-            for group in pay-bills-nav wallet-transfers-nav financial-services-nav business-api-nav history-records-nav settings-help-nav; do
-              grep -q "id=\"${group}\"" "VTU/${edition}/func/bc-header.php"
+            for group in pay-bills wallet-transfers financial-services business-api history-records settings-help; do
+              grep -q "'id' => '${group}'" "VTU/${edition}/func/bc-plate-app.php"
             done
-            if grep -q 'nav-heading">Services' "VTU/${edition}/func/bc-header.php"; then
+            if grep -q "'label' => 'Services'" "VTU/${edition}/func/bc-plate-app.php"; then
               echo "${edition} sidebar still has the flat Services heading"; exit 1
             fi
+            # The retired chrome partials are deleted; the shells own the layout.
+            for partial in bc-header.php bc-footer.php bc-admin-header.php bc-admin-footer.php bc-admin-header-link.php bc-spadmin-header.php bc-spadmin-footer.php bc-spadmin-header-link.php; do
+              if [ -f "VTU/${edition}/func/${partial}" ]; then
+                echo "${edition} retired partial func/${partial} still exists"; exit 1
+              fi
+            done
             # The landing page keeps the reference homepage structure: a sticky navbar, a
             # two-line display headline, a scrolling band, alternating feature rows, a dark
             # analytics band and a multi-column footer. Anchors must resolve to real ids.
