@@ -51,6 +51,10 @@ Options -Indexes
     RewriteCond %{DOCUMENT_ROOT}/install/install.php !-f
     RewriteRule ^ - [F,L]
 
+    # Debug artefacts that used to hold credentials, OTPs, API keys and PII. The writers are gone;
+    # this makes a stale copy on a not-yet-redeployed server unfetchable too.
+    RewriteRule (?:^|/)(?:login|forgot|app-info|airtime|data|card|bank|betting|cable|electric|education|register|email-msg|merchant|ufitpay|upayvessel-webhook|sender_id_debug)\.(?:txt|json|log)$ - [F,NC,L]
+
     # Narrow, high-signature request filters. Generic SQL words such as select, update and create
     # are intentionally NOT blocked: DGV7 uses them in legitimate query strings. Each suspicious
     # condition below is ORed with the next, and the final condition ends the OR chain.

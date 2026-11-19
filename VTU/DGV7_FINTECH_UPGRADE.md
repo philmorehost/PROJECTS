@@ -407,6 +407,28 @@ LockoutResolution, Inactive, Suspended, Error.**
 The suite grew from **857 to 923 checks**; CI gained the shell syntax check, the parity list and
 the presentation-only greps.
 
+### 8. Root `.htaccess` parity restored
+
+`VTU/tests/htaccess_context_test.py` was failing with **"SAAS and NON-SAAS root .htaccess files
+have diverged"**. The SAAS root file carried an extra rule that the standalone edition lacked:
+
+```apache
+RewriteRule (?:^|/)(?:login|forgot|app-info|airtime|data|card|bank|betting|cable|electric|education|register|email-msg|merchant|ufitpay|upayvessel-webhook|sender_id_debug)\.(?:txt|json|log)$ - [F,NC,L]
+```
+
+Those files are the debug artefacts that historically held credentials, OTPs, API keys and PII;
+the writers are gone, and the rule makes a stale copy on a not-yet-redeployed server unfetchable
+too. NON-SAAS now carries the identical rule, so both editions' root files are byte-identical
+(`md5 23a1b582…`) and the test reports **224 checks across 16 `.htaccess` files, PASS**.
+
+Nothing was removed: the directory-listing block, the deny on config/log/backup files, the
+security headers, the upload-PHP execution block and the query-string guards are all intact. The
+test also still rejects server/vhost-only directives, which is what caused the earlier HTTP 500.
+
+CI now runs the context test as its own step and `cmp`s the two root files, and both `.htaccess`
+paths plus the test script were added to the workflow triggers, so the divergence cannot return
+silently.
+
 ## Phase 1C gateway change — Plisio retired
 
 Plisio.net is defunct. It is retired **without deleting history**:

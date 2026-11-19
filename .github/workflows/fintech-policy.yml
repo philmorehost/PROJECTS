@@ -66,6 +66,9 @@ on:
       - 'VTU/DGV7.0-SAAS/users-flutterwave.php'
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
+      - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/.htaccess'
+      - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
   pull_request:
     paths:
@@ -121,6 +124,9 @@ on:
       - 'VTU/DGV7.0-SAAS/users-flutterwave.php'
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
+      - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/.htaccess'
+      - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
 
 permissions:
@@ -176,6 +182,14 @@ jobs:
           set -e
           php -n VTU/tests/fintech_policy_test.php
           php -n VTU/tests/fintech_gate_test.php
+      - name: Apache .htaccess context and parity
+        run: |
+          set -e
+          # Rejects server/vhost-only directives in any .htaccess (the 500 cause), validates
+          # container balance and regexes, and requires both editions' root files to be
+          # byte-identical.
+          python3 VTU/tests/htaccess_context_test.py
+          cmp VTU/DGV7.0-SAAS/.htaccess VTU/DGV7.0-NON-SAAS/.htaccess
       - name: Editions must ship identical policy files
         run: |
           set -e
@@ -216,6 +230,9 @@ jobs:
           cmp VTU/DGV7.0-SAAS/web/BusinessUpgrade.php VTU/DGV7.0-NON-SAAS/web/BusinessUpgrade.php
           cmp VTU/DGV7.0-SAAS/bc-admin/BusinessKYB.php VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php
           cmp VTU/DGV7.0-SAAS/uploads/kyb/.htaccess VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess
+          # The root .htaccess files must stay byte-identical; a divergence here is what
+          # the htaccess context test above rejects.
+          cmp VTU/DGV7.0-SAAS/.htaccess VTU/DGV7.0-NON-SAAS/.htaccess
           # Phase 2: shared customer-facing pages must match across editions.
           cmp VTU/DGV7.0-SAAS/index-bc-style-template-6.php VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php
           cmp VTU/DGV7.0-SAAS/web/ajax-support-chat.php VTU/DGV7.0-NON-SAAS/web/ajax-support-chat.php
