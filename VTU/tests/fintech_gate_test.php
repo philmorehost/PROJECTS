@@ -18,6 +18,22 @@ $checks = 0;
 // CI would show never appeared locally. Match the stricter runner.
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
+// TEMPORARY DIAGNOSTIC - remove before merge. The job log is not retrievable from this
+// sandbox, so surface a fatal as a workflow annotation, which the checks API can read.
+set_exception_handler(function ($e) {
+    $msg = 'GATE-TEST ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine();
+    fwrite(fopen('php://stdout', 'w'), "::error ::" . $msg . "\n");
+    fwrite(fopen('php://stderr', 'w'), $msg . "\n");
+    exit(255);
+});
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        $msg = 'GATE-TEST FATAL ' . $e['message'] . ' @ ' . $e['file'] . ':' . $e['line'];
+        fwrite(fopen('php://stdout', 'w'), "::error ::" . $msg . "\n");
+        fwrite(fopen('php://stderr', 'w'), $msg . "\n");
+    }
+});
 function gcheck($label, $actual, $expected) {
     global $checks;
     $checks++;
