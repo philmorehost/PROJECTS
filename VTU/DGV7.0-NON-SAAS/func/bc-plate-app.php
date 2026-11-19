@@ -733,6 +733,101 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .balance-hero { padding: 1.25rem; }
         .pk-app__wrap .balance-amount { font-size: 1.75rem; }
         .pk-app__wrap .quick-action-btn { font-size: .78rem; padding: .55rem .4rem; }
+
+        /* ---- Visual pass (2026-11): modern fintech finish for the big console pages ----
+           Purely presentational: same markup, richer surfaces. Cards get a soft layered
+           shadow and a larger radius, tables read like a ledger, controls get a brand
+           focus ring, and the primary action carries the tenant gradient. */
+        .pk-app__wrap .card {
+            border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 10px 30px -18px rgba(16, 24, 40, .18);
+        }
+        .pk-app__wrap .card-header {
+            background: transparent; font-weight: 700; letter-spacing: .01em;
+        }
+        .pk-app__wrap .card-title { font-weight: 700; letter-spacing: -.01em; }
+        .pk-app__wrap .transition-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+        .pk-app__wrap .transition-hover:hover {
+            transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
+            box-shadow: 0 2px 4px rgba(16, 24, 40, .05), 0 18px 38px -18px rgba(16, 24, 40, .28);
+        }
+        .pk-app__wrap .info-card, .pk-app__wrap .sales-card, .pk-app__wrap .revenue-card,
+        .pk-app__wrap .customers-card, .pk-app__wrap .balance-hero {
+            position: relative; overflow: hidden;
+        }
+        .pk-app__wrap .balance-hero {
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 88%);
+            color: #fff; border: none; border-radius: 20px;
+            box-shadow: 0 22px 44px -18px color-mix(in srgb, var(--brand) 65%, transparent);
+        }
+        .pk-app__wrap .balance-hero .text-muted, .pk-app__wrap .balance-hero small { color: rgba(255, 255, 255, .75) !important; }
+        .pk-app__wrap .balance-amount { font-weight: 800; letter-spacing: -.02em; }
+        .pk-app__wrap .card-icon, .pk-app__wrap .info-card .card-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 46px; height: 46px; border-radius: 14px; font-size: 1.25rem;
+            background: color-mix(in srgb, var(--brand) 12%, var(--surface)); color: var(--brand);
+        }
+        .pk-app__wrap .table-responsive {
+            border: 1px solid var(--line); border-radius: 14px; overflow: auto; background: var(--surface);
+        }
+        .pk-app__wrap .table { margin-bottom: 0; }
+        .pk-app__wrap .table thead th {
+            position: sticky; top: 0; z-index: 1; background: var(--wash);
+            color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line);
+            padding: 11px 12px; white-space: nowrap;
+        }
+        .pk-app__wrap .table tbody tr { transition: background .12s ease; }
+        .pk-app__wrap .table tbody tr:hover { background: color-mix(in srgb, var(--brand) 4%, var(--surface)); }
+        .pk-app__wrap .table-striped tbody tr:nth-of-type(odd) { background: color-mix(in srgb, var(--wash) 55%, var(--surface)); }
+        .pk-app__wrap .table-striped tbody tr:nth-of-type(odd):hover { background: color-mix(in srgb, var(--brand) 5%, var(--surface)); }
+        .pk-app__wrap .form-label { font-weight: 600; font-size: .85rem; margin-bottom: 6px; }
+        .pk-app__wrap .form-control, .pk-app__wrap .form-select {
+            border-radius: 12px; border: 1px solid var(--line); padding: 10px 12px;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .pk-app__wrap .form-control:focus, .pk-app__wrap .form-select:focus {
+            border-color: var(--brand); outline: none;
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);
+        }
+        .pk-app__wrap .form-check-input { width: 1.05rem; height: 1.05rem; accent-color: var(--brand); }
+        .pk-app__wrap .btn {
+            border-radius: 12px; font-weight: 600; letter-spacing: .01em;
+            transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .pk-app__wrap .btn:active { transform: translateY(1px); }
+        .pk-app__wrap .btn-primary {
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+            border: none; color: #fff;
+            box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 75%, transparent);
+        }
+        .pk-app__wrap .btn-primary:hover { background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand) 130%); color: #fff; }
+        .pk-app__wrap .btn-outline-primary { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line)); color: var(--brand); background: transparent; }
+        .pk-app__wrap .btn-outline-primary:hover { background: color-mix(in srgb, var(--brand) 8%, var(--surface)); color: var(--brand-dark); }
+        .pk-app__wrap .badge { border-radius: 999px; padding: 5px 10px; font-weight: 700; letter-spacing: .02em; }
+        .pk-app__wrap .alert { border-radius: 14px; border: 1px solid var(--line); border-left: 4px solid var(--brand); padding: 14px 16px; }
+        .pk-app__wrap .alert-success { border-left-color: var(--ok); }
+        .pk-app__wrap .alert-danger, .pk-app__wrap .alert-error { border-left-color: var(--bad); }
+        .pk-app__wrap .alert-warning, .pk-app__wrap .alert-warn { border-left-color: var(--warn); }
+        .pk-app__wrap .modal-content { border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+        .pk-app__wrap .modal-header { border-bottom: 1px solid var(--line); font-weight: 700; }
+        .pk-app__wrap .modal-footer { border-top: 1px solid var(--line); }
+        .pk-app__wrap .nav-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+        .pk-app__wrap .nav-pills .nav-link {
+            border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: .88rem;
+            color: var(--muted); background: var(--wash); border: 1px solid var(--line); text-decoration: none;
+        }
+        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .pk-app__wrap .nav-tabs { border-bottom: 1px solid var(--line); gap: 4px; }
+        .pk-app__wrap .nav-tabs .nav-link { border: none; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 600; padding: 10px 14px; text-decoration: none; }
+        .pk-app__wrap .nav-tabs .nav-link.active { color: var(--brand); border-bottom-color: var(--brand); }
+        .pk-app__wrap .progress { height: 8px; border-radius: 999px; background: var(--wash); overflow: hidden; }
+        .pk-app__wrap .progress-bar { background: linear-gradient(90deg, var(--brand), var(--brand-dark)); border-radius: 999px; }
+        .pk-app__wrap .pagination .page-link { border-radius: 10px !important; border: 1px solid var(--line); color: var(--ink); margin: 0 2px; }
+        .pk-app__wrap .pagination .page-item.active .page-link { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .pk-app__wrap a { color: var(--brand); }
+        .pk-app__wrap .text-primary { color: var(--brand) !important; }
+        .pk-app__wrap .bg-primary { background: var(--brand) !important; }
+        .pk-app__wrap hr { border: 0; border-top: 1px solid var(--line); opacity: 1; }
         @keyframes pk-app__spin { to { transform: rotate(360deg); } }
         @media (max-width: 1080px) {
             .pk-app__side { transform: translateX(-100%); box-shadow: var(--shadow); }
