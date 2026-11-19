@@ -165,7 +165,7 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'Pay Bills', 'icon' => 'lightning-charge', 'id' => 'pay-bills',
-                'match' => array('Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Card.php', 'Exam.php'),
+                'match' => array('Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Exam.php'),
                 'items' => array(
                     array('label' => 'Buy Data Bundle', 'href' => 'Data.php', 'icon' => 'diagram-3', 'service' => 'data'),
                     array('label' => 'Buy Airtime VTU', 'href' => 'Airtime.php', 'icon' => 'phone', 'service' => 'airtime'),
@@ -174,33 +174,31 @@ if (!function_exists('bc_app_menu')) {
                     array('label' => 'Buy CableTv Sub(s)', 'href' => 'Cable.php', 'icon' => 'tv', 'service' => 'cable'),
                     array('label' => 'Buy Electric Token', 'href' => 'Electric.php', 'icon' => 'plug', 'service' => 'electric'),
                     array('label' => 'Fund Betting', 'href' => 'Betting.php', 'icon' => 'trophy', 'service' => 'betting'),
-                    array('label' => 'Card Printing', 'href' => 'Card.php', 'icon' => 'credit-card', 'service' => 'recharge_card'),
                     array('label' => 'Buy Exam Pin(s)', 'href' => 'Exam.php', 'icon' => 'pencil-square', 'service' => 'exam'),
                 ),
             ),
             array(
                 'label' => 'Wallet & Transfers', 'icon' => 'wallet2', 'id' => 'wallet-transfers',
-                'match' => array('Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php'),
+                'match' => array('Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'CoinConversion.php', 'VirtualCard.php', 'GiftCard.php', 'CryptoHub.php'),
                 'items' => array(
                     array('label' => 'Fund with ATM Card', 'href' => 'Fund.php', 'icon' => 'credit-card-2-front'),
                     array('label' => 'Fund via Bank Transfer', 'href' => 'VirtualBanks.php', 'icon' => 'bank'),
                     array('label' => 'Wallet to Bank', 'href' => 'SendFund.php', 'icon' => 'arrow-up-right-circle', 'service' => 'bank_transfer'),
                     array('label' => 'Share Fund', 'href' => 'ShareFund.php', 'icon' => 'share'),
-                    array('label' => 'Share Fund History', 'href' => 'ShareFundHistory.php', 'icon' => 'clock-history'),
                     array('label' => 'Convert Coins', 'href' => 'CoinConversion.php', 'icon' => 'arrow-left-right', 'service' => 'vtu_coins'),
                     array('label' => 'Virtual Card', 'href' => 'VirtualCard.php', 'icon' => 'credit-card', 'service' => 'virtual_card'),
+                    array('label' => 'Gift Card', 'href' => 'GiftCard.php', 'icon' => 'gift', 'service' => 'gift_card'),
+                    array('label' => 'Crypto', 'href' => 'CryptoHub.php', 'icon' => 'currency-bitcoin', 'service' => 'crypto_hub'),
                 ),
             ),
             array(
                 'label' => 'Financial Services', 'icon' => 'briefcase', 'id' => 'financial-services',
-                'match' => array('NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php', 'CryptoHub.php'),
+                'match' => array('NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php'),
                 'items' => array(
                     array('label' => 'Print NIN Slip', 'href' => 'NINCard.php', 'icon' => 'person-vcard', 'service' => 'nin_card'),
                     array('label' => 'NIN Slip History', 'href' => 'NINCardHistory.php', 'icon' => 'clock-history', 'service' => 'nin_card'),
                     array('label' => 'BVN Verification', 'href' => 'BVNVerification.php', 'icon' => 'shield-check', 'service' => 'bvn_verify'),
                     array('label' => 'Number Filter', 'href' => 'NumberFilter.php', 'icon' => 'funnel'),
-                    array('label' => 'Gift Card', 'href' => 'GiftCard.php', 'icon' => 'gift', 'service' => 'gift_card'),
-                    array('label' => 'Crypto', 'href' => 'CryptoHub.php', 'icon' => 'currency-bitcoin', 'service' => 'crypto_hub'),
                 ),
             ),
             array(
@@ -221,10 +219,11 @@ if (!function_exists('bc_app_menu')) {
                 ),
             ),
             array(
-                'label' => 'History & Records', 'icon' => 'clock-history', 'id' => 'history-records',
-                'match' => array('Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php', 'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php'),
+                'label' => 'History & Tools', 'icon' => 'clock-history', 'id' => 'history-tools',
+                'match' => array('Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php', 'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php', 'ShareFundHistory.php'),
                 'items' => array(
                     array('label' => 'All Transactions', 'href' => 'Transactions.php', 'icon' => 'list-ul'),
+                    array('label' => 'Share Fund History', 'href' => 'ShareFundHistory.php', 'icon' => 'clock-history'),
                     array('label' => 'Batch Transactions', 'href' => 'BatchTransactions.php', 'icon' => 'layers'),
                     array('label' => 'Points History', 'href' => 'PointsHistory.php', 'icon' => 'star'),
                     array('label' => 'Transaction Calculator', 'href' => 'TransactionCalculator.php', 'icon' => 'calculator'),

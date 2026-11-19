@@ -11,7 +11,7 @@
         "Buy CableTv Sub(s)" => "Cable.php",
         "Buy Electric Token" => "Electric.php",
         "Fund Betting" => "Betting.php",
-        "Card Printing" => "Card.php",
+        "Card Printing" => "DataBundleCard.php",
         "Send SMS" => "BulkSMS.php",
         "Buy Exam Pin(s)" => "Exam.php",
         "Gift Card" => "GiftCard.php",

@@ -30,104 +30,91 @@ bc_app_sidebar();
 bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 ?>
 <style>
-	/* Page-specific primitives. Everything else (grid, cards, buttons, alerts, forms) comes
-	   from the shell's scoped compat layer, so a migrated page carries only its own look. */
-	.balance-hero {
-		background: linear-gradient(135deg, <?php echo bc_app_colour(); ?> 0%, <?php echo bc_app_colour(); ?>cc 100%);
-		border-radius: 1.25rem;
-		color: white;
-		padding: 1.5rem;
-		position: relative;
-		overflow: hidden;
-		margin-bottom: 1.5rem;
+	/* Dashboard (Platnova) — page primitives on the shell's tokens: --brand, --ink, --muted,
+	   --line, --surface, --radius, --shadow. Grid/cards/buttons come from the shell compat layer. */
+	.db-hero {
+		background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 76%, #0b1220) 100%);
+		border-radius: 20px; color: #fff; padding: 1.75rem; position: relative; overflow: hidden;
+		box-shadow: var(--shadow); margin-bottom: 1.5rem;
 	}
-	.balance-hero::after {
-		content: '';
-		position: absolute;
-		top: -20%;
-		right: -10%;
-		width: 300px;
-		height: 300px;
-		background: rgba(255,255,255,0.1);
-		border-radius: 50%;
-		pointer-events: none;
+	.db-hero::before, .db-hero::after {
+		content: ''; position: absolute; border-radius: 50%; pointer-events: none;
+		background: rgba(255,255,255,.10);
 	}
-	.balance-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
-	.quick-action-btn {
-		background: rgba(255, 255, 255, 0.15);
-		border: 1px solid rgba(255, 255, 255, 0.25);
-		color: white;
-		padding: 0.5rem;
-		border-radius: 0.75rem;
-		font-weight: 600;
-		font-size: 0.75rem;
-		backdrop-filter: blur(10px);
-		transition: all 0.2s;
-		text-align: center;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		min-height: 60px;
-		position: relative;
-		z-index: 5;
+	.db-hero::before { width: 340px; height: 340px; top: -160px; right: -60px; }
+	.db-hero::after { width: 200px; height: 200px; bottom: -110px; right: 180px; background: rgba(255,255,255,.07); }
+	.db-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+	.db-balance { font-size: 2.6rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; }
+	.db-round {
+		width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+		background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); color: #fff;
+		font-size: 1.2rem; transition: all .2s; backdrop-filter: blur(8px);
 	}
-	.quick-action-btn i { font-size: 1.25rem; margin-bottom: 2px; }
-	.quick-action-btn:hover { background: rgba(255, 255, 255, 0.25); color: white; transform: translateY(-2px); }
+	.db-round:hover { background: rgba(255,255,255,.28); color: #fff; transform: translateY(-2px); }
+	.db-round-label { font-size: .62rem; font-weight: 700; letter-spacing: .08em; margin-top: 4px; opacity: .85; }
+	.db-action {
+		display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+		min-height: 62px; padding: .5rem .25rem; border-radius: 14px; text-align: center;
+		background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.24); color: #fff;
+		font-size: .72rem; font-weight: 700; backdrop-filter: blur(8px); transition: all .2s;
+	}
+	.db-action i { font-size: 1.2rem; }
+	.db-action:hover { background: rgba(255,255,255,.26); color: #fff; transform: translateY(-2px); }
+	.db-meta {
+		background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16);
+		border-radius: var(--radius); padding: 1rem 1.1rem; backdrop-filter: blur(8px); position: relative; z-index: 2;
+	}
+	.db-meta .rowline { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; font-size: .85rem; }
+	.db-meta .k { opacity: .72; } .db-meta .v { font-weight: 700; }
+	.db-fund {
+		display: block; text-align: center; padding: .8rem; border-radius: 999px; font-weight: 700; letter-spacing: .04em;
+		background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.26); color: #fff; backdrop-filter: blur(8px); transition: all .2s;
+	}
+	.db-fund:hover { background: rgba(255,255,255,.28); color: #fff; }
 
-	.service-card {
-		transition: transform 0.2s, box-shadow 0.2s;
-		cursor: pointer;
-		text-align: center;
-		padding: 1.25rem 0.5rem;
+	.db-card {
+		background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+		box-shadow: 0 10px 30px rgba(16,24,40,.05); padding: 1.4rem; margin-bottom: 1.5rem;
 	}
-	.service-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-	.service-icon-box {
-		width: 56px;
-		height: 56px;
-		border-radius: 1rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		margin: 0 auto 0.75rem;
-		font-size: 1.5rem;
-	}
-	.icon-data { background: #eff6ff; color: #3b82f6; }
-	.icon-airtime { background: #fef2f2; color: #ef4444; }
-	.icon-cable { background: #fdf2f7; color: #db2777; }
-	.icon-electric { background: #fffbeb; color: #f59e0b; }
-	.icon-transfer { background: #eef2ff; color: #287bff; }
-	.icon-exam { background: #f5f3ff; color: #8b5cf6; }
-	.icon-betting { background: #fff7ed; color: #f97316; }
-	.icon-crypto { background: #fff7ed; color: #f59e0b; }
-	.icon-vcard { background: #eef2ff; color: #3b82f6; }
-	.icon-giftcard { background: #fdf2f7; color: #db2777; }
-	.icon-nin { background: #f5f3ff; color: #8b5cf6; }
-	.icon-bvn { background: #eef2ff; color: #3b82f6; }
-	.icon-more { background: #f8fafc; color: #64748b; }
+	.db-card__title { font-size: 1.05rem; font-weight: 800; color: var(--ink); margin-bottom: .2rem; }
+	.db-card__sub { font-size: .8rem; color: var(--muted); margin-bottom: 1.1rem; }
 
-	.service-quick-card {
-		background: rgba(255, 255, 255, 0.7);
-		backdrop-filter: blur(10px);
-		border: 1px solid rgba(255, 255, 255, 0.3);
-		border-radius: 1.5rem;
-		padding: 1.5rem;
-		transition: all 0.3s ease;
-		height: 100%;
+	.db-feature {
+		display: flex; align-items: center; gap: .9rem; height: 100%;
+		background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+		padding: 1.1rem 1.2rem; transition: all .2s;
 	}
-	.service-quick-card:hover {
-		transform: translateY(-5px);
-		box-shadow: 0 15px 30px rgba(0,0,0,0.1);
-		background: rgba(255, 255, 255, 0.9);
+	.db-feature:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
+	.db-feature .chev { margin-left: auto; color: var(--muted); }
+
+	.svc-tile {
+		display: flex; flex-direction: column; align-items: center; text-align: center;
+		height: 100%; padding: 1.05rem .4rem .9rem; border-radius: var(--radius);
+		background: var(--surface); border: 1px solid var(--line); transition: all .2s;
 	}
+	.svc-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
+	.svc-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.3rem; margin-bottom: .55rem; }
+	.svc-name { font-size: .84rem; font-weight: 700; color: var(--ink); line-height: 1.25; }
+	.svc-sub { font-size: .68rem; color: var(--muted); margin-top: 2px; }
+	.ic-blue { background: #eff6ff; color: #2563eb; } .ic-green { background: #ecfdf5; color: #059669; }
+	.ic-purple { background: #f5f3ff; color: #7c3aed; } .ic-orange { background: #fff7ed; color: #ea580c; }
+	.ic-pink { background: #fdf2f8; color: #db2777; } .ic-red { background: #fef2f2; color: #dc2626; }
+	.ic-teal { background: #f0fdfa; color: #0d9488; } .ic-amber { background: #fffbeb; color: #d97706; }
+	.ic-indigo { background: #eef2ff; color: #4f46e5; } .ic-cyan { background: #ecfeff; color: #0891b2; }
+	.ic-slate { background: #f8fafc; color: #475569; } .ic-lime { background: #f7fee7; color: #65a30d; }
+	.ic-violet { background: #f5f3ff; color: #8b5cf6; } .ic-sky { background: #f0f9ff; color: #0284c7; }
 
-	.stats-label { font-size: 0.875rem; color: #64748b; font-weight: 500; }
-	.stats-value { font-size: 1.25rem; font-weight: 700; color: #0f172a; word-break: break-all; }
-
+	.db-side-title { font-size: .95rem; font-weight: 800; color: var(--ink); margin-bottom: .9rem; }
+	.db-stat { border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; height: 100%; background: var(--surface); }
+	.db-stat .k { font-size: .7rem; font-weight: 700; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+	.db-stat .v { font-size: 1.15rem; font-weight: 800; color: var(--ink); word-break: break-all; }
+	.badge-new {
+		background: #fff; color: #312e81; font-size: .62rem; font-weight: 800; letter-spacing: .06em;
+		border-radius: 999px; padding: 2px 8px; vertical-align: middle;
+	}
 	@media (max-width: 767px) {
-		.balance-amount { font-size: 1.75rem; }
-		.balance-hero { padding: 1.25rem; }
-		.quick-action-btn { font-size: 0.65rem; padding: 0.4rem; }
+		.db-balance { font-size: 1.9rem; }
+		.db-hero { padding: 1.3rem; }
 	}
 </style>
 	<section class="section dashboard">
@@ -146,7 +133,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                             </div>
                             <div>
                                 <h5 class="fw-bold text-white mb-1">Meet Your AI Assistant! <span class="badge-new ms-2">NEW</span></h5>
-                                <p class="text-white opacity-75 small mb-0">Buy <b>Airtime, Data, Cable</b> & pay <b>Bills</b> just by chatting with our AI Engine.</p>
+                                <p class="text-white opacity-75 small mb-0">Buy <b>Airtime, Data, Cable</b> &amp; pay <b>Bills</b> just by chatting with our AI Engine.</p>
                             </div>
                         </div>
                         <a href="AISuite.php" class="btn btn-light rounded-pill px-4 fw-bold text-primary shadow-sm position-relative z-1">Try AI Now</a>
@@ -199,272 +186,137 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
         <?php include(__DIR__ . "/../func/bc-dashboard-accounts.php"); ?>
 
         <!-- Balance Hero -->
-        <div class="balance-hero shadow">
-            <div class="row align-items-center">
-                <div class="col-md-7 mb-3 mb-md-0 text-center text-md-start" style="position: relative; z-index: 10;">
-                    <div class="small fw-semibold opacity-75 mb-1">AVAILABLE BALANCE</div>
-                    <div class="balance-amount mb-2 d-flex align-items-center flex-wrap justify-content-center justify-content-md-start" style="word-break: break-all;">
-                        ₦<?php echo toDecimal($get_logged_user_details["balance"], "2"); ?>
-                        <div class="ms-3 d-flex flex-column align-items-center">
-                            <a href="CoinConversion.php" class="d-flex align-items-center justify-content-center text-decoration-none" title="Get Bonus" style="width: 42px; height: 42px; background: rgba(255, 255, 255, 0.15); color: #fff; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25); transition: all 0.3s ease; backdrop-filter: blur(10px);">
-                                <i class="bi bi-gift-fill" style="font-size: 1.25rem;"></i>
-                            </a>
-                            <span style="font-size: 11px; font-weight: 600; color: #fff; margin-top: 4px; opacity: 0.85;">BONUS</span>
-                        </div>
-                        <div class="ms-3 d-flex flex-column align-items-center">
-                            <a href="SendFund.php" class="d-flex align-items-center justify-content-center text-decoration-none" title="W2B - Withdraw" style="width: 42px; height: 42px; background: rgba(255, 255, 255, 0.15); color: #fff; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25); transition: all 0.3s ease; backdrop-filter: blur(10px);">
-                                <i class="bi bi-wallet2" style="font-size: 1.25rem;"></i>
-                            </a>
-                            <span style="font-size: 11px; font-weight: 600; color: #fff; margin-top: 4px; opacity: 0.85;">W2B</span>
+        <div class="db-hero">
+            <div class="row align-items-center position-relative" style="z-index: 2;">
+                <div class="col-md-7 mb-4 mb-md-0 text-center text-md-start">
+                    <div class="db-eyebrow mb-1">Available Balance</div>
+                    <div class="d-flex align-items-start flex-wrap justify-content-center justify-content-md-start gap-2">
+                        <div class="db-balance">₦<?php echo toDecimal($get_logged_user_details["balance"], "2"); ?></div>
+                        <div class="d-flex gap-3 ms-md-3 mt-1">
+                            <div class="text-center">
+                                <a href="CoinConversion.php" class="db-round" title="Get Bonus"><i class="bi bi-gift-fill"></i></a>
+                                <div class="db-round-label">BONUS</div>
+                            </div>
+                            <div class="text-center">
+                                <a href="SendFund.php" class="db-round" title="W2B - Withdraw"><i class="bi bi-wallet2"></i></a>
+                                <div class="db-round-label">W2B</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="row row-cols-4 g-2 mt-4" style="position: relative; z-index: 20;">
-                        <div class="col"><a href="Fund.php" class="quick-action-btn"><i class="bi bi-plus-lg"></i>Fund</a></div>
-                        <div class="col"><a href="SubmitPayment.php" class="quick-action-btn"><i class="bi bi-cash-coin"></i>Submit</a></div>
+                    <div class="row row-cols-4 g-2 mt-4">
+                        <div class="col"><a href="Fund.php" class="db-action"><i class="bi bi-plus-lg"></i>Fund</a></div>
+                        <div class="col"><a href="SubmitPayment.php" class="db-action"><i class="bi bi-cash-coin"></i>Submit</a></div>
                         <?php if(isServiceEnabled('share_fund')): ?>
-                        <div class="col"><a href="ShareFund.php" class="quick-action-btn"><i class="bi bi-send"></i>Share</a></div>
+                        <div class="col"><a href="ShareFund.php" class="db-action"><i class="bi bi-send"></i>Share</a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('crypto_hub')): ?>
-                        <div class="col"><a href="CryptoHub.php" class="quick-action-btn"><i class="bi bi-currency-bitcoin"></i>Crypto</a></div>
+                        <div class="col"><a href="CryptoHub.php" class="db-action"><i class="bi bi-currency-bitcoin"></i>Crypto</a></div>
                         <?php endif; ?>
                     </div>
 
                     <?php if(isServiceEnabled('virtual_bank_display')): ?>
-                    <div class="mt-4" style="position: relative; z-index: 20;">
-                        <a href="VirtualBanks.php" class="btn w-100 rounded-pill fw-bold shadow-sm" style="background: rgba(255, 255, 255, 0.15); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25); padding: 0.85rem; transition: all 0.3s ease; backdrop-filter: blur(10px); letter-spacing: 0.5px;">
-                            <i class="bi bi-bank2 me-2 fs-5"></i> FUND VIA VIRTUAL BANK
-                        </a>
+                    <div class="mt-3">
+                        <a href="VirtualBanks.php" class="db-fund"><i class="bi bi-bank2 me-2"></i>Fund via Virtual Bank</a>
                     </div>
                     <?php endif; ?>
                 </div>
                 <div class="col-md-5">
-                    <div class="bg-white bg-opacity-10 p-3 rounded-4 backdrop-blur border border-white border-opacity-10">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="small opacity-75">Account Type</span>
-                            <span class="fw-bold small"><?php echo accountLevel($get_logged_user_details["account_level"]); ?></span>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span class="small opacity-75">Username</span>
-                            <span class="fw-bold small">@<?php echo $get_logged_user_details["username"]; ?></span>
-                        </div>
+                    <div class="db-meta">
+                        <div class="rowline"><span class="k">Account Type</span><span class="v"><?php echo accountLevel($get_logged_user_details["account_level"]); ?></span></div>
+                        <div class="rowline"><span class="k">Username</span><span class="v">@<?php echo $get_logged_user_details["username"]; ?></span></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Service Quick Access Section -->
-        <div class="row g-4 mb-4">
+        <!-- Money & Cards -->
+        <div class="row g-3 mb-4">
             <?php if(isServiceEnabled('crypto_hub')): ?>
             <div class="col-md-4">
                 <a href="CryptoHub.php" class="text-decoration-none">
-                    <div class="service-quick-card d-flex align-items-center">
-                        <div class="service-icon-box icon-crypto m-0 me-3 shadow-sm" style="width: 60px; height: 60px; font-size: 1.75rem;">
-                            <i class="bi bi-currency-bitcoin"></i>
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0 text-dark">Crypto Hub</h6>
-                            <p class="small text-muted mb-0">Buy, Sell & Swap Crypto</p>
-                        </div>
+                    <div class="db-feature">
+                        <div class="svc-ic ic-amber mb-0"><i class="bi bi-currency-bitcoin"></i></div>
+                        <div><div class="svc-name">Crypto Hub</div><div class="svc-sub">Buy, sell &amp; swap crypto</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
                     </div>
                 </a>
             </div>
             <?php endif; ?>
-
             <?php if(isServiceEnabled('virtual_card')): ?>
             <div class="col-md-4">
                 <a href="VirtualCard.php" class="text-decoration-none">
-                    <div class="service-quick-card d-flex align-items-center">
-                        <div class="service-icon-box icon-vcard m-0 me-3 shadow-sm" style="width: 60px; height: 60px; font-size: 1.75rem;">
-                            <i class="bi bi-credit-card-2-front"></i>
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0 text-dark">Virtual Dollar Card</h6>
-                            <p class="small text-muted mb-0">Global Payments Simplified</p>
-                        </div>
+                    <div class="db-feature">
+                        <div class="svc-ic ic-indigo mb-0"><i class="bi bi-credit-card-2-front"></i></div>
+                        <div><div class="svc-name">Virtual Dollar Card</div><div class="svc-sub">Global payments, simplified</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
                     </div>
                 </a>
             </div>
             <?php endif; ?>
-
             <?php if(isServiceEnabled('gift_card')): ?>
             <div class="col-md-4">
                 <a href="GiftCard.php" class="text-decoration-none">
-                    <div class="service-quick-card d-flex align-items-center">
-                        <div class="service-icon-box icon-giftcard m-0 me-3 shadow-sm" style="width: 60px; height: 60px; font-size: 1.75rem;">
-                            <i class="bi bi-gift"></i>
-                        </div>
-                        <div>
-                            <h6 class="fw-bold mb-0 text-dark">Gift Cards</h6>
-                            <p class="small text-muted mb-0">Buy & Trade Gift Cards</p>
-                        </div>
+                    <div class="db-feature">
+                        <div class="svc-ic ic-pink mb-0"><i class="bi bi-gift"></i></div>
+                        <div><div class="svc-name">Gift Cards</div><div class="svc-sub">Buy &amp; trade gift cards</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
                     </div>
                 </a>
             </div>
             <?php endif; ?>
-
         </div>
 
         <div class="row g-4">
             <!-- Services Grid -->
             <div class="col-lg-8">
-                <div class="card p-4 border-0 shadow-sm rounded-4">
-                    <h5 class="fw-bold mb-5 text-center" style="font-size: 1.5rem; color: #1e293b;">All Services</h5>
-                    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-xl-4 g-4 g-md-5 justify-content-center">
+                <div class="db-card">
+                    <div class="db-card__title">All Services</div>
+                    <p class="db-card__sub">Everything you can buy, pay and print — in one place.</p>
+                    <div class="row row-cols-3 row-cols-md-4 row-cols-xl-5 g-3">
                         <?php if(isServiceEnabled('data')): ?>
-                        <div class="col">
-                            <a href="Data.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(37, 99, 235, 0.1); color: #2563eb;">
-                                        <i class="bi bi-wifi"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Data</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Top-up Data</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Data.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-blue"><i class="bi bi-wifi"></i></div><div class="svc-name">Data</div><div class="svc-sub">Top-up data</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('airtime')): ?>
-                        <div class="col">
-                            <a href="Airtime.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(22, 163, 74, 0.1); color: #16a34a;">
-                                        <i class="bi bi-telephone"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Airtime</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Buy Airtime</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Airtime.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-green"><i class="bi bi-telephone"></i></div><div class="svc-name">Airtime</div><div class="svc-sub">Buy airtime</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('cable')): ?>
-                        <div class="col">
-                            <a href="Cable.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(147, 51, 234, 0.1); color: #9333ea;">
-                                        <i class="bi bi-tv"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Cable</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">TV Subscriptions</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Cable.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-purple"><i class="bi bi-tv"></i></div><div class="svc-name">Cable TV</div><div class="svc-sub">Subscriptions</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('electric')): ?>
-                        <div class="col">
-                            <a href="Electric.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(234, 88, 12, 0.1); color: #ea580c;">
-                                        <i class="bi bi-lightbulb"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Electric</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Pay Bills</div>
-                                </div>
-                            </a>
-                        </div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('share_fund')): ?>
-                        <div class="col">
-                            <a href="ShareFund.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(13, 148, 136, 0.1); color: #0d9488;">
-                                        <i class="bi bi-send"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Transfer</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Send Funds</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Electric.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-orange"><i class="bi bi-lightbulb"></i></div><div class="svc-name">Electricity</div><div class="svc-sub">Buy tokens</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('exam')): ?>
-                        <div class="col">
-                            <a href="Exam.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(219, 39, 119, 0.1); color: #db2777;">
-                                        <i class="bi bi-card-list"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Exam</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Result Pins</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Exam.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-pink"><i class="bi bi-card-list"></i></div><div class="svc-name">Exam Pins</div><div class="svc-sub">Result checkers</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('betting')): ?>
-                        <div class="col">
-                            <a href="Betting.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(220, 38, 38, 0.1); color: #dc2626;">
-                                        <i class="bi bi-tag"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Betting</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Fund Wallets</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="Betting.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-red"><i class="bi bi-trophy"></i></div><div class="svc-name">Betting</div><div class="svc-sub">Fund wallets</div></div></a></div>
+                        <?php endif; ?>
+                        <?php if(isServiceEnabled('share_fund')): ?>
+                        <div class="col"><a href="ShareFund.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-teal"><i class="bi bi-send"></i></div><div class="svc-name">Transfer</div><div class="svc-sub">Share funds</div></div></a></div>
+                        <?php endif; ?>
+                        <?php if(isServiceEnabled('bank_transfer')): ?>
+                        <div class="col"><a href="SendFund.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-indigo"><i class="bi bi-bank"></i></div><div class="svc-name">Wallet to Bank</div><div class="svc-sub">Withdraw</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('crypto_hub')): ?>
-                        <div class="col">
-                            <a href="CryptoHub.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(217, 119, 6, 0.1); color: #d97706;">
-                                        <i class="bi bi-currency-bitcoin"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Crypto</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Trade Assets</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="CryptoHub.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-amber"><i class="bi bi-currency-bitcoin"></i></div><div class="svc-name">Crypto</div><div class="svc-sub">Trade assets</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('virtual_card')): ?>
-                        <div class="col">
-                            <a href="VirtualCard.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(79, 70, 229, 0.1); color: #4f46e5;">
-                                        <i class="bi bi-credit-card-2-front"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">V-Card</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Dollar Cards</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="VirtualCard.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-indigo"><i class="bi bi-credit-card-2-front"></i></div><div class="svc-name">Virtual Card</div><div class="svc-sub">Dollar cards</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('gift_card')): ?>
-                        <div class="col">
-                            <a href="GiftCard.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(8, 145, 178, 0.1); color: #0891b2;">
-                                        <i class="bi bi-gift"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Gift Card</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Buy & Trade</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="GiftCard.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-cyan"><i class="bi bi-gift"></i></div><div class="svc-name">Gift Card</div><div class="svc-sub">Buy &amp; trade</div></div></a></div>
                         <?php endif; ?>
                         <?php if(isServiceEnabled('data_card')): ?>
-                        <div class="col">
-                            <a href="PrintHub.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(71, 85, 105, 0.1); color: #475569;">
-                                        <i class="bi bi-printer"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">Print Hub</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Data Pins</div>
-                                </div>
-                            </a>
-                        </div>
+                        <div class="col"><a href="PrintHub.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-slate"><i class="bi bi-printer"></i></div><div class="svc-name">Print Cards</div><div class="svc-sub">Recharge &amp; data pins</div></div></a></div>
                         <?php endif; ?>
-                        <div class="col">
-                            <a href="Transactions.php" class="text-decoration-none h-100 d-block">
-                                <div class="card h-100 border border-light shadow-sm rounded-4 p-4 py-md-5 text-center transition-hover" style="background-color: #f8fafc;">
-                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow-sm" style="width: 80px; height: 80px; font-size: 2.2rem; background: rgba(101, 163, 13, 0.1); color: #65a30d;">
-                                        <i class="bi bi-receipt"></i>
-                                    </div>
-                                    <h6 class="fw-bold text-dark mb-1">History</h6>
-                                    <div class="text-muted" style="font-size: 0.7rem;">Transactions</div>
-                                </div>
-                            </a>
-                        </div>
+                        <?php if(isServiceEnabled('bulk_sms')): ?>
+                        <div class="col"><a href="BulkSMS.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-sky"><i class="bi bi-chat-square-text"></i></div><div class="svc-name">Bulk SMS</div><div class="svc-sub">Send campaigns</div></div></a></div>
+                        <?php endif; ?>
+                        <?php if(isServiceEnabled('ai_suite')): ?>
+                        <div class="col"><a href="AISuite.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-violet"><i class="bi bi-robot"></i></div><div class="svc-name">AI Suite</div><div class="svc-sub">Chat &amp; automate</div></div></a></div>
+                        <?php endif; ?>
+                        <div class="col"><a href="Transactions.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-lime"><i class="bi bi-receipt"></i></div><div class="svc-name">History</div><div class="svc-sub">Transactions</div></div></a></div>
                     </div>
                 </div>
 
@@ -475,18 +327,17 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 $bvn_dash_enabled = isServiceEnabled('bvn_verify', $v_id_dash);
 
                 if($nin_dash_enabled || $bvn_dash_enabled): ?>
-                <div class="card p-4 mt-4">
-                    <h5 class="fw-bold mb-4">Identity Services</h5>
+                <div class="db-card">
+                    <div class="db-card__title">Identity Services</div>
+                    <p class="db-card__sub">Verify and print official identity documents.</p>
                     <div class="row g-3">
                         <?php if($nin_dash_enabled): ?>
                         <div class="col-md-6">
                             <a href="NINCard.php" class="text-decoration-none">
-                                <div class="d-flex align-items-center p-3 rounded-4 border border-light shadow-sm transition-hover" style="background: #fdf4ff;">
-                                    <div class="service-icon-box icon-nin m-0 me-3 shadow-sm"><i class="bi bi-person-badge"></i></div>
-                                    <div>
-                                        <div class="small fw-bold text-dark">NIN Slip</div>
-                                        <div class="text-muted" style="font-size: 10px;">Generate/Print NIN Card</div>
-                                    </div>
+                                <div class="db-feature">
+                                    <div class="svc-ic ic-violet mb-0"><i class="bi bi-person-badge"></i></div>
+                                    <div><div class="svc-name">NIN Slip</div><div class="svc-sub">Generate &amp; print NIN card</div></div>
+                                    <i class="bi bi-chevron-right chev"></i>
                                 </div>
                             </a>
                         </div>
@@ -494,12 +345,10 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                         <?php if($bvn_dash_enabled): ?>
                         <div class="col-md-6">
                             <a href="BVNVerification.php" class="text-decoration-none">
-                                <div class="d-flex align-items-center p-3 rounded-4 border border-light shadow-sm transition-hover" style="background: #f0f9ff;">
-                                    <div class="service-icon-box icon-bvn m-0 me-3 shadow-sm"><i class="bi bi-shield-check"></i></div>
-                                    <div>
-                                        <div class="small fw-bold text-dark">BVN Verify</div>
-                                        <div class="text-muted" style="font-size: 10px;">Secure Identity Verification</div>
-                                    </div>
+                                <div class="db-feature">
+                                    <div class="svc-ic ic-blue mb-0"><i class="bi bi-shield-check"></i></div>
+                                    <div><div class="svc-name">BVN Verification</div><div class="svc-sub">Secure identity check</div></div>
+                                    <i class="bi bi-chevron-right chev"></i>
                                 </div>
                             </a>
                         </div>
@@ -515,7 +364,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 <?php
                 $v_ai_q = mysqli_query($connection_server, "SELECT ai_status, voice_tx_threshold FROM sas_vendors WHERE id='".$get_logged_user_details["vendor_id"]."'");
                 $v_ai = $v_ai_q ? mysqli_fetch_assoc($v_ai_q) : null;
-                
+
                 if (isServiceEnabled('ai_suite') && ($v_ai['ai_status'] ?? 0) == 1):
                     $tx_count_q = mysqli_query($connection_server, "SELECT COUNT(*) as c FROM sas_transactions WHERE username='".$get_logged_user_details["username"]."' AND status=1");
                     $tx_count = ($tx_count_q && $row_c = mysqli_fetch_assoc($tx_count_q)) ? (int)$row_c['c'] : 0;
@@ -523,22 +372,22 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                     $v_status = (int)$get_logged_user_details['ai_voice_status'];
 
                     if ($v_status == 1 || (int)$get_logged_user_details['ai_status'] == 1): ?>
-                        <div class="card p-4 mb-4 border-0 shadow-sm animate__animated animate__pulse animate__infinite" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white;">
-                            <h6 class="fw-bold mb-2"><i class="bi bi-cpu-fill me-2"></i>AI Access Active/Pending</h6>
-                            <p class="x-small opacity-75 mb-0">Your AI Assistant access is active or pending review.</p>
+                        <div class="db-card" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none;">
+                            <h6 class="fw-bold mb-2 text-white"><i class="bi bi-cpu-fill me-2"></i>AI Access Active/Pending</h6>
+                            <p class="small opacity-75 mb-0">Your AI Assistant access is active or pending review.</p>
                             <a href="AISuite.php" class="btn btn-light btn-sm w-100 rounded-pill fw-bold text-primary shadow-sm mt-3">GO TO AI SUITE</a>
                         </div>
                     <?php elseif ($v_status == 0): ?>
-                        <div class="card p-4 mb-4 border-0 shadow-sm" style="background: <?php echo ($tx_count >= $threshold) ? 'linear-gradient(135deg, #000, #4338ca)' : '#fff'; ?>; color: <?php echo ($tx_count >= $threshold) ? 'white' : '#64748b'; ?>;">
-                            <h6 class="fw-bold mb-2 <?php echo ($tx_count >= $threshold) ? 'text-white' : 'text-dark'; ?>">
+                        <div class="db-card" style="<?php echo ($tx_count >= $threshold) ? 'background: linear-gradient(135deg, #0b1220, #4338ca); color: white; border: none;' : ''; ?>">
+                            <h6 class="fw-bold mb-2">
                                 <i class="bi <?php echo ($tx_count >= $threshold) ? 'bi-stars' : 'bi-lock-fill'; ?> me-2"></i>
                                 <?php echo ($tx_count >= $threshold) ? 'AI Reward Unlocked!' : 'Autonomous AI'; ?>
                             </h6>
-                            <p class="x-small opacity-75 mb-3">
+                            <p class="small opacity-75 mb-3">
                                 <?php if ($tx_count >= $threshold): ?>
                                     You've completed <?php echo $tx_count; ?> transactions! Apply now for "Zero-Click" Voice commands.
                                 <?php else: ?>
-                                    Complete <?php echo $threshold; ?> successful transactions to unlock Voice AI. 
+                                    Complete <?php echo $threshold; ?> successful transactions to unlock Voice AI.
                                     <strong>(<?php echo $tx_count; ?>/<?php echo $threshold; ?> done)</strong>
                                 <?php endif; ?>
                             </p>
@@ -556,7 +405,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 <!-- VTU Coins Card -->
                 <?php if(isServiceEnabled('vtu_coins')): ?>
                 <a href="PointsHistory.php" class="text-decoration-none">
-                    <div class="card p-4 mb-4 shadow-sm border-0 transition-hover" style="background: #fffbeb;">
+                    <div class="db-card" style="background: #fffbeb;">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h6 class="fw-bold text-warning mb-0">VTU Coins</h6>
                             <i class="bi bi-gem text-warning fs-4"></i>
@@ -576,8 +425,8 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 <?php endif; ?>
 
                 <!-- Referral Card -->
-                <div class="card p-4 mb-4">
-                    <h6 class="fw-bold mb-3">Refer and Earn</h6>
+                <div class="db-card">
+                    <div class="db-side-title">Refer and Earn</div>
                     <?php
                     $stmt = mysqli_prepare($connection_server, "SELECT COUNT(*) as referral_count FROM sas_users WHERE referral_id = ?");
                     mysqli_stmt_bind_param($stmt, "i", $get_logged_user_details["id"]);
@@ -585,7 +434,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                     $referral_count = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['referral_count'];
                     ?>
                     <div class="d-flex align-items-center mb-3">
-                        <div class="service-icon-box icon-data m-0 me-3"><i class="bi bi-people"></i></div>
+                        <div class="svc-ic ic-blue mb-0 me-3"><i class="bi bi-people"></i></div>
                         <div>
                             <div class="h4 fw-bold text-dark mb-0"><?php echo $referral_count; ?></div>
                             <div class="small text-muted">Successful Referrals</div>
@@ -626,23 +475,23 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 ?>
                 <div class="row g-3 mb-4">
                     <div class="col-6">
-                        <div class="card p-3 h-100 border-start border-success border-4">
-                            <div class="stats-label">TOTAL DEPOSIT</div>
-                            <div class="stats-value">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
+                        <div class="db-stat" style="border-left: 4px solid var(--ok);">
+                            <div class="k">Total Deposit</div>
+                            <div class="v">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="card p-3 h-100 border-start border-danger border-4">
-                            <div class="stats-label">TOTAL SPENT</div>
-                            <div class="stats-value">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
+                        <div class="db-stat" style="border-left: 4px solid var(--bad);">
+                            <div class="k">Total Spent</div>
+                            <div class="v">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Upgrade Card -->
                 <?php if ($get_logged_user_details["account_level"] < 2) : ?>
-                <div class="card p-4">
-                    <h6 class="fw-bold mb-3">Upgrade Account</h6>
+                <div class="db-card">
+                    <div class="db-side-title">Upgrade Account</div>
                     <form method="post" action="handle_upgrade.php">
                         <select name="upgrade-type" class="form-select mb-3 rounded-3" required>
                             <option value="" hidden>Choose Level</option>
