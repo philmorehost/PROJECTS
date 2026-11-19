@@ -127,31 +127,13 @@ if (isset($_POST["request-nin-card"])) {
     exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>NIN Slip | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>NIN SLIP</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="PrintHub.php">Print Hub</a></li>
-                <li class="breadcrumb-item active">NIN Slip</li>
-            </ol>
-        </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("NIN Slip | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "NIN SLIP", "crumb" => "Home / Print Hub / NIN Slip")); ?>
 
     <section class="section dashboard">
         <?php include("../func/service-header.php"); ?>
@@ -203,6 +185,5 @@ if (isset($_POST["request-nin-card"])) {
         </div>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+    
+	<?php bc_app_foot(); ?>

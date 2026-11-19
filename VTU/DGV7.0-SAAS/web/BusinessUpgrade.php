@@ -130,32 +130,13 @@ $bc_kyb_badges = [0 => 'secondary', 1 => 'warning', 2 => 'success', 3 => 'danger
 $bc_kyb_badge  = $bc_kyb_badges[$bc_kyb_status] ?? 'secondary';
 $bc_show_form  = ($bc_current_type === 'personal' && ($bc_kyb_status === 0 || $bc_kyb_status === 3));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Business Upgrade | <?php echo htmlspecialchars($get_all_site_details["site_title"] ?? 'Account'); ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        .upgrade-card { border: none; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-        .form-label { font-size: 0.72rem; letter-spacing: 0.06em; color: #64748b; font-weight: 700; }
-    </style>
-</head>
-<body class="bg-light">
-<?php include("../func/bc-header.php"); ?>
-
-<div class="pagetitle">
-    <h1>BUSINESS ACCOUNT UPGRADE</h1>
-    <nav><ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-        <li class="breadcrumb-item active">Business Upgrade</li>
-    </ol></nav>
-</div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Business Upgrade | " . ($get_all_site_details["site_title"] ?? 'Account'));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "BUSINESS ACCOUNT UPGRADE", "crumb" => "Home / Business Upgrade")); ?>
 
 <section class="section">
   <div class="row g-4">
@@ -294,6 +275,5 @@ $bc_show_form  = ($bc_current_type === 'personal' && ($bc_kyb_status === 0 || $b
   </div>
 </section>
 
-<?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+
+	<?php bc_app_foot(); ?>

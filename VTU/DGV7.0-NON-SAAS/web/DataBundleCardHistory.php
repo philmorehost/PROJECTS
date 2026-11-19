@@ -11,32 +11,13 @@
     ];
     $current_title = $service_titles[$service_type] ?? "Print Hub";
 ?>
-<!DOCTYPE html>
-<head>
-    <title><?php echo $current_title; ?> Card History | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-	<?php include("../func/bc-header.php"); ?>
-
-	<div class="pagetitle">
-      <h1><?php echo strtoupper($current_title); ?> BATCH HISTORY</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item"><a href="PrintHub.php">Print Hub</a></li>
-          <li class="breadcrumb-item active">Batch History</li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head(($current_title) . " Card History | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => (strtoupper($current_title)) . " BATCH HISTORY", "crumb" => "Home / Print Hub / Batch History")); ?>
 
     <section class="section dashboard">
       <div class="col-12">
@@ -74,6 +55,5 @@
       </div>
     </section>
 
-	<?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+	
+	<?php bc_app_foot(); ?>

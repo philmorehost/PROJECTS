@@ -95,41 +95,13 @@ if (!empty($_GET['ref'])) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>BVN Verification | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        .result-card { border-radius: 1rem; overflow: hidden; }
-        .result-header { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 1.5rem 2rem; }
-        .result-row { display: flex; border-bottom: 1px solid #f1f5f9; padding: 0.75rem 1.5rem; align-items: center; }
-        .result-row:last-child { border-bottom: none; }
-        .result-label { font-weight: 600; color: #64748b; min-width: 180px; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .result-value { color: #1e293b; font-weight: 500; font-size: 0.95rem; }
-        .badge-success-soft { background: #dcfce7; color: #16a34a; padding: 0.25rem 0.75rem; border-radius: 50px; font-size: 0.8rem; font-weight: 600; }
-        .fee-badge { background: #fef3c7; color: #92400e; padding: 0.25rem 0.75rem; border-radius: 50px; font-size: 0.8rem; font-weight: 600; }
-    </style>
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>BVN VERIFICATION</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="PrintHub.php">Print Hub</a></li>
-                <li class="breadcrumb-item active">BVN Verification</li>
-            </ol>
-        </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("BVN Verification | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "BVN VERIFICATION", "crumb" => "Home / Print Hub / BVN Verification")); ?>
 
     <section class="section">
         <?php if(isset($_SESSION["product_purchase_response"]) && !empty($_SESSION["product_purchase_response"])): ?>
@@ -279,12 +251,9 @@ if (!empty($_GET['ref'])) {
         <?php endif; ?>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-    <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script>
+<script>
         document.getElementById('bvn_number').addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '').substring(0, 11);
         });
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

@@ -1,47 +1,13 @@
 <?php session_start();
     include("../func/bc-config.php");
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Number Filter | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.gstatic.com" rel="preconnect">
-    <link
-        href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-        rel="stylesheet">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-    <!-- Template Main CSS File -->
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
-</head>
-<body>
-	<?php include("../func/bc-header.php"); ?>
-
-	<div class="pagetitle">
-      <h1>Number Filter</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Number Filter</li>
-        </ol>
-      </nav>
-    </div><!-- End Page Title -->
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Number Filter | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "Number Filter", "crumb" => "Home / Number Filter")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
       <div class="col-12">
@@ -96,9 +62,7 @@
       </div>
     </section>
 
-	<?php include("../func/bc-footer.php"); ?>
-
-    <script>
+	<script>
         document.getElementById('filter-btn').addEventListener('click', function() {
             const mtn_prefixes = ["0803", "0702", "0703", "0704", "0707", "0903", "0806", "0706", "0813", "0810", "0814", "0816", "0906", "0916", "0913", "0903"];
             const glo_prefixes = ["0805", "0705", "0905", "0807", "0815", "0811", "0915"];
@@ -148,5 +112,4 @@
             });
         });
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

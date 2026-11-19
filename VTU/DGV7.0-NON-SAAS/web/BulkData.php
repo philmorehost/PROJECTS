@@ -43,54 +43,14 @@ if (isset($_POST["buy-data"])) {
 }
 
 ?>
-<!DOCTYPE html>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Bulk Shared Data, SME Data, Direct Data, Corporate Data | " . ($get_all_site_details["site_title"]));
+?>
 
-<head>
-    <title>Bulk Shared Data, SME Data, Direct Data, Corporate Data | <?php echo $get_all_site_details["site_title"]; ?>
-    </title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-    
-      <!-- Google Fonts -->
-  <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link
-    href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-    rel="stylesheet">
-
-    <script src="https://merchant.beewave.ng/checkout.min.js" defer></script>
-  <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-  <link href="../assets-2/vendor/simple-datatables/style.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-
-</head>
-
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-	<div class="pagetitle">
-      <h1>BULK DATA</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Bulk Data</li>
-        </ol>
-      </nav>
-    </div><!-- End Page Title -->
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "BULK DATA", "crumb" => "Home / Bulk Data")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
       <?php include("../func/service-header.php"); ?>
@@ -188,8 +148,5 @@ if (isset($_POST["buy-data"])) {
     </section>
 
     <?php include("../func/short-trans.php"); ?>
-    <?php include("../func/bc-footer.php"); ?>
-
-</body>
-
-</html>
+    
+	<?php bc_app_foot(); ?>

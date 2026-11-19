@@ -114,34 +114,13 @@ $status_map = [
 ];
 $st = $status_map[$tx['status']] ?? ['Unknown', 'secondary', 'bi-question-circle'];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Crypto Invoice | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        .invoice-card { border-radius: 20px; border: none; overflow: hidden; }
-        .qr-box { background: #f8f9fa; border-radius: 15px; padding: 20px; display: inline-block; }
-        .amount-val { font-size: 1.8rem; font-weight: 700; color: #333; }
-    </style>
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle px-4 pt-4">
-      <h1>CRYPTO INVOICE</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item"><a href="CryptoHub.php">Crypto</a></li>
-          <li class="breadcrumb-item active">Invoice</li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Crypto Invoice | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "CRYPTO INVOICE", "crumb" => "Home / Crypto / Invoice")); ?>
 
     <section class="section p-4">
         <div class="row justify-content-center">
@@ -428,6 +407,5 @@ $st = $status_map[$tx['status']] ?? ['Unknown', 'secondary', 'bi-question-circle
         }, 10000);
     </script>
 
-    <?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+    
+	<?php bc_app_foot(); ?>

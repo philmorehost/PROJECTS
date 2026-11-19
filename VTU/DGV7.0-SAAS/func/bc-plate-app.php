@@ -1014,9 +1014,12 @@ if (!function_exists('bc_app_foot')) {
     function bc_app_foot($opts = array()) {
         $site = bc_app_site();
         $base = bc_app_base();
-        ?></div>
+        // 'bare' is for pages that own their own layout (print targets, full-screen terminals):
+        // they still get the flash dialog and the shell script, but not the wrapper-closing tags.
+        if (empty($opts['bare'])): ?></div>
 </main>
 </div>
+<?php endif; ?>
 <?php if (empty($opts['nonav'])): ?>
 <footer class="pk-app__foot">
     <span>&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site['title']); ?></span>
@@ -1098,6 +1101,27 @@ if (!function_exists('bc_app_foot')) {
     document.addEventListener('click', closeAll);
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' || e.key === 'Esc') { closeAll(); closeNav(); }
+    });
+
+    // Bootstrap-compat: the retired bundle is gone, so the handful of data attributes the
+    // compat layer renders are wired here instead of shipping all of Bootstrap's JS.
+    document.addEventListener('click', function (e) {
+        var dismiss = e.target.closest('[data-bs-dismiss]');
+        if (dismiss) {
+            var kind = dismiss.getAttribute('data-bs-dismiss');
+            if (kind === 'alert') {
+                var alert = dismiss.closest('.alert');
+                if (alert) alert.parentNode.removeChild(alert);
+            } else if (kind === 'modal') {
+                var modal = dismiss.closest('.modal');
+                if (modal) modal.classList.remove('show');
+            }
+        }
+        var toggle = e.target.closest('[data-bs-toggle]');
+        if (toggle && toggle.getAttribute('data-bs-toggle') === 'modal') {
+            var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));
+            if (m) m.classList.toggle('show');
+        }
     });
 
     // Logout confirm, matching the behaviour of the old header.

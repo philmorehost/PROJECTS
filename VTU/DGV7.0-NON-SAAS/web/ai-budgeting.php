@@ -18,11 +18,12 @@ $trans_count = $stats['count'] ?? 0;
 $potential_savings = $total_spent * 0.15; // Assume 15% savings possible by switching to SME
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>AI Smart Budgeting — DGV6.90</title>
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("AI Smart Budgeting");
+?>
     <style>
         :root { --primary: #6366f1; --bg: #0f172a; --card: #1e293b; }
         body { background: var(--bg); color: white; font-family: 'Inter', sans-serif; padding: 2rem; }
@@ -32,8 +33,8 @@ $potential_savings = $total_spent * 0.15; // Assume 15% savings possible by swit
         .savings { color: #10b981; font-size: 1.5rem; font-weight: bold; }
         .btn-opt { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
     </style>
-</head>
-<body>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "AI SMART BUDGETING", "crumb" => "Home / AI Smart Budgeting")); ?>
     <h1><span class="ai-badge">TITANIUM AI</span> Smart Budgeting</h1>
     <p>AI-driven insights for @<?php echo $username; ?></p>
 
@@ -82,5 +83,6 @@ $potential_savings = $total_spent * 0.15; // Assume 15% savings possible by swit
             options: { plugins: { legend: { display: false } }, scales: { y: { display: false } } }
         });
     </script>
+<?php bc_app_foot(); ?>
 </body>
 </html>

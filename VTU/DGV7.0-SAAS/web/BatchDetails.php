@@ -59,33 +59,13 @@
 
     $batch_progress = bc_get_bulk_batch_progress($connection_server, $get_logged_user_details["vendor_id"], $get_logged_user_details["username"], $batch);
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Batch Details | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <?php if ($batch_progress["status"] !== "completed"): ?>
-    <meta http-equiv="refresh" content="10">
-    <?php endif; ?>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-    <div class="pagetitle">
-      <h1>BATCH DETAILS</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item"><a href="BatchTransactions.php">Batch Transactions</a></li>
-          <li class="breadcrumb-item active"><?php echo $batch; ?></li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Batch Details | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "BATCH DETAILS", "crumb" => "Home / Batch Transactions")); ?>
 
     <section class="section dashboard">
       <div class="col-12">
@@ -237,9 +217,6 @@
         </div>
       </div>
     </section>
-    <?php include("../func/bc-footer.php"); ?>
-
-    <?php if ($has_pending): ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const selectAll = document.getElementById('selectAllPending');
@@ -301,6 +278,4 @@
             }
         }
     </script>
-    <?php endif; ?>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

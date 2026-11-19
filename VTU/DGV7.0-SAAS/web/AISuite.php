@@ -93,35 +93,13 @@
     $user_tokens = (int)$get_logged_user_details['ai_token_balance'];
     $progress = min(100, ($tx_count / max(1, $v_limit)) * 100);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>AI Suite | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="../assets-2/vendor/bootstrap/css/bootstrap.min.css">
-    <link rel="stylesheet" href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css">
-    <link rel="stylesheet" href="../assets-2/css/style.css">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <style>
-        .ai-card { border-radius: 1.5rem; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); border: none; }
-        .ai-card:hover { transform: translateY(-5px); }
-        .bg-ai { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
-        .token-stat { font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #4f46e5, #9333ea); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    </style>
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-    
-    <div class="pagetitle">
-      <h1>AI COMMAND CENTER</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Dashboard</a></li>
-          <li class="breadcrumb-item active">AI Suite</li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("AI Suite | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "AI COMMAND CENTER", "crumb" => "Dashboard / AI Suite")); ?>
 
     <section class="section">
         <div class="row">
@@ -298,8 +276,6 @@
         </div>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-    
     <script>
         function updateTokenCost(amount) {
             const pricePer1k = <?php echo $user_token_price; ?>;
@@ -324,5 +300,4 @@
             }, 2000);
         }
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

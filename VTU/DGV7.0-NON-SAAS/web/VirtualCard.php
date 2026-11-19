@@ -31,31 +31,13 @@ $issuance_profit = (float)($vc_settings['vc_issuance_profit_usd'] ?? 2.00);
 $funding_fee = (float)($vc_settings['vc_funding_profit_percent'] ?? 3.00);
 
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Virtual Card Dashboard | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link rel="stylesheet" href="../assets/css/fintech-cards.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <style>
-        .card-stack { perspective: 1000px; }
-        .empty-state { text-align: center; padding: 60px 20px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px dashed rgba(0,0,0,0.1); }
-    </style>
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle d-flex justify-content-between align-items-center">
-        <div>
-            <h1>Virtual Cards</h1>
-            <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li><li class="breadcrumb-item active">Virtual Card</li></ol></nav>
-        </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Virtual Card Dashboard | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "Virtual Cards", "crumb" => "Home / Virtual Card")); ?>
         <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#issueCardModal">
             <i class="bi bi-plus-lg me-2"></i>New Card
         </button>
@@ -378,6 +360,5 @@ $funding_fee = (float)($vc_settings['vc_funding_profit_percent'] ?? 3.00);
         });
     }
     </script>
-    <?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+    
+	<?php bc_app_foot(); ?>

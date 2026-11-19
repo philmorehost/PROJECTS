@@ -12,6 +12,10 @@ on:
       - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
       - 'VTU/tests/plate_app_test.php'
+      - 'VTU/tests/plate_migration_test.php'
+      - 'VTU/tests/plate_bodies.php'
+      - 'VTU/tests/plate_migrate.py'
+      - 'VTU/tests/plate_capture.py'
       - 'VTU/DGV7.0-SAAS/install/index.php'
       - 'VTU/DGV7.0-NON-SAAS/install.php'
       - 'VTU/DGV7.0-SAAS/func/bc-service-matrix*.php'
@@ -100,6 +104,10 @@ on:
       - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
       - 'VTU/tests/plate_app_test.php'
+      - 'VTU/tests/plate_migration_test.php'
+      - 'VTU/tests/plate_bodies.php'
+      - 'VTU/tests/plate_migrate.py'
+      - 'VTU/tests/plate_capture.py'
       - 'VTU/DGV7.0-SAAS/func/bc-fintech-wallet.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-wallet.php'
       - 'VTU/DGV7.0-SAAS/func/bc-dashboard-accounts.php'
@@ -183,18 +191,23 @@ jobs:
                         web/Inactive.php web/Suspended.php web/Error.php; do
               php -l "VTU/${edition}/${file}"
             done
+            # Every console page must parse: the shell migration touches all of them.
+            find "VTU/${edition}/web" -maxdepth 1 -name '*.php' -print0 | xargs -0 -n1 php -l
             # Every app endpoint must parse: these carry the dual-auth bridge.
             find "VTU/${edition}/web/api" -name '*.php' -print0 | xargs -0 -n1 php -l
           done
           php -l VTU/DGV7.0-SAAS/web/api/login-otp.php
           php -l VTU/tests/provider_smoke.php
           php -l VTU/tests/fintech_gate_test.php
+          php -l VTU/tests/plate_migration_test.php
+          php -l VTU/tests/plate_bodies.php
       - name: Policy and gate tests
         run: |
           set -e
           php -n VTU/tests/fintech_policy_test.php
           php -n VTU/tests/fintech_gate_test.php
           php -n VTU/tests/plate_app_test.php
+          php -n VTU/tests/plate_migration_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e

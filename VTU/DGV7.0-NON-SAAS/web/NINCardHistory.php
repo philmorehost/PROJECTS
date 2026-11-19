@@ -3,32 +3,13 @@ include("../func/bc-config.php");
 
 $history = mysqli_query($connection_server, "SELECT * FROM sas_nin_card_requests WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' AND user_id='".$get_logged_user_details["id"]."' ORDER BY date_created DESC LIMIT 50");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>NIN Slip History | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>NIN SLIP HISTORY</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="PrintHub.php">Print Hub</a></li>
-                <li class="breadcrumb-item"><a href="NINCard.php">NIN Slip</a></li>
-                <li class="breadcrumb-item active">History</li>
-            </ol>
-        </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("NIN Slip History | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "NIN SLIP HISTORY", "crumb" => "Home / Print Hub / NIN Slip / History")); ?>
 
     <section class="section dashboard">
         <?php include("../func/service-header.php"); ?>
@@ -98,6 +79,5 @@ $history = mysqli_query($connection_server, "SELECT * FROM sas_nin_card_requests
         </div>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+    
+	<?php bc_app_foot(); ?>

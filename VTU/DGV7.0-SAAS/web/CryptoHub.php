@@ -307,83 +307,13 @@ foreach($supported as $s) {
 }
 if (empty($active_supported)) $active_supported = $supported; // Fallback
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Crypto | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        body { background-color: #f8fafc; color: #1e293b; }
-        .card { border-radius: 1.25rem; border: none; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
-        .balance-hero {
-            background: linear-gradient(135deg, <?php echo $vendor_primary_color; ?> 0%, <?php echo $vendor_primary_color; ?>cc 100%);
-            border-radius: 1.25rem;
-            color: white;
-            padding: 1.5rem;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 1.5rem;
-        }
-        .balance-hero::after {
-            content: '';
-            position: absolute;
-            top: -20%;
-            right: -10%;
-            width: 300px;
-            height: 300px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        .balance-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
-        .quick-action-btn {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.25);
-            color: white;
-            padding: 0.5rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
-            font-size: 0.75rem;
-            backdrop-filter: blur(10px);
-            transition: all 0.2s;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 60px;
-            position: relative;
-            z-index: 10;
-        }
-        .quick-action-btn i { font-size: 1.25rem; margin-bottom: 2px; }
-        .quick-action-btn:hover { background: rgba(255,255,255,0.25); color: white; transform: translateY(-2px); }
-
-        .coin-icons-row img { width: 32px; height: 32px; margin-right: 8px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15)); transition: transform 0.2s; }
-        .coin-icons-row img:hover { transform: scale(1.15); }
-
-        @media (max-width: 767px) {
-            .balance-amount { font-size: 1.75rem; }
-            .balance-hero { padding: 1.25rem; }
-            .quick-action-btn { font-size: 0.65rem; padding: 0.4rem; }
-        }
-    </style>
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>CRYPTO</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Crypto</li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "CRYPTO", "crumb" => "Home / Crypto")); ?>
 
     <section class="section dashboard">
 
@@ -700,110 +630,6 @@ if (empty($active_supported)) $active_supported = $supported; // Fallback
         </div>
     </div>
 
-    <?php include("../func/bc-footer.php"); ?>
-
-    <!-- Wallet List Modal -->
-    <div class="modal fade" id="walletListModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content border-0 rounded-4">
-                <div class="modal-header border-0">
-                    <h6 class="fw-bold mb-0">My Crypto Wallets</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <ul class="list-group list-group-flush">
-                        <?php foreach($supported as $cid):
-                            $bal = $userWallets[$cid]['balance'] ?? 0;
-                            $label = ($cid == 'USDT_TRX') ? 'Tether (TRC-20)' : $cid;
-                        ?>
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                            <div class="d-flex align-items-center">
-                                <img src="../asset/crypto/<?php echo strtolower(str_replace('_', '-', $cid)) . ".png"; ?>" style="width:28px; height:28px; margin-right:12px;">
-                                <div>
-                                    <div class="fw-bold small"><?php echo $label; ?></div>
-                                    <div class="text-muted small"><?php echo $cid; ?></div>
-                                </div>
-                            </div>
-                            <div class="text-end">
-                                <div class="fw-bold"><?php echo (float)$bal; ?></div>
-                            </div>
-                        </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Self Help Modal -->
-    <div class="modal fade" id="selfHelpModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 rounded-4">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="fw-bold">Crypto Self-Help</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <p class="small text-muted mb-4">Paid for an invoice but it hasn't reflected? Enter your transaction reference below to manually synchronize with the payment provider.</p>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Transaction Reference</label>
-                        <input type="text" id="syncRef" class="form-control form-control-lg bg-light border-0" placeholder="DEP_123456789...">
-                    </div>
-                    <button class="btn btn-info w-100 py-3 rounded-pill fw-bold text-white shadow-sm" onclick="triggerManualSync(this)">
-                        <i class="bi bi-arrow-repeat me-1"></i> Sync Transaction
-                    </button>
-
-                    <div class="mt-4 pt-3 border-top">
-                        <h6 class="fw-bold small mb-2 text-uppercase text-muted">Common Issues</h6>
-                        <ul class="small text-muted ps-3 mb-0">
-                            <li>Check if your wallet shows the transaction as "Confirmed".</li>
-                            <li>Plisio requires at least 1-3 confirmations depending on the coin.</li>
-                            <li>Syncing may take up to 2 minutes after the network confirmation.</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Withdraw Modal -->
-    <div class="modal fade" id="withdrawModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 rounded-4">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="fw-bold">Send Crypto Externally</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="withdrawForm">
-                    <div class="modal-body p-4">
-                        <input type="hidden" name="currency" id="withdrawCid">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Destination Address</label>
-                            <input type="text" name="address" class="form-control" placeholder="Enter wallet address" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Amount</label>
-                            <input type="number" name="amount" class="form-control" step="0.00000001" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Transaction PIN</label>
-                            <input type="password" name="pin" class="form-control" maxlength="4" placeholder="****" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Email OTP</label>
-                            <div class="input-group">
-                                <input type="text" name="otp" class="form-control" placeholder="6-digit code" required>
-                                <button type="button" class="btn btn-outline-secondary" onclick="sendWithdrawalOTP(this)">Get Code</button>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 py-2 rounded-3 mt-2">Submit Withdrawal</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-
     <script>
         let currentDepCid = '';
 
@@ -1064,5 +890,4 @@ if (empty($active_supported)) $active_supported = $supported; // Fallback
         }
 
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

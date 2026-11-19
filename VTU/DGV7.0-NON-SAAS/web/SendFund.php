@@ -261,82 +261,14 @@ if (isset($_POST["reset-bank"])) {
 }
 
 ?>
-<!DOCTYPE html>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
+?>
 
-<head>
-    <title>Withdraw Funds | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-
-    <script src="/jsfile/bc-custom-all.js"></script>
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.gstatic.com" rel="preconnect">
-    <link
-        href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-        rel="stylesheet">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-    <!-- Template Main CSS File -->
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
-    <!-- Searchable Select Assets (Tom Select) -->
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-    <style>
-        .ts-control { border-radius: 0.5rem !important; padding: 0.75rem 1rem !important; border: none !important; background-color: #f8f9fa !important; font-size: 1rem !important; transition: all 0.3s ease; }
-        .ts-control:focus { background-color: #fff !important; box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1) !important; }
-        .ts-dropdown { border-radius: 0.75rem !important; box-shadow: 0 15px 35px rgba(0,0,0,0.15) !important; border: 1px solid rgba(0,0,0,0.05) !important; padding: 0.5rem !important; margin-top: 5px !important; }
-        .ts-dropdown .option { border-radius: 0.5rem !important; padding: 0.6rem 1rem !important; margin-bottom: 2px !important; }
-        .ts-dropdown .active { background-color: var(--primary-color) !important; color: #fff !important; }
-        .ts-wrapper.single .ts-control { background-image: none !important; }
-
-        .modern-input { border-radius: 0.75rem !important; padding: 0.75rem 1.25rem !important; background-color: #f8f9fa !important; border: 1px solid transparent !important; transition: all 0.3s ease; }
-        .modern-input:focus { background-color: #fff !important; border-color: var(--primary-color) !important; box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1) !important; }
-
-        .hover-up { transition: all 0.3s ease; }
-        .hover-up:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
-
-        .ls-1 { letter-spacing: 1px; }
-        .animated { animation-duration: 0.6s; animation-fill-mode: both; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .fadeIn { animation-name: fadeIn; }
-
-        /* Compact Header Overrides */
-        .dashboard .card.bg-primary { margin-bottom: 0.75rem !important; }
-        .dashboard .card.bg-primary .card-body { padding: 0.75rem 1.25rem !important; }
-        .dashboard .card.bg-primary .h2 { font-size: 1.25rem !important; margin-bottom: 0 !important; }
-        .dashboard .card.bg-primary .small { font-size: 0.65rem !important; margin-bottom: 0 !important; }
-        .dashboard .card.bg-primary .bg-opacity-20 { padding: 0.5rem !important; }
-        .dashboard .card.bg-primary .fs-3 { font-size: 1.1rem !important; }
-    </style>
-
-</head>
-
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>WITHDRAW FUNDS</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="#">Home</a></li>
-                <li class="breadcrumb-item active">Withdraw Funds</li>
-            </ol>
-        </nav>
-    </div><!-- End Page Title -->
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "WITHDRAW FUNDS", "crumb" => "Home / Withdraw Funds")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
         <?php include("../func/service-header.php"); ?>
@@ -512,12 +444,6 @@ if (isset($_POST["reset-bank"])) {
         </div>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-
-    <?php if (isset($_SESSION["transfer_result"])) {
-        $res = $_SESSION["transfer_result"];
-        unset($_SESSION["transfer_result"]);
-    ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof Swal === 'undefined') {
@@ -580,9 +506,7 @@ if (isset($_POST["reset-bank"])) {
             });
         });
     </script>
-    <?php } ?>
-
-    <script>
+<script>
     function fillBeneficiary(data) {
         const bankSelect = document.getElementById('bank-code');
         const accountInput = document.getElementById('account-number');
@@ -914,6 +838,4 @@ if (isset($_POST["reset-bank"])) {
         });
     }
     </script>
-</body>
-
-</html>
+	<?php bc_app_foot(); ?>
