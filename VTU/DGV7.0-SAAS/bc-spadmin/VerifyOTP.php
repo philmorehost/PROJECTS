@@ -42,47 +42,30 @@
         }
     }
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Master Verification | Super Portal</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container d-flex justify-content-center align-items-center min-vh-100">
-        <div class="card shadow border-0 rounded-4 p-4 p-md-5" style="max-width: 450px; width: 100%;">
-            <div class="text-center mb-4">
-                <div class="bg-dark bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                    <i class="bi bi-shield-lock-fill text-dark fs-1"></i>
-                </div>
-                <h3 class="fw-bold">Master Verification</h3>
-                <p class="text-muted">Enter the master code sent to your email: <b><?php echo substr($admin_detail['email'], 0, 3) . '...' . substr($admin_detail['email'], strpos($admin_detail['email'], '@')); ?></b></p>
-            </div>
-
-            <?php if(isset($error)): ?>
-                <div class="alert alert-danger py-2 small mb-3 text-center"><?php echo $error; ?></div>
-            <?php endif; ?>
-
+<?php
+$GLOBALS['get_all_site_details'] = $get_all_super_admin_site_details ?? ($GLOBALS['get_all_site_details'] ?? null);
+include_once(__DIR__ . "/../func/bc-plate-auth.php");
+bc_plate_auth_head("Master Verification | Super Portal", $get_all_super_admin_site_details ?? null);
+bc_plate_auth_top(array(
+    'icon'  => 'shield',
+    'title' => 'Master Verification',
+    'sub'   => 'Enter the master code sent to your email: <b>' . substr($admin_detail['email'], 0, 3) . '...' . substr($admin_detail['email'], strpos($admin_detail['email'], '@')) . '</b>',
+    'alert' => isset($error) ? array(array('type' => 'error', 'body' => $error)) : null,
+));
+?>
             <form method="post" action="">
-                <div class="mb-4">
-                    <label class="form-label small fw-bold text-uppercase text-muted text-center d-block">6-Digit Master Code</label>
-                    <input name="otp" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control form-control-lg text-center fw-bold letter-spacing-lg" placeholder="000000" inputmode="numeric" required autofocus>
-                    <p class="text-center small text-muted mt-2">Code expires in: <span id="timer" class="fw-bold text-danger">10:00</span></p>
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="otp">6-Digit Master Code</label>
+                    <input id="otp" name="otp" type="text" maxlength="6" pattern="[0-9]{6}" class="pk-auth__input pk-auth__otp" placeholder="000000" inputmode="numeric" required autofocus>
+                    <p class="pk-auth__note" style="margin-top:10px;">Code expires in: <span id="timer" style="color: var(--danger); font-weight: 700;">10:00</span></p>
                 </div>
-                <button name="verify-otp" type="submit" class="btn btn-dark btn-lg w-100 shadow-sm rounded-3 py-3 fw-bold mb-3">
+                <button name="verify-otp" type="submit" class="pk-auth__btn">
                     AUTHORIZE MASTER SESSION
                 </button>
-                <div class="text-center">
-                    <a href="?resend=1" class="text-decoration-none small fw-bold text-dark">Resend Code</a>
-                </div>
+                <p class="pk-auth__note" style="margin-top:14px;">
+                    <a href="?resend=1" class="pk-auth__link">Resend Code</a>
+                </p>
             </form>
-        </div>
-    </div>
     <style>
         .letter-spacing-lg { letter-spacing: 0.5rem; }
     </style>
@@ -103,5 +86,4 @@
         }
         updateTimer();
     </script>
-</body>
-</html>
+<?php bc_plate_auth_end(array('links' => array(array('href' => 'Login.php', 'label' => 'Back to sign in')))); ?>
