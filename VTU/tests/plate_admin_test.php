@@ -75,7 +75,7 @@ foreach (array('Dashboard', 'Manage User', 'System Function', 'API Manager', 'Su
 achk(!in_array('Renew Subscription', $labels, true) || true, 'admin menu shape');
 $sys = null;
 foreach ($admin as $block) { foreach ((array)$block['items'] as $item) { if ($item['label'] === 'System Function') $sys = $item; } }
-achk(is_array($sys) && count($sys['children']) === 24, 'System Function keeps its 24 children');
+achk(is_array($sys) && count($sys['children']) === 25, 'System Function keeps its 25 children (incl. System Update)');
 achk(in_array('Service Control Center', array_map(function ($c) { return $c['label']; }, $sys['children']), true), 'Service Control Center is under System Function');
 
 $sp = bc_adm_menu('spadmin');

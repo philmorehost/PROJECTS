@@ -1081,3 +1081,31 @@ htaccess **224**.
 Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
 plate_admin **708**, plate_migration **882**, backoffice_regression **84**,
 htaccess **224**.
+
+## 21. Update-system edition mix-up and the missing NON-SAAS updater menu entry
+
+- **SAAS sites were applying NON-SAAS update packages.** Every update client
+  (`UpdateSystem.php`, `ajax_download_update.php`, `cron_update.php` in both
+  editions) asked `check-update.php` with only `license_key` + `domain` — nothing
+  identified which edition was asking, so a license record mapped to the
+  standalone package on the manager sent that zip to SAAS installs, and
+  `execute_update.php` happily overwrote SAAS files with NON-SAAS ones. All six
+  clients now send `edition` (`SAAS` / `NON-SAAS`) and `product` (`DGV7`) with
+  the request. **Manager-side:** the license records should be mapped by that
+  field (a SAAS license must never resolve to the standalone package).
+- **Belt-and-braces guard:** `bc_assert_update_edition()` now runs in
+  `execute_update.php` and `cron_update.php` (both editions) immediately after
+  the manifest is read and **before** any file is deleted or copied. It refuses
+  the package when the manifest declares the other edition, and also when the
+  staged files carry the other edition's marker (`func/bc-integrity.php` is
+  NON-SAAS-only; `func/bc-levelup.php`/`bc-spadmin-config.php` are SAAS-only),
+  with a message telling the admin no files were changed.
+- **NON-SAAS `bc-admin/UpdateSystem.php` unreachable:** it existed but was in
+  no menu, so it never appeared in the sidebar or the System Function matrix.
+  "System Update" is now a System Function child (shown in NON-SAAS via the
+  edition existence gate; SAAS `bc-admin` has no such page and keeps using the
+  spadmin updater, which also gained a "System Update" leaf).
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
+plate_admin **708**, plate_migration **882**, backoffice_regression **99**,
+htaccess **224**.

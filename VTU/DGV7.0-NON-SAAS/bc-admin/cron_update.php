@@ -23,6 +23,40 @@ define('TEMP_DIR', ROOT_DIR . '/tmp_update');
 define('ZIP_FILE', TEMP_DIR . '/update.zip');
 define('STAGING_DIR', TEMP_DIR . '/staging');
 
+// Edition guard: refuse a package built for the other edition BEFORE any file is
+// deleted or overwritten. The check-update request now carries this installation's
+// edition, but a mis-mapped license record on the manager can still hand back the
+// wrong zip; applying it would overwrite this edition's files with the other's.
+function bc_update_edition_of($declared) {
+    $d = strtolower((string)$declared);
+    if ($d === '') return '';
+    if (strpos($d, 'non') !== false || strpos($d, 'standalone') !== false || strpos($d, 'standard') !== false) return 'NON-SAAS';
+    if (strpos($d, 'saas') !== false) return 'SAAS';
+    return '';
+}
+function bc_assert_update_edition($manifest, $staging_dir_actual, $expected) {
+    $declared = '';
+    foreach (array('edition', 'product', 'channel', 'package') as $key) {
+        if (!empty($manifest[$key]) && is_string($manifest[$key])) { $declared = $manifest[$key]; break; }
+    }
+    $declared_edition = bc_update_edition_of($declared);
+    if ($declared_edition !== '' && $declared_edition !== $expected) {
+        throw new Exception("Wrong update package: this is a $expected installation but the package is for $declared_edition. No files were changed. Ask the provider to map your license to the $expected package.");
+    }
+    $files_dir = $staging_dir_actual . '/files';
+    if (is_dir($files_dir . '/func')) {
+        $saas_marker = file_exists($files_dir . '/func/bc-levelup.php') || file_exists($files_dir . '/func/bc-spadmin-config.php');
+        $nonsaas_marker = file_exists($files_dir . '/func/bc-integrity.php');
+        if ($expected === 'SAAS' && $nonsaas_marker && !$saas_marker) {
+            throw new Exception("Wrong update package: the package contains NON-SAAS files (func/bc-integrity.php) but this is a SAAS installation. No files were changed.");
+        }
+        if ($expected === 'NON-SAAS' && $saas_marker && !$nonsaas_marker) {
+            throw new Exception("Wrong update package: the package contains SAAS files (func/bc-levelup.php) but this is a NON-SAAS installation. No files were changed.");
+        }
+    }
+}
+
+
 $timestamp = date('Y-m-d_H-i-s');
 $log = [];
 
@@ -140,6 +174,8 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
     'license_key' => $license_key,
+    'edition' => 'NON-SAAS',
+    'product' => 'DGV7',
     'domain' => $license_domain
 ]));
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
@@ -328,6 +364,8 @@ try {
     if (!$manifest || !isset($manifest['version'])) {
         throw new Exception("Corrupted or invalid manifest.json file.");
     }
+
+    bc_assert_update_edition($manifest, $staging_dir_actual, 'NON-SAAS');
 
     // Process file deletions
     if (!empty($manifest['files_to_delete'])) {
