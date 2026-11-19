@@ -2,18 +2,6 @@
 /** Run: php -n VTU/tests/fintech_policy_test.php
  * This only tests the unconnected phase-1 policy primitives, not route enforcement.
  */
-// TEMPORARY DIAGNOSTIC - remove before merge.
-set_exception_handler(function ($e) {
-    $msg = 'POLICY-TEST ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine();
-    fwrite(fopen('php://stdout', 'w'), "::error ::" . $msg . "\n");
-    exit(255);
-});
-register_shutdown_function(function () {
-    $e = error_get_last();
-    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
-        fwrite(fopen('php://stdout', 'w'), "::error ::POLICY-TEST FATAL " . $e['message'] . " @ " . $e['file'] . ":" . $e['line'] . "\n");
-    }
-});
 $root = dirname(__DIR__);
 $saas = $root . '/DGV7.0-SAAS/func/bc-fintech-policy.php';
 $standalone = $root . '/DGV7.0-NON-SAAS/func/bc-fintech-policy.php';
