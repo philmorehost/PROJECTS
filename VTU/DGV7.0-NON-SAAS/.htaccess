@@ -45,11 +45,15 @@ Options -Indexes
     # Do not execute PHP files uploaded into asset/upload trees, at any depth.
     RewriteRule (?:^|/)(?:uploads?|uploaded-image|assets?|images?|img|media)/.*\.php$ - [F,NC,L]
 
-    # Keep the SAAS installer closed once installation has finished. Re-enable it temporarily
-    # only when a fresh installation/migration is deliberately being performed.
-    RewriteCond %{REQUEST_URI} (?:^|/)install/
-    RewriteCond %{DOCUMENT_ROOT}/install/install.php !-f
-    RewriteRule ^ - [F,L]
+    # The installer is NOT blocked here. An earlier guard keyed off
+    # %{DOCUMENT_ROOT}/install/install.php, but that file exists in neither edition (SAAS ships
+    # install/index.php, NON-SAAS ships install.php) and %{DOCUMENT_ROOT} is the Apache docroot,
+    # not the application directory. The condition was therefore always true, so every /install/
+    # request returned 403 and a fresh installation could never be run.
+    #
+    # Re-installation is refused by the installers themselves, which is app-relative and works
+    # from any subdirectory: SAAS install/index.php redirects to / when func/db-json.php and a
+    # super-admin row already exist; NON-SAAS install.php redirects when installed.lock exists.
 
     # Debug artefacts that used to hold credentials, OTPs, API keys and PII. The writers are gone;
     # this makes a stale copy on a not-yet-redeployed server unfetchable too.

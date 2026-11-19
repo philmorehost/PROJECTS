@@ -429,6 +429,47 @@ CI now runs the context test as its own step and `cmp`s the two root files, and 
 paths plus the test script were added to the workflow triggers, so the divergence cannot return
 silently.
 
+### 9. Fresh installations returned 403 — installer guard removed
+
+After the parity fix, a **new installation of either edition returned "Forbidden"**. The cause was a
+guard in both root `.htaccess` files:
+
+```apache
+RewriteCond %{REQUEST_URI} (?:^|/)install/
+RewriteCond %{DOCUMENT_ROOT}/install/install.php !-f
+RewriteRule ^ - [F,L]
+```
+
+Two independent defects, either of which makes the guard fire on every request:
+
+1. **`install/install.php` exists in neither edition.** SAAS ships `install/index.php`; NON-SAAS
+   ships `install.php` at the root. So `!-f` was always true.
+2. **`%{DOCUMENT_ROOT}` is the Apache document root, not the application directory.** Even with a
+   correct file name, the check would fail whenever the app is deployed in a subdirectory
+   (`public_html/vtu/` and similar), which is the common case.
+
+With the condition always true, `RewriteRule ^ - [F,L]` returned **403 for every `/install/`
+request**, so the wizard could never be opened. The comment above it ("re-enable it temporarily
+only when a fresh installation is deliberately being performed") is the trap: there was no way to
+re-enable it short of editing the file on the server.
+
+**The guard is removed.** Re-installation over a live install is still prevented — by the
+installers themselves, which are app-relative and work from any subdirectory:
+
+| Edition | Self-guard |
+| --- | --- |
+| SAAS `install/index.php` | redirects to `/` when `func/db-json.php` exists **and** a `sas_super_admin` row exists |
+| NON-SAAS `install.php` | redirects to `/bc-admin/Dashboard.php` when `installed.lock` exists |
+
+Nothing else was loosened: the directory-listing block, the deny on config/log/backup files, the
+security headers, the upload-PHP execution block, the private-directory rules and the
+query-string guards are all unchanged, and the two root files remain byte-identical.
+
+`htaccess_context_test.py` gained three assertions so this cannot return: no active line may key a
+decision off `%{DOCUMENT_ROOT}`, the nonexistent `install/install.php` may not be referenced, and
+no `RewriteCond` may gate the installer path. Verified by restoring the old file — the test fails
+with exactly those messages — then restoring the fix (**PASS, 224 checks**).
+
 ## Phase 1C gateway change — Plisio retired
 
 Plisio.net is defunct. It is retired **without deleting history**:
