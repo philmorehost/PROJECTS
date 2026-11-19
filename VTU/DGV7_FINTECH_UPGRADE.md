@@ -777,3 +777,45 @@ Regression coverage lives in `VTU/tests/fintech_gate_test.php`: the real handler
 evaluated against a fake `sas_admin_payments` / `sas_super_admin_payments`, asserting a `0`
 charge saves, an existing row updates instead of duplicating, and invalid input always yields
 a message.
+
+## 12. Installer head must be called from inside the PHP tags
+
+Both wizards printed their own opening lines as literal text. `bc_installer_head()` was written in
+**inline-HTML position** in `DGV7.0-SAAS/install/index.php` and `DGV7.0-NON-SAAS/install.php`, so
+PHP never executed it: the page had no `<head>`, no `<title>`, no stylesheet, and no JS. It
+looked like a "loading issue" with a missing stylesheet — it was a call outside the tags.
+
+The call is now `?>` + `<?php bc_installer_head("…"); ?>`, and the gate test renders each
+installer from source with `token_get_all()` (inline HTML becomes `echo`, the tags are dropped) so
+a call left outside the tags reproduces the literal text instead of being silently evaluated. The
+previous helper eval'd from the first `bc_installer_head(` and therefore could not see it.
+
+## 13. Add-vendor must not lose the "use existing domain" value
+
+`bc-spadmin/VendorReg.php` read the existing domain **only** from the hidden `app_base_url`
+field, which the page's script fills by copying `existing_url` on `input`. Any suppressed script,
+autofill, or paste that never fired `oninput` left that field empty, so the vendor was saved with
+a domain the admin had in fact typed. The handler now reads `existing_url` directly and falls back
+to it, and normalises it with the shipped host cleaner (so `www.` and a scheme are stripped).
+
+The second fault was a silent one: when the `sas_pending_vendors` INSERT failed, the handler
+discarded `mysqli_error()` and set a bare *"Could not save your registration. Please try
+again."* — no cause, nothing in the log. It now logs the real error and reports a duplicate
+email/domain distinctly, so the admin can delete the pending row and retry.
+
+Schema: the pending-vendor migration added eight columns under a single "app_base_url is missing"
+condition. A table that already had `app_base_url` but was missing a later column never received
+it, and the add-vendor INSERT — which names every column — then failed with an unknown-column
+error while the duplicate pre-checks still passed. Each column is now added on its own, with
+`AFTER order_playstore` applied only once `order_playstore` exists. `BC_TABLES_VERSION` moved to
+`2026.11.19-1` in both editions so installations already carrying the old marker re-run it.
+
+Nothing here depends on cPanel API details: cPanel is best-effort at approval time
+(`bc-spadmin/VendorRegistrations.php`), and WHMP is required only on the **register** path. A
+settings state of "bank settings saved, TLD prices saved, cPanel API details not saved" must not
+block add-vendor.
+
+Coverage: `VTU/tests/fintech_gate_test.php` now evaluates the real `create-profile` handler
+against a faithful fake `sas_pending_vendors` (unique keys enforced, `mysqli_error` populated),
+asserting the existing domain is read and normalised, a duplicate is named, nothing is written on
+a collision, and the failure branch is wired to the real error. 1025 checks.

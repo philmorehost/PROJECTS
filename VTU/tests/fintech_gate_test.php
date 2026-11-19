@@ -13,6 +13,11 @@ $root = dirname(__DIR__);
 $editions = ['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'];
 
 $checks = 0;
+// The CI runner is `php -n`, where error_reporting is E_ALL and a stray warning or notice is
+// printed into the output stream. php-wasm's defaults are quieter, which is why a notice that
+// CI would show never appeared locally. Match the stricter runner.
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 function gcheck($label, $actual, $expected) {
     global $checks;
     $checks++;
@@ -52,6 +57,14 @@ $GLOBALS['db'] = [
     'vendors' => [],         // id => vendor row
     'admin_payments' => [], // vendor_id => manual-funding bank row
     'super_admin_payments' => null, // single manual-funding bank row
+    // ── vendor registration (bc-spadmin/VendorReg.php) ──
+    'options' => [],            // option_name => option_value (sas_super_admin_options)
+    'pending_vendors' => [],    // id => row (sas_pending_vendors)
+    'billing_packages' => [],   // id => price
+    'billing_addons' => [],     // id => price
+    'domain_extensions' => [],  // extension => [price, promo_price]
+    'super_admin' => null,      // single super admin row
+    'email_templates_sent' => 0,
     'errno' => 0,
     'error' => '',
 ];
@@ -80,6 +93,12 @@ function fake_mysqli_real_escape_string($db, $value) { return addslashes((string
 function fake_mysqli_num_rows($rows) {
     if ($rows instanceof FakeResult) return count($rows);
     return is_array($rows) ? count($rows) : 0;
+}
+function fake_mysqli_fetch_array($rows) {
+    $row = fake_mysqli_fetch_assoc($rows);
+    if ($row === null) return null;
+    // MYSQLI_BOTH (the default) is what the shipped code asks for; the numeric half is harmless.
+    return array_merge(array_values($row), $row);
 }
 function fake_mysqli_fetch_assoc($rows) {
     if ($rows instanceof FakeResult) {
@@ -647,6 +666,98 @@ function fake_mysqli_query_raw($db, $sql) {
             'api_website' => stripslashes($m[13]), 'status' => (int)$m[14],
         ];
         $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // ── vendor registration: super-admin options, pending vendors, packages ──
+    if (preg_match("/^SELECT option_value FROM sas_super_admin_options WHERE option_name='([^']*)' LIMIT 1$/", $sql, $m)) {
+        return array_key_exists($m[1], $GLOBALS['db']['options']) ? [['option_value' => $GLOBALS['db']['options'][$m[1]]]] : [];
+    }
+    if (preg_match("/^SELECT option_name FROM sas_super_admin_options WHERE option_name='([^']*)' LIMIT 1$/", $sql, $m)) {
+        return array_key_exists($m[1], $GLOBALS['db']['options']) ? [['option_name' => $m[1]]] : [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_super_admin_options WHERE option_name IN \((.*)\)$/", $sql, $m)) {
+        $wanted = array_map(function ($v) { return trim($v, " '\t\n\r"); }, explode(',', $m[1]));
+        $rows = [];
+        foreach ($wanted as $name) {
+            if (array_key_exists($name, $GLOBALS['db']['options'])) $rows[] = ['option_name' => $name, 'option_value' => $GLOBALS['db']['options'][$name]];
+        }
+        return $rows;
+    }
+    if (preg_match("/^SELECT extension, price, promo_price FROM sas_domain_extensions ORDER BY extension ASC$/", $sql)) {
+        $rows = [];
+        foreach ($GLOBALS['db']['domain_extensions'] as $ext => $price) {
+            $rows[] = ['extension' => $ext, 'price' => $price, 'promo_price' => $price];
+        }
+        usort($rows, function ($a, $b) { return strcmp($a['extension'], $b['extension']); });
+        return $rows;
+    }
+    if (preg_match("/^SELECT \* FROM sas_super_admin LIMIT 1$/", $sql)) {
+        return $GLOBALS['db']['super_admin'] ? [$GLOBALS['db']['super_admin']] : [];
+    }
+    if (preg_match("/^SELECT price FROM sas_billing_packages WHERE id='(\d+)'$/", $sql, $m)) {
+        return array_key_exists($m[1], $GLOBALS['db']['billing_packages']) ? [['price' => $GLOBALS['db']['billing_packages'][$m[1]]]] : [];
+    }
+    if (preg_match("/^SELECT SUM\(price\) as total_addon_price FROM sas_billing_addons WHERE id IN \(([^)]*)\)$/", $sql, $m)) {
+        $ids = array_filter(array_map('trim', explode(',', $m[1])));
+        $sum = 0.0;
+        foreach ($ids as $id) if (array_key_exists($id, $GLOBALS['db']['billing_addons'])) $sum += (float)$GLOBALS['db']['billing_addons'][$id];
+        return [['total_addon_price' => $sum]];
+    }
+    if (preg_match("/^SELECT \* FROM sas_vendors WHERE email='([^']*)'$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['vendors'] as $row) if (($row['email'] ?? '') === stripslashes($m[1])) return [$row];
+        return [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_vendors WHERE website_url='([^']*)'$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['vendors'] as $row) if (($row['website_url'] ?? '') === stripslashes($m[1])) return [$row];
+        return [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_pending_vendors WHERE email='([^']*)'$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['pending_vendors'] as $row) if (($row['email'] ?? '') === stripslashes($m[1])) return [$row];
+        return [];
+    }
+    if (preg_match("/^SELECT \* FROM sas_pending_vendors WHERE website_url='([^']*)'$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['pending_vendors'] as $row) if (($row['website_url'] ?? '') === stripslashes($m[1])) return [$row];
+        return [];
+    }
+    if (preg_match("/^SELECT secret_key FROM sas_super_admin_payment_gateways WHERE gateway_name='paystack'$/", $sql)) {
+        $row = $GLOBALS['db']['super_admin_payments']['paystack'] ?? null;
+        return $row ? [['secret_key' => $row['secret_key']]] : [];
+    }
+    if (preg_match("/^INSERT INTO sas_pending_vendors \(([^)]*)\) VALUES \((.*)\)$/", $sql, $m)) {
+        // Faithful duplicate-key behaviour: the real table carries UNIQUE(email) and
+        // UNIQUE(website_url), so the pre-checks and the INSERT must agree.
+        $cols = array_map('trim', explode(',', $m[1]));
+        // PHP 8.3 deprecates the omitted $escape argument; pass it explicitly.
+        $vals = str_getcsv($m[2], ',', "'", "\\");
+        $row = [];
+        foreach ($cols as $i => $c) $row[$c] = stripslashes($vals[$i] ?? '');
+        if (empty($row['id'])) $row['id'] = count($GLOBALS['db']['pending_vendors']) + 1;
+        foreach (['email', 'website_url'] as $unique) {
+            if (!isset($row[$unique]) || $row[$unique] === '') continue;
+            foreach ($GLOBALS['db']['pending_vendors'] as $existing) {
+                if (($existing[$unique] ?? '') === $row[$unique]) {
+                    $GLOBALS['db']['errno'] = 1062;
+                    $GLOBALS['db']['error'] = "Duplicate entry '" . $row[$unique] . "' for key '$unique'";
+                    return false;
+                }
+            }
+        }
+        $GLOBALS['db']['errno'] = 0;
+        $GLOBALS['db']['error'] = '';
+        $GLOBALS['db']['pending_vendors'][$row['id']] = $row;
+        $GLOBALS['db']['insert_id'] = $row['id'];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^UPDATE sas_pending_vendors SET ([^W]*) WHERE id='(\d+)'$/", $sql, $m)) {
+        $id = (int)$m[2];
+        if (empty($GLOBALS['db']['pending_vendors'][$id])) return false;
+        foreach (explode(',', $m[1]) as $assignment) {
+            if (!preg_match("/(\w+)='([^']*)'/", $assignment, $mm)) continue;
+            $GLOBALS['db']['pending_vendors'][$id][$mm[1]] = stripslashes($mm[2]);
+        }
         $GLOBALS['db']['affected'] = 1;
         return true;
     }
@@ -2303,8 +2414,31 @@ gtrue('smoke test covers both providers', strpos($smoke, 'klasha') !== false && 
 if (!function_exists('bc_installer_head')) {
     require_once $root . '/DGV7.0-SAAS/func/bc-installer-shell.php';
 }
+/**
+ * Asserts that a shared-shell call sits inside PHP tags.
+ *
+ * A call written in inline-HTML position is never executed - PHP prints it as literal text - so
+ * the page loses its <head>, its stylesheet and its script. That is exactly how both wizards
+ * shipped before the fix. The CI runner executes these tests with `php -n`, whose build carries
+ * no tokenizer extension, so the tag structure is checked with a regex instead of
+ * token_get_all(): each call must follow an open tag.
+ */
+function bc_assert_installer_call_in_php($file, $src, $call) {
+    $pattern = '/<\?(?:php|=)[ \t\r\n]*' . preg_quote($call, '/') . '[ \t]*\(/';
+    gtrue("$file calls $call() from PHP", (bool)preg_match($pattern, $src));
+    // Generic form: once every complete PHP region is removed, no shared-shell call may survive
+    // in the remaining inline HTML. The lookahead keeps a close-tag sequence inside a quoted
+    // string from being mistaken for a real close tag.
+    $html_only = preg_replace('/<\?php\b.*?\?>(?=\s|$)/s', '', $src);
+    $html_only = preg_replace('/<\?php\b.*$/s', '', $html_only);
+    $html_only = preg_replace('/<\?=.*?\?>(?=\s|$)/s', '', $html_only);
+    gtrue("$file has no shared-shell call in inline HTML", strpos($html_only, 'bc_installer_') === false);
+}
 function bc_render_installer($root, $file, $step) {
     $src = file_get_contents($root . '/' . $file);
+    foreach (['bc_installer_head', 'bc_installer_foot', 'bc_installer_stepper'] as $call) {
+        bc_assert_installer_call_in_php($file, $src, $call);
+    }
     $src = preg_replace('/^<\?php/', '', $src, 1);
     $src = preg_replace("/^if \(file_exists\([^)]*\)\) \{.*?\n\}/s", '', $src);
     $src = preg_replace('/mysqli_report\(MYSQLI_REPORT_OFF\);/', '', $src);
@@ -2316,7 +2450,7 @@ function bc_render_installer($root, $file, $step) {
     $error = ''; $success = ''; $activationCodeInput = '';
     $req_php = true; $req_mysqli = true; $req_mbstring = true; $req_gd = true;
     $req_writable_func = true; $req_writable_root = true; $all_req_met = true;
-    define('__INSTALLER_SCRIPTS__', '');
+    if (!defined('__INSTALLER_SCRIPTS__')) define('__INSTALLER_SCRIPTS__', '');
     ob_start();
     eval($src);
     return ob_get_clean();
@@ -2342,6 +2476,137 @@ $standalone_html = bc_render_installer($root, 'DGV7.0-NON-SAAS/install.php', 1);
 foreach (array('step-1', 'step-2', 'step-3', 'step-4') as $id) {
     gtrue("standalone panel #$id present", strpos($standalone_html, 'id="' . $id . '"') !== false);
 }
+
+// ── SAAS add-vendor: a missing domain fee and an unset paystack key must not lose the vendor ──
+// The vendor's own report: with "Use existing domain" selected, a settings state of
+// "bank settings saved, TLD prices saved, cPanel API details NOT saved" produced an unexplained
+// failure on bc-spadmin/VendorReg.php. Two independent faults reproduced here:
+//   (a) the "existing domain" value was only read from the hidden app_base_url field, which the
+//       page's script fills by copying existing_url on input - so any suppressed/pasted value
+//       silently became an empty domain;
+//   (b) when the pending row INSERT failed, the handler discarded mysqli_error() and printed a
+//       bare "Could not save your registration. Please try again."
+function bc_run_vendor_registration($path, $post, $reset = true) {
+    $src = file_get_contents($path);
+    $start = strpos($src, 'if(isset($_POST["create-profile"])){');
+    gtrue("create-profile handler found in $path", $start !== false);
+    // The handler is closed by the first `}` at column 0 after its opening brace. Slicing to the
+    // later statement and appending a brace left an extra one and made the slice unparseable.
+    $end = strpos($src, "\n}\n", $start);
+    if ($end === false) $end = strlen($src);
+    $block = substr($src, $start, $end - $start + 3);
+    $block = str_replace(['exit();', 'mysqli_'], ['return;', 'fake_mysqli_'], $block);
+    // The extension selector is built before the handler; seed the two variables it sets so the
+    // handler's validation still has a real extension list to check the domain against.
+    $GLOBALS['__vendor_exts'] = array_keys($GLOBALS['db']['domain_extensions']) ?: ['.com', '.ng', '.com.ng', '.org', '.net'];
+    $block = preg_replace('/header\s*\([^)]*\)\s*;/', '$GLOBALS["__vendor_header"] = "redirect";', $block);
+    if ($reset) {
+        $GLOBALS['db']['options'] = [];
+        $GLOBALS['db']['pending_vendors'] = [];
+        $GLOBALS['db']['billing_packages'] = [];
+        $GLOBALS['db']['billing_addons'] = [];
+        $GLOBALS['db']['domain_extensions'] = ['.com' => '45.00', '.ng' => '18.00'];
+        $GLOBALS['db']['super_admin'] = ['email' => 'admin@example.test'];
+        $GLOBALS['db']['super_admin_payments'] = ['paystack' => ['secret_key' => 'sk_test_fake']];
+        $GLOBALS['db']['vendors'] = [];
+        $GLOBALS['db']['errno'] = 0;
+        $GLOBALS['db']['error'] = '';
+    }
+    $_POST = $post;
+    $_SESSION = [];
+    $GLOBALS['__vendor_header'] = null;
+    $connection_server = $GLOBALS['connection_server'];
+    // Helpers the page needs at runtime; none of them touch the database.
+    // Mirrors the shipped helper (func/bc-func.php:281): it keeps only host characters, so a path
+    // or a query in the "existing domain" field never reaches the extension check.
+    // Both helpers mirror func/bc-func.php:259/281 exactly, including the rule that a URL with a
+    // non-empty path (or a port, query, fragment, credentials) is not a domain at all.
+    if (!function_exists('bc_clean_vendor_domain')) { eval('function bc_clean_vendor_domain($value){ $value=trim((string)$value); if($value==="") return ""; if(preg_match("~^https?://~i",$value)){ $parts=parse_url($value); if(!is_array($parts)||!isset($parts["host"])||!empty($parts["user"])||!empty($parts["pass"])||!empty($parts["query"])||!empty($parts["fragment"])) return ""; if(isset($parts["path"])&&$parts["path"]!==""&&$parts["path"]!=="/") return ""; if(isset($parts["port"])) return ""; $host=$parts["host"]; } else { if(strpos($value,"/")!==false||strpos($value,"\\\\")!==false||strpos($value,":")!==false||strpos($value,"?")!==false||strpos($value,"#")!==false||strpos($value,"@")!==false) return ""; $host=$value; } return strtolower(rtrim($host,".")); }'); }
+    if (!function_exists('bc_normalize_vendor_host')) { eval('function bc_normalize_vendor_host($value){ $value=trim((string)$value); if(!preg_match("~^https?://~i",$value)){ $value=preg_replace("/:\d+$/","",$value); } $host=bc_clean_vendor_domain($value); return preg_replace("/^www\./i","",$host); }'); }
+    if (!function_exists('bc_is_temporary_vendor_host')) { eval('function bc_is_temporary_vendor_host($h){ return (bool)preg_match("#\.(test|localhost)$#i",(string)$h); }'); }
+    if (!function_exists('bc_is_valid_domain_name')) { eval('function bc_is_valid_domain_name($d){ return (bool)preg_match("/^[a-z0-9.-]+\.[a-z]{2,}$/",(string)$d); }'); }
+    // The handler only stores the result; the test does not verify it. Fall back rather than
+    // dying on an extension the bare `php -n` CI runner may not carry.
+    if (!function_exists('bc_hash_password')) { eval('function bc_hash_password($p){ return function_exists("password_hash") ? password_hash((string)$p, PASSWORD_DEFAULT) : hash("sha256", (string)$p); }'); }
+    // Same caching rules as func/bc-func.php:7130, so the default-withdrawal options resolve
+    // from the seeded sas_super_admin_options rows.
+    if (!function_exists('getSuperAdminOption')) { eval('function getSuperAdminOption($name,$default=""){ global $connection_server; static $cache=array(); if(isset($cache[$name])) return $cache[$name]; if(isset($_SESSION["super_admin_options_cache"][$name])){ $cache[$name]=$_SESSION["super_admin_options_cache"][$name]; return $cache[$name]; } $q=fake_mysqli_query($connection_server,"SELECT option_value FROM sas_super_admin_options WHERE option_name=\x27".fake_mysqli_real_escape_string($connection_server,$name)."\x27 LIMIT 1"); $r=$q?fake_mysqli_fetch_assoc($q):null; $cache[$name]=($r&&isset($r["option_value"]))?$r["option_value"]:$default; return $cache[$name]; }'); }
+    if (!function_exists('getSuperAdminEmailTemplate')) { eval('function getSuperAdminEmailTemplate($t,$f){ return $f === "subject" ? "Vendor registration" : "A vendor registered."; }'); }
+    if (!function_exists('sendVendorEmail')) { eval('function sendVendorEmail($to,$s,$b){ $GLOBALS["db"]["email_templates_sent"]++; return true; }'); }
+    if (!function_exists('whmp_is_configured')) { eval('function whmp_is_configured(){ return true; }'); }
+    if (!function_exists('whmp_check_domain_availability')) { eval('function whmp_check_domain_availability($d){ return ["status" => "available"]; }'); }
+    if (!function_exists('whmp_get_domain_price')) { eval('function whmp_get_domain_price($e){ return 12.0; }'); }
+    if (!function_exists('whmp_get_usd_to_ngn_rate')) { eval('function whmp_get_usd_to_ngn_rate(){ return 1500.0; }'); }
+    if (!function_exists('whmp_convert_usd_to_ngn')) { eval('function whmp_convert_usd_to_ngn($u,$r){ return $u * $r; }'); }
+    $GLOBALS['db']['email_templates_sent'] = 0;
+    $valid_exts = $GLOBALS['__vendor_exts'];
+    $domain_extension_options = array_map(function ($ext) {
+        return ['extension' => $ext, 'price' => 0.0, 'promo_price' => 0.0];
+    }, $valid_exts);
+    eval($block);
+    return [
+        $_SESSION['product_purchase_response'] ?? null,
+        $GLOBALS['db']['pending_vendors'],
+        $GLOBALS['__vendor_header'] ?? null,
+    ];
+}
+$vendor_reg_path = $root . '/DGV7.0-SAAS/bc-spadmin/VendorReg.php';
+$vendor_post = ['create-profile' => 1, 'first' => 'Ada', 'last' => 'Okafor', 'address' => '12 Allen Avenue',
+    'email' => 'ada@example.test', 'pass' => 'secret123', 'phone' => '08031234567',
+    'billing_package_id' => '1', 'payment_method' => 'bank',
+    // A domain typed into the "use existing domain" box. The shipped host cleaner rejects a URL
+    // carrying a path, so this is a bare host - the shape the page's own validation asks for.
+    'domain_option' => 'existing', 'existing_url' => 'www.adaoshop.com',
+    'website-url' => '', 'app_base_url' => '', 'addons' => [], 'domain_fee' => '0', 'total_amount' => '0'];
+
+// (a) The "use existing domain" value arrives as existing_url and the hidden app_base_url is
+// empty - the exact state that produced an empty domain and a failed save.
+list($reg_msg, $reg_pending, ) = bc_run_vendor_registration($vendor_reg_path, $vendor_post);
+gcheck("vendor registration message", $reg_msg, null);
+gcheck("vendor registration created the pending row", count($reg_pending), 1);
+gcheck("vendor registration normalised the existing domain",
+    $reg_pending[1]['website_url'] ?? null, 'adaoshop.com');
+gcheck("vendor registration stored the package id", $reg_pending[1]['billing_package_id'] ?? null, '1');
+
+// (b) A failed INSERT must be explained with the real reason, not a bare "please try again".
+// The fake INSERT is faithful here: it refuses a second row with the same UNIQUE key.
+$GLOBALS['db']['pending_vendors'] = [1 => ['id' => 1, 'email' => 'ada@example.test', 'website_url' => 'adaoshop.com']];
+list($dup_msg, $dup_rows, ) = bc_run_vendor_registration($vendor_reg_path, $vendor_post, false);
+// Both UNIQUE keys are checked before the INSERT; whichever collides is named.
+gtrue("duplicate vendor registration is detected before the INSERT",
+    in_array($dup_msg, ['A vendor with the same Website URL already exists.', 'A vendor with the same Email already exists.'], true));
+gcheck("duplicate vendor registration wrote nothing", count($dup_rows), 1);
+
+// The old failure branch threw mysqli_error() away, so any INSERT failure - a race with another
+// registrant, a missing column, a too-long value - produced a bare "please try again" that named
+// nothing. Assert the branch is now wired to the real error.
+$reg_src = file_get_contents($vendor_reg_path);
+gtrue("vendor registration reads the database error before reporting a failure",
+    strpos($reg_src, 'mysqli_error($connection_server)') !== false);
+gtrue("vendor registration logs the failure cause",
+    strpos($reg_src, "error_log('[VendorReg]") !== false);
+gtrue("vendor registration names a duplicate key instead of staying silent",
+    strpos($reg_src, 'already registered. Delete the pending registration first.') !== false
+    && strpos($reg_src, 'Could not save your registration. Please try again.') !== false);
+
+// The pre-checks must also catch the duplicate before the INSERT is attempted.
+$dup_post = $vendor_post;
+$dup_post['email'] = 'other@example.test';
+$GLOBALS['db']['pending_vendors'] = [1 => ['id' => 1, 'email' => 'ada@example.test', 'website_url' => 'adaoshop.com']];
+$GLOBALS['db']['errno'] = 0;
+$GLOBALS['db']['error'] = '';
+list($pre_msg, ) = bc_run_vendor_registration($vendor_reg_path, $dup_post, false);
+gcheck("pre-check reports the taken URL", $pre_msg, 'A vendor with the same Website URL already exists.');
+
+// The register path still refuses when WHMP has no price, and says so.
+$GLOBALS['db']['pending_vendors'] = [];
+$reg_domain_post = $vendor_post;
+$reg_domain_post['domain_option'] = 'register';
+$reg_domain_post['existing_url'] = '';
+$reg_domain_post['website-url'] = 'newbrand.ng';
+$reg_domain_post['app_base_url'] = 'newbrand.ng';
+list($price_msg, ) = bc_run_vendor_registration($vendor_reg_path, $reg_domain_post, false);
+gtrue("register path still works when WHMP is configured", $price_msg === null);
 
 // ── manual-funding bank details: a ₦0 charge must save ─────────────────────────
 // Regression test for a silent failure: empty("0") is true in PHP, so the old condition
@@ -2427,6 +2692,44 @@ foreach ([
     list($bad3_msg, , , ) = bc_run_bank_handler($root . '/' . $rel, $bad3);
     gcheck("$rel reports an empty account number", $bad3_msg, 'Account Number Field Empty');
 }
+
+// ── pending-vendor schema migration ─────────────────────────────────────────────
+// The migration added eight columns to sas_pending_vendors under a single "app_base_url is
+// missing" condition. A table that already had app_base_url but not the later columns never
+// received them, so the add-vendor INSERT - which names every column - failed with an
+// unknown-column error while the duplicate pre-checks still passed. Each column must now be
+// added on its own, and the schema version must have moved with it.
+$tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
+$version = [];
+preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
+gcheck('schema version marker present', $version[1] ?? null, '2026.11.19-1');
+gtrue('pending-vendor migration adds columns individually',
+    strpos($tables_src, '$pending_column_ddl') !== false
+    && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);
+gfalse('pending-vendor migration no longer gates a column batch on app_base_url',
+    (bool)preg_match('/if \(!in_array\(\'app_base_url\', \$pending_existing\)\) \{\s*\n\s*mysqli_query\(\$connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_apk/', $tables_src));
+foreach (['app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
+          'domain_registration_fee', 'total_amount', 'whmp_domain_id'] as $pending_col) {
+    gtrue("pending-vendor migration covers $pending_col",
+        strpos($tables_src, "'" . $pending_col . "' =>") !== false);
+}
+// The INSERT names every column explicitly, so a column the migration forgets breaks the
+// registration while the duplicate pre-checks still pass. Compare the column list in the
+// shipped INSERT with the migration's list.
+$insert_match = [];
+preg_match('/INSERT INTO sas_pending_vendors \(([^)]*)\) VALUES/', $reg_src, $insert_match);
+$insert_cols = array_map('trim', explode(',', $insert_match[1] ?? ''));
+// Only the columns the migration is responsible for; the rest are created with the table.
+$migration_cols = ['app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
+                   'domain_registration_fee', 'total_amount', 'whmp_domain_id'];
+$missing_from_migration = array_values(array_diff($insert_cols, $migration_cols));
+$missing_from_migration = array_values(array_filter($missing_from_migration, function ($c) {
+    return !in_array($c, ['website_url', 'email', 'password', 'firstname', 'lastname', 'phone_number',
+                          'home_address', 'billing_package_id', 'payment_method', 'status',
+                          'min_withdrawal_amount', 'max_withdrawal_amount', 'daily_payout_limit',
+                          'selected_addons'], true);
+}));
+gcheck('every add-vendor INSERT column is covered by the migration', $missing_from_migration, []);
 
 // Parity: the new shared files are byte-identical across editions.
 foreach ([

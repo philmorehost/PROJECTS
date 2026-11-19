@@ -490,8 +490,7 @@ $req_writable_func = is_writable(__DIR__ . '/func/');
 $req_writable_root = is_writable(__DIR__);
 $all_req_met    = $req_php && $req_mysqli && $req_mbstring && $req_writable_func && $req_writable_root;
 ?>
-bc_installer_head("Install — DGV7 Standalone VTU");
-?>
+<?php bc_installer_head("Install — DGV7 Standalone VTU"); ?>
 <div class="bc-installer">
     <div class="bc-installer__brand">
         <div class="bc-installer__mark">D7</div>
