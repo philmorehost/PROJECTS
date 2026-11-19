@@ -20,6 +20,12 @@
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Exam PIN | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* Exam — fintech redesign (2026-11): shell bill card, carrier tiles, steps.
+   Automation (network auto-detection, plan filtering, proceed gating) is
+   jsfile/bc-custom-all.js, loaded by the shell; all ids/handlers are kept. */
+.pk-app__wrap .pk-bill{border-radius:22px!important}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "BUY EXAM PIN", "crumb" => "Home / Exam PIN")); ?><!-- End Page Title -->
 
@@ -28,8 +34,14 @@ bc_app_head("Exam PIN | " . ($get_all_site_details["site_title"]));
 
       <div class="row justify-content-center">
         <div class="col-lg-8">
-          <div class="card shadow-sm border-0 p-4">
-            <form method="post" action="">
+          <div class="card pk-bill shadow-sm border-0 overflow-hidden">
+                <div class="pk-bill__head">
+                    <span class="pk-bill__ic"><i class="bi bi-pencil-square"></i></span>
+                    <div><h5>Buy Exam PIN</h5><p>Pick the exam body and package.</p></div>
+                    <div class="pk-bill__steps"><span class="on">1 · Exam Body</span><span class="">2 · Package</span><span class="">3 · Confirm</span></div>
+                </div>
+
+            <form method="post" action="" class="p-4">
                 <div class="carrier-grid d-flex flex-wrap justify-content-center gap-3 mb-4">
                     <img alt="Waec" id="waec-lg" product-status="enabled" src="/asset/waec.jpg" onclick="tickExamCarrier('waec'); resetExamQuantity();" class="rounded-4 border p-2"/>
                     <img alt="Neco" id="neco-lg" product-status="enabled" src="/asset/neco.jpg" onclick="tickExamCarrier('neco'); resetExamQuantity();" class="rounded-4 border p-2"/>

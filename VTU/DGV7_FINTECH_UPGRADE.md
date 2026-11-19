@@ -1151,3 +1151,31 @@ New test `VTU/tests/lm_edition_test.php` (30 checks; runs in CI against the
 real LM tree, mirrored locally by the harness). Counts: gate **1053**, policy
 **70**, plate_app **149**, plate_admin **708**, plate_migration **908**,
 backoffice_regression **110**, lm_edition **30**, htaccess **224**.
+
+## 23. Pay Bills automation restored + redesign; admin Dashboard redesign
+
+- **Root cause of the dead Pay Bills pages:** every automation on Data,
+  Airtime, Bulk Data/Airtime, Cable, Electric, Betting and Exam — the
+  phone-prefix network auto-detection (`tickDataCarrier`/`tickAirtimeCarrier`),
+  plan filtering by `product-category`, carrier `.selected` states, proceed
+  gating, bulk number filtering and identifier-limit checks — lives in
+  `jsfile/bc-custom-all.js`, which the retired `bc-footer.php` used to load.
+  The console shell (`bc-plate-app.php`) never picked it up (the admin shell
+  did), so the pages rendered but nothing on them worked. `bc_app_foot()` now
+  loads it after SweetAlert, and the carrier-tile sizing/selected styles that
+  lived in the retired `assets-2` stylesheet are in the shell CSS.
+- **Redesign:** all eight pages (both editions) sit in the shell bill card
+  with a dark gradient head band (icon, title, step pills), carrier tiles and
+  the `pk-verify` detail panel for the verify-then-confirm flows. Every form
+  id/name, inline handler, plan query, PIN block and POST action is unchanged;
+  a regression check resolves every inline handler name against the library.
+- **bc-admin/Dashboard.php** (identical in both editions) rebuilt in the
+  fintech v2 (`ad2-*`) design: glowing dark hero with glass metrics, alert
+  cards, subscription/growth/quick-links, auto-funding bank cards and the
+  addon list. All queries (including the `admin_stats_v2` dashboard cache),
+  the vendor sync script, `buy-addon`/`pay-bill` handlers and addon modals
+  are byte-preserved; the diff is presentation-only.
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
+plate_admin **708**, plate_migration **980**, backoffice_regression **139**,
+lm_edition **30**, htaccess **224**.

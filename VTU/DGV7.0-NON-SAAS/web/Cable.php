@@ -57,6 +57,12 @@
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Cable | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* Cable — fintech redesign (2026-11): shell bill card, carrier tiles, steps.
+   Automation (network auto-detection, plan filtering, proceed gating) is
+   jsfile/bc-custom-all.js, loaded by the shell; all ids/handlers are kept. */
+.pk-app__wrap .pk-bill{border-radius:22px!important}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "BUY CABLE", "crumb" => "Home / Buy Cable")); ?><!-- End Page Title -->
 
@@ -65,9 +71,15 @@ bc_app_head("Cable | " . ($get_all_site_details["site_title"]));
 
       <div class="row justify-content-center">
         <div class="col-lg-8">
-          <div class="card shadow-sm border-0 p-4">
+          <div class="card pk-bill shadow-sm border-0 overflow-hidden">
+                <div class="pk-bill__head">
+                    <span class="pk-bill__ic"><i class="bi bi-tv"></i></span>
+                    <div><h5>Buy Cable TV</h5><p>Verify the decoder first, then confirm the package.</p></div>
+                    <div class="pk-bill__steps"><span class="">1 · Provider</span><span class="">2 · Verify Decoder</span><span class="">3 · Confirm</span></div>
+                </div>
+
 	
-            <form method="post" action="">
+            <form method="post" action="" class="p-4">
                 <?php if(!isset($_SESSION["cable_name"])){ ?>
                 <div class="carrier-grid d-flex justify-content-center gap-3 mb-4">
                     <img alt="Startimes" id="startimes-lg" product-status="enabled" src="/asset/startimes.jpg" onclick="tickCableCarrier('startimes');" class="rounded-4 border p-2"/>
@@ -115,16 +127,16 @@ bc_app_head("Cable | " . ($get_all_site_details["site_title"]));
                 <?php }else{ ?>
                 <div class="text-center mb-4">
                   <img alt="<?php echo htmlspecialchars($_SESSION['cable_provider'], ENT_QUOTES, 'UTF-8'); ?>" id="<?php echo htmlspecialchars($_SESSION['cable_provider'], ENT_QUOTES, 'UTF-8'); ?>-lg" src="/asset/<?php echo htmlspecialchars($_SESSION['cable_provider'], ENT_QUOTES, 'UTF-8'); ?>.jpg" class="service-logo rounded-4 shadow-sm border mb-3" /><br/>
-                  <div class="bg-light p-3 rounded-4 border text-start">
-                      <div class="mb-2"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Full Name</small><br><span class="fw-bold text-dark"><?php echo strtoupper($_SESSION['cable_name']); ?></span></div>
-                      <div class="mb-2"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">IUC Number</small><br><span class="fw-bold text-dark"><?php echo htmlspecialchars($_SESSION['iuc_number'], ENT_QUOTES, 'UTF-8'); ?></span></div>
-                      <div class="mb-0"><small class="text-muted text-uppercase fw-bold" style="font-size: 10px;">Package</small><br><span class="fw-bold text-dark"><?php echo ucwords(trim(str_replace(["-", "_"], " ", strtoupper($_SESSION['cable_package'])))); ?></span></div>
+                  <div class="pk-verify text-start">
+                      <div class="row-line"><span class="k">Full Name</span><span class="v"><?php echo strtoupper($_SESSION['cable_name']); ?></span></div>
+                      <div class="row-line"><span class="k">IUC Number</span><span class="v"><?php echo htmlspecialchars($_SESSION['iuc_number'], ENT_QUOTES, 'UTF-8'); ?></span></div>
+                      <div class="row-line"><span class="k">Package</span><span class="v"><?php echo ucwords(trim(str_replace(["-", "_"], " ", strtoupper($_SESSION['cable_package'])))); ?></span></div>
                   </div>
                 </div>
                 <?php } ?>
 
                 <?php if(!isset($_SESSION["cable_name"])){ ?>
-                <button id="proceedBtn" name="verify-cable" type="submit" style="pointer-events: none;" class="btn btn-primary btn-lg w-100 shadow-sm" >
+                <button id="proceedBtn" name="verify-cable" type="submit" style="pointer-events: none;" class="btn btn-primary btn-lg w-100 shadow-sm rounded-pill fw-bold" >
                     VERIFY DECODER
                 </button>
                 <?php }else{ ?>
@@ -135,7 +147,7 @@ bc_app_head("Cable | " . ($get_all_site_details["site_title"]));
                     <div class="form-text">Your account requires a transaction PIN for every purchase.</div>
                 </div>
                 <?php endif; ?>
-                <button name="buy-cable" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm mb-3" >
+                <button name="buy-cable" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-pill fw-bold mb-3" >
                     COMPLETE PURCHASE
                 </button>
                 <button name="reset-cable" type="submit" class="btn btn-outline-secondary w-100 border-0" >
