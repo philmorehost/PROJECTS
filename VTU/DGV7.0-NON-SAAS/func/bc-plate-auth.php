@@ -98,6 +98,7 @@ if (!function_exists('bc_plate_auth_icon')) {
             'fingerprint' => '<path d="M12 11a3 3 0 0 0-3 3c0 2 .5 4-1 6"/><path d="M12 11a3 3 0 0 1 3 3c0 2.5-.5 5-1 7"/><path d="M6.5 8.5A6 6 0 0 1 18 14c0 2.5-.3 4.5-1 6"/><path d="M4 12a8 8 0 0 1 16 0c0 3-.5 6-1.5 8"/>',
             'arrow'   => '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
             'home'    => '<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+            'bank'    => '<path d="M3 9 12 4l9 5"/><path d="M4 9v8"/><path d="M20 9v8"/><path d="M8 12v4"/><path d="M12 12v4"/><path d="M16 12v4"/><path d="M2 17h20"/>',
         );
         $body = isset($paths[$name]) ? $paths[$name] : $paths['check'];
         return '<svg width="' . (int)$size . '" height="' . (int)$size . '" viewBox="0 0 24 24" fill="none" '

@@ -42,7 +42,6 @@ $later = array(
     'APIDocs.php', 'GiftCard.php', 'KYCVerification.php', 'SiteMap.php',
     'ViewBankReceipt.php', 'ViewCard.php', 'ViewDataBundleCard.php',
     'ViewElectric.php', 'ViewNINCard.php', 'WebsiteOrderRequest.php',
-    'manual_payment.php', 'paystack_callback.php',
     'payhub-success.php', 'guest-payment-complete.php',
     'bc-plate-app.php', 'bc-header.php', 'bc-footer.php', 'short-trans.php',
 );
