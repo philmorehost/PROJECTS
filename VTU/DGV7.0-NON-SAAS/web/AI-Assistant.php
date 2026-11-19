@@ -13,18 +13,11 @@ $vendor_id = $get_logged_user_details['vendor_id'];
 $get_all_site_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='$vendor_id'"));
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>AI Assistant Terminal | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("AI Assistant Terminal | " . ($get_all_site_details["site_title"]));
+?>
     <style>
         :root {
             --ai-bg: #0f0716;
@@ -355,8 +348,8 @@ $get_all_site_details = mysqli_fetch_array(mysqli_query($connection_server, "SEL
         }
         .chat-bubble { animation: fadeIn 0.3s ease forwards; }
     </style>
-</head>
-<body>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "AI ASSISTANT TERMINAL", "crumb" => "Home / AI Assistant")); ?>
 
 <div class="terminal-container">
     <header class="terminal-header">
@@ -438,7 +431,6 @@ $get_all_site_details = mysqli_fetch_array(mysqli_query($connection_server, "SEL
     </div>
 </div>
 
-<script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     const chatHistory = document.getElementById('chat-history');
@@ -595,5 +587,6 @@ $get_all_site_details = mysqli_fetch_array(mysqli_query($connection_server, "SEL
     });
 </script>
 
+<?php bc_app_foot(array("bare" => true, "nonav" => true)); ?>
 </body>
 </html>

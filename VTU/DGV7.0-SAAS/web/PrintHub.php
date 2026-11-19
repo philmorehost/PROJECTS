@@ -7,61 +7,13 @@ if(!isServiceEnabled('data_card')){
     exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<title>Print Hub | <?php echo $get_all_site_details["site_title"]; ?></title>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-	<link rel="stylesheet" href="/cssfile/bc-style.css">
-	<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-	<link href="../assets-2/css/style.css" rel="stylesheet">
-	<style>
-		.service-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-            cursor: pointer;
-            text-align: center;
-            padding: 1.5rem 1rem;
-            height: 100%;
-            border-radius: 1.25rem;
-            border: none;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-        }
-        .service-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1); }
-        .icon-box {
-            width: 64px;
-            height: 64px;
-            border-radius: 1.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 1rem;
-            font-size: 1.75rem;
-        }
-        .bg-airtime { background: #fff1f2; color: #e11d48; }
-        .bg-data { background: #eff6ff; color: #2563eb; }
-        .bg-cable { background: #faf5ff; color: #9333ea; }
-        .bg-electric { background: #fffbeb; color: #d97706; }
-        .bg-exam { background: #f0fdf4; color: #16a34a; }
-        .bg-betting { background: #fdf2f8; color: #db2777; }
-        .bg-nin { background: #ecfdf5; color: #059669; }
-        .service-card.locked { opacity: 0.65; cursor: not-allowed; }
-        .service-card.locked:hover { transform: none; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-	</style>
-</head>
-<body>
-	<?php include("../func/bc-header.php"); ?>
-	<div class="pagetitle">
-		<h1>PRINT HUB</h1>
-		<nav>
-			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-				<li class="breadcrumb-item active">Print Hub</li>
-			</ol>
-		</nav>
-	</div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Print Hub | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "PRINT HUB", "crumb" => "Home / Print Hub")); ?>
 	<section class="section dashboard">
         <div class="row g-4 justify-content-center">
             <div class="col-md-10">
@@ -196,6 +148,5 @@ if(!isServiceEnabled('data_card')){
             </div>
         </div>
 	</section>
-	<?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+	
+	<?php bc_app_foot(); ?>

@@ -12,60 +12,14 @@ $vendor_id = resolveVendorID();
 
 $is_logged_in = isset($_SESSION["user_session"]) && isset($get_logged_user_details);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Service Pricing | <?php echo $get_all_site_details["site_title"] ?? 'Platform'; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <meta name="description" content="View our competitive pricing and discounts for all VTU services." />
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Platform'));
+?>
 
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.gstatic.com" rel="preconnect">
-    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700|Nunito:300,400,600,700|Poppins:300,400,500,600,700" rel="stylesheet">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
-    <style>
-        body { background-color: #f8fafc; }
-        .pricing-container { max-width: 1100px; margin: 0 auto; padding: 20px; }
-        .card { border-radius: 1rem; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-        .accordion-item { border: none; margin-bottom: 1rem; border-radius: 1rem !important; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
-        .accordion-button { font-weight: 700; border-radius: 1rem !important; padding: 1.25rem; }
-        .accordion-button:not(.collapsed) { background-color: #f1f5ff; color: var(--primary-color); }
-        .table thead th { background-color: #f8fafc; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; color: #64748b; border-top: none; }
-        .network-badge { padding: 5px 12px; border-radius: 50px; font-weight: 700; font-size: 0.7rem; }
-        .empty-state { padding: 40px; text-align: center; color: #64748b; }
-        .empty-state i { font-size: 3rem; margin-bottom: 15px; opacity: 0.3; }
-
-        @media (max-width: 768px) {
-            .table-responsive { font-size: 0.85rem; }
-            .pagetitle h1 { font-size: 1.5rem; }
-        }
-    </style>
-</head>
-
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pricing-container">
-        <div class="pagetitle mb-4">
-            <h1><i class="bi bi-tags-fill me-2 text-primary"></i>Service Pricing & Discounts</h1>
-            <nav>
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/">Home</a></li>
-                    <li class="breadcrumb-item active">Pricing</li>
-                </ol>
-            </nav>
-        </div>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "<i class=\"bi bi-tags-fill me-2 text-primary\"></i>Service Pricing & Discounts", "crumb" => "Home / Pricing")); ?>
 
         <div class="alert alert-info border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center">
             <i class="bi bi-info-circle-fill fs-4 me-3"></i>
@@ -324,8 +278,6 @@ $is_logged_in = isset($_SESSION["user_session"]) && isset($get_logged_user_detai
         </div>
     </div>
 
-    <?php include("../func/bc-footer.php"); ?>
-
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Ensure accordion works even if other scripts interfere
@@ -362,5 +314,4 @@ $is_logged_in = isset($_SESSION["user_session"]) && isset($get_logged_user_detai
             });
         });
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

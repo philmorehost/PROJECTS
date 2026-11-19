@@ -69,38 +69,13 @@ if(isset($_POST['notify-deposit'])){
     exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Virtual Bank Accounts | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        .bank-card { border-radius: 15px; border: none; box-shadow: 0 5px 20px rgba(0,0,0,0.05); transition: 0.3s; background: #fff; overflow: hidden; }
-        .bank-header { background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #eee; font-weight: 700; color: #4154f1; }
-        .bank-body { padding: 20px; }
-        .acc-no { font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #333; }
-        .copy-btn { cursor: pointer; color: #4154f1; transition: 0.2s; }
-        .copy-btn:hover { color: #2a3eb1; }
-    </style>
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>VIRTUAL BANK ACCOUNTS</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">Virtual Banks</li>
-            </ol>
-        </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "VIRTUAL BANK ACCOUNTS", "crumb" => "Home / Virtual Banks")); ?>
 
     <section class="section">
         <?php if(!$is_kyc_compliant && $get_logged_user_details["kyc_status"] != 1 && isKYCEnforced()): ?>
@@ -321,7 +296,6 @@ if(isset($_POST['notify-deposit'])){
         }
     </script>
 
-    <?php include("../func/bc-footer.php"); ?>
     <script>
         function triggerManualSync() {
             const btn = document.getElementById('syncBtn');
@@ -382,5 +356,4 @@ if(isset($_POST['notify-deposit'])){
         setTimeout(function() { window.location.reload(); }, 1500);
         <?php endif; ?>
     </script>
-</body>
-</html>
+	<?php bc_app_foot(); ?>

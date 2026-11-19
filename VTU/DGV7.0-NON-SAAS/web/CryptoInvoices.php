@@ -16,29 +16,13 @@ if (!$invoices) {
     error_log("CryptoInvoices Query Error: " . mysqli_error($connection_server));
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Invoice History | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-header.php"); ?>
-
-    <div class="pagetitle px-4 pt-4">
-      <h1>INVOICE HISTORY</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item"><a href="CryptoHub.php">Crypto</a></li>
-          <li class="breadcrumb-item active">Invoices</li>
-        </ol>
-      </nav>
-    </div>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Invoice History | " . ($get_all_site_details["site_title"]));
+?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "INVOICE HISTORY", "crumb" => "Home / Crypto / Invoices")); ?>
 
     <section class="section p-4">
         <!-- Temporary Debug Info (Request by user) -->
@@ -105,6 +89,5 @@ if (!$invoices) {
         </div>
     </section>
 
-    <?php include("../func/bc-footer.php"); ?>
-</body>
-</html>
+    
+	<?php bc_app_foot(); ?>

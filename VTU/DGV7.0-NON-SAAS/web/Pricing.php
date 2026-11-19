@@ -9,25 +9,12 @@
         exit();
     }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Product Pricing & Discounts | <?php echo htmlspecialchars($get_all_site_details["site_title"]); ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr(htmlspecialchars($get_all_site_details["site_desc"] ?? ''), 0, 160); ?>" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <meta name="theme-color" content="#1a1a2e" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    
-    <!-- Google Fonts & Icons -->
-    <link href="https://fonts.gstatic.com" rel="preconnect">
-    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Product Pricing & Discounts | " . ($get_all_site_details["site_title"]));
+?>
     <style>
         :root {
             --primary-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -191,30 +178,8 @@
         .badge-tier-agent { background: rgba(253, 126, 20, 0.1); color: #fd7e14; }
         .badge-tier-api { background: rgba(111, 66, 193, 0.1); color: #6f42c1; }
     </style>
-</head>
-<body class="<?php echo !isset($_SESSION['user_session']) ? 'public-pricing' : ''; ?>">
-
-    <?php 
-    if(isset($_SESSION["user_session"])) {
-        include("../func/bc-header.php"); 
-    } else {
-        // Render Beautiful Standalone Public Navigation Bar
-        ?>
-        <nav class="public-navbar shadow-sm mb-4">
-            <div class="container d-flex justify-content-between align-items-center">
-                <a href="/" class="d-flex align-items-center text-decoration-none">
-                    <img src="<?php echo htmlspecialchars($get_all_site_details['site_logo'] ?? '/assets-2/img/logo.png'); ?>" alt="Logo" style="max-height: 40px;">
-                    <span class="fs-5 fw-bold text-primary ms-2 d-none d-sm-inline-block"><?php echo htmlspecialchars($get_all_site_details['site_title']); ?></span>
-                </a>
-                <div>
-                    <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill px-3 me-2 fw-semibold"><i class="bi bi-house me-1"></i> Home</a>
-                    <a href="Login.php" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Login <i class="bi bi-box-arrow-in-right ms-1"></i></a>
-                </div>
-            </div>
-        </nav>
-        <?php
-    }
-    ?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "<i class=\"bi bi-tags-fill me-2 text-primary\"></i>Service Pricing & Discounts", "crumb" => "Home / Pricing")); ?>
 
     <?php
         // ── Pricing Generator Helper Functions ──
@@ -657,6 +622,6 @@
         });
     </script>
 
-    <?php include("../func/bc-footer.php"); ?>
+    <?php bc_app_foot(); ?>
 </body>
 </html>
