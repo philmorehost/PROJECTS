@@ -7,8 +7,10 @@
  * which is included by func/db-dtl.php → func/bc-connect.php
  */
 
-// Prevent running if already installed
-if (file_exists(__DIR__ . '/installed.lock')) {
+// Prevent running if already installed. Both markers are required: the lock alone
+// (with func/db-json.php lost, e.g. overwritten by a code update) used to bounce the
+// wizard straight back to a Dashboard that could not connect to any database.
+if (file_exists(__DIR__ . '/installed.lock') && file_exists(__DIR__ . '/func/db-json.php')) {
     header('Location: /bc-admin/Dashboard.php');
     exit();
 }

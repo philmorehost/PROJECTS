@@ -76,6 +76,13 @@ on:
       - 'VTU/DGV7.0-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
+      - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/func/db-dtl.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/db-dtl.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-admin-config.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-admin-config.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-spadmin-config.php'
+      - '.gitignore'
       - 'VTU/tests/fintech_policy_test.php'
       - 'VTU/DGV7_FINTECH_UPGRADE.md'
       - 'VTU/DGV7.0-SAAS/users-klasha.php'
@@ -147,6 +154,13 @@ on:
       - 'VTU/DGV7.0-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
+      - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/func/db-dtl.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/db-dtl.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-admin-config.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-admin-config.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-spadmin-config.php'
+      - '.gitignore'
       - 'VTU/tests/fintech_policy_test.php'
       - 'VTU/DGV7_FINTECH_UPGRADE.md'
       - 'VTU/DGV7.0-SAAS/users-klasha.php'
@@ -184,7 +198,7 @@ jobs:
                         func/bc-fintech-accounts.php func/bc-service-matrix.php \
                         func/bc-service-matrix-render.php func/bc-account-backfill.php \
                         func/bc-account-backfill-render.php \
-                        func/bc-config.php web/Login.php web/api/login.php web/api/logout.php \
+                        func/bc-config.php func/db-dtl.php func/bc-admin-config.php web/Login.php web/api/login.php web/api/logout.php \
                         web/api/profile.php web/BusinessUpgrade.php bc-admin/AccountSettings.php \
                         bc-admin/PaymentGateway.php bc-admin/ServiceControl.php \
                         bc-admin/BusinessKYB.php bc-admin/SupportChat.php bc-admin/ChatSettings.php \
@@ -218,6 +232,8 @@ jobs:
           php -l VTU/tests/fintech_gate_test.php
           php -l VTU/tests/plate_migration_test.php
           php -l VTU/tests/plate_bodies.php
+          php -l VTU/tests/backoffice_regression_test.php
+          php -l VTU/DGV7.0-SAAS/func/bc-spadmin-config.php
       - name: Policy and gate tests
         run: |
           set -e
@@ -226,6 +242,7 @@ jobs:
           php -n VTU/tests/plate_app_test.php
           php -n VTU/tests/plate_admin_test.php
           php -n VTU/tests/plate_migration_test.php
+          php -n VTU/tests/backoffice_regression_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e
@@ -263,6 +280,13 @@ jobs:
             done
           done
           cmp VTU/DGV7.0-SAAS/web/api/logout.php VTU/DGV7.0-NON-SAAS/web/api/logout.php
+          cmp VTU/DGV7.0-SAAS/func/db-dtl.php VTU/DGV7.0-NON-SAAS/func/db-dtl.php
+          # Per-installation credentials are written by the wizards on the server and
+          # must never be committed (a committed copy broke every NON-SAAS page).
+          if [ -e VTU/DGV7.0-NON-SAAS/func/db-json.php ]; then
+            echo "NON-SAAS ships a committed func/db-json.php"; exit 1
+          fi
+          grep -q 'DGV7.0-NON-SAAS/func/db-json.php' .gitignore
           # Phase 3 provider webhooks are shared infrastructure and must match.
           cmp VTU/DGV7.0-SAAS/users-klasha.php VTU/DGV7.0-NON-SAAS/users-klasha.php
           cmp VTU/DGV7.0-SAAS/users-flutterwave.php VTU/DGV7.0-NON-SAAS/users-flutterwave.php

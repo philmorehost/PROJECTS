@@ -18,6 +18,20 @@
         }
     }
 
+	// Installer check: func/db-json.php is written by install.php and holds this
+	// installation's own database credentials. It is deliberately NOT shipped with
+	// the code (a committed copy carrying another account's credentials made every
+	// page fail its database connect and land on bc-admin/Error.php). When it is
+	// absent the site has not been installed yet: send the visitor to the wizard,
+	// exactly as the SAAS edition does, instead of a dead-end error page.
+	if (!file_exists(__DIR__ . "/db-json.php")) {
+	    $current_uri = $_SERVER['REQUEST_URI'] ?? '';
+	    if (PHP_SAPI !== 'cli' && strpos($current_uri, '/install') === false) {
+	        header("Location: /install.php");
+	        exit();
+	    }
+	}
+
 	include_once(__DIR__ . "/db-dtl.php");
 	include_once(__DIR__ . "/bc-mailer.php");
 	include_once(__DIR__ . "/email-design.php");

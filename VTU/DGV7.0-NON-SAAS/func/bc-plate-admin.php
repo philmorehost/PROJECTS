@@ -833,7 +833,53 @@ if (!function_exists('bc_adm_foot')) {
             var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));
             if (m) m.classList.toggle('show');
         }
+
+        var tabToggle = e.target.closest('[data-bs-toggle="pill"], [data-bs-toggle="tab"]');
+        if (tabToggle) {
+            e.preventDefault();
+            var tabList = tabToggle.closest('.nav, [role="tablist"]');
+            if (tabList) {
+                Array.prototype.forEach.call(
+                    tabList.querySelectorAll('[data-bs-toggle="pill"], [data-bs-toggle="tab"]'),
+                    function (t) { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); }
+                );
+            }
+            tabToggle.classList.add('active');
+            tabToggle.setAttribute('aria-selected', 'true');
+            var tabTarget = tabToggle.getAttribute('data-bs-target') || tabToggle.getAttribute('href');
+            var tabPane = tabTarget ? document.querySelector(tabTarget) : null;
+            if (tabPane) {
+                var tabContent = tabPane.closest('.tab-content');
+                if (tabContent) {
+                    Array.prototype.forEach.call(
+                        tabContent.querySelectorAll(':scope > .tab-pane'),
+                        function (p) { p.classList.remove('active', 'show'); }
+                    );
+                }
+                tabPane.classList.add('active');
+                void tabPane.offsetWidth;
+                tabPane.classList.add('show');
+            }
+        }
     });
+
+    // Minimal bootstrap.Modal shim. Pages open dialogs with the Bootstrap JS API
+    // (bootstrap.Modal.getOrCreateInstance(el).show()); the bundle is retired, so the
+    // class is provided here on top of the compat layer's .modal.show display rule.
+    if (!window.bootstrap || !window.bootstrap.Modal) {
+        var PkModal = function (el) { this._el = el; };
+        PkModal.prototype.show = function () { if (this._el) this._el.classList.add('show'); };
+        PkModal.prototype.hide = function () { if (this._el) this._el.classList.remove('show'); };
+        PkModal.prototype.toggle = function () { if (this._el) this._el.classList.toggle('show'); };
+        PkModal.getInstance = function (el) { return (el && el.__pkModal) ? el.__pkModal : null; };
+        PkModal.getOrCreateInstance = function (el) {
+            if (!el) return new PkModal(null);
+            if (!el.__pkModal) el.__pkModal = new PkModal(el);
+            return el.__pkModal;
+        };
+        window.bootstrap = window.bootstrap || {};
+        window.bootstrap.Modal = PkModal;
+    }
 })();
 </script>
 </body>
