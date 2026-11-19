@@ -195,6 +195,41 @@ rchk(strpos($sys_hub, 'bi-envelope') !== false, 'hub matrix shows the mail envel
 rchk(strpos(rsrc($nons . '/bc-admin/BatchTransactions.php'), 'bt-hero') !== false,
     'BatchTransactions carries its dedicated redesign');
 
+// ---------------------------------------------------------------- update edition guard
+$upd_clients = array(
+    $saas . '/bc-spadmin/UpdateSystem.php' => 'SAAS',
+    $saas . '/bc-spadmin/ajax_download_update.php' => 'SAAS',
+    $saas . '/bc-spadmin/cron_update.php' => 'SAAS',
+    $nons . '/bc-admin/UpdateSystem.php' => 'NON-SAAS',
+    $nons . '/bc-admin/ajax_download_update.php' => 'NON-SAAS',
+    $nons . '/bc-admin/cron_update.php' => 'NON-SAAS',
+);
+foreach ($upd_clients as $file => $ed) {
+    rchk(strpos(rsrc($file), "'edition' => '$ed'") !== false,
+        basename(dirname($file)) . '/' . basename($file) . " identifies itself as $ed to the update server");
+}
+foreach (array($saas . '/bc-spadmin/execute_update.php' => 'SAAS', $saas . '/bc-spadmin/cron_update.php' => 'SAAS',
+               $nons . '/bc-admin/execute_update.php' => 'NON-SAAS', $nons . '/bc-admin/cron_update.php' => 'NON-SAAS') as $file => $ed) {
+    $src = rsrc($file);
+    $guard = strpos($src, "bc_assert_update_edition(\$manifest, \$staging_dir_actual, '$ed')");
+    $delete = strpos($src, "files_to_delete");
+    rchk($guard !== false && $delete !== false && $guard < $delete,
+        basename(dirname($file)) . '/' . basename($file) . ' refuses the wrong edition before touching files');
+}
+// The edition classifier itself: "non-saas" must not match the "saas" substring.
+$exec_src = rsrc($nons . '/bc-admin/execute_update.php');
+if (preg_match('/function bc_update_edition_of.*?\n\}\n/s', $exec_src, $mm)) {
+    eval($mm[0]);
+    rchk(bc_update_edition_of('DGV7-SAAS') === 'SAAS', 'classifier maps DGV7-SAAS to SAAS');
+    rchk(bc_update_edition_of('non-saas') === 'NON-SAAS', 'classifier maps non-saas to NON-SAAS');
+    rchk(bc_update_edition_of('Standalone') === 'NON-SAAS', 'classifier maps Standalone to NON-SAAS');
+    rchk(bc_update_edition_of('') === '', 'classifier leaves undeclared packages unclassified');
+} else {
+    rchk(false, 'edition classifier is present in execute_update');
+}
+rchk(strpos($adm_src, "'label' => 'System Update'") !== false && strpos($adm_src, "'href' => 'UpdateSystem.php'") !== false,
+    'System Update is in the back-office menu (System Function + spadmin)');
+
 echo "backoffice_regression_test: $checks checks, $failures failures\n";
 if ($failures > 0) {
     exit(1);

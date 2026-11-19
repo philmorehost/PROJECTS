@@ -296,6 +296,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'AI Manager',            'href' => 'AIManagement.php',     'icon' => 'cpu-fill',        'match' => array('AIManagement.php')),
                     array('label' => 'Automation & AI Guide', 'href' => 'AutomationGuide.php',  'icon' => 'journal-text',    'match' => array('AutomationGuide.php')),
                     array('label' => 'USSD Channel Access',   'href' => 'USSDAccessFee.php',    'icon' => 'phone',           'match' => array('USSDAccessFee.php')),
+                    array('label' => 'System Update',         'href' => 'UpdateSystem.php',     'icon' => 'cloud-arrow-up',  'match' => array('UpdateSystem.php')),
                 )),
                 array('label' => 'Management', 'items' => array(
                     array('label' => 'Manage Vendors', 'icon' => 'menu-button-wide', 'match' => array('VendorReg.php','Vendors.php','VendorRegistrations.php','UnblockRequests.php','DomainSettings.php','DomainChangeRequests.php'), 'children' => array(
@@ -366,7 +367,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Fund User',             'href' => 'ShareFund.php',            'match' => array('ShareFund.php')),
                 )),
                 array('label' => 'System Function', 'icon' => 'menu-button-wide',
-                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php'),
+                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php','UpdateSystem.php'),
                       'children' => array(
                     array('label' => 'Account Settings',     'href' => 'AccountSettings.php',     'match' => array('AccountSettings.php')),
                     array('label' => 'Fund Wallet',          'href' => 'Fund.php',                'match' => array('Fund.php')),
@@ -392,6 +393,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Chat Settings',        'href' => 'ChatSettings.php',        'match' => array('ChatSettings.php')),
                     array('label' => 'Brute Force Security',  'href' => 'BruteForceSecurity.php',  'match' => array('BruteForceSecurity.php')),
                     array('label' => 'Service Control Center','href' => 'ServiceControl.php',      'match' => array('ServiceControl.php')),
+                    array('label' => 'System Update',       'href' => 'UpdateSystem.php',       'match' => array('UpdateSystem.php')),
                 )),
             )),
             array('label' => 'Service Operations', 'items' => array(
