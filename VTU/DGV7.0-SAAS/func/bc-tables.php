@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.17-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.19-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -234,19 +234,29 @@ if ($check_pending_cols) {
         mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN daily_payout_limit INT DEFAULT 10");
     }
 
-    if (!in_array('app_base_url', $pending_existing)) {
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN app_base_url VARCHAR(255) DEFAULT NULL");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_apk TINYINT(1) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_ios TINYINT(1) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_playstore TINYINT(1) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_sms_bridge TINYINT(1) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN domain_registration_fee DECIMAL(10,2) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN total_amount DECIMAL(10,2) DEFAULT 0");
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN whmp_domain_id VARCHAR(255) DEFAULT NULL");
-    }
-
-    if (!in_array('order_sms_bridge', $pending_existing) && in_array('app_base_url', $pending_existing)) {
-        mysqli_query($connection_server, "ALTER TABLE sas_pending_vendors ADD COLUMN order_sms_bridge TINYINT(1) DEFAULT 0 AFTER order_playstore");
+    // Every column is added on its own. They used to be grouped under "app_base_url is
+    // missing", so a table that already had app_base_url but was missing any of the later
+    // columns never received them - and the add-vendor INSERT, which names every column,
+    // then failed with an unknown-column error while the pre-checks still passed.
+    $pending_column_ddl = [
+        'app_base_url' => "ALTER TABLE sas_pending_vendors ADD COLUMN app_base_url VARCHAR(255) DEFAULT NULL",
+        'order_apk' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_apk TINYINT(1) DEFAULT 0",
+        'order_ios' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_ios TINYINT(1) DEFAULT 0",
+        'order_playstore' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_playstore TINYINT(1) DEFAULT 0",
+        'order_sms_bridge' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_sms_bridge TINYINT(1) DEFAULT 0",
+        'domain_registration_fee' => "ALTER TABLE sas_pending_vendors ADD COLUMN domain_registration_fee DECIMAL(10,2) DEFAULT 0",
+        'total_amount' => "ALTER TABLE sas_pending_vendors ADD COLUMN total_amount DECIMAL(10,2) DEFAULT 0",
+        'whmp_domain_id' => "ALTER TABLE sas_pending_vendors ADD COLUMN whmp_domain_id VARCHAR(255) DEFAULT NULL",
+    ];
+    foreach ($pending_column_ddl as $pending_column => $pending_ddl) {
+        if (in_array($pending_column, $pending_existing, true)) continue;
+        // AFTER fails when the referenced column is not there yet, so only use it once the
+        // table has been brought up to date by an earlier iteration of this loop.
+        if ($pending_column === 'order_sms_bridge' && in_array('order_playstore', $pending_existing, true)) {
+            $pending_ddl .= ' AFTER order_playstore';
+        }
+        mysqli_query($connection_server, $pending_ddl);
+        $pending_existing[] = $pending_column;
     }
 }
 

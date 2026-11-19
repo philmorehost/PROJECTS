@@ -61,6 +61,13 @@
         $payment_method = mysqli_real_escape_string($connection_server, $_POST['payment_method']);
         
         $app_base_url_raw = trim(strip_tags((string)($_POST['app_base_url'] ?? '')));
+        // "Use existing domain" posts its value as existing_url; the page's script also copies
+        // it into the hidden app_base_url field. Read it directly so a blocked script, autofill
+        // or a paste that never fires oninput cannot silently drop the domain.
+        $existing_url_raw = trim(strip_tags((string)($_POST['existing_url'] ?? '')));
+        if ($app_base_url_raw === '' && $existing_url_raw !== '') {
+            $app_base_url_raw = $existing_url_raw;
+        }
         $app_base_url = mysqli_real_escape_string($connection_server, bc_normalize_vendor_host($app_base_url_raw));
         $order_apk = isset($_POST['order_apk']) ? 1 : 0;
         $order_ios = isset($_POST['order_ios']) ? 1 : 0;
@@ -272,7 +279,17 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                                 exit();
                             }
                         } else {
-                            $_SESSION["product_purchase_response"] = "Could not save your registration. Please try again.";
+                            // The old handler discarded mysqli_error(), so a failure here was
+                            // completely unexplained. Log the real cause and say what it was.
+                            $register_error = mysqli_error($connection_server);
+                            error_log('[VendorReg] Could not save vendor registration: ' . $register_error);
+                            if (strpos((string)$register_error, 'Duplicate entry') !== false) {
+                                $_SESSION["product_purchase_response"] = "Could not save this vendor: that email or domain is already registered. Delete the pending registration first.";
+                            } elseif ((string)$register_error !== '') {
+                                $_SESSION["product_purchase_response"] = "Could not save this vendor: " . $register_error;
+                            } else {
+                                $_SESSION["product_purchase_response"] = "Could not save your registration. Please try again.";
+                            }
                         }
                         header("Location: ".$_SERVER["REQUEST_URI"]);
                         exit();

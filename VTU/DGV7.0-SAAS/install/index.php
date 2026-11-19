@@ -209,8 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
-bc_installer_head("Installation Wizard - DGV7.0 SAAS");
-?>
+<?php bc_installer_head("Installation Wizard - DGV7.0 SAAS"); ?>
 <div class="bc-installer">
     <div class="bc-installer__brand">
         <div class="bc-installer__mark">D7</div>
