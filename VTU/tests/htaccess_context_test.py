@@ -123,6 +123,19 @@ for path, text in ((saas_root, saas_text), (non_saas_root, non_saas_text)):
         ):
             check(bool(combined.search(attack)), f"{path}: attack pattern not blocked: {attack}")
 
+    # A fresh installation must be reachable. The guard that used to sit here keyed off
+    # %{DOCUMENT_ROOT}/install/install.php: that file exists in neither edition (SAAS ships
+    # install/index.php, NON-SAAS ships install.php) and %{DOCUMENT_ROOT} is the Apache docroot,
+    # not the application directory. The condition was therefore always true, so /install/
+    # always returned 403 and a new installation could never be run.
+    check("%{DOCUMENT_ROOT}" not in active_text,
+          f"{path}: .htaccess keys a decision off %{{DOCUMENT_ROOT}}, which is wrong when the app is in a subdirectory")
+    check("install/install.php" not in active_text,
+          f"{path}: .htaccess still references the nonexistent install/install.php")
+    installer_guard = re.compile(r"^\\s*RewriteCond\\s+%\\{REQUEST_URI\\}\\s+(?:^|/)install/", re.IGNORECASE)
+    check(not any(installer_guard.match(line) for _, line in lines),
+          f"{path}: a RewriteCond still gates the installer path; the installers self-guard")
+
     deny_patterns = [m.group(1) for _, line in lines
                      if (m := DENY_RULE.match(line)) and m.group(1) != "^"]
     try:
