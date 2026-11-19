@@ -159,135 +159,85 @@
         exit();
 	}
 ?>
-<!DOCTYPE html>
-<head>
-	<title>Super Admin Recovery</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-
-          <!-- Google Fonts -->
-  <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link
-    href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-    rel="stylesheet">
-
-  <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-  <link href="../assets-2/vendor/simple-datatables/style.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-<style>
-  body{
-    background-image: url('../asset/web-bg-image.jpg');
-    background-size: cover;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-  }
-</style>
-</head>
-<body>	
-    <div class="container d-flex justify-content-center align-items-center min-vh-100 py-5">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden" style="max-width: 900px; width: 100%;">
-            <div class="row g-0">
-                <div class="col-lg-5 d-none d-lg-flex flex-column justify-content-center align-items-center bg-dark p-5 text-white">
-                    <img src="<?php echo $web_http_host; ?>/uploaded-image/sp-logo.png" style="width: 120px; height: 120px; object-fit: contain;" class="rounded-circle bg-white p-2 mb-4 shadow"/>
-                    <h3 class="fw-bold">Super Recovery</h3>
-                    <p class="text-center opacity-75">Secure session re-authorization for super administrative accounts.</p>
-                </div>
-                <div class="col-lg-7 p-4 p-md-5 bg-white">
+<?php
+$GLOBALS['get_all_site_details'] = $get_all_super_admin_site_details ?? ($GLOBALS['get_all_site_details'] ?? null);
+include_once(__DIR__ . "/../func/bc-plate-auth.php");
+bc_plate_auth_head("Super Admin Recovery", $get_all_super_admin_site_details ?? null);
+bc_plate_auth_top(array(
+    'icon'  => 'key',
+    'title' => 'Account Recovery',
+    'sub'   => 'Master access restoration.',
+));
+?>
                     <?php if ($reset_blocked_msg): ?>
-                    <div class="alert alert-danger border-0 rounded-3 mb-4">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-shield-lock-fill fs-4 me-2 text-danger"></i>
-                            <strong class="fw-bold">Password reset unavailable</strong>
-                        </div>
-                        <p class="mb-2 small"><?php echo htmlspecialchars($reset_blocked_msg); ?></p>
-                        <a href="Login.php" class="btn btn-dark btn-lg w-100 fw-bold">Back to Super Admin Login</a>
+                    <div class="pk-auth__alert pk-auth__alert--error">
+                        <span><?php echo bc_plate_auth_icon('warn', 18); ?></span>
+                        <span><strong>Password reset unavailable</strong><br><?php echo htmlspecialchars($reset_blocked_msg); ?></span>
                     </div>
+                    <a href="Login.php" class="pk-auth__btn">Back to Super Admin Login</a>
                     <?php endif; ?>
-                    <div class="text-center mb-4 d-lg-none">
-                        <img src="<?php echo $web_http_host; ?>/uploaded-image/sp-logo.png" style="width: 80px; height: 80px; object-fit: contain;" class="rounded-circle bg-light p-1 mb-3"/>
-                        <h4 class="fw-bold text-dark">Super Recovery</h4>
-                    </div>
-
-                    <h2 class="fw-bold text-dark mb-1 d-none d-lg-block">Account Recovery</h2>
-                    <p class="text-muted mb-4 d-none d-lg-block">Master access restoration</p>
 
                     <form method="post" action="" <?php echo $reset_blocked_msg ? 'style="display:none"' : ''; ?>>
                         <?php if(!isset($_SESSION["spadmin-recovery-username"]) || empty($_SESSION["spadmin-recovery-username"])){ ?>
-                            <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Super Email</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-shield-lock text-dark"></i></span>
-                                    <input name="email" type="email" class="form-control form-control-lg bg-light border-start-0" placeholder="super@system" style="text-transform: lowercase;" required>
-                                </div>
-                                <div class="form-text mt-2 small text-muted">Authorized credentials required.</div>
+                            <div class="pk-auth__field">
+                                <label class="pk-auth__label" for="email">Super Email</label>
+                                <input id="email" name="email" type="email" class="pk-auth__input" placeholder="super@system" style="text-transform: lowercase;" required>
+                                <p class="pk-auth__note" style="margin-top:8px; text-align:left;">Authorized credentials required.</p>
                             </div>
 
-                            <button name="send-code" type="submit" class="btn btn-dark btn-lg w-100 shadow-sm rounded-3 mb-4 py-3 fw-bold text-uppercase">
+                            <button name="send-code" type="submit" class="pk-auth__btn">
                                 ISSUE RECOVERY CODE
                             </button>
                         <?php } ?>
 
                         <?php if(isset($_SESSION["spadmin-recovery-username"]) && !empty($_SESSION["spadmin-recovery-username"])){ ?>
-                            <div class="alert alert-warning border-0 py-2 small mb-4">
-                                <i class="bi bi-exclamation-triangle-fill me-2"></i> Authorized code sent to email.
+                            <div class="pk-auth__alert pk-auth__alert--info">
+                                <span><?php echo bc_plate_auth_icon('alert', 18); ?></span>
+                                <span>Authorized code sent to email.</span>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Recovery Code</label>
-                                <input name="code" type="text" class="form-control form-control-lg bg-light border-0" placeholder="6-digit code" pattern="[0-9]{6}" required>
+                            <div class="pk-auth__field">
+                                <label class="pk-auth__label" for="code">Recovery Code</label>
+                                <input id="code" name="code" type="text" class="pk-auth__input" placeholder="6-digit code" pattern="[0-9]{6}" required>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">New Master Password</label>
-                                <div class="input-group">
-                                    <input id="new-password" name="pass" type="password" class="form-control form-control-lg bg-light border-0" placeholder="Required" required>
-                                    <span class="input-group-text bg-light border-0" style="cursor: pointer;" onclick="togglePasswordVisibility('new-password', this)">
-                                        <i class="bi bi-eye text-muted"></i>
-                                    </span>
+                            <div class="pk-auth__field">
+                                <label class="pk-auth__label" for="new-password">New Master Password</label>
+                                <div style="position: relative;">
+                                    <input id="new-password" name="pass" type="password" class="pk-auth__input" placeholder="Required" required style="padding-right: 62px;">
+                                    <button type="button" onclick="togglePasswordVisibility('new-password', this)"
+                                            aria-label="Show password"
+                                            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                                                   border:0; background:transparent; color:var(--muted); font:inherit;
+                                                   font-size:.8rem; font-weight:700; cursor:pointer;">Show</button>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Confirm Password</label>
-                                <div class="input-group">
-                                    <input id="confirm-password" name="confirm-pass" type="password" class="form-control form-control-lg bg-light border-0" placeholder="Repeat" required>
-                                    <span class="input-group-text bg-light border-0" style="cursor: pointer;" onclick="togglePasswordVisibility('confirm-password', this)">
-                                        <i class="bi bi-eye text-muted"></i>
-                                    </span>
+                            <div class="pk-auth__field">
+                                <label class="pk-auth__label" for="confirm-password">Confirm New Password</label>
+                                <div style="position: relative;">
+                                    <input id="confirm-password" name="confirm-pass" type="password" class="pk-auth__input" placeholder="Repeat" required style="padding-right: 62px;">
+                                    <button type="button" onclick="togglePasswordVisibility('confirm-password', this)"
+                                            aria-label="Show password"
+                                            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                                                   border:0; background:transparent; color:var(--muted); font:inherit;
+                                                   font-size:.8rem; font-weight:700; cursor:pointer;">Show</button>
                                 </div>
                             </div>
 
-                            <button name="verify-code" type="submit" class="btn btn-dark btn-lg w-100 shadow-sm rounded-3 mb-3 py-3 fw-bold text-uppercase">
+                            <button name="verify-code" type="submit" class="pk-auth__btn">
                                 OVERWRITE PASSWORD
                             </button>
 
-                            <button name="reset-recovery" type="submit" class="btn btn-link w-100 text-muted text-decoration-none small">
-                                ABORT SESSION
+                            <button name="reset-recovery" type="submit" class="pk-auth__btn pk-auth__btn--ghost" style="margin-top:10px;">
+                                Cancel &amp; Restart
                             </button>
                         <?php } ?>
 
-                        <hr class="my-4 opacity-25">
-
-                        <div class="text-center">
-                            <a href="Login.php" class="fw-bold text-decoration-none small text-dark">Return to System Access</a>
-                        </div>
+                        <p class="pk-auth__note" style="margin-top:16px;">
+                            <a href="Login.php" class="pk-auth__link">Back to Super Admin Sign In</a>
+                        </p>
                     </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
 <?php if(isset($_SESSION["product_purchase_response"])){ ?>
 
   <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
@@ -303,19 +253,13 @@
 <?php } ?>
 <script src="/jsfile/bc-custom-all.js"></script>
 <script>
-function togglePasswordVisibility(fieldId, iconElement) {
+function togglePasswordVisibility(fieldId, toggleElement) {
     const field = document.getElementById(fieldId);
-    const icon = iconElement.querySelector('i');
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.classList.remove('bi-eye');
-        icon.classList.add('bi-eye-slash');
-    } else {
-        field.type = 'password';
-        icon.classList.remove('bi-eye-slash');
-        icon.classList.add('bi-eye');
-    }
+    const label = toggleElement.getAttribute('aria-label') === 'Show password' ? 'Hide password' : 'Show password';
+    toggleElement.setAttribute('aria-label', label);
+    toggleElement.textContent = field.type === 'password' ? 'Hide' : 'Show';
+    field.type = field.type === 'password' ? 'text' : 'password';
+    field.focus();
 }
 </script>
-</body>
-</html>
+<?php bc_plate_auth_end(array('links' => array(array('href' => 'Login.php', 'label' => 'Back to sign in')))); ?>

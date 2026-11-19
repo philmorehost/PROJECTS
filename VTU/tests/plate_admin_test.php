@@ -197,6 +197,27 @@ foreach ($dirs as $dir) {
         }
     }
 }
+// Back-office sign-in pages use the signed-out (auth) shell, not the admin shell and
+// never the retired template.
+$auth_pages = array(
+    '/DGV7.0-SAAS/bc-admin/Login.php', '/DGV7.0-SAAS/bc-admin/PasswordRecovery.php',
+    '/DGV7.0-SAAS/bc-admin/VerifyOTP.php', '/DGV7.0-SAAS/bc-admin/Error.php',
+    '/DGV7.0-SAAS/bc-spadmin/Login.php', '/DGV7.0-SAAS/bc-spadmin/PasswordRecovery.php',
+    '/DGV7.0-SAAS/bc-spadmin/VerifyOTP.php',
+    '/DGV7.0-NON-SAAS/bc-admin/Login.php', '/DGV7.0-NON-SAAS/bc-admin/PasswordRecovery.php',
+    '/DGV7.0-NON-SAAS/bc-admin/VerifyOTP.php', '/DGV7.0-NON-SAAS/bc-admin/Error.php',
+);
+foreach ($auth_pages as $rel) {
+    $src = file_get_contents($root . $rel);
+    achk($src !== false, 'admin auth page exists: ' . $rel);
+    achk(strpos($src, 'bc_plate_auth_head(') !== false, basename($rel) . ' uses the auth shell head');
+    achk(strpos($src, 'bc_plate_auth_top(') !== false, basename($rel) . ' uses the auth shell top');
+    achk(strpos($src, 'bc_plate_auth_end(') !== false, basename($rel) . ' uses the auth shell end');
+    achk(strpos($src, 'assets-2') === false, basename($rel) . ' does not load the retired template');
+    achk(strpos($src, "name=\"email\"") !== false || strpos($rel, 'VerifyOTP') !== false || strpos($rel, 'Error.php') !== false, basename($rel) . ' keeps its credential field');
+}
+achk(file_get_contents($root . '/DGV7.0-SAAS/bc-admin/VerifyOTP.php') === file_get_contents($root . '/DGV7.0-NON-SAAS/bc-admin/VerifyOTP.php'), 'admin VerifyOTP is byte-identical across editions');
+achk(file_get_contents($root . '/DGV7.0-SAAS/bc-admin/PasswordRecovery.php') === file_get_contents($root . '/DGV7.0-NON-SAAS/bc-admin/PasswordRecovery.php'), 'admin PasswordRecovery is byte-identical across editions');
 achk($shell_pages >= 180, 'at least 180 back-office pages are on the admin shell (got ' . $shell_pages . ')');
 achk(file_get_contents($shell) === file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-plate-admin.php'), 'admin shell is byte-identical across editions');
 achk(strpos(file_get_contents($shell), "</body>\n</html>") !== false, 'admin foot closes the document');

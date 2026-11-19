@@ -819,3 +819,23 @@ Coverage: `VTU/tests/fintech_gate_test.php` now evaluates the real `create-profi
 against a faithful fake `sas_pending_vendors` (unique keys enforced, `mysqli_error` populated),
 asserting the existing domain is read and normalised, a duplicate is named, nothing is written on
 a collision, and the failure branch is wired to the real error. 1025 checks.
+
+## 14. Back-office sign-in pages join the signed-out shell
+
+The last legacy-template surface was the admin sign-in journey: `bc-admin/Login.php`,
+`bc-admin/PasswordRecovery.php`, `bc-admin/VerifyOTP.php`, `bc-admin/Error.php` (both editions)
+and the `bc-spadmin/` equivalents still loaded `assets-2` and a photographic background while
+every other signed-out page already used `func/bc-plate-auth.php`.
+
+- All 11 pages now render through `bc_plate_auth_head/top/end`. The tenant identity is bridged
+  with one line — `$GLOBALS['get_all_site_details'] = $get_all_super_admin_site_details` — so the
+  shell's brand bar, title and brand colour resolve from the same site row the old template used.
+- Presentation only: every form field and button name, the two-step login OTP branch, the
+  blocked-account SweetAlert flow (including the unblock-request fetch), the OTP countdown and
+  the password visibility toggle survive verbatim; only the chrome and control classes changed.
+- `Error.php` is a pure shell render; `VerifyOTP.php` and `PasswordRecovery.php` stay
+  byte-identical across editions.
+
+Coverage: `VTU/tests/plate_admin_test.php` asserts each page uses the auth shell, loads no
+`assets-2`, keeps its credential field, and that the two shared pages stay byte-identical
+(688 checks). CI already lints every `bc-admin`/`bc-spadmin` page.
