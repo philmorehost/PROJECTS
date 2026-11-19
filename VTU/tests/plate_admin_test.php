@@ -170,4 +170,35 @@ bc_adm_foot(array('area' => 'admin'));
 $bad = ob_get_clean();
 achk(strpos($bad, 'Processing Error!') !== false, 'a failure message is classified as an error');
 
+// ---------------------------------------------------------------- migration contract
+// Every back-office page is on this shell and none still includes the legacy chrome.
+// AJAX endpoints, the auth pages and the dual-mode VendorReg keep their own shapes.
+$dirs = array(
+    $root . '/DGV7.0-SAAS/bc-admin',
+    $root . '/DGV7.0-SAAS/bc-spadmin',
+    $root . '/DGV7.0-NON-SAAS/bc-admin',
+);
+$shell_pages = 0;
+foreach ($dirs as $dir) {
+    achk(is_dir($dir), 'back-office directory exists: ' . $dir);
+    foreach (glob($dir . '/*.php') as $page) {
+        $src = file_get_contents($page);
+        foreach (array('bc-admin-header.php', 'bc-spadmin-header.php', 'bc-admin-footer.php', 'bc-spadmin-footer.php') as $legacy) {
+            if (strpos($src, 'include("../func/' . $legacy . '")') !== false
+                || strpos($src, 'include ("../func/' . $legacy . '")') !== false) {
+                achk(false, basename($dir) . '/' . basename($page) . ' still includes ' . $legacy);
+            }
+        }
+        if (strpos($src, 'bc_adm_head(') !== false) {
+            $shell_pages++;
+            achk(strpos($src, 'bc_adm_sidebar(') !== false, basename($page) . ' renders the admin sidebar');
+            achk(strpos($src, 'bc_adm_topbar(') !== false || strpos($page, 'VendorReg.php') !== false, basename($page) . ' renders the admin topbar');
+            achk(strpos($src, '<div class="pagetitle') === false, basename($page) . ' has no leftover pagetitle block');
+        }
+    }
+}
+achk($shell_pages >= 180, 'at least 180 back-office pages are on the admin shell (got ' . $shell_pages . ')');
+achk(file_get_contents($shell) === file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-plate-admin.php'), 'admin shell is byte-identical across editions');
+achk(strpos(file_get_contents($shell), "</body>\n</html>") !== false, 'admin foot closes the document');
+
 echo "plate_admin_test: $checks checks\n";

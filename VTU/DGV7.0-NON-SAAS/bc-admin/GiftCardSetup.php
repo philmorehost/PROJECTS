@@ -150,39 +150,25 @@ $installed_ids = [];
 $q_inst = mysqli_query($connection_server, "SELECT reloadly_product_id FROM `sas_vendor_giftcard_products` WHERE vendor_id='$vid'");
 while($r = mysqli_fetch_assoc($q_inst)) $installed_ids[] = $r['reloadly_product_id'];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Gift Card Setup | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Gift Card Setup | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<style>
         .product-card { transition: all 0.3s; border: 1px solid #eee; }
         .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
         .logo-placeholder { width: 60px; height: 60px; object-fit: contain; }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>GIFT CARD SETUP</h1>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "GIFT CARD SETUP", "crumb" => "Home / Gift Card Setup")); ?>
+      
       <?php if($global_is_empty): ?>
       <div class="alert alert-danger border-0 shadow-sm mb-3">
           <i class="bi bi-exclamation-octagon-fill me-2"></i>
           <strong>Global Library Empty:</strong> Please go to <a href="GiftCard.php" class="fw-bold text-decoration-underline">API Manager</a> and click "Sync Global Library" to populate product details.
       </div>
       <?php endif; ?>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Gift Card Setup</li>
-        </ol>
-      </nav>
-    </div>
+      
+    
 
     <section class="section">
         <div class="card shadow-sm border-0 rounded-4 mb-4">
@@ -298,7 +284,7 @@ while($r = mysqli_fetch_assoc($q_inst)) $installed_ids[] = $r['reloadly_product_
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
 
     <script>
     document.querySelectorAll('.btn-install').forEach(btn => {
@@ -378,5 +364,7 @@ while($r = mysqli_fetch_assoc($q_inst)) $installed_ids[] = $r['reloadly_product_
         }
     };
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

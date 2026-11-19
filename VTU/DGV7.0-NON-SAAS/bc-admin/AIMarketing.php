@@ -178,15 +178,10 @@ $prompt_chips = [
 $recent_campaigns = bc_get_recent_mail_campaigns($connection_server, $vendor_id, 10);
 $active_campaign_id = (int)($_GET['campaign'] ?? 0);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title><?php echo $title; ?></title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head(($title), array("area" => "admin"));
+?>
+<style>
         .studio-header { background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 2rem; padding: 3rem; color: white; margin-bottom: 2rem; position: relative; overflow: hidden; }
         .studio-header::after { content: '✨'; position: absolute; right: 5%; top: 50%; transform: translateY(-50%); font-size: 5rem; opacity: 0.2; }
         .fintech-card { border: none; border-radius: 2rem; box-shadow: 0 10px 40px rgba(0,0,0,0.05); background: #fff; transition: 0.3s; }
@@ -204,10 +199,8 @@ $active_campaign_id = (int)($_GET['campaign'] ?? 0);
         .ai-spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
         @keyframes ai-spin { to { transform: rotate(360deg); } }
     </style>
-</head>
-<body>
-<?php include("../func/bc-admin-header.php"); ?>
-<div class="pagetitle"><h1>AI Marketing Studio</h1></div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "AI Marketing Studio", "crumb" => "")); ?>
 
 <section class="section">
     <div class="studio-header shadow">
@@ -378,7 +371,7 @@ $active_campaign_id = (int)($_GET['campaign'] ?? 0);
         </div>
     </div>
 </section>
-<?php include("../func/bc-admin-footer.php"); ?>
+
 <script>
 (function() {
     const briefInput = document.getElementById('briefInput');
@@ -493,5 +486,7 @@ $active_campaign_id = (int)($_GET['campaign'] ?? 0);
     }
 })();
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

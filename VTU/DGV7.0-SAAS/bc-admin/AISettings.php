@@ -182,16 +182,10 @@ $v_avg_latency = ($health && $health['avg_lat'] > 0) ? round($health['avg_lat'])
 $blocked_q = mysqli_query($connection_server, "SELECT COUNT(*) as blocked FROM sas_ai_transactions WHERE vendor_id='$esc_vid' AND status='blocked' AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)");
 $v_blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_b['blocked'] : 0;
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>AI Control Center | <?php echo $get_all_super_admin_site_details["site_title"] ?? 'Vendor Dashboard'; ?></title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("AI Control Center | " . ($get_all_super_admin_site_details["site_title"] ?? 'Vendor Dashboard'), array("area" => "admin"));
+?>
+<style>
         :root { 
             --ai-primary: #6366f1; --ai-secondary: #a855f7; 
             --ai-dark: #0f172a; --ai-glass: rgba(255, 255, 255, 0.9);
@@ -232,14 +226,9 @@ $v_blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $ro
         .pulse-active { width: 10px; height: 10px; background: #10b981; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 rgba(16,185,129,0.4); animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); } 70% { box-shadow: 0 0 0 10px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
     </style>
-</head>
-<body>
-<?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
-        <h1 class="fw-900">Intelligence Command Center</h1>
-        <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li><li class="breadcrumb-item active">AI Control</li></ol></nav>
-    </div>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "Intelligence Command Center", "crumb" => "Home / AI Control")); ?>
 
     <section class="section dashboard">
         <?php if (isset($_SESSION["product_purchase_response"])): ?>
@@ -582,6 +571,8 @@ $v_blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $ro
     }
 </script>
 
-<?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

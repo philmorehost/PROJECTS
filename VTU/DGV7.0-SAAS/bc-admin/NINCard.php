@@ -10,30 +10,11 @@ if (empty($get_logged_admin_details['nin_card_enabled'])) {
 
 $history = mysqli_query($connection_server, "SELECT r.*, u.username, u.firstname AS u_firstname, u.lastname AS u_lastname FROM sas_nin_card_requests r LEFT JOIN sas_users u ON u.id=r.user_id AND u.vendor_id=r.vendor_id WHERE r.vendor_id='".$get_logged_admin_details["id"]."' ORDER BY r.date_created DESC LIMIT 200");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>NIN Card Requests | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>NIN Card Requests</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">NIN Card</li>
-            </ol>
-        </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("NIN Card Requests | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "NIN Card Requests", "crumb" => "Home / NIN Card")); ?>
 
     <section class="section">
         <?php // include("../func/bc-admin-service-header.php"); ?>
@@ -98,6 +79,8 @@ $history = mysqli_query($connection_server, "SELECT r.*, u.username, u.firstname
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

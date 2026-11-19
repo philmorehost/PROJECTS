@@ -112,12 +112,10 @@ include(__DIR__ . "/../func/bc-service-matrix.php");
 include(__DIR__ . "/../func/bc-account-backfill.php");
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Service Control Center | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<style>
         .restricted-badge {
             background-color: #f8d7da;
             color: #721c24;
@@ -133,19 +131,8 @@ include(__DIR__ . "/../func/bc-account-backfill.php");
             background-color: #f8f9fa;
         }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>SERVICE CONTROL CENTER</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Service Control</li>
-        </ol>
-      </nav>
-    </div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "SERVICE CONTROL CENTER", "crumb" => "Home / Service Control")); ?>
 
     <section class="section dashboard">
         <div class="row">
@@ -329,6 +316,8 @@ include(__DIR__ . "/../func/bc-account-backfill.php");
     }
     </script>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

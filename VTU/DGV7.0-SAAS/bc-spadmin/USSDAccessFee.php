@@ -59,15 +59,10 @@ $min_deposit = getSuperAdminOption('ussd_min_deposit', '0');
 // Fetch Vendors
 $vendors_query = mysqli_query($connection_server, "SELECT id, firstname, lastname, email, balance, ussd_access, website_url FROM sas_vendors WHERE status=1 ORDER BY firstname ASC");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>USSD Channel Access | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("USSD Channel Access | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         .premium-card { border: none; border-radius: 1.25rem; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }
         .config-banner {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -85,14 +80,11 @@ $vendors_query = mysqli_query($connection_server, "SELECT id, firstname, lastnam
             display: flex; align-items: center; justify-content: center; gap: 8px; border: none;
         }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
-        <h1 class="h3 fw-bold mb-1">USSD Channel Access</h1>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "USSD Channel Access", "crumb" => "")); ?>
+        
         <p class="text-muted small">Manage access fees and activations for vendor USSD channels.</p>
-    </div>
+    
 
     <section class="section">
         <div class="config-banner shadow-sm mb-4">
@@ -244,10 +236,11 @@ $vendors_query = mysqli_query($connection_server, "SELECT id, firstname, lastnam
         </div>
     </section>
 
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <?php if (isset($_SESSION["product_purchase_response"])): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script>Swal.fire({ icon: 'success', title: 'Action Successful', text: '<?php echo addslashes($_SESSION["product_purchase_response"]); ?>', borderRadius: '1rem' });</script>
 <?php unset($_SESSION["product_purchase_response"]); endif; ?>
-</body>
-</html>
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

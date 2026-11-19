@@ -50,15 +50,10 @@ $sc_sender = getSuperAdminOption('wa_sendchamp_sender', '');
 
 $is_configured = ($wa_provider === 'official') ? (!empty($off_token) && !empty($off_phone_id)) : (!empty($sc_key) && !empty($sc_sender));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>WhatsApp Messaging Center | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("WhatsApp Messaging Center | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         :root { --meta-blue: #0668E1; --wa-green: #25D366; }
         .premium-card { border: none; border-radius: 1.25rem; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }
         .config-banner {
@@ -82,19 +77,16 @@ $is_configured = ($wa_provider === 'official') ? (!empty($off_token) && !empty($
             display: flex; align-items: center; justify-content: center; gap: 8px; border: none;
         }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "WhatsApp Messaging Center", "crumb" => "")); ?>
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h1 class="h3 fw-bold mb-1">WhatsApp Messaging Center</h1>
+                
                 <p class="text-muted small">Configure and monitor your Official Meta Cloud API infrastructure.</p>
             </div>
             <a href="WhatsAppPricing.php" class="btn btn-outline-success rounded-pill px-4 btn-sm fw-bold"><i class="bi bi-tags-fill me-2"></i>Pricing Settings</a>
         </div>
-    </div>
+    
 
 <section class="section">
     <div class="config-banner shadow-sm">
@@ -204,7 +196,7 @@ $is_configured = ($wa_provider === 'official') ? (!empty($off_token) && !empty($
     </div>
 </section>
 
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <script>
 function toggleProvider(val) {
     document.getElementById('meta-fields').style.display = val === 'official' ? 'block' : 'none';
@@ -215,5 +207,7 @@ function toggleProvider(val) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script>Swal.fire({ icon: 'info', title: 'Meta Gateway', text: '<?php echo addslashes($_SESSION["product_purchase_response"]); ?>', borderRadius: '1rem' });</script>
 <?php unset($_SESSION["product_purchase_response"]); endif; ?>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

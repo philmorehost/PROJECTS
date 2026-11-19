@@ -198,29 +198,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'])) {
 $pending_result = mysqli_query($connection_server, "SELECT r.*, v.firstname, v.lastname, v.email, v.website_url, v.app_base_url, v.balance FROM sas_vendor_domain_requests r JOIN sas_vendors v ON v.id=r.vendor_id WHERE r.status='pending' ORDER BY r.created_at ASC");
 $history_result = mysqli_query($connection_server, "SELECT r.*, v.firstname, v.lastname, v.email FROM sas_vendor_domain_requests r JOIN sas_vendors v ON v.id=r.vendor_id WHERE r.status IN ('approved','rejected','processing') ORDER BY r.reviewed_at DESC, r.created_at DESC LIMIT 100");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Domain Change Requests | Super Admin</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Domain Change Requests | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         body { background: #f6f9ff; }
         .card { border: 0; border-radius: 12px; box-shadow: 0 0.125rem .25rem rgba(0,0,0,.075); }
         .table td { vertical-align: middle; }
         .domain { font-family: monospace; font-weight: 600; word-break: break-word; }
         .decision-note { min-width: 180px; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-<div class="pagetitle">
-    <h1>Domain Requests</h1>
-    <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li><li class="breadcrumb-item">Manage Vendors</li><li class="breadcrumb-item active">Domain Requests</li></ol></nav>
-</div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "Domain Requests", "crumb" => "Home / Manage Vendors / Domain Requests")); ?>
 <section class="section">
     <?php if (isset($_SESSION['page_alert'])): $alert = (string)$_SESSION['page_alert']; unset($_SESSION['page_alert']); ?>
         <div class="alert alert-info alert-dismissible fade show" role="alert"><?php echo htmlspecialchars($alert, ENT_QUOTES, 'UTF-8'); ?><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
@@ -268,6 +257,8 @@ $history_result = mysqli_query($connection_server, "SELECT r.*, v.firstname, v.l
         </div>
     </div>
 </section>
-<script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

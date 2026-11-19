@@ -122,17 +122,10 @@ if ($response === false) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>System Update Centre | Platform Admin</title>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("System Update Centre | Platform Admin", array("area" => "admin"));
+?>
+<style>
         .update-header-gradient {
             background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
             color: white;
@@ -223,10 +216,8 @@ if ($response === false) {
             100% { transform: rotate(360deg); }
         }
     </style>
-</head>
-<body>
-<?php include("../func/bc-admin-header.php"); ?>
-<div class="pagetitle"><h1>System Update Centre</h1></div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "System Update Centre", "crumb" => "")); ?>
 
 <section class="section">
     <div class="row justify-content-center">
@@ -344,7 +335,7 @@ if ($response === false) {
     </div>
 </section>
 
-<?php include("../func/bc-admin-footer.php"); ?>
+
 
 <!-- confetti library for wow factor on success -->
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -481,5 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

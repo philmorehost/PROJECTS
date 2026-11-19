@@ -132,23 +132,16 @@ if (isset($_POST['save_post'])) {
 
 $all_categories = mysqli_query($connection_server, "SELECT * FROM blog_categories ORDER BY name ASC");
 ?>
-<!DOCTYPE html>
-<head>
-    <title><?php echo $post_id ? 'Edit' : 'Add New'; ?> Post</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head(($post_id ? 'Edit' : 'Add New') . " Post", array("area" => "admin"));
+?>
+<style>
         .ck-editor__editable_inline {
             min-height: 300px;
         }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-    <div class="pagetitle"><h1><?php echo $post_id ? 'Edit' : 'Add New'; ?> Post</h1></div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => ($post_id ? 'Edit' : 'Add New') . " Post", "crumb" => "")); ?>
     <section class="section dashboard">
         <div class="card">
             <div class="card-body pt-3">
@@ -213,7 +206,7 @@ $all_categories = mysqli_query($connection_server, "SELECT * FROM blog_categorie
             </div>
         </div>
     </section>
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <script src="https://cdn.ckeditor.com/ckeditor5/36.0.1/classic/ckeditor.js"></script>
 <script>
     ClassicEditor
@@ -234,5 +227,7 @@ $all_categories = mysqli_query($connection_server, "SELECT * FROM blog_categorie
             console.error('There was a problem initializing the editor.', error);
         });
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

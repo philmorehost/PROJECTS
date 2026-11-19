@@ -186,17 +186,12 @@ $global_count = mysqli_fetch_assoc($q_global_check)['total'] ?? 0;
 $q_spread = mysqli_query($connection_server, "SELECT setting_value FROM sas_settings WHERE vendor_id='$vid' AND setting_name='gc_conversion_spread' LIMIT 1");
 $gc_conversion_spread = mysqli_fetch_assoc($q_spread)['setting_value'] ?? '0.00';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Gift Card API Manager | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>GIFT CARD API MANAGER</h1>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Gift Card API Manager | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "GIFT CARD API MANAGER", "crumb" => "Home / Gift Card API")); ?>
+      
       <?php if($global_count == 0): ?>
       <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center mb-3">
           <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
@@ -209,13 +204,8 @@ $gc_conversion_spread = mysqli_fetch_assoc($q_spread)['setting_value'] ?? '0.00'
           </div>
       </div>
       <?php endif; ?>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Gift Card API</li>
-        </ol>
-      </nav>
-    </div>
+      
+    
 
     <section class="section dashboard">
         <div class="row g-4">
@@ -438,7 +428,7 @@ $gc_conversion_spread = mysqli_fetch_assoc($q_spread)['setting_value'] ?? '0.00'
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
 
     <!-- Admin P2P Chat Modal -->
     <div class="modal fade" id="adminChatModal" tabindex="-1">
@@ -597,5 +587,7 @@ $gc_conversion_spread = mysqli_fetch_assoc($q_spread)['setting_value'] ?? '0.00'
         document.getElementById('api-status').value = status || '1';
     }
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

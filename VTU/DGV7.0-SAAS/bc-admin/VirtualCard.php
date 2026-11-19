@@ -95,28 +95,11 @@ $funding_profit_val = $vc_settings['vc_funding_profit_percent'] ?? '3.00';
 $conversion_spread_val = $vc_settings['vc_conversion_spread'] ?? '0.00';
 
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Virtual Card Manager | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-    <div class="pagetitle">
-      <h1>VIRTUAL CARD MANAGER (V2)</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Virtual Cards</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Virtual Card Manager | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "VIRTUAL CARD MANAGER (V2)", "crumb" => "Home / Virtual Cards")); ?>
 
     <section class="section dashboard">
       <div class="row">
@@ -387,7 +370,7 @@ $conversion_spread_val = $vc_settings['vc_conversion_spread'] ?? '0.00';
       </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <script>
     function toggleGuide() {
         var x = document.getElementById("setup-guide");
@@ -398,5 +381,7 @@ $conversion_spread_val = $vc_settings['vc_conversion_spread'] ?? '0.00';
         }
     }
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

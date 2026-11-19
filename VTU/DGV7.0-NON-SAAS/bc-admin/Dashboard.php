@@ -280,28 +280,8 @@
 		
 	}
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Admin Dashboard | <?php echo $get_all_super_admin_site_details["site_title"] ?? 'Vendor Dashboard'; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_super_admin_site_details["site_desc"] ?? '', 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-    
-      <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php"); bc_adm_head("Dashboard | " . $get_all_super_admin_site_details["site_title"]); ?>
+<style>
     .balance-hero {
         background: linear-gradient(135deg, <?php echo $vendor_primary_color; ?> 0%, <?php echo $vendor_primary_color; ?>cc 100%);
         border-radius: 1.25rem;
@@ -391,9 +371,6 @@
     .ql-teal    i { color: #20c997; } .ql-teal:hover    { background: #e7f9f3; border-color: #a8e6cf; }
     .ql-orange  i { color: #fd7e14; } .ql-orange:hover  { background: #fff1e6; border-color: #ffcda3; }
   </style>
-
-?>
-<?php include_once(__DIR__ . "/../func/bc-plate-admin.php"); bc_adm_head("Dashboard | " . $get_all_super_admin_site_details["site_title"]); ?>
     <?php bc_adm_sidebar(); ?>
 
     

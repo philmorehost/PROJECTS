@@ -59,29 +59,11 @@ if (isset($_GET["action"]) && $_GET["action"] == 'unblock-all') {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Unblock Requests | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-    <div class="pagetitle">
-        <h1>UNBLOCK REQUESTS</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">Unblock Requests</li>
-            </ol>
-        </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Unblock Requests | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "spadmin"));
+?>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "UNBLOCK REQUESTS", "crumb" => "Home / Unblock Requests")); ?>
 
     <section class="section dashboard">
         <div class="row mb-4">
@@ -218,6 +200,8 @@ if (isset($_GET["action"]) && $_GET["action"] == 'unblock-all') {
             </div>
         </div>
     </section>
-    <?php include("../func/bc-spadmin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

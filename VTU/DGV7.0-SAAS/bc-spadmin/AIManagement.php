@@ -263,16 +263,10 @@ $avg_latency = ($health && $health['avg_lat'] > 0) ? round($health['avg_lat']) :
 $blocked_q = mysqli_query($connection_server, "SELECT COUNT(*) as blocked FROM sas_ai_transactions WHERE status='blocked' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
 $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_b['blocked'] : 0;
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>AI Management | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         .ai-header{background:linear-gradient(135deg,#1e1b4b,#3730a3);color:#fff;border-radius:1.5rem;padding:2rem;}
         .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
         .dot-green{background:#22c55e;box-shadow:0 0 8px #22c55e;}
@@ -284,10 +278,8 @@ $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_
         .log-item{font-size:.75rem;padding:.5rem;border-bottom:1px solid #f1f5f9;transition:.2s;}
         .log-item:hover{background:#f8fafc;}
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-<div class="pagetitle"><h1>AI MANAGEMENT CENTER</h1></div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "AI MANAGEMENT CENTER", "crumb" => "")); ?>
 
 <section class="section">
 <?php if (isset($_SESSION["response"])): ?>
@@ -520,7 +512,7 @@ $blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_
     </div>
 </div>
 </section>
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <script>
 function updateApiKeyField() {
     const provider = document.querySelector('select[name="ai_provider"]').value;
@@ -539,5 +531,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateApiKeyField();
 });
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

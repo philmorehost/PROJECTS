@@ -28,30 +28,12 @@ if (isset($_GET["reject"])) {
 
 $api_requests = mysqli_query($connection_server, "SELECT r.*, u.email as user_email, u.phone_number FROM sas_api_requests r JOIN sas_users u ON r.user_id = u.id WHERE r.vendor_id='" . $get_logged_admin_details["id"] . "' ORDER BY r.date_requested DESC");
 ?>
-<!DOCTYPE html>
-<html lang="en">
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("API Access Requests | Admin", array("area" => "admin"));
+?>
 
-<head>
-	<title>API Access Requests | Admin</title>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-	<link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-
-<body>
-	<?php include("../func/bc-admin-header.php"); ?>
-
-	<div class="pagetitle">
-		<h1>API ACCESS REQUESTS</h1>
-		<nav>
-			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-				<li class="breadcrumb-item active">API Requests</li>
-			</ol>
-		</nav>
-	</div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "API ACCESS REQUESTS", "crumb" => "Home / API Requests")); ?>
 
 	<section class="section">
 		<div class="row">
@@ -120,7 +102,8 @@ $api_requests = mysqli_query($connection_server, "SELECT r.*, u.email as user_em
 		</div>
 	</section>
 
-	<?php include("../func/bc-admin-footer.php"); ?>
-</body>
+	
 
-</html>
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

@@ -32,25 +32,14 @@ if (isset($_POST['send-message'])) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Send WhatsApp | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Send WhatsApp | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         .select-scroll { height: 180px; border-radius: 12px; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-
-<div class="pagetitle">
-    <h1>WhatsApp Messaging Center</h1>
-    <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li><li class="breadcrumb-item active">Send WhatsApp</li></ol></nav>
-</div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "WhatsApp Messaging Center", "crumb" => "Home / Send WhatsApp")); ?>
 
 <section class="section">
     <div class="row justify-content-center">
@@ -114,11 +103,13 @@ if (isset($_POST['send-message'])) {
     </div>
 </section>
 
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <?php if(isset($_SESSION["product_purchase_response"])): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script>Swal.fire('Notification','<?php echo addslashes($_SESSION["product_purchase_response"]); ?>','info');</script>
 <?php unset($_SESSION["product_purchase_response"]); endif; ?>
 
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

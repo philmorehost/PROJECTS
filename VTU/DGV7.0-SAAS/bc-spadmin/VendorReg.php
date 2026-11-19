@@ -312,18 +312,10 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
     $is_admin_session = isset($_SESSION["spadmin_session"]);
     $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Vendor Onboarding | Platform Registration</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmin"));
+?>
+<style>
         :root {
             --bs-primary: #0d6efd;
             --bs-primary-rgb: 13, 110, 253;
@@ -548,22 +540,9 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
             white-space: pre-wrap !important;
         }
     </style>
-</head>
-<body>
-    <?php if($is_admin_session) include("../func/bc-spadmin-header.php"); ?>
+<?php if($is_admin_session) { bc_adm_sidebar(array("area" => "spadmin")); bc_adm_topbar(array("area" => "spadmin", "title" => "Onboard New Vendor", "crumb" => "Home / Add Vendor")); } else { echo '<body>'; } ?>
 
     <div class="container py-4 py-lg-5">
-        <?php if($is_admin_session): ?>
-        <div class="pagetitle mb-4">
-            <h1 class="h3 fw-900 text-dark">Onboard New Vendor</h1>
-            <nav>
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                    <li class="breadcrumb-item active">Add Vendor</li>
-                </ol>
-            </nav>
-        </div>
-        <?php endif; ?>
 
         <form method="post" action="" id="reg-form">
             <div class="row g-4">
@@ -837,7 +816,6 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         </form>
     </div>
 
-    <?php if($is_admin_session) include("../func/bc-spadmin-footer.php"); ?>
 
     <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -1089,5 +1067,4 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
     }));
     updateDomainExtensionCatalog();
     </script>
-</body>
-</html>
+<?php if($is_admin_session) { bc_adm_foot(array("area" => "spadmin")); } else { echo '</body></html>'; } ?>

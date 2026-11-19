@@ -33,15 +33,10 @@ $utility_usd = getSuperAdminOption('wa_utility_base_usd', '0.006');
 $profit_margin = getSuperAdminOption('wa_profit_margin_percent', '15');
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>WhatsApp Pricing | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("WhatsApp Pricing | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         :root { --meta-blue: #0668E1; --wa-green: #25D366; }
         
         .premium-card { border: none; border-radius: 1.25rem; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }
@@ -62,19 +57,16 @@ $profit_margin = getSuperAdminOption('wa_profit_margin_percent', '15');
             display: flex; align-items: center; justify-content: center; gap: 8px; border: none;
         }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "WhatsApp Billing Engine", "crumb" => "")); ?>
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h1 class="h3 fw-bold mb-1">WhatsApp Billing Engine</h1>
+                
                 <p class="text-muted small">Manage live-conversion billing rates and profit margins.</p>
             </div>
             <a href="WhatsAppAIManager.php" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold"><i class="bi bi-arrow-left me-2"></i>Back to API</a>
         </div>
-    </div>
+    
 
     <section class="section">
         <div class="config-banner shadow-sm">
@@ -160,10 +152,12 @@ $profit_margin = getSuperAdminOption('wa_profit_margin_percent', '15');
         </div>
     </section>
 
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <?php if(isset($_SESSION["product_purchase_response"])): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script>Swal.fire({ icon: 'success', title: 'Saved', text: '<?php echo addslashes($_SESSION["product_purchase_response"]); ?>', borderRadius: '1rem' });</script>
 <?php unset($_SESSION["product_purchase_response"]); endif; ?>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

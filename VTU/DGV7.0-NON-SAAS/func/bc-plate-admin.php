@@ -716,6 +716,8 @@ if (!function_exists('bc_adm_foot')) {
     });
 })();
 </script>
+</body>
+</html>
         <?php
     }
 }

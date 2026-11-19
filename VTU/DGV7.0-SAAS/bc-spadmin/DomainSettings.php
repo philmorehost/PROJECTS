@@ -199,16 +199,10 @@
         if($row['option_name'] == 'domain_registrar_url') { $registrar_url = $row['option_value']; }
     }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Domain Management | Super Admin</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Domain Management | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         body { background-color: #f6f9ff; font-family: 'Inter', sans-serif; }
         .card { border: none; border-radius: 12px; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
         .form-label { font-weight: 600; font-size: 0.85rem; color: #444; margin-bottom: 5px; }
@@ -222,19 +216,8 @@
         .action-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: all 0.2s; }
         .action-icon:hover { background: #fee2e2; color: #dc2626 !important; }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>Domain Configuration</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">Domain Settings</li>
-            </ol>
-        </nav>
-    </div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "Domain Configuration", "crumb" => "Home / Domain Settings")); ?>
 
     <section class="section">
         <div class="row g-4">
@@ -459,7 +442,7 @@
         </div>
     </section>
 
-    <?php include("../func/bc-spadmin-footer.php"); ?>
+    
     <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
     (() => {
@@ -540,5 +523,7 @@
     })();
     </script>
     <?php endif; ?>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

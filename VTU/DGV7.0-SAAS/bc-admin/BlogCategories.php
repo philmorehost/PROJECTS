@@ -66,27 +66,11 @@ if (isset($_GET['edit_id'])) {
 
 $categories_result = mysqli_query($connection_server, "SELECT * FROM blog_categories ORDER BY name ASC");
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Blog Categories Management</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>Blog Categories</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">Blog Categories</li>
-            </ol>
-        </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Blog Categories Management", array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "Blog Categories", "crumb" => "Home / Blog Categories")); ?>
 
     <section class="section dashboard">
         <?php if(isset($_SESSION['page_alert'])): ?>
@@ -156,6 +140,8 @@ $categories_result = mysqli_query($connection_server, "SELECT * FROM blog_catego
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

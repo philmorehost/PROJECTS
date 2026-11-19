@@ -64,22 +64,11 @@ $view_id   = (int)($_GET['thread'] ?? 0);
 $view      = $view_id > 0 ? bc_chat_thread_get($vid, $view_id) : null;
 $view_msgs = $view ? bc_chat_messages($vid, (int)$view['id'], 0, 300) : [];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Support Chat | <?php echo htmlspecialchars($get_all_super_admin_site_details["site_title"] ?? ''); ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-<div class="pagetitle">
-    <h1>SUPPORT CHAT</h1>
-    <nav><ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-        <li class="breadcrumb-item active">Support Chat</li>
-    </ol></nav>
-</div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"] ?? ''), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "SUPPORT CHAT", "crumb" => "Home / Support Chat")); ?>
 
 <section class="section dashboard">
     <?php if ($flash): ?>
@@ -201,6 +190,8 @@ $view_msgs = $view ? bc_chat_messages($vid, (int)$view['id'], 0, 300) : [];
     </div>
 </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

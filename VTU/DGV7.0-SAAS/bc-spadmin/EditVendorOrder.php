@@ -72,16 +72,10 @@ $addons = mysqli_query($connection_server, "SELECT * FROM sas_billing_addons ORD
 
 $current_addons = explode(',', $pv['selected_addons']);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Edit Vendor Order | Admin</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Edit Vendor Order | Admin", array("area" => "spadmin"));
+?>
+<style>
         .addon-card {
             transition: all 0.3s ease;
             cursor: pointer;
@@ -96,20 +90,8 @@ $current_addons = explode(',', $pv['selected_addons']);
             background-color: #f8fbff;
         }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>Edit Vendor Order</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="VendorRegistrations.php">Pending Registrations</a></li>
-                <li class="breadcrumb-item active">Edit Order</li>
-            </ol>
-        </nav>
-    </div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "Edit Vendor Order", "crumb" => "Home / Pending Registrations / Edit Order")); ?>
 
     <section class="section">
         <div class="row justify-content-center">
@@ -219,7 +201,7 @@ $current_addons = explode(',', $pv['selected_addons']);
         </div>
     </section>
 
-    <?php include("../func/bc-spadmin-footer.php"); ?>
+    
 
     <script>
         function calculateTotal() {
@@ -247,5 +229,7 @@ $current_addons = explode(',', $pv['selected_addons']);
             el.addEventListener('input', calculateTotal);
         });
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>
