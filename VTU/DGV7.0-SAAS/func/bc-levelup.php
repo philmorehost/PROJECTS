@@ -101,11 +101,58 @@ function bc_store_license_option($conn, $name, $value) {
 }
 
 /**
+ * Persists the validated license into sas_super_admin_options (once per request).
+ * The func/bc-activation.php file and func/cache/ are wiped by every redeploy, so
+ * the database copy is what lets bc_verify_integrity() recover without asking the
+ * admin to type the key again after each update.
+ */
+function bc_license_db_backfill($code, $domain) {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    global $connection_server;
+    if (!isset($connection_server) || !$connection_server) return;
+    $existing = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='license_key' LIMIT 1");
+    $row = $existing ? mysqli_fetch_assoc($existing) : null;
+    if (!$row || $row['option_value'] !== $code) {
+        bc_store_license_option($connection_server, 'license_key', $code);
+    }
+    bc_store_license_option($connection_server, 'license_domain', $domain);
+    bc_store_license_option($connection_server, 'license_status', 'valid');
+    bc_store_license_option($connection_server, 'license_last_check', date('Y-m-d H:i:s'));
+    mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='license_invalid_since'");
+}
+
+/**
+ * Whether this install is inside its post-rejection grace window. Only installs
+ * whose database says the license previously validated get grace; the first
+ * rejection stamps license_invalid_since and the window runs for 7 days.
+ */
+function bc_license_grace_active() {
+    global $connection_server;
+    if (!isset($connection_server) || !$connection_server) return false;
+    $q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='license_status' LIMIT 1");
+    $row = $q ? mysqli_fetch_assoc($q) : null;
+    if (!$row || $row['option_value'] !== 'valid') return false;
+    $q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='license_invalid_since' LIMIT 1");
+    $row = $q ? mysqli_fetch_assoc($q) : null;
+    if (!$row) {
+        bc_store_license_option($connection_server, 'license_invalid_since', (string)time());
+        return true;
+    }
+    return (time() - (int)$row['option_value']) < 7 * 86400;
+}
+
+/**
  * Verifies system integrity against the validation API
  */
 function bc_verify_integrity() {
-    // Avoid double validation in the same execution
-    if (isset($GLOBALS['bc_integrity_checked'])) {
+    // Avoid double validation in the same execution. Callers that have just stored a
+    // new code unset this flag to force a fresh check; testing isset() alone was the
+    // bug behind "invalid for this domain" on the first try (the flag stayed set even
+    // when assigned false, so the stale verdict from earlier in the request was
+    // returned), followed by the page mysteriously working on reload.
+    if (!empty($GLOBALS['bc_integrity_checked'])) {
         return !$GLOBALS['bc_integrity_fail'];
     }
     $GLOBALS['bc_integrity_checked'] = true;
@@ -173,6 +220,11 @@ function bc_verify_integrity() {
     if (strpos($domain, ':') !== false) {
         $domain = explode(':', $domain)[0];
     }
+    // License records are registered against the apex domain; sending the www.
+    // variant (or vice versa, from a stored license_domain row) made the license
+    // server reject genuinely valid keys depending on which hostname was used.
+    $domain = preg_replace('/^www\./i', '', $domain);
+    $host_domain = preg_replace('/^www\./i', '', (string)$host_domain);
 
     $cache_dir = __DIR__ . '/cache';
     if (!is_dir($cache_dir)) {
@@ -200,6 +252,7 @@ function bc_verify_integrity() {
             if (($now - $cache['last_check']) < 172800) {
                 if ($cache['status'] == 1) {
                     $GLOBALS['bc_integrity_fail'] = false;
+                    bc_license_db_backfill($code, $domain);
                     return true;
                 } else {
                     $GLOBALS['bc_integrity_fail'] = true;
@@ -245,6 +298,7 @@ function bc_verify_integrity() {
 
             if ($status === 1 || (isset($res_decoded['message']) && stripos($res_decoded['message'], 'Limit exceeded') !== false)) {
                 $GLOBALS['bc_integrity_fail'] = false;
+                bc_license_db_backfill($code, $domain);
                 return true;
             } else {
                 // Report the exact values sent. "Invalid license key or domain" is ambiguous on
@@ -257,6 +311,18 @@ function bc_verify_integrity() {
                 }
                 $_SESSION['bc_integrity_debug_err'] = "API returned Status " . $status . ": "
                     . ($res_decoded['message'] ?? 'Inactive/Invalid key') . " [" . $sent . "]";
+                // A site that has previously validated keeps working: a fresh rejection
+                // (domain-record drift on the license server, hostname changes, a
+                // transient bad answer) must not lock a paying install out of its own
+                // back office. The saved key in the database remains the source of
+                // truth; the rejection starts a 7-day grace clock instead. Explicit
+                // suspensions still lock immediately.
+                $api_message = (string)($res_decoded['message'] ?? '');
+                if (stripos($api_message, 'suspend') === false && bc_license_grace_active()) {
+                    $GLOBALS['bc_integrity_fail'] = false;
+                    $GLOBALS['bc_integrity_grace'] = true;
+                    return true;
+                }
                 $GLOBALS['bc_integrity_fail'] = true;
                 return false;
             }

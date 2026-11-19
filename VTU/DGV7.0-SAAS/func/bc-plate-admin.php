@@ -185,6 +185,65 @@ if (!function_exists('bc_adm_hub_find')) {
     }
 }
 
+if (!function_exists('bc_adm_item_icon')) {
+    /**
+     * An icon that fits the child page itself. Menu children carry no icon key,
+     * so the Hub matrix used to repeat the parent item's glyph on every card.
+     * Resolution: an explicit 'icon' key wins, then a per-page map, then a
+     * label-keyword fallback.
+     */
+    function bc_adm_item_icon($item) {
+        if (!empty($item['icon'])) return (string)$item['icon'];
+        // Print variants share one page; give each type its own glyph.
+        $href = (string)($item['href'] ?? '');
+        if (strpos($href, 'DataBundleCard.php') !== false) {
+            foreach (array('airtime' => 'phone', 'cable' => 'tv', 'electric' => 'plug', 'exam' => 'pencil-square', 'betting' => 'trophy', 'data' => 'wifi') as $type => $icon) {
+                if (strpos($href, 'type=' . $type) !== false) return $icon;
+            }
+        }
+        $file = basename(explode('?', $href)[0]);
+        $map = array(
+            'Dashboard.php' => 'grid', 'SiteMap.php' => 'grid-3x3-gap', 'AccountSettings.php' => 'gear',
+            'Users.php' => 'people', 'CreateUser.php' => 'person-plus', 'UserEdit.php' => 'person-gear',
+            'Transactions.php' => 'list-ul', 'BatchTransactions.php' => 'layers', 'SelfTransactions.php' => 'person-lines-fill',
+            'PaymentOrders.php' => 'receipt', 'SelfPaymentOrders.php' => 'receipt-cutoff', 'Withdrawals.php' => 'cash-coin',
+            'FundTransferRequests.php' => 'arrow-left-right', 'ShareFund.php' => 'share', 'Fund.php' => 'wallet2',
+            'StatusMessage.php' => 'megaphone', 'EmailTemplates.php' => 'envelope-paper', 'SendMail.php' => 'envelope',
+            'AppUpdateBroadcast.php' => 'broadcast', 'IDBlockingSystem.php' => 'shield-lock', 'TransactionLimits.php' => 'sliders',
+            'SalesCalculator.php' => 'calculator', 'SenderIDRequests.php' => 'send-check', 'SelfSubmitPayment.php' => 'cash-stack',
+            'PaymentGateway.php' => 'credit-card', 'LoyaltySettings.php' => 'award', 'CoinConversions.php' => 'arrow-repeat',
+            'CryptoHub.php' => 'currency-bitcoin', 'CryptoInvoices.php' => 'file-earmark-text', 'FloatServiceIcons.php' => 'grid-1x2',
+            'KYCManagement.php' => 'person-check', 'BusinessKYB.php' => 'building-check', 'SupportChat.php' => 'chat-dots',
+            'ChatSettings.php' => 'chat-square-text', 'BruteForceSecurity.php' => 'shield-exclamation', 'ServiceControl.php' => 'toggles',
+            'MarketPlace.php' => 'shop', 'ProductSetUp.php' => 'box-seam', 'IdentityAPI.php' => 'fingerprint',
+            'Airtime.php' => 'phone', 'SharedData.php' => 'diagram-3', 'SmeData.php' => 'database', 'CorporateData.php' => 'building',
+            'DirectData.php' => 'hdd-network', 'Cable.php' => 'tv', 'Electric.php' => 'plug', 'Exam.php' => 'pencil-square',
+            'Betting.php' => 'trophy', 'BulkSMS.php' => 'chat-square-text', 'DataBundleCard.php' => 'printer',
+            'NINCard.php' => 'person-vcard', 'BVNVerification.php' => 'shield-check', 'GiftCard.php' => 'gift',
+            'VirtualCard.php' => 'credit-card-2-front', 'RenewSubscription.php' => 'arrow-clockwise', 'SubscriptionHistory.php' => 'clock-history',
+            'BlogPosts.php' => 'journal-text', 'BlogCategories.php' => 'tags', 'BlogPostEdit.php' => 'pencil-square',
+            'VendorReg.php' => 'person-plus', 'Vendors.php' => 'people', 'VendorRegistrations.php' => 'hourglass-split',
+            'UnblockRequests.php' => 'unlock', 'DomainSettings.php' => 'globe', 'DomainChangeRequests.php' => 'arrow-repeat',
+            'BillingPackages.php' => 'box-seam', 'AllSubscriptions.php' => 'collection', 'CreateAPI.php' => 'braces',
+            'APIRequests.php' => 'key', 'KnowledgeBase.php' => 'book', 'NumberChecker.php' => 'phone-flip',
+            'USSDChannel.php' => 'phone', 'AIMarketing.php' => 'robot', 'AISettings.php' => 'cpu',
+        );
+        if (isset($map[$file])) return $map[$file];
+        $label = strtolower((string)($item['label'] ?? ''));
+        foreach (array(
+            'mail' => 'envelope', 'user' => 'people', 'transaction' => 'list-ul', 'payment' => 'credit-card',
+            'fund' => 'wallet2', 'setting' => 'gear', 'security' => 'shield-lock', 'block' => 'shield-lock',
+            'domain' => 'globe', 'blog' => 'journal-text', 'post' => 'journal-text', 'api' => 'braces',
+            'crypto' => 'currency-bitcoin', 'coin' => 'arrow-repeat', 'kyc' => 'person-check', 'card' => 'credit-card',
+            'data' => 'database', 'airtime' => 'phone', 'sms' => 'chat-square-text', 'chat' => 'chat-dots',
+            'subscription' => 'collection', 'billing' => 'receipt', 'vendor' => 'people', 'print' => 'printer',
+        ) as $needle => $icon) {
+            if (strpos($label, $needle) !== false) return $icon;
+        }
+        return 'circle';
+    }
+}
+
 if (!function_exists('bc_adm_hub_render')) {
     /**
      * Render a menu item's children as an embossed dark matrix (see bc_app_css).
@@ -203,7 +262,7 @@ if (!function_exists('bc_adm_hub_render')) {
         echo '<div class="pk-matrix">';
         foreach ($children as $child) {
             echo '<a class="pk-matrix__card" href="' . htmlspecialchars(bc_adm_url((string)$child['href'], $area)) . '">';
-            echo '<span class="pk-matrix__icon">' . bc_adm_icon(isset($item['icon']) ? $item['icon'] : 'circle') . '</span>';
+            echo '<span class="pk-matrix__icon">' . bc_adm_icon(bc_adm_item_icon($child)) . '</span>';
             echo '<span class="pk-matrix__label">' . htmlspecialchars((string)$child['label']) . '</span>';
             echo '<span class="pk-matrix__go">' . bc_adm_icon('arrow-right-circle') . '</span>';
             echo '</a>';

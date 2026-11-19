@@ -164,6 +164,37 @@ foreach (array('SendFund','CryptoHub','NINCard','Pricing','TransactionCalculator
 }
 rchk(strpos(rsrc($nons . '/web/PrintHub.php'), 'pk-matrix') !== false, 'PrintHub renders as a matrix');
 
+// ---------------------------------------------------------------- license lock fixes
+$levelup = rsrc($saas . '/func/bc-levelup.php');
+rchk(strpos($levelup, "!empty(\$GLOBALS['bc_integrity_checked'])") !== false,
+    'integrity memo can actually be reset (no more invalid-on-first-try)');
+rchk(strpos($levelup, 'function bc_license_db_backfill') !== false, 'validated licenses backfill the database copy');
+rchk(strpos($levelup, 'function bc_license_grace_active') !== false, 'previously validated installs get a grace window');
+rchk(strpos($levelup, "preg_replace('/^www\\./i'") !== false, 'license domain is www-normalised');
+$spcfg = rsrc($saas . '/func/bc-spadmin-config.php');
+rchk(strpos($spcfg, "if (!function_exists('bc_store_license_option')") !== false,
+    'spadmin config loads license helpers defensively (no undefined-function fatal)');
+$verify_pos = strpos($spcfg, 'if (bc_verify_integrity()) {');
+$store_pos = strpos($spcfg, "bc_store_license_option(\$connection_server, 'license_key', \$code)");
+rchk($verify_pos !== false && $store_pos !== false && $store_pos > $verify_pos,
+    'license key is persisted only after it validates');
+rchk(strpos($spcfg, "unset(\$GLOBALS['bc_integrity_checked'])") !== false, 'activation forces a fresh integrity check');
+
+// ---------------------------------------------------------------- matrix layout
+rchk(strpos($app_src, 'repeat(3, minmax(0, 1fr))') !== false, 'matrix is three columns on desktop');
+rchk(strpos($app_src, '@media (max-width: 640px)') !== false, 'matrix collapses responsively on mobile');
+rchk(strpos($app_src, '.pk-app__main > .pk-app__wrap { width: 100%; }') !== false,
+    'admin wrap cannot shrink-wrap the matrix into one column');
+rchk(strpos($adm_src, 'function bc_adm_item_icon') !== false, 'admin hub picks an icon per page');
+rchk(strpos($adm_src, 'bc_adm_icon(bc_adm_item_icon($child))') !== false, 'admin hub renders per-page icons');
+ob_start();
+bc_adm_hub_render(bc_adm_hub_find('admin', 'system-function'), 'admin');
+$sys_hub = ob_get_clean();
+rchk(strpos($sys_hub, 'bi-gear') !== false, 'hub matrix shows the settings gear');
+rchk(strpos($sys_hub, 'bi-envelope') !== false, 'hub matrix shows the mail envelope');
+rchk(strpos(rsrc($nons . '/bc-admin/BatchTransactions.php'), 'bt-hero') !== false,
+    'BatchTransactions carries its dedicated redesign');
+
 echo "backoffice_regression_test: $checks checks, $failures failures\n";
 if ($failures > 0) {
     exit(1);

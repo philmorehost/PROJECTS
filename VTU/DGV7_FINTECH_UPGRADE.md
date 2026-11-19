@@ -1035,3 +1035,49 @@ htaccess **224**.
 Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
 plate_admin **708**, plate_migration **882**, backoffice_regression **69**,
 htaccess **224**.
+
+## 20. License lock fixes, matrix fine-tuning, BatchTransactions redesign
+
+- **"Invalid for this domain" on the first try, fine on reload — fixed.** The
+  activation handler forced a re-check by assigning
+  `$GLOBALS['bc_integrity_checked'] = false`, but `bc_verify_integrity()`
+  memoised on `isset(...)`, which is true for `false` — so the stale verdict
+  from earlier in the same request was returned, the handler reported the key
+  invalid and `bc_clear_activation()` deleted the file it had just written.
+  The memo now requires a truthy flag and the handler `unset()`s it.
+- **The key is no longer re-asked after every update.** Validation success
+  (remote or cache) backfills `sas_super_admin_options` (`license_key`,
+  `license_domain`, `license_status`, `license_last_check`) via
+  `bc_license_db_backfill()`, so when a redeploy wipes `func/bc-activation.php`
+  and `func/cache/`, the database copy — the source of truth — silently
+  re-validates and rewrites the file. The activation handler also changed
+  order: it persists the key **only after it validates**, so a mistyped attempt
+  can't overwrite the saved working key. Domains are www-normalised before
+  being sent to the license server.
+- **No more hard lockout of a previously-valid install.** If the license server
+  freshly rejects a key whose database record says it previously validated,
+  `bc_license_grace_active()` starts a 7-day grace window (stamped in
+  `license_invalid_since`) instead of locking the back office; explicit
+  suspensions still lock immediately.
+- **`bc_store_license_option()` fatal fixed for partial updates:**
+  `bc-spadmin-config.php` now loads `func/bc-levelup.php` defensively when the
+  license helpers are missing, instead of assuming `bc-connect.php`'s include
+  chain completed on a half-updated deployment.
+- **Matrix fine-tuning:** the admin shell's `<main class="pk-app__wrap">` is a
+  flex item of `.pk-app__main`, and its `margin: 0 auto` shrink-wrapped it to
+  the widest card — the reason the admin/spadmin matrix rendered as a single
+  column. `.pk-app__main > .pk-app__wrap` now takes full width, and
+  `.pk-matrix` is explicitly **3 columns on desktop, 2 under 1080px, 1 under
+  640px**. Hub cards now use an icon that fits each page (`bc_adm_item_icon()`:
+  explicit key → per-page map → label keywords, with per-type print icons)
+  instead of repeating the parent section's glyph.
+- **`bc-admin/BatchTransactions.php` redesigned** (both editions): dark
+  gradient hero with page/per-page/filter stat tiles, a dedicated search card
+  with clear-filter action, the shared batch table in a styled frame, and a
+  modern Prev/Page/Next pager. All queries, the requery handler, search and
+  pagination logic are byte-preserved (only the SAAS escaping difference
+  remains between editions).
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
+plate_admin **708**, plate_migration **882**, backoffice_regression **84**,
+htaccess **224**.
