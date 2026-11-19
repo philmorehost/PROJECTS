@@ -17,6 +17,14 @@ $is_logged_in = isset($_SESSION["user_session"]) && isset($get_logged_user_detai
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Platform'));
 ?>
+<style data-pkx="page-redesign">
+/* Pricing — modern fintech redesign layer (2026-11) */
+.pk-app__wrap .card{border-radius:20px!important}
+.pk-app__wrap .table td,.pk-app__wrap .table th{vertical-align:middle}
+.pk-app__wrap .badge{padding:.4rem .7rem}
+.pk-app__wrap .text-primary{color:var(--brand)!important}
+.pk-app__wrap .d-inline-flex.align-items-center.gap-1{font-weight:700}
+</style>
 
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "<i class=\"bi bi-tags-fill me-2 text-primary\"></i>Service Pricing & Discounts", "crumb" => "Home / Pricing")); ?>

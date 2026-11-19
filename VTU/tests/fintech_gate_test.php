@@ -2348,11 +2348,11 @@ $required_nav_pages = [
     'CryptoHub.php', 'AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php',
     'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php', 'Transactions.php', 'BatchTransactions.php',
     'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php',
-    'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php', 'AccountSettings.php',
+    'PaymentOrders.php', 'SubmitPayment.php', 'AccountSettings.php',
 ];
 foreach ($editions as $edition) {
     $header_src = php_strip_whitespace($root . '/' . $edition . '/func/bc-plate-app.php');
-    foreach (['pay-bills', 'wallet-transfers', 'financial-services', 'business-api', 'history-tools', 'settings-help'] as $group) {
+    foreach (['pay-bills', 'wallet-transfers', 'verify-print', 'tools-api', 'history-tools', 'settings-help'] as $group) {
         gtrue("$edition sidebar groups $group", strpos($header_src, "'id' => '" . $group . "'") !== false);
     }
     gfalse("$edition sidebar has no flat Services heading", strpos($header_src, "'label' => 'Services'") !== false);
@@ -2364,7 +2364,8 @@ foreach ($editions as $edition) {
     gfalse("$edition nav has no discarded Card.php", strpos($header_src, "'Card.php'") !== false);
     // History & Records carries the transaction and print items in the shell menu.
     gtrue("$edition history groups transactions", strpos($header_src, "'href' => 'Transactions.php'") !== false);
-    gtrue("$edition history groups print hub", strpos($header_src, "'href' => 'PrintHub.php'") !== false);
+    gtrue("$edition PrintHub stands alone in the nav", strpos($header_src, "'label' => 'PrintHub'") !== false);
+    gtrue("$edition history keeps the number filter", strpos($header_src, "'href' => 'NumberFilter.php'") !== false);
 }
 
 // The ledger is the only writer of provider balances: the adapters never UPDATE a balance.

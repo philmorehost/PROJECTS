@@ -132,6 +132,15 @@ if (isset($_POST["request-nin-card"])) {
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("NIN Slip | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* NINCard — modern fintech redesign layer (2026-11) */
+.pk-app__wrap .card{border-radius:24px!important}
+.pk-app__wrap .form-control{border-radius:14px;padding:.75rem 1rem}
+.pk-app__wrap .form-label.text-uppercase{letter-spacing:.07em;font-size:.72rem}
+.pk-app__wrap .btn{border-radius:14px;font-weight:800}
+.pk-app__wrap .text-center.mb-4 h4,.pk-app__wrap .text-center.mb-4 h5{font-weight:800;letter-spacing:-.01em}
+.pk-app__wrap .form-text{color:var(--muted)}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "NIN SLIP", "crumb" => "Home / Print Hub / NIN Slip")); ?>
 

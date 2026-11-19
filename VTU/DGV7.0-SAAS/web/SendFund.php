@@ -278,6 +278,15 @@ if (isset($_POST["reset-bank"])) {
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* SendFund — modern fintech redesign layer (2026-11) */
+.pk-app__wrap .modern-input{border-radius:14px!important;padding:.8rem 1rem;font-weight:600}
+.pk-app__wrap .card{overflow:hidden}
+.pk-app__wrap .card-body .d-flex.justify-content-between.mb-2.pb-2.border-bottom{border-color:rgba(255,255,255,.14)!important}
+.pk-app__wrap .btn-lg{border-radius:14px;font-weight:800;letter-spacing:.01em}
+.pk-app__wrap .form-label.text-uppercase{letter-spacing:.07em;font-size:.72rem}
+.pk-app__wrap .alert{border-radius:16px}
+</style>
 
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "WITHDRAW FUNDS", "crumb" => "Home / Withdraw Funds")); ?><!-- End Page Title -->

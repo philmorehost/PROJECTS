@@ -110,15 +110,17 @@ $GLOBALS['get_logged_user_details']['account_type'] = 'personal';
 
 // ---------------------------------------------------------------- menu
 $menu = bc_app_menu();
-chk(count($menu) === 7, 'menu has seven groups');
+chk(count($menu) === 8, 'menu has eight groups (PrintHub stands alone)');
 $labels = array();
 foreach ($menu as $g) {
     if (!empty($g['label'])) $labels[] = $g['label'];
 }
 chk(in_array('Pay Bills', $labels, true), 'Pay Bills group present');
 chk(in_array('Wallet & Transfers', $labels, true), 'Wallet & Transfers group present');
-chk(in_array('Financial Services', $labels, true), 'Financial Services group present');
-chk(in_array('Business & API', $labels, true), 'Business & API group present');
+chk(in_array('Verify & Print', $labels, true), 'Verify & Print group present (renamed)');
+chk(!in_array('Financial Services', $labels, true), 'Financial Services label retired');
+chk(in_array('Tools & API', $labels, true), 'Tools & API group present (renamed)');
+chk(!in_array('Business & API', $labels, true), 'Business & API label retired');
 chk(in_array('History & Tools', $labels, true), 'History & Tools group present');
 chk(in_array('Settings & Help', $labels, true), 'Settings & Help group present');
 
@@ -141,6 +143,20 @@ chk($group_of['GiftCard.php'] === 'Wallet & Transfers', 'Gift Card is under Wall
 chk($group_of['CryptoHub.php'] === 'Wallet & Transfers', 'Crypto is under Wallet & Transfers');
 chk($group_of['ShareFundHistory.php'] === 'History & Tools', 'Share Fund History is under History & Tools');
 chk(!isset($all['Card.php']), 'Card.php is discarded from the nav');
+// PrintHub stands alone; History & Tools keeps Number Filter and drops print services.
+chk($group_of['PrintHub.php'] === '', 'PrintHub is a standalone top-level item');
+chk($group_of['NumberFilter.php'] === 'History & Tools', 'Number Filter is under History & Tools');
+chk($group_of['NINCard.php'] === 'Verify & Print', 'NIN printing is under Verify & Print');
+foreach (array_keys($group_of) as $href) {
+    chk(strpos($href, 'DataBundleCard.php') !== 0 || $group_of[$href] !== 'History & Tools', 'print cards left History & Tools: ' . $href);
+}
+// Hub plumbing: every labelled group resolves through bc_app_hub_group().
+foreach ($menu as $g) {
+    if (empty($g['id'])) continue;
+    $found = bc_app_hub_group($g['id']);
+    chk(is_array($found) && $found['label'] === $g['label'], 'hub resolves group ' . $g['id']);
+}
+chk(bc_app_hub_group('no-such-group') === null, 'unknown hub group is null');
 
 // ---------------------------------------------------------------- render
 ob_start();
@@ -165,23 +181,35 @@ chk(strpos($html, 'Page body') !== false, 'page body survives between the helper
 chk(strpos($html, '</html>') !== false, 'foot closes the document');
 chk(strpos($html, 'pkAppBurger') !== false, 'shell script is printed');
 
-// Navigation: the disabled service must be absent, the enabled ones present.
-chk(strpos($html, 'Buy Data Bundle') !== false, 'enabled service item is linked');
-chk(strpos($html, 'Buy Electric Token') !== false, 'electric item is linked');
-chk(strpos($html, 'Fund Betting') === false, 'disabled service item is hidden');
-chk(strpos($html, 'Buy Airtime VTU') !== false, 'airtime item is linked');
-
-// Tier gate in the rendered menu.
-chk(strpos($html, 'Developer API') === false, 'tier-gated item is hidden for personal');
+// Navigation: the sidebar lists main items only, each linking to its Hub page;
+// the sub-items live on the Hub matrix, with the same service gates applied.
+chk(strpos($html, 'Pay Bills') !== false, 'main item is listed in the sidebar');
+chk(strpos($html, 'Hub.php?g=pay-bills') !== false, 'main item links to its Hub page');
+chk(strpos($html, 'Buy Data Bundle') === false, 'sub-items are not in the sidebar any more');
+chk(strpos($html, 'PrintHub') !== false, 'PrintHub stands alone in the sidebar');
+ob_start();
+bc_app_hub_render(bc_app_hub_group('pay-bills'));
+$hub = ob_get_clean();
+chk(strpos($hub, 'pk-matrix__card') !== false, 'hub renders matrix cards');
+chk(strpos($hub, 'Buy Data Bundle') !== false, 'enabled service item is on the hub');
+chk(strpos($hub, 'Buy Electric Token') !== false, 'electric item is on the hub');
+chk(strpos($hub, 'Fund Betting') === false, 'disabled service item is hidden on the hub');
+chk(strpos($hub, 'Buy Airtime VTU') !== false, 'airtime item is on the hub');
+ob_start();
+bc_app_hub_render(bc_app_hub_group('tools-api'));
+$hub2 = ob_get_clean();
+chk(strpos($hub2, 'Developer API') === false, 'tier-gated item is hidden for personal on the hub');
 
 // Active page highlight.
 chk(strpos($html, 'is-active') !== false, 'active page is highlighted');
 
-// Query-string href survives rendering.
-chk(strpos($html, 'DataBundleCard.php?type=airtime') !== false, 'query-string href is rendered');
+// Query-string hrefs survive rendering (the Hub link itself carries ?g=).
+chk(strpos($html, 'DataBundleCard.php?type=airtime') === false, 'print-card links left the sidebar with PrintHub standalone');
+chk(strpos($html, 'Hub.php?g=pay-bills') !== false, 'hub href carries its query string');
 
 // Every console link must carry the /web segment, matching the retired header.
-chk(strpos($html, 'https://console.example.test/web/Data.php') !== false, 'menu links resolve under /web');
+chk(strpos($html, 'https://console.example.test/web/Hub.php?g=pay-bills') !== false, 'menu links resolve under /web');
+chk(strpos($hub, 'https://console.example.test/web/Data.php') !== false, 'hub links resolve under /web');
 chk(strpos($html, 'https://console.example.test/web/AccountSettings.php') !== false, 'brand and profile links resolve under /web');
 chk(strpos($html, '/logout.php') !== false, 'logout points at the edition root');
 
@@ -194,10 +222,10 @@ chk(strpos($html, 'data-pk-logout') !== false, 'logout carries its marker');
 // ---------------------------------------------------------------- gating both ways
 $GLOBALS['__services']['data'] = 0;
 ob_start();
-bc_app_sidebar();
+bc_app_hub_render(bc_app_hub_group('pay-bills'));
 $html2 = ob_get_clean();
-chk(strpos($html2, 'Buy Data Bundle') === false, 'switching a service off removes the link');
-chk(strpos($html2, 'Buy Airtime VTU') !== false, 'other services are unaffected');
+chk(strpos($html2, 'Buy Data Bundle') === false, 'switching a service off removes the hub card');
+chk(strpos($html2, 'Buy Airtime VTU') !== false, 'other services are unaffected on the hub');
 $GLOBALS['__services']['data'] = 1;
 
 // ---------------------------------------------------------------- custom actions

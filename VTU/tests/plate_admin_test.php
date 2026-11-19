@@ -66,10 +66,10 @@ achk(bc_adm_base() === 'https://admin.example.test', 'base comes from web_http_h
 
 // ---------------------------------------------------------------- navigation
 $admin = bc_adm_menu('admin');
-achk(count($admin) === 4, 'admin menu has four blocks');
+achk(count($admin) === 3, 'admin menu has three blocks (Help / Guide duplicate removed)');
 $labels = array();
 foreach ($admin as $block) { foreach ((array)$block['items'] as $item) { $labels[] = $item['label']; } }
-foreach (array('Dashboard', 'Manage User', 'System Function', 'API Manager', 'Subscription Manager', 'Blog Manager', 'Help / Guide') as $want) {
+foreach (array('Dashboard', 'Manage User', 'System Function', 'API Manager', 'Subscription Manager', 'Blog Manager') as $want) {
     achk(in_array($want, $labels, true), "admin menu contains $want");
 }
 achk(!in_array('Renew Subscription', $labels, true) || true, 'admin menu shape');
@@ -110,7 +110,14 @@ achk(strpos($admin_html, '--brand: #123456') !== false, 'admin brand colour reac
 achk(strpos($admin_html, 'Adaobo Super') !== false, 'admin site title is rendered');
 achk(substr_count($admin_html, '<body') === 1, 'admin renders exactly one body tag');
 achk(strpos($admin_html, '/bc-admin/Dashboard.php') !== false, 'admin rail links to its dashboard');
-achk(strpos($admin_html, '/bc-admin/Users.php') !== false, 'admin nav links into bc-admin');
+achk(strpos($admin_html, '/bc-admin/Hub.php?g=manage-user') !== false, 'admin nav links main items to their Hub page');
+achk(strpos($admin_html, '/bc-admin/Users.php') === false, 'sub-items are not in the admin sidebar any more');
+ob_start();
+bc_adm_hub_render(bc_adm_hub_find('admin', 'manage-user'), 'admin');
+$adm_hub = ob_get_clean();
+achk(strpos($adm_hub, 'pk-matrix__card') !== false, 'admin hub renders matrix cards');
+achk(strpos($adm_hub, '/bc-admin/Users.php') !== false, 'admin hub links into bc-admin');
+achk(strpos($admin_html, 'Help / Guide') === false, 'duplicate Help / Guide entry is gone');
 achk(strpos($admin_html, '/bc-spadmin/') === false, 'admin nav does not leak spadmin links');
 achk(strpos($admin_html, 'data-pk-logout') !== false, 'admin has a logout action');
 achk(strpos($admin_html, '/admin-logout.php') !== false, 'admin logout points at admin-logout.php');
@@ -129,7 +136,11 @@ bc_adm_topbar(array('title' => 'VENDORS', 'crumb' => 'Home / Manage Vendors', 'a
 bc_adm_foot(array('area' => 'spadmin'));
 $sp_html = ob_get_clean();
 
-achk(strpos($sp_html, '/bc-spadmin/Vendors.php') !== false, 'spadmin nav links into bc-spadmin');
+achk(strpos($sp_html, '/bc-spadmin/Hub.php?g=manage-vendors') !== false, 'spadmin nav links main items to their Hub page');
+ob_start();
+bc_adm_hub_render(bc_adm_hub_find('spadmin', 'manage-vendors'), 'spadmin');
+$sp_hub = ob_get_clean();
+achk(strpos($sp_hub, '/bc-spadmin/Vendors.php') !== false, 'spadmin hub links into bc-spadmin');
 achk(strpos($sp_html, 'Adaobo Root') !== false, 'spadmin uses the spadmin site row');
 achk(strpos($sp_html, 'Super admin') !== false, 'spadmin identifies its role');
 achk(strpos($sp_html, '/spadmin-logout.php') !== false, 'spadmin logout points at spadmin-logout.php');

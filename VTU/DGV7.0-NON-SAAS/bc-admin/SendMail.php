@@ -16,6 +16,7 @@ $assigned_model = $ai_engine->isModelCompatible($assigned_model_raw) ? $assigned
 $site_q = mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vid' LIMIT 1");
 $site_data = mysqli_fetch_assoc($site_q);
 $biz_name = $get_logged_admin_details['company_name'] ?? ($site_data['site_title'] ?? 'Our VTU Platform');
+$copilot_cost_display = (int)getSuperAdminOption('ai_marketing_copilot_cost', 3);
 
 // AJAX Handler for Drafts / AI / Live Progress
 if (isset($_GET['action'])) {
@@ -85,9 +86,11 @@ if (isset($_GET['action'])) {
         header('Content-Type: application/json');
 
         $token_bal = (int)($get_logged_admin_details['ai_token_balance'] ?? 0);
-        $per_tx_cost = (int)($get_logged_admin_details['ai_per_tx_cost'] ?? 2);
+        // Flat platform-wide rate set by the super admin (AI Management > Economics), separate
+        // from ai_per_tx_cost (the general per-vendor chat fee used elsewhere, e.g. AI Assistant).
+        $per_tx_cost = $copilot_cost_display;
         if ($token_bal < $per_tx_cost) {
-            echo json_encode(['status' => 'error', 'message' => 'Insufficient AI tokens. Please top up in AI Suite.']);
+            echo json_encode(['status' => 'error', 'message' => "Insufficient AI tokens. The Marketing Copilot costs $per_tx_cost token(s) per use — please top up in AI Suite.", 'copilot_cost' => $per_tx_cost, 'tokens_remaining' => $token_bal]);
             exit;
         }
 
@@ -136,7 +139,7 @@ $safe_input";
             $esc_label = mysqli_real_escape_string($connection_server, ($ai_action === 'ai_write' ? 'SendMail Write' : 'SendMail Refine') . ': ' . substr($safe_input, 0, 150));
             mysqli_query($connection_server, "INSERT INTO sas_ai_transactions (vendor_id, username, prompt, response, tokens_burned, status, duration_ms) VALUES ('$vid', 'admin_{$get_logged_admin_details['email']}', '$esc_label', '$esc_res', '$tokens', 'success', '$duration')");
 
-            // Atomic debit
+            // Atomic debit: subtract only if balance is sufficient to prevent race-condition double-spend
             $deduct_result = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $per_tx_cost WHERE id='$vid' AND ai_token_balance >= $per_tx_cost");
             if (!$deduct_result || mysqli_affected_rows($connection_server) === 0) {
                 mysqli_query($connection_server, "UPDATE sas_ai_transactions SET status='failed' WHERE vendor_id='$vid' AND prompt='$esc_label' ORDER BY id DESC LIMIT 1");
@@ -158,6 +161,7 @@ $safe_input";
                 'subject'          => $subject_out,
                 'body'             => $body_out,
                 'tokens_remaining' => $get_logged_admin_details['ai_token_balance'],
+                'tokens_charged'   => $per_tx_cost,
             ]);
         } else {
             echo json_encode(['status' => 'error', 'message' => 'AI Error: ' . ($result['message'] ?? 'Unable to connect to AI engine.')]);
@@ -171,6 +175,15 @@ $safe_input";
         $cid = (int)($_GET['campaign_id'] ?? 0);
         $progress = bc_get_mail_campaign_progress($connection_server, $cid, $vid);
         echo json_encode($progress ?: ['status' => 'error', 'message' => 'Campaign not found.']);
+        exit;
+    }
+
+    // ─── Cancel a queued/sending campaign (stops remaining emails) ──────────
+    if ($_GET['action'] == 'cancel_campaign') {
+        header('Content-Type: application/json');
+        $cid = (int)($_GET['campaign_id'] ?? 0);
+        $result = bc_cancel_mail_campaign($connection_server, $cid, $vid, false);
+        echo json_encode($result);
         exit;
     }
 }
@@ -251,178 +264,133 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             background: #fff;
-            height: calc(100vh - 180px);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .marketing-card .card-body {
-            flex: 1;
-            overflow: hidden;
-        }
-        #gjs {
-            border: 1px solid #ddd;
-            overflow: hidden;
-            height: 100% !important;
-        }
-        .placeholder-btn {
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 11px;
-            padding: 5px 8px;
-        }
-        .placeholder-btn:hover {
-            transform: scale(1.05);
-            background: #eef2ff !important;
-        }
-        .app-sidebar {
-            background: #f8fafc;
-            border-right: 1px solid #e2e8f0;
             padding: 20px;
-            overflow-y: auto;
-            height: 100%;
         }
-        .gjs-cv-canvas {
-            width: 100%;
-            height: 100%;
-            top: 0;
+        #editor-container {
+            height: 300px;
+            border-radius: 0 0 10px 10px;
         }
-        .main-content-area {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
+        .ql-toolbar {
+            border-radius: 10px 10px 0 0;
+            background: #f8fafc;
         }
-        .prompt-chip { border: 1.5px solid #e2e8f0; background: #fff; border-radius: 2rem; padding: 0.3rem 0.7rem; font-size: 0.72rem; font-weight: 600; color: #475569; cursor: pointer; transition: 0.2s; }
+        .prompt-chip { border: 1.5px solid #e2e8f0; background: #fff; border-radius: 2rem; padding: 0.35rem 0.9rem; font-size: 0.78rem; font-weight: 600; color: #475569; cursor: pointer; transition: 0.2s; }
         .prompt-chip:hover { border-color: #4f46e5; color: #4f46e5; background: #f5f3ff; }
-        .refine-btn { border-radius: 1rem; font-size: 0.7rem; font-weight: 700; }
+        .refine-btn { border-radius: 2rem; font-size: 0.76rem; font-weight: 700; }
         .campaign-progress-bar { height: 10px; border-radius: 1rem; }
         .campaign-row { font-size: 0.85rem; }
-        .ai-spinner { display: inline-block; width: 0.9rem; height: 0.9rem; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
+        .ai-spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
         @keyframes ai-spin { to { transform: rotate(360deg); } }
     </style>
-<link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
-<script src="https://unpkg.com/grapesjs"></script>
-<script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "MARKETING SUITE", "crumb" => "Home / Send Mail")); ?>
 
     <section class="section">
       <div class="row">
         <div class="col-lg-12">
-            <div class="marketing-card">
+            <div class="marketing-card mb-4">
                 <div class="card-body p-0">
-                    <div class="row g-0 h-100">
-                        <!-- Left Controls -->
-                        <div class="col-md-3 app-sidebar">
-                            <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-megaphone me-2"></i>Campaign Settings</h5>
+                    <div class="row">
+        <div class="col-md-12">
+            <h5 class="fw-bold mb-3 text-primary"><i class="bi bi-megaphone me-2"></i>Send Email</h5>
 
-                            <div class="mb-3 p-2 bg-white rounded-3 border">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Help Me Write</label>
-                                <div class="mb-2 d-flex flex-wrap gap-1">
-                                    <?php foreach ($prompt_chips as $label => $chip_prompt): ?>
-                                    <button type="button" class="prompt-chip" data-prompt="<?php echo htmlspecialchars($chip_prompt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($label); ?></button>
-                                    <?php endforeach; ?>
-                                </div>
-                                <input id="briefInput" type="text" class="form-control form-control-sm mb-2" placeholder="e.g. Announce a referral bonus">
-                                <button type="button" id="btnGenerate" class="btn btn-primary btn-sm w-100 fw-bold">Generate 🪄</button>
-                                <div class="d-flex flex-wrap gap-1 mt-2" id="refineBar" style="display:none !important;">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="shorter">✂️ Shorter</button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="persuasive">🔥 Persuasive</button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="tone">😊 Warmer</button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="improve">✨ Improve</button>
-                                </div>
-                            </div>
+            <div class="mb-3 p-3 bg-light rounded-4 border">
+                <label class="form-label small fw-bold text-muted text-uppercase mb-2">Help Me Write</label>
+                <div class="mb-2 d-flex flex-wrap gap-2">
+                    <?php foreach ($prompt_chips as $label => $chip_prompt): ?>
+                    <button type="button" class="prompt-chip" data-prompt="<?php echo htmlspecialchars($chip_prompt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($label); ?></button>
+                    <?php endforeach; ?>
+                </div>
+                <div class="d-flex gap-2">
+                    <input id="briefInput" type="text" class="form-control" placeholder="e.g. Announce a new referral bonus program">
+                    <button type="button" id="btnGenerate" class="btn btn-primary fw-bold px-4 text-nowrap">Generate 🪄</button>
+                </div>
+                <div class="text-muted small mt-2"><i class="bi bi-coin me-1"></i>Copilot costs <strong><?php echo $copilot_cost_display; ?> token<?php echo $copilot_cost_display == 1 ? '' : 's'; ?></strong> per generate or refine · You have <strong id="tokenBalanceLabel"><?php echo number_format($get_logged_admin_details['ai_token_balance'] ?? 0); ?></strong> tokens</div>
+            </div>
 
-                            <form id="mainForm" method="post" enctype="multipart/form-data">
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Email Subject</label>
-                                    <input name="subject" id="subject" type="text" class="form-control rounded-3" placeholder="e.g. System Update v2.0" required />
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Registered Users</label>
-                                    <select name="status_cohort" id="mailto" class="form-select rounded-3">
-                                        <option value="">No internal target (External only)</option>
-                                        <option value="all">All Users</option>
-                                        <option value="active">Active Users Only</option>
-                                        <option value="blocked">Blocked Users Only</option>
-                                        <option value="deleted">Deleted Users Only</option>
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Account Level</label>
-                                    <select name="account_level" class="form-select rounded-3">
-                                        <option value="0">Any Level</option>
-                                        <option value="1">Smart Users Only</option>
-                                        <option value="2">Agent Users Only</option>
-                                        <option value="3">API Users Only</option>
-                                    </select>
-                                </div>
-
-                                <hr class="my-3 opacity-50">
-
-                                <h6 class="fw-bold mb-3 small text-muted text-uppercase">External Marketing</h6>
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold"><i class="bi bi-file-earmark-arrow-up me-1"></i> Bulk Upload (.csv, .txt)</label>
-                                    <input type="file" name="email_file" class="form-control form-control-sm rounded-3" accept=".csv,.txt">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold"><i class="bi bi-clipboard-plus me-1"></i> Paste Emails</label>
-                                    <textarea name="paste_emails" class="form-control rounded-3" rows="2" placeholder="Separate by comma or newline"></textarea>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold text-muted text-uppercase mb-2">Personalization Tags</label>
-                                    <div class="d-flex flex-wrap gap-1">
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{firstname}')">{firstname}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{lastname}')">{lastname}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{email}')">{email}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{phone}')">{phone}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{address}')">{address}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{username}')">{username}</span>
-                                        <span class="badge bg-light text-primary border placeholder-btn" onclick="insertPlaceholder('{balance}')">{balance}</span>
-                                    </div>
-                                </div>
-
-                                <textarea name="body" id="body_html" hidden></textarea>
-                                <input type="hidden" name="body_json" id="body_json">
-
-                                <div class="d-grid gap-2 mt-4">
-                                    <button type="button" class="btn btn-outline-primary btn-sm fw-bold" onclick="saveDraft()">
-                                        <i class="bi bi-save me-2"></i>Save Draft
-                                    </button>
-                                    <button name="send-mail" type="submit" class="btn btn-primary fw-bold shadow">
-                                        <i class="bi bi-send-fill me-2"></i>Dispatch Campaign
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <!-- Right Builder -->
-                        <div class="col-md-9 main-content-area">
-                            <div class="d-flex justify-content-between align-items-center p-3 border-bottom bg-white">
-                                <h4 class="fw-bold mb-0">Visual Email Builder</h4>
-                                <button type="button" class="btn btn-light btn-sm text-danger fw-bold" onclick="if(confirm('Clear all content?')) editor.setComponents('')">
-                                    <i class="bi bi-trash me-1"></i> Clear Canvas
-                                </button>
-                            </div>
-                            <div id="gjs"></div>
-                        </div>
+            <form id="mainForm" method="post" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold text-muted text-uppercase">Email Subject</label>
+                        <input name="subject" id="subject" type="text" class="form-control" placeholder="e.g. System Update v2.0" required />
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold text-muted text-uppercase">Registered Users</label>
+                        <select name="status_cohort" id="mailto" class="form-select">
+                            <option value="">No internal target (External only)</option>
+                            <option value="all">All Users</option>
+                            <option value="active">Active Users Only</option>
+                            <option value="blocked">Blocked Users Only</option>
+                            <option value="deleted">Deleted Users Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold text-muted text-uppercase">Account Level</label>
+                        <select name="account_level" class="form-select">
+                            <option value="0">Any Level</option>
+                            <option value="1">Smart Users Only</option>
+                            <option value="2">Agent Users Only</option>
+                            <option value="3">API Users Only</option>
+                        </select>
                     </div>
                 </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">External Emails (comma or space separated)</label>
+                    <input name="paste_emails" id="paste_emails" type="text" class="form-control" placeholder="user1@email.com, user2@email.com" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Upload CSV (Optional)</label>
+                    <input type="file" name="email_file" class="form-control form-control-sm" accept=".csv,.txt" />
+                    <div class="form-text" style="font-size: 11px;">Upload a CSV file containing email addresses (one per line).</div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold text-muted text-uppercase mb-0">Message Content</label>
+                        <div class="d-flex flex-wrap gap-2" id="refineBar" style="display:none !important;">
+                            <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="shorter">✂️ Shorter</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="persuasive">🔥 More Persuasive</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="tone">😊 Warmer Tone</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm refine-btn" data-refine="improve">✨ Improve</button>
+                        </div>
+                    </div>
+                    <div class="mb-2 small text-muted">
+                        <strong>Supported Tags:</strong> <code>{firstname}</code>, <code>{lastname}</code>, <code>{email}</code>, <code>{phone}</code>, <code>{address}</code>, <code>{website}</code>
+                    </div>
+                    <div id="editor-container"></div>
+                    <textarea name="body" id="body_html" style="display:none;"></textarea>
+                    <input type="hidden" name="body_json" id="body_json" />
+                </div>
+
+                <div class="mb-3 d-flex gap-2">
+                    <button type="submit" name="send-mail" class="btn btn-primary fw-bold px-4 py-2 rounded-pill shadow-sm">
+                        <i class="bi bi-send-fill me-2"></i> Send Campaign
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary fw-bold px-4 py-2 rounded-pill" onclick="saveDraft(event)">
+                        <i class="bi bi-save me-2"></i> Save Draft
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
             </div>
         </div>
       </div>
 
-      <div class="row mt-3 <?php echo $active_campaign_id ? '' : 'd-none'; ?>" id="progressRow">
+      <div class="row <?php echo $active_campaign_id ? '' : 'd-none'; ?>" id="progressRow">
         <div class="col-lg-12">
-            <div class="marketing-card" style="height:auto; padding:20px;">
+            <div class="marketing-card mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold mb-0"><i class="bi bi-broadcast-pin me-2"></i>Live Send Report</h6>
-                    <span class="badge bg-primary-subtle text-primary" id="progressStatus">—</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary-subtle text-primary" id="progressStatus">—</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="cancelActiveBtn">
+                            <i class="bi bi-x-circle me-1"></i>Cancel Campaign
+                        </button>
+                    </div>
                 </div>
                 <div class="progress campaign-progress-bar mb-2">
                     <div class="progress-bar bg-success" id="progressBarSent" style="width:0%"></div>
@@ -438,16 +406,16 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
         </div>
       </div>
 
-      <div class="row mt-3">
+      <div class="row">
         <div class="col-lg-12">
-            <div class="marketing-card" style="height:auto; padding:20px;">
+            <div class="marketing-card">
                 <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-2"></i>Recent Campaigns</h6>
                 <?php if (empty($recent_campaigns)): ?>
                     <p class="text-muted small mb-0">No campaigns sent yet.</p>
                 <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-sm campaign-row align-middle mb-0">
-                            <thead class="text-muted"><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Failed</th><th>Total</th></tr></thead>
+                            <thead class="text-muted"><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Failed</th><th>Total</th><th>Action</th></tr></thead>
                             <tbody>
                             <?php foreach ($recent_campaigns as $c): ?>
                                 <tr>
@@ -456,6 +424,13 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
                                     <td><?php echo (int)$c['sent_count']; ?></td>
                                     <td><?php echo (int)$c['failed_count']; ?></td>
                                     <td><?php echo (int)$c['total_count']; ?></td>
+                                    <td>
+                                        <?php if (in_array($c['status'], ['queued', 'sending'], true)): ?>
+                                            <button type="button" class="btn btn-sm btn-outline-danger cancel-campaign-btn" data-id="<?php echo (int)$c['id']; ?>" data-subject="<?php echo htmlspecialchars($c['subject'], ENT_QUOTES); ?>">Cancel</button>
+                                        <?php else: ?>
+                                            <span class="text-muted small">—</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -469,56 +444,65 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
 
     
 
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script>
-        let editor;
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            placeholder: 'Write your email content here...',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            }
+        });
 
-        window.onload = () => {
-            editor = grapesjs.init({
-                container: '#gjs',
-                fromElement: false,
-                height: '100%',
-                width: 'auto',
-                storageManager: false,
-                plugins: ['grapesjs-preset-newsletter'],
-                pluginsOpts: {
-                    'grapesjs-preset-newsletter': {
-                        modalTitleImport: 'Import template',
-                    }
-                },
-                assetManager: {
-                    upload: '?action=upload_asset',
-                    params: { vid: '<?php echo $vid; ?>' }
-                },
-                canvas: {
-                    styles: [
-                        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-                        'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css'
-                    ]
+        fetch('?action=load_draft')
+            .then(res => res.json())
+            .then(data => {
+                if (data.body_html) {
+                    quill.root.innerHTML = data.body_html;
+                    document.getElementById('subject').value = data.subject || '';
+                    document.getElementById('mailto').value = data.mailto || '';
                 }
             });
 
-            // Load draft automatically if exists
-            fetch('?action=load_draft')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.body_json) {
-                        editor.setComponents(JSON.parse(data.body_json));
-                        document.getElementById('subject').value = data.subject;
-                        document.getElementById('mailto').value = data.mailto;
-                    }
-                });
+        document.getElementById('mainForm').onsubmit = function() {
+            document.getElementById('body_html').value = quill.root.innerHTML;
+            document.getElementById('body_json').value = JSON.stringify(quill.getContents());
+            return true;
+        };
 
-            // Sync HTML to hidden textarea before submit
-            document.getElementById('mainForm').onsubmit = (e) => {
-                document.getElementById('body_html').value = editor.runCommand('gjs-get-inlined-html');
-                document.getElementById('body_json').value = JSON.stringify(editor.getComponents());
-            };
+        function saveDraft(event) {
+            const btn = event.currentTarget;
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Saving...';
 
-            // ─── AI: Help Me Write / Refine ───────────────────────────────────
+            fetch('?action=save_draft', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: document.getElementById('subject').value,
+                    mailto: document.getElementById('mailto').value,
+                    body_html: quill.root.innerHTML,
+                    body_json: JSON.stringify(quill.getContents())
+                }),
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => {
+                btn.innerHTML = '<i class="bi bi-check me-2"></i> Saved';
+                setTimeout(() => btn.innerHTML = '<i class="bi bi-save me-2"></i> Save Draft', 2000);
+            });
+        }
+
+        // ─── AI: Help Me Write / Refine ───────────────────────────────────────
+        (function() {
             const briefInput = document.getElementById('briefInput');
             const btnGenerate = document.getElementById('btnGenerate');
             const refineBar = document.getElementById('refineBar');
             const subjectInput = document.getElementById('subject');
+            const tokenBalanceLabel = document.getElementById('tokenBalanceLabel');
 
             document.querySelectorAll('.prompt-chip').forEach(function(chip) {
                 chip.addEventListener('click', function() {
@@ -527,15 +511,10 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
                 });
             });
 
-            function currentBodyIsEmpty() {
-                const html = editor.getHtml().replace(/<[^>]*>/g, '').trim();
-                return html.length === 0;
-            }
-
             function toggleRefineBar() {
-                refineBar.style.setProperty('display', currentBodyIsEmpty() ? 'none' : 'flex', 'important');
+                refineBar.style.setProperty('display', quill.getText().trim() ? 'flex' : 'none', 'important');
             }
-            editor.on('component:add component:remove component:update', toggleRefineBar);
+            quill.on('text-change', toggleRefineBar);
             toggleRefineBar();
 
             function setBusy(btn, busy, busyLabel) {
@@ -558,8 +537,9 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
                         setBusy(btn, false);
                         if (data.status === 'success') {
                             if (data.subject) subjectInput.value = data.subject;
-                            editor.setComponents(data.body);
+                            quill.root.innerHTML = data.body;
                             toggleRefineBar();
+                            if (typeof data.tokens_remaining !== 'undefined' && tokenBalanceLabel) tokenBalanceLabel.textContent = data.tokens_remaining;
                         } else {
                             alert(data.message || 'Something went wrong. Please try again.');
                         }
@@ -578,73 +558,88 @@ bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_titl
 
             document.querySelectorAll('.refine-btn').forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    if (currentBodyIsEmpty()) return;
-                    const content = editor.runCommand('gjs-get-inlined-html');
+                    const content = quill.root.innerHTML;
+                    if (!quill.getText().trim()) return;
                     callAI('ai_refine', { content: content, refine_mode: btn.dataset.refine }, btn, 'Refining...');
                 });
             });
+        })();
 
-            // ─── Live campaign progress polling ───────────────────────────────
+        // ─── Live campaign progress polling ──────────────────────────────────
+        (function() {
             const activeCampaignId = <?php echo (int)$active_campaign_id; ?>;
-            if (activeCampaignId > 0) {
-                const barSent = document.getElementById('progressBarSent');
-                const barFailed = document.getElementById('progressBarFailed');
-                const elSent = document.getElementById('progressSent');
-                const elFailed = document.getElementById('progressFailed');
-                const elPending = document.getElementById('progressPending');
-                const elTotal = document.getElementById('progressTotal');
-                const elStatus = document.getElementById('progressStatus');
+            if (activeCampaignId <= 0) return;
 
-                const poll = () => {
-                    fetch('?action=campaign_progress&campaign_id=' + activeCampaignId)
-                        .then(r => r.json())
-                        .then(data => {
-                            if (!data || data.status === 'error') return;
-                            const total = data.total || 0;
-                            const sentPct = total ? (data.sent / total * 100) : 0;
-                            const failedPct = total ? (data.failed / total * 100) : 0;
-                            barSent.style.width = sentPct + '%';
-                            barFailed.style.width = failedPct + '%';
-                            elSent.textContent = data.sent;
-                            elFailed.textContent = data.failed;
-                            elPending.textContent = data.pending;
-                            elTotal.textContent = total;
-                            elStatus.textContent = data.status;
-                            if (data.status !== 'completed') {
-                                setTimeout(poll, 3000);
-                            }
-                        })
-                        .catch(() => setTimeout(poll, 5000));
-                };
-                poll();
-            }
-        };
+            const barSent = document.getElementById('progressBarSent');
+            const barFailed = document.getElementById('progressBarFailed');
+            const elSent = document.getElementById('progressSent');
+            const elFailed = document.getElementById('progressFailed');
+            const elPending = document.getElementById('progressPending');
+            const elTotal = document.getElementById('progressTotal');
+            const elStatus = document.getElementById('progressStatus');
+            const cancelActiveBtn = document.getElementById('cancelActiveBtn');
 
-        function insertPlaceholder(tag) {
-            const selected = editor.getSelected();
-            if (selected && selected.is('text')) {
-                selected.append(tag);
-            } else {
-                alert('Please select a text block first to insert a placeholder.');
-            }
-        }
+            function stopPolling() { cancelActiveBtn.disabled = true; cancelActiveBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cancelled'; }
 
-        function saveDraft() {
-            const data = {
-                subject: document.getElementById('subject').value,
-                mailto: document.getElementById('mailto').value,
-                body_html: editor.runCommand('gjs-get-inlined-html'),
-                body_json: JSON.stringify(editor.getComponents())
-            };
-
-            fetch('?action=save_draft', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            }).then(res => res.json()).then(res => {
-                if(res.status == 'success') alert('Draft saved successfully!');
+            cancelActiveBtn.addEventListener('click', function() {
+                if (!confirm('Cancel this campaign? Emails that have not been sent yet will not be sent.')) return;
+                cancelActiveBtn.disabled = true;
+                cancelActiveBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Cancelling...';
+                fetch('?action=cancel_campaign&campaign_id=' + activeCampaignId)
+                    .then(r => r.json())
+                    .then(data => {
+                        alert(data.message || (data.success ? 'Campaign cancelled.' : 'Could not cancel campaign.'));
+                        if (data.success) { stopPolling(); setTimeout(() => location.reload(), 1200); }
+                        else { cancelActiveBtn.disabled = false; cancelActiveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Campaign'; }
+                    })
+                    .catch(() => {
+                        cancelActiveBtn.disabled = false;
+                        cancelActiveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Campaign';
+                    });
             });
-        }
+
+            function poll() {
+                fetch('?action=campaign_progress&campaign_id=' + activeCampaignId)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data || data.status === 'error') return;
+                        const total = data.total || 0;
+                        const sentPct = total ? (data.sent / total * 100) : 0;
+                        const failedPct = total ? (data.failed / total * 100) : 0;
+                        barSent.style.width = sentPct + '%';
+                        barFailed.style.width = failedPct + '%';
+                        elSent.textContent = data.sent;
+                        elFailed.textContent = data.failed;
+                        elPending.textContent = data.pending;
+                        elTotal.textContent = total;
+                        elStatus.textContent = data.status;
+                        if (data.status === 'cancelled') { stopPolling(); return; }
+                        if (data.status !== 'completed') {
+                            setTimeout(poll, 3000);
+                        }
+                    })
+                    .catch(() => setTimeout(poll, 5000));
+            }
+            poll();
+        })();
+
+        // ─── Cancel buttons in the Recent Campaigns table ─────────────────────
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.cancel-campaign-btn');
+            if (!btn) return;
+            const cid = btn.dataset.id;
+            if (!confirm('Cancel campaign "' + (btn.dataset.subject || '') + '"? Emails that have not been sent yet will not be sent.')) return;
+            btn.disabled = true;
+            btn.textContent = 'Cancelling...';
+            fetch('?action=cancel_campaign&campaign_id=' + cid)
+                .then(r => r.json())
+                .then(data => {
+                    alert(data.message || (data.success ? 'Campaign cancelled.' : 'Could not cancel campaign.'));
+                    if (data.success) { location.reload(); }
+                    else { btn.disabled = false; btn.textContent = 'Cancel'; }
+                })
+                .catch(() => { btn.disabled = false; btn.textContent = 'Cancel'; });
+        });
     </script>
 
 

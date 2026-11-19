@@ -145,10 +145,70 @@ if (!function_exists('bc_adm_item_visible')) {
      * An item's gates. Same rule as the app shell: every gate defaults to visible,
      * so a page included before the fintech layer loads degrades to shown.
      */
-    function bc_adm_item_visible($item) {
-        if (empty($item['service'])) return true;
-        if (!function_exists('isServiceEnabled')) return true;
-        return (bool)isServiceEnabled($item['service']);
+    function bc_adm_item_visible($item, $area = null) {
+        if (!empty($item['service'])) {
+            if (!function_exists('isServiceEnabled')) return true;
+            if (!isServiceEnabled($item['service'])) return false;
+        }
+        // An entry whose page does not exist in this edition is dead weight in the
+        // menu (e.g. the standalone edition has no Fund/Self*/Renew pages, and had
+        // no USSDChannel page). Hide it instead of linking to a 404.
+        if (!empty($item['href'])) {
+            $area = $area ?: bc_adm_area();
+            $dir  = $area === 'spadmin' ? 'bc-spadmin' : 'bc-admin';
+            $file = basename(explode('?', (string)$item['href'])[0]);
+            if ($file !== '' && !is_file(__DIR__ . '/../' . $dir . '/' . $file)) return false;
+        }
+        return true;
+    }
+}
+
+if (!function_exists('bc_adm_hub_slug')) {
+    /** URL slug for a menu item with children (the Hub page's ?g= value). */
+    function bc_adm_hub_slug($label) {
+        $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', (string)$label));
+        return trim($slug, '-');
+    }
+}
+
+if (!function_exists('bc_adm_hub_find')) {
+    /** Find a children-bearing menu item (either area) by its hub slug. */
+    function bc_adm_hub_find($area, $slug) {
+        foreach (bc_adm_menu($area) as $group) {
+            foreach ((array)$group['items'] as $item) {
+                if (!empty($item['children']) && bc_adm_hub_slug($item['label']) === (string)$slug) {
+                    return $item;
+                }
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('bc_adm_hub_render')) {
+    /**
+     * Render a menu item's children as an embossed dark matrix (see bc_app_css).
+     * Used by bc-admin/Hub.php and bc-spadmin/Hub.php so the sidebar lists only
+     * main items and each section gets a landing page.
+     */
+    function bc_adm_hub_render($item, $area) {
+        $children = array();
+        foreach ((array)$item['children'] as $child) {
+            if (bc_adm_item_visible($child, $area)) $children[] = $child;
+        }
+        if (!$children) {
+            echo '<div class="pk-matrix__empty">Nothing here is available yet.</div>';
+            return;
+        }
+        echo '<div class="pk-matrix">';
+        foreach ($children as $child) {
+            echo '<a class="pk-matrix__card" href="' . htmlspecialchars(bc_adm_url((string)$child['href'], $area)) . '">';
+            echo '<span class="pk-matrix__icon">' . bc_adm_icon(isset($item['icon']) ? $item['icon'] : 'circle') . '</span>';
+            echo '<span class="pk-matrix__label">' . htmlspecialchars((string)$child['label']) . '</span>';
+            echo '<span class="pk-matrix__go">' . bc_adm_icon('arrow-right-circle') . '</span>';
+            echo '</a>';
+        }
+        echo '</div>';
     }
 }
 
@@ -314,9 +374,6 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Categories', 'href' => 'BlogCategories.php', 'match' => array('BlogCategories.php')),
                 )),
             )),
-            array('items' => array(
-                array('label' => 'Help / Guide', 'href' => 'SiteMap.php', 'icon' => 'question-circle', 'match' => array('SiteMap.php')),
-            )),
         );
     }
 }
@@ -441,7 +498,7 @@ if (!function_exists('bc_adm_sidebar')) {
         foreach ($menu as $group):
             $items = array();
             foreach ((array)$group['items'] as $item) {
-                if (bc_adm_item_visible($item)) $items[] = $item;
+                if (bc_adm_item_visible($item, $area)) $items[] = $item;
             }
             if (!$items) continue;
             $group_label = isset($group['label']) ? (string)$group['label'] : '';
@@ -459,23 +516,12 @@ if (!function_exists('bc_adm_sidebar')) {
                         <span class="pk-app__glabel"><?php echo htmlspecialchars($item['label']); ?></span>
                     </a><?php
                 else:
-                    $gid = 'adm' . $index;
-                    ?><button class="pk-app__glink<?php echo $item_active ? ' is-active' : ''; ?>" type="button"
-                            aria-expanded="<?php echo $item_active ? 'true' : 'false'; ?>"
-                            data-pk-group="<?php echo htmlspecialchars($gid); ?>">
+                    ?><a class="pk-app__glink<?php echo $item_active ? ' is-active' : ''; ?>"
+                       href="<?php echo htmlspecialchars(bc_adm_url('Hub.php?g=' . urlencode(bc_adm_hub_slug($item['label'])), $area)); ?>">
                         <span class="pk-app__gicon"><?php echo bc_adm_icon($icon); ?></span>
                         <span class="pk-app__glabel"><?php echo htmlspecialchars($item['label']); ?></span>
-                        <i class="bi bi-chevron-right pk-app__chev" aria-hidden="true"></i>
-                    </button>
-                    <ul class="pk-app__sub<?php echo $item_active ? ' is-open' : ''; ?>" id="pk-app-sub-<?php echo htmlspecialchars($gid); ?>">
-                        <?php foreach ($item['children'] as $child): ?>
-                            <?php
-                            if (!bc_adm_item_visible($child)) continue;
-                            $c_active = !empty($child['match']) && in_array($active, (array)$child['match'], true);
-                            ?>
-                            <li><a class="pk-app__slink<?php echo $c_active ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars(bc_adm_url((string)$child['href'], $area)); ?>"><?php echo htmlspecialchars($child['label']); ?></a></li>
-                        <?php endforeach; ?>
-                    </ul><?php
+                        <i class="bi bi-arrow-right-circle pk-app__chev" aria-hidden="true"></i>
+                    </a><?php
                 endif;
             endforeach;
         endforeach;
@@ -832,6 +878,28 @@ if (!function_exists('bc_adm_foot')) {
         if (toggle && toggle.getAttribute('data-bs-toggle') === 'modal') {
             var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));
             if (m) m.classList.toggle('show');
+        }
+
+        var collapseToggle = e.target.closest('[data-bs-toggle="collapse"]');
+        if (collapseToggle) {
+            var collapseTarget = collapseToggle.getAttribute('data-bs-target') || collapseToggle.getAttribute('href');
+            var collapsePane = collapseTarget ? document.querySelector(collapseTarget) : null;
+            if (collapsePane) {
+                e.preventDefault();
+                var willShow = !collapsePane.classList.contains('show');
+                var accordion = collapsePane.closest('.accordion');
+                if (accordion && willShow) {
+                    Array.prototype.forEach.call(accordion.querySelectorAll('.accordion-collapse.show'), function (p) {
+                        p.classList.remove('show');
+                    });
+                    Array.prototype.forEach.call(accordion.querySelectorAll('[data-bs-toggle="collapse"]'), function (b) {
+                        b.classList.add('collapsed'); b.setAttribute('aria-expanded', 'false');
+                    });
+                }
+                collapsePane.classList.toggle('show', willShow);
+                collapseToggle.classList.toggle('collapsed', !willShow);
+                collapseToggle.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+            }
         }
 
         var tabToggle = e.target.closest('[data-bs-toggle="pill"], [data-bs-toggle="tab"]');
