@@ -312,6 +312,14 @@ if (empty($active_supported)) $active_supported = $supported; // Fallback
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* CryptoHub — modern fintech redesign layer (2026-11) */
+.pk-app__wrap .crypto-card{border-radius:22px!important;background:linear-gradient(145deg,#16213a,#0b1220 65%);color:#e2e8f0;border:1px solid rgba(148,163,184,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 18px 34px -16px rgba(2,6,23,.65)}
+.pk-app__wrap .crypto-card .text-muted{color:#94a3b8!important}
+.pk-app__wrap .quick-action-btn{border-radius:16px!important;font-weight:700;transition:transform .15s ease,box-shadow .15s ease}
+.pk-app__wrap .quick-action-btn:hover{transform:translateY(-2px);box-shadow:0 14px 26px -14px rgba(2,6,23,.6)}
+.pk-app__wrap .nav-pills .nav-link{border-radius:999px;font-weight:700}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "CRYPTO", "crumb" => "Home / Crypto")); ?>
 

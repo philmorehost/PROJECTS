@@ -21,6 +21,21 @@ $res = mysqli_query($connection_server, $sql);
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Crypto Invoices | Admin", array("area" => "admin"));
 ?>
+<style data-pkx="page-redesign">
+/* Modern fintech redesign layer (2026-11) */
+.pk-app__wrap .card{border-radius:20px}
+.pk-app__wrap .card-header{background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 10%,var(--surface)),var(--surface));font-weight:800}
+.pk-app__wrap .table thead th{letter-spacing:.04em;text-transform:uppercase;font-size:.72rem}
+.pk-app__wrap .form-control,.pk-app__wrap .form-select{border-radius:12px}
+.pk-app__wrap .form-label{letter-spacing:.05em}
+.pk-app__wrap .btn{border-radius:12px;font-weight:700}
+.pk-app__wrap .badge{border-radius:999px}
+.pk-app__wrap .nav-pills .nav-link{border-radius:999px;font-weight:700}
+.pk-app__wrap .modal-content{border-radius:20px;overflow:hidden}
+
+.pk-app__wrap .badge{padding:.45rem .75rem}
+.pk-app__wrap code{font-size:.8rem}
+</style>
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "CRYPTO INVOICE HISTORY", "crumb" => "Home / Crypto Invoices")); ?>
 

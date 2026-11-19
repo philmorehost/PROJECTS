@@ -6,6 +6,14 @@ include("../func/bc-config.php");
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Transactions Calculator | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* TransactionCalculator — modern fintech redesign layer (2026-11) */
+.pk-app__wrap .p-3.border.rounded-4.bg-light{border-radius:20px!important;background:linear-gradient(145deg,#16213a,#0b1220 65%)!important;color:#e2e8f0;border-color:rgba(148,163,184,.2)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 16px 30px -16px rgba(2,6,23,.6)}
+.pk-app__wrap .p-3.border.rounded-4.bg-light .text-muted{color:#94a3b8!important}
+.pk-app__wrap .form-control{border-radius:14px;padding:.75rem 1rem;font-weight:600}
+.pk-app__wrap .form-label.text-uppercase{letter-spacing:.07em;font-size:.72rem}
+.pk-app__wrap .btn{border-radius:14px;font-weight:800}
+</style>
 
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "TRANSACTION CALCULATOR", "crumb" => "Home / Transaction Calculator")); ?><!-- End Page Title -->

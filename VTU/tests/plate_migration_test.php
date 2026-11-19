@@ -117,6 +117,15 @@ foreach ($editions as $edition) {
         // and its stylesheet (assets/css/fintech-cards.css) unlinked, so the body had to
         // change to fix the layout. The shell-presence checks above still apply.
         if ($name === 'Dashboard.php' || $name === 'VirtualCard.php') continue;
+        // Hub.php is designed on the shell (section landing pages, 2026-11): it has no
+        // pre-migration body to preserve.
+        if ($name === 'Hub.php') continue;
+        // PrintHub.php is redesigned on the shell as the PrintHub matrix (2026-11);
+        // its service gates and card links are preserved, the body is not.
+        if ($name === 'PrintHub.php') {
+            chk(strpos($cur, 'pk-matrix') !== false, "$label renders the PrintHub matrix");
+            continue;
+        }
 
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");

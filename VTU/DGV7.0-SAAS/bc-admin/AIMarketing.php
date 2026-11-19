@@ -195,6 +195,22 @@ $active_campaign_id = (int)($_GET['campaign'] ?? 0);
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head(($title), array("area" => "admin"));
 ?>
+<style data-pkx="page-redesign">
+/* Modern fintech redesign layer (2026-11) */
+.pk-app__wrap .card{border-radius:20px}
+.pk-app__wrap .card-header{background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 10%,var(--surface)),var(--surface));font-weight:800}
+.pk-app__wrap .table thead th{letter-spacing:.04em;text-transform:uppercase;font-size:.72rem}
+.pk-app__wrap .form-control,.pk-app__wrap .form-select{border-radius:12px}
+.pk-app__wrap .form-label{letter-spacing:.05em}
+.pk-app__wrap .btn{border-radius:12px;font-weight:700}
+.pk-app__wrap .badge{border-radius:999px}
+.pk-app__wrap .nav-pills .nav-link{border-radius:999px;font-weight:700}
+.pk-app__wrap .modal-content{border-radius:20px;overflow:hidden}
+
+.pk-app__wrap .marketing-card{border-radius:22px!important;background:linear-gradient(145deg,#1e1b4b,#0b1220 70%);color:#e2e8f0;border:1px solid rgba(148,163,184,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 18px 34px -16px rgba(2,6,23,.65)}
+.pk-app__wrap .marketing-card .text-muted{color:#a5b4fc!important}
+.pk-app__wrap .prompt-chip{border-radius:999px}
+</style>
 <style>
         .studio-header { background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 2rem; padding: 3rem; color: white; margin-bottom: 2rem; position: relative; overflow: hidden; }
         .studio-header::after { content: '✨'; position: absolute; right: 5%; top: 50%; transform: translateY(-50%); font-size: 5rem; opacity: 0.2; }

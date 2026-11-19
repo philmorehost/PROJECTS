@@ -77,6 +77,22 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/web/Hub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
+      - 'VTU/DGV7.0-SAAS/web/PrintHub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/PrintHub.php'
+      - 'VTU/DGV7.0-SAAS/web/SendFund.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/SendFund.php'
+      - 'VTU/DGV7.0-SAAS/web/CryptoHub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/CryptoHub.php'
+      - 'VTU/DGV7.0-SAAS/web/NINCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/NINCard.php'
+      - 'VTU/DGV7.0-SAAS/web/Pricing.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Pricing.php'
+      - 'VTU/DGV7.0-SAAS/web/TransactionCalculator.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/TransactionCalculator.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-mail-queue.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-mail-queue.php'
       - 'VTU/DGV7.0-SAAS/func/db-dtl.php'
       - 'VTU/DGV7.0-NON-SAAS/func/db-dtl.php'
       - 'VTU/DGV7.0-SAAS/func/bc-admin-config.php'
@@ -155,6 +171,22 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/web/Hub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
+      - 'VTU/DGV7.0-SAAS/web/PrintHub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/PrintHub.php'
+      - 'VTU/DGV7.0-SAAS/web/SendFund.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/SendFund.php'
+      - 'VTU/DGV7.0-SAAS/web/CryptoHub.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/CryptoHub.php'
+      - 'VTU/DGV7.0-SAAS/web/NINCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/NINCard.php'
+      - 'VTU/DGV7.0-SAAS/web/Pricing.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Pricing.php'
+      - 'VTU/DGV7.0-SAAS/web/TransactionCalculator.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/TransactionCalculator.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-mail-queue.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-mail-queue.php'
       - 'VTU/DGV7.0-SAAS/func/db-dtl.php'
       - 'VTU/DGV7.0-NON-SAAS/func/db-dtl.php'
       - 'VTU/DGV7.0-SAAS/func/bc-admin-config.php'
@@ -198,7 +230,7 @@ jobs:
                         func/bc-fintech-accounts.php func/bc-service-matrix.php \
                         func/bc-service-matrix-render.php func/bc-account-backfill.php \
                         func/bc-account-backfill-render.php \
-                        func/bc-config.php func/db-dtl.php func/bc-admin-config.php web/Login.php web/api/login.php web/api/logout.php \
+                        func/bc-config.php func/db-dtl.php func/bc-admin-config.php func/bc-mail-queue.php web/Login.php web/api/login.php web/api/logout.php \
                         web/api/profile.php web/BusinessUpgrade.php bc-admin/AccountSettings.php \
                         bc-admin/PaymentGateway.php bc-admin/ServiceControl.php \
                         bc-admin/BusinessKYB.php bc-admin/SupportChat.php bc-admin/ChatSettings.php \
@@ -378,8 +410,8 @@ jobs:
             grep -q 'bc_flw_handle_webhook(' "VTU/${edition}/web/api/flutterwave_webhook.php"
             # The published developer docs must point at the canonical endpoint.
             grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
-            # The sidebar is grouped into the six service groups; the flat "Services" heading is gone.
-            for group in pay-bills wallet-transfers financial-services business-api history-tools settings-help; do
+            # The sidebar is grouped into service groups; the flat "Services" heading is gone.
+            for group in pay-bills wallet-transfers verify-print tools-api history-tools settings-help; do
               grep -q "'id' => '${group}'" "VTU/${edition}/func/bc-plate-app.php"
             done
             if grep -q "'label' => 'Services'" "VTU/${edition}/func/bc-plate-app.php"; then

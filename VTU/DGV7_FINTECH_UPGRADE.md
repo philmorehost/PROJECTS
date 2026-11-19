@@ -987,3 +987,51 @@ CI alongside the existing suites.
 Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
 plate_admin **692**, plate_migration **876**, backoffice_regression **36**,
 htaccess **224**.
+
+## 19. Matrix hubs, menu restructure, and the modern fintech redesign pass
+
+- **Sidebar → Hub pages (all three shells).** The sidebars now list main menu
+  items only. Every item with sub-pages links to a new Hub page
+  (`web/Hub.php`, `bc-admin/Hub.php`, `bc-spadmin/Hub.php`) that renders its
+  sub-pages as an **embossed dark matrix** — subtle dark-slate cards with an
+  inset top highlight and deep outer shadow (`.pk-matrix__card`), a gradient
+  hero (`.pk-hub__hero`), brand icon tiles and hover lift. `bc_app_css()` gained
+  a "fintech design layer v2" (deeper card elevation, gradient primary buttons,
+  pill badges) so **every** shell page — console, admin and spadmin — picks up
+  the modern look without body changes.
+- **Console menu changes:** "Financial Services" → **Verify & Print**;
+  "Business & API" → **Tools & API**; **PrintHub stands alone** as a top-level
+  item, and all PrintHub print-card links were removed from **History & Tools**
+  (Number Filter moved into it instead) — the print services live only in
+  `web/PrintHub.php`, itself redesigned onto the same matrix (service gates and
+  NIN/BVN vendor checks preserved). **Admin menu:** the duplicate
+  "Help / Guide" entry is gone (Platform Guide remains), and the admin shell
+  now hides menu entries whose page does not exist in the running edition —
+  which discards Fund / Self Transactions / Self Submit Payment / Self Payment
+  Orders / Renew Subscription / Subscription History from the standalone
+  (NON-SAAS) menu, where those pages do not exist, while SAAS keeps them.
+- **`bc-admin/USSDChannel.php` restored in NON-SAAS** (with
+  `ajax-ussd-activate.php`), ported from SAAS with null-safe vendor reads;
+  the menu's missing-page gate makes it appear automatically.
+- **`bc-admin/KnowledgeBase.php` accordion fixed:** the shells now style
+  (`.accordion*` in the compat layer) and wire Bootstrap collapse toggles,
+  including `data-bs-parent` exclusivity — the retired bundle no longer needs
+  to be present for the guide to expand.
+- **NON-SAAS `bc-admin/SendMail.php` now uses the SAAS email sender** — the file
+  is byte-identical across editions (Quill composer, campaign cancel/progress),
+  backed by porting `bc_cancel_mail_campaign()` and
+  `bc_get_active_mail_campaigns()` into NON-SAAS `func/bc-mail-queue.php`.
+- **Page redesign layers** (`<style data-pkx="page-redesign">`, logic and markup
+  contracts untouched): bc-admin — CryptoInvoices, AIMarketing, Users,
+  BatchTransactions, PaymentOrders, Withdrawals, FundTransferRequests, ShareFund,
+  BlogPostEdit, StatusMessage, EmailTemplates, AppUpdateBroadcast, IDBlockingSystem,
+  TransactionLimits, SenderIDRequests, CoinConversions, KYCManagement,
+  ServiceControl, DataBundleCard (all `?type=` variants), GiftCard, VirtualCard
+  (plus the spadmin copies of Users/PaymentOrders/ShareFund/StatusMessage/
+  EmailTemplates/KYCManagement/ServiceControl); web — SendFund, CryptoHub,
+  NINCard, Pricing, TransactionCalculator (inserted after the shell head, so the
+  migration body contract still holds).
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
+plate_admin **708**, plate_migration **882**, backoffice_regression **69**,
+htaccess **224**.

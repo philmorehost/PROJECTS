@@ -192,17 +192,21 @@ if (!function_exists('bc_app_menu')) {
                 ),
             ),
             array(
-                'label' => 'Financial Services', 'icon' => 'briefcase', 'id' => 'financial-services',
-                'match' => array('NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php'),
+                'label' => 'Verify & Print', 'icon' => 'briefcase', 'id' => 'verify-print',
+                'match' => array('NINCard.php', 'NINCardHistory.php', 'BVNVerification.php'),
                 'items' => array(
                     array('label' => 'Print NIN Slip', 'href' => 'NINCard.php', 'icon' => 'person-vcard', 'service' => 'nin_card'),
                     array('label' => 'NIN Slip History', 'href' => 'NINCardHistory.php', 'icon' => 'clock-history', 'service' => 'nin_card'),
                     array('label' => 'BVN Verification', 'href' => 'BVNVerification.php', 'icon' => 'shield-check', 'service' => 'bvn_verify'),
-                    array('label' => 'Number Filter', 'href' => 'NumberFilter.php', 'icon' => 'funnel'),
                 ),
             ),
             array(
-                'label' => 'Business & API', 'icon' => 'building', 'id' => 'business-api',
+                'items' => array(
+                    array('label' => 'PrintHub', 'href' => 'PrintHub.php', 'icon' => 'printer', 'service' => 'data_card'),
+                ),
+            ),
+            array(
+                'label' => 'Tools & API', 'icon' => 'building', 'id' => 'tools-api',
                 'match' => array('AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php'),
                 'items' => array(
                     array('label' => 'AI Suite', 'href' => 'AISuite.php', 'icon' => 'robot', 'service' => 'ai_suite', 'badge' => 'NEW'),
@@ -220,7 +224,7 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'History & Tools', 'icon' => 'clock-history', 'id' => 'history-tools',
-                'match' => array('Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php', 'DataBundleCard.php', 'PaymentOrders.php', 'SubmitPayment.php', 'ShareFundHistory.php'),
+                'match' => array('Transactions.php', 'BatchTransactions.php', 'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'NumberFilter.php', 'PaymentOrders.php', 'SubmitPayment.php', 'ShareFundHistory.php'),
                 'items' => array(
                     array('label' => 'All Transactions', 'href' => 'Transactions.php', 'icon' => 'list-ul'),
                     array('label' => 'Share Fund History', 'href' => 'ShareFundHistory.php', 'icon' => 'clock-history'),
@@ -228,13 +232,7 @@ if (!function_exists('bc_app_menu')) {
                     array('label' => 'Points History', 'href' => 'PointsHistory.php', 'icon' => 'star'),
                     array('label' => 'Transaction Calculator', 'href' => 'TransactionCalculator.php', 'icon' => 'calculator'),
                     array('label' => 'Number Credit Checker', 'href' => 'NumberChecker.php', 'icon' => 'phone-flip'),
-                    array('label' => 'Vending Dashboard', 'href' => 'PrintHub.php', 'icon' => 'speedometer2', 'service' => 'data_card'),
-                    array('label' => 'Print Airtime Card', 'href' => 'DataBundleCard.php?type=airtime', 'icon' => 'printer', 'service' => 'print_airtime'),
-                    array('label' => 'Print Data Card', 'href' => 'DataBundleCard.php?type=data', 'icon' => 'printer', 'service' => 'print_data'),
-                    array('label' => 'Print Cable Card', 'href' => 'DataBundleCard.php?type=cable', 'icon' => 'printer', 'service' => 'print_cable'),
-                    array('label' => 'Print Electric Card', 'href' => 'DataBundleCard.php?type=electric', 'icon' => 'printer', 'service' => 'print_electric'),
-                    array('label' => 'Print Exam Pin', 'href' => 'DataBundleCard.php?type=exam', 'icon' => 'printer', 'service' => 'print_exam'),
-                    array('label' => 'Print Betting Card', 'href' => 'DataBundleCard.php?type=betting', 'icon' => 'printer', 'service' => 'print_betting'),
+                    array('label' => 'Number Filter', 'href' => 'NumberFilter.php', 'icon' => 'funnel'),
                     array('label' => 'Payment Orders', 'href' => 'PaymentOrders.php', 'icon' => 'receipt'),
                     array('label' => 'Submit Payment', 'href' => 'SubmitPayment.php', 'icon' => 'cash-stack', 'service' => 'manual_funding'),
                 ),
@@ -249,6 +247,53 @@ if (!function_exists('bc_app_menu')) {
                 ),
             ),
         );
+    }
+}
+
+if (!function_exists('bc_app_hub_group')) {
+    /** Find a labelled main-menu group by its id (the Hub page's ?g= slug). */
+    function bc_app_hub_group($id) {
+        foreach (bc_app_menu() as $group) {
+            if (isset($group['id']) && (string)$group['id'] === (string)$id && !empty($group['label'])) {
+                return $group;
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('bc_app_hub_render')) {
+    /**
+     * Render a main-menu group as an embossed dark matrix of its sub-pages.
+     * Used by web/Hub.php so the sidebar stays a short list of main items and
+     * each section gets a proper landing page instead of an expanding tree.
+     */
+    function bc_app_hub_render($group, $user = null) {
+        if ($user === null) {
+            $site = bc_app_site();
+            $user = $site['user'];
+        }
+        $items = array();
+        foreach ((array)$group['items'] as $item) {
+            if (bc_app_item_visible($item, $user)) $items[] = $item;
+        }
+        if (!$items) {
+            echo '<div class="pk-matrix__empty">Nothing here is enabled for your account yet.</div>';
+            return;
+        }
+        echo '<div class="pk-matrix">';
+        foreach ($items as $item) {
+            $href = bc_app_url((string)$item['href']);
+            echo '<a class="pk-matrix__card" href="' . htmlspecialchars($href) . '">';
+            echo '<span class="pk-matrix__icon">' . bc_app_icon(isset($item['icon']) ? $item['icon'] : 'circle') . '</span>';
+            echo '<span class="pk-matrix__label">' . htmlspecialchars((string)$item['label']) . '</span>';
+            if (!empty($item['badge'])) {
+                echo '<span class="pk-matrix__badge">' . htmlspecialchars((string)$item['badge']) . '</span>';
+            }
+            echo '<span class="pk-matrix__go">' . bc_app_icon('arrow-right-circle') . '</span>';
+            echo '</a>';
+        }
+        echo '</div>';
     }
 }
 
@@ -884,6 +929,113 @@ if (!function_exists('bc_app_css')) {
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { transition: none !important; animation-duration: .01ms !important; }
         }
+
+        /* ── Fintech design layer v2 (2026-11) ──────────────────────────────────
+           Modernises every shell page without touching page bodies: deeper card
+           elevation, gradient primary actions, softer surfaces, and the embossed
+           dark matrix used by the section Hub pages. */
+        .pk-app__wrap .card {
+            border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+            border-radius: 20px;
+            box-shadow: 0 1px 2px rgba(11,18,32,.05), 0 12px 32px -16px rgba(11,18,32,.18);
+        }
+        .pk-app__wrap .card-header {
+            background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 10%, var(--surface)), var(--surface));
+            border-bottom: 1px solid var(--line);
+            border-radius: 20px 20px 0 0 !important;
+            font-weight: 700;
+        }
+        .pk-app__wrap .btn { border-radius: 12px; }
+        .pk-app__wrap .btn-primary {
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark)) !important;
+            border: none; color: #fff !important;
+            box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--brand) 80%, transparent);
+        }
+        .pk-app__wrap .btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
+        .pk-app__wrap .form-control, .pk-app__wrap .form-select, .pk-app__wrap .input-group-text {
+            border-radius: 12px;
+        }
+        .pk-app__wrap .badge { border-radius: 999px; font-weight: 700; letter-spacing: .01em; }
+
+        /* Embossed dark matrix: section hubs + service pickers. The card sits on a
+           subtle dark slate with an inset top highlight and a deep outer shadow,
+           which reads as pressed/embossed rather than flat. */
+        .pk-matrix {
+            display: grid; gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        }
+        .pk-matrix__card {
+            position: relative; display: flex; align-items: center; gap: 14px;
+            padding: 20px 18px; border-radius: 18px; text-decoration: none;
+            color: #e2e8f0;
+            background: linear-gradient(145deg, #16213a 0%, #0b1220 60%, #0d1526 100%);
+            border: 1px solid rgba(148, 163, 184, .18);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,.10),
+                inset 0 -10px 18px rgba(0,0,0,.35),
+                0 14px 28px -12px rgba(2, 6, 23, .55);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+        .pk-matrix__card:hover {
+            transform: translateY(-3px); color: #fff; text-decoration: none;
+            border-color: color-mix(in srgb, var(--brand) 65%, rgba(148,163,184,.18));
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,.14),
+                inset 0 -10px 18px rgba(0,0,0,.35),
+                0 22px 38px -14px rgba(2, 6, 23, .65);
+        }
+        .pk-matrix__icon {
+            width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; color: #fff;
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 8px 16px -8px rgba(0,0,0,.8);
+        }
+        .pk-matrix__label { font-weight: 700; font-size: .95rem; line-height: 1.25; }
+        .pk-matrix__badge {
+            position: absolute; top: 10px; right: 12px;
+            background: var(--warn); color: #fff; font-size: .62rem; font-weight: 800;
+            padding: 2px 8px; border-radius: 999px; letter-spacing: .05em;
+        }
+        .pk-matrix__go { margin-left: auto; opacity: .45; font-size: 1.05rem; }
+        .pk-matrix__card:hover .pk-matrix__go { opacity: 1; }
+        .pk-matrix__empty {
+            padding: 28px; border-radius: 18px; text-align: center; color: var(--muted);
+            background: var(--wash); border: 1px dashed var(--line);
+        }
+        .pk-hub__hero {
+            border-radius: 22px; padding: 30px 28px; margin-bottom: 22px; color: #fff;
+            background:
+                radial-gradient(600px 220px at 85% -10%, color-mix(in srgb, var(--brand) 55%, transparent), transparent 60%),
+                linear-gradient(135deg, #0b1220 0%, #101c33 55%, color-mix(in srgb, var(--brand-dark) 55%, #0b1220) 100%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 20px 40px -18px rgba(2,6,23,.7);
+        }
+        .pk-hub__hero h1 { font-size: 1.55rem; font-weight: 800; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
+        .pk-hub__hero p { margin: 0; opacity: .75; font-size: .92rem; }
+
+        /* Bootstrap accordion (KnowledgeBase and friends). The retired bundle used
+           to provide this; the compat layer styles and wires it instead. */
+        .pk-app__wrap .accordion { display: grid; gap: 12px; }
+        .pk-app__wrap .accordion-item {
+            border: 1px solid var(--line) !important; border-radius: 16px !important;
+            overflow: hidden; background: var(--surface);
+            box-shadow: 0 6px 18px -12px rgba(11,18,32,.25);
+        }
+        .pk-app__wrap .accordion-header { margin: 0; }
+        .pk-app__wrap .accordion-button {
+            width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+            background: var(--surface); border: 0; padding: 16px 18px; cursor: pointer;
+            font: inherit; font-weight: 700; color: var(--ink);
+        }
+        .pk-app__wrap .accordion-button::after {
+            content: "\F282"; font-family: "bootstrap-icons"; margin-left: auto;
+            transition: transform .18s ease; font-size: .9rem; color: var(--muted);
+        }
+        .pk-app__wrap .accordion-button:not(.collapsed) { color: var(--brand); background: color-mix(in srgb, var(--brand) 6%, var(--surface)); }
+        .pk-app__wrap .accordion-button:not(.collapsed)::after { transform: rotate(180deg); }
+        .pk-app__wrap .accordion-collapse { display: none; }
+        .pk-app__wrap .accordion-collapse.show { display: block; }
+        .pk-app__wrap .accordion-body { padding: 4px 18px 18px; color: var(--muted); line-height: 1.65; }
 </style>
         <?php
     }
@@ -972,24 +1124,13 @@ if (!function_exists('bc_app_sidebar')) {
                     </a>
                 <?php endforeach; ?>
             <?php else: ?>
-                <button class="pk-app__glink<?php echo $group_active ? ' is-active' : ''; ?>" type="button"
-                        aria-expanded="<?php echo $group_active ? 'true' : 'false'; ?>"
-                        data-pk-group="<?php echo htmlspecialchars($group_id); ?>">
+                <a class="pk-app__glink<?php echo $group_active ? ' is-active' : ''; ?>"
+                   href="<?php echo htmlspecialchars(bc_app_url('Hub.php?g=' . urlencode($group_id))); ?>">
                     <span class="pk-app__gicon"><?php echo bc_app_icon($group_icon); ?></span>
                     <span class="pk-app__glabel"><?php echo htmlspecialchars($group_label); ?></span>
                     <?php if (!empty($group['badge'])): ?><span class="pk-app__badge"><?php echo htmlspecialchars($group['badge']); ?></span><?php endif; ?>
-                    <i class="bi bi-chevron-right pk-app__chev" aria-hidden="true"></i>
-                </button>
-                <ul class="pk-app__sub<?php echo $group_active ? ' is-open' : ''; ?>" id="pk-app-sub-<?php echo htmlspecialchars($group_id); ?>">
-                    <?php foreach ($items as $item): ?>
-                        <?php $item_active = $active === basename((string)$item['href']); ?>
-                        <li>
-                            <a class="pk-app__slink<?php echo $item_active ? ' is-active' : ''; ?>" href="<?php echo htmlspecialchars(bc_app_url($item['href'])); ?>">
-                                <?php echo htmlspecialchars($item['label']); ?>
-                            </a>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
+                    <i class="bi bi-arrow-right-circle pk-app__chev" aria-hidden="true"></i>
+                </a>
             <?php endif; ?>
         <?php endforeach; ?>
     </nav>
@@ -1352,6 +1493,28 @@ if (!function_exists('bc_app_foot')) {
         if (toggle && toggle.getAttribute('data-bs-toggle') === 'modal') {
             var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));
             if (m) m.classList.toggle('show');
+        }
+
+        var collapseToggle = e.target.closest('[data-bs-toggle="collapse"]');
+        if (collapseToggle) {
+            var collapseTarget = collapseToggle.getAttribute('data-bs-target') || collapseToggle.getAttribute('href');
+            var collapsePane = collapseTarget ? document.querySelector(collapseTarget) : null;
+            if (collapsePane) {
+                e.preventDefault();
+                var willShow = !collapsePane.classList.contains('show');
+                var accordion = collapsePane.closest('.accordion');
+                if (accordion && willShow) {
+                    Array.prototype.forEach.call(accordion.querySelectorAll('.accordion-collapse.show'), function (p) {
+                        p.classList.remove('show');
+                    });
+                    Array.prototype.forEach.call(accordion.querySelectorAll('[data-bs-toggle="collapse"]'), function (b) {
+                        b.classList.add('collapsed'); b.setAttribute('aria-expanded', 'false');
+                    });
+                }
+                collapsePane.classList.toggle('show', willShow);
+                collapseToggle.classList.toggle('collapsed', !willShow);
+                collapseToggle.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+            }
         }
 
         var tabToggle = e.target.closest('[data-bs-toggle="pill"], [data-bs-toggle="tab"]');

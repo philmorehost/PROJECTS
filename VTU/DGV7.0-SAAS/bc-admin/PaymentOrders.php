@@ -114,6 +114,18 @@
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
 ?>
+<style data-pkx="page-redesign">
+/* Modern fintech redesign layer (2026-11) */
+.pk-app__wrap .card{border-radius:20px}
+.pk-app__wrap .card-header{background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 10%,var(--surface)),var(--surface));font-weight:800}
+.pk-app__wrap .table thead th{letter-spacing:.04em;text-transform:uppercase;font-size:.72rem}
+.pk-app__wrap .form-control,.pk-app__wrap .form-select{border-radius:12px}
+.pk-app__wrap .form-label{letter-spacing:.05em}
+.pk-app__wrap .btn{border-radius:12px;font-weight:700}
+.pk-app__wrap .badge{border-radius:999px}
+.pk-app__wrap .nav-pills .nav-link{border-radius:999px;font-weight:700}
+.pk-app__wrap .modal-content{border-radius:20px;overflow:hidden}
+</style>
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "PAYMENT ORDERS", "crumb" => "Home / Payment Orders")); ?><!-- End Page Title -->
 
