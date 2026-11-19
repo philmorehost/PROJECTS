@@ -36,8 +36,100 @@ $funding_fee = (float)($vc_settings['vc_funding_profit_percent'] ?? 3.00);
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Virtual Card Dashboard | " . ($get_all_site_details["site_title"]));
 ?>
+<link rel="stylesheet" href="../assets/css/fintech-cards.css">
+<style>
+	/* Virtual Cards (Platnova) — builds on assets/css/fintech-cards.css, which the shell
+	   migration left unlinked. Tokens: --brand, --ink, --muted, --line, --radius, --shadow. */
+	.vc-pagehead {
+		display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+		flex-wrap: wrap; margin-bottom: 1.25rem;
+	}
+	.vc-pagehead__title { font-size: 1.35rem; font-weight: 800; color: var(--ink); margin: 0; letter-spacing: -.02em; }
+	.vc-pagehead__sub { color: var(--muted); font-size: .85rem; margin: 2px 0 0; }
+
+	/* Card face: premium brand-gradient plastic, contactless-era proportions. */
+	.vc-glass-card {
+		background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 70%, #0b1220) 100%) !important;
+		border: 1px solid rgba(255,255,255,.25);
+		border-radius: 20px;
+		aspect-ratio: 1.586 / 1;
+		min-height: 0;
+		padding: 1.4rem 1.5rem;
+		display: flex; flex-direction: column;
+		box-shadow: var(--shadow);
+	}
+	.vc-glass-card::after {
+		content: ''; position: absolute; width: 300px; height: 300px; border-radius: 50%;
+		background: rgba(255,255,255,.10); top: -150px; right: -70px; pointer-events: none;
+	}
+	.vc-glass-card:hover { transform: translateY(-4px); }
+	.vc-glass-card > div:last-child { margin-top: auto; }
+	.vc-chip {
+		width: 46px; height: 34px; border-radius: 7px; margin-bottom: 1.1rem;
+		background: linear-gradient(135deg, #f6d365 0%, #d4a017 55%, #b8860b 100%);
+		box-shadow: inset 0 0 0 1px rgba(120,72,0,.35), inset 0 -10px 0 rgba(120,72,0,.18);
+		position: relative; z-index: 1;
+	}
+	.vc-number {
+		font-family: 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 1.28rem;
+		letter-spacing: .14em; margin-bottom: 1.1rem; text-shadow: 0 1px 2px rgba(0,0,0,.25);
+		position: relative; z-index: 1;
+	}
+	.vc-info-label { font-size: .62rem; letter-spacing: .12em; font-weight: 700; opacity: .72; }
+	.vc-info-val { font-size: .95rem; font-weight: 700; letter-spacing: .04em; }
+	.vc-brand i { font-size: 2.1rem; opacity: .95; }
+	.vc-frozen-overlay { backdrop-filter: blur(3px); background: rgba(11,18,32,.55); }
+	.vc-frozen-badge { background: var(--bad); letter-spacing: .08em; }
+
+	.vc-status-indicator { width: 9px; height: 9px; box-shadow: none; vertical-align: 0; }
+	.status-active { background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,.9); }
+	.status-frozen { background: #f87171; box-shadow: 0 0 8px rgba(248,113,113,.9); }
+
+	.reveal-btn {
+		background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+		border-radius: 999px; padding: 4px 12px; font-size: .7rem; font-weight: 700;
+		position: relative; z-index: 1;
+	}
+	.reveal-btn:hover { background: rgba(255,255,255,.32); }
+
+	/* Quick actions under each card */
+	.btn-white {
+		background: var(--surface); border: 1px solid var(--line) !important; color: var(--ink);
+		font-weight: 700; transition: all .18s ease;
+	}
+	.btn-white:hover { transform: translateY(-2px); box-shadow: var(--shadow); color: var(--ink); }
+
+	/* Empty state */
+	.empty-state {
+		border: 1.5px dashed var(--line); border-radius: var(--radius); background: var(--surface);
+		padding: 3rem 1.5rem; text-align: center;
+	}
+	.empty-state .display-1 { font-size: 3.2rem; line-height: 1; }
+
+	.text-xs { font-size: .72rem; }
+
+	/* Insights sidebar */
+	.vc-insight-head {
+		display: flex; align-items: center; gap: .7rem; padding: 1.1rem 1.4rem;
+		border-bottom: 1px solid var(--line);
+	}
+	.vc-insight-ic {
+		width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+		background: color-mix(in srgb, var(--brand) 12%, #fff); color: var(--brand); font-size: 1.1rem;
+	}
+
+	@media (max-width: 575px) {
+		.vc-number { font-size: 1.05rem; }
+		.vc-glass-card { padding: 1.1rem 1.2rem; }
+	}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "Virtual Cards", "crumb" => "Home / Virtual Card")); ?>
+    <div class="vc-pagehead">
+        <div>
+            <h2 class="vc-pagehead__title">My Virtual Cards</h2>
+            <p class="vc-pagehead__sub">USD virtual cards for global online payments — fund, freeze and reveal securely.</p>
+        </div>
         <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#issueCardModal">
             <i class="bi bi-plus-lg me-2"></i>New Card
         </button>
@@ -59,7 +151,7 @@ bc_app_head("Virtual Card Dashboard | " . ($get_all_site_details["site_title"]))
                         $is_frozen = ($card['status'] == 'frozen');
                     ?>
                     <div class="col-md-6 card-stack">
-                        <div class="vc-glass-card <?php echo $is_frozen ? 'frozen' : ''; ?>" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+                        <div class="vc-glass-card <?php echo $is_frozen ? 'frozen' : ''; ?>">
                             <?php if($is_frozen): ?>
                             <div class="vc-frozen-overlay">
                                 <span class="vc-frozen-badge">FROZEN</span>
@@ -112,8 +204,9 @@ bc_app_head("Virtual Card Dashboard | " . ($get_all_site_details["site_title"]))
             <!-- Spending Insights & Help -->
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
-                    <div class="card-header bg-primary text-white py-3 border-0">
-                        <h6 class="fw-bold mb-0">Balance & Insights</h6>
+                    <div class="vc-insight-head">
+                        <div class="vc-insight-ic"><i class="bi bi-wallet2"></i></div>
+                        <h6 class="fw-bold mb-0">Balance &amp; Insights</h6>
                     </div>
                     <div class="card-body p-4 text-center">
                         <div class="display-6 fw-bold text-primary mb-1">$<?php

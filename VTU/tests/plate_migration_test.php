@@ -107,7 +107,16 @@ foreach ($editions as $edition) {
         foreach ($retired as $token) {
             chk(strpos($cur, $token) === false, "$label has no retired $token");
         }
-        if ($name === 'Dashboard.php') continue;
+        if ($name === 'VirtualCard.php') {
+            // The missing-stylesheet bug must not come back: the page links its card CSS.
+            chk(strpos($cur, 'fintech-cards.css') !== false, "$label links its card stylesheet");
+        }
+        // Dashboard.php is exempt (designed on the shell, PR #137 follow-ups).
+        // VirtualCard.php is exempt too: redesigned on the shell (see DGV7_FINTECH_UPGRADE.md §17). Its shell
+        // migration had left the page outside .pk-app__wrap (a residual pagetitle </div>)
+        // and its stylesheet (assets/css/fintech-cards.css) unlinked, so the body had to
+        // change to fix the layout. The shell-presence checks above still apply.
+        if ($name === 'Dashboard.php' || $name === 'VirtualCard.php') continue;
 
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
