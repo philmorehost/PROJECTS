@@ -21,140 +21,115 @@ if (mysqli_num_rows($select_user_vendor_status_message) == 1) {
 // Master KYC Compliance Check
 $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<title>Dashboard | <?php echo $get_all_site_details["site_title"]; ?></title>
-	<meta charset="UTF-8" />
-	<meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-	<meta http-equiv="Content-Type" content="text/html; " />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-	<link rel="stylesheet" href="/cssfile/bc-style.css">
-	<meta name="author" content="Philmore Codes">
-	<meta name="dc.creator" content="Philmore Codes">
-	<link href="https://fonts.gstatic.com" rel="preconnect">
-	<link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-	<link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-	<link href="../assets-2/css/style.css" rel="stylesheet">
-	<style>
-		body { background-color: #f8fafc; color: #1e293b; }
-        .card { border-radius: 1.25rem; border: none; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
-        .balance-hero {
-            background: linear-gradient(135deg, <?php echo $vendor_primary_color; ?> 0%, <?php echo $vendor_primary_color; ?>cc 100%);
-            border-radius: 1.25rem;
-            color: white;
-            padding: 1.5rem;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 1.5rem;
-        }
-        .balance-hero::after {
-            content: '';
-            position: absolute;
-            top: -20%;
-            right: -10%;
-            width: 300px;
-            height: 300px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        .balance-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
-        .quick-action-btn {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.25);
-            color: white;
-            padding: 0.5rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
-            font-size: 0.75rem;
-            backdrop-filter: blur(10px);
-            transition: all 0.2s;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 60px;
-            position: relative;
-            z-index: 5;
-        }
-        .quick-action-btn i { font-size: 1.25rem; margin-bottom: 2px; }
-        .quick-action-btn:hover { background: rgba(255,255,255,0.25); color: white; transform: translateY(-2px); }
+<?php
+// Plate app shell: one shared chrome for the signed-in console. The page keeps its own
+// logic; only the <head>, the navigation and the footer come from the shell.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Dashboard | " . $get_all_site_details["site_title"]);
+bc_app_sidebar();
+bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
+?>
+<style>
+	/* Page-specific primitives. Everything else (grid, cards, buttons, alerts, forms) comes
+	   from the shell's scoped compat layer, so a migrated page carries only its own look. */
+	.balance-hero {
+		background: linear-gradient(135deg, <?php echo bc_app_colour(); ?> 0%, <?php echo bc_app_colour(); ?>cc 100%);
+		border-radius: 1.25rem;
+		color: white;
+		padding: 1.5rem;
+		position: relative;
+		overflow: hidden;
+		margin-bottom: 1.5rem;
+	}
+	.balance-hero::after {
+		content: '';
+		position: absolute;
+		top: -20%;
+		right: -10%;
+		width: 300px;
+		height: 300px;
+		background: rgba(255,255,255,0.1);
+		border-radius: 50%;
+		pointer-events: none;
+	}
+	.balance-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
+	.quick-action-btn {
+		background: rgba(255, 255, 255, 0.15);
+		border: 1px solid rgba(255, 255, 255, 0.25);
+		color: white;
+		padding: 0.5rem;
+		border-radius: 0.75rem;
+		font-weight: 600;
+		font-size: 0.75rem;
+		backdrop-filter: blur(10px);
+		transition: all 0.2s;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		min-height: 60px;
+		position: relative;
+		z-index: 5;
+	}
+	.quick-action-btn i { font-size: 1.25rem; margin-bottom: 2px; }
+	.quick-action-btn:hover { background: rgba(255, 255, 255, 0.25); color: white; transform: translateY(-2px); }
 
-        .service-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-            cursor: pointer;
-            text-align: center;
-            padding: 1.25rem 0.5rem;
-        }
-        .service-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-        .service-icon-box {
-            width: 56px;
-            height: 56px;
-            border-radius: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 0.75rem;
-            font-size: 1.5rem;
-        }
-        .icon-data { background: #eff6ff; color: #3b82f6; }
-        .icon-airtime { background: #fef2f2; color: #ef4444; }
-        .icon-cable { background: #fdf2f7; color: #db2777; }
-        .icon-electric { background: #fffbeb; color: #f59e0b; }
-        .icon-transfer { background: #eef2ff; color: #287bff; }
-        .icon-exam { background: #f5f3ff; color: #8b5cf6; }
-        .icon-betting { background: #fff7ed; color: #f97316; }
-        .icon-crypto { background: #fff7ed; color: #f59e0b; }
-        .icon-vcard { background: #eef2ff; color: #3b82f6; }
-        .icon-giftcard { background: #fdf2f7; color: #db2777; }
-        .icon-nin { background: #f5f3ff; color: #8b5cf6; }
-        .icon-bvn { background: #eef2ff; color: #3b82f6; }
-        .icon-more { background: #f8fafc; color: #64748b; }
+	.service-card {
+		transition: transform 0.2s, box-shadow 0.2s;
+		cursor: pointer;
+		text-align: center;
+		padding: 1.25rem 0.5rem;
+	}
+	.service-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+	.service-icon-box {
+		width: 56px;
+		height: 56px;
+		border-radius: 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto 0.75rem;
+		font-size: 1.5rem;
+	}
+	.icon-data { background: #eff6ff; color: #3b82f6; }
+	.icon-airtime { background: #fef2f2; color: #ef4444; }
+	.icon-cable { background: #fdf2f7; color: #db2777; }
+	.icon-electric { background: #fffbeb; color: #f59e0b; }
+	.icon-transfer { background: #eef2ff; color: #287bff; }
+	.icon-exam { background: #f5f3ff; color: #8b5cf6; }
+	.icon-betting { background: #fff7ed; color: #f97316; }
+	.icon-crypto { background: #fff7ed; color: #f59e0b; }
+	.icon-vcard { background: #eef2ff; color: #3b82f6; }
+	.icon-giftcard { background: #fdf2f7; color: #db2777; }
+	.icon-nin { background: #f5f3ff; color: #8b5cf6; }
+	.icon-bvn { background: #eef2ff; color: #3b82f6; }
+	.icon-more { background: #f8fafc; color: #64748b; }
 
-        /* Modern Glassmorphism Service Cards */
-        .service-quick-card {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 1.5rem;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-            height: 100%;
-        }
-        .service-quick-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
-            background: rgba(255, 255, 255, 0.9);
-        }
+	.service-quick-card {
+		background: rgba(255, 255, 255, 0.7);
+		backdrop-filter: blur(10px);
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		border-radius: 1.5rem;
+		padding: 1.5rem;
+		transition: all 0.3s ease;
+		height: 100%;
+	}
+	.service-quick-card:hover {
+		transform: translateY(-5px);
+		box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+		background: rgba(255, 255, 255, 0.9);
+	}
 
-        .stats-label { font-size: 0.875rem; color: #64748b; font-weight: 500; }
-        .stats-value { font-size: 1.25rem; font-weight: 700; color: #0f172a; word-break: break-all; }
+	.stats-label { font-size: 0.875rem; color: #64748b; font-weight: 500; }
+	.stats-value { font-size: 1.25rem; font-weight: 700; color: #0f172a; word-break: break-all; }
 
-        @media (max-width: 767px) {
-            .balance-amount { font-size: 1.75rem; }
-            .balance-hero { padding: 1.25rem; }
-            .pagetitle { display: none; }
-            .quick-action-btn { font-size: 0.65rem; padding: 0.4rem; }
-        }
-	</style>
-</head>
-<body>
-	<?php include("../func/bc-header.php"); ?>
-	<div class="pagetitle">
-		<h1>DASHBOARD</h1>
-		<nav>
-			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="#">Home</a></li>
-				<li class="breadcrumb-item active">Dashboard</li>
-			</ol>
-		</nav>
-	</div>
+	@media (max-width: 767px) {
+		.balance-amount { font-size: 1.75rem; }
+		.balance-hero { padding: 1.25rem; }
+		.quick-action-btn { font-size: 0.65rem; padding: 0.4rem; }
+	}
+</style>
 	<section class="section dashboard">
         <!-- AI Awareness Spotlight -->
         <div class="row mb-4">
@@ -679,110 +654,60 @@ $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
             </div>
         </div>
 	</section>
-	<script>
-		function copyDashboardTextFallback(text) {
-			var textArea = document.createElement("textarea");
-			textArea.value = text;
-			textArea.style.position = "fixed";
-			textArea.style.top = "0";
-			textArea.style.left = "0";
-			textArea.style.opacity = "0";
-			document.body.appendChild(textArea);
-			textArea.focus();
-			textArea.select();
-			var successful = false;
-			try {
-				successful = document.execCommand('copy');
-			} catch (err) {
-				console.error('Fallback copy failed', err);
-			}
-			document.body.removeChild(textArea);
-			return successful;
-		}
-
-		function copyAccount(accountNumber) {
-			if (navigator.clipboard && navigator.clipboard.writeText) {
-				navigator.clipboard.writeText(accountNumber).then(() => {
-					Swal.fire({ icon: 'success', title: 'Copied!', text: 'Account number copied: ' + accountNumber, timer: 2000, showConfirmButton: false });
-				}).catch(err => {
-					if (copyDashboardTextFallback(accountNumber)) {
-						Swal.fire({ icon: 'success', title: 'Copied!', text: 'Account number copied: ' + accountNumber, timer: 2000, showConfirmButton: false });
-					} else {
-						console.error('Failed to copy: ', err);
-					}
-				});
-			} else {
-				if (copyDashboardTextFallback(accountNumber)) {
-					Swal.fire({ icon: 'success', title: 'Copied!', text: 'Account number copied: ' + accountNumber, timer: 2000, showConfirmButton: false });
-				} else {
-					console.error('Failed to copy: Clipboard API not supported');
-				}
-			}
-		}
-		let ReferLink = '<?php echo $web_http_host . "/web/Register.php?referral=" . $get_logged_user_details["username"]; ?>';
-		const copyReferLink = async () => {
-			if (navigator.clipboard && navigator.clipboard.writeText) {
-				try {
-					await navigator.clipboard.writeText(ReferLink);
-					Swal.fire({ icon: 'success', title: 'Copied!', text: 'Referral link copied: ' + ReferLink, timer: 2000, showConfirmButton: false });
-				} catch (err) {
-					if (copyDashboardTextFallback(ReferLink)) {
-						Swal.fire({ icon: 'success', title: 'Copied!', text: 'Referral link copied: ' + ReferLink, timer: 2000, showConfirmButton: false });
-					} else {
-						console.error('Failed to copy: ' + err);
-					}
-				}
-			} else {
-				if (copyDashboardTextFallback(ReferLink)) {
-					Swal.fire({ icon: 'success', title: 'Copied!', text: 'Referral link copied: ' + ReferLink, timer: 2000, showConfirmButton: false });
-				} else {
-					console.error('Failed to copy: Clipboard API not supported');
-				}
-			}
-		}
-	</script>
 	<div class="d-none d-md-block">
 		<?php include("../func/short-trans.php"); ?>
 	</div>
-	<?php include("../func/bc-footer.php"); ?>
-    <script src="/asset/biometric-handler.js"></script>
-    <script>
-        // Async Virtual Account Sync with throttling (Added in Branch DG6.7)
-        fetch('ajax-sync-accounts.php?source=dashboard')
-            .then(response => response.json())
-            .then(data => {
-                console.log('Sync result:', data);
-                // If any gateway returned 'success', it means new accounts were likely added
-                const hasNew = ['payhub', 'paystack', 'monnify', 'payvessel'].some(gw => data[gw] && data[gw].status === 'success');
-                if (hasNew) {
-                    setTimeout(() => { window.location.reload(); }, 2000);
-                }
-            })
-            .catch(error => console.error('Sync error:', error));
+	<script>
+		function copyAccount(accountNumber) {
+			navigator.clipboard.writeText(accountNumber).then(() => {
+				Swal.fire({ icon: 'success', title: 'Copied!', text: 'Account number copied: ' + accountNumber, timer: 2000, showConfirmButton: false });
+			}).catch(err => { console.error('Failed to copy: ', err); });
+		}
+		let ReferLink = '<?php echo bc_app_root_url("Register.php"); ?>?referral=<?php echo $get_logged_user_details["username"]; ?>';
+		const copyReferLink = async () => {
+			try {
+				await navigator.clipboard.writeText(ReferLink);
+				Swal.fire({ icon: 'success', title: 'Copied!', text: 'Referral link copied: ' + ReferLink, timer: 2000, showConfirmButton: false });
+			} catch (err) { console.error('Failed to copy: ' + err); }
+		}
+	</script>
+	<script src="/asset/biometric-handler.js"></script>
+	<script>
+		// Async Virtual Account Sync with throttling (Added in Branch DG6.7)
+		fetch('ajax-sync-accounts.php?source=dashboard')
+			.then(response => response.json())
+			.then(data => {
+				console.log('Sync result:', data);
+				// If any gateway returned 'success', it means new accounts were likely added
+				const hasNew = ['payhub', 'paystack', 'monnify', 'payvessel'].some(gw => data[gw] && data[gw].status === 'success');
+				if (hasNew) {
+					setTimeout(() => { window.location.reload(); }, 2000);
+				}
+			})
+			.catch(error => console.error('Sync error:', error));
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.PublicKeyCredential && !localStorage.getItem('biometric_registered')) {
-                // Check if they just logged in (Welcome back message)
-                const hasWelcome = document.body.innerText.includes('Welcome Back');
-                if (hasWelcome) {
-                    setTimeout(() => {
-                        Swal.fire({
-                            title: 'Enable Biometric Login?',
-                            text: 'Login faster next time using your fingerprint or face recognition.',
-                            icon: 'info',
-                            showCancelButton: true,
-                            confirmButtonText: 'Enable Now',
-                            cancelButtonText: 'Maybe Later',
-                            confirmButtonColor: '#0d6efd'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                registerBiometric();
-                            }
-                        });
-                    }, 2000);
-                }
-            }
-        });
-    </script>
-</body>
-</html>
+		document.addEventListener('DOMContentLoaded', () => {
+			if (window.PublicKeyCredential && !localStorage.getItem('biometric_registered')) {
+				// Check if they just logged in (Welcome back message)
+				const hasWelcome = document.body.innerText.includes('Welcome Back');
+				if (hasWelcome) {
+					setTimeout(() => {
+						Swal.fire({
+							title: 'Enable Biometric Login?',
+							text: 'Login faster next time using your fingerprint or face recognition.',
+							icon: 'info',
+							showCancelButton: true,
+							confirmButtonText: 'Enable Now',
+							cancelButtonText: 'Maybe Later',
+							confirmButtonColor: '#0d6efd'
+						}).then((result) => {
+							if (result.isConfirmed) {
+								registerBiometric();
+							}
+						});
+					}, 2000);
+				}
+			}
+		});
+	</script>
+	<?php bc_app_foot(); ?>

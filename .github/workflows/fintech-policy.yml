@@ -9,6 +9,9 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-*.php'
       - 'VTU/DGV7.0-SAAS/func/bc-installer-shell.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-installer-shell.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
+      - 'VTU/tests/plate_app_test.php'
       - 'VTU/DGV7.0-SAAS/install/index.php'
       - 'VTU/DGV7.0-NON-SAAS/install.php'
       - 'VTU/DGV7.0-SAAS/func/bc-service-matrix*.php'
@@ -94,6 +97,9 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php'
       - 'VTU/DGV7.0-SAAS/func/bc-support-chat*.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-support-chat*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
+      - 'VTU/tests/plate_app_test.php'
       - 'VTU/DGV7.0-SAAS/func/bc-fintech-wallet.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-wallet.php'
       - 'VTU/DGV7.0-SAAS/func/bc-dashboard-accounts.php'
@@ -170,6 +176,8 @@ jobs:
                         func/bc-fintech-webhook.php func/bc-fintech-klasha.php \
                         func/bc-fintech-flutterwave.php users-klasha.php \
                         users-flutterwave.php func/bc-plate-auth.php \
+                        func/bc-plate-app.php func/bc-installer-shell.php \
+                        web/Dashboard.php \
                         web/Login.php web/Register.php web/PasswordRecovery.php \
                         web/VerifyOTP.php web/SecurityPIN.php web/LockoutResolution.php \
                         web/Inactive.php web/Suspended.php web/Error.php; do
@@ -186,6 +194,7 @@ jobs:
           set -e
           php -n VTU/tests/fintech_policy_test.php
           php -n VTU/tests/fintech_gate_test.php
+          php -n VTU/tests/plate_app_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e
@@ -204,7 +213,7 @@ jobs:
                       bc-fintech-wallet.php bc-dashboard-accounts.php \
                       bc-fintech-providers.php bc-fintech-ledger.php bc-fintech-webhook.php \
                       bc-fintech-klasha.php bc-fintech-flutterwave.php \
-                      bc-plate-auth.php bc-installer-shell.php; do
+                      bc-plate-auth.php bc-plate-app.php bc-installer-shell.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
           done
           # Phase 2b: the shared auth shell pages are identical across editions.
@@ -232,6 +241,19 @@ jobs:
           cmp VTU/DGV7.0-SAAS/web/api/MOBILE_APP_SPEC.md VTU/DGV7.0-NON-SAAS/web/api/MOBILE_APP_SPEC.md
           # The installer shell is shared infrastructure: identical across editions.
           cmp VTU/DGV7.0-SAAS/func/bc-installer-shell.php VTU/DGV7.0-NON-SAAS/func/bc-installer-shell.php
+          # The app shell is shared infrastructure: identical across editions.
+          cmp VTU/DGV7.0-SAAS/func/bc-plate-app.php VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php
+          # The first migrated console page. Both editions must use the shell and must not
+          # reach for the retired template or the old header/footer partials.
+          for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+            grep -q 'bc_app_head(' "VTU/${edition}/web/Dashboard.php"
+            grep -q 'bc_app_sidebar(' "VTU/${edition}/web/Dashboard.php"
+            grep -q 'bc_app_topbar(' "VTU/${edition}/web/Dashboard.php"
+            grep -q 'bc_app_foot(' "VTU/${edition}/web/Dashboard.php"
+            if grep -q 'assets-2\|bc-header.php\|bc-footer.php' "VTU/${edition}/web/Dashboard.php"; then
+              echo "${edition} Dashboard still loads the retired template"; exit 1
+            fi
+          done
           # Both wizards must use the shell, not their retired templates.
           for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
             installer="VTU/${edition}/install/index.php"
