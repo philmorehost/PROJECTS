@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-connect.php");
+    require_once(__DIR__ . "/../func/bc-plate-auth.php");
     //Select Vendor Table
     $vendor_id = resolveVendorID();
 	$select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
@@ -11,61 +12,27 @@
 
     if($get_vendor_details == ""){
         header("Location: /Error.php");
+        exit();
     }
 
+bc_plate_auth_head('Website suspended');
+bc_plate_auth_top(array(
+    'icon'      => 'warn',
+    'icon_style'=> 'warn',
+    'title'     => 'Website suspended',
+    'sub'       => 'We are sorry, but this website is currently suspended. Please contact the site administrator for more information.',
+));
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Website Suspended</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        .container {
-            text-align: center;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            color: #ff6347;
-        }
-
-        p {
-            color: #333;
-        }
-
-        .contact {
-            margin-top: 20px;
-        }
-
-        .contact a {
-            color: #007bff;
-            text-decoration: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Website Suspended</h1>
-        <p>We're sorry, but this website is currently suspended.</p>
-        <p>Please contact the site administrator for more information.</p>
-        <div class="contact">
-            <p>You can contact us at <a href="mailto:<?php echo $get_vendor_details['email']; ?>"><?php echo $get_vendor_details["email"]; ?></a></p>
+        <?php if (!empty($get_vendor_details['email'])): ?>
+        <div class="pk-auth__field">
+            <a class="pk-auth__btn" href="mailto:<?php echo htmlspecialchars($get_vendor_details['email']); ?>">
+                <?php echo bc_plate_auth_icon('mail', 18); ?> Contact <?php echo htmlspecialchars($get_vendor_details['email']); ?>
+            </a>
         </div>
-    </div>
-</body>
-</html>
+        <?php endif; ?>
+        <p class="pk-auth__note">
+            Are you the owner? <a class="pk-auth__link" href="/bc-admin/Login.php">Admin sign in</a>
+        </p>
+<?php
+bc_plate_auth_end();
+?>

@@ -159,7 +159,10 @@ jobs:
                         func/bc-fintech-providers.php func/bc-fintech-ledger.php \
                         func/bc-fintech-webhook.php func/bc-fintech-klasha.php \
                         func/bc-fintech-flutterwave.php users-klasha.php \
-                        users-flutterwave.php; do
+                        users-flutterwave.php func/bc-plate-auth.php \
+                        web/Login.php web/Register.php web/PasswordRecovery.php \
+                        web/VerifyOTP.php web/SecurityPIN.php web/LockoutResolution.php \
+                        web/Inactive.php web/Suspended.php web/Error.php; do
               php -l "VTU/${edition}/${file}"
             done
             # Every app endpoint must parse: these carry the dual-auth bridge.
@@ -182,8 +185,24 @@ jobs:
                       bc-support-chat.php bc-support-chat-schema.php bc-support-chat-widget.php \
                       bc-fintech-wallet.php bc-dashboard-accounts.php \
                       bc-fintech-providers.php bc-fintech-ledger.php bc-fintech-webhook.php \
-                      bc-fintech-klasha.php bc-fintech-flutterwave.php; do
+                      bc-fintech-klasha.php bc-fintech-flutterwave.php \
+                      bc-plate-auth.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
+          done
+          # Phase 2b: the shared auth shell pages are identical across editions.
+          for page in PasswordRecovery.php VerifyOTP.php LockoutResolution.php Inactive.php Suspended.php Error.php; do
+            cmp "VTU/DGV7.0-SAAS/web/${page}" "VTU/DGV7.0-NON-SAAS/web/${page}"
+          done
+          # Login/Register/SecurityPIN legitimately differ (the standalone edition lacks the
+          # SAAS hardening), but both editions must use the shell and drop assets-2.
+          for page in Login.php Register.php SecurityPIN.php; do
+            for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+              grep -q 'bc_plate_auth_head(' "VTU/${edition}/web/${page}"
+              grep -q 'bc_plate_auth_end(' "VTU/${edition}/web/${page}"
+              if grep -q 'assets-2\|web-bg-image' "VTU/${edition}/web/${page}"; then
+                echo "${edition} ${page} still loads the retired template"; exit 1
+              fi
+            done
           done
           cmp VTU/DGV7.0-SAAS/web/api/logout.php VTU/DGV7.0-NON-SAAS/web/api/logout.php
           # Phase 3 provider webhooks are shared infrastructure and must match.
@@ -268,6 +287,14 @@ jobs:
             # Every in-page anchor must land on an id that exists in the same file.
             if [ -n "$(grep -oE 'href="#[a-z0-9_-]+"' "VTU/${edition}/index-bc-style-template-6.php" | sed 's/href="#//; s/"//' | sort -u | while read -r a; do grep -q "id=\"$a\"" "VTU/${edition}/index-bc-style-template-6.php" || echo "$a"; done)" ]; then
               echo "${edition} landing has an anchor with no matching id"; exit 1
+            fi
+            # The auth shell is presentation-only: it must never touch a balance, a gateway
+            # credential row or an entitlement gate.
+            if grep -qE '\b(chargeUser|chargeOtherUser|chargeVendor|updateUserCryptoBalance|bc_fintech_ledger_post)[[:space:]]*\(' "VTU/${edition}/func/bc-plate-auth.php"; then
+              echo "${edition} auth shell moves money"; exit 1
+            fi
+            if grep -qE 'sas_(payment_gateways|bank_transfer_gateways)' "VTU/${edition}/func/bc-plate-auth.php"; then
+              echo "${edition} auth shell reads gateway credentials"; exit 1
             fi
             # The ledger moves money and nothing else: the receipt is re-attached by the
             # delivery pipeline, never from inside bc_fintech_ledger_post().

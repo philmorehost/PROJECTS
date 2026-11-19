@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-plate-auth.php");
     if(isset($get_logged_user_details["username"]) && !empty($get_logged_user_details["username"]) && ($get_logged_user_details["status"] == 1)){
     	header("Location: /web/Dashboard.php");
     }
@@ -175,140 +176,94 @@
 		header("Location: ".$_SERVER["REQUEST_URI"]);
 	}
 ?>
-<!DOCTYPE html>
-<head>
-	<title>Password Recovery | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-              <!-- Google Fonts -->
-  <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link
-    href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-    rel="stylesheet">
-
-  <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-<style>
-  body{
-    background-image: url('../asset/web-bg-image.jpg');
-    background-size: cover;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-  }
-</style>
-</head>
-<body>	
-    <div class="container d-flex justify-content-center align-items-center min-vh-100 py-5">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden" style="max-width: 900px; width: 100%;">
-            <div class="row g-0">
-                <div class="col-lg-5 d-none d-lg-flex flex-column justify-content-center align-items-center bg-primary p-5 text-white">
-                    <img src="<?php echo $web_http_host; ?>/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" style="width: 120px; height: 120px; object-fit: contain;" class="rounded-circle bg-white p-2 mb-4 shadow"/>
-                    <h3 class="fw-bold">Forgot Password?</h3>
-                    <p class="text-center opacity-75">No worries! It happens to the best of us. Let's get you back into your account.</p>
-                </div>
-                <div class="col-lg-7 p-4 p-md-5 bg-white">
-                    <?php if ($reset_blocked_msg): ?>
-                    <div class="alert alert-danger border-0 rounded-3 mb-4">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-shield-lock-fill fs-4 me-2 text-danger"></i>
-                            <strong class="fw-bold">Password reset unavailable</strong>
-                        </div>
-                        <p class="mb-2 small"><?php echo htmlspecialchars($reset_blocked_msg); ?></p>
-                        <a href="LockoutResolution.php" class="btn btn-danger btn-lg w-100 fw-bold">Unlock with Security PIN</a>
-                        <div class="text-center mt-2">
-                            <a href="Login.php" class="text-decoration-none small fw-bold text-muted"><i class="bi bi-arrow-left me-1"></i>Back to Login</a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    <div class="text-center mb-4 d-lg-none">
-                        <img src="<?php echo $web_http_host; ?>/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" style="width: 80px; height: 80px; object-fit: contain;" class="rounded-circle bg-light p-1 mb-3"/>
-                        <h4 class="fw-bold text-dark">Recover Password</h4>
-                    </div>
-
-                    <h2 class="fw-bold text-dark mb-1 d-none d-lg-block">Account Recovery</h2>
-                    <p class="text-muted mb-4 d-none d-lg-block">Follow the steps below to reset your password</p>
-
-                    <form method="post" action="" <?php echo $reset_blocked_msg ? 'style="display:none"' : ''; ?>>
-                        <?php if(!isset($_SESSION["user-recovery-username"]) || empty($_SESSION["user-recovery-username"])){ ?>
-                            <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Enter Username</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-person text-primary"></i></span>
-                                    <input name="user" type="text" class="form-control form-control-lg bg-light border-start-0" placeholder="e.g. johndoe" style="text-transform: lowercase;" required>
-                                </div>
-                                <div class="form-text mt-2 small text-muted">A verification code will be sent to your registered email.</div>
-                            </div>
-
-                            <button name="send-code" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-3 mb-4 py-3 fw-bold text-uppercase">
-                                Send Recovery Code
-                            </button>
-                        <?php } ?>
-
-                        <?php if(isset($_SESSION["user-recovery-username"]) && !empty($_SESSION["user-recovery-username"])){ ?>
-                            <div class="alert alert-success border-0 py-2 small mb-4">
-                                <i class="bi bi-check-circle-fill me-2"></i> Code sent to your email.
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Recovery Code</label>
-                                <input name="code" type="text" class="form-control form-control-lg bg-light border-0" placeholder="6-digit code" pattern="[0-9]{6}" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">New Password</label>
-                                <div class="input-group">
-                                    <input id="new-password" name="pass" type="password" class="form-control form-control-lg bg-light border-0" placeholder="Min 8 characters" required>
-                                    <span class="input-group-text bg-light border-0" style="cursor: pointer;" onclick="togglePasswordVisibility('new-password', this)">
-                                        <i class="bi bi-eye text-muted"></i>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Confirm New Password</label>
-                                <div class="input-group">
-                                    <input id="confirm-password" name="confirm-pass" type="password" class="form-control form-control-lg bg-light border-0" placeholder="Repeat password" required>
-                                    <span class="input-group-text bg-light border-0" style="cursor: pointer;" onclick="togglePasswordVisibility('confirm-password', this)">
-                                        <i class="bi bi-eye text-muted"></i>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <button name="verify-code" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-3 mb-3 py-3 fw-bold text-uppercase">
-                                Reset Password
-                            </button>
-
-                            <button name="reset-recovery" type="submit" class="btn btn-link w-100 text-muted text-decoration-none small">
-                                Restart Recovery
-                            </button>
-                        <?php } ?>
-
-                        <hr class="my-4 opacity-25">
-
-                        <div class="text-center">
-                            <span class="text-muted small">Remembered it? </span>
-                            <a href="Login.php" class="fw-bold text-decoration-none small">Back to Login</a>
-                        </div>
-                    </form>
-                </div>
+<?php
+bc_plate_auth_head('Password recovery | ' . $get_all_site_details["site_title"]);
+bc_plate_auth_top(array(
+    'icon'      => $reset_blocked_msg ? 'warn' : 'key',
+    'icon_style'=> $reset_blocked_msg ? 'warn' : '',
+    'title'     => 'Account recovery',
+    'sub'       => $reset_blocked_msg
+        ? htmlspecialchars($reset_blocked_msg)
+        : 'Follow the steps below to reset your password.',
+    'alert'     => $reset_blocked_msg
+        ? array(array('type' => 'error', 'body' => htmlspecialchars($reset_blocked_msg)))
+        : null,
+));
+?>
+        <?php if ($reset_blocked_msg): ?>
+            <div class="pk-auth__field">
+                <a class="pk-auth__btn pk-auth__btn--danger" href="LockoutResolution.php">
+                    <?php echo bc_plate_auth_icon('lock', 18); ?> Unlock with Security PIN
+                </a>
             </div>
-        </div>
-    </div>
+            <p class="pk-auth__note">
+                <a class="pk-auth__link" href="Login.php">Back to login</a>
+            </p>
+        <?php else: ?>
+            <form method="post" action="">
+                <?php if(!isset($_SESSION["user-recovery-username"]) || empty($_SESSION["user-recovery-username"])){ ?>
+                    <div class="pk-auth__field">
+                        <label class="pk-auth__label" for="user">Enter username</label>
+                        <input id="user" name="user" type="text" class="pk-auth__input" placeholder="e.g. johndoe"
+                               style="text-transform: lowercase;" required>
+                        <p class="pk-auth__note" style="margin-top:8px;">A verification code will be sent to your registered email.</p>
+                    </div>
+                    <div class="pk-auth__field">
+                        <button name="send-code" type="submit" class="pk-auth__btn">Send recovery code</button>
+                    </div>
+                <?php } ?>
 
+                <?php if(isset($_SESSION["user-recovery-username"]) && !empty($_SESSION["user-recovery-username"])){ ?>
+                    <div class="pk-auth__alert pk-auth__alert--ok">
+                        <span><?php echo bc_plate_auth_icon('check', 18); ?></span>
+                        <span>Code sent to your email.</span>
+                    </div>
+
+                    <div class="pk-auth__field">
+                        <label class="pk-auth__label" for="code">Recovery code</label>
+                        <input id="code" name="code" type="text" class="pk-auth__input" placeholder="6-digit code" pattern="[0-9]{6}" required>
+                    </div>
+
+                    <div class="pk-auth__field">
+                        <label class="pk-auth__label" for="new-password">New password</label>
+                        <div style="position: relative;">
+                            <input id="new-password" name="pass" type="password" class="pk-auth__input"
+                                   placeholder="Min 8 characters" required style="padding-right: 62px;">
+                            <button type="button" onclick="togglePasswordVisibility('new-password', this)"
+                                    aria-label="Show password"
+                                    style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                                           border:0; background:transparent; color:var(--muted); font:inherit;
+                                           font-size:.8rem; font-weight:700; cursor:pointer;">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="pk-auth__field">
+                        <label class="pk-auth__label" for="confirm-password">Confirm new password</label>
+                        <div style="position: relative;">
+                            <input id="confirm-password" name="confirm-pass" type="password" class="pk-auth__input"
+                                   placeholder="Repeat password" required style="padding-right: 62px;">
+                            <button type="button" onclick="togglePasswordVisibility('confirm-password', this)"
+                                    aria-label="Show password"
+                                    style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                                           border:0; background:transparent; color:var(--muted); font:inherit;
+                                           font-size:.8rem; font-weight:700; cursor:pointer;">Show</button>
+                        </div>
+                    </div>
+
+                    <div class="pk-auth__field">
+                        <button name="verify-code" type="submit" class="pk-auth__btn">Reset password</button>
+                    </div>
+                    <div class="pk-auth__field">
+                        <button name="reset-recovery" type="submit" class="pk-auth__btn pk-auth__btn--ghost">Restart recovery</button>
+                    </div>
+                <?php } ?>
+
+                <div class="pk-auth__divider">or</div>
+                <p class="pk-auth__note">
+                    Remembered it? <a class="pk-auth__link" href="Login.php">Back to login</a>
+                </p>
+            </form>
+        <?php endif; ?>
 
 <?php if(isset($_SESSION["product_purchase_response"])){ ?>
 
@@ -367,19 +322,16 @@
 <?php } ?>
 <script src="/jsfile/bc-custom-all.js"></script>
 <script>
-function togglePasswordVisibility(fieldId, iconElement) {
+function togglePasswordVisibility(fieldId, toggleElement) {
     const field = document.getElementById(fieldId);
-    const icon = iconElement.querySelector('i');
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.classList.remove('bi-eye');
-        icon.classList.add('bi-eye-slash');
-    } else {
-        field.type = 'password';
-        icon.classList.remove('bi-eye-slash');
-        icon.classList.add('bi-eye');
-    }
+    const label = toggleElement.getAttribute('aria-label') === 'Show password' ? 'Hide password' : 'Show password';
+    toggleElement.setAttribute('aria-label', label);
+    toggleElement.textContent = field.type === 'password' ? 'Hide' : 'Show';
+    field.type = field.type === 'password' ? 'text' : 'password';
+    field.focus();
 }
 </script>
-</body>
-</html>
+
+<?php
+bc_plate_auth_end();
+?>

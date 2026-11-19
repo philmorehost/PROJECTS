@@ -1556,6 +1556,23 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
     $missing = array_diff($anchors[1], $ids[1]);
     gtrue("$edition template 6 anchors all resolve to an id", $missing === [], 'unresolved: ' . implode(',', $missing));
 
+    // Plate auth shell: the signed-out journey shares one layout and must not drift back to
+    // the retired assets-2 template or the photographic background.
+    $shell = file_get_contents($b . '/func/bc-plate-auth.php');
+    gtrue("$edition auth shell validates the brand colour", strpos($shell, "preg_match('/^#[0-9a-fA-F]{6}$/'") !== false);
+    gtrue("$edition auth shell draws its own icons", strpos($shell, 'function bc_plate_auth_icon') !== false);
+    gtrue("$edition auth shell has no icon-font dependency", !preg_match('/bootstrap-icons|boxicons|remixicon/', $shell));
+    gtrue("$edition auth shell honours prefers-reduced-motion", strpos($shell, 'prefers-reduced-motion') !== false);
+    foreach (array('Login', 'Register', 'PasswordRecovery', 'VerifyOTP', 'SecurityPIN', 'LockoutResolution', 'Inactive', 'Suspended', 'Error') as $page) {
+        $src = file_get_contents($b . '/web/' . $page . '.php');
+        gtrue("$edition $page uses the Plate auth shell", strpos($src, 'bc_plate_auth_head(') !== false && strpos($src, 'bc_plate_auth_end(') !== false);
+        gtrue("$edition $page drops the retired assets-2 template", strpos($src, 'assets-2') === false);
+        gtrue("$edition $page drops the photographic background", strpos($src, 'web-bg-image') === false);
+    }
+    // The shell must stay presentation-only: it may not touch money, credentials or gates.
+    gtrue("$edition auth shell moves no money", !preg_match('/\b(chargeUser|chargeOtherUser|chargeVendor|updateUserCryptoBalance|bc_fintech_ledger_post)\s*\(/', $shell));
+    gtrue("$edition auth shell queries no credentials", !preg_match('/sas_(payment_gateways|bank_transfer_gateways)/', $shell));
+
     // account settings
     $acs = file_get_contents($b . '/bc-admin/AccountSettings.php');
     gtrue("$edition Account Settings offers template 6", strpos($acs, 'bc-style-template-6.css') !== false);

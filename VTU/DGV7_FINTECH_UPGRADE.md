@@ -374,6 +374,39 @@ What the rebuild changed and what it deliberately did not:
 The suite grew from **835 to 857 checks**; the CI workflow gained matching landing greps and the
 anchor check.
 
+### 7. Signed-out journey moved onto the Plate shell
+
+The unauthenticated and account-state pages still loaded the heavyweight `assets-2` template with a
+photographic background, so a visitor who had just seen the new landing landed on a different
+product. They now share one shell, `func/bc-plate-auth.php`, carrying the same design tokens as
+template 6 (Inter, `--brand` / `--ink` / `--muted` / `--radius`, 16px radius, soft brand wash
+instead of the photo).
+
+Helpers: `bc_plate_auth_head($title)`, `bc_plate_auth_top($opts)`, `bc_plate_auth_end($opts)`, plus
+`bc_plate_auth_icon()` and `bc_plate_auth_colour()`. `$opts` covers the card modifier, icon and
+icon tone, title, subtitle, alerts, footer links and footer note.
+
+Migrated pages, in both editions: **Login, Register, PasswordRecovery, VerifyOTP, SecurityPIN,
+LockoutResolution, Inactive, Suspended, Error.**
+
+- **Every PHP logic line is preserved.** Only the `<head>` and the wrapper markup were replaced;
+  forms keep their field names, handlers and scripts. `Login.php` keeps the Google sign-in block,
+  the biometric button, the SweetAlert session-message block and the network-status widget;
+  `PasswordRecovery.php` keeps its two-step code flow; `LockoutResolution.php` keeps the
+  per-table login redirect.
+- **The password show/hide toggle** no longer depends on Bootstrap icon classes: it swaps an
+  `aria-label` and the button text, so it works with the shell's inline SVG.
+- **Error.php is now dependency-free.** It requires only the shell, so a broken URL cannot be
+  blocked by a database problem. Previously it was an unstyled standalone page.
+- The shell is **presentation-only** — no money movement, no gateway credential reads, no
+  entitlement decisions. The suite asserts this and CI greps for it.
+- `Login`, `Register` and `SecurityPIN` legitimately differ between editions (the standalone
+  edition has no login-OTP, CSRF or current-PIN hardening); both variants were migrated and the
+  differences preserved. The other six pages are byte-identical and parity-checked.
+
+The suite grew from **857 to 923 checks**; CI gained the shell syntax check, the parity list and
+the presentation-only greps.
+
 ## Phase 1C gateway change — Plisio retired
 
 Plisio.net is defunct. It is retired **without deleting history**:
