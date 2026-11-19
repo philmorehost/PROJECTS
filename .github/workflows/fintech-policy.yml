@@ -77,6 +77,7 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-levelup.php'
       - 'VTU/DGV7.0-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-SAAS/web/PrintHub.php'
@@ -171,6 +172,7 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/bc-admin/AccountSettings.php'
       - 'VTU/tests/fintech_gate_test.php'
       - 'VTU/tests/backoffice_regression_test.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-levelup.php'
       - 'VTU/DGV7.0-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-NON-SAAS/web/Hub.php'
       - 'VTU/DGV7.0-SAAS/web/PrintHub.php'
@@ -266,6 +268,7 @@ jobs:
           php -l VTU/tests/plate_bodies.php
           php -l VTU/tests/backoffice_regression_test.php
           php -l VTU/DGV7.0-SAAS/func/bc-spadmin-config.php
+          php -l VTU/DGV7.0-SAAS/func/bc-levelup.php
       - name: Policy and gate tests
         run: |
           set -e

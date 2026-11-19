@@ -960,9 +960,19 @@ if (!function_exists('bc_app_css')) {
         /* Embossed dark matrix: section hubs + service pickers. The card sits on a
            subtle dark slate with an inset top highlight and a deep outer shadow,
            which reads as pressed/embossed rather than flat. */
+        /* In the admin shell <main class="pk-app__wrap"> is a flex item of
+           .pk-app__main; its margin:0 auto otherwise shrink-wraps it to the
+           widest card and the matrix collapses to a single column. */
+        .pk-app__main > .pk-app__wrap { width: 100%; }
         .pk-matrix {
-            display: grid; gap: 16px;
-            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            display: grid; gap: 16px; width: 100%;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        @media (max-width: 1080px) {
+            .pk-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+            .pk-matrix { grid-template-columns: minmax(0, 1fr); }
         }
         .pk-matrix__card {
             position: relative; display: flex; align-items: center; gap: 14px;

@@ -12,6 +12,15 @@
 
 	include_once(__DIR__ . "/bc-connect.php");
 
+	// The activation handler below calls the license helpers directly. bc-connect.php
+	// loads bc-levelup.php, but a partially-updated deployment (this file replaced
+	// without func/bc-levelup.php, exactly what a file-manager upload does) used to
+	// fatal with "Call to undefined function bc_store_license_option()". Load the
+	// helpers defensively instead of assuming the include chain completed.
+	if (!function_exists('bc_store_license_option') || !function_exists('bc_verify_integrity')) {
+	    include_once(__DIR__ . "/bc-levelup.php");
+	}
+
 if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === true) {
     $act_error = '';
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_activate_code'])) {
@@ -22,31 +31,9 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
             // ownership) silently left the system with no readable activation code, producing a
             // bare "invalid for this domain" with no explanation. Track it and report it below.
             $write_ok = bc_write_activation($code);
-            // Persist to the database too, not just the func/bc-activation.php file. That file
-            // (and func/cache/bc-core.cache) gets wiped whenever the site's files are redeployed
-            // (e.g. re-uploading func/ via cPanel File Manager), and bc_verify_integrity() falls
-            // back to the DB's license_key when the file is unreadable. Without this, a stale/old
-            // DB value gets validated instead of the code just re-entered here, making a genuinely
-            // valid key appear "invalid" after every deployment.
-            // These used INSERT ... ON DUPLICATE KEY UPDATE, which silently does nothing useful
-            // unless option_name actually carries a UNIQUE/PRIMARY key. bc-tables.php creates the
-            // table with option_name as PRIMARY KEY, but an older schema variant with a separate
-            // `id` column also exists in the wild (see the "SELECT id FROM sas_super_admin_options"
-            // query in bc-tables.php) — on that variant the upsert just appends duplicate rows and
-            // the unordered "LIMIT 1" reads elsewhere can return a stale one, so the key looks like
-            // it never saved. Do an existence-checked UPDATE/INSERT instead: correct on either
-            // schema, and the result is captured so a failure is reported rather than swallowed.
-            $db_write_err = '';
-            if (isset($connection_server) && $connection_server) {
-                $current_domain = $_SERVER['HTTP_HOST'] ?? 'localhost';
-                if (!bc_store_license_option($connection_server, 'license_key', $code)) {
-                    $db_write_err = mysqli_error($connection_server) ?: 'unknown database error';
-                } elseif (!bc_store_license_option($connection_server, 'license_domain', $current_domain)) {
-                    $db_write_err = mysqli_error($connection_server) ?: 'unknown database error';
-                }
-            } else {
-                $db_write_err = 'no database connection available';
-            }
+            // The key is persisted to the database AFTER it validates (below). Storing
+            // it before the check meant a rejected attempt overwrote the previously
+            // saved, working key with the bad one.
             // Force a fresh remote check instead of possibly reading a stale FAILED verdict cached
             // from an earlier attempt (e.g. from before the DB persistence fix above existed, or from
             // a transient DB-connection blip). Without this, a still-valid 6-hour-old negative cache
@@ -57,8 +44,26 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
             if (file_exists($cache_file)) {
                 @unlink($cache_file);
             }
-            $GLOBALS['bc_integrity_checked'] = false;
+            // unset(), not = false: bc_verify_integrity() memoises on a truthy flag,
+            // and assigning false used to leave the stale verdict in place.
+            unset($GLOBALS['bc_integrity_checked']);
             if (bc_verify_integrity()) {
+                // Validated: now persist to the database. That copy (plus the file
+                // bc_write_activation() just wrote) is what stops the site asking for
+                // the key again after the next file update.
+                if (isset($connection_server) && $connection_server) {
+                    $current_domain = preg_replace('/^www\./i', '', str_replace(["https://", "http://"], "", $_SERVER['HTTP_HOST'] ?? 'localhost'));
+                    if (!bc_store_license_option($connection_server, 'license_key', $code)) {
+                        $db_write_err = mysqli_error($connection_server) ?: 'unknown database error';
+                    } elseif (!bc_store_license_option($connection_server, 'license_domain', $current_domain)) {
+                        $db_write_err = mysqli_error($connection_server) ?: 'unknown database error';
+                    }
+                } else {
+                    $db_write_err = 'no database connection available';
+                }
+                if (!empty($db_write_err)) {
+                    error_log('[DGV-LICENSE] validated but could not persist license_key: ' . $db_write_err);
+                }
                 header("Location: " . $_SERVER['REQUEST_URI']);
                 exit;
             } else {
