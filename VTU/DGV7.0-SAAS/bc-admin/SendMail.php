@@ -255,23 +255,10 @@ $prompt_chips = [
     'Festive greeting'        => 'Send a warm festive/holiday greeting to customers with a special seasonal offer',
 ];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Marketing Suite | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Marketing Suite | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<style>
         .marketing-card {
             border: none;
             border-radius: 20px;
@@ -295,19 +282,9 @@ $prompt_chips = [
         .ai-spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
         @keyframes ai-spin { to { transform: rotate(360deg); } }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>MARKETING SUITE</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Send Mail</li>
-        </ol>
-      </nav>
-    </div>
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "MARKETING SUITE", "crumb" => "Home / Send Mail")); ?>
 
     <section class="section">
       <div class="row">
@@ -465,7 +442,7 @@ $prompt_chips = [
       </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
 
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script>
@@ -664,5 +641,7 @@ $prompt_chips = [
                 .catch(() => { btn.disabled = false; btn.textContent = 'Cancel'; });
         });
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

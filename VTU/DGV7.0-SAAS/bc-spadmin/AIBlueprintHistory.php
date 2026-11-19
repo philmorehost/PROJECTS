@@ -52,28 +52,17 @@ if ($blueprints_q) while ($bp = mysqli_fetch_assoc($blueprints_q)) $blueprints[]
 
 $triggered = !empty($_GET['triggered']);
 ?>
-<!DOCTYPE html>
-<head>
-    <title>AI Blueprint History | <?php echo $get_all_super_admin_site_details['site_title']??'System'; ?></title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="robots" content="noindex,nofollow"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("AI Blueprint History | " . ($get_all_super_admin_site_details['site_title']??'System'), array("area" => "spadmin"));
+?>
+<style>
         .blueprint-card { transition: all .2s; border-left: 4px solid #7c3aed; }
         .blueprint-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(124,58,237,.1); }
         .stat-pill { background: #f3f0ff; color: #7c3aed; border-radius: 20px; padding: 2px 10px; font-size: .75rem; font-weight: 700; }
         .hero-gradient { background: linear-gradient(135deg,#1e1b4b,#4c1d95,#7c3aed); border-radius: 16px; color: #fff; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-<div class="pagetitle">
-    <h1>AI Blueprint History</h1>
-    <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="#">Home</a></li><li class="breadcrumb-item active">Blueprint History</li></ol></nav>
-</div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "AI Blueprint History", "crumb" => "Home / Blueprint History")); ?>
 <section class="section">
 
 <?php if ($triggered): ?>
@@ -179,9 +168,11 @@ $triggered = !empty($_GET['triggered']);
 </div>
 
 </section>
-<?php include("../func/bc-spadmin-footer.php"); ?>
+
 <?php if(isset($_SESSION["product_purchase_response"])): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script>Swal.fire('Notice','<?php echo addslashes($_SESSION["product_purchase_response"]); ?>','info');fetch('/func/unset-product-response.php');</script>
 <?php unset($_SESSION["product_purchase_response"]); endif; ?>
 </body></html>
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

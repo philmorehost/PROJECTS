@@ -122,16 +122,10 @@ if ($count_q) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>API Gateway Manager | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("API Gateway Manager | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<style>
         body { background: #f8fafc; font-family: 'Inter', sans-serif; }
         .api-card {
             background: rgba(255, 255, 255, 0.9);
@@ -167,19 +161,9 @@ if ($count_q) {
             border-radius: 50px;
         }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
-        <h1 class="fw-bold">API Gateway Control Hub</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">API Manager</li>
-            </ol>
-        </nav>
-    </div>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "API Gateway Control Hub", "crumb" => "Home / API Manager")); ?>
 
     <section class="section dashboard">
         <?php if (isset($_SESSION["product_purchase_response"])): ?>
@@ -402,7 +386,7 @@ if ($count_q) {
         </div>
     </div>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
         // Populate Configure Modal dynamically on click
@@ -435,5 +419,6 @@ if ($count_q) {
             });
         }
     </script>
-</body>
-</html>
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

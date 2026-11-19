@@ -100,33 +100,25 @@ while ($t = mysqli_fetch_assoc($templates_q)) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>WhatsApp Marketing | Vendor Panel</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("WhatsApp Marketing | Vendor Panel", array("area" => "admin"));
+?>
+<style>
         .select-scroll { height: 250px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 10px; }
         .user-checkbox-item { padding: 8px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 10px; transition: 0.2s; }
         .user-checkbox-item:hover { background: #f8fafc; }
         .user-checkbox-item label { flex-grow: 1; cursor: pointer; margin: 0; font-size: 0.85rem; }
         .badge-wa { background: linear-gradient(135deg, #25d366 0%, #128c7e 100%); color: white; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-admin-header.php"); ?>
-<div class="pagetitle d-flex justify-content-between align-items-center mb-4">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "WhatsApp Official Notifications", "crumb" => "")); ?>
     <div>
-        <h1 class="h3 fw-bold mb-1">WhatsApp Official Notifications</h1>
+        
         <p class="text-muted small">Send highly converted alerts via Official Cloud API</p>
     </div>
     <div class="text-end">
         <span class="badge bg-light text-dark shadow-sm px-3 py-2 border"><i class="bi bi-wallet2 text-success me-2"></i>Wallet: ₦<?php echo number_format($get_logged_admin_details['balance'], 2); ?></span>
     </div>
-</div>
 
 <?php if(isset($_SESSION['success_msg'])): ?>
     <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($_SESSION['success_msg'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['success_msg']); ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
@@ -319,7 +311,7 @@ while ($t = mysqli_fetch_assoc($templates_q)) {
     </div>
 </section>
 
-<?php include("../func/bc-admin-footer.php"); ?>
+
 
 <script>
     const ratePerMessage = <?php echo $marketing_ngn; ?>;
@@ -422,5 +414,7 @@ while ($t = mysqli_fetch_assoc($templates_q)) {
         });
     }
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

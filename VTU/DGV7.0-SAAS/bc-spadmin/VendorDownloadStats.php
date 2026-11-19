@@ -16,29 +16,11 @@ $sql = "SELECT vd.*, v.firstname, v.lastname, v.website_url,
 $logs = mysqli_query($connection_server, $sql);
 if (!$logs) { error_log("[VendorDownloadStats] Error: " . mysqli_error($connection_server)); }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Vendor Download Analytics</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>Download Analytics</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="BillingPackages.php">Billing Packages</a></li>
-                <li class="breadcrumb-item active">Download Stats</li>
-            </ol>
-        </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Vendor Download Analytics", array("area" => "spadmin"));
+?>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "Download Analytics", "crumb" => "Home / Billing Packages / Download Stats")); ?>
 
     <section class="section dashboard">
         <div class="row">
@@ -123,6 +105,8 @@ if (!$logs) { error_log("[VendorDownloadStats] Error: " . mysqli_error($connecti
         </div>
     </section>
 
-    <?php include("../func/bc-spadmin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

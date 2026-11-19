@@ -84,24 +84,11 @@
     }
         
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Create User | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>    
-  	<div class="pagetitle">
-      <h1>CREATE NEW USER</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item">Manage User</li>
-          <li class="breadcrumb-item active">Create User</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Create User | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "CREATE NEW USER", "crumb" => "Home / Manage User / Create User")); ?>
 
     <section class="section dashboard">
       <div class="row justify-content-center">
@@ -192,6 +179,8 @@
         </div>
       </div>
     </section>
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

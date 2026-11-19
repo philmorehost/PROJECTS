@@ -34,32 +34,10 @@
     }
 
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Email Template</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    
-          <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-  <link href="../assets-2/vendor/simple-datatables/style.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-
-  <!-- GrapesJS -->
-  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/grapesjs"></script>
-  <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
-
-  <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Email Template", array("area" => "spadmin"));
+?>
+<style>
     .gjs-cv-canvas {
         top: 0;
         width: 100%;
@@ -76,19 +54,13 @@
         min-height: 100vh;
     }
   </style>
-
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>    
-    <div class="pagetitle">
-      <h1>EMAIL TEMPLATE</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Email Template</li>
-        </ol>
-      </nav>
-    </div><!-- End Page Title -->
+<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
+<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
+<link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+<script src="https://unpkg.com/grapesjs"></script>
+<script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "EMAIL TEMPLATE", "crumb" => "Home / Email Template")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
       <!-- GrapesJS Modal -->
@@ -190,7 +162,7 @@
       </div>
     </section>
         
-    <?php include("../func/bc-spadmin-footer.php"); ?>
+    
     
     <script>
         let editor;
@@ -243,5 +215,7 @@
             bootstrap.Modal.getInstance(document.getElementById('grapesModal')).hide();
         });
     </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

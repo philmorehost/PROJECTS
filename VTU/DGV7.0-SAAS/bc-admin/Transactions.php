@@ -263,43 +263,13 @@
         exit();
     }
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Users Transaction | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_super_admin_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-    
-      <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-  <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-  <link href="../assets-2/vendor/simple-datatables/style.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-    <div class="pagetitle">
-      <h1>TRANSACTIONS</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Transactions</li>
-        </ol>
-      </nav>
-    </div><!-- End Page Title -->
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
+<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
+<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "TRANSACTIONS", "crumb" => "Home / Transactions")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
       <div class="row">
@@ -496,7 +466,7 @@
         </div>
       </div>
     </section>
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <style>
       .tx-summary-card { display:flex; align-items:center; gap:14px; min-height:82px; padding:15px 18px; border-radius:16px; background:#fff; box-shadow:0 8px 24px rgba(31,58,112,.08); border-left:4px solid #3867f2; }
       .tx-summary-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:13px; font-size:21px; background:#eef3ff; color:#3867f2; }
@@ -515,5 +485,7 @@
       @media (max-width: 767px) { .tx-summary-card { min-height:78px; padding:13px; }.tx-summary-value { font-size:21px; } }
     </style>
     
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

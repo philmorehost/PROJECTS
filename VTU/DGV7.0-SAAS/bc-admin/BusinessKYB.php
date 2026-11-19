@@ -90,22 +90,11 @@ if ($q_decided) { while ($r = mysqli_fetch_assoc($q_decided)) $bc_decided[] = $r
 
 $bc_categories = bc_fintech_kyb_categories();
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Business KYB Review | <?php echo htmlspecialchars($get_all_super_admin_site_details["site_title"] ?? ''); ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-<div class="pagetitle">
-    <h1>BUSINESS KYB REVIEW</h1>
-    <nav><ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-        <li class="breadcrumb-item active">Business KYB</li>
-    </ol></nav>
-</div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_title"] ?? ''), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "BUSINESS KYB REVIEW", "crumb" => "Home / Business KYB")); ?>
 
 <section class="section dashboard">
     <?php if (!empty($_SESSION['product_purchase_response'])): ?>
@@ -232,6 +221,8 @@ $bc_categories = bc_fintech_kyb_categories();
     <?php endif; ?>
 </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

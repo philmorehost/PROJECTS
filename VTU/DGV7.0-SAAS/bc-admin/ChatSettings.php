@@ -72,22 +72,11 @@ $flash    = bc_chat_flash();
 $warn_ai_without_key = ($settings['chat_ai_enabled'] === '1' && !$has_key);
 $warn_chat_off       = ($settings['chat_enabled'] !== '1');
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Chat Settings | <?php echo htmlspecialchars($get_all_super_admin_site_details["site_title"] ?? ''); ?></title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-<div class="pagetitle">
-    <h1>CHAT SETTINGS</h1>
-    <nav><ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-        <li class="breadcrumb-item active">Chat Settings</li>
-    </ol></nav>
-</div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Chat Settings | " . ($get_all_super_admin_site_details["site_title"] ?? ''), array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "CHAT SETTINGS", "crumb" => "Home / Chat Settings")); ?>
 
 <section class="section dashboard">
     <?php if ($flash): ?>
@@ -216,6 +205,8 @@ $warn_chat_off       = ($settings['chat_enabled'] !== '1');
     </div>
 </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

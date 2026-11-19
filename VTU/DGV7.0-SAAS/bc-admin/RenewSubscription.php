@@ -49,30 +49,11 @@ if (isset($_GET['buy'])) {
     exit();
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Renew Subscription | Admin Portal</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>SUBSCRIPTION</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Renew Subscription</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Renew Subscription | Admin Portal", array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "SUBSCRIPTION", "crumb" => "Home / Renew Subscription")); ?>
 
     <section class="section dashboard">
         <div class="row justify-content-center">
@@ -127,10 +108,12 @@ if (isset($_GET['buy'])) {
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <style>
         .transition-hover { transition: all 0.3s ease; }
         .transition-hover:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; }
     </style>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

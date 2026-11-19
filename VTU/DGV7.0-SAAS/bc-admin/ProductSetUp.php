@@ -83,42 +83,12 @@ if (isset($_POST["update-product"])) {
     exit;
 }
 ?>
-<!DOCTYPE html>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Product Function | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+?>
 
-<head>
-    <title>Product Function | <?php echo $get_all_super_admin_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_super_admin_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-    <!-- Template Main CSS File -->
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-
-</head>
-
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-    <div class="pagetitle">
-        <h1>PRODUCT SETTINGS</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="#">Home</a></li>
-                <li class="breadcrumb-item active">Product Settings</li>
-            </ol>
-        </nav>
-    </div><!-- End Page Title -->
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "PRODUCT SETTINGS", "crumb" => "Home / Product Settings")); ?><!-- End Page Title -->
 
     <section class="section dashboard">
         <div class="row g-4">
@@ -248,8 +218,10 @@ if (isset($_POST["update-product"])) {
             <?php endforeach; ?>
         </div>
     </section>
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
 
-</body>
 
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

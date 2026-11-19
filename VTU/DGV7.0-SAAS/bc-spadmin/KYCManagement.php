@@ -139,25 +139,11 @@ if (isset($_GET['view'])) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Global KYC Management | Super Admin</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>GLOBAL KYC REVIEW</h1>
-      <nav><ol class="breadcrumb"><li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li><li class="breadcrumb-item active">KYC Review</li></ol></nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Global KYC Management | Super Admin", array("area" => "spadmin"));
+?>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "GLOBAL KYC REVIEW", "crumb" => "Home / KYC Review")); ?>
 
     <section class="section dashboard">
       <div class="row">
@@ -365,6 +351,8 @@ if (isset($_GET['view'])) {
       </div>
     </section>
 
-    <?php include("../func/bc-spadmin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

@@ -36,27 +36,11 @@ if (isset($_GET['delete_id'])) {
 
 $posts_result = mysqli_query($connection_server, "SELECT p.*, v.firstname, v.lastname FROM blog_posts p JOIN sas_vendors v ON p.author_id = v.id WHERE p.author_id = '{$get_logged_admin_details['id']}' ORDER BY p.created_at DESC");
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Manage Blog Posts</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle">
-        <h1>Blog Posts</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">Blog Posts</li>
-            </ol>
-        </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Manage Blog Posts", array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "Blog Posts", "crumb" => "Home / Blog Posts")); ?>
 
     <section class="section dashboard">
         <div class="card">
@@ -108,6 +92,8 @@ $posts_result = mysqli_query($connection_server, "SELECT p.*, v.firstname, v.las
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

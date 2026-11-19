@@ -12,6 +12,12 @@ on:
       - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
       - 'VTU/tests/plate_app_test.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-plate-admin.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-admin.php'
+      - 'VTU/tests/plate_admin_test.php'
+      - 'VTU/tests/plate_admin_migrate.py'
+      - 'VTU/DGV7.0-SAAS/bc-admin/*.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/*.php'
       - 'VTU/tests/plate_migration_test.php'
       - 'VTU/tests/plate_bodies.php'
       - 'VTU/tests/plate_migrate.py'
@@ -104,6 +110,12 @@ on:
       - 'VTU/DGV7.0-SAAS/func/bc-plate-app.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-app.php'
       - 'VTU/tests/plate_app_test.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-plate-admin.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-plate-admin.php'
+      - 'VTU/tests/plate_admin_test.php'
+      - 'VTU/tests/plate_admin_migrate.py'
+      - 'VTU/DGV7.0-SAAS/bc-admin/*.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/*.php'
       - 'VTU/tests/plate_migration_test.php'
       - 'VTU/tests/plate_bodies.php'
       - 'VTU/tests/plate_migrate.py'
@@ -195,6 +207,11 @@ jobs:
             find "VTU/${edition}/web" -maxdepth 1 -name '*.php' -print0 | xargs -0 -n1 php -l
             # Every app endpoint must parse: these carry the dual-auth bridge.
             find "VTU/${edition}/web/api" -name '*.php' -print0 | xargs -0 -n1 php -l
+            # Every back-office page must parse: the admin shell migration touches all of them.
+            find "VTU/${edition}/bc-admin" -maxdepth 1 -name '*.php' -print0 | xargs -0 -n1 php -l
+            if [ -d "VTU/${edition}/bc-spadmin" ]; then
+              find "VTU/${edition}/bc-spadmin" -maxdepth 1 -name '*.php' -print0 | xargs -0 -n1 php -l
+            fi
           done
           php -l VTU/DGV7.0-SAAS/web/api/login-otp.php
           php -l VTU/tests/provider_smoke.php
@@ -207,6 +224,7 @@ jobs:
           php -n VTU/tests/fintech_policy_test.php
           php -n VTU/tests/fintech_gate_test.php
           php -n VTU/tests/plate_app_test.php
+          php -n VTU/tests/plate_admin_test.php
           php -n VTU/tests/plate_migration_test.php
       - name: Apache .htaccess context and parity
         run: |
@@ -226,7 +244,7 @@ jobs:
                       bc-fintech-wallet.php bc-dashboard-accounts.php \
                       bc-fintech-providers.php bc-fintech-ledger.php bc-fintech-webhook.php \
                       bc-fintech-klasha.php bc-fintech-flutterwave.php \
-                      bc-plate-auth.php bc-plate-app.php bc-installer-shell.php; do
+                      bc-plate-auth.php bc-plate-app.php bc-plate-admin.php bc-installer-shell.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
           done
           # Phase 2b: the shared auth shell pages are identical across editions.
@@ -267,6 +285,10 @@ jobs:
               echo "${edition} Dashboard still loads the retired template"; exit 1
             fi
           done
+          # Back-office pages use the admin shell and never the legacy chrome partials.
+          if grep -rl 'include("../func/bc-admin-header.php")\|include("../func/bc-spadmin-header.php")\|include("../func/bc-admin-footer.php")\|include("../func/bc-spadmin-footer.php")' VTU/DGV7.0-SAAS/bc-admin VTU/DGV7.0-SAAS/bc-spadmin VTU/DGV7.0-NON-SAAS/bc-admin; then
+            echo "a back-office page still loads the legacy admin chrome"; exit 1
+          fi
           # Both wizards must use the shell, not their retired templates.
           for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
             installer="VTU/${edition}/install/index.php"

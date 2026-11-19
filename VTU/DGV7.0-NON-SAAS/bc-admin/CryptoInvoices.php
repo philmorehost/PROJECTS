@@ -18,24 +18,11 @@ if(!empty($_GET['status'])) {
 $sql = "SELECT * FROM sas_crypto_transactions $where ORDER BY created_at DESC LIMIT 500";
 $res = mysqli_query($connection_server, $sql);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Crypto Invoices | Admin</title>
-    <?php include("../func/bc-admin-header-link.php"); ?>
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle px-4 pt-4">
-      <h1>CRYPTO INVOICE HISTORY</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Crypto Invoices</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Crypto Invoices | Admin", array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "CRYPTO INVOICE HISTORY", "crumb" => "Home / Crypto Invoices")); ?>
 
     <section class="section p-4">
         <div class="card shadow-sm border-0 rounded-4">
@@ -94,6 +81,7 @@ $res = mysqli_query($connection_server, $sql);
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

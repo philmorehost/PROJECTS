@@ -3,27 +3,9 @@ session_start();
 include("../func/bc-admin-config.php");
 $page_title = "Admin Platform Guide & Site Map";
 ?>
-<!DOCTYPE html>
-<head>
-    <title><?php echo $page_title; ?> | <?php echo $get_all_super_admin_site_details["site_title"] ?? ''; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_super_admin_site_details["site_desc"] ?? '', 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-
-    <!-- Vendor CSS Files -->
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-    <!-- Template Main CSS File -->
-    <link href="../assets-2/css/style.css" rel="stylesheet">
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head(($page_title) . " | " . ($get_all_super_admin_site_details["site_title"] ?? ''), array("area" => "admin"));
+?>
 <style>
 .sitemap-hero{background:linear-gradient(135deg,var(--primary-color) 0%,#1a237e 100%);color:#fff;padding:2.5rem 1.5rem 2rem;border-radius:0 0 1.5rem 1.5rem;margin-bottom:1.5rem;}
 .sitemap-hero h1{font-size:1.8rem;font-weight:800;margin-bottom:.4rem;}
@@ -44,18 +26,8 @@ $page_title = "Admin Platform Guide & Site Map";
   .sm-section .row .col-md-4{margin-bottom:.5rem;}
 }
 </style>
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
-<div class="pagetitle">
-  <h1>Platform Guide &amp; Site Map</h1>
-  <nav>
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-      <li class="breadcrumb-item active">Site Map</li>
-    </ol>
-  </nav>
-</div>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "Platform Guide &amp; Site Map", "crumb" => "Home / Site Map")); ?>
 
 <section class="sitemap-hero">
   <div class="container-fluid">
@@ -262,6 +234,8 @@ $h = $web_http_host . '/bc-admin/';
 
 </div><!-- /container-fluid -->
 
-<?php include("../func/bc-admin-footer.php"); ?>
-</body>
-</html>
+
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

@@ -16,16 +16,10 @@ if ($logs_dir_ready && !file_exists($logs_dir . '/.htaccess')) {
 }
 $logs_dir_writable = $logs_dir_ready && is_writable($logs_dir);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Platform Cron Jobs | Super Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Platform Cron Jobs | Super Admin", array("area" => "spadmin"));
+?>
+<style>
         .cron-header { background: linear-gradient(135deg, #0f172a, #1e293b); color: white; border-radius: 1.5rem; padding: 3rem 2rem; position: relative; overflow: hidden; }
         .cron-header::after { content: '⏱️'; position: absolute; right: 5%; top: 50%; transform: translateY(-50%); font-size: 5rem; opacity: 0.1; }
         .code-block { background: #1e293b; color: #f8fafc; border-radius: 0.75rem; padding: 1.1rem 1.25rem; font-family: 'Courier New', Courier, monospace; position: relative; font-size: 0.82rem; border: 1px solid #334155; word-break: break-all; }
@@ -33,10 +27,8 @@ $logs_dir_writable = $logs_dir_ready && is_writable($logs_dir);
         .copy-btn:hover { background: rgba(255,255,255,0.2); }
         .schedule-badge { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-spadmin-header.php"); ?>
-<div class="pagetitle"><h1>PLATFORM CRON JOBS</h1></div>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "PLATFORM CRON JOBS", "crumb" => "")); ?>
 
 <section class="section">
     <div class="cron-header mb-4 shadow">
@@ -231,6 +223,8 @@ function copyCode(btn) {
 }
 </script>
 
-<?php include("../func/bc-spadmin-footer.php"); ?>
-</body>
-</html>
+
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>

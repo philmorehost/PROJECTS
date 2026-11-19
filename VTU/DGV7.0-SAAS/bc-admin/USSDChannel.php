@@ -15,16 +15,10 @@ $fee = (float)getSuperAdminOption('ussd_access_fee', '0');
 $ussd_access = (int)$get_logged_admin_details['ussd_access'];
 $balance = (float)$get_logged_admin_details['balance'];
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>USSD Channel | Vendor Admin</title>
-    <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("USSD Channel | Vendor Admin", array("area" => "admin"));
+?>
+<style>
         .premium-card { border: none; border-radius: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
         .hero-banner {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -41,19 +35,9 @@ $balance = (float)$get_logged_admin_details['balance'];
         }
         .btn-activate:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(13,110,253,0.3); color: white; }
     </style>
-</head>
-<body>
-<?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle mb-4">
-        <h1 class="fw-bold">USSD Channel Manager</h1>
-        <nav>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-                <li class="breadcrumb-item active">USSD Channel</li>
-            </ol>
-        </nav>
-    </div>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "USSD Channel Manager", "crumb" => "Home / USSD Channel")); ?>
 
     <section class="section dashboard">
         <!-- Global Check -->
@@ -143,7 +127,7 @@ $balance = (float)$get_logged_admin_details['balance'];
         <?php endif; ?>
     </section>
 
-<?php include("../func/bc-admin-footer.php"); ?>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.getElementById('btn-pay-ussd')?.addEventListener('click', function() {
@@ -196,5 +180,7 @@ document.getElementById('btn-pay-ussd')?.addEventListener('click', function() {
     })
 });
 </script>
-</body>
-</html>
+
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

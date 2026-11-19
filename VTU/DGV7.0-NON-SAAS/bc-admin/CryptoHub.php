@@ -92,28 +92,11 @@ $withdrawals = mysqli_query($connection_server, $sql);
 $sql_tx = "SELECT * FROM sas_crypto_transactions WHERE vendor_id='$vid' ORDER BY created_at DESC LIMIT 100";
 $transactions = mysqli_query($connection_server, $sql_tx);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Crypto | Vendor Admin</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <?php include("../func/bc-admin-header.php"); ?>
-
-    <div class="pagetitle px-4 pt-4">
-      <h1>CRYPTO HUB MANAGEMENT</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Crypto</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
+?>
+<?php bc_adm_sidebar(array("area" => "admin")); ?>
+<?php bc_adm_topbar(array("area" => "admin", "title" => "CRYPTO HUB MANAGEMENT", "crumb" => "Home / Crypto")); ?>
 
     <section class="section p-4">
         <div class="row g-4">
@@ -276,7 +259,7 @@ $transactions = mysqli_query($connection_server, $sql_tx);
         </div>
     </section>
 
-    <?php include("../func/bc-admin-footer.php"); ?>
+    
     <script>
     function confirmRejection(btn) {
         const form = btn.closest('form');
@@ -288,5 +271,6 @@ $transactions = mysqli_query($connection_server, $sql_tx);
         return confirm('Are you sure you want to reject this withdrawal?');
     }
     </script>
-</body>
-</html>
+
+
+<?php bc_adm_foot(array("area" => "admin")); ?>

@@ -126,24 +126,11 @@ include(__DIR__ . "/../func/bc-service-matrix.php");
 include(__DIR__ . "/../func/bc-account-backfill.php");
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Global Service Control | Super Admin</title>
-    <?php include("../func/bc-spadmin-header-link.php"); ?>
-</head>
-<body>
-    <?php include("../func/bc-spadmin-header.php"); ?>
-
-    <div class="pagetitle">
-      <h1>GLOBAL SERVICE CONTROL</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="Dashboard.php">Home</a></li>
-          <li class="breadcrumb-item active">Global Service Control</li>
-        </ol>
-      </nav>
-    </div>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
+bc_adm_head("Global Service Control | Super Admin", array("area" => "spadmin"));
+?>
+<?php bc_adm_sidebar(array("area" => "spadmin")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "GLOBAL SERVICE CONTROL", "crumb" => "Home / Global Service Control")); ?>
 
     <section class="section dashboard">
         <div class="row mb-4">
@@ -313,6 +300,8 @@ include(__DIR__ . "/../func/bc-account-backfill.php");
     });
     </script>
 
-    <?php include("../func/bc-spadmin-footer.php"); ?>
-</body>
-</html>
+    
+
+
+
+<?php bc_adm_foot(array("area" => "spadmin")); ?>
