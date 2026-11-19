@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-plate-auth.php");
     if(isset($get_logged_user_details["username"]) && !empty($get_logged_user_details["username"]) && ($get_logged_user_details["status"] == 1)){
     	header("Location: /web/Dashboard.php");
     }
@@ -150,128 +151,82 @@
     $check_user_referral_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='$get_referral'"));
     
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Register | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-    <meta http-equiv="Content-Type" content="text/html; " />
-    <meta name="theme-color" content="black" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <meta name="author" content="Philmore Codes">
-    <meta name="dc.creator" content="Philmore Codes">
-        
-          <!-- Google Fonts -->
-  <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link
-    href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-    rel="stylesheet">
-
-  <!-- Vendor CSS Files -->
-  <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
-  <link href="../assets-2/css/style.css" rel="stylesheet">
-<style>
-  body{
-    background-image: url('../asset/web-bg-image.jpg');
-    background-size: cover;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-  }
-</style>
-</head>
-<body>	
-    <div class="container d-flex justify-content-center align-items-center min-vh-100 py-5">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden" style="max-width: 1000px; width: 100%;">
-            <div class="row g-0">
-                <div class="col-lg-4 d-none d-lg-flex flex-column justify-content-center align-items-center bg-primary p-5 text-white">
-                    <img src="<?php echo $web_http_host; ?>/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" style="width: 100px; height: 100px; object-fit: contain;" class="rounded-circle bg-white p-2 mb-4 shadow"/>
-                    <h3 class="fw-bold">Join Us Today!</h3>
-                    <p class="text-center opacity-75">Create an account and start enjoying seamless fintech services at your fingertips.</p>
+<?php
+bc_plate_auth_head('Register | ' . $get_all_site_details["site_title"]);
+bc_plate_auth_top(array(
+    'icon'  => 'user',
+    'title' => 'Get started',
+    'sub'   => 'Fill in your details to create a secure account.',
+    'wide'  => true,
+));
+?>
+        <form method="post" action="">
+            <div class="pk-auth__row">
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="user">Username</label>
+                    <input id="user" name="user" type="text" class="pk-auth__input" placeholder="e.g. johndoe" pattern="[a-zA-Z]{6,}" required>
                 </div>
-                <div class="col-lg-8 p-4 p-md-5 bg-white">
-                    <div class="text-center mb-4 d-lg-none">
-                        <img src="<?php echo $web_http_host; ?>/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" style="width: 60px; height: 60px; object-fit: contain;" class="rounded-circle bg-light p-1 mb-3"/>
-                        <h4 class="fw-bold text-dark">Create Account</h4>
-                    </div>
-
-                    <h2 class="fw-bold text-dark mb-1 d-none d-lg-block">Get Started</h2>
-                    <p class="text-muted mb-4 d-none d-lg-block">Fill in your details to create a secure account</p>
-
-                    <form method="post" action="">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Username</label>
-                                <input name="user" type="text" class="form-control bg-light border-0" placeholder="e.g. johndoe" pattern="[a-zA-Z]{6,}" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Phone Number</label>
-                                <input name="phone" type="text" class="form-control bg-light border-0" placeholder="080XXXXXXXX" pattern="[0-9]{11}" required>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">First Name</label>
-                                <input name="first" type="text" class="form-control bg-light border-0" placeholder="First Name" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Last Name</label>
-                                <input name="last" type="text" class="form-control bg-light border-0" placeholder="Last Name" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label small fw-bold text-uppercase text-muted">Other Name</label>
-                                <input name="other" type="text" class="form-control bg-light border-0" placeholder="Optional">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-uppercase text-muted">Email Address</label>
-                            <input name="email" type="email" class="form-control bg-light border-0" placeholder="name@example.com" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-uppercase text-muted">Residential Address</label>
-                            <input name="address" type="text" class="form-control bg-light border-0" placeholder="Full Address" required>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label small fw-bold text-uppercase text-muted">Security Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light border-0 border-end"><i class="bi bi-lock text-primary"></i></span>
-                                <input id="password-field" name="pass" type="password" class="form-control bg-light border-0" placeholder="At least 8 characters" required>
-                                <span class="input-group-text bg-light border-0 border-start" style="cursor: pointer;" onclick="togglePasswordVisibility('password-field', this)">
-                                    <i class="bi bi-eye text-muted"></i>
-                                </span>
-                            </div>
-                        </div>
-
-                        <?php if(!empty($check_user_referral_details["id"])){ ?>
-                        <div class="alert alert-info py-2 small mb-3">
-                            <i class="bi bi-info-circle me-2"></i> Referred by: <strong><?php echo ucwords($check_user_referral_details["firstname"]." ".$check_user_referral_details["lastname"]); ?></strong>
-                        </div>
-                        <?php } ?>
-
-        <button id="btn-create-account" name="register" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-3 mb-4 py-3 fw-bold" data-no-lock>
-                            CREATE MY ACCOUNT
-                        </button>
-
-                        <div class="text-center">
-                            <span class="text-muted">Already have an account? </span>
-                            <a href="Login.php" class="fw-bold text-decoration-none">Sign In</a>
-                        </div>
-                    </form>
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="phone">Phone number</label>
+                    <input id="phone" name="phone" type="text" class="pk-auth__input" placeholder="080XXXXXXXX" pattern="[0-9]{11}" required>
                 </div>
             </div>
-        </div>
-    </div>
+
+            <div class="pk-auth__row">
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="first">First name</label>
+                    <input id="first" name="first" type="text" class="pk-auth__input" placeholder="First name" required>
+                </div>
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="last">Last name</label>
+                    <input id="last" name="last" type="text" class="pk-auth__input" placeholder="Last name" required>
+                </div>
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="other">Other name</label>
+                    <input id="other" name="other" type="text" class="pk-auth__input" placeholder="Optional">
+                </div>
+            </div>
+
+            <div class="pk-auth__field">
+                <label class="pk-auth__label" for="email">Email address</label>
+                <input id="email" name="email" type="email" class="pk-auth__input" placeholder="name@example.com" required>
+            </div>
+
+            <div class="pk-auth__field">
+                <label class="pk-auth__label" for="address">Residential address</label>
+                <input id="address" name="address" type="text" class="pk-auth__input" placeholder="Full address" required>
+            </div>
+
+            <div class="pk-auth__field">
+                <label class="pk-auth__label" for="password-field">Security password</label>
+                <div style="position: relative;">
+                    <input id="password-field" name="pass" type="password" class="pk-auth__input"
+                           placeholder="At least 8 characters" required style="padding-right: 62px;">
+                    <button type="button" onclick="togglePasswordVisibility('password-field', this)"
+                            aria-label="Show password"
+                            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+                                   border:0; background:transparent; color:var(--muted); font:inherit;
+                                   font-size:.8rem; font-weight:700; cursor:pointer;">Show</button>
+                </div>
+            </div>
+
+            <?php if(!empty($check_user_referral_details["id"])){ ?>
+                <div class="pk-auth__alert pk-auth__alert--info">
+                    <span><?php echo bc_plate_auth_icon('check', 18); ?></span>
+                    <span>Referred by <strong><?php echo htmlspecialchars(ucwords($check_user_referral_details["firstname"] . " " . $check_user_referral_details["lastname"])); ?></strong></span>
+                </div>
+            <?php } ?>
+
+            <div class="pk-auth__field">
+                <button id="btn-create-account" name="register" type="submit" class="pk-auth__btn" data-no-lock>
+                    Create my account
+                </button>
+            </div>
+
+            <p class="pk-auth__note">
+                Already have an account? <a class="pk-auth__link" href="Login.php">Sign in</a>
+            </p>
+        </form>
 
   <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
@@ -628,19 +583,21 @@
 <script src="../jsfile/bc-custom-all.js"></script>
 <script src="../asset/pwa-handler.js"></script>
 <script>
-function togglePasswordVisibility(fieldId, iconElement) {
+function togglePasswordVisibility(fieldId, toggleElement) {
     const field = document.getElementById(fieldId);
-    const icon = iconElement.querySelector('i');
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.classList.remove('bi-eye');
-        icon.classList.add('bi-eye-slash');
-    } else {
-        field.type = 'password';
-        icon.classList.remove('bi-eye-slash');
-        icon.classList.add('bi-eye');
-    }
+    const label = toggleElement.getAttribute('aria-label') === 'Show password' ? 'Hide password' : 'Show password';
+    toggleElement.setAttribute('aria-label', label);
+    toggleElement.textContent = field.type === 'password' ? 'Hide' : 'Show';
+    field.type = field.type === 'password' ? 'text' : 'password';
+    field.focus();
 }
 </script>
-</body>
-</html>
+
+<?php
+bc_plate_auth_end(array(
+    'links' => array(
+        array('href' => 'Login.php', 'label' => 'Sign in'),
+        array('href' => 'PasswordRecovery.php', 'label' => 'Forgot password'),
+    ),
+));
+?>

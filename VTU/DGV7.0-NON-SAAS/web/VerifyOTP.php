@@ -1,5 +1,6 @@
 <?php session_start();
     include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
     if(!isset($_SESSION["temp_user_session"]) || !isset($_SESSION["auth_otp_time"])){
         header("Location: Login.php");
@@ -44,51 +45,34 @@
         }
     }
 ?>
-<!DOCTYPE html>
-<head>
-    <title>Verify Login | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-    <link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container d-flex justify-content-center align-items-center min-vh-100">
-        <div class="card shadow border-0 rounded-4 p-4 p-md-5" style="max-width: 450px; width: 100%;">
-            <div class="text-center mb-4">
-                <div class="bg-primary bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                    <i class="bi bi-shield-check text-primary fs-1"></i>
-                </div>
-                <h3 class="fw-bold">Two-Factor Authentication</h3>
-                <p class="text-muted">A verification code has been sent to <b><?php echo substr($user_detail['email'], 0, 3) . '...' . substr($user_detail['email'], strpos($user_detail['email'], '@')); ?></b></p>
+
+<?php
+$otp_email_masked = htmlspecialchars(substr($user_detail['email'], 0, 3) . '...' . substr($user_detail['email'], (int)strpos($user_detail['email'], '@')));
+bc_plate_auth_head('Verify login | ' . $get_all_site_details["site_title"]);
+bc_plate_auth_top(array(
+    'icon'  => 'shield',
+    'title' => 'Two-factor authentication',
+    'sub'   => 'A verification code has been sent to <b>' . $otp_email_masked . '</b>.',
+    'alert' => isset($error) ? array(array('type' => 'error', 'body' => $error)) : null,
+));
+?>
+        <form method="post" action="">
+            <div class="pk-auth__field">
+                <label class="pk-auth__label" for="otp">Enter 6-digit code</label>
+                <input id="otp" name="otp" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+                       required autofocus class="pk-auth__input pk-auth__otp" placeholder="000000">
+                <p class="pk-auth__note" style="margin-top:10px;">
+                    Code expires in <span id="timer" style="color: var(--danger); font-weight: 700;">10:00</span>
+                </p>
             </div>
-
-            <?php if(isset($error)): ?>
-                <div class="alert alert-danger py-2 small mb-3 text-center"><?php echo $error; ?></div>
-            <?php endif; ?>
-
-            <form method="post" action="">
-                <div class="mb-4">
-                    <label class="form-label small fw-bold text-uppercase text-muted text-center d-block">Enter 6-Digit Code</label>
-                    <input name="otp" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control form-control-lg text-center fw-bold letter-spacing-lg" placeholder="000000" inputmode="numeric" required autofocus>
-                    <p class="text-center small text-muted mt-2">Code expires in: <span id="timer" class="fw-bold text-danger">10:00</span></p>
-                </div>
-                <button name="verify-otp" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-3 py-3 fw-bold mb-3">
-                    VERIFY & CONTINUE
-                </button>
-                <div class="text-center">
-                    <a href="?resend=1" class="text-decoration-none small fw-bold">Didn't get the code? Resend</a>
-                </div>
-            </form>
-        </div>
-    </div>
-    <style>
-        .letter-spacing-lg { letter-spacing: 0.5rem; }
-    </style>
-    <script>
+            <div class="pk-auth__field">
+                <button name="verify-otp" type="submit" class="pk-auth__btn">Verify &amp; continue</button>
+            </div>
+            <p class="pk-auth__note">
+                Did not get the code? <a class="pk-auth__link" href="?resend=1">Resend</a>
+            </p>
+        </form>
+        <script>
         var timeLeft = <?php echo max(0, 600 - (time() - ($_SESSION["auth_otp_time"] ?? time()))); ?>;
         var timerElement = document.getElementById('timer');
 
@@ -104,6 +88,7 @@
             setTimeout(updateTimer, 1000);
         }
         updateTimer();
-    </script>
-</body>
-</html>
+        </script>
+<?php
+bc_plate_auth_end();
+?>

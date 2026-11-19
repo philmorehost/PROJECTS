@@ -1,5 +1,6 @@
 <?php session_start();
 include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
 $ip = $_SERVER['REMOTE_ADDR'];
 $vendor_id = resolveVendorID();
@@ -75,62 +76,52 @@ if (isset($_POST['resolve'])) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Account Recovery | Lockout Resolution</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-    <style>
-        body { background: #f6f9ff; display: flex; align-items: center; justify-content: center; min-vh-100; }
-        .card { border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-    </style>
-</head>
-<body>
-    <div class="container" style="max-width: 500px;">
-        <div class="text-center mb-4">
-            <h2 class="fw-bold">Security Recovery</h2>
-            <p class="text-muted">Self-help unblocking using your Security PIN</p>
-        </div>
 
-        <div class="card p-4">
-            <?php if ($error): ?>
-                <div class="alert alert-danger"><?php echo $error; ?></div>
-            <?php endif; ?>
-
-            <?php if ($success):
-                $redirect_url = "Login.php";
-                if (isset($_SESSION["last_resolved_table"])) {
-                    if ($_SESSION["last_resolved_table"] === "sas_vendors") $redirect_url = "../bc-admin/Login.php";
-                    elseif ($_SESSION["last_resolved_table"] === "sas_super_admin") $redirect_url = "../bc-spadmin/Login.php";
-                    unset($_SESSION["last_resolved_table"]);
-                }
-            ?>
-                <div class="alert alert-success">
-                    <i class="bi bi-check-circle-fill me-2"></i> <?php echo $success; ?>
-                    <div class="mt-3">
-                        <a href="<?php echo $redirect_url; ?>" class="btn btn-primary w-100">Go to Login</a>
-                    </div>
+<?php
+$lockout_success = !empty($success);
+$lockout_redirect = "Login.php";
+if (isset($_SESSION["last_resolved_table"])) {
+    if ($_SESSION["last_resolved_table"] === "sas_vendors") $lockout_redirect = "../bc-admin/Login.php";
+    elseif ($_SESSION["last_resolved_table"] === "sas_super_admin") $lockout_redirect = "../bc-spadmin/Login.php";
+    // Consumed once: the target is resolved for this render only, as before.
+    unset($_SESSION["last_resolved_table"]);
+}
+bc_plate_auth_head('Account recovery');
+bc_plate_auth_top(array(
+    'icon'      => $lockout_success ? 'check' : 'key',
+    'icon_style'=> $lockout_success ? '' : 'warn',
+    'title'     => 'Security recovery',
+    'sub'       => $lockout_success
+        ? $success
+        : 'Self-help unblocking using your Security PIN.',
+    'alert'     => !empty($error) ? array(array('type' => 'error', 'body' => $error)) : null,
+));
+?>
+        <?php if ($lockout_success): ?>
+            <div class="pk-auth__field">
+                <a class="pk-auth__btn" href="<?php echo htmlspecialchars($lockout_redirect); ?>">
+                    <?php echo bc_plate_auth_icon('arrow', 18); ?> Go to login
+                </a>
+            </div>
+        <?php else: ?>
+            <form method="post">
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="username">Username or email</label>
+                    <input id="username" type="text" name="username" class="pk-auth__input" required placeholder="Enter your username">
                 </div>
-            <?php else: ?>
-                <form method="post">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Username / Email</label>
-                        <input type="text" name="username" class="form-control form-control-lg" required placeholder="Enter your username">
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">4-Digit Security PIN</label>
-                        <input type="password" name="pin" class="form-control form-control-lg text-center fw-bold" maxlength="4" pattern="\d{4}" inputmode="numeric" required placeholder="****" style="letter-spacing: 10px; font-size: 24px;">
-                    </div>
-                    <button type="submit" name="resolve" class="btn btn-primary btn-lg w-100 fw-bold">VERIFY & UNBLOCK</button>
-                    <div class="text-center mt-3">
-                        <a href="Login.php" class="text-decoration-none small fw-bold"><i class="bi bi-arrow-left"></i> Back to Login</a>
-                    </div>
-                </form>
-            <?php endif; ?>
-        </div>
-    </div>
-</body>
-</html>
+                <div class="pk-auth__field">
+                    <label class="pk-auth__label" for="pin">4-digit security PIN</label>
+                    <input id="pin" type="password" name="pin" class="pk-auth__input pk-auth__otp" maxlength="4"
+                           pattern="\d{4}" inputmode="numeric" required placeholder="****">
+                </div>
+                <div class="pk-auth__field">
+                    <button type="submit" name="resolve" class="pk-auth__btn">Verify &amp; unblock</button>
+                </div>
+                <p class="pk-auth__note">
+                    <a class="pk-auth__link" href="Login.php">Back to login</a>
+                </p>
+            </form>
+        <?php endif; ?>
+<?php
+bc_plate_auth_end();
+?>
