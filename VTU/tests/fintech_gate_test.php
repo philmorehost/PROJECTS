@@ -2438,6 +2438,13 @@ function bc_render_installer($root, $file, $step) {
     // reproduced here instead of being silently evaluated. The previous version of this helper
     // started at the first "bc_installer_head(" and eval'd from there, which hid precisely that
     // bug.
+    // TEMPORARY DIAGNOSTIC
+    $facts = 'TOK exists=' . var_export(function_exists('token_get_all'), true)
+        . ' loaded=' . var_export(extension_loaded('tokenizer'), true)
+        . ' ver=' . PHP_VERSION
+        . ' disable=' . var_export(ini_get('disable_functions'), true)
+        . ' exts=' . implode(',', get_loaded_extensions());
+    fwrite(fopen('php://stdout', 'w'), "::warning ::" . $facts . "\n");
     $php = '';
     foreach (token_get_all($src) as $token) {
         if (is_array($token)) {
