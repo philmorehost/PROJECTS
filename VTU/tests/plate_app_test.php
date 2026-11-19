@@ -119,7 +119,7 @@ chk(in_array('Pay Bills', $labels, true), 'Pay Bills group present');
 chk(in_array('Wallet & Transfers', $labels, true), 'Wallet & Transfers group present');
 chk(in_array('Financial Services', $labels, true), 'Financial Services group present');
 chk(in_array('Business & API', $labels, true), 'Business & API group present');
-chk(in_array('History & Records', $labels, true), 'History & Records group present');
+chk(in_array('History & Tools', $labels, true), 'History & Tools group present');
 chk(in_array('Settings & Help', $labels, true), 'Settings & Help group present');
 
 $all = array();
@@ -131,6 +131,16 @@ chk(isset($all['Data.php']), 'Data item present');
 chk(isset($all['SendFund.php']), 'SendFund item present');
 chk(isset($all['CryptoHub.php']), 'Crypto item present');
 chk(isset($all['AccountSettings.php']), 'Account Settings item present');
+// Nav placement (2026-11): Gift Card + Crypto live under Wallet & Transfers,
+// Share Fund History under History & Tools, and Card.php is discarded.
+$group_of = array();
+foreach ($menu as $g) {
+    foreach ((array)$g['items'] as $i) $group_of[$i['href']] = isset($g['label']) ? $g['label'] : '';
+}
+chk($group_of['GiftCard.php'] === 'Wallet & Transfers', 'Gift Card is under Wallet & Transfers');
+chk($group_of['CryptoHub.php'] === 'Wallet & Transfers', 'Crypto is under Wallet & Transfers');
+chk($group_of['ShareFundHistory.php'] === 'History & Tools', 'Share Fund History is under History & Tools');
+chk(!isset($all['Card.php']), 'Card.php is discarded from the nav');
 
 // ---------------------------------------------------------------- render
 ob_start();

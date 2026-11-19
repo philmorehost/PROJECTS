@@ -864,3 +864,43 @@ assertions were retargeted from the deleted headers to the shells (still 1049).
 One leftover: the SAAS-root `Dashboard.php` still references the old header through
 an already-broken `../func/` path; it has been unreachable since before this work
 and is untouched.
+
+## 16. Nav regrouping, Card.php discarded, root .htaccess disabled, dashboards redesigned
+
+Four changes, both editions throughout:
+
+- **Navigation (`func/bc-plate-app.php`).** Gift Card and Crypto moved from Financial
+  Services into **Wallet & Transfers**; Share Fund History moved from Wallet & Transfers
+  into the history group; the group is renamed **History & Records → History & Tools**
+  (`history-records` → `history-tools`). The pinned group lists in
+  `plate_app_test.php`, `fintech_gate_test.php` and the CI workflow moved with it, and
+  `plate_app_test.php` now asserts the placement of each moved item.
+- **`/web/Card.php` discarded.** The page bought recharge cards through an external API
+  that no longer works, and the VTU console (Print Hub / `DataBundleCard.php`) already
+  generates recharge cards itself. Deleted in both editions, together with its sidebar
+  item, the Pay Bills `match` entry, the media-KYC page-list entry in `bc-config.php`,
+  and its captured bodies in `plate_bodies.php`. The admin floating-icon shortcut that
+  pointed at it now opens `DataBundleCard.php`. `web/api/card.php` and `web/func/card.php`
+  stay: they are the API surface, not the discarded page.
+- **Root `.htaccess` disabled.** Renamed to `.htaccess.disabled` in both editions (kept
+  byte-identical; rename back to re-enable). Its query-string WAF rules returned 403 for
+  legitimate application requests. The per-directory guards for private upload, log and
+  backup directories remain active, and `htaccess_context_test.py` now asserts the root
+  file stays disabled while still validating the disabled copy's contents. CI asserts the
+  same. Also deleted: the stray legacy `DGV7.0-SAAS/Dashboard.php` at the edition root —
+  a dead duplicate of `web/Dashboard.php` whose `../func/` includes resolved outside the
+  edition, so it could only ever 500.
+- **Dashboards redesigned (Platnova).** `web/Dashboard.php` (both editions, edition gates
+  preserved), `bc-admin/Dashboard.php` (both editions) and `bc-spadmin/Dashboard.php`
+  (SAAS) were rebuilt on the shells' design tokens (`--brand`, `--ink`, `--muted`,
+  `--line`, `--radius`, `--shadow`): brand-gradient balance/overview hero, compact
+  service tiles that now include the new services (Crypto Hub, Virtual Dollar Card, Gift
+  Cards, Bulk SMS, AI Suite, card printing via the VTU console), and white line-bordered
+  cards throughout. Every query, POST handler, cache key, DOM id and JS hook is
+  unchanged — only presentation moved. `web/Dashboard.php` remains exempt from the
+  body-verbatim migration test, and its Phase 2 accounts partial keeps the tenant brand
+  in its upgrade banner.
+
+Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
+plate_admin **692**, plate_migration **880** (down from 896 — the two deleted Card.php
+pages no longer contribute per-page checks), htaccess **158**.

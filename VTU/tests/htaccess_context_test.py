@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Static regression checks for DGV7.0 Apache/LiteSpeed .htaccess files.
 
+The root configuration is DISABLED (.htaccess.disabled in both editions): its
+query-string WAF rules returned 403 for legitimate requests. Its contents are still
+validated here so it stays safe to re-enable. Subdirectory guards (private upload,
+log and backup directories) remain active and are validated as before.
+
 The security hardening commit introduced a <DirectoryMatch> container into both root
 .htaccess files. That container is only legal in server/vhost configuration, so the
 web server rejected the whole per-directory config and returned HTTP 500 before PHP ran.
@@ -72,7 +77,11 @@ for edition in EDITIONS:
     edition_root = VTU_ROOT / edition
     check(edition_root.is_dir(), f"missing edition directory: {edition_root}")
     root_file = edition_root / ".htaccess"
-    check(root_file.is_file(), f"missing root .htaccess: {root_file}")
+    check(not root_file.is_file(),
+          f"root .htaccess is active again: {root_file} (it must stay disabled: "
+          "its query-string WAF rules 403 legitimate requests; see .htaccess.disabled)")
+    check((edition_root / ".htaccess.disabled").is_file(),
+          f"missing disabled root config: {edition_root / '.htaccess.disabled'}")
     for path in sorted(edition_root.rglob(".htaccess")):
         htaccess_files.append(path)
         text = path.read_text(encoding="utf-8-sig")
@@ -84,12 +93,12 @@ for edition in EDITIONS:
 
 check(len(htaccess_files) > 0, "no .htaccess files found")
 
-saas_root = VTU_ROOT / "DGV7.0-SAAS" / ".htaccess"
-non_saas_root = VTU_ROOT / "DGV7.0-NON-SAAS" / ".htaccess"
+saas_root = VTU_ROOT / "DGV7.0-SAAS" / ".htaccess.disabled"
+non_saas_root = VTU_ROOT / "DGV7.0-NON-SAAS" / ".htaccess.disabled"
 saas_text = saas_root.read_text(encoding="utf-8-sig")
 non_saas_text = non_saas_root.read_text(encoding="utf-8-sig")
 check(saas_root.read_bytes() == non_saas_root.read_bytes(),
-      "SAAS and NON-SAAS root .htaccess files have diverged")
+      "SAAS and NON-SAAS root .htaccess.disabled files have diverged")
 
 for path, text in ((saas_root, saas_text), (non_saas_root, non_saas_text)):
     lines = active_lines(text)

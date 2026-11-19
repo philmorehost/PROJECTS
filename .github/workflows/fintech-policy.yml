@@ -84,8 +84,8 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
-      - 'VTU/DGV7.0-SAAS/.htaccess'
-      - 'VTU/DGV7.0-NON-SAAS/.htaccess'
+      - 'VTU/DGV7.0-SAAS/.htaccess.disabled'
+      - 'VTU/DGV7.0-NON-SAAS/.htaccess.disabled'
       - '.github/workflows/fintech-policy.yml'
   pull_request:
     paths:
@@ -155,8 +155,8 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
-      - 'VTU/DGV7.0-SAAS/.htaccess'
-      - 'VTU/DGV7.0-NON-SAAS/.htaccess'
+      - 'VTU/DGV7.0-SAAS/.htaccess.disabled'
+      - 'VTU/DGV7.0-NON-SAAS/.htaccess.disabled'
       - '.github/workflows/fintech-policy.yml'
 
 permissions:
@@ -233,7 +233,7 @@ jobs:
           # container balance and regexes, and requires both editions' root files to be
           # byte-identical.
           python3 VTU/tests/htaccess_context_test.py
-          cmp VTU/DGV7.0-SAAS/.htaccess VTU/DGV7.0-NON-SAAS/.htaccess
+          cmp VTU/DGV7.0-SAAS/.htaccess.disabled VTU/DGV7.0-NON-SAAS/.htaccess.disabled
       - name: Editions must ship identical policy files
         run: |
           set -e
@@ -303,9 +303,14 @@ jobs:
           cmp VTU/DGV7.0-SAAS/web/BusinessUpgrade.php VTU/DGV7.0-NON-SAAS/web/BusinessUpgrade.php
           cmp VTU/DGV7.0-SAAS/bc-admin/BusinessKYB.php VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php
           cmp VTU/DGV7.0-SAAS/uploads/kyb/.htaccess VTU/DGV7.0-NON-SAAS/uploads/kyb/.htaccess
-          # The root .htaccess files must stay byte-identical; a divergence here is what
-          # the htaccess context test above rejects.
-          cmp VTU/DGV7.0-SAAS/.htaccess VTU/DGV7.0-NON-SAAS/.htaccess
+          # The root .htaccess stays disabled (its WAF rules 403 legitimate requests);
+          # the disabled copies must stay byte-identical.
+          cmp VTU/DGV7.0-SAAS/.htaccess.disabled VTU/DGV7.0-NON-SAAS/.htaccess.disabled
+          for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+            if [ -f "VTU/${edition}/.htaccess" ]; then
+              echo "${edition} root .htaccess is active again"; exit 1
+            fi
+          done
           # Phase 2: shared customer-facing pages must match across editions.
           cmp VTU/DGV7.0-SAAS/index-bc-style-template-6.php VTU/DGV7.0-NON-SAAS/index-bc-style-template-6.php
           cmp VTU/DGV7.0-SAAS/web/ajax-support-chat.php VTU/DGV7.0-NON-SAAS/web/ajax-support-chat.php
@@ -355,7 +360,7 @@ jobs:
             # The published developer docs must point at the canonical endpoint.
             grep -q '/users-flutterwave.php' "VTU/${edition}/web/APIDocs.php"
             # The sidebar is grouped into the six service groups; the flat "Services" heading is gone.
-            for group in pay-bills wallet-transfers financial-services business-api history-records settings-help; do
+            for group in pay-bills wallet-transfers financial-services business-api history-tools settings-help; do
               grep -q "'id' => '${group}'" "VTU/${edition}/func/bc-plate-app.php"
             done
             if grep -q "'label' => 'Services'" "VTU/${edition}/func/bc-plate-app.php"; then

@@ -1,4 +1,9 @@
-# DGV7.0 — Root .htaccess (shared by SAAS and NON-SAAS)
+# DGV7.0 — Root .htaccess (shared by SAAS and NON-SAAS) — DISABLED
+#
+# This file is intentionally named .htaccess.disabled: Apache ignores it. The query-string
+# WAF rules below returned 403 for legitimate application requests, which blocked access.
+# Rename back to .htaccess to re-enable. Subdirectory guards (uploads/kyb, uploads/kyc,
+# logs, backups) stay active: they only deny access to private directories.
 #
 # IMPORTANT: only directives valid in a per-directory (.htaccess) context belong here.
 # <Directory>, <DirectoryMatch>, <VirtualHost>, AllowOverride and php_* directives are

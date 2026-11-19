@@ -5,16 +5,42 @@
 bc_adm_head('', array("area" => "spadmin"));
 ?>
 <style>
-    .info-card.card-blue { background-color: #eef7ff; }
-    .info-card.card-red { background-color: #fceeed; }
-    .info-card.card-green { background-color: #eefcef; }
-    .info-card.card-yellow { background-color: #fff9e6; }
-    .info-card {
-        border-radius: 15px;
+    /* Dashboard (Platnova) — page primitives on the shell's tokens. */
+    .sp-hero {
+        background: linear-gradient(135deg, <?php echo $spadmin_primary_color; ?> 0%, color-mix(in srgb, <?php echo $spadmin_primary_color; ?> 74%, #0b1220) 100%);
+        border-radius: 20px; color: #fff; padding: 2rem; position: relative; overflow: hidden;
+        box-shadow: var(--shadow); margin-bottom: 1.5rem;
     }
-    .shadow {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    .sp-hero::before {
+        content: ''; position: absolute; width: 340px; height: 340px; border-radius: 50%;
+        background: rgba(255,255,255,.10); top: -160px; right: -60px; pointer-events: none;
     }
+    .sp-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+    .sp-metric .k { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .75; margin-bottom: .2rem; }
+    .sp-metric .v { font-size: 1.45rem; font-weight: 800; word-break: break-all; line-height: 1.15; }
+    .sp-active {
+        background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px);
+        border-radius: 20px; padding: 1.6rem; text-align: center; position: relative; z-index: 2;
+    }
+    .sp-card {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        box-shadow: 0 10px 30px rgba(16,24,40,.05); padding: 1.4rem;
+    }
+    .sp-tile {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .45rem;
+        height: 100%; min-height: 96px; padding: 1rem .4rem; text-decoration: none;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .sp-tile i { font-size: 1.5rem; color: var(--brand); }
+    .sp-tile span { font-size: .74rem; font-weight: 700; color: var(--ink); text-align: center; }
+    .sp-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
+    .ad-alert {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        border-radius: var(--radius); padding: 1rem 1.2rem; border: 1px solid var(--line);
+        border-left: 4px solid var(--bad); background: var(--surface); box-shadow: 0 10px 30px rgba(16,24,40,.05);
+    }
+    @media (max-width: 767px) { .sp-hero { padding: 1.3rem; } }
   </style>
 <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
 <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
@@ -34,43 +60,40 @@ bc_adm_head('', array("area" => "spadmin"));
     ?>
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card bg-danger bg-opacity-10 border-danger border-start border-4 rounded-4 shadow-sm">
-                <div class="card-body py-3 d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-shield-lock-fill text-danger fs-2 me-3"></i>
-                        <div>
-                            <h6 class="mb-0 fw-bold text-dark-primary">Platform Security Alert</h6>
-                            <p class="mb-0 small text-dark-primary" style="opacity: 0.8;">
-                                <?php if($unblock_count > 0) echo "<b>$unblock_count</b> vendor unblock requests. "; ?>
-                                <?php if($blocked_count > 0) echo "<b>$blocked_count</b> vendor accounts locked."; ?>
-                            </p>
-                        </div>
+            <div class="ad-alert">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#fef2f2;color:#dc2626;font-size:1.25rem;">
+                        <i class="bi bi-shield-lock-fill"></i>
                     </div>
-                    <a href="UnblockRequests.php" class="btn btn-danger btn-sm fw-bold px-3 rounded-pill">Take Action</a>
+                    <div>
+                        <h6 class="mb-0 fw-bold">Platform Security Alert</h6>
+                        <p class="mb-0 small text-muted">
+                            <?php if($unblock_count > 0) echo "<b>$unblock_count</b> vendor unblock requests. "; ?>
+                            <?php if($blocked_count > 0) echo "<b>$blocked_count</b> vendor accounts locked."; ?>
+                        </p>
+                    </div>
                 </div>
+                <a href="UnblockRequests.php" class="btn btn-danger btn-sm fw-bold px-3 rounded-pill">Take Action</a>
             </div>
         </div>
     </div>
     <?php endif; ?>
 
-        <!-- Consolidated Super Admin Stats Card -->
-        <div class="row">
-            <div class="col-12 mb-4">
-                <div class="card border-0 rounded-4 shadow-sm overflow-hidden" style="background: linear-gradient(135deg, <?php echo $spadmin_primary_color; ?> 0%, <?php echo $spadmin_primary_color; ?>cc 100%);">
-                    <div class="card-body p-4 p-lg-5 text-white">
-                        <div class="row align-items-center">
-                            <div class="col-lg-7">
-                                <div class="d-flex align-items-center mb-3">
-                                    <div class="bg-white bg-opacity-20 p-3 rounded-4 me-3">
-                                        <i class="bi bi-gear-fill fs-3 text-white"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="fw-bold mb-0">Platform Overview</h4>
-                                        <p class="mb-0 opacity-75 small">Comprehensive system metrics and revenue tracking.</p>
-                                    </div>
-                                </div>
+        <!-- Platform Overview -->
+        <div class="sp-hero">
+            <div class="row align-items-center position-relative" style="z-index: 2;">
+                <div class="col-lg-7">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.26);font-size:1.25rem;">
+                            <i class="bi bi-gear-fill"></i>
+                        </div>
+                        <div>
+                            <div class="sp-eyebrow">Super Admin</div>
+                            <h4 class="fw-bold mb-0 text-white">Platform Overview</h4>
+                        </div>
+                    </div>
+                    <p class="small mb-4" style="opacity:.8;">Comprehensive system metrics and revenue tracking across every vendor on the platform.</p>
 
-                                <div class="row mt-4 g-3">
                                     <?php
                                         // Super Admin persistent stats caching (Branch DG6.7 Optimization)
                                         // v2 cache key: the previous SQL counted pending (status 2) and
@@ -109,96 +132,50 @@ bc_adm_head('', array("area" => "spadmin"));
                                             mysqli_query($connection_server, "INSERT INTO sas_dashboard_cache (vendor_id, username, cache_key, cache_value, expiry) VALUES (0, 'SPADMIN', '$stats_cache_key', '$cache_val', DATE_ADD(NOW(), INTERVAL 15 MINUTE))");
                                         }
                                     ?>
-                                    <div class="col-6 col-md-3">
-                                        <p class="mb-1 small opacity-75 text-uppercase fw-bold">Total Vendors</p>
-                                        <h2 class="fw-bold mb-0"><?php echo number_format($stats['total_vendors']); ?></h2>
-                                    </div>
-                                    <div class="col-6 col-md-3 border-start border-white border-opacity-25 ps-3 ps-md-4">
-                                        <p class="mb-1 small opacity-75 text-uppercase fw-bold">Manual</p>
-                                        <h3 class="fw-bold mb-0" style="word-break: break-all; font-size: clamp(0.9rem, 3vw, 1.4rem);">₦<?php echo toDecimal($stats['manual'], 2); ?></h3>
-                                    </div>
-                                    <div class="col-6 col-md-3 border-start border-white border-opacity-25 ps-3 ps-md-4">
-                                        <p class="mb-1 small opacity-75 text-uppercase fw-bold">Revenue</p>
-                                        <h3 class="fw-bold mb-0" style="word-break: break-all; font-size: clamp(0.9rem, 3vw, 1.4rem);">₦<?php echo toDecimal($stats['revenue'], 2); ?></h3>
-                                    </div>
-                                    <div class="col-6 col-md-3 border-start border-white border-opacity-25 ps-3 ps-md-4">
-                                        <p class="mb-1 small opacity-75 text-uppercase fw-bold">Outflow</p>
-                                        <h3 class="fw-bold mb-0" style="word-break: break-all; font-size: clamp(0.9rem, 3vw, 1.4rem);">₦<?php echo toDecimal($stats['outflow'], 2); ?></h3>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-5 d-none d-lg-flex justify-content-end">
-                                <div class="bg-white bg-opacity-10 p-5 rounded-circle position-relative overflow-hidden" style="width: 240px; height: 240px;">
-                                    <i class="bi bi-graph-up-arrow position-absolute top-50 start-50 translate-middle" style="font-size: 100px; opacity: 0.15;"></i>
-                                    <div class="text-center position-relative z-1">
-                                        <p class="mb-1 small opacity-75 text-uppercase fw-bold">Active Subscriptions</p>
-                                        <h1 class="display-5 fw-bold mb-0"><?php echo number_format($stats['active_subs']); ?></h1>
-                                        <a href="Vendors.php" class="btn btn-light btn-sm mt-3 fw-bold rounded-pill px-4 text-primary shadow-sm border-0">Manage Vendors</a>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3 sp-metric">
+                            <div class="k">Total Vendors</div>
+                            <div class="v"><?php echo number_format($stats['total_vendors']); ?></div>
                         </div>
+                        <div class="col-6 col-md-3 sp-metric">
+                            <div class="k">Manual</div>
+                            <div class="v">₦<?php echo toDecimal($stats['manual'], 2); ?></div>
+                        </div>
+                        <div class="col-6 col-md-3 sp-metric">
+                            <div class="k">Revenue</div>
+                            <div class="v">₦<?php echo toDecimal($stats['revenue'], 2); ?></div>
+                        </div>
+                        <div class="col-6 col-md-3 sp-metric">
+                            <div class="k">Outflow</div>
+                            <div class="v">₦<?php echo toDecimal($stats['outflow'], 2); ?></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-5 mt-4 mt-lg-0">
+                    <div class="sp-active">
+                        <div class="sp-eyebrow mb-1">Active Subscriptions</div>
+                        <div style="font-size: 3rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1;"><?php echo number_format($stats['active_subs']); ?></div>
+                        <a href="Vendors.php" class="btn btn-light btn-sm mt-3 fw-bold rounded-pill px-4 text-primary shadow-sm border-0">Manage Vendors</a>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Quick Link Actions -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 rounded-4 shadow-sm">
-                    <div class="card-header bg-white border-0 pt-4 px-4">
-                        <h5 class="card-title fw-bold m-0 text-dark-primary d-flex align-items-center">
-                            <i class="bi bi-lightning-fill text-warning me-2"></i> Quick Actions
-                        </h5>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="row g-3">
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="AIManagement.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-cpu-fill fs-3"></i>
-                                    <span class="small fw-bold">AI Manager</span>
-                                </a>
-                            </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="Vendors.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-people-fill fs-3"></i>
-                                    <span class="small fw-bold">Vendors</span>
-                                </a>
-                            </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="BillingPackages.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-box-seam-fill fs-3"></i>
-                                    <span class="small fw-bold">Billing</span>
-                                </a>
-                            </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="Transactions.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-wallet2 fs-3"></i>
-                                    <span class="small fw-bold">Transactions</span>
-                                </a>
-                            </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="AccountSettings.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-gear-fill fs-3"></i>
-                                    <span class="small fw-bold">Settings</span>
-                                </a>
-                            </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <a href="PaymentGateway.php" class="btn btn-outline-primary w-100 py-3 rounded-4 border-2 d-flex flex-column align-items-center gap-2 hover-lift">
-                                    <i class="bi bi-credit-card-fill fs-3"></i>
-                                    <span class="small fw-bold">Gateway</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- Quick Actions -->
+        <div class="sp-card mb-4">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-lightning-fill text-warning fs-5"></i>
+                <h5 class="fw-bold m-0" style="color: var(--ink); font-size: 1rem;">Quick Actions</h5>
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-md-4 col-lg-2"><a href="AIManagement.php" class="sp-tile"><i class="bi bi-cpu-fill"></i><span>AI Manager</span></a></div>
+                <div class="col-6 col-md-4 col-lg-2"><a href="Vendors.php" class="sp-tile"><i class="bi bi-people-fill"></i><span>Vendors</span></a></div>
+                <div class="col-6 col-md-4 col-lg-2"><a href="BillingPackages.php" class="sp-tile"><i class="bi bi-box-seam-fill"></i><span>Billing</span></a></div>
+                <div class="col-6 col-md-4 col-lg-2"><a href="Transactions.php" class="sp-tile"><i class="bi bi-wallet2"></i><span>Transactions</span></a></div>
+                <div class="col-6 col-md-4 col-lg-2"><a href="AccountSettings.php" class="sp-tile"><i class="bi bi-gear-fill"></i><span>Settings</span></a></div>
+                <div class="col-6 col-md-4 col-lg-2"><a href="PaymentGateway.php" class="sp-tile"><i class="bi bi-credit-card-fill"></i><span>Gateway</span></a></div>
             </div>
         </div>
-        <style>
-            .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-            .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(var(--bs-primary-rgb), 0.1); background-color: var(--primary-color); color: white !important; }
-        </style>
     </section>
 		
 		<?php include("../func/spadmin-short-trans.php"); ?>

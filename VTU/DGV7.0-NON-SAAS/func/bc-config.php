@@ -569,7 +569,7 @@ if ($connection_server) {
 							"/web/Exam.php", "/web/Betting.php", "/web/BulkAirtime.php", "/web/BulkData.php",
 							"/web/BulkSMS.php", "/web/PrintHub.php", "/web/DataBundleCard.php", "/web/VirtualCard.php",
 							"/web/SendFund.php", "/web/VirtualBanks.php", "/web/ShareFund.php",
-							"/web/GiftCard.php", "/web/CoinConversion.php", "/web/Card.php"
+							"/web/GiftCard.php", "/web/CoinConversion.php"
 						);
 						if (in_array($current_p, $kyc_enforced_pages)) {
 							$_SESSION["product_purchase_response"] = "Action Restricted: You must complete your KYC Verification (Video/Picture/ID) to perform transactions.";

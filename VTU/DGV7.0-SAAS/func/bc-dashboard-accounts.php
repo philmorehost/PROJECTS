@@ -48,6 +48,7 @@ $da_show_upgrade = ($da_tier === 'personal' && !in_array($da_kyb, [1, 2], true))
     .da-wallet {
         background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px;
         display: flex; flex-direction: column; gap: 4px;
+        box-shadow: 0 10px 30px rgba(16, 24, 40, .05);
     }
     .da-wallet--closed { background: #f8fafc; border-style: dashed; }
     .da-wallet__code { font-size: .72rem; font-weight: 700; letter-spacing: .07em; color: #64748b; text-transform: uppercase; }
@@ -73,13 +74,13 @@ $da_show_upgrade = ($da_tier === 'personal' && !in_array($da_kyb, [1, 2], true))
 
     .da-upgrade {
         display: flex; align-items: center; justify-content: space-between; gap: 16px;
-        background: linear-gradient(135deg, #0f766e, #115e59); color: #fff;
+        background: linear-gradient(135deg, <?php echo function_exists('bc_app_colour') ? bc_app_colour() : '#0f766e'; ?>, #0b1220); color: #fff;
         border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; flex-wrap: wrap;
     }
     .da-upgrade h6 { margin: 0 0 4px; font-weight: 700; font-size: 1rem; }
     .da-upgrade p { margin: 0; font-size: .85rem; opacity: .9; }
     .da-upgrade a {
-        background: #fff; color: #0f766e; text-decoration: none; font-weight: 700;
+        background: #fff; color: #0b1220; text-decoration: none; font-weight: 700;
         padding: 9px 18px; border-radius: 10px; font-size: .85rem; white-space: nowrap;
     }
     .da-upgrade a:hover { background: #ecfdf5; }

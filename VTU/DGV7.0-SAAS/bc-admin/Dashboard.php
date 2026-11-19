@@ -282,94 +282,82 @@
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php"); bc_adm_head("Dashboard | " . $get_all_super_admin_site_details["site_title"]); ?>
 <style>
-    .balance-hero {
-        background: linear-gradient(135deg, <?php echo $vendor_primary_color; ?> 0%, <?php echo $vendor_primary_color; ?>cc 100%);
-        border-radius: 1.25rem;
-        color: white;
-        padding: 2rem;
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 1.5rem;
-        border: none;
+    /* Dashboard (Platnova) — page primitives on the shell's tokens: --brand, --ink, --muted,
+       --line, --surface, --radius, --shadow. */
+    .ad-hero {
+        background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 76%, #0b1220) 100%);
+        border-radius: 20px; color: #fff; padding: 2rem; position: relative; overflow: hidden;
+        box-shadow: var(--shadow); margin-bottom: 1.5rem;
     }
-    .balance-hero::after {
-        content: '';
-        position: absolute;
-        top: -20%;
-        right: -10%;
-        width: 300px;
-        height: 300px;
-        background: rgba(255,255,255,0.1);
-        border-radius: 50%;
+    .ad-hero::before {
+        content: ''; position: absolute; width: 340px; height: 340px; border-radius: 50%;
+        background: rgba(255,255,255,.10); top: -160px; right: -60px; pointer-events: none;
     }
-    .balance-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; }
+    .ad-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+    .ad-balance { font-size: 2.6rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; word-break: break-all; }
+    .ad-metric {
+        background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
+        border-radius: var(--radius); padding: 1rem 1.1rem; backdrop-filter: blur(8px); height: 100%;
+    }
+    .ad-metric .k { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+    .ad-metric .v { font-size: 1.3rem; font-weight: 800; word-break: break-all; }
+    .ad-card {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        box-shadow: 0 10px 30px rgba(16,24,40,.05); padding: 1.4rem; height: 100%;
+        display: flex; flex-direction: column;
+    }
+    .ad-card__head { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.1rem; }
+    .ad-card__title { font-size: 1rem; font-weight: 800; color: var(--ink); margin: 0; }
+    .ad-card__sub { font-size: .78rem; color: var(--muted); }
+    .ad-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.25rem; flex: 0 0 auto; }
+    .ic-amber { background: #fffbeb; color: #d97706; } .ic-red { background: #fef2f2; color: #dc2626; }
+    .ic-blue { background: #eff6ff; color: #2563eb; } .ic-indigo { background: #eef2ff; color: #4f46e5; }
 
-    .metric-box {
-        background: rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 1rem;
-        padding: 1rem;
-        transition: all 0.3s ease;
+    .ad-alert {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        border-radius: var(--radius); padding: 1rem 1.2rem; border: 1px solid var(--line);
+        background: var(--surface); box-shadow: 0 10px 30px rgba(16,24,40,.05);
     }
-    .metric-box:hover { background: rgba(255,255,255,0.15); }
-    .metric-label { font-size: 0.75rem; font-weight: 700; text-uppercase: uppercase; opacity: 0.8; margin-bottom: 0.25rem; }
-    .metric-value { font-size: 1.25rem; font-weight: 800; word-break: break-all; }
+    .ad-alert--warn { border-left: 4px solid var(--warn); }
+    .ad-alert--info { border-left: 4px solid var(--brand); }
+
+    .ad-tile {
+        position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: .4rem; text-decoration: none; height: 100%; min-height: 88px; padding: .9rem .4rem;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .ad-tile i { font-size: 1.45rem; }
+    .ad-tile span { font-size: .72rem; font-weight: 700; color: var(--ink); text-align: center; }
+    .ad-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
+    .ad-tile__badge {
+        position: absolute; top: 8px; right: 10px; background: var(--bad); color: #fff;
+        font-size: .62rem; font-weight: 800; border-radius: 999px; min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center; padding: 0 5px;
+    }
+    .ql-primary i { color: #2563eb; } .ql-success i { color: #059669; } .ql-info i { color: #0284c7; }
+    .ql-purple i { color: #7c3aed; } .ql-warning i { color: #d97706; } .ql-danger i { color: #dc2626; }
+    .ql-teal i { color: #0d9488; } .ql-orange i { color: #ea580c; }
+
+    .growth-tile { transition: transform .18s ease, box-shadow .18s ease; }
+    .growth-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    @keyframes pulse-new {
+        0% { box-shadow: 0 0 0 0 rgba(220,53,69,.5); }
+        70% { box-shadow: 0 0 0 6px rgba(220,53,69,0); }
+        100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); }
+    }
+
+    .ad-bank {
+        min-width: 300px; flex: 0 0 auto; background: var(--wash); border: 1px solid var(--line);
+        border-left: 4px solid var(--brand); border-radius: var(--radius); padding: 1.1rem 1.2rem;
+    }
+    .ad-addon { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
+    .ad-addon:last-child { border-bottom: 0; }
 
     @media (max-width: 767px) {
-        .balance-amount { font-size: 1.75rem; }
-        .balance-hero { padding: 1.25rem; }
-        .metric-value { font-size: 1rem; }
+        .ad-balance { font-size: 1.9rem; }
+        .ad-hero { padding: 1.3rem; }
     }
-
-    .subscription-icon {
-        width: 52px; height: 52px; border-radius: 1rem;
-        background: linear-gradient(135deg, #f59e0b, #d97706);
-        color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .business-growth-icon {
-        width: 52px; height: 52px; border-radius: 1rem;
-        background: linear-gradient(135deg, #ef4444, #b91c1c);
-        color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .growth-tile { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-    .growth-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -8px rgba(0,0,0,0.15) !important; }
-    @keyframes pulse-new {
-        0%   { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.5); }
-        70%  { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-    }
-
-    .quick-link-tile {
-        position: relative;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 0.35rem;
-        text-decoration: none;
-        background: #f8f9fc;
-        border: 1px solid #eef0f5;
-        border-radius: 1rem;
-        padding: 0.9rem 0.5rem;
-        height: 100%;
-        min-height: 84px;
-        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-    }
-    .quick-link-tile i { font-size: 1.4rem; }
-    .quick-link-tile span { font-size: 0.7rem; font-weight: 700; color: #334155; text-align: center; }
-    .quick-link-tile:hover { transform: translateY(-3px); box-shadow: 0 10px 20px -8px rgba(0,0,0,0.15); }
-    .quick-link-badge {
-        position: absolute; top: 6px; right: 10px;
-        background: #dc3545; color: #fff; font-size: 0.62rem; font-weight: 800;
-        border-radius: 999px; min-width: 18px; height: 18px;
-        display: flex; align-items: center; justify-content: center; padding: 0 4px;
-    }
-    .ql-primary i { color: #0d6efd; } .ql-primary:hover { background: #eaf2ff; border-color: #b6d4fe; }
-    .ql-success i { color: #198754; } .ql-success:hover { background: #e9f7ef; border-color: #a3d9b8; }
-    .ql-info    i { color: #0dcaf0; } .ql-info:hover    { background: #e6f9fd; border-color: #9eebfa; }
-    .ql-purple  i { color: #6f42c1; } .ql-purple:hover  { background: #f1eafb; border-color: #d2b8f0; }
-    .ql-warning i { color: #ffc107; } .ql-warning:hover { background: #fff9e6; border-color: #ffe69c; }
-    .ql-danger  i { color: #dc3545; } .ql-danger:hover  { background: #fdecee; border-color: #f3b8c0; }
-    .ql-teal    i { color: #20c997; } .ql-teal:hover    { background: #e7f9f3; border-color: #a8e6cf; }
-    .ql-orange  i { color: #fd7e14; } .ql-orange:hover  { background: #fff1e6; border-color: #ffcda3; }
   </style>
     <?php bc_adm_sidebar(); ?>
 
@@ -393,49 +381,45 @@
     <div class="row mb-4 g-3">
         <?php if ($unblock_count > 0 || $blocked_count > 0): ?>
         <div class="col-md-6">
-            <div class="card bg-warning bg-opacity-10 border-warning border-start border-4 rounded-4 shadow-sm h-100 mb-0">
-                <div class="card-body py-3 d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-shield-lock-fill text-warning fs-2 me-3"></i>
-                        <div>
-                            <h6 class="mb-0 fw-bold text-dark-primary">Security Action Required</h6>
-                            <p class="mb-0 small text-dark-primary" style="opacity: 0.8;">
-                                <?php if($unblock_count > 0) echo "<b>$unblock_count</b> pending unblock. "; ?>
-                                <?php if($blocked_count > 0) echo "<b>$blocked_count</b> locked accounts."; ?>
-                            </p>
-                        </div>
+            <div class="ad-alert ad-alert--warn h-100">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="ad-ic ic-amber"><i class="bi bi-shield-lock-fill"></i></div>
+                    <div>
+                        <h6 class="mb-0 fw-bold">Security Action Required</h6>
+                        <p class="mb-0 small text-muted">
+                            <?php if($unblock_count > 0) echo "<b>$unblock_count</b> pending unblock. "; ?>
+                            <?php if($blocked_count > 0) echo "<b>$blocked_count</b> locked accounts."; ?>
+                        </p>
                     </div>
-                    <a href="BruteForceSecurity.php" class="btn btn-warning btn-sm fw-bold px-3 rounded-pill">Manage</a>
                 </div>
+                <a href="BruteForceSecurity.php" class="btn btn-warning btn-sm fw-bold px-3 rounded-pill">Manage</a>
             </div>
         </div>
         <?php endif; ?>
 
         <?php if ($kyc_count > 0): ?>
         <div class="col-md-6">
-            <div class="card bg-primary bg-opacity-10 border-primary border-start border-4 rounded-4 shadow-sm h-100 mb-0">
-                <div class="card-body py-3 d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-person-badge-fill text-primary fs-2 me-3"></i>
-                        <div>
-                            <h6 class="mb-0 fw-bold text-dark-primary">KYC Action Required</h6>
-                            <p class="mb-0 small text-dark-primary" style="opacity: 0.8;"><b><?php echo $kyc_count; ?></b> pending identity verifications.</p>
-                        </div>
+            <div class="ad-alert ad-alert--info h-100">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="ad-ic ic-blue"><i class="bi bi-person-badge-fill"></i></div>
+                    <div>
+                        <h6 class="mb-0 fw-bold">KYC Action Required</h6>
+                        <p class="mb-0 small text-muted"><b><?php echo $kyc_count; ?></b> pending identity verifications.</p>
                     </div>
-                    <a href="KYCManagement.php" class="btn btn-primary btn-sm fw-bold px-3 rounded-pill">Review</a>
                 </div>
+                <a href="KYCManagement.php" class="btn btn-primary btn-sm fw-bold px-3 rounded-pill">Review</a>
             </div>
         </div>
         <?php endif; ?>
     </div>
     <?php endif; ?>
 
-    <div class="balance-hero shadow-sm">
-        <div class="row align-items-center">
+    <div class="ad-hero">
+        <div class="row align-items-center position-relative" style="z-index: 2;">
             <div class="col-lg-5 mb-4 mb-lg-0 text-center text-lg-start">
-                <div class="small fw-bold text-uppercase opacity-75 mb-1">Total API Balance</div>
-                <div class="balance-amount mb-3" style="word-break: break-all;">₦<?php echo number_format($get_logged_admin_details["balance"], 2); ?></div>
-                <div class="d-flex gap-2">
+                <div class="ad-eyebrow mb-1">Total API Balance</div>
+                <div class="ad-balance mb-3">₦<?php echo number_format($get_logged_admin_details["balance"], 2); ?></div>
+                <div class="d-flex gap-2 justify-content-center justify-content-lg-start">
                     <a href="Fund.php" class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-primary">Add Funds</a>
                     <a href="Transactions.php" class="btn btn-outline-light btn-sm rounded-pill px-3 fw-bold">History</a>
                 </div>
@@ -443,9 +427,9 @@
             <div class="col-lg-7">
                 <div class="row g-3">
                     <div class="col-6 col-md-4">
-                        <div class="metric-box">
-                            <div class="metric-label">Total Users</div>
-                            <div class="metric-value"><?php
+                        <div class="ad-metric">
+                            <div class="k">Total Users</div>
+                            <div class="v"><?php
                                 $get_total_users = mysqli_query($connection_server, "SELECT COUNT(*) as count FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."'");
                                 echo number_format(mysqli_fetch_assoc($get_total_users)['count'] ?? 0);
                             ?></div>
@@ -494,21 +478,21 @@
                         }
                     ?>
                     <div class="col-6 col-md-4">
-                        <div class="metric-box">
-                            <div class="metric-label">Total Deposits</div>
-                            <div class="metric-value">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
+                        <div class="ad-metric">
+                            <div class="k">Total Deposits</div>
+                            <div class="v">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
                         </div>
                     </div>
                     <div class="col-12 col-md-4">
-                        <div class="metric-box">
-                            <div class="metric-label">Total Sales</div>
-                            <div class="metric-value">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
+                        <div class="ad-metric">
+                            <div class="k">Total Sales</div>
+                            <div class="v">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
                         </div>
                     </div>
                     <div class="col-12">
-                        <div class="metric-box border-warning border-opacity-50">
-                            <div class="metric-label text-warning">24h Payout Limit</div>
-                            <div class="metric-value">
+                        <div class="ad-metric">
+                            <div class="k" style="color: #fcd34d;">24h Payout Limit</div>
+                            <div class="v">
                                 <?php
                                     $vid = $get_logged_admin_details["id"];
                                     $daily_limit = (int)($get_logged_admin_details['daily_payout_limit'] ?? 10);
@@ -525,10 +509,9 @@
             </div>
         </div>
     </div>
-</section>
-        
+
         <!-- Row -->
-        <div class="row">
+        <div class="row g-4 mb-4">
           <!-- Subscription Card -->
           <div class="col-12 col-lg-4">
             <?php
@@ -577,15 +560,11 @@
                   $expiry_text = date('F j, Y', strtotime($expiry_date));
               }
             ?>
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4 h-100">
-              <div class="card-body p-4 d-flex flex-column">
-
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div class="subscription-icon">
-                        <i class="bi bi-gem fs-4"></i>
-                    </div>
+            <div class="ad-card">
+                <div class="ad-card__head">
+                    <div class="ad-ic ic-amber"><i class="bi bi-gem"></i></div>
                     <div>
-                        <h5 class="mb-0 fw-bold text-dark"><?php echo $plan_name ? htmlspecialchars($plan_name) . ' Plan' : 'Subscription'; ?></h5>
+                        <h5 class="ad-card__title"><?php echo $plan_name ? htmlspecialchars($plan_name) . ' Plan' : 'Subscription'; ?></h5>
                         <span class="badge <?php echo $status_badge; ?> rounded-pill px-2 py-1" style="font-size: 0.65rem;"><?php echo $status_text; ?></span>
                     </div>
                 </div>
@@ -609,31 +588,24 @@
                 <a href="RenewSubscription.php" class="btn btn-primary rounded-pill fw-bold py-2 mt-auto">
                   <i class="bi bi-arrow-repeat me-2"></i><?php echo ($status_text === 'Active' || $status_text === 'Expired') ? 'Renew / Upgrade Plan' : 'Choose a Plan'; ?>
                 </a>
-              </div>
             </div>
           </div>
 
           <!-- Business Growth Card -->
           <?php if(isServiceEnabled('ai_suite')): ?>
           <div class="col-12 col-lg-4">
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4 h-100" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);">
-              <div class="card-body p-4 d-flex flex-column">
-
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div class="business-growth-icon">
-                        <i class="bi bi-rocket-takeoff-fill fs-4"></i>
-                    </div>
+            <div class="ad-card" style="background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);">
+                <div class="ad-card__head">
+                    <div class="ad-ic ic-red"><i class="bi bi-rocket-takeoff-fill"></i></div>
                     <div>
-                        <h5 class="mb-0 fw-bold" style="color:#0f172a;">Business Growth</h5>
-                        <span class="small text-muted">AI tools to grow faster</span>
+                        <h5 class="ad-card__title">Business Growth</h5>
+                        <span class="ad-card__sub">AI tools to grow faster</span>
                     </div>
                 </div>
 
                 <div class="d-flex flex-column gap-2 flex-grow-1">
-                  <a href="AISettings.php" class="text-decoration-none p-3 rounded-4 bg-white shadow-sm d-flex align-items-center growth-tile" style="border: 1px solid rgba(0,0,0,0.05);">
-                      <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-3">
-                          <i class="bi bi-cpu-fill fs-4"></i>
-                      </div>
+                  <a href="AISettings.php" class="text-decoration-none p-3 rounded-4 bg-white shadow-sm d-flex align-items-center growth-tile" style="border: 1px solid var(--line);">
+                      <div class="ad-ic ic-blue me-3"><i class="bi bi-cpu-fill"></i></div>
                       <div class="flex-grow-1">
                           <h6 class="mb-0 fw-bold text-dark d-flex align-items-center">AI Business Suite <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.6rem; animation: pulse-new 2s infinite;">NEW</span></h6>
                           <span class="small text-muted" style="font-size: 0.75rem;">Automate support &amp; sales</span>
@@ -641,10 +613,8 @@
                       <i class="bi bi-chevron-right text-muted"></i>
                   </a>
 
-                  <a href="AIMarketing.php" class="text-decoration-none p-3 rounded-4 bg-white shadow-sm d-flex align-items-center growth-tile" style="border: 1px solid rgba(0,0,0,0.05);">
-                      <div class="bg-danger bg-opacity-10 text-danger p-3 rounded-circle me-3">
-                          <i class="bi bi-megaphone-fill fs-4"></i>
-                      </div>
+                  <a href="AIMarketing.php" class="text-decoration-none p-3 rounded-4 bg-white shadow-sm d-flex align-items-center growth-tile" style="border: 1px solid var(--line);">
+                      <div class="ad-ic ic-red me-3"><i class="bi bi-megaphone-fill"></i></div>
                       <div class="flex-grow-1">
                           <h6 class="mb-0 fw-bold text-dark">AI Marketing Studio</h6>
                           <span class="small text-muted" style="font-size: 0.75rem;">Generate promo content instantly</span>
@@ -652,8 +622,6 @@
                       <i class="bi bi-chevron-right text-muted"></i>
                   </a>
                 </div>
-
-              </div>
             </div>
           </div>
           <?php endif; ?>
@@ -666,87 +634,88 @@
                 $ql_pending_q = mysqli_query($connection_server, "SELECT COUNT(*) as c FROM sas_submitted_payments WHERE vendor_id='$ql_vid' && status='2'");
                 if ($ql_pending_q) $ql_pending_orders = (int)(mysqli_fetch_assoc($ql_pending_q)['c'] ?? 0);
             ?>
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4 h-100">
-              <div class="card-header bg-white py-3 border-0">
-                  <h5 class="card-title mb-0 text-center"><i class="bi bi-grid-fill me-2 text-primary"></i>Quick Links</h5>
-              </div>
-              <div class="card-body p-4">
-                <div class="row g-2">
+            <div class="ad-card">
+                <div class="ad-card__head">
+                    <div class="ad-ic ic-indigo"><i class="bi bi-grid-fill"></i></div>
+                    <h5 class="ad-card__title">Quick Links</h5>
+                </div>
+                <div class="row g-2 flex-grow-1">
                   <div class="col-6">
-                    <a href="PaymentOrders.php" class="quick-link-tile ql-primary">
-                      <?php if ($ql_pending_orders > 0): ?><span class="quick-link-badge"><?php echo $ql_pending_orders > 99 ? '99+' : $ql_pending_orders; ?></span><?php endif; ?>
+                    <a href="PaymentOrders.php" class="ad-tile ql-primary">
+                      <?php if ($ql_pending_orders > 0): ?><span class="ad-tile__badge"><?php echo $ql_pending_orders > 99 ? '99+' : $ql_pending_orders; ?></span><?php endif; ?>
                       <i class="bi bi-card-checklist"></i>
                       <span>Orders</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="ShareFund.php" class="quick-link-tile ql-success">
+                    <a href="ShareFund.php" class="ad-tile ql-success">
                       <i class="bi bi-send"></i>
                       <span>Transfer</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="Transactions.php" class="quick-link-tile ql-info">
+                    <a href="Transactions.php" class="ad-tile ql-info">
                       <i class="bi bi-receipt"></i>
                       <span>Transactions</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="Users.php" class="quick-link-tile ql-purple">
+                    <a href="Users.php" class="ad-tile ql-purple">
                       <i class="bi bi-people"></i>
                       <span>Users</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="CoinConversions.php" class="quick-link-tile ql-warning">
+                    <a href="CoinConversions.php" class="ad-tile ql-warning">
                       <i class="bi bi-coin"></i>
                       <span>Coins</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="BruteForceSecurity.php" class="quick-link-tile ql-danger">
+                    <a href="BruteForceSecurity.php" class="ad-tile ql-danger">
                       <i class="bi bi-shield-lock"></i>
                       <span>Security</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="PaymentGateway.php" class="quick-link-tile ql-teal">
+                    <a href="PaymentGateway.php" class="ad-tile ql-teal">
                       <i class="bi bi-credit-card"></i>
                       <span>Gateways</span>
                     </a>
                   </div>
                   <div class="col-6">
-                    <a href="ServiceControl.php" class="quick-link-tile ql-orange">
+                    <a href="ServiceControl.php" class="ad-tile ql-orange">
                       <i class="bi bi-toggles"></i>
                       <span>Services</span>
                     </a>
                   </div>
                 </div>
-              </div>
             </div>
           </div>
         </div>
         <!-- Row End -->
-    
+
     <!-- Row -->
     <div class="row g-4">
         <div class="col-12 col-lg-6">
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4 h-100">
-                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0"><i class="bi bi-bank me-2 text-primary"></i>Auto-Funding</h5>
+            <div class="ad-card">
+                <div class="ad-card__head justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="ad-ic ic-blue"><i class="bi bi-bank"></i></div>
+                        <h5 class="ad-card__title">Auto-Funding</h5>
+                    </div>
                     <button id="syncBtnAdmin" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" onclick="triggerAdminManualSync()">
                         <i class="bi bi-arrow-repeat me-1"></i> RE-SYNC
                     </button>
                 </div>
-                <div class="card-body p-4">
-                    <div class="d-flex gap-3 overflow-auto pb-2 no-scrollbar">
+                <div class="d-flex gap-3 overflow-auto pb-2">
                         <?php
                           $v_banks = getVendorVirtualBank();
                           if($v_banks){
                             foreach ($v_banks as $bank_accounts_json) {
                                 $bank_accounts_json = json_decode($bank_accounts_json, true);
                                 ?>
-                                <div class="bg-light p-4 rounded-4 border-start border-primary border-4 flex-shrink-0" style="min-width: 320px;">
+                                <div class="ad-bank">
                                     <div class="small text-muted fw-bold text-uppercase mb-2"><?php echo $bank_accounts_json["bank_name"]; ?></div>
                                     <div class="h4 fw-bold text-dark mb-2 d-flex justify-content-between align-items-center">
                                         <?php echo $bank_accounts_json["account_number"]; ?>
@@ -766,19 +735,20 @@
                               echo '<div class="alert alert-info w-100">Ensure your API context is correctly set to generate auto-funding accounts.</div>';
                           }
                         ?>
-                    </div>
                 </div>
             </div>
         </div>
 
         <div class="col-12 col-lg-6">
-            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4 h-100">
-                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>Mobile App Addons</h5>
+            <div class="ad-card">
+                <div class="ad-card__head justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="ad-ic ic-indigo"><i class="bi bi-box-seam"></i></div>
+                        <h5 class="ad-card__title">Mobile App Addons</h5>
+                    </div>
                     <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Premium Features</span>
                 </div>
-                <div class="card-body p-4">
-                    <div class="list-group list-group-flush">
+                <div>
                         <?php
                             $addons = [
                                 'apk' => ['label' => 'Android APK', 'price' => getSuperAdminOption('apk_development_price', '0'), 'ordered' => $get_logged_admin_details['apk_ordered'], 'icon' => 'bi-android2'],
@@ -790,11 +760,9 @@
                             foreach($addons as $key => $addon):
                                 $is_ordered = ($addon['ordered'] == 1);
                         ?>
-                            <div class="list-group-item px-0 py-3 border-light d-flex justify-content-between align-items-center">
+                            <div class="ad-addon">
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-2 me-3">
-                                        <i class="bi <?php echo $addon['icon']; ?> fs-4"></i>
-                                    </div>
+                                    <div class="ad-ic ic-blue me-3"><i class="bi <?php echo $addon['icon']; ?>"></i></div>
                                     <div>
                                         <h6 class="mb-0 fw-bold"><?php echo $addon['label']; ?></h6>
                                         <span class="small text-muted">₦<?php echo number_format((float)$addon['price'], 2); ?></span>
@@ -817,13 +785,11 @@
                                 </div>
                             </div>
                         <?php endforeach; ?>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
     <!-- Row End -->
-      </div>
     </section>
         <?php include("../func/admin-short-trans.php"); ?>
     <?php bc_adm_foot(); ?>

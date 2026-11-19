@@ -2342,7 +2342,7 @@ foreach ($editions as $edition) {
 // The sidebar is grouped, and regrouping must never drop a service link.
 $required_nav_pages = [
     'Dashboard.php', 'Data.php', 'Airtime.php', 'BulkData.php', 'BulkAirtime.php', 'Cable.php',
-    'Electric.php', 'Betting.php', 'Card.php', 'Exam.php', 'Fund.php', 'VirtualBanks.php',
+    'Electric.php', 'Betting.php', 'Exam.php', 'Fund.php', 'VirtualBanks.php',
     'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php',
     'NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php',
     'CryptoHub.php', 'AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php',
@@ -2352,7 +2352,7 @@ $required_nav_pages = [
 ];
 foreach ($editions as $edition) {
     $header_src = php_strip_whitespace($root . '/' . $edition . '/func/bc-plate-app.php');
-    foreach (['pay-bills', 'wallet-transfers', 'financial-services', 'business-api', 'history-records', 'settings-help'] as $group) {
+    foreach (['pay-bills', 'wallet-transfers', 'financial-services', 'business-api', 'history-tools', 'settings-help'] as $group) {
         gtrue("$edition sidebar groups $group", strpos($header_src, "'id' => '" . $group . "'") !== false);
     }
     gfalse("$edition sidebar has no flat Services heading", strpos($header_src, "'label' => 'Services'") !== false);
@@ -2361,6 +2361,7 @@ foreach ($editions as $edition) {
         if (strpos($header_src, "'" . $pg . "'") === false) $missing[] = $pg;
     }
     gcheck("$edition nav keeps every service link", implode(',', $missing), '');
+    gfalse("$edition nav has no discarded Card.php", strpos($header_src, "'Card.php'") !== false);
     // History & Records carries the transaction and print items in the shell menu.
     gtrue("$edition history groups transactions", strpos($header_src, "'href' => 'Transactions.php'") !== false);
     gtrue("$edition history groups print hub", strpos($header_src, "'href' => 'PrintHub.php'") !== false);
