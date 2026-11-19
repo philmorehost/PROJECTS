@@ -80,14 +80,12 @@ if ($display_photo === '') $display_photo = nin_card_image_src($record['photo_da
 $front_art = '../asset/nin-premium-bg.png';
 $back_art = '../asset/nin-disclaimer-back.png';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>NIN Slip — <?php echo htmlspecialchars($fullname ?: $nin_number, ENT_QUOTES, 'UTF-8'); ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("NIN Slip | " . ($get_all_site_details["site_title"]));
+?>
     <style>
         * { box-sizing: border-box; }
         html, body { min-width: 0; width: 100%; margin: 0; }
@@ -298,8 +296,8 @@ $back_art = '../asset/nin-disclaimer-back.png';
             .slip-note { display: none !important; }
         }
     </style>
-</head>
-<body>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "NIN SLIP", "crumb" => "Home / Print Hub / NIN Slip")); ?>
     <main class="print-wrapper">
         <div class="action-bar no-print">
             <a href="NINCardHistory.php" class="btn btn-light border rounded-pill px-4">
@@ -371,5 +369,6 @@ $back_art = '../asset/nin-disclaimer-back.png';
 
         <p class="slip-note text-center text-muted small no-print"><i class="bi bi-info-circle"></i> Print at 100% scale for PVC-card dimensions. If printing on paper, choose “Actual size” in your print settings.</p>
     </main>
+<?php bc_app_foot(); ?>
 </body>
 </html>

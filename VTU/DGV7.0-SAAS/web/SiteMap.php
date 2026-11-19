@@ -6,21 +6,12 @@ function svc_enabled($svc) {
     return isServiceEnabled($svc);
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Services Guide &amp; Site Map | <?php echo $get_all_site_details["site_title"] ?? ''; ?></title>
-<link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-<link rel="stylesheet" href="/cssfile/bc-style.css">
-<link href="https://fonts.gstatic.com" rel="preconnect">
-<link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
-<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-<link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-<link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-<link href="../assets-2/css/style.css" rel="stylesheet">
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Services & Features Guide | " . ($get_all_site_details["site_title"]));
+?>
 <style>
 .sitemap-hero{background:linear-gradient(135deg,var(--primary-color) 0%,#1a237e 100%);color:#fff;padding:3rem 1.5rem 2rem;border-radius:0 0 2rem 2rem;}
 .sitemap-hero h1{font-size:2rem;font-weight:800;margin-bottom:.5rem;}
@@ -40,9 +31,8 @@ function svc_enabled($svc) {
   .sm-card-icon{width:40px;height:40px;font-size:1.2rem;}
 }
 </style>
-</head>
-<body>
-<?php include("../func/bc-header.php"); ?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "SERVICES & FEATURES GUIDE", "crumb" => "Home / Platform Guide")); ?>
 <section class="sitemap-hero mb-4">
   <div class="container">
     <h1><i class="bi bi-grid-3x3-gap me-2"></i>Services &amp; Features Guide</h1>
@@ -211,6 +201,6 @@ function sm_card($icon, $icon_bg, $title, $desc, $url, $service_key = null, $tag
 
 </div><!-- /container -->
 
-<?php include("../func/bc-footer.php"); ?>
+<?php bc_app_foot(); ?>
 </body>
 </html>

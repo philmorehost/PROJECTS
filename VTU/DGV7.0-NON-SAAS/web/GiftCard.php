@@ -176,15 +176,12 @@ $installed_products = mysqli_query($connection_server, $sql_products);
 $my_cards = mysqli_query($connection_server, "SELECT * FROM `sas_giftcard_inventory` WHERE vendor_id='$vid' AND current_owner_id='$user_id' ORDER BY id DESC");
 $p2p_listings = mysqli_query($connection_server, "SELECT i.*, u.username as seller_name FROM `sas_giftcard_inventory` i JOIN sas_users u ON i.current_owner_id = u.id WHERE i.vendor_id='$vid' AND i.is_for_sale=1 AND i.current_owner_id != '$user_id'");
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Gift Card Hub | <?php echo $get_all_site_details["site_title"]; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
+?>
     <style>
         :root { --primary: <?php echo $vendor_primary_color; ?>; --primary-soft: <?php echo $vendor_primary_color; ?>15; }
         body { background-color: #f4f7f6; font-family: 'Inter', sans-serif; }
@@ -238,9 +235,8 @@ $p2p_listings = mysqli_query($connection_server, "SELECT i.*, u.username as sell
 
         @media (max-width: 768px) { .balance-hero { padding: 2rem 1.5rem; } }
     </style>
-</head>
-<body>
-    <?php include("../func/bc-header.php"); ?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "GIFT CARD HUB", "crumb" => "Home / Gift Card")); ?>
 
     <div class="container-fluid py-4">
         <div class="balance-hero mb-5 shadow-lg">
@@ -483,7 +479,7 @@ $p2p_listings = mysqli_query($connection_server, "SELECT i.*, u.username as sell
         </div>
     </div>
 
-    <?php include("../func/bc-footer.php"); ?>
+    <?php bc_app_foot(); ?>
 
     <script>
     const VENDOR_FEE = <?php echo (float)($vendor_fee_percent ?? 0); ?>;

@@ -27,21 +27,30 @@ $root = dirname(__DIR__);
 $editions = array('DGV7.0-SAAS', 'DGV7.0-NON-SAAS');
 
 // The retired template chrome. No console page may reference these any more.
-$retired = array('assets-2/', 'bc-header.php', 'bc-footer.php', 'bc-style.css');
+// bc-style.css stays: it is the live shared stylesheet the print receipts use.
+$retired = array('assets-2/', 'bc-header.php', 'bc-footer.php');
 
 // Pages migrated by hand rather than by plate_migrate.py, because their old chrome was
 // not the standard pagetitle shape.
 $handDone = array(
     'DGV7.0-SAAS/web/ai-budgeting.php', 'DGV7.0-NON-SAAS/web/ai-budgeting.php',
     'DGV7.0-NON-SAAS/web/AI-Assistant.php', 'DGV7.0-NON-SAAS/web/Pricing.php',
+    // No pagetitle block, or a print document with its own action bar.
+    'DGV7.0-SAAS/web/APIDocs.php', 'DGV7.0-NON-SAAS/web/APIDocs.php',
+    'DGV7.0-SAAS/web/GiftCard.php', 'DGV7.0-NON-SAAS/web/GiftCard.php',
+    'DGV7.0-SAAS/web/KYCVerification.php', 'DGV7.0-NON-SAAS/web/KYCVerification.php',
+    'DGV7.0-SAAS/web/SiteMap.php', 'DGV7.0-NON-SAAS/web/SiteMap.php',
+    'DGV7.0-SAAS/web/ViewBankReceipt.php', 'DGV7.0-NON-SAAS/web/ViewBankReceipt.php',
+    'DGV7.0-SAAS/web/ViewCard.php', 'DGV7.0-NON-SAAS/web/ViewCard.php',
+    'DGV7.0-SAAS/web/ViewDataBundleCard.php', 'DGV7.0-NON-SAAS/web/ViewDataBundleCard.php',
+    'DGV7.0-SAAS/web/ViewElectric.php', 'DGV7.0-NON-SAAS/web/ViewElectric.php',
+    'DGV7.0-SAAS/web/ViewNINCard.php', 'DGV7.0-NON-SAAS/web/ViewNINCard.php',
+    'DGV7.0-SAAS/web/WebsiteOrderRequest.php', 'DGV7.0-NON-SAAS/web/WebsiteOrderRequest.php',
 );
 
 // Pages that intentionally render no console chrome of their own: print targets, raw
 // callbacks, partials, and iframe/standalone landings.
 $later = array(
-    'APIDocs.php', 'GiftCard.php', 'KYCVerification.php', 'SiteMap.php',
-    'ViewBankReceipt.php', 'ViewCard.php', 'ViewDataBundleCard.php',
-    'ViewElectric.php', 'ViewNINCard.php', 'WebsiteOrderRequest.php',
     'payhub-success.php', 'guest-payment-complete.php',
     'bc-plate-app.php', 'bc-header.php', 'bc-footer.php', 'short-trans.php',
 );

@@ -51,12 +51,15 @@ def main():
         "return array(\n",
     ]
     n = 0
+    ref = 'HEAD'
+    if '--from' in sys.argv:
+        ref = sys.argv[sys.argv.index('--from') + 1]
     for rel in migrated_pages():
         path = os.path.join(ROOT, rel)
         cur = open(path, errors='replace').read()
         if 'bc_app_head(' not in cur:
             continue
-        old = subprocess.run(['git', '-C', ROOT, 'show', 'HEAD:' + rel],
+        old = subprocess.run(['git', '-C', ROOT, 'show', ref + ':' + rel],
                              capture_output=True, text=True).stdout
         body = body_of(old)
         if body is None:
@@ -68,10 +71,16 @@ def main():
         parts.append('    ' + json.dumps(rel) + " => <<<'%s'\n%s\n%s,\n" % (MARK, body, MARK))
         n += 1
     parts.append(");\n")
+    if n == 0:
+        print('refusing to write: no bodies captured from %s '
+              '(run this before migrating, or pass --from <pre-migration sha>)' % ref,
+              file=sys.stderr)
+        return 1
     out = os.path.join(ROOT, 'VTU', 'tests', 'plate_bodies.php')
     open(out, 'w').write(''.join(parts))
     print('captured %d bodies -> %s' % (n, out))
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

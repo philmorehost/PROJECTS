@@ -31,41 +31,18 @@ if (isset($_GET["ref"])) {
 	//header("Location: ".$_SERVER["REQUEST_URI"]);
 }
 ?>
-<!DOCTYPE html>
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Transfer Receipt | " . ($get_all_site_details["site_title"]));
+?>
+<link rel="stylesheet" href="/cssfile/bc-style.css">
 
-<head>
-	<title>View Bank Transfer |
-		<?php echo $get_all_site_details["site_title"]; ?>
-	</title>
-	<meta charset="UTF-8" />
-	<meta name=" description" content="<?php echo substr($get_all_site_details["site_desc"], 0, 160); ?>" />
-	<meta http-equiv="Content-Type" content="text/html; " />
-	<meta name="theme-color" content="black" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-	<link rel="stylesheet" href="/cssfile/bc-style.css">
-	<meta name="author" content="Philmore Codes">
-	<meta name="dc.creator" content="Philmore Codes">
 
-	<!-- Google Fonts -->
-	<link href="https://fonts.gstatic.com" rel="preconnect">
-	<link
-		href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-		rel="stylesheet">
+	<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "TRANSFER RECEIPT", "crumb" => "Home / Transfer Receipt")); ?>
 
-	<!-- Vendor CSS Files -->
-	<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-	<link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/remixicon/remixicon.css" rel="stylesheet">
-
-	<!-- Template Main CSS File -->
-	<link href="../assets-2/css/style.css" rel="stylesheet">
-
-</head>
-
-<body>
-	<?php include("../func/bc-header.php"); ?>
 	<div style="text-align: center;"
 		class="bg-2 m-block-dp s-block-dp m-position-rel s-position-rel br-radius-5px m-width-94 s-width-94 m-height-auto s-height-auto m-padding-lt-1 s-padding-lt-1 m-padding-rt-1 s-padding-rt-1 m-padding-tp-5 s-padding-tp-3 m-padding-bm-1 s-padding-bm-1 m-margin-lt-2 s-margin-lt-2 m-margin-bm-2 s-margin-bm-2">
 		<span style="user-select: auto;" class=" color-4 text-bold-500 m-font-size-20 s-font-size-25
@@ -184,7 +161,7 @@ if (isset($_GET["ref"])) {
 		}
 	</script>
 
-	<?php include("../func/bc-footer.php"); ?>
+	<?php bc_app_foot(); ?>
 
 </body>
 
