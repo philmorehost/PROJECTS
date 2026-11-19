@@ -539,95 +539,60 @@ if (isset($_POST["change-password"])) {
 
 if (isset($_POST["update-bank-details"])) {
     bc_demo_guard_edit($connection_server);
-    $fullname = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["name"])));
-    $bank_name = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["bank"])));
-    $account_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_POST["number"]))));
-    $phone_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", strip_tags($_POST["phone"])));
-    $amount_charged = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($_POST["charges"]))));
+    $fullname = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["name"] ?? '')));
+    $bank_name = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["bank"] ?? '')));
+    $account_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_POST["number"] ?? ''))));
+    $phone_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_POST["phone"] ?? ''))));
+    $amount_charged = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($_POST["charges"] ?? ''))));
 
-    if (!empty($fullname) && !empty($bank_name) && !empty($account_number) && is_numeric($account_number) && !empty($phone_number) && is_numeric($phone_number) && !empty($amount_charged) && is_numeric($amount_charged) && ($amount_charged > 0)) {
+    // A charge of 0 is valid: it means "do not add a manual-funding fee". The old condition used
+    // empty($amount_charged), and empty("0") is true in PHP, so a legitimate 0 was rejected as an
+    // empty field. The amount error branch was also inverted, so the handler fell through without
+    // writing anything and without setting a message - a completely silent failure.
+    $amount_ok = ($amount_charged !== '' && is_numeric($amount_charged) && (float)$amount_charged >= 0);
+
+    if (!empty($fullname) && !empty($bank_name) && !empty($account_number) && is_numeric($account_number)
+        && !empty($phone_number) && is_numeric($phone_number) && $amount_ok) {
         $get_admin_payment_details = mysqli_query($connection_server, "SELECT * FROM sas_admin_payments WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
 
         if (mysqli_num_rows($get_admin_payment_details) == 1) {
             mysqli_query($connection_server, "UPDATE sas_admin_payments SET bank_name='$bank_name', account_name='$fullname', account_number='$account_number', phone_number='$phone_number', amount_charged='$amount_charged' WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
-            //Bank Information Updated Successfully
-            $json_response_array = array("desc" => "Bank Information Updated Successfully");
-            $json_response_encode = json_encode($json_response_array, true);
+            $bank_save_message = "Bank Information Updated Successfully";
+        } elseif (mysqli_num_rows($get_admin_payment_details) == 0) {
+            mysqli_query($connection_server, "INSERT INTO sas_admin_payments (vendor_id, bank_name, account_name, account_number, phone_number, amount_charged) VALUES ('" . $get_logged_admin_details["id"] . "', '$bank_name', '$fullname', '$account_number', '$phone_number', '$amount_charged')");
+            $bank_save_message = "Bank Information Created Successfully";
         } else {
-            if (mysqli_num_rows($get_admin_payment_details) == 0) {
-                mysqli_query($connection_server, "INSERT INTO sas_admin_payments (vendor_id, bank_name, account_name, account_number, phone_number, amount_charged) VALUES ('" . $get_logged_admin_details["id"] . "', '$bank_name', '$fullname', '$account_number', '$phone_number', '$amount_charged')");
-                //Admin Bank Info Exists
-                $json_response_array = array("desc" => "Bank Information Created Successfully");
-                $json_response_encode = json_encode($json_response_array, true);
-            } else {
-                if (mysqli_num_rows($get_admin_payment_details) > 1) {
-                    //Duplicated Details, Contact Admin
-                    $json_response_array = array("desc" => "Duplicated Details, Contact Admin");
-                    $json_response_encode = json_encode($json_response_array, true);
-                }
-            }
+            $bank_save_message = "Duplicated Details, Contact Admin";
         }
     } else {
+        // Always produce a message. A silent fall-through here is what made the old bug invisible.
         if (empty($fullname)) {
-            //Fullname Field Empty
-            $json_response_array = array("desc" => "Fullname Field Empty");
-            $json_response_encode = json_encode($json_response_array, true);
+            $bank_save_message = "Fullname Field Empty";
+        } elseif (empty($bank_name)) {
+            $bank_save_message = "Bank Name Field Empty";
+        } elseif (empty($account_number)) {
+            $bank_save_message = "Account Number Field Empty";
+        } elseif (!is_numeric($account_number)) {
+            $bank_save_message = "Non-numeric Account Number";
+        } elseif (empty($phone_number)) {
+            $bank_save_message = "Phone Number Field Empty";
+        } elseif (!is_numeric($phone_number)) {
+            $bank_save_message = "Non-numeric Phone Number";
+        } elseif ($amount_charged === '') {
+            $bank_save_message = "Amount Field Empty";
+        } elseif (!is_numeric($amount_charged)) {
+            $bank_save_message = "Non-numeric Amount";
+        } elseif ((float)$amount_charged < 0) {
+            $bank_save_message = "Amount Must Be Zero Or Greater";
         } else {
-            if (empty($bank_name)) {
-                //Bank Name Field Empty
-                $json_response_array = array("desc" => "Bank Name Field Empty");
-                $json_response_encode = json_encode($json_response_array, true);
-            } else {
-                if (empty($account_number)) {
-                    //Account Number Field Empty
-                    $json_response_array = array("desc" => "Account Number Field Empty");
-                    $json_response_encode = json_encode($json_response_array, true);
-                } else {
-                    if (!is_numeric($account_number)) {
-                        //Non-numeric Account Number
-                        $json_response_array = array("desc" => "Non-numeric Account Number");
-                        $json_response_encode = json_encode($json_response_array, true);
-                    } else {
-                        if (empty($phone_number)) {
-                            //Phone Number Field Empty
-                            $json_response_array = array("desc" => "Phone Number Field Empty");
-                            $json_response_encode = json_encode($json_response_array, true);
-                        } else {
-                            if (!is_numeric($phone_number)) {
-                                //Non-numeric Phone Number
-                                $json_response_array = array("desc" => "Non-numeric Account Number");
-                                $json_response_encode = json_encode($json_response_array, true);
-                            } else {
-                                if (empty($amount_charged)) {
-                                    //Amount Field Empty
-                                    $json_response_array = array("desc" => "Amount Number Field Empty");
-                                    $json_response_encode = json_encode($json_response_array, true);
-                                } else {
-                                    if (!is_numeric($amount_charged)) {
-                                        //Non-numeric Amount
-                                        $json_response_array = array("desc" => "Non-numeric Account");
-                                        $json_response_encode = json_encode($json_response_array, true);
-                                    } else {
-                                        if ($amount_charged > 0) {
-                                            //Amount Must Be Greater Than 0
-                                            $json_response_array = array("desc" => "Amount Must Be Greater Than 0");
-                                            $json_response_encode = json_encode($json_response_array, true);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            $bank_save_message = "Please check the bank details and try again.";
         }
     }
 
-    $_SESSION["product_purchase_response"] = $json_response_array["desc"] ?? "Settings saved";
+    $_SESSION["product_purchase_response"] = $bank_save_message;
     header("Location: " . $_SERVER["REQUEST_URI"]);
     exit;
 }
-
 
 if (isset($_POST["update-daily-purchase-limit-details"])) {
     $limit_phone = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_POST["limit-phone"]))));
@@ -1864,23 +1829,23 @@ if ($q_site_details && mysqli_num_rows($q_site_details) > 0) {
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">ACCOUNT NAME</label>
-                                        <input name="name" type="text" value="<?php echo $get_admin_payment_details['account_name']; ?>" class="form-control" required />
+                                        <input name="name" type="text" value="<?php echo htmlspecialchars($get_admin_payment_details['account_name'] ?? '', ENT_QUOTES); ?>" class="form-control" required />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">BANK NAME</label>
-                                        <input name="bank" type="text" value="<?php echo $get_admin_payment_details['bank_name']; ?>" class="form-control" required />
+                                        <input name="bank" type="text" value="<?php echo htmlspecialchars($get_admin_payment_details['bank_name'] ?? '', ENT_QUOTES); ?>" class="form-control" required />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">ACCOUNT NUMBER</label>
-                                        <input name="number" type="text" value="<?php echo $get_admin_payment_details['account_number']; ?>" class="form-control" required />
+                                        <input name="number" type="text" value="<?php echo htmlspecialchars($get_admin_payment_details['account_number'] ?? '', ENT_QUOTES); ?>" class="form-control" required />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">CONTACT PHONE NUMBER</label>
-                                        <input name="phone" type="text" value="<?php echo $get_admin_payment_details['phone_number']; ?>" class="form-control" required />
+                                        <input name="phone" type="text" value="<?php echo htmlspecialchars($get_admin_payment_details['phone_number'] ?? '', ENT_QUOTES); ?>" class="form-control" required />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">CHARGES (₦)</label>
-                                        <input name="charges" type="number" value="<?php echo $get_admin_payment_details['amount_charged']; ?>" class="form-control" required />
+                                        <input name="charges" type="number" value="<?php echo htmlspecialchars($get_admin_payment_details['amount_charged'] ?? '', ENT_QUOTES); ?>" class="form-control" required />
                                     </div>
                                 </div>
                                 <button name="update-bank-details" class="btn btn-primary mt-4 px-5 rounded-pill fw-bold">Update Bank Info</button>

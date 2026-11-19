@@ -735,3 +735,45 @@ Run it with `php VTU/tests/provider_smoke.php [edition] [--vendor=N]`.
 - **Confirmed market target:** all blueprint markets and corridors, subject to provider entitlement, settlement support, and compliance approval in each jurisdiction.
 - Supply an accessible, isolated staging setup and sandbox documentation/entitlements through the normal secure deployment process. Do not paste secrets in chat. Live rollout requires the providers' confirmed product access, compliance review, signing configuration and explicit release approval.
 - Confirm operating jurisdictions, allowed assets and custody/ledger ownership before designing or launching cross-border, stablecoin and virtual-account features. A blueprint endpoint list is not evidence of provider support or regulatory approval.
+
+## 10. Site-wide fintech UI — installers
+
+The installation wizards are the first screen a customer sees, so both were rebuilt onto a
+shared shell in `func/bc-installer-shell.php` (byte-identical across editions, parity-enforced
+in CI). It carries the same design tokens as the landing page and the auth shell
+(`--brand: #0f766e`, `--ink`, `--muted`, `--line`, `--surface`, `--wash`, 16px radius), a
+soft brand wash instead of the old flat grey, and a caption stepper.
+
+- `bc_installer_head($title)` — meta, fonts, icons, the shared stylesheet.
+- `bc_installer_stepper($step)` — 4 captioned dots; `data-step` / `data-after` hooks drive
+  the client stepper.
+- `bc_installer_foot($note, $scripts)` — footer, shared `goStep`/`toggleVis` script, then the
+  wizard's own inline JS.
+- `install/index.php` (SAAS) and `install.php` (standalone) keep all of their own PHP logic
+  and field names verbatim; only the markup moved. The standalone wizard's JS was moved out
+  of the markup into a `__INSTALLER_SCRIPTS__` heredoc so the page can hand it to the shell
+  without printing it twice.
+- The SAAS `install/install.css` was removed — it is no longer referenced by anything.
+- CI now asserts the shell is byte-identical and that both installers use `bc_installer_head`
+  / `bc_installer_foot` and load neither `assets-2`, the Bootstrap CDN nor `install.css`.
+
+## 11. Bank details must always save, and always say so
+
+`update-bank-details` in `bc-admin/AccountSettings.php` (both editions) and
+`bc-spadmin/AccountSettings.php` (SAAS) failed silently for a legitimate ₦0 charge:
+
+- PHP's `empty("0")` is `true`, so `!empty($amount_charged)` rejected a `0` charge as "empty".
+- The amount branch was inverted (`if ($amount_charged > 0) { /* error */ }`), so it fell
+  through having written nothing **and** set no message. The admin saw an unsaved form with
+  no explanation.
+
+The handler now validates flatly (`$amount_ok = $amount_charged !== '' && is_numeric(...) &&
+(float)$amount_charged >= 0`), writes `$bank_save_message`, and **always** sets a message —
+there is no silent fall-through. `bc-spadmin` also gained the missing `exit` after its
+redirect. The five bank fields in all three forms are escaped with
+`htmlspecialchars(..., ENT_QUOTES)`.
+
+Regression coverage lives in `VTU/tests/fintech_gate_test.php`: the real handler block is
+evaluated against a fake `sas_admin_payments` / `sas_super_admin_payments`, asserting a `0`
+charge saves, an existing row updates instead of duplicating, and invalid input always yields
+a message.
