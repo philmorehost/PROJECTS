@@ -2440,7 +2440,7 @@ function bc_render_installer($root, $file, $step) {
     $error = ''; $success = ''; $activationCodeInput = '';
     $req_php = true; $req_mysqli = true; $req_mbstring = true; $req_gd = true;
     $req_writable_func = true; $req_writable_root = true; $all_req_met = true;
-    define('__INSTALLER_SCRIPTS__', '');
+    if (!defined('__INSTALLER_SCRIPTS__')) define('__INSTALLER_SCRIPTS__', '');
     ob_start();
     eval($php);
     return ob_get_clean();
@@ -2515,7 +2515,9 @@ function bc_run_vendor_registration($path, $post, $reset = true) {
     if (!function_exists('bc_normalize_vendor_host')) { eval('function bc_normalize_vendor_host($value){ $value=trim((string)$value); if(!preg_match("~^https?://~i",$value)){ $value=preg_replace("/:\d+$/","",$value); } $host=bc_clean_vendor_domain($value); return preg_replace("/^www\./i","",$host); }'); }
     if (!function_exists('bc_is_temporary_vendor_host')) { eval('function bc_is_temporary_vendor_host($h){ return (bool)preg_match("#\.(test|localhost)$#i",(string)$h); }'); }
     if (!function_exists('bc_is_valid_domain_name')) { eval('function bc_is_valid_domain_name($d){ return (bool)preg_match("/^[a-z0-9.-]+\.[a-z]{2,}$/",(string)$d); }'); }
-    if (!function_exists('bc_hash_password')) { eval('function bc_hash_password($p){ return password_hash((string)$p, PASSWORD_DEFAULT); }'); }
+    // The handler only stores the result; the test does not verify it. Fall back rather than
+    // dying on an extension the bare `php -n` CI runner may not carry.
+    if (!function_exists('bc_hash_password')) { eval('function bc_hash_password($p){ return function_exists("password_hash") ? password_hash((string)$p, PASSWORD_DEFAULT) : hash("sha256", (string)$p); }'); }
     // Same caching rules as func/bc-func.php:7130, so the default-withdrawal options resolve
     // from the seeded sas_super_admin_options rows.
     if (!function_exists('getSuperAdminOption')) { eval('function getSuperAdminOption($name,$default=""){ global $connection_server; static $cache=array(); if(isset($cache[$name])) return $cache[$name]; if(isset($_SESSION["super_admin_options_cache"][$name])){ $cache[$name]=$_SESSION["super_admin_options_cache"][$name]; return $cache[$name]; } $q=fake_mysqli_query($connection_server,"SELECT option_value FROM sas_super_admin_options WHERE option_name=\x27".fake_mysqli_real_escape_string($connection_server,$name)."\x27 LIMIT 1"); $r=$q?fake_mysqli_fetch_assoc($q):null; $cache[$name]=($r&&isset($r["option_value"]))?$r["option_value"]:$default; return $cache[$name]; }'); }
