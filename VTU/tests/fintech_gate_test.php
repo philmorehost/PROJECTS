@@ -2430,48 +2430,45 @@ gtrue('smoke test covers both providers', strpos($smoke, 'klasha') !== false && 
 if (!function_exists('bc_installer_head')) {
     require_once $root . '/DGV7.0-SAAS/func/bc-installer-shell.php';
 }
+/**
+ * Asserts that a shared-shell call sits inside PHP tags.
+ *
+ * A call written in inline-HTML position is never executed - PHP prints it as literal text - so
+ * the page loses its <head>, its stylesheet and its script. That is exactly how both wizards
+ * shipped before the fix. The CI runner executes these tests with `php -n`, whose build carries
+ * no tokenizer extension, so the tag structure is checked with a regex instead of
+ * token_get_all(): each call must follow an open tag.
+ */
+function bc_assert_installer_call_in_php($file, $src, $call) {
+    $pattern = '/<\?(?:php|=)[ \t\r\n]*' . preg_quote($call, '/') . '[ \t]*\(/';
+    gtrue("$file calls $call() from PHP", (bool)preg_match($pattern, $src));
+    // Generic form: once every complete PHP region is removed, no shared-shell call may survive
+    // in the remaining inline HTML. The lookahead keeps a close-tag sequence inside a quoted
+    // string from being mistaken for a real close tag.
+    $html_only = preg_replace('/<\?php\b.*?\?>(?=\s|$)/s', '', $src);
+    $html_only = preg_replace('/<\?php\b.*$/s', '', $html_only);
+    $html_only = preg_replace('/<\?=.*?\?>(?=\s|$)/s', '', $html_only);
+    gtrue("$file has no shared-shell call in inline HTML", strpos($html_only, 'bc_installer_') === false);
+}
 function bc_render_installer($root, $file, $step) {
     $src = file_get_contents($root . '/' . $file);
-    // Rebuild the template as one pure-PHP script: every inline-HTML span becomes an echo and
-    // the PHP tags are dropped. That is exactly what PHP itself does with the file, so a call
-    // accidentally left outside the PHP tags (which PHP would print as literal text) is
-    // reproduced here instead of being silently evaluated. The previous version of this helper
-    // started at the first "bc_installer_head(" and eval'd from there, which hid precisely that
-    // bug.
-    // TEMPORARY DIAGNOSTIC
-    $facts = 'TOK exists=' . var_export(function_exists('token_get_all'), true)
-        . ' loaded=' . var_export(extension_loaded('tokenizer'), true)
-        . ' ver=' . PHP_VERSION
-        . ' disable=' . var_export(ini_get('disable_functions'), true)
-        . ' exts=' . implode(',', get_loaded_extensions());
-    fwrite(fopen('php://stdout', 'w'), "::warning ::" . $facts . "\n");
-    $php = '';
-    foreach (token_get_all($src) as $token) {
-        if (is_array($token)) {
-            if ($token[0] === T_INLINE_HTML) {
-                $php .= 'echo ' . var_export($token[1], true) . ';';
-            } elseif ($token[0] === T_OPEN_TAG || $token[0] === T_CLOSE_TAG) {
-                continue;
-            } elseif ($token[0] === T_OPEN_TAG_WITH_ECHO) {
-                $php .= 'echo ';
-            } else {
-                $php .= $token[1];
-            }
-        } else {
-            $php .= $token;
-        }
+    foreach (['bc_installer_head', 'bc_installer_foot', 'bc_installer_stepper'] as $call) {
+        bc_assert_installer_call_in_php($file, $src, $call);
     }
-    $php = preg_replace("/^\s*if \(file_exists\([^)]*\)\) \{.*?\n\}/s", '', $php, 1);
-    $php = preg_replace('/mysqli_report\(MYSQLI_REPORT_OFF\);/', '', $php);
-    $php = preg_replace("/require_once __DIR__ \. '\/[^']*bc-installer-shell\.php';/", '', $php);
-    $php = preg_replace("/define\('__INSTALLER_SCRIPTS__', <<<'JS'.*?\nJS\);/s", '', $php);
-    gtrue("installer markup found in $file", strpos($php, 'bc_installer_head(') !== false);
+    $src = preg_replace('/^<\?php/', '', $src, 1);
+    $src = preg_replace("/^if \(file_exists\([^)]*\)\) \{.*?\n\}/s", '', $src);
+    $src = preg_replace('/mysqli_report\(MYSQLI_REPORT_OFF\);/', '', $src);
+    $src = preg_replace("/require_once __DIR__ \. '\/[^']*bc-installer-shell\.php';/", '', $src);
+    $src = preg_replace("/define\('__INSTALLER_SCRIPTS__', <<<'JS'.*?\nJS\);/s", '', $src);
+    $cut = strpos($src, 'bc_installer_head(');
+    gtrue("installer markup found in $file", $cut !== false);
+    $src = substr($src, $cut);
     $error = ''; $success = ''; $activationCodeInput = '';
     $req_php = true; $req_mysqli = true; $req_mbstring = true; $req_gd = true;
     $req_writable_func = true; $req_writable_root = true; $all_req_met = true;
     if (!defined('__INSTALLER_SCRIPTS__')) define('__INSTALLER_SCRIPTS__', '');
     ob_start();
-    eval($php);
+    eval($src);
     return ob_get_clean();
 }
 foreach (array(
