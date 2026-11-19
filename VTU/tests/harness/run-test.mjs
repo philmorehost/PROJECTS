@@ -70,7 +70,9 @@ async function mirror() {
     const isPhp = f.rel.endsWith('.php');
     const isDoc = f.rel.endsWith('.md');
     const isHtaccess = f.rel.endsWith('.htaccess');
-    if (!isPhp && !isDoc && !isHtaccess) continue;
+    // The Pay Bills automation library is asserted against the pages that call it.
+    const isJs = f.rel.endsWith('.js') && f.rel.includes('/jsfile/');
+    if (!isPhp && !isDoc && !isHtaccess && !isJs) continue;
     const dest = '/host/' + f.rel;
     // mkdir on an existing directory fails in this FS, so create each segment once.
     const parts = path.dirname(f.rel).split('/').filter((p) => p && p !== '.');

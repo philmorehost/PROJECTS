@@ -145,6 +145,30 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // Pay Bills pages are redesigned on the shell (2026-11) with their
+        // automation restored (the shell loads jsfile/bc-custom-all.js again).
+        // Their form contracts — field ids/names, tick*/pick* handlers, plan
+        // queries, POST actions — are the behaviour that must not drift.
+        $payBills = array(
+            'Data.php' => array('tickDataCarrier', 'id="phone-number"', 'id="internet-data-type"', 'id="product-amount"', 'name="buy-data"'),
+            'Airtime.php' => array('tickAirtimeCarrier', 'id="phone-number"', 'id="product-amount"', 'name="buy-airtime"'),
+            'BulkData.php' => array('tickBulkDataCarrier', 'id="filtered-phone-number"', 'id="phone-numbers-span"', 'name="buy-data"'),
+            'BulkAirtime.php' => array('tickBulkAirtimeCarrier', 'id="filtered-phone-number"', 'id="phone-numbers-span"', 'name="buy-airtime"'),
+            'Cable.php' => array('tickCableCarrier', 'id="iuc-number"', 'name="verify-cable"', 'name="buy-cable"', 'name="reset-cable"'),
+            'Electric.php' => array('tickElectricCarrier', 'pickElectricQty', 'id="meter-number"', 'name="verify-meter"', 'name="buy-electric"'),
+            'Betting.php' => array('tickBettingCarrier', 'pickBettingQty', 'id="customer-id"', 'name="verify-customer"', 'name="buy-betting"'),
+            'Exam.php' => array('tickExamCarrier', 'pickExamQty', 'id="product-amount"', 'name="buy-exam"'),
+        );
+        if (isset($payBills[$name])) {
+            chk(strpos($cur, 'data-pkx="page-redesign"') !== false, "$label carries the redesign layer");
+            chk(strpos($cur, 'pk-bill__head') !== false, "$label renders the bill card head");
+            chk(strpos($cur, 'carrier-grid') !== false, "$label keeps the carrier picker");
+            foreach ($payBills[$name] as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps $token");
+            }
+            continue;
+        }
+
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             continue;

@@ -24,6 +24,12 @@
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Airtime | " . ($get_all_site_details["site_title"]));
 ?>
+<style data-pkx="page-redesign">
+/* Airtime — fintech redesign (2026-11): shell bill card, carrier tiles, steps.
+   Automation (network auto-detection, plan filtering, proceed gating) is
+   jsfile/bc-custom-all.js, loaded by the shell; all ids/handlers are kept. */
+.pk-app__wrap .pk-bill{border-radius:22px!important}
+</style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "BUY AIRTIME", "crumb" => "Home / Buy Airtime")); ?><!-- End Page Title -->
 
@@ -32,8 +38,14 @@ bc_app_head("Airtime | " . ($get_all_site_details["site_title"]));
 
       <div class="row justify-content-center">
         <div class="col-lg-8">
-          <div class="card shadow-sm border-0 p-4">
-            <form method="post" action="">
+          <div class="card pk-bill shadow-sm border-0 overflow-hidden">
+                <div class="pk-bill__head">
+                    <span class="pk-bill__ic"><i class="bi bi-phone"></i></span>
+                    <div><h5>Buy Airtime VTU</h5><p>The network is detected automatically from the phone number.</p></div>
+                    <div class="pk-bill__steps"><span class="on">1 · Network</span><span class="">2 · Amount</span><span class="">3 · Confirm</span></div>
+                </div>
+
+            <form method="post" action="" class="p-4">
                 <div class="carrier-grid d-flex justify-content-center gap-3 mb-4">
                     <img alt="Airtel" id="airtel-lg" product-status="enabled" src="/asset/airtel.png" onclick="tickAirtimeCarrier('airtel');" class="rounded-4 border p-2"/>
                     <img alt="MTN" id="mtn-lg" product-status="enabled" src="/asset/mtn.png" onclick="tickAirtimeCarrier('mtn');" class="rounded-4 border p-2"/>
@@ -67,7 +79,7 @@ bc_app_head("Airtime | " . ($get_all_site_details["site_title"]));
                     <div class="form-text">Your account requires a transaction PIN for every purchase.</div>
                 </div>
                 <?php endif; ?>
-                <button id="proceedBtn" name="buy-airtime" type="submit" style="pointer-events: none;" class="btn btn-primary btn-lg w-100 shadow-sm" >
+                <button id="proceedBtn" name="buy-airtime" type="submit" style="pointer-events: none;" class="btn btn-primary btn-lg w-100 shadow-sm rounded-pill fw-bold" >
                     BUY AIRTIME
                 </button>
 

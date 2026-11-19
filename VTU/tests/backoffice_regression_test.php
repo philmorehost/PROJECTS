@@ -251,6 +251,39 @@ rchk(strpos($app_css_src, '.pk-app__wrap .pk-matrix__label { color: #f8fafc; }')
      && strpos($app_css_src, '.pk-app__wrap .pk-matrix__card { color: #e2e8f0; }') !== false,
     'matrix card text colours are pinned against the brand link colour');
 
+// ------------------------------------------------- Pay Bills automation restore
+$app_src = rsrc($saas . '/func/bc-plate-app.php');
+$swal_pos = strpos($app_src, 'sweetalert2.all.min.js');
+$custom_pos = strpos($app_src, '/jsfile/bc-custom-all.js');
+rchk($swal_pos !== false && $custom_pos !== false && $custom_pos > $swal_pos,
+    'console shell loads bc-custom-all.js (Pay Bills automation) after SweetAlert');
+rchk(strpos($app_src, '.carrier-grid img') !== false && strpos($app_src, 'img.selected') !== false,
+    'shell carries the carrier picker sizing/selected styles');
+// Every inline handler the Pay Bills pages call must exist in the library.
+$js_src = rsrc($saas . '/jsfile/bc-custom-all.js');
+preg_match_all('/function\s+([A-Za-z_$][\w$]*)\s*\(/', $js_src, $mm);
+$js_fns = array_flip($mm[1]);
+foreach (array('Data', 'Airtime', 'BulkData', 'BulkAirtime', 'Cable', 'Electric', 'Betting', 'Exam') as $pg) {
+    foreach (array($saas, $nons) as $ed) {
+        $page = rsrc($ed . '/web/' . $pg . '.php');
+        preg_match_all('/on\w+="([^"]*)"/', $page, $am);
+        $missing = array();
+        foreach ($am[1] as $attr) {
+            preg_match_all('/([A-Za-z_$][\w$]*)\s*\(/', $attr, $cm);
+            foreach ($cm[1] as $fn) {
+                if (!isset($js_fns[$fn])) $missing[] = $fn;
+            }
+        }
+        rchk(empty($missing), basename($ed) . "/$pg.php inline handlers all resolve in bc-custom-all.js");
+    }
+}
+// Admin dashboard redesign keeps its logic: cache key, sync, addon modals.
+$dash = rsrc($saas . '/bc-admin/Dashboard.php');
+foreach (array('ad2-hero', 'admin_stats_v2', 'sas_dashboard_cache', 'triggerAdminManualSync', 'syncBtnAdmin', 'modal-addon-', 'buy-addon', 'pay-bill', 'admin-short-trans.php', 'getVendorVirtualBank') as $token) {
+    rchk(strpos($dash, $token) !== false, "bc-admin/Dashboard keeps $token");
+}
+rchk(rsrc($nons . '/bc-admin/Dashboard.php') === $dash, 'bc-admin/Dashboard.php matches across editions');
+
 echo "backoffice_regression_test: $checks checks, $failures failures\n";
 if ($failures > 0) {
     exit(1);

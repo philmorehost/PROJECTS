@@ -1032,6 +1032,42 @@ if (!function_exists('bc_app_css')) {
         .pk-hub__hero h1 { font-size: 1.55rem; font-weight: 800; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
         .pk-hub__hero p { margin: 0; opacity: .75; font-size: .92rem; }
 
+        /* Pay Bills: carrier picker + purchase card. The tick*Carrier() functions
+           in jsfile/bc-custom-all.js toggle .selected on these images and gate
+           #proceedBtn; the sizing/selected styles used to live in the retired
+           assets-2 stylesheet. */
+        .pk-app__wrap .carrier-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+        .pk-app__wrap .carrier-grid img, .pk-app__wrap .service-logo, .pk-app__wrap .network-logo {
+            width: 84px; height: 84px; object-fit: contain; background: #fff;
+            border: 1.5px solid var(--line); border-radius: 18px; padding: 8px;
+            cursor: pointer; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+        }
+        .pk-app__wrap .carrier-grid img:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); box-shadow: 0 10px 20px -12px rgba(2,6,23,.35); }
+        .pk-app__wrap .carrier-grid img.selected, .pk-app__wrap .network-logo.selected, .pk-app__wrap img.selected {
+            border-color: var(--brand); transform: scale(1.04);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent), 0 12px 22px -12px rgba(2,6,23,.4);
+        }
+        .pk-app__wrap .service-logo { width: 92px; height: 92px; border-radius: 20px; }
+        @media (max-width: 640px) {
+            .pk-app__wrap .carrier-grid img, .pk-app__wrap .service-logo, .pk-app__wrap .network-logo { width: 62px; height: 62px; padding: 5px; border-radius: 14px; }
+        }
+        .pk-bill__head {
+            display: flex; align-items: center; gap: 14px; padding: 18px 22px; color: #fff;
+            background: radial-gradient(420px 160px at 90% -20%, color-mix(in srgb, var(--brand) 55%, transparent), transparent 60%), linear-gradient(135deg, #0b1220, #101c33 60%, color-mix(in srgb, var(--brand-dark) 55%, #0b1220));
+        }
+        .pk-bill__head .pk-bill__ic { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+        .pk-bill__head h5 { margin: 0; font-weight: 800; font-size: 1.05rem; }
+        .pk-bill__head p { margin: 2px 0 0; font-size: .8rem; opacity: .75; }
+        .pk-bill__steps { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+        .pk-bill__steps span { font-size: .66rem; font-weight: 700; letter-spacing: .02em; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); white-space: nowrap; }
+        .pk-bill__steps span.on { background: var(--brand); border-color: transparent; }
+        @media (max-width: 640px) { .pk-bill__steps { display: none; } }
+        .pk-verify { background: var(--wash); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+        .pk-verify .row-line { display: flex; justify-content: space-between; gap: 1rem; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+        .pk-verify .row-line:last-child { border-bottom: 0; }
+        .pk-verify .k { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .pk-verify .v { font-weight: 700; color: var(--ink); text-align: right; }
+
         /* Bootstrap accordion (KnowledgeBase and friends). The retired bundle used
            to provide this; the compat layer styles and wires it instead. */
         .pk-app__wrap .accordion { display: grid; gap: 12px; }
@@ -1419,6 +1455,7 @@ if (!function_exists('bc_app_foot')) {
 </footer>
 <?php endif; ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
+<script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/bc-custom-all.js"></script>
 <?php bc_app_flash(); ?>
 <script>
 (function () {
