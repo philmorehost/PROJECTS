@@ -124,7 +124,7 @@ if ($connection_server) {
                             // regardless of the force_vendor_pin toggle, since an admin with no PIN
                             // set has no way to prove identity and unblock themselves if the
                             // brute-force system locks them out. Flag-only (no redirect): a blocking
-                            // modal (func/bc-admin-header.php) prompts for it on whatever page the
+                            // modal (func/bc-plate-admin.php) prompts for it on whatever page the
                             // admin is already on. Exempt super-admin-as-vendor impersonation sessions.
                             $GLOBALS['bc_admin_needs_pin'] = empty($get_logged_admin_details["security_pin"]) && !isset($_SESSION["spadmin_vendor_auth"]);
 

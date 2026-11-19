@@ -34,7 +34,7 @@ if (isset($_POST['demo-relock-session'])) {
     exit;
 }
 
-// AJAX: quick PIN-only save for the forced-setup modal (func/bc-admin-header.php).
+// AJAX: quick PIN-only save for the forced-setup modal (func/bc-plate-admin.php).
 // Deliberately touches ONLY security_pin — the full "update-security-settings"
 // handler further down also writes SMTP/2FA/SSO fields together in one UPDATE,
 // which would blank those out if fired from a PIN-only modal submission.

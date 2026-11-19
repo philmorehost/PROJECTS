@@ -839,3 +839,28 @@ every other signed-out page already used `func/bc-plate-auth.php`.
 Coverage: `VTU/tests/plate_admin_test.php` asserts each page uses the auth shell, loads no
 `assets-2`, keeps its credential field, and that the two shared pages stay byte-identical
 (688 checks). CI already lints every `bc-admin`/`bc-spadmin` page.
+
+## 15. Legacy chrome partials deleted — after restoring what they injected
+
+The retired partials (`func/bc-header.php`, `bc-footer.php`, `bc-admin-header.php`,
+`bc-admin-footer.php`, both `*-header-link.php`, `bc-spadmin-header.php`,
+`bc-spadmin-footer.php` — 13 files) are deleted. Deleting them safely first required
+restoring the page-level features they injected on every page, which the shell
+migrations had silently dropped:
+
+- **Console** (`bc_app_widgets()` in `bc-plate-app.php`, called from `bc_app_foot()`):
+  the AI assistant (original gates: signed-in + `ai_suite`, skipped on the VTU
+  purchase pages), the Refer-and-Earn modal (trigger now in the topbar), and the
+  support chat widget (self-gating, as before).
+- **Back office** (`bc_adm_widgets()` in `bc-plate-admin.php`): the admin AI
+  assistant (`ai_status` = 1), the forced Security PIN setup modal (same
+  `quick_set_pin` AJAX contract with `AccountSettings.php`; shown via the shell's
+  `.show` modal class instead of the retired Bootstrap bundle), and the
+  temporary-vendor-host banner in the topbar.
+
+`VTU/tests/plate_migration_test.php` now asserts the partials are absent in both
+editions and that the shells carry the widgets (896 checks); the gate test's nav
+assertions were retargeted from the deleted headers to the shells (still 1049).
+One leftover: the SAAS-root `Dashboard.php` still references the old header through
+an already-broken `../func/` path; it has been unreachable since before this work
+and is untouched.

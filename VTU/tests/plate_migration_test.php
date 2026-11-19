@@ -55,6 +55,24 @@ $later = array(
     'bc-plate-app.php', 'bc-header.php', 'bc-footer.php', 'short-trans.php',
 );
 
+// The retired chrome partials are deleted, not merely unused: the shells own the
+// layout now, and the page-level features they injected (AI assistant, referral
+// modal, support chat) live in bc_app_widgets() / bc_adm_widgets().
+foreach ($editions as $edition) {
+    foreach (array('bc-header.php', 'bc-footer.php', 'bc-admin-header.php', 'bc-admin-footer.php',
+                   'bc-admin-header-link.php', 'bc-spadmin-header.php', 'bc-spadmin-footer.php',
+                   'bc-spadmin-header-link.php') as $partial) {
+        chk(!is_file($root . '/' . $edition . '/func/' . $partial), "$edition retired partial func/$partial is deleted");
+    }
+    $app = file_get_contents($root . '/' . $edition . '/func/bc-plate-app.php');
+    chk(strpos($app, 'bc-support-chat-widget.php') !== false, "$edition console shell renders the support chat widget");
+    chk(strpos($app, 'ai-assistant.js') !== false, "$edition console shell injects the AI assistant");
+    chk(strpos($app, 'referralModal') !== false, "$edition console shell renders the referral modal");
+    $adm = file_get_contents($root . '/' . $edition . '/func/bc-plate-admin.php');
+    chk(strpos($adm, 'forcePinModal') !== false, "$edition admin shell renders the forced PIN setup");
+    chk(strpos($adm, 'quick_set_pin') !== false, "$edition forced PIN setup keeps its AJAX contract");
+}
+
 $before = require __DIR__ . '/plate_bodies.php';
 
 foreach ($editions as $edition) {

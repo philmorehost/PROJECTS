@@ -2,7 +2,7 @@
 /**
  * DGV7 phase 2 — support chat widget (customer side).
  *
- * Included from bc-footer.php so every signed-in page gets it without per-page edits. It renders
+ * Included from bc_app_foot() (func/bc-plate-app.php) so every signed-in page gets it without per-page edits. It renders
  * nothing at all when the visitor is not a signed-in user, when the tenant has not switched chat
  * on, or when the schema is not usable.
  *

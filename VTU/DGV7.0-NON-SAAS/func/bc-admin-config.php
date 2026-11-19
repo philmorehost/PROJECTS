@@ -102,7 +102,7 @@ if ($connection_server) {
                         // flow (web/LockoutResolution.php) — mandatory for every admin regardless of
                         // the force_vendor_pin toggle, since an admin with no PIN set has no way to
                         // prove identity and unblock themselves if the brute-force system locks them
-                        // out. Flag-only (no redirect): a blocking modal (func/bc-admin-header.php)
+                        // out. Flag-only (no redirect): a blocking modal (func/bc-plate-admin.php)
                         // prompts for it on whatever page the admin is already on, instead of bouncing
                         // them to a separate page (the previous redirect-based approach could loop
                         // under some server configurations).
