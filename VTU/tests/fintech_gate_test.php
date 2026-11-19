@@ -13,6 +13,11 @@ $root = dirname(__DIR__);
 $editions = ['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'];
 
 $checks = 0;
+// The CI runner is `php -n`, where error_reporting is E_ALL and a stray warning or notice is
+// printed into the output stream. php-wasm's defaults are quieter, which is why a notice that
+// CI would show never appeared locally. Match the stricter runner.
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 function gcheck($label, $actual, $expected) {
     global $checks;
     $checks++;
@@ -724,7 +729,8 @@ function fake_mysqli_query_raw($db, $sql) {
         // Faithful duplicate-key behaviour: the real table carries UNIQUE(email) and
         // UNIQUE(website_url), so the pre-checks and the INSERT must agree.
         $cols = array_map('trim', explode(',', $m[1]));
-        $vals = str_getcsv($m[2], ',', "'");
+        // PHP 8.3 deprecates the omitted $escape argument; pass it explicitly.
+        $vals = str_getcsv($m[2], ',', "'", "\\");
         $row = [];
         foreach ($cols as $i => $c) $row[$c] = stripslashes($vals[$i] ?? '');
         if (empty($row['id'])) $row['id'] = count($GLOBALS['db']['pending_vendors']) + 1;
