@@ -392,19 +392,12 @@
     .ql-orange  i { color: #fd7e14; } .ql-orange:hover  { background: #fff1e6; border-color: #ffcda3; }
   </style>
 
-</head>
-<body>
-    <?php include("../func/bc-admin-header.php"); ?>
+?>
+<?php include_once(__DIR__ . "/../func/bc-plate-admin.php"); bc_adm_head("Dashboard | " . $get_all_super_admin_site_details["site_title"]); ?>
+    <?php bc_adm_sidebar(); ?>
+
     
-  	<div class="pagetitle">
-      <h1>DASHBOARD</h1>
-      <nav>
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active">Dashboard</li>
-        </ol>
-      </nav>
-    </div><!-- End Page Title -->
+  	<?php bc_adm_topbar(array("title" => "DASHBOARD", "crumb" => "Home / Dashboard", "actions" => array(array("label" => "REFRESH", "href" => "?"), array("label" => "SYNC", "href" => "?")))); ?>
 
     <section class="section dashboard">
     <?php
@@ -856,7 +849,7 @@
       </div>
     </section>
         <?php include("../func/admin-short-trans.php"); ?>
-    <?php include("../func/bc-admin-footer.php"); ?>
+    <?php bc_adm_foot(); ?>
     
     <script>
         function triggerAdminManualSync() {
@@ -1004,5 +997,4 @@
         </div>
     </div>
     <?php endforeach; ?>
-</body>
 </html>
