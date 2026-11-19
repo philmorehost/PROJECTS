@@ -692,6 +692,7 @@ if (!function_exists('lm_pull_job_summary')) {
             if (!empty($result['notifications']['queued'])) {
                 $head .= ' — ' . (int) $result['notifications']['queued'] . ' customer e-mail(s) queued';
             }
+            $head .= ' — ' . lm_retention_summary_line($result);
 
             return $head;
         }
@@ -750,6 +751,9 @@ if (!function_exists('lm_pull_job_render_email')) {
         if (isset($result['seconds'])) {
             $rows[] = array('Duration', $result['seconds'] . ' s'
                 . (!empty($result['timings']['download']) ? ' (download ' . $result['timings']['download'] . ' s)' : ''));
+        }
+        if (isset($result['retention'])) {
+            $rows[] = array('Old release', lm_retention_summary_line($result));
         }
 
         $accent = $ok ? '#047857' : '#b91c1c';

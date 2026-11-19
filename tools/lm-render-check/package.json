@@ -5,10 +5,20 @@
   "description": "Render every License Manager page under PHP 8.3 (wasm) and fail if PHP source reaches the output.",
   "scripts": {
     "render": "node render-check.mjs ../../LM",
-    "unit": "node stray-html-check.mjs"
+    "unit": "node stray-html-check.mjs",
+    "tests": "node run-tests.mjs ../../LM/tests",
+    "arity": "node arity-check.cjs ../../LM",
+    "leaks": "node mode-leak-check.cjs ../../LM",
+    "all": "npm run syntax && npm run arity && npm run leaks && npm run manifest && npm run unit && npm run tests && npm run settings && npm run render",
+    "syntax": "node syntax-check.cjs ../../LM",
+    "manifest": "node manifest-check.cjs ../../LM",
+    "settings": "node settings-save.mjs ../../LM"
   },
   "dependencies": {
     "@php-wasm/node": "^3.1.54",
     "@php-wasm/universal": "^3.1.54"
+  },
+  "devDependencies": {
+    "php-parser": "^3.7.0"
   }
 }

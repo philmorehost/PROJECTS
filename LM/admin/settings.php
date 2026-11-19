@@ -63,12 +63,15 @@ if (lm_app_handle_post()) {
     $posted['update_reminder_hours'] = max(1, (int) ($_POST['update_reminder_hours'] ?? 24));
     $posted['update_reminder_max'] = max(0, (int) ($_POST['update_reminder_max'] ?? 1));
     $posted['update_email_batch_size'] = max(1, (int) ($_POST['update_email_batch_size'] ?? 25));
+    $posted['release_keep'] = max(1, min(50, (int) ($_POST['release_keep'] ?? 1)));
+    $posted['release_keep_days'] = max(0, min(3650, (int) ($_POST['release_keep_days'] ?? 0)));
     $posted['smtp_timeout'] = max(5, (int) ($_POST['smtp_timeout'] ?? 20));
 
     $posted['payment_gateway_enabled'] = isset($_POST['payment_gateway_enabled']);
     $posted['update_notify_enabled'] = isset($_POST['update_notify_enabled']);
     $posted['smtp_verify_peer'] = isset($_POST['smtp_verify_peer']);
     $posted['update_skip_if_downloaded'] = isset($_POST['update_skip_if_downloaded']);
+    $posted['release_auto_prune'] = isset($_POST['release_auto_prune']);
 
     $ips = (string) ($_POST['whitelisted_ips'] ?? '');
     $posted['whitelisted_ips'] = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', $ips) ?: array())));
@@ -451,12 +454,37 @@ lm_app_start('Settings', array(
                         (<?= lm_e((string) ini_get('upload_max_filesize')) ?>).</p>
                 </div>
                 <div class="lm-field">
+                    <label for="release_keep">Releases kept per project</label>
+                    <input class="lm-input" type="number" min="1" max="50" id="release_keep" name="release_keep"
+                           value="<?= (int) ($settings['release_keep'] ?? 1) ?>">
+                    <p class="lm-help"><code>1</code> keeps only the current release: the previous ZIP is
+                        deleted as soon as a new one is published. Raise it only if you need to go back.</p>
+                </div>
+                <div class="lm-field">
+                    <label for="release_keep_days">Keep releases for at least (days)</label>
+                    <input class="lm-input" type="number" min="0" max="3650" id="release_keep_days" name="release_keep_days"
+                           value="<?= (int) ($settings['release_keep_days'] ?? 0) ?>">
+                    <p class="lm-help"><code>0</code> means the count above is the only rule. Otherwise a release
+                        younger than this stays even when it falls outside the count.</p>
+                </div>
+                <div class="lm-field">
                     <label for="github_api_base">GitHub API base</label>
                     <input class="lm-input lm-mono" type="url" id="github_api_base" name="github_api_base"
                            value="<?= lm_e((string) ($settings['github_api_base'] ?? 'https://api.github.com')) ?>">
                     <p class="lm-help">Only change this for GitHub Enterprise.</p>
                 </div>
             </div>
+
+            <label class="lm-check" style="margin-top:16px">
+                <input type="checkbox" name="release_auto_prune" value="1"
+                    <?= !empty($settings['release_auto_prune']) ? 'checked' : '' ?>>
+                <span class="txt">
+                    <strong>Delete the old release automatically after every publish</strong>
+                    <small>Applies to GitHub pulls and manual uploads. The current release is never deleted, and
+                        anything that cannot be deleted is reported on the dashboard and in GitHub Pull instead of
+                        failing quietly.</small>
+                </span>
+            </label>
 
             <div class="lm-field" style="margin-bottom:0">
                 <span class="lm-label">Cron URL</span>

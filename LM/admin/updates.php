@@ -153,7 +153,9 @@ lm_app_start('Push updates', array(
     <div class="lm-panel__head">
         <div>
             <h2><?= lm_icon('clock') ?> Recent releases</h2>
-            <p>The newest 25. Deleting a release removes its ZIP from disk as well as the row.</p>
+            <p>The newest 25. Deleting a release removes its ZIP from disk as well as the row.
+                Old releases are removed automatically after each publish — see
+                <a href="settings.php">Settings → Storage &amp; cron</a>.</p>
         </div>
         <button type="button" class="lm-btn lm-btn--sm lm-btn--danger" data-lm-cleanup>
             <?= lm_icon('refresh') ?> Clean up old releases
@@ -263,6 +265,11 @@ lm_app_start('Push updates', array(
                 if (res && res.status === 'success') {
                     paint(100);
                     finish(res.message || 'Published.', true);
+                    // The release is published; the old package stayed behind.
+                    // Say so without turning the upload into a failure.
+                    if (res.warning && window.lmToast) {
+                        window.setTimeout(function () { window.lmToast(res.warning, 'bad'); }, 1200);
+                    }
                 } else {
                     finish((res && res.message) || 'The server rejected the upload (HTTP ' + xhr.status + ').', false);
                 }
@@ -298,7 +305,10 @@ lm_app_start('Push updates', array(
     var cleanup = document.querySelector('[data-lm-cleanup]');
     if (cleanup) {
         cleanup.addEventListener('click', function () {
-            if (!window.confirm('Keep only the newest release per project?\n\nEvery older ZIP is deleted from disk and from the database. This cannot be undone.')) {
+            var keep = <?= (int) (function_exists('lm_retention_settings') ? lm_retention_settings()['keep'] : 1) ?>;
+            if (!window.confirm('Apply the retention rule now?\n\nKeeps the newest ' + keep
+                + ' release(s) per project and deletes every older ZIP from disk and from the database.\n\n'
+                + 'A file that cannot be deleted is reported instead of being skipped. This cannot be undone.')) {
                 return;
             }
             cleanup.disabled = true;
