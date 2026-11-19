@@ -94,7 +94,7 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>System Activation Required</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
         <style>
             :root {
                 --bg-color: #0b0f19;

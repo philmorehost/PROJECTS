@@ -267,35 +267,78 @@ include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
 ?>
 <style data-pkx="page-redesign">
-/* SendFund — modern fintech redesign layer (2026-11) */
+/* SendFund — modern fintech redesign (2026-11): hero, step pills and a
+   search-as-you-type bank picker (the bank list ships with the page, so
+   results are instant; picking one fills the hidden bank-code field). */
+.sf-shell{border-radius:26px!important;box-shadow:0 24px 48px -24px rgba(2,6,23,.35)!important}
+.sf-hero{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:26px 28px;color:#fff;
+    background:radial-gradient(600px 220px at 85% -10%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 60%),linear-gradient(135deg,#0b1220,#101c33 55%,color-mix(in srgb,var(--brand-dark) 55%,#0b1220))}
+.sf-hero__icon{width:58px;height:58px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);display:grid;place-items:center;font-size:1.5rem;flex:0 0 auto}
+.sf-hero__text{flex:1 1 220px}
+.sf-hero__text h4{margin:0;font-weight:900;letter-spacing:-.01em}
+.sf-hero__text p{margin:2px 0 0;opacity:.72;font-size:.86rem}
+.sf-hero__bal{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:10px 16px;text-align:right}
+.sf-hero__bal small{display:block;font-size:.64rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.65}
+.sf-hero__bal b{font-size:1.12rem}
+.sf-steps{display:flex;gap:8px;padding:16px 28px 0;flex-wrap:wrap}
+.sf-steps span{display:inline-flex;align-items:center;gap:7px;font-size:.76rem;font-weight:800;letter-spacing:.03em;border-radius:999px;padding:.45rem .95rem;background:var(--wash,#f1f5f9);color:var(--muted,#64748b);border:1px solid var(--line,#e2e8f0)}
+.sf-steps span.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.sf-steps span.done{background:#e8f9ee;border-color:#bbe7c6;color:#15803d}
 .pk-app__wrap .modern-input{border-radius:14px!important;padding:.8rem 1rem;font-weight:600}
-.pk-app__wrap .card{overflow:hidden}
-.pk-app__wrap .card-body .d-flex.justify-content-between.mb-2.pb-2.border-bottom{border-color:rgba(255,255,255,.14)!important}
-.pk-app__wrap .btn-lg{border-radius:14px;font-weight:800;letter-spacing:.01em}
-.pk-app__wrap .form-label.text-uppercase{letter-spacing:.07em;font-size:.72rem}
-.pk-app__wrap .alert{border-radius:16px}
+.sf-bank{position:relative}
+.sf-bank__box{position:relative}
+.sf-bank__box>i{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--muted,#64748b);z-index:2}
+.sf-bank__box .modern-input{padding-left:2.7rem!important}
+.sf-bank__results{position:absolute;left:0;right:0;top:100%;margin-top:8px;background:var(--surface,#fff);border:1px solid var(--line,#e2e8f0);border-radius:18px;box-shadow:0 24px 44px -18px rgba(2,6,23,.35);overflow:hidden;z-index:50;max-height:330px;overflow-y:auto}
+.sf-bank__item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line,#eef2f7);padding:12px 16px;cursor:pointer;color:var(--ink,#0f172a)}
+.sf-bank__item:last-child{border-bottom:0}
+.sf-bank__item:hover,.sf-bank__item.is-active{background:color-mix(in srgb,var(--brand) 8%,#fff)}
+.sf-bank__item>i{margin-left:auto;color:var(--muted,#94a3b8)}
+.sf-bank__mark{width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--brand) 12%,#fff);color:var(--brand);display:grid;place-items:center;font-weight:900;flex:0 0 auto}
+.sf-bank__meta{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.sf-bank__meta b{font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-bank__meta small{color:var(--muted,#64748b);font-size:.72rem}
+.sf-bank__empty{padding:16px;color:var(--muted,#64748b);font-size:.88rem}
+.sf-shell .btn-lg{border-radius:14px;font-weight:800;letter-spacing:.01em}
+.sf-shell .form-label.text-uppercase{letter-spacing:.07em;font-size:.72rem}
+.sf-shell .alert{border-radius:16px}
 </style>
 
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "WITHDRAW FUNDS", "crumb" => "Home / Withdraw Funds")); ?><!-- End Page Title -->
+<?php
+// Transfer outcome flashed by the non-AJAX transfer/verify redirects above.
+// It used to never be read into the variable the result script below expects,
+// so the outcome modal never appeared and the flash was never cleared.
+// Read it once here and clear it.
+$sf_result = $_SESSION["transfer_result"] ?? null;
+if ($sf_result !== null) unset($_SESSION["transfer_result"]);
+?>
 
     <section class="section dashboard">
         <?php include("../func/service-header.php"); ?>
 
         <div class="row justify-content-center">
             <div class="col-lg-7">
-                <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
-                    <div class="card-header bg-white py-4 border-0 text-center">
-                        <div class="bg-primary bg-opacity-10 text-dark-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm" style="width: 70px; height: 70px;">
-                            <i class="bi bi-bank fs-2"></i>
+                <div class="card sf-shell shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+                    <div class="sf-hero">
+                        <div class="sf-hero__icon"><i class="bi bi-bank"></i></div>
+                        <div class="sf-hero__text">
+                            <h4>Request Withdrawal</h4>
+                            <p>Move funds from your wallet to any local bank account instantly.</p>
                         </div>
-                        <h4 class="fw-bold text-dark mb-1">Request Withdrawal</h4>
-                        <p class="text-muted small">Move funds from your wallet to any local bank account instantly.</p>
+                        <?php if (isset($get_logged_user_details['balance'])) { ?>
+                        <div class="sf-hero__bal"><small>Wallet balance</small><b>&#8358;<?php echo number_format((float)$get_logged_user_details['balance'], 2); ?></b></div>
+                        <?php } ?>
+                    </div>
+                    <div class="sf-steps">
+                        <span class="<?php echo isset($_SESSION["transfer_enquiry_id"]) ? 'done' : 'on'; ?>"><i class="bi bi-1-circle"></i> Verify account</span>
+                        <span class="<?php echo isset($_SESSION["transfer_enquiry_id"]) ? 'on' : ''; ?>"><i class="bi bi-2-circle"></i> Confirm &amp; send</span>
                     </div>
                     <div class="card-body p-4 p-md-5 pt-2">
                     <?php
                     // Prevent default footer modal from showing if we have a transfer result
-                    if (isset($_SESSION["transfer_result"])) unset($_SESSION["product_purchase_response"]);
+                    if ($sf_result !== null) unset($_SESSION["product_purchase_response"]);
 
                     if (isset($_SESSION["product_purchase_response"])) { ?>
                         <div class="alert alert-info alert-dismissible fade show rounded-3 mb-4" role="alert">
@@ -338,16 +381,15 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
                         <?php } ?>
 
                         <form method="post" action="">
-                            <div class="mb-4">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-building me-2"></i>Select Bank</label>
-                                <select id="bank-code" name="bank-code" placeholder="Start typing bank name..." required>
-                                    <option value="">Choose Bank</option>
-                                    <?php
-                                    foreach ($retrieve_bank_list as $each_bank) {
-                                        echo '<option value="' . $each_bank["bankCode"] . '">' . $each_bank["bankName"] . '</option>';
-                                    }
-                                    ?>
-                                </select>
+                            <div class="mb-4 sf-bank">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2" for="bank-search"><i class="bi bi-building me-2"></i>Select Bank</label>
+                                <div class="sf-bank__box">
+                                    <i class="bi bi-search"></i>
+                                    <input id="bank-search" type="text" class="form-control form-control-lg modern-input" placeholder="Start typing bank name..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="bank-results" aria-autocomplete="list" />
+                                </div>
+                                <div id="bank-results" class="sf-bank__results" role="listbox" hidden></div>
+                                <input id="bank-code" name="bank-code" type="hidden" value="" />
+                                <small class="text-muted d-block mt-2"><i class="bi bi-lightning-charge me-1"></i>Banks appear as you type — tap a result to select it.</small>
                             </div>
 
                             <div class="mb-4">
@@ -453,6 +495,7 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
         </div>
     </section>
 
+    <?php if ($sf_result !== null) { ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof Swal === 'undefined') {
@@ -460,7 +503,7 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
                 return;
             }
 
-            const resData = <?php echo json_encode($res); ?>;
+            const resData = <?php echo json_encode($sf_result); ?>;
             const status = resData.status;
             const title = resData.title;
             const message = resData.message;
@@ -515,16 +558,15 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
             });
         });
     </script>
+    <?php } ?>
 <script>
     function fillBeneficiary(data) {
         const bankSelect = document.getElementById('bank-code');
         const accountInput = document.getElementById('account-number');
 
-        if (bankSelect && bankSelect.tomselect) {
-            bankSelect.tomselect.setValue(data.bank_code);
-        } else if (bankSelect) {
-            bankSelect.value = data.bank_code;
-        }
+        if (bankSelect) bankSelect.value = data.bank_code || '';
+        const bankSearch = document.getElementById('bank-search');
+        if (bankSearch) bankSearch.value = data.bank_name || '';
 
         if (accountInput) {
             accountInput.value = data.account_number;
@@ -533,7 +575,8 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
         }
 
         // Scroll back to top of card
-        document.querySelector('.card-header').scrollIntoView({ behavior: 'smooth' });
+        const hero = document.querySelector('.sf-hero');
+        if (hero) hero.scrollIntoView({ behavior: 'smooth' });
     }
 
     const SAVED_BENEFICIARIES = <?php
@@ -662,26 +705,104 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
         return false;
     }
 
+    // Bank search-as-you-type. The full bank list ships with the page (from
+    // func/banks.json), so results filter instantly as the user types with no
+    // extra request. Picking a result fills the hidden bank-code field the
+    // transfer form posts, then account-name resolution runs as before.
+    const SF_BANKS = <?php echo json_encode(array_values(array_map(function ($b) { return array('code' => (string)($b['bankCode'] ?? ''), 'name' => (string)($b['bankName'] ?? '')); }, $retrieve_bank_list))); ?>;
+
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize Tom Select for Bank Search
         const bankSelect = document.getElementById('bank-code');
-        if (bankSelect) {
-            new TomSelect(bankSelect, {
-                create: false,
-                sortField: {
-                    field: "text",
-                    direction: "asc"
-                },
-                maxOptions: null,
-                render: {
-                    no_results: function(data, escape) {
-                        return '<div class="no-results">No banks found for "' + escape(data.input) + '"</div>';
-                    }
-                }
+        const bankSearch = document.getElementById('bank-search');
+        const bankResults = document.getElementById('bank-results');
+        const accountInput = document.getElementById('account-number');
+
+        let activeIndex = -1;
+        let currentMatches = [];
+
+        function closeResults() {
+            if (!bankResults) return;
+            bankResults.hidden = true;
+            bankSearch.setAttribute('aria-expanded', 'false');
+            activeIndex = -1;
+        }
+        function selectBank(bank) {
+            bankSelect.value = bank.code;
+            bankSearch.value = bank.name;
+            closeResults();
+            verifyAccount();
+        }
+        function renderResults(matches) {
+            currentMatches = matches;
+            if (activeIndex >= matches.length) activeIndex = matches.length - 1;
+            if (!matches.length) {
+                bankResults.innerHTML = '<div class="sf-bank__empty">No banks found for &ldquo;' + bankSearch.value.replace(/</g, '&lt;') + '&rdquo;</div>';
+            } else {
+                bankResults.innerHTML = matches.map(function (b, i) {
+                    return '<button type="button" class="sf-bank__item' + (i === activeIndex ? ' is-active' : '') + '" role="option" data-idx="' + i + '">' +
+                        '<span class="sf-bank__mark">' + b.name.charAt(0) + '</span>' +
+                        '<span class="sf-bank__meta"><b>' + b.name.replace(/</g, '&lt;') + '</b><small>Bank code ' + b.code + '</small></span>' +
+                        '<i class="bi bi-chevron-right"></i></button>';
+                }).join('');
+            }
+            bankResults.hidden = false;
+            bankSearch.setAttribute('aria-expanded', 'true');
+        }
+        function searchBanks() {
+            const q = bankSearch.value.trim().toLowerCase();
+            // Typing over a chosen bank invalidates its code: the user must
+            // pick from the results, so bank-code can never go stale.
+            if (bankSelect.value) {
+                const chosen = SF_BANKS.find(function (b) { return b.code === bankSelect.value; });
+                if (!chosen || chosen.name.toLowerCase() !== q) bankSelect.value = '';
+            }
+            if (!q) { activeIndex = -1; renderResults(SF_BANKS.slice(0, 12)); return; }
+            const starts = [], contains = [];
+            SF_BANKS.forEach(function (b) {
+                const n = b.name.toLowerCase();
+                if (n.indexOf(q) === 0) starts.push(b);
+                else if (n.indexOf(q) !== -1) contains.push(b);
             });
+            activeIndex = starts.concat(contains).length ? 0 : -1;
+            renderResults(starts.concat(contains).slice(0, 12));
         }
 
-        const accountInput = document.getElementById('account-number');
+        if (bankSearch && bankSelect && bankResults) {
+            bankSearch.addEventListener('input', searchBanks);
+            bankSearch.addEventListener('focus', searchBanks);
+            bankSearch.addEventListener('keydown', function (e) {
+                if (bankResults.hidden) return;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!currentMatches.length) return;
+                    activeIndex = (activeIndex + (e.key === 'ArrowDown' ? 1 : -1) + currentMatches.length) % currentMatches.length;
+                    renderResults(currentMatches);
+                } else if (e.key === 'Enter') {
+                    if (currentMatches[activeIndex]) { e.preventDefault(); selectBank(currentMatches[activeIndex]); }
+                } else if (e.key === 'Escape') {
+                    closeResults();
+                }
+            });
+            bankResults.addEventListener('mousedown', function (e) {
+                const item = e.target.closest('.sf-bank__item');
+                if (item) selectBank(currentMatches[Number(item.dataset.idx)]);
+            });
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.sf-bank')) closeResults();
+            });
+            const verifyBtn = document.querySelector('button[name="verify-bank"]');
+            if (verifyBtn) {
+                verifyBtn.closest('form').addEventListener('submit', function (e) {
+                    if (!bankSelect.value) {
+                        e.preventDefault();
+                        bankSearch.focus();
+                        searchBanks();
+                    }
+                });
+            }
+        }
+
+        let verifyAccount = function () {};
         if (bankSelect && accountInput) {
             const nameStatus = document.createElement('div');
             nameStatus.id = 'account-name-status';
@@ -692,7 +813,7 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
             let resolutionCache = {};
             let debounceTimer;
 
-            function verifyAccount() {
+            verifyAccount = function () {
                 const bankCode = bankSelect.value;
                 const accountNo = accountInput.value.trim();
                 const currentKey = bankCode + accountNo;
@@ -737,7 +858,7 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
                 } else {
                     nameStatus.innerHTML = '';
                 }
-            }
+            };
 
             function displayAccountName(res) {
                 const accountName = (res.account_name || "").toUpperCase();
@@ -754,7 +875,6 @@ bc_app_head("Withdraw Funds | " . ($get_all_site_details["site_title"]));
                 }
             }
 
-            bankSelect.addEventListener('change', verifyAccount);
             accountInput.addEventListener('input', verifyAccount);
         }
     });

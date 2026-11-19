@@ -119,6 +119,18 @@ if ($response === false) {
         }
     } elseif (is_array($res_data) && !empty($res_data['message'])) {
         $error_msg = 'License Manager (HTTP ' . $http_code . '): ' . $res_data['message'];
+        if (stripos($res_data['message'], 'tier mismatch') !== false) {
+            // This install always declares its own edition (SAAS); a mismatch
+            // means the key being sent belongs to the other edition on the
+            // License Manager. That is either a stale key (the License settings
+            // page is where the key is saved — confirm the form shows the new
+            // key after saving) or a license record pinned to the wrong tier,
+            // which only the platform operator can re-pin on the manager.
+            $error_msg .= ' — This SAAS install sent the license key saved under Account Settings → License Key.'
+                . ' If you pasted a SAAS key there, re-save it and confirm the form shows the new key afterwards;'
+                . ' if it does, the license record itself is assigned to the NON-SAAS edition on the License Manager'
+                . ' and must be re-pinned to the SAAS tier there (License Manager → Fix License Tiers).';
+        }
     } else {
         $error_msg = 'The License Manager returned an unexpected response (HTTP ' . $http_code . ').';
     }

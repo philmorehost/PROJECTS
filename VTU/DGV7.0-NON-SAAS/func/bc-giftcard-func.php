@@ -183,6 +183,29 @@ function getLiveExchangeRate($from_currency, $to_currency = 'NGN', $vendor_id = 
         }
     }
 
+    // Provider A2: the vendor's own ExchangeRate-API key (bc-admin -> Service
+    // Control -> Currency Conversion API). This is what "the API is configured"
+    // means for live conversion: with a key saved, rates come from the keyed
+    // v6 endpoint instead of the shared free one below.
+    if ($api_rate <= 0 && $vendor_id > 0 && function_exists('getVendorOption')) {
+        $fx_api_key = trim((string) getVendorOption($vendor_id, 'fx_api_key', ''));
+        if ($fx_api_key !== '') {
+            $fx_url = "https://v6.exchangerate-api.com/v6/" . urlencode($fx_api_key) . "/latest/" . $from;
+            $fx_ch = curl_init();
+            curl_setopt($fx_ch, CURLOPT_URL, $fx_url);
+            curl_setopt($fx_ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($fx_ch, CURLOPT_TIMEOUT, 5);
+            $fx_response = curl_exec($fx_ch);
+            curl_close($fx_ch);
+            if ($fx_response) {
+                $fx_data = json_decode($fx_response, true);
+                if (isset($fx_data['conversion_rates'][$to])) {
+                    $api_rate = (float)$fx_data['conversion_rates'][$to];
+                }
+            }
+        }
+    }
+
     // Provider B: ExchangeRate-API (Fallback)
     if ($api_rate <= 0) {
         $url = "https://api.exchangerate-api.com/v4/latest/$from";
