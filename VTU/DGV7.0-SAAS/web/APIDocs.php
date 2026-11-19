@@ -44,22 +44,12 @@ if (isset($_POST["generate-apikey"])) {
 	}
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-	<title>Developer API Documentation | <?php echo $get_all_site_details["site_title"]; ?></title>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="stylesheet" href="<?php echo $css_style_template_location; ?>">
-	<link rel="stylesheet" href="/cssfile/bc-style.css">
-
-	<!-- Vendor CSS Files -->
-	<link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-	<link href="../assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-	<link href="../assets-2/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-	<link href="../assets-2/css/style.css" rel="stylesheet">
-
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_title"]));
+?>
 	<style>
 		:root {
 			--api-primary: #4e73df;
@@ -351,10 +341,9 @@ if (isset($_POST["generate-apikey"])) {
 			.section-title { font-size: 1.5rem; }
 		}
 	</style>
-</head>
 
-<body data-bs-spy="scroll" data-bs-target="#apiDocsNav">
-	<?php include("../func/bc-header.php"); ?>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "DEVELOPER API", "crumb" => "Home / API Documentation")); ?>
 
 	<div class="api-header text-center">
 		<div class="container">
@@ -1551,8 +1540,7 @@ if (isset($_POST["generate-apikey"])) {
 		</div>
 	</div>
 
-	<?php include("../func/bc-footer.php"); ?>
-	<script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+	<?php bc_app_foot(); ?>
 
 	<script>
 		function toggleApiNav() {

@@ -3,6 +3,7 @@
     include("../func/bc-connect.php");
     include("../func/bc-tables.php");
     include_once("../func/whmp-func.php");
+    require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
     $page_title = "Payment Verification";
     $error_message = "Transaction could not be verified. Please contact support.";
@@ -139,40 +140,24 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         }
     }
 ?>
-<!DOCTYPE html>
-<head>
-    <title><?php echo $page_title; ?></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../assets-2/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <main>
-        <div class="container">
-            <section class="section min-vh-100 d-flex flex-column align-items-center justify-content-center py-4">
-                <div class="container">
-                    <div class="row justify-content-center">
-                        <div class="col-lg-6 col-md-8">
-                            <div class="card">
-                                <div class="card-body text-center p-5">
-                                    <?php if(isset($success_message)): ?>
-                                        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                                        <h2 class="mt-3">Payment Successful!</h2>
-                                        <p class="lead"><?php echo $success_message; ?></p>
-                                    <?php else: ?>
-                                         <i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>
-                                        <h2 class="mt-3">Payment Failed</h2>
-                                        <p class="lead"><?php echo $error_message; ?></p>
-                                    <?php endif; ?>
-                                    <a href="/" class="btn btn-primary mt-3">Go to Homepage</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </div>
-    </main>
-</body>
-</html>
+
+?>
+<?php
+bc_plate_auth_head($page_title . ' | ' . $get_all_site_details["site_title"]);
+bc_plate_auth_top(array(
+    'icon'  => isset($success_message) ? 'check' : 'warn',
+    'title' => isset($success_message) ? 'Payment successful' : 'Payment failed',
+    'sub'   => isset($success_message)
+        ? 'Your subscription has been renewed.'
+        : 'We could not confirm this payment.',
+));
+?>
+        <p class="pk-auth__note" style="text-align:left;margin-bottom:18px;">
+            <?php echo htmlspecialchars(isset($success_message) ? $success_message : $error_message); ?>
+        </p>
+        <a class="pk-auth__btn" href="/"><?php echo bc_plate_auth_icon('home', 18); ?> Go to homepage</a>
+<?php
+bc_plate_auth_end(array(
+    'note' => 'If this payment was deducted but not confirmed, contact support with your reference.',
+));
+?>

@@ -36,13 +36,12 @@ if (!empty($ussd_code) && $ussd_channel_mode !== 'SMS Bridge Only') {
     }
 }
 ?>
-<!DOCTYPE html>
-<head>
-	<title>View Data Bundle Cards | <?php echo $get_all_site_details["site_title"]; ?></title>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="stylesheet" href="/cssfile/bc-style.css">
-    <link href="../assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+?>
+<?php
+// Plate app shell: one shared chrome for the signed-in console.
+include_once(__DIR__ . "/../func/bc-plate-app.php");
+bc_app_head("View Data Bundle Cards | " . ($get_all_site_details["site_title"]));
+?>
 	<style>
         body { background: #f4f7f6; }
         .card-grid {
@@ -91,8 +90,8 @@ if (!empty($ussd_code) && $ussd_channel_mode !== 'SMS Bridge Only') {
             .no-print { display: none; }
         }
     </style>
-</head>
-<body>
+<?php bc_app_sidebar(); ?>
+<?php bc_app_topbar(array("title" => "DATA BUNDLE CARDS", "crumb" => "Home / Print Hub / Batch History")); ?>
     <?php
         $first_card = mysqli_fetch_assoc($all_cards);
         mysqli_data_seek($all_cards, 0);
@@ -146,5 +145,6 @@ if (!empty($ussd_code) && $ussd_channel_mode !== 'SMS Bridge Only') {
         }
         if ($count > 0) echo '</div>';
     ?>
+<?php bc_app_foot(); ?>
 </body>
 </html>
