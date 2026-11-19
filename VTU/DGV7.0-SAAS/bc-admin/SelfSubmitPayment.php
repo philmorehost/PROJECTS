@@ -2,6 +2,13 @@
     include("../func/bc-admin-config.php");
 	$get_admin_payment_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin_payments LIMIT 1"));
 	$get_admin_payment_order_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin_payment_orders LIMIT 1"));
+	// Both rows are optional configuration. When they have not been saved yet the fetches
+	// above return null and the summary below warned ("Trying to access array offset on
+	// null") and printed an empty "Maximum Amount: N". Fill the displayed keys instead.
+	if (!is_array($get_admin_payment_details)) $get_admin_payment_details = array();
+	$get_admin_payment_details += array('account_number' => '', 'account_name' => '', 'bank_name' => '', 'phone_number' => '', 'amount_charged' => 0);
+	if (!is_array($get_admin_payment_order_details)) $get_admin_payment_order_details = array();
+	$get_admin_payment_order_details += array('min_amount' => 0, 'max_amount' => 0);
 	
     if(isset($_POST["submit-payment"])){
         $purchase_method = "web";

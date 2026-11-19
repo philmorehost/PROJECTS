@@ -372,6 +372,13 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
     $get_all_super_admin_site_details_query = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_site_details LIMIT 1");
     $get_all_super_admin_site_details = $get_all_super_admin_site_details_query ? mysqli_fetch_array($get_all_super_admin_site_details_query) : null;
 
+    // Every back-office page prints its <title> from this row. When the row has not been
+    // seeded yet the value must still be an array, or each of those pages emits
+    // "Trying to access array offset on null".
+    if (!is_array($get_all_super_admin_site_details)) {
+        $get_all_super_admin_site_details = array('site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel');
+    }
+
     $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
     $spadmin_primary_color = "#0d6efd";
     $select_spadmin_style_template = mysqli_query($connection_server, "SELECT * FROM sas_spadmin_style_templates");

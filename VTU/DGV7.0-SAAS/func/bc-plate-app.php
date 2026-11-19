@@ -318,9 +318,29 @@ if (!function_exists('bc_app_css')) {
      *      `card` / `row` / `btn` / `alert` markup keeps rendering while it is being restyled.
      */
     function bc_app_css($brand) {
+        $bc_brand_rgb = '15, 118, 110';
+        if (is_string($brand) && preg_match('/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/', $brand, $bc_rgb_m)) {
+            $bc_brand_rgb = hexdec($bc_rgb_m[1]) . ', ' . hexdec($bc_rgb_m[2]) . ', ' . hexdec($bc_rgb_m[3]);
+        }
         ?><style>
         :root {
             --brand: <?php echo $brand; ?>;
+            /* Legacy aliases. Pages written against Bootstrap 5 or the retired template
+               reference --bs-primary / --primary-color; without them those rules compute
+               to nothing and themed elements (pills, badges, focus rings) lose their
+               background while keeping white text. */
+            --primary-color: var(--brand);
+            --bs-primary: var(--brand);
+            --bs-primary-rgb: <?php echo $bc_brand_rgb; ?>;
+            --danger: var(--bad);
+            --info: #0284c7;
+            --ok-rgb: 5, 150, 105;
+            --bad-rgb: 220, 38, 38;
+            --warn-rgb: 217, 119, 6;
+            --info-rgb: 2, 132, 199;
+            --ink-rgb: 11, 18, 32;
+            --muted-rgb: 100, 116, 139;
+            --wash-rgb: 246, 248, 251;
             /* Derived, so a tenant's own brand colour never gets a teal hover state. */
             --brand-dark: color-mix(in srgb, var(--brand) 82%, #000);
             --ink: #0b1220;
@@ -579,20 +599,27 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .text-success { color: var(--ok) !important; }
         .pk-app__wrap .text-danger { color: var(--bad) !important; }
         .pk-app__wrap .text-warning { color: var(--warn) !important; }
+        .pk-app__wrap .text-info { color: var(--info) !important; }
         .pk-app__wrap .text-dark-primary { color: var(--brand) !important; }
         .pk-app__wrap .text-body { color: var(--ink) !important; }
-        .pk-app__wrap .bg-light { background: var(--wash) !important; }
-        .pk-app__wrap .bg-white { background: #fff !important; }
-        .pk-app__wrap .bg-primary { background: var(--brand) !important; color: #fff; }
-        .pk-app__wrap .bg-secondary { background: var(--wash) !important; }
-        .pk-app__wrap .bg-success { background: var(--ok) !important; color: #fff; }
-        .pk-app__wrap .bg-danger { background: var(--bad) !important; color: #fff; }
-        .pk-app__wrap .bg-warning { background: var(--warn) !important; color: #fff; }
-        .pk-app__wrap .bg-dark { background: var(--ink) !important; color: #fff; }
+        /* Background utilities follow Bootstrap semantics: bg-opacity-* tints the
+           element's own bg-* colour (via --bs-bg-opacity). The previous white-tint
+           version made bg-<colour> bg-opacity-10 badges/buttons render white-on-white. */
+        .pk-app__wrap .bg-light { background-color: rgba(var(--wash-rgb), var(--bs-bg-opacity, 1)) !important; }
+        .pk-app__wrap .bg-white { background-color: rgba(255, 255, 255, var(--bs-bg-opacity, 1)) !important; }
+        .pk-app__wrap .bg-primary { background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-secondary { background-color: rgba(var(--muted-rgb), var(--bs-bg-opacity, 1)) !important; }
+        .pk-app__wrap .bg-success { background-color: rgba(var(--ok-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-danger { background-color: rgba(var(--bad-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-warning { background-color: rgba(var(--warn-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-info { background-color: rgba(var(--info-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-dark { background-color: rgba(var(--ink-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
         .pk-app__wrap .bg-transparent { background: transparent !important; }
-        .pk-app__wrap .bg-opacity-10 { background-color: rgba(255, 255, 255, .10) !important; }
-        .pk-app__wrap .bg-opacity-20 { background-color: rgba(255, 255, 255, .20) !important; }
-        .pk-app__wrap .bg-opacity-25 { background-color: rgba(255, 255, 255, .25) !important; }
+        .pk-app__wrap .bg-opacity-10 { --bs-bg-opacity: .1; }
+        .pk-app__wrap .bg-opacity-20 { --bs-bg-opacity: .2; }
+        .pk-app__wrap .bg-opacity-25 { --bs-bg-opacity: .25; }
+        .pk-app__wrap .bg-opacity-50 { --bs-bg-opacity: .5; }
+        .pk-app__wrap .bg-opacity-75 { --bs-bg-opacity: .75; }
         .pk-app__wrap .bg-gradient { background-image: linear-gradient(135deg, var(--brand), var(--brand-dark)) !important; }
         .pk-app__wrap .opacity-75 { opacity: .75; } .pk-app__wrap .opacity-50 { opacity: .5; }
         .pk-app__wrap .opacity-25 { opacity: .25; } .pk-app__wrap .opacity-10 { opacity: .1; }
@@ -602,13 +629,16 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .border-light { border-color: var(--line) !important; }
         .pk-app__wrap .border-white { border-color: #fff !important; }
         .pk-app__wrap .border-start { border-left: 1px solid var(--line) !important; }
-        .pk-app__wrap .border-success { border-color: var(--ok) !important; }
-        .pk-app__wrap .border-danger { border-color: var(--bad) !important; }
-        .pk-app__wrap .border-warning { border-color: var(--warn) !important; }
-        .pk-app__wrap .border-primary { border-color: var(--brand) !important; }
+        .pk-app__wrap .border-success { border-color: rgba(var(--ok-rgb), var(--bs-border-opacity, 1)) !important; }
+        .pk-app__wrap .border-danger { border-color: rgba(var(--bad-rgb), var(--bs-border-opacity, 1)) !important; }
+        .pk-app__wrap .border-warning { border-color: rgba(var(--warn-rgb), var(--bs-border-opacity, 1)) !important; }
+        .pk-app__wrap .border-primary { border-color: rgba(var(--bs-primary-rgb), var(--bs-border-opacity, 1)) !important; }
+        .pk-app__wrap .border-info { border-color: rgba(var(--info-rgb), var(--bs-border-opacity, 1)) !important; }
         .pk-app__wrap .border-4 { border-width: 4px !important; }
         .pk-app__wrap .border-5 { border-width: 5px !important; }
-        .pk-app__wrap .border-opacity-10 { border-color: rgba(255, 255, 255, .10) !important; }
+        .pk-app__wrap .border-opacity-10 { --bs-border-opacity: .1; }
+        .pk-app__wrap .border-opacity-25 { --bs-border-opacity: .25; }
+        .pk-app__wrap .border-opacity-50 { --bs-border-opacity: .5; }
         .pk-app__wrap .rounded { border-radius: 10px; }
         .pk-app__wrap .rounded-2 { border-radius: 10px; }
         .pk-app__wrap .rounded-3 { border-radius: 12px; }
@@ -659,6 +689,16 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .btn-outline-primary:hover { background: var(--brand); color: #fff; }
         .pk-app__wrap .btn-outline-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
         .pk-app__wrap .btn-outline-light { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
+        .pk-app__wrap .btn-outline-success { background: transparent; color: var(--ok); border-color: var(--ok); }
+        .pk-app__wrap .btn-outline-success:hover { background: var(--ok); color: #fff; }
+        .pk-app__wrap .btn-outline-danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+        .pk-app__wrap .btn-outline-danger:hover { background: var(--bad); color: #fff; }
+        .pk-app__wrap .btn-outline-warning { background: transparent; color: var(--warn); border-color: var(--warn); }
+        .pk-app__wrap .btn-outline-warning:hover { background: var(--warn); color: #fff; }
+        .pk-app__wrap .btn-outline-info { background: transparent; color: var(--info); border-color: var(--info); }
+        .pk-app__wrap .btn-outline-info:hover { background: var(--info); color: #fff; }
+        .pk-app__wrap .btn-outline-dark { background: transparent; color: var(--ink); border-color: var(--ink); }
+        .pk-app__wrap .btn-outline-dark:hover { background: var(--ink); color: #fff; }
         .pk-app__wrap .btn-link { background: none; color: var(--brand); padding: 0; }
         .pk-app__wrap .btn-sm { padding: 6px 11px; font-size: .82rem; border-radius: 8px; }
         .pk-app__wrap .btn-lg { padding: 13px 22px; font-size: 1rem; }
@@ -819,6 +859,11 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .nav-tabs { border-bottom: 1px solid var(--line); gap: 4px; }
         .pk-app__wrap .nav-tabs .nav-link { border: none; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 600; padding: 10px 14px; text-decoration: none; }
         .pk-app__wrap .nav-tabs .nav-link.active { color: var(--brand); border-bottom-color: var(--brand); }
+        .pk-app__wrap .tab-content > .tab-pane { display: none; }
+        .pk-app__wrap .tab-content > .tab-pane.active { display: block; }
+        .pk-app__wrap .tab-content > .tab-pane.fade { transition: opacity .15s ease; }
+        .pk-app__wrap .tab-content > .tab-pane.fade:not(.show) { opacity: 0; }
+        .pk-app__wrap .nav .nav-link { cursor: pointer; font: inherit; text-align: left; }
         .pk-app__wrap .progress { height: 8px; border-radius: 999px; background: var(--wash); overflow: hidden; }
         .pk-app__wrap .progress-bar { background: linear-gradient(90deg, var(--brand), var(--brand-dark)); border-radius: 999px; }
         .pk-app__wrap .pagination .page-link { border-radius: 10px !important; border: 1px solid var(--line); color: var(--ink); margin: 0 2px; }
@@ -1308,6 +1353,34 @@ if (!function_exists('bc_app_foot')) {
             var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));
             if (m) m.classList.toggle('show');
         }
+
+        var tabToggle = e.target.closest('[data-bs-toggle="pill"], [data-bs-toggle="tab"]');
+        if (tabToggle) {
+            e.preventDefault();
+            var tabList = tabToggle.closest('.nav, [role="tablist"]');
+            if (tabList) {
+                Array.prototype.forEach.call(
+                    tabList.querySelectorAll('[data-bs-toggle="pill"], [data-bs-toggle="tab"]'),
+                    function (t) { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); }
+                );
+            }
+            tabToggle.classList.add('active');
+            tabToggle.setAttribute('aria-selected', 'true');
+            var tabTarget = tabToggle.getAttribute('data-bs-target') || tabToggle.getAttribute('href');
+            var tabPane = tabTarget ? document.querySelector(tabTarget) : null;
+            if (tabPane) {
+                var tabContent = tabPane.closest('.tab-content');
+                if (tabContent) {
+                    Array.prototype.forEach.call(
+                        tabContent.querySelectorAll(':scope > .tab-pane'),
+                        function (p) { p.classList.remove('active', 'show'); }
+                    );
+                }
+                tabPane.classList.add('active');
+                void tabPane.offsetWidth;
+                tabPane.classList.add('show');
+            }
+        }
     });
 
     // Logout confirm, matching the behaviour of the old header.
@@ -1319,6 +1392,25 @@ if (!function_exists('bc_app_foot')) {
                 window.location.href = '<?php echo htmlspecialchars(bc_app_root_url('logout.php')); ?>';
             }
         });
+    }
+
+
+    // Minimal bootstrap.Modal shim. Pages open dialogs with the Bootstrap JS API
+    // (bootstrap.Modal.getOrCreateInstance(el).show()); the bundle is retired, so the
+    // class is provided here on top of the compat layer's .modal.show display rule.
+    if (!window.bootstrap || !window.bootstrap.Modal) {
+        var PkModal = function (el) { this._el = el; };
+        PkModal.prototype.show = function () { if (this._el) this._el.classList.add('show'); };
+        PkModal.prototype.hide = function () { if (this._el) this._el.classList.remove('show'); };
+        PkModal.prototype.toggle = function () { if (this._el) this._el.classList.toggle('show'); };
+        PkModal.getInstance = function (el) { return (el && el.__pkModal) ? el.__pkModal : null; };
+        PkModal.getOrCreateInstance = function (el) {
+            if (!el) return new PkModal(null);
+            if (!el.__pkModal) el.__pkModal = new PkModal(el);
+            return el.__pkModal;
+        };
+        window.bootstrap = window.bootstrap || {};
+        window.bootstrap.Modal = PkModal;
     }
 
     // Any modal a legacy page opens with the old Bootstrap toggle: honour .show.

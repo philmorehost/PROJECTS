@@ -31,3 +31,12 @@ LM/storage/logs/*.log
 
 # Local PHP-wasm test harness (installed, never committed)
 VTU/tests/harness/node_modules/
+
+# Per-installation database credentials and license tokens (written by the install
+# wizards on the live server; a committed copy broke every NON-SAAS page and leaks
+# credentials). Never commit these again.
+VTU/DGV7.0-SAAS/func/db-json.php
+VTU/DGV7.0-NON-SAAS/func/db-json.php
+VTU/DGV7.0-NON-SAAS/func/levelup.php
+VTU/DGV7.0-NON-SAAS/installed.lock
+VTU/DGV7.0-NON-SAAS/func/cache/

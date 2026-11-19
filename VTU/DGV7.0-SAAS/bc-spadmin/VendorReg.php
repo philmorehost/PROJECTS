@@ -540,7 +540,7 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
             white-space: pre-wrap !important;
         }
     </style>
-<?php if($is_admin_session) { bc_adm_sidebar(array("area" => "spadmin")); bc_adm_topbar(array("area" => "spadmin", "title" => "Onboard New Vendor", "crumb" => "Home / Add Vendor")); } else { echo '<body>'; } ?>
+<?php if($is_admin_session) { bc_adm_sidebar(array("area" => "spadmin")); bc_adm_topbar(array("area" => "spadmin", "title" => "Onboard New Vendor", "crumb" => "Home / Add Vendor")); } else { echo '<body><main class="pk-app__wrap">'; } ?>
 
     <div class="container py-4 py-lg-5">
 
@@ -1067,4 +1067,4 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
     }));
     updateDomainExtensionCatalog();
     </script>
-<?php if($is_admin_session) { bc_adm_foot(array("area" => "spadmin")); } else { echo '</body></html>'; } ?>
+<?php if($is_admin_session) { bc_adm_foot(array("area" => "spadmin")); } else { echo '</main></body></html>'; } ?>

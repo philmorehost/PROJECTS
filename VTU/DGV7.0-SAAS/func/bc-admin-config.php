@@ -20,7 +20,7 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 
 if (!$connection_server) {
     if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/bc-admin/Error.php", "/index.php"))) {
-        header("Location: /bc-admin/Error.php");
+        header("Location: /bc-admin/Error.php?reason=db");
         exit();
     }
 }
@@ -40,6 +40,13 @@ if ($connection_server) {
 
     $get_all_super_admin_site_details_query = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_site_details LIMIT 1");
     $get_all_super_admin_site_details = ($get_all_super_admin_site_details_query && mysqli_num_rows($get_all_super_admin_site_details_query) > 0) ? mysqli_fetch_array($get_all_super_admin_site_details_query) : null;
+
+    // Every back-office page prints its <title> from this row. When the row has not been
+    // seeded yet the value must still be an array, or each of those pages emits
+    // "Trying to access array offset on null".
+    if (!is_array($get_all_super_admin_site_details)) {
+        $get_all_super_admin_site_details = array('site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel');
+    }
 
     $checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");
     if ($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1) {

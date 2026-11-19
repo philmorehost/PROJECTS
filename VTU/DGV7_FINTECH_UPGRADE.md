@@ -927,3 +927,63 @@ pages no longer contribute per-page checks), htaccess **158**.
 
 Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
 plate_admin **692**, plate_migration **876**, htaccess **224**.
+
+## 18. Back-office bug round: invisible buttons, dead tabs, null warnings, NON-SAAS lockout
+
+- **NON-SAAS "Website Not Found" on every page.** `bc-admin/Error.php` is only reached
+  when `func/bc-admin-config.php` finds no database connection — and the repository
+  shipped a committed `func/db-json.php` written by one installation's wizard,
+  carrying that account's database credentials in plaintext. On any other account
+  the connect fails, `$connection_server` stays null and every page redirects to
+  the error page. Fixed properly: the committed credential file (and the committed
+  NON-SAAS cache files) are deleted, `.gitignore` now excludes `func/db-json.php`
+  in both editions (plus `func/levelup.php`, `installed.lock`, `func/cache/` for
+  NON-SAAS), `func/db-dtl.php` tolerates a missing credential file, NON-SAAS
+  `func/bc-connect.php` routes an uninstalled site to `/install.php` (SAAS parity),
+  the NON-SAAS installer reopens when the lock exists but credentials are missing
+  (no more Dashboard↔installer loop), and the no-connection redirect carries
+  `?reason=db` so `bc-admin/Error.php` says "Service Temporarily Unavailable"
+  with repair guidance instead of "Website Not Found". **Action for the site
+  owner:** the credentials that were committed remain in git history — rotate
+  that database password. After deploying this change, if the installer appears,
+  re-enter the same database details; existing data and the vendor record are
+  preserved (the wizard skips seeding when vendor 1 already exists).
+- **Invisible button/badge text (SAAS back office).** Pages written against
+  Bootstrap 5 referenced `--primary-color`, `--bs-primary` and `--bs-primary-rgb`,
+  which no shell defined — themed elements lost their background and kept white
+  text. `bc_app_css()` now derives `--bs-primary-rgb` from the tenant brand and
+  defines `--primary-color`, `--bs-primary`, `--danger`, `--info` and per-colour
+  RGB triplets as legacy aliases of the Platnova tokens. Separately, the compat
+  layer's `.bg-opacity-*` were white tints (meant for dark heroes); they now
+  follow Bootstrap semantics via `--bs-bg-opacity`, so the common
+  `bg-<colour> bg-opacity-10 text-<colour>` badge renders tinted again.
+  `.bg-info`/`.text-info`, the missing `btn-outline-*` variants and border-opacity
+  handling were added under the same contract.
+- **`bc-spadmin/VendorReg.php` "missing stylesheet":** in its public
+  (no-session) branch the page emitted a bare `<body>` outside
+  `.pk-app__wrap`, so the whole compat layer missed it. It now opens/closes the
+  shell wrap in that branch (shell mode unchanged).
+- **`bc-admin/AccountSettings.php` dead tabs:** the shells never loaded the
+  Bootstrap bundle and their compat JS wired only modals/dismiss. Both shells
+  now wire `[data-bs-toggle="pill"|"tab"]` (active link + pane switching), the
+  CSS hides inactive `.tab-pane`s, and a minimal `bootstrap.Modal`
+  `getOrCreateInstance` shim serves pages that open dialogs through the JS API.
+- **Null-offset warnings (~30 pages):** nearly every cited line prints
+  `$get_all_super_admin_site_details["site_title"]` into `bc_adm_head()`, and
+  both SAAS configs left that global `null` until a row was seeded. Both SAAS
+  configs (and the NON-SAAS missing-vendor path) now always default it to
+  `array('site_title' => 'Admin Panel', ...)`. `bc-admin/SelfSubmitPayment.php`
+  likewise defaults its two optional settings rows, ending the warnings and the
+  "Maximum Amount: N" output on an unconfigured install.
+- **`bc-spadmin/ShareFund.php`:** removed a stray literal `l>` fragment left in
+  the page tail during migration (the only one in either back office; its divs
+  were already balanced).
+
+New regression suite `VTU/tests/backoffice_regression_test.php` (36 checks)
+renders a real spadmin head and pins the aliases, badge tint contract, tab
+wiring, config defaults and the NON-SAAS credential/install chain; it runs in
+CI alongside the existing suites.
+
+Test counts after this change: gate **1051**, policy **70**, plate_app **91**,
+plate_admin **692**, plate_migration **876**, backoffice_regression **36**,
+htaccess **224**.

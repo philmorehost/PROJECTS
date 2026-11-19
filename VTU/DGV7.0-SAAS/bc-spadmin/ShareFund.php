@@ -169,8 +169,4 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
     });
     </script>
 
-    
-
-
-l>
 <?php bc_adm_foot(array("area" => "spadmin")); ?>

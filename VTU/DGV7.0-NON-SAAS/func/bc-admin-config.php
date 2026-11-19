@@ -14,7 +14,7 @@ include_once(__DIR__ . "/bc-connect.php");
 
 if (!$connection_server) {
     if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/bc-admin/Error.php", "/index.php"))) {
-        header("Location: /bc-admin/Error.php");
+        header("Location: /bc-admin/Error.php?reason=db");
         exit();
     }
 }
@@ -37,7 +37,10 @@ if ($connection_server) {
     $select_vendor_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id_cfg' AND status=1 LIMIT 1");
     $select_vendor_table = $select_vendor_query ? mysqli_fetch_array($select_vendor_query) : null;
     
-    $get_all_super_admin_site_details = null;
+    // Kept as an array even when the vendor row cannot be resolved: every back-office
+    // page prints its <title> from this value, and a null here made each of them emit
+    // "Trying to access array offset on null".
+    $get_all_super_admin_site_details = array('site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel');
     if ($select_vendor_table) {
         $q_site_details = mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='".$select_vendor_table["id"]."' LIMIT 1");
         $get_all_super_admin_site_details = ($q_site_details && mysqli_num_rows($q_site_details) > 0) ? mysqli_fetch_array($q_site_details) : ['site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel'];
