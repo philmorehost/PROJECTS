@@ -16,6 +16,7 @@
 
 require_once __DIR__ . '/lm_config.php';
 require_once __DIR__ . '/zip.php';
+require_once __DIR__ . '/release_retention.php';
 
 if (!function_exists('lm_updates_root')) {
     /**
@@ -963,6 +964,39 @@ if (!function_exists('lm_publish_update')) {
             } catch (Throwable $e) {
                 lm_log('signals', 'Signal after publish failed: ' . $e->getMessage());
                 $result['signal'] = array('ok' => false, 'message' => $e->getMessage());
+            }
+        }
+
+        /*
+         * Remove the releases this publish just made obsolete.
+         *
+         * The rule is a setting (Settings → Storage & cron), defaulting to
+         * "keep the current release only" — a GitHub pull publishes a fresh
+         * ~250 MB package every time the repository moves, and the previous one
+         * is worthless the moment this one exists. Until 9.7.x nothing removed
+         * it automatically, so the folder grew until an operator pressed
+         * "Clean up old releases" and hoped.
+         *
+         * A failure here must not fail the publish: the release exists and
+         * customers can download it. The result carries the failure so the
+         * caller can show it, and lm_retention_prune() logs every path it could
+         * not delete.
+         */
+        $retention = lm_retention_settings();
+        $autoPrune = array_key_exists('prune', $options) ? (bool) $options['prune'] : $retention['auto'];
+        if ($autoPrune) {
+            try {
+                $result['retention'] = lm_retention_prune($pdo, (int) $tier['id'], $retention);
+                if (empty($result['retention']['ok'])) {
+                    // Visible, not just logged: the operator asked for the old
+                    // release to go and it did not.
+                    $result['retention_warning'] = 'The previous release could not be deleted: '
+                        . implode('; ', array_slice($result['retention']['errors'], 0, 3));
+                }
+            } catch (Throwable $e) {
+                $result['retention'] = array('ok' => false, 'errors' => array($e->getMessage()));
+                $result['retention_warning'] = 'The previous release could not be deleted: ' . $e->getMessage();
+                lm_log('updates', 'Retention failed after publishing v' . $version . ': ' . $e->getMessage());
             }
         }
 

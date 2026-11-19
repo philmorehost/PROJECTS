@@ -173,6 +173,13 @@ if (!function_exists('lm_settings')) {
             // Empty = the built-in text (admin dashboard + control-panel cron).
             'update_instructions_admin'    => '',
             'update_instructions_cron'     => '',
+            // Releases kept per project. 1 = only the current one, which is
+            // what an automated GitHub pull wants: each package is ~250 MB and
+            // the previous one is worthless the moment the new one publishes.
+            // release_keep_days adds an age floor (0 = off).
+            'release_keep'                 => 1,
+            'release_keep_days'            => 0,
+            'release_auto_prune'           => true,
             // Storage
             'updates_storage_dir'          => '',
             'max_update_size_mb'           => 128,

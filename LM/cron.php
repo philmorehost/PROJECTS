@@ -109,7 +109,7 @@ if (in_array('cleanup', $tasks, true)) {
         $stmt->execute();
         $expired = $stmt->rowCount();
     } catch (PDOException $e) {
-        lm_log('cron: token cleanup failed — ' . $e->getMessage());
+        lm_log('cron', 'Token cleanup failed — ' . $e->getMessage());
     }
 
     // Finished pull jobs are only useful as a short history.
@@ -126,7 +126,37 @@ if (in_array('cleanup', $tasks, true)) {
         // Table not created yet — nothing to clean.
     }
 
-    $lmReport['tasks']['cleanup'] = array('expired_tokens' => $expired, 'old_pull_jobs' => $oldJobs);
+    /*
+     * The retention rule (Settings → Storage & cron), applied to every project.
+     *
+     * A publish already prunes its own project, so this is the safety net: a
+     * pull that was cancelled between publishing and pruning, a release that
+     * could not be deleted last time because of a permission problem, or the
+     * pile that accumulated before this rule existed. Without it the folder
+     * only shrinks when somebody notices.
+     */
+    $retention = array('kept' => 0, 'deleted' => 0, 'files' => 0, 'failed' => 0, 'ok' => true, 'errors' => array());
+    $rule = function_exists('lm_retention_settings') ? lm_retention_settings() : array('auto' => false);
+    if (!empty($rule['auto'])) {
+        try {
+            require_once __DIR__ . '/includes/updates.php';
+            $retention = lm_retention_prune_all($pdo);
+        } catch (Throwable $e) {
+            // Log it and carry on: the rest of the cron run still matters.
+            $retention = array('kept' => 0, 'deleted' => 0, 'files' => 0, 'failed' => 0, 'ok' => false,
+                'errors' => array($e->getMessage()));
+            lm_log('cron', 'Release retention failed — ' . $e->getMessage());
+        }
+    } else {
+        // Report it as switched off rather than as "nothing to do".
+        $retention['disabled'] = true;
+    }
+
+    $lmReport['tasks']['cleanup'] = array(
+        'expired_tokens' => $expired,
+        'old_pull_jobs' => $oldJobs,
+        'retention' => $retention,
+    );
 }
 
 /* -------------------------------------------------------------------------
@@ -215,7 +245,7 @@ if (function_exists('lm_cron_heartbeat_write')) {
     lm_cron_heartbeat_write($lmReport);
 }
 
-lm_log('cron: completed in ' . $lmReport['duration_ms'] . ' ms — ' . json_encode(array(
+lm_log('cron', 'Completed in ' . $lmReport['duration_ms'] . ' ms — ' . json_encode(array(
     'mail' => isset($lmReport['tasks']['mail']['processed']) ? $lmReport['tasks']['mail']['processed'] : null,
     'notifications' => isset($lmReport['tasks']['notifications']['processed']) ? $lmReport['tasks']['notifications']['processed'] : null,
     'github' => isset($lmReport['tasks']['github']['published']) ? count($lmReport['tasks']['github']['published']) : null,

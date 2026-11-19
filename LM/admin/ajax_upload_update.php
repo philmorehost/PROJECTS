@@ -131,30 +131,62 @@ if ($zip->open($target_path) === TRUE) {
 // 6. Generate Checksum (after any manifest injection)
 $checksum = hash_file('sha256', $target_path);
 
-// 7. Update Database
-try {
-    // Check if this version already exists
-    $check_stmt = $pdo->prepare("SELECT id FROM script_updates WHERE tier_id = ? AND version_number = ?");
-    $check_stmt->execute([$tier_id, $version_number]);
-    $existing = $check_stmt->fetch();
-    
-    if ($existing) {
-        // Update existing record
-        $update_stmt = $pdo->prepare("UPDATE script_updates SET zip_path = ?, checksum = ?, changelog = ?, release_date = CURRENT_TIMESTAMP, is_released = 1 WHERE id = ?");
-        $update_stmt->execute([$target_path, $checksum, $changelog, $existing['id']]);
-    } else {
-        // Insert new record
-        $insert_stmt = $pdo->prepare("INSERT INTO script_updates (tier_id, version_number, zip_path, checksum, changelog, is_released) VALUES (?, ?, ?, ?, ?, 1)");
-        $insert_stmt->execute([$tier_id, $version_number, $target_path, $checksum, $changelog]);
-    }
-    
-    echo json_encode([
-        'status' => 'success', 
-        'message' => "Update v{$version_number} successfully published!"
-    ]);
+/*
+ * 7. Publish through the shared function, not a local INSERT.
+ *
+ * This endpoint used to write the row itself: no checksum column refresh, no
+ * changelog_text/format, no source/commit, and — the reason it changed — no
+ * retention. A manual upload left every previous release on disk while a GitHub
+ * pull removed them, so "it does not clear" came back as soon as one package
+ * was published by hand.
+ */
+require_once __DIR__ . '/../includes/updates.php';
 
+// The publish path needs the project's own code and name; the local sanitised
+// $tier_code is a folder name and must not be written back to the row.
+$tier_row = array(
+    'id' => $tier_id,
+    'tier_code' => (string) ($tier['tier_code'] ?? $tier_code),
+    'tier_name' => (string) ($tier['tier_name'] ?? ($tier['tier_code'] ?? $tier_code)),
+    'is_active' => 1,
+);
+
+try {
+    $tier_stmt = $pdo->prepare("SELECT * FROM script_tiers WHERE id = ?");
+    $tier_stmt->execute(array($tier_id));
+    $row = $tier_stmt->fetch(PDO::FETCH_ASSOC);
+    if (is_array($row)) {
+        $tier_row = $row;
+    }
 } catch (PDOException $e) {
-    // Attempt to delete the file if DB insert fails
-    @unlink($target_path);
-    echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
+    // Keep the minimal row: the publish only needs the id and the code.
 }
+
+$publish = lm_publish_update($pdo, $tier_row, $version_number, $target_path, $changelog, array(
+    'source' => 'manual',
+    'notify' => !empty($_POST['notify']),
+));
+
+if (empty($publish['ok'])) {
+    // Nothing was recorded, so the package is an orphan: remove it.
+    @unlink($target_path);
+    echo json_encode(['status' => 'error', 'message' => (string) $publish['error']]);
+    exit();
+}
+
+$message = "Update v{$version_number} successfully published!";
+if (isset($publish['retention'])) {
+    $message .= ' ' . lm_retention_summary_line($publish);
+}
+
+/*
+ * The publish itself succeeded — always status "success" so the page reloads and
+ * the new release is visible. A cleanup failure is reported alongside it as a
+ * `warning`, which the toast shows in full: calling the whole upload a failure
+ * would invite a retry that publishes the same version again.
+ */
+echo json_encode([
+    'status' => 'success',
+    'message' => $message,
+    'warning' => (string) ($publish['retention_warning'] ?? ''),
+]);

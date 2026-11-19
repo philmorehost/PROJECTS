@@ -2432,6 +2432,14 @@ if (!function_exists('lm_github_pull')) {
         $result['commit'] = $head['commit']['short'];
         $result['commit_title'] = $head['commit']['title'];
         $result['notifications'] = $publish['notification_queue'] ?? array();
+        // The previous release, already deleted (or not — then this says why).
+        $result['retention'] = $publish['retention'] ?? array();
+        if (!empty($publish['retention_warning'])) {
+            $result['retention_warning'] = (string) $publish['retention_warning'];
+            // Appended to the message so it reaches the toast, the pull history
+            // and the admin e-mail — all three read `message`.
+            $result['message'] .= ' ' . $result['retention_warning'];
+        }
         $result['changelog'] = $changelogHtml;
         $result['package_root'] = $rewrite['root'];
         $result['files_selected'] = (int) $rewrite['files'];

@@ -230,7 +230,19 @@ HTML
                         'id' => 'cleanup',
                         'title' => 'Cleanup and storage',
                         'html' => <<<'HTML'
-<p><strong>Cleanup &amp; storage</strong> keeps only the newest release per project. For every deleted release the LM:</p>
+<p>Every publish removes the releases it made obsolete, automatically — a GitHub pull publishes a
+fresh package each time the repository moves, and the previous one is worthless the moment the new
+one exists. The rule is <strong>Settings → Storage &amp; cron → Releases kept per project</strong>
+(default <code>1</code>, meaning only the current release). The newest release is never deleted,
+whatever the setting says, and <em>Keep releases for at least (days)</em> adds an age floor if you
+sometimes need to go back a few days.</p>
+<p>This applies to GitHub pulls and manual uploads alike. The cron job repeats it for every project,
+which catches anything a publish was interrupted before removing. <strong>If a file cannot be
+deleted</strong> — usually because it is owned by a different user than PHP runs as — the release
+row is kept, the package stays on disk, and the failure is reported in the pull result, the admin
+e-mail and on the dashboard. Nothing is ever counted as deleted unless the file is really gone.</p>
+<p><strong>Cleanup &amp; storage</strong> (the button on Push Updates) applies the same rule on
+demand. For every deleted release the LM:</p>
 <ol class="lm-guide-steps">
   <li>resolves the stored path (it survives folder moves and renames),</li>
   <li>deletes the ZIP from cPanel,</li>

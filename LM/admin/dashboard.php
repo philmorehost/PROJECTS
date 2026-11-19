@@ -30,6 +30,7 @@ $licenses = array();
 $transactions = array();
 $requests = array();
 $updates = array();
+$leftoverReleases = array();
 $currency = 'NGN';
 
 if ($pdo instanceof PDO) {
@@ -94,6 +95,31 @@ if ($pdo instanceof PDO) {
     } catch (PDOException $e) {
         $updates = array();
     }
+
+    /*
+     * Releases that outlive the retention rule.
+     *
+     * Automatic pruning removes them on the next publish, so a leftover only
+     * survives a failure (a file PHP cannot delete) or the rule being switched
+     * off. Either way the operator should see it here rather than discover it
+     * when the disk fills — that is the "there was no error notification" part
+     * of the 9.7.x cleanup bug.
+     */
+    try {
+        $keep = function_exists('lm_retention_settings') ? lm_retention_settings() : array('keep' => 1);
+        $stale = $pdo->prepare(
+            "SELECT t.tier_code, COUNT(*) AS total
+               FROM script_updates u
+               JOIN script_tiers t ON u.tier_id = t.id
+              GROUP BY u.tier_id, t.tier_code
+             HAVING COUNT(*) > ?
+              ORDER BY COUNT(*) DESC"
+        );
+        $stale->execute(array(max(1, (int) $keep['keep'])));
+        $leftoverReleases = $stale->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $leftoverReleases = array();
+    }
 }
 
 if (!function_exists('lm_admin_date')) {
@@ -144,6 +170,25 @@ lm_app_start('Dashboard', array(
         <span><strong><?= (int) $stats['pending'] ?> licence request<?= $stats['pending'] === 1 ? '' : 's' ?> need a decision.</strong>
             Approving one creates the licence and emails the key.
             <a href="licenses.php#requests">Review them now</a>.</span>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($leftoverReleases)): ?>
+    <div class="lm-note lm-note--warn">
+        <?= lm_icon('rocket') ?>
+        <span><strong>Older releases are still on disk.</strong>
+            <?php
+            $bits = array();
+            foreach (array_slice($leftoverReleases, 0, 4) as $row) {
+                $bits[] = $row['tier_code'] . ' keeps ' . (int) $row['total'];
+            }
+            echo lm_e(implode(', ', $bits));
+            ?>. The retention rule keeps the newest <?= (int) (function_exists('lm_retention_settings') ? lm_retention_settings()['keep'] : 1) ?>
+            per project and deletes the rest at the next publish; if they are still here, a previous delete failed.
+            <?php if (function_exists('lm_retention_settings') && empty(lm_retention_settings()['auto'])): ?>
+                Automatic removal is switched off.
+            <?php endif; ?>
+            <a href="updates.php">Open Push Updates</a> to remove them now.</span>
     </div>
 <?php endif; ?>
 

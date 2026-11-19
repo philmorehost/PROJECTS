@@ -77,57 +77,54 @@ if ($action === 'delete_single') {
         exit();
     }
 } elseif ($action === 'cleanup_old') {
+    /*
+     * The button on Push Updates. It used to carry its own copy of the rule
+     * (keep MAX(id) per project, delete the ZIP if unlink() happens to work,
+     * delete the row regardless) — which is how a release could disappear from
+     * the panel while its 250 MB package stayed on disk, with nothing said.
+     *
+     * It now runs the same rule as an automatic publish, so the button and the
+     * automation can never disagree: the configured number of releases is kept,
+     * the newest is never touched, and anything that cannot be deleted is
+     * reported with the path and the reason instead of being ignored.
+     */
     try {
-        // Keep ONLY the latest update for each tier_id
-        // Group by tier_id and get the max ID
-        $stmt = $pdo->query("SELECT MAX(id) as latest_id, tier_id FROM script_updates GROUP BY tier_id");
-        $latest_updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $latest_ids = array_column($latest_updates, 'latest_id');
-        
-        if (empty($latest_ids)) {
-            echo json_encode(['status' => 'success', 'message' => 'No updates found to clean up.', 'deleted_count' => 0]);
-            exit();
-        }
-
-        // Find all updates that are NOT the latest for their respective script tiers
-        $in_placeholder = implode(',', array_fill(0, count($latest_ids), '?'));
-        $stmt = $pdo->prepare("SELECT id, zip_path, version_number FROM script_updates WHERE id NOT IN ($in_placeholder)");
-        $stmt->execute($latest_ids);
-        $old_updates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (empty($old_updates)) {
-            echo json_encode(['status' => 'success', 'message' => 'Only the latest updates exist. No archives to clean up.', 'deleted_count' => 0]);
-            exit();
-        }
-
-        $deleted_files_count = 0;
-        $deleted_records_count = 0;
-
-        foreach ($old_updates as $old) {
-            // Delete ZIP file from storage
-            if (!empty($old['zip_path']) && file_exists($old['zip_path'])) {
-                if (@unlink($old['zip_path'])) {
-                    $deleted_files_count++;
-                }
-            }
-            // Delete from database
-            $del_stmt = $pdo->prepare("DELETE FROM script_updates WHERE id = ?");
-            $del_stmt->execute([$old['id']]);
-            $deleted_records_count++;
-        }
-
-        echo json_encode([
-            'status' => 'success',
-            'message' => "Clean up completed: Deleted {$deleted_files_count} physical update ZIP file(s) and {$deleted_records_count} older update database record(s).",
-            'deleted_count' => $deleted_records_count
-        ]);
-        exit();
-
-    } catch (PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Database error during cleanup: ' . $e->getMessage()]);
+        require_once __DIR__ . '/../includes/updates.php';
+        $result = lm_retention_prune_all($pdo);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Cleanup failed: ' . $e->getMessage()]);
         exit();
     }
+
+    $message = 'Cleanup finished: kept the newest '
+        . (function_exists('lm_retention_settings') ? (int) lm_retention_settings()['keep'] : 1)
+        . ' release(s) per project, deleted ' . (int) $result['deleted']
+        . ' release(s) and ' . (int) $result['files'] . ' path(s).';
+
+    if ((int) $result['failed'] > 0) {
+        // Not a success with a footnote: this is the case that used to pass
+        // silently, so it is reported as an error the operator must act on.
+        $first = $result['errors'][0] ?? 'unknown reason';
+        echo json_encode([
+            'status' => 'error',
+            'message' => $message . ' ' . (int) $result['failed']
+                . ' could not be deleted — ' . $first
+                . '. Check the file owner in cPanel (it must match the PHP user).',
+            'deleted_count' => (int) $result['deleted'],
+            'failed_count' => (int) $result['failed'],
+            'errors' => array_slice($result['errors'], 0, 10),
+        ]);
+        exit();
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $message,
+        'deleted_count' => (int) $result['deleted'],
+        'failed_count' => 0,
+    ]);
+    exit();
+
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Invalid action.']);
     exit();
