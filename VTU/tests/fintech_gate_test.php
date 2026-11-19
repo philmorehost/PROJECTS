@@ -50,6 +50,8 @@ $GLOBALS['db'] = [
     'fintech_tx' => [],      // id => sas_transactions mirror row
     'email_templates' => [], // "vendor:email_type" => row (receipt notifications)
     'vendors' => [],         // id => vendor row
+    'admin_payments' => [], // vendor_id => manual-funding bank row
+    'super_admin_payments' => null, // single manual-funding bank row
     'errno' => 0,
     'error' => '',
 ];
@@ -645,6 +647,52 @@ function fake_mysqli_query_raw($db, $sql) {
             'api_website' => stripslashes($m[13]), 'status' => (int)$m[14],
         ];
         $GLOBALS['db']['insert_id'] = $id;
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+
+    // ── manual-funding bank details (bc-admin / bc-spadmin AccountSettings) ──
+    if (preg_match("/^SELECT \* FROM sas_admin_payments WHERE vendor_id='(\\d+)'( LIMIT 1)?$/", $sql, $m)) {
+        $row = $GLOBALS['db']['admin_payments'][(int)$m[1]] ?? null;
+        return $row ? [$row] : [];
+    }
+    if (preg_match("/^UPDATE sas_admin_payments SET bank_name='([^']*)', account_name='([^']*)', account_number='([^']*)', phone_number='([^']*)', amount_charged='([^']*)' WHERE vendor_id='(\\d+)'$/", $sql, $m)) {
+        $GLOBALS['db']['admin_payments'][(int)$m[6]] = [
+            'vendor_id' => (int)$m[6], 'bank_name' => stripslashes($m[1]),
+            'account_name' => stripslashes($m[2]), 'account_number' => stripslashes($m[3]),
+            'phone_number' => stripslashes($m[4]), 'amount_charged' => stripslashes($m[5]),
+        ];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^INSERT INTO sas_admin_payments \(vendor_id, bank_name, account_name, account_number, phone_number, amount_charged\) VALUES \('(\d+)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)'\)$/", $sql, $m)) {
+        $GLOBALS['db']['admin_payments'][(int)$m[1]] = [
+            'vendor_id' => (int)$m[1], 'bank_name' => stripslashes($m[2]),
+            'account_name' => stripslashes($m[3]), 'account_number' => stripslashes($m[4]),
+            'phone_number' => stripslashes($m[5]), 'amount_charged' => stripslashes($m[6]),
+        ];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match('/^SELECT \* FROM sas_super_admin_payments LIMIT 1$/', $sql)) {
+        $row = $GLOBALS['db']['super_admin_payments'] ?? null;
+        return $row ? [$row] : [];
+    }
+    if (preg_match("/^UPDATE sas_super_admin_payments SET bank_name='([^']*)', account_name='([^']*)', account_number='([^']*)', phone_number='([^']*)', amount_charged='([^']*)'$/", $sql, $m)) {
+        $GLOBALS['db']['super_admin_payments'] = [
+            'bank_name' => stripslashes($m[1]), 'account_name' => stripslashes($m[2]),
+            'account_number' => stripslashes($m[3]), 'phone_number' => stripslashes($m[4]),
+            'amount_charged' => stripslashes($m[5]),
+        ];
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
+    if (preg_match("/^INSERT INTO sas_super_admin_payments \(bank_name, account_name, account_number, phone_number, amount_charged\) VALUES \('([^']*)', '([^']*)', '([^']*)', '([^']*)', '([^']*)'\)$/", $sql, $m)) {
+        $GLOBALS['db']['super_admin_payments'] = [
+            'bank_name' => stripslashes($m[1]), 'account_name' => stripslashes($m[2]),
+            'account_number' => stripslashes($m[3]), 'phone_number' => stripslashes($m[4]),
+            'amount_charged' => stripslashes($m[5]),
+        ];
         $GLOBALS['db']['affected'] = 1;
         return true;
     }
@@ -2247,6 +2295,138 @@ gtrue('provider smoke test exists', is_file($root . '/tests/provider_smoke.php')
 $smoke = file_get_contents($root . '/tests/provider_smoke.php');
 gtrue('smoke test reports "not configured"', strpos($smoke, 'not configured') !== false);
 gtrue('smoke test covers both providers', strpos($smoke, 'klasha') !== false && strpos($smoke, 'flutterwave') !== false);
+
+// ─────────────────────────── installer shell ───────────────────────────
+// The installers are the first screen a customer sees, so they carry the same design tokens as
+// the landing page and the auth shell. The shell is byte-identical across editions; the two
+// wizards must both use it and must not fall back to their retired templates.
+if (!function_exists('bc_installer_head')) {
+    require_once $root . '/DGV7.0-SAAS/func/bc-installer-shell.php';
+}
+function bc_render_installer($root, $file, $step) {
+    $src = file_get_contents($root . '/' . $file);
+    $src = preg_replace('/^<\?php/', '', $src, 1);
+    $src = preg_replace("/^if \(file_exists\([^)]*\)\) \{.*?\n\}/s", '', $src);
+    $src = preg_replace('/mysqli_report\(MYSQLI_REPORT_OFF\);/', '', $src);
+    $src = preg_replace("/require_once __DIR__ \. '\/[^']*bc-installer-shell\.php';/", '', $src);
+    $src = preg_replace("/define\('__INSTALLER_SCRIPTS__', <<<'JS'.*?\nJS\);/s", '', $src);
+    $cut = strpos($src, 'bc_installer_head(');
+    gtrue("installer markup found in $file", $cut !== false);
+    $src = substr($src, $cut);
+    $error = ''; $success = ''; $activationCodeInput = '';
+    $req_php = true; $req_mysqli = true; $req_mbstring = true; $req_gd = true;
+    $req_writable_func = true; $req_writable_root = true; $all_req_met = true;
+    define('__INSTALLER_SCRIPTS__', '');
+    ob_start();
+    eval($src);
+    return ob_get_clean();
+}
+foreach (array(
+    'DGV7.0-SAAS/install/index.php',
+    'DGV7.0-NON-SAAS/install.php',
+) as $installer) {
+    $tag = basename(dirname($installer)) . '/' . basename($installer);
+    $html = bc_render_installer($root, $installer, 1);
+    gtrue("$tag renders a document", strpos($html, '<!DOCTYPE html>') !== false);
+    gtrue("$tag uses the shared shell", strpos($html, 'bc-installer__card') !== false);
+    gtrue("$tag prints the shared stylesheet", strpos($html, '--brand: #0f766e') !== false);
+    gtrue("$tag prints the stepper script", strpos($html, 'function goStep') !== false);
+    gtrue("$tag drops the retired template", strpos($html, 'cdn.jsdelivr.net/npm/bootstrap') === false && strpos($html, 'install.css') === false);
+    gcheck("$tag has four stepper dots", substr_count($html, 'bc-installer__dot"'), 4);
+    gtrue("$tag closes the document", strpos($html, '</html>') !== false);
+}
+$saas_html = bc_render_installer($root, 'DGV7.0-SAAS/install/index.php', 1);
+gtrue('saas installer keeps the activation field', strpos($saas_html, 'name="activation_code"') !== false);
+gtrue('saas installer keeps the requirement checklist', strpos($saas_html, 'bc-installer__req') !== false);
+$standalone_html = bc_render_installer($root, 'DGV7.0-NON-SAAS/install.php', 1);
+foreach (array('step-1', 'step-2', 'step-3', 'step-4') as $id) {
+    gtrue("standalone panel #$id present", strpos($standalone_html, 'id="' . $id . '"') !== false);
+}
+
+// ── manual-funding bank details: a ₦0 charge must save ─────────────────────────
+// Regression test for a silent failure: empty("0") is true in PHP, so the old condition
+// `!empty($amount_charged)` rejected a legitimate 0 charge, and the amount error branch was
+// inverted (`if ($amount_charged > 0)`), so the handler fell through having written nothing
+// AND set no message. The admin saw an unsaved form with no explanation.
+if (!function_exists('bc_demo_guard_edit')) {
+    function bc_demo_guard_edit($db) { return true; }
+}
+function bc_run_bank_handler($path, $post, $reset = true) {
+    $src = file_get_contents($path);
+    $start = strpos($src, 'if (isset($_POST["update-bank-details"]))');
+    if ($start === false) { $start = strpos($src, 'if(isset($_POST["update-bank-details"]))'); }
+    gtrue("bank handler found in $path", $start !== false);
+    $next = strpos($src, 'if (isset($_POST["update-daily-purchase-limit-details"]))', $start);
+    if ($next === false) { $next = strpos($src, 'if (isset($_POST["update-global-withdrawal-settings"]))', $start); }
+    if ($next === false) { $next = strlen($src); }
+    $block = substr($src, $start, $next - $start);
+    // Run the real shipped block against the fake DB, the same substitution load_edition uses.
+    $block = str_replace(['exit;', 'mysqli_'], ['return;', 'fake_mysqli_'], $block);
+    $block = preg_replace('/header\s*\([^)]*\)\s*;/', '$GLOBALS["__bank_header"] = "redirect";', $block);
+
+    if ($reset) {
+        $GLOBALS['db']['admin_payments'] = [];
+        $GLOBALS['db']['super_admin_payments'] = null;
+    }
+    $_POST = $post;
+    $_SESSION = [];
+    $GLOBALS['__bank_header'] = null;
+    $connection_server = $GLOBALS['connection_server'];
+    $get_logged_admin_details = ['id' => 7];
+    eval($block);
+    return [
+        $_SESSION['product_purchase_response'] ?? null,
+        $GLOBALS['db']['admin_payments'],
+        $GLOBALS['db']['super_admin_payments'],
+        $GLOBALS['__bank_header'] ?? null,
+    ];
+}
+$bank_post_zero = ['update-bank-details' => 1, 'name' => 'Adaobi Okafor', 'bank' => 'Guaranty Trust Bank',
+                   'number' => '0123456789', 'phone' => '08031234567', 'charges' => '0'];
+$bank_post_paid = $bank_post_zero;
+$bank_post_paid['charges'] = '500';
+
+foreach ([
+    'DGV7.0-SAAS/bc-admin/AccountSettings.php' => 'admin',
+    'DGV7.0-NON-SAAS/bc-admin/AccountSettings.php' => 'admin',
+    'DGV7.0-SAAS/bc-spadmin/AccountSettings.php' => 'super',
+] as $rel => $kind) {
+    list($msg, $admin_rows, $super_row, $header) = bc_run_bank_handler($root . '/' . $rel, $bank_post_zero);
+    gcheck("$rel saves a 0 charge", $msg, 'Bank Information Created Successfully');
+    gcheck("$rel redirects after saving", $header, 'redirect');
+    $stored = ($kind === 'admin') ? ($admin_rows[7] ?? null) : $super_row;
+    gtrue("$rel stored the bank row", is_array($stored));
+    gcheck("$rel stored the 0 charge", $stored['amount_charged'] ?? null, '0');
+    gcheck("$rel stored the account name", $stored['account_name'] ?? null, 'Adaobi Okafor');
+    gcheck("$rel stored the account number", $stored['account_number'] ?? null, '0123456789');
+
+    // A non-zero charge must still save, and an existing row must be updated rather than duplicated.
+    $GLOBALS['db']['admin_payments'] = [7 => ['vendor_id' => 7, 'bank_name' => 'Old', 'account_name' => 'Old',
+        'account_number' => '0000000000', 'phone_number' => '0000000000', 'amount_charged' => '0']];
+    $GLOBALS['db']['super_admin_payments'] = ['bank_name' => 'Old', 'account_name' => 'Old',
+        'account_number' => '0000000000', 'phone_number' => '0000000000', 'amount_charged' => '0'];
+    list($msg2, $admin_rows2, $super_row2, ) = bc_run_bank_handler($root . '/' . $rel, $bank_post_paid, false);
+    gcheck("$rel updates an existing row", $msg2, 'Bank Information Updated Successfully');
+    $stored2 = ($kind === 'admin') ? ($admin_rows2[7] ?? null) : $super_row2;
+    gcheck("$rel stored the paid charge", $stored2['amount_charged'] ?? null, '500');
+    gcheck("$rel kept a single row", ($kind === 'admin') ? count($admin_rows2) : 1, 1);
+
+    // Invalid input must always produce a message, never a silent fall-through.
+    $bad = $bank_post_zero;
+    $bad['bank'] = '';
+    list($bad_msg, , , ) = bc_run_bank_handler($root . '/' . $rel, $bad);
+    gcheck("$rel reports an empty bank name", $bad_msg, 'Bank Name Field Empty');
+    // The charge is stripped to digits and dots before validation, so a non-numeric entry
+    // arrives as an empty string; either way the handler must say so rather than stay silent.
+    $bad2 = $bank_post_zero;
+    $bad2['charges'] = 'abc';
+    list($bad2_msg, , , ) = bc_run_bank_handler($root . '/' . $rel, $bad2);
+    gcheck("$rel reports an unusable charge", $bad2_msg, 'Amount Field Empty');
+    $bad3 = $bank_post_zero;
+    $bad3['number'] = '';
+    list($bad3_msg, , , ) = bc_run_bank_handler($root . '/' . $rel, $bad3);
+    gcheck("$rel reports an empty account number", $bad3_msg, 'Account Number Field Empty');
+}
 
 // Parity: the new shared files are byte-identical across editions.
 foreach ([

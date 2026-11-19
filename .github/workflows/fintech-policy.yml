@@ -7,6 +7,10 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-policy.php'
       - 'VTU/DGV7.0-SAAS/func/bc-fintech-*.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-fintech-*.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-installer-shell.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-installer-shell.php'
+      - 'VTU/DGV7.0-SAAS/install/index.php'
+      - 'VTU/DGV7.0-NON-SAAS/install.php'
       - 'VTU/DGV7.0-SAAS/func/bc-service-matrix*.php'
       - 'VTU/DGV7.0-NON-SAAS/func/bc-service-matrix*.php'
       - 'VTU/DGV7.0-SAAS/func/bc-account-backfill*.php'
@@ -200,7 +204,7 @@ jobs:
                       bc-fintech-wallet.php bc-dashboard-accounts.php \
                       bc-fintech-providers.php bc-fintech-ledger.php bc-fintech-webhook.php \
                       bc-fintech-klasha.php bc-fintech-flutterwave.php \
-                      bc-plate-auth.php; do
+                      bc-plate-auth.php bc-installer-shell.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
           done
           # Phase 2b: the shared auth shell pages are identical across editions.
@@ -226,6 +230,18 @@ jobs:
           cmp VTU/DGV7.0-SAAS/web/api/flutterwave_webhook.php VTU/DGV7.0-NON-SAAS/web/api/flutterwave_webhook.php
           cmp VTU/DGV7.0-SAAS/web/APIDocs.php VTU/DGV7.0-NON-SAAS/web/APIDocs.php
           cmp VTU/DGV7.0-SAAS/web/api/MOBILE_APP_SPEC.md VTU/DGV7.0-NON-SAAS/web/api/MOBILE_APP_SPEC.md
+          # The installer shell is shared infrastructure: identical across editions.
+          cmp VTU/DGV7.0-SAAS/func/bc-installer-shell.php VTU/DGV7.0-NON-SAAS/func/bc-installer-shell.php
+          # Both wizards must use the shell, not their retired templates.
+          for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
+            installer="VTU/${edition}/install/index.php"
+            [ -f "$installer" ] || installer="VTU/${edition}/install.php"
+            grep -q 'bc_installer_head(' "$installer"
+            grep -q 'bc_installer_foot(' "$installer"
+            if grep -q 'assets-2\|cdn.jsdelivr.net/npm/bootstrap\|install.css' "$installer"; then
+              echo "${edition} installer still loads the retired template"; exit 1
+            fi
+          done
           # Step 2 pages and the private upload guard must match too.
           cmp VTU/DGV7.0-SAAS/web/BusinessUpgrade.php VTU/DGV7.0-NON-SAAS/web/BusinessUpgrade.php
           cmp VTU/DGV7.0-SAAS/bc-admin/BusinessKYB.php VTU/DGV7.0-NON-SAAS/bc-admin/BusinessKYB.php
