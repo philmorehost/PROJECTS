@@ -63,6 +63,7 @@ $services = [
     'virtual_card' => 'Virtual Card System',
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',
+    'currency_conversion' => 'Currency Conversion (Live FX Rates)',
     'nin_card' => 'Digital NIN Slip',
     'bvn_verify' => 'BVN Verification',
     'virtual_bank_display' => 'Virtual Bank Button (Off by Default)',

@@ -85,7 +85,7 @@
     if (isset($_POST["activate-nin-card-wallet"])) {
         $vid = $get_logged_admin_details['id'];
         $q_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='nin_card_activation_fee'");
-        $fee = (float)(mysqli_fetch_assoc($q_fee)['option_value'] ?? 5000);
+        $fee = (float)(($q_fee && mysqli_num_rows($q_fee) > 0) ? mysqli_fetch_assoc($q_fee)['option_value'] : 5000);
 
         if ($get_logged_admin_details['balance'] >= $fee) {
             $ref = "NIN_ACT_" . time();
@@ -117,7 +117,7 @@
     if (isset($_POST["activate-bvn-verify-wallet"])) {
         $vid = $get_logged_admin_details['id'];
         $q_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='bvn_verify_activation_fee'");
-        $fee = (float)(mysqli_fetch_assoc($q_fee)['option_value'] ?? 5000);
+        $fee = (float)(($q_fee && mysqli_num_rows($q_fee) > 0) ? mysqli_fetch_assoc($q_fee)['option_value'] : 5000);
 
         if ($get_logged_admin_details['balance'] >= $fee) {
             $ref = "BVN_ACT_" . time();
@@ -179,8 +179,8 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                 </div>
                 <form method="post" class="m-0">
                     <button type="submit" name="activate-identity-api-wallet" class="btn btn-sm btn-warning text-dark fw-bold"
-                        onclick="return confirm('Charge â‚¦<?php echo number_format($idp_act_fee, 2); ?> from your vendor wallet to unlock the premium providers?')">
-                        <i class="bi bi-wallet2 me-1"></i> Activate Premium - â‚¦<?php echo number_format($idp_act_fee, 2); ?>
+                        onclick="return confirm('Charge ₦<?php echo number_format($idp_act_fee, 2); ?> from your vendor wallet to unlock the premium providers?')">
+                        <i class="bi bi-wallet2 me-1"></i> Activate Premium - ₦<?php echo number_format($idp_act_fee, 2); ?>
                     </button>
                 </form>
             </div>
@@ -289,8 +289,8 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                     <div class="alert alert-info border-0 rounded-3 small mt-3 mb-0">
                                         <i class="bi bi-info-circle me-1"></i>
                                         <strong>Local Marketplace is free to install.</strong>
-                                        You are charged <strong>â‚¦<?php echo number_format($local_ver_fee, 2); ?></strong> per successful verification.
-                                        Minimum wallet balance required: <strong>â‚¦<?php echo number_format($local_min_bal, 2); ?></strong>.
+                                        You are charged <strong>₦<?php echo number_format($local_ver_fee, 2); ?></strong> per successful verification.
+                                        Minimum wallet balance required: <strong>₦<?php echo number_format($local_min_bal, 2); ?></strong>.
                                     </div>
                                 </div>
                             </div>
@@ -323,17 +323,17 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                 <div class="card-body p-4">
                     <?php if ($get_logged_admin_details['nin_card_enabled'] == 0):
                         $q_nin_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='nin_card_activation_fee'");
-                        $nin_act_fee = (float)(mysqli_fetch_assoc($q_nin_fee)['option_value'] ?? 5000);
+                        $nin_act_fee = (float)(($q_nin_fee && mysqli_num_rows($q_nin_fee) > 0) ? mysqli_fetch_assoc($q_nin_fee)['option_value'] : 5000);
                     ?>
                         <div class="text-center py-5 bg-light rounded-4 border">
                             <i class="bi bi-lock-fill text-warning display-4 mb-3"></i>
                             <h4 class="fw-bold mb-2">NIN Card Service Locked</h4>
                             <p class="text-muted mb-4 px-lg-5">Activate the NIN Card Service to let your users generate and download their Digital NIN Slip. Uses Dojah or QoreID as the identity provider.</p>
-                            <div class="h3 fw-bold text-success mb-4">One-time Fee: â‚¦<?php echo number_format($nin_act_fee, 2); ?></div>
+                            <div class="h3 fw-bold text-success mb-4">One-time Fee: ₦<?php echo number_format($nin_act_fee, 2); ?></div>
                             <form method="post" class="m-0 d-inline-block">
                                 <button type="submit" name="activate-nin-card-wallet" class="btn btn-success btn-lg rounded-pill fw-bold px-5"
-                                    onclick="return confirm('Charge â‚¦<?php echo number_format($nin_act_fee, 2); ?> from your vendor wallet to activate the NIN Card Service?')">
-                                    <i class="bi bi-wallet2 me-2"></i> Activate â€” Pay â‚¦<?php echo number_format($nin_act_fee, 2); ?> from Wallet
+                                    onclick="return confirm('Charge ₦<?php echo number_format($nin_act_fee, 2); ?> from your vendor wallet to activate the NIN Card Service?')">
+                                    <i class="bi bi-wallet2 me-2"></i> Activate — Pay ₦<?php echo number_format($nin_act_fee, 2); ?> from Wallet
                                 </button>
                             </form>
                         </div>
@@ -350,9 +350,9 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                         <form method="post">
                             <div class="row g-4 align-items-end">
                                 <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee â€” User (Level 1)</label>
+                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee — User (Level 1)</label>
                                     <div class="input-group">
-                                        <span class="input-group-text bg-light border-0">â‚¦</span>
+                                        <span class="input-group-text bg-light border-0">₦</span>
                                         <input name="nin_card_fee" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['nin_card_fee']; ?>"
                                                class="form-control form-control-lg bg-light border-0" placeholder="300.00">
@@ -360,9 +360,9 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                     <small class="text-muted text-xs">Price charged to regular users.</small>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee â€” Agent (Level 2)</label>
+                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee — Agent (Level 2)</label>
                                     <div class="input-group">
-                                        <span class="input-group-text bg-light border-0">â‚¦</span>
+                                        <span class="input-group-text bg-light border-0">₦</span>
                                         <input name="nin_card_fee_agent" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['nin_card_fee_agent']; ?>"
                                                class="form-control form-control-lg bg-light border-0" placeholder="250.00">
@@ -370,9 +370,9 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                     <small class="text-muted text-xs">Price charged to agent-level users.</small>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee â€” API (Level 3)</label>
+                                    <label class="form-label small fw-bold text-muted text-uppercase">Fee — API (Level 3)</label>
                                     <div class="input-group">
-                                        <span class="input-group-text bg-light border-0">â‚¦</span>
+                                        <span class="input-group-text bg-light border-0">₦</span>
                                         <input name="nin_card_fee_api" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['nin_card_fee_api']; ?>"
                                                class="form-control form-control-lg bg-light border-0" placeholder="200.00">
@@ -402,17 +402,17 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                 <div class="card-body p-4">
                     <?php if ($get_logged_admin_details['bvn_verify_enabled'] == 0):
                         $q_bvn_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='bvn_verify_activation_fee'");
-                        $bvn_act_fee = (float)(mysqli_fetch_assoc($q_bvn_fee)['option_value'] ?? 5000);
+                        $bvn_act_fee = (float)(($q_bvn_fee && mysqli_num_rows($q_bvn_fee) > 0) ? mysqli_fetch_assoc($q_bvn_fee)['option_value'] : 5000);
                     ?>
                         <div class="text-center py-5 bg-light rounded-4 border">
                             <i class="bi bi-lock-fill text-warning display-4 mb-3"></i>
                             <h4 class="fw-bold mb-2">BVN Verification Service Locked</h4>
                             <p class="text-muted mb-4 px-lg-5">Activate BVN Verification to let your users instantly verify any Bank Verification Number and retrieve identity details. Uses Dojah or QoreID as the identity provider.</p>
-                            <div class="h3 fw-bold text-success mb-4">One-time Fee: â‚¦<?php echo number_format($bvn_act_fee, 2); ?></div>
+                            <div class="h3 fw-bold text-success mb-4">One-time Fee: ₦<?php echo number_format($bvn_act_fee, 2); ?></div>
                             <form method="post" class="m-0 d-inline-block">
                                 <button type="submit" name="activate-bvn-verify-wallet" class="btn btn-success btn-lg rounded-pill fw-bold px-5"
-                                    onclick="return confirm('Charge â‚¦<?php echo number_format($bvn_act_fee, 2); ?> from your vendor wallet to activate the BVN Verification Service?')">
-                                    <i class="bi bi-wallet2 me-2"></i> Activate â€” Pay â‚¦<?php echo number_format($bvn_act_fee, 2); ?> from Wallet
+                                    onclick="return confirm('Charge ₦<?php echo number_format($bvn_act_fee, 2); ?> from your vendor wallet to activate the BVN Verification Service?')">
+                                    <i class="bi bi-wallet2 me-2"></i> Activate — Pay ₦<?php echo number_format($bvn_act_fee, 2); ?> from Wallet
                                 </button>
                             </form>
                         </div>
@@ -427,7 +427,7 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                 <div class="col-md-4">
                                     <label class="form-label fw-semibold">Smart (User) Price <span class="text-danger">*</span></label>
                                     <div class="input-group">
-                                        <span class="input-group-text">â‚¦</span>
+                                        <span class="input-group-text">₦</span>
                                         <input name="bvn_verify_fee" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['bvn_verify_fee']; ?>"
                                                class="form-control" required>
@@ -437,7 +437,7 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                 <div class="col-md-4">
                                     <label class="form-label fw-semibold">Agent Price <span class="text-danger">*</span></label>
                                     <div class="input-group">
-                                        <span class="input-group-text">â‚¦</span>
+                                        <span class="input-group-text">₦</span>
                                         <input name="bvn_verify_fee_agent" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['bvn_verify_fee_agent']; ?>"
                                                class="form-control" required>
@@ -447,7 +447,7 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                                 <div class="col-md-4">
                                     <label class="form-label fw-semibold">API Price <span class="text-danger">*</span></label>
                                     <div class="input-group">
-                                        <span class="input-group-text">â‚¦</span>
+                                        <span class="input-group-text">₦</span>
                                         <input name="bvn_verify_fee_api" type="number" step="any" min="0"
                                                value="<?php echo $get_logged_admin_details['bvn_verify_fee_api']; ?>"
                                                class="form-control" required>

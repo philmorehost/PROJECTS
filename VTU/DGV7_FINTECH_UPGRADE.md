@@ -1179,3 +1179,76 @@ backoffice_regression **110**, lm_edition **30**, htaccess **224**.
 Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
 plate_admin **708**, plate_migration **980**, backoffice_regression **139**,
 lm_edition **30**, htaccess **224**.
+
+## 24. Landing redesign, license-save fix, back-office bug round (2026-11-19)
+
+- **Landing page (template 1, both editions)** rebuilt on the client's
+  freelancer design: hero with wallet/pockets mock, feature cards, three
+  ways to get paid (bank transfer / invoice / QR), pockets, personas,
+  currencies, spend, free pricing, FAQ and final CTA. The brand name is
+  automated — every mention renders the saved site title (vendor site
+  details; on the SAAS platform domain, the super-admin site title) — and
+  sections follow bc-admin Service Control state: the VTU card/chips/tiles
+  (airtime/data/cable/electric/betting/exam), the card sections
+  (virtual_card), bank-transfer receiving (bank_transfer), the exchange
+  steps/tiles (currency_conversion) and the FAQ service list all hide when
+  their service is off. Templates 2/3/6 are untouched; vendors who picked
+  them keep them.
+- **Live currency conversion** is a real bc-admin feature now: Service
+  Control gains a `currency_conversion` service toggle (vendor + SAAS
+  global) and a **Currency Conversion API** card that stores the vendor's
+  ExchangeRate-API key (`fx_api_key` in `sas_settings`).
+  `getLiveExchangeRate()` prefers that keyed v6 endpoint over the shared
+  free one. The landing converter renders **only** when the toggle is ON
+  and a key is configured, and fetches `web/api/exchange-rate.php` live.
+- **License "not saving" + updater tier-mismatch 403 (SAAS) were one bug.**
+  The save handler ignored `bc_write_activation()`'s result; when the
+  activation file could not be written (func/ ownership after an update),
+  the stale file's key — which outranks the database in
+  `bc_verify_integrity()` — was stamped back over the just-saved key by
+  `bc_license_db_backfill()`. The old key (assigned to NON-SAAS on the
+  License Manager) kept being sent, and the session-cached
+  `getSuperAdminOption()` kept showing it, so the page looked unsaved. The
+  handler now checks both writes, drops the stale activation file so the
+  saved database key governs, busts the session option cache, and reports
+  write failures honestly. UpdateSystem's tier-mismatch error now explains
+  both fixes (re-save the key, or re-pin the license tier in License
+  Manager → Fix License Tiers). LM enforcement itself is unchanged.
+- **bc-admin Dashboard addon dump:** the addon modals were printed after
+  `bc_adm_foot()`, i.e. outside `.pk-app__wrap` where the shell's
+  `.modal{display:none}` compat rule applies, so the whole catalogue
+  (APK/iOS/Play Store/PrintHub copy, fees, Order Now) rendered as raw page
+  text. The modals and page script now sit before `bc_adm_foot()` (inside
+  the wrap); the stray trailing `</html>` is gone. Dashboard.php stays
+  byte-identical across editions.
+- **IdentityAPI currency labels:** the naira sign was double-encoded
+  (`â‚¦`, 16×, plus 5 em-dashes) across fee labels, input prefixes and
+  confirm dialogs; restored to `₦`/`—`. Four fee lookups indexed
+  `mysqli_fetch_assoc()` output without checking the query — now guarded
+  like the existing identity-fee lookup.
+- **BatchTransactions** printed a literal closing-tag fragment under its
+  hero: a doubled `?>` on its own line after the query block (both
+  editions). Removed.
+- **Users Block action rendered blank:** `bi-ban` only exists in Bootstrap
+  Icons 1.11+, but every shell loaded 1.10.5. All icon-font loaders
+  (plate-app, plate-admin, installer shell, spadmin config; both editions)
+  now load 1.11.3, which also fixes every other 1.11-only glyph in use.
+- **web/SendFund.php redesigned** (both editions): fintech hero with the
+  wallet balance, Verify→Confirm step pills, and a search-as-you-type bank
+  picker — the bank list ships with the page (`func/banks.json`), filters
+  instantly (prefix matches first), supports keyboard navigation, and
+  fills the same hidden `bank-code` field the form posts. It replaces the
+  TomSelect dropdown whose library the shell never loaded — constructing
+  it threw, which also killed the account-name auto-resolution wired after
+  it; that flow (resolve_account, caching, debounce) is restored verbatim.
+  All POST actions (`verify-bank`, `process-transfer`, `initiate-transfer`,
+  `reset-bank`, `send_otp`, `delete_beneficiary`), field names and the
+  beneficiary limit flow are unchanged. Two latent bugs fixed on the way:
+  the result modal read an undefined `$res` (the flashed `transfer_result`
+  was never captured or cleared — now captured once into `$sf_result`), and
+  `fillBeneficiary` scrolled to a `.card-header` the redesign replaces
+  (now `.sf-hero`, null-guarded).
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
+plate_admin **708**, plate_migration **1020**, backoffice_regression **184**,
+lm_edition **30**, htaccess **224**.

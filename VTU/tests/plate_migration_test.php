@@ -145,6 +145,30 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // SendFund.php is redesigned on the shell (2026-11): a fintech hero,
+        // step pills and a search-as-you-type bank picker replace the old
+        // TomSelect dropdown — its library was never loaded by the shell, so
+        // constructing it threw and silently killed bank search AND the
+        // account-name resolution wired after it. The transfer contract —
+        // POST actions, field ids/names, the resolve/delete/OTP AJAX posts —
+        // is the behaviour that must not drift.
+        if ($name === 'SendFund.php') {
+            chk(strpos($cur, 'data-pkx="page-redesign"') !== false, "$label carries the redesign layer");
+            chk(strpos($cur, 'sf-hero') !== false, "$label renders the fintech hero");
+            chk(strpos($cur, 'id="bank-search"') !== false, "$label renders the bank search input");
+            chk(strpos($cur, 'id="bank-results"') !== false, "$label renders the bank results list");
+            chk(strpos($cur, 'SF_BANKS') !== false, "$label ships the bank list for type-ahead");
+            foreach (array('name="verify-bank"', 'name="process-transfer"', 'name="initiate-transfer"', 'name="reset-bank"',
+                           'id="bank-code"', 'name="bank-code"', 'id="account-number"', 'id="resolved-account-name"',
+                           "'resolve_account'", "'delete_beneficiary'", "'send_otp'", 'fillBeneficiary', 'deleteBeneficiary',
+                           'sendWithdrawalOTP', 'handleTransferSubmit', 'sas_withdrawal_beneficiaries') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps $token");
+            }
+            chk(strpos($cur, 'TomSelect') === false, "$label no longer depends on the unloaded TomSelect");
+            chk(strpos($cur, 'json_encode($sf_result)') !== false, "$label feeds the captured transfer result to its modal");
+            continue;
+        }
+
         // Pay Bills pages are redesigned on the shell (2026-11) with their
         // automation restored (the shell loads jsfile/bc-custom-all.js again).
         // Their form contracts — field ids/names, tick*/pick* handlers, plan

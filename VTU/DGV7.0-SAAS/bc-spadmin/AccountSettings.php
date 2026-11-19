@@ -82,6 +82,9 @@
         $status_str = $is_valid ? 'valid' : 'invalid';
         bc_store_license_option($connection_server, 'license_status', $status_str);
         bc_store_license_option($connection_server, 'license_last_check', date('Y-m-d H:i:s'));
+        // The banner on this page reads through the session-cached
+        // getSuperAdminOption(); drop the cache so it shows this fresh status.
+        unset($_SESSION['super_admin_options_cache']);
 
         if ($is_valid) {
             mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='license_invalid_since'");
@@ -751,11 +754,27 @@ if(isset($_POST["update-global-withdrawal-settings"])){
         // Use the existence-checked upsert so the value actually sticks on both schema
         // variants of sas_super_admin_options (plain INSERT ... ON DUPLICATE KEY UPDATE
         // silently appends duplicates on the older non-unique-key layout).
-        bc_store_license_option($connection_server, 'license_key', $license_key);
+        $license_key_saved = bc_store_license_option($connection_server, 'license_key', $license_key);
         bc_store_license_option($connection_server, 'license_domain', $license_domain);
 
-        // Persist to activation file as well
-        bc_write_activation($license_key);
+        // Persist to activation file as well. The activation file outranks the
+        // database in bc_verify_integrity(), and bc_license_db_backfill() stamps
+        // the file's key back over the database copy — so when this write fails
+        // (func/ not writable by PHP, common after an update changes file
+        // ownership) the OLD key silently comes back on the next request: this
+        // page looks like it never saves, and the updater keeps sending the old
+        // key (which the License Manager may report as the other edition's).
+        // Drop the stale file instead so the database copy saved above becomes
+        // the source of truth, and report the failure honestly below.
+        $activation_file_saved = bc_write_activation($license_key);
+        if (!$activation_file_saved) {
+            bc_clear_activation();
+        }
+
+        // getSuperAdminOption() caches values in the session; without this the
+        // re-rendered form (and the license refresh endpoint) keep showing the
+        // pre-save key, which reads exactly like "the settings did not save".
+        unset($_SESSION['super_admin_options_cache']);
         // Clear integrity cache file to force fresh check on next load
         $cache_file = __DIR__ . '/../func/cache/bc-core.cache';
         if (file_exists($cache_file)) {
@@ -811,16 +830,23 @@ if(isset($_POST["update-global-withdrawal-settings"])){
         bc_store_license_option($connection_server, 'license_status', $status_str);
         bc_store_license_option($connection_server, 'license_last_check', date('Y-m-d H:i:s'));
         
+        $activation_note = "";
+        if (!$license_key_saved) {
+            $activation_note = " ERROR: the key could not be written to the database (sas_super_admin_options) — check the database connection and table.";
+        } elseif (!$activation_file_saved) {
+            $activation_note = " Note: func/bc-activation.php could not be written (check that PHP can write to the func/ folder); the key was saved to the database and is used from there.";
+        }
+
         if ($is_valid) {
             mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='license_invalid_since'");
-            $_SESSION["product_purchase_response"] = "✅ License key saved and verified successfully!";
+            $_SESSION["product_purchase_response"] = "✅ License key saved and verified successfully!" . $activation_note;
         } else {
             // Only set if not already set, to prevent reset on subsequent checks
             $invalid_check = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='license_invalid_since' LIMIT 1");
             if ($invalid_check && mysqli_num_rows($invalid_check) == 0) {
                 bc_store_license_option($connection_server, 'license_invalid_since', time());
             }
-            $_SESSION["product_purchase_response"] = "⚠️ License saved, but status is INVALID. Please verify key/domain.";
+            $_SESSION["product_purchase_response"] = "⚠️ License saved, but status is INVALID. Please verify key/domain." . $activation_note;
         }
 
         header("Location: ".$_SERVER["REQUEST_URI"]);

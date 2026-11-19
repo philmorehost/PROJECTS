@@ -283,6 +283,95 @@ foreach (array('ad2-hero', 'admin_stats_v2', 'sas_dashboard_cache', 'triggerAdmi
     rchk(strpos($dash, $token) !== false, "bc-admin/Dashboard keeps $token");
 }
 rchk(rsrc($nons . '/bc-admin/Dashboard.php') === $dash, 'bc-admin/Dashboard.php matches across editions');
+// The addon modals must render INSIDE the shell wrap: the compat CSS only
+// hides .modal under .pk-app__wrap, so modals printed after bc_adm_foot()
+// (which closes the wrap and the document) dumped their full catalogue text
+// onto the dashboard as raw page content.
+$dash_foot_pos = strpos($dash, 'bc_adm_foot()');
+$dash_modal_pos = strpos($dash, 'modal-addon-');
+rchk($dash_modal_pos !== false && $dash_foot_pos !== false && $dash_modal_pos < $dash_foot_pos,
+    'bc-admin/Dashboard renders addon modals before bc_adm_foot() (inside the shell wrap)');
+rchk(substr_count($dash, '</html>') === 0, 'bc-admin/Dashboard adds no stray </html> after the shell foot');
+
+// ------------------------------------------------------- 2026-11-19 round
+// BatchTransactions printed a literal closing-tag fragment under its
+// filter card: a second closing tag sat on its own line after the query.
+foreach (array($saas, $nons) as $ed) {
+    $bt = rsrc($ed . '/bc-admin/BatchTransactions.php');
+    rchk(strpos($bt, "?>\n?>\n") === false, basename($ed) . ' BatchTransactions has no doubled ?> line');
+    rchk(strpos($bt, 'bt-hero') !== false, basename($ed) . ' BatchTransactions keeps its redesign');
+}
+
+// The Users list Block action uses bi-ban, which only exists in Bootstrap
+// Icons 1.11+; on the old 1.10.5 font the button rendered blank/white.
+// The shells must ship the newer icon font, and the action must stay wired.
+foreach (array('/func/bc-plate-admin.php', '/func/bc-plate-app.php', '/func/bc-installer-shell.php') as $shell) {
+    foreach (array($saas, $nons) as $ed) {
+        rchk(strpos(rsrc($ed . $shell), 'bootstrap-icons/1.11.3') !== false,
+            basename($ed) . $shell . ' loads Bootstrap Icons 1.11.3 (bi-ban exists)');
+    }
+}
+rchk(strpos(rsrc($saas . '/func/bc-spadmin-config.php'), 'bootstrap-icons/1.11.3') !== false,
+    'bc-spadmin-config loads Bootstrap Icons 1.11.3 (bi-ban exists)');
+foreach (array($saas, $nons) as $ed) {
+    $users = rsrc($ed . '/bc-admin/Users.php');
+    rchk(strpos($users, "updateUserAccountStatus('2'") !== false && strpos($users, 'bi bi-ban') !== false,
+        basename($ed) . ' Users keeps the Block-user action and its icon');
+}
+
+// IdentityAPI showed the naira sign as mojibake (double-encoded UTF-8) on
+// every fee label and confirm dialog, and four fee lookups indexed the
+// result of mysqli_fetch_assoc() without checking the query succeeded.
+$idp = rsrc($saas . '/bc-admin/IdentityAPI.php');
+rchk(strpos($idp, 'â') === false, 'IdentityAPI has no double-encoded UTF-8 left');
+rchk(substr_count($idp, '₦') >= 10, 'IdentityAPI renders the naira sign correctly');
+rchk(strpos($idp, "mysqli_fetch_assoc(\$q_fee)['option_value'] ??") === false
+    && strpos($idp, "mysqli_fetch_assoc(\$q_nin_fee)['option_value'] ??") === false
+    && strpos($idp, "mysqli_fetch_assoc(\$q_bvn_fee)['option_value'] ??") === false,
+    'IdentityAPI fee lookups guard the query result before indexing it');
+
+// License settings "not saving" + the updater's tier-mismatch 403 were one
+// bug: a failed bc_write_activation() left a stale activation file whose key
+// bc_license_db_backfill() stamped back over the just-saved database key, so
+// the old (other-edition) key kept being sent. The save must drop the stale
+// file, bust the session option cache and report the failure; the updater
+// must tell the admin where the fix lives.
+$sp_settings = rsrc($saas . '/bc-spadmin/AccountSettings.php');
+rchk(strpos($sp_settings, '$activation_file_saved = bc_write_activation($license_key);') !== false,
+    'license save checks the activation-file write result');
+rchk(strpos($sp_settings, 'bc_clear_activation();') !== false,
+    'license save drops a stale activation file when the write fails');
+rchk(substr_count($sp_settings, "unset(\$_SESSION['super_admin_options_cache']);") >= 2,
+    'license save/refresh bust the session option cache');
+$upd = rsrc($saas . '/bc-spadmin/UpdateSystem.php');
+rchk(strpos($upd, "'expected_tier' => 'SAAS'") !== false, 'UpdateSystem still declares the SAAS tier');
+rchk(strpos($upd, 'Fix License Tiers') !== false, 'UpdateSystem explains the tier-mismatch fix');
+
+// Currency conversion: bc-admin toggles it per service and stores the FX
+// API key; getLiveExchangeRate prefers the keyed provider; the landing
+// page renders its live converter only when both are in place, brands
+// itself from the saved site name and hides disabled services.
+foreach (array($saas, $nons) as $ed) {
+    $sc = rsrc($ed . '/bc-admin/ServiceControl.php');
+    rchk(strpos($sc, "'currency_conversion' => 'Currency Conversion (Live FX Rates)'") !== false,
+        basename($ed) . ' ServiceControl lists the Currency Conversion service');
+    rchk(strpos($sc, "isset(\$_POST['save-fx-api'])") !== false && strpos($sc, "setVendorOption(\$vid, 'fx_api_key', \$fx_key)") !== false,
+        basename($ed) . ' ServiceControl saves the FX API key');
+    rchk(strpos(rsrc($ed . '/func/bc-giftcard-func.php'), 'v6.exchangerate-api.com/v6/') !== false,
+        basename($ed) . ' getLiveExchangeRate uses the keyed FX provider');
+    $tpl = rsrc($ed . '/index-bc-style-template-1.php');
+    rchk(strpos($tpl, 'MzeeVTU') === false, basename($ed) . ' landing has no hardcoded client brand');
+    rchk(strpos($tpl, '$site_name_e') !== false, basename($ed) . ' landing brands itself from the saved site name');
+    rchk(strpos($tpl, "isServiceEnabled(\$service, \$lp_vid)") !== false || strpos($tpl, 'isServiceEnabled($service, $lp_vid)') !== false,
+        basename($ed) . ' landing gates sections on bc-admin service state');
+    rchk(strpos($tpl, '$lp_fx_live = $lp_fx_toggle && $lp_fx_key !== \'\';') !== false,
+        basename($ed) . ' landing live converter requires the toggle AND a configured API key');
+    rchk(strpos($tpl, 'id="fxConverter"') !== false && strpos($tpl, 'web/api/exchange-rate.php') !== false,
+        basename($ed) . ' landing converter fetches the live rate endpoint');
+    foreach (array('lp_cards', 'lp_vtu_any', 'lp_receive') as $gate) {
+        rchk(strpos($tpl, '$' . $gate) !== false, basename($ed) . " landing keeps the $gate service gate");
+    }
+}
 
 echo "backoffice_regression_test: $checks checks, $failures failures\n";
 if ($failures > 0) {

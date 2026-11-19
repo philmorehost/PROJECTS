@@ -57,7 +57,6 @@ bc_adm_head("Users Batch Transaction | " . ($get_all_super_admin_site_details["s
             $get_user_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_bulk_product_purchase WHERE vendor_id='".$get_logged_admin_details["id"]."' $search_statement ORDER BY date DESC LIMIT 20 $offset_statement");
             
         ?>
-?>
 
 <div class="bt-hero">
     <h2><i class="bi bi-layers me-2"></i>Batch Transactions</h2>

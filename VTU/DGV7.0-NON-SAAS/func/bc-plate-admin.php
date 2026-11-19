@@ -464,7 +464,7 @@ if (!function_exists('bc_adm_head')) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
     <?php foreach ($extra as $href): ?>
     <link rel="stylesheet" href="<?php echo htmlspecialchars((string)$href, ENT_QUOTES, 'UTF-8'); ?>">
     <?php endforeach; ?>

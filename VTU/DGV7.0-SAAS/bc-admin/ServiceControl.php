@@ -42,6 +42,7 @@ $services = [
     'virtual_card' => 'Virtual Card System',
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',
+    'currency_conversion' => 'Currency Conversion (Live FX Rates)',
     'nin_card' => 'Digital NIN Slip',
     'bvn_verify' => 'BVN Verification',
     'virtual_bank_display' => 'Virtual Bank Button (Off by Default)',
@@ -59,6 +60,22 @@ $gateways = [
     // 'plisio' => 'Plisio (Crypto)', // DGV7: retired, provider defunct
     'manual_funding' => 'Manual Bank Funding'
 ];
+
+// Live FX (currency conversion) API configuration. The public landing-page
+// converter is offered only while the Currency Conversion service above is ON
+// and a key is saved here; getLiveExchangeRate() prefers this keyed provider
+// over the shared free endpoint, so rates are the vendor's own live rates.
+if (isset($_POST['save-fx-api'])) {
+    $vid = (int)$get_logged_admin_details['id'];
+    $fx_key = trim(strip_tags($_POST['fx_api_key'] ?? ''));
+    setVendorOption($vid, 'fx_api_provider', 'exchangerate-api');
+    setVendorOption($vid, 'fx_api_key', $fx_key);
+    $_SESSION["product_purchase_response"] = $fx_key !== ''
+        ? "Currency conversion API saved. Live rates are now used wherever currency conversion applies."
+        : "Currency conversion API key removed. Live currency conversion stays off until a key is saved.";
+    header("Location: ServiceControl.php");
+    exit();
+}
 
 if (isset($_POST['toggle_service'])) {
     $service_name = mysqli_real_escape_string($connection_server, $_POST['service_name']);
@@ -228,6 +245,38 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
                             </div>
                             <?php endforeach; ?>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Currency Conversion API -->
+                <div class="card shadow-sm border-0 rounded-4 mt-4">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-currency-exchange me-2"></i>Currency Conversion API</h5>
+                        <p class="small text-muted mb-0">Live exchange rates for the public landing-page converter and currency-priced services.</p>
+                    </div>
+                    <div class="card-body">
+                        <?php $fx_api_key_saved = trim((string) getVendorOption((int)$get_logged_admin_details['id'], 'fx_api_key', '')); ?>
+                        <div class="alert <?php echo $fx_api_key_saved !== '' ? 'alert-success' : 'alert-warning'; ?> border-0 rounded-3 small">
+                            <?php if ($fx_api_key_saved !== ''): ?>
+                                <i class="bi bi-check-circle me-1"></i><strong>API configured.</strong> Live conversion is available wherever the Currency Conversion service is switched on.
+                            <?php else: ?>
+                                <i class="bi bi-exclamation-triangle me-1"></i><strong>No API key saved.</strong> The landing-page converter stays hidden until a key is saved here and the Currency Conversion service is switched on.
+                            <?php endif; ?>
+                        </div>
+                        <form method="post" action="">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Provider</label>
+                                <select name="fx_api_provider" class="form-select">
+                                    <option value="exchangerate-api" selected>ExchangeRate-API (v6.exchangerate-api.com)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">API Key</label>
+                                <input type="text" name="fx_api_key" class="form-control" value="<?php echo htmlspecialchars($fx_api_key_saved, ENT_QUOTES); ?>" placeholder="Paste your ExchangeRate-API key" autocomplete="off">
+                                <div class="form-text">Get a key at exchangerate-api.com. Leave the field blank and save to remove the key.</div>
+                            </div>
+                            <button type="submit" name="save-fx-api" class="btn btn-primary rounded-pill px-4 fw-bold"><i class="bi bi-save2 me-1"></i>Save API Configuration</button>
+                        </form>
                     </div>
                 </div>
 

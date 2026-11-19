@@ -781,7 +781,6 @@
     <!-- Row End -->
     </section>
         <?php include("../func/admin-short-trans.php"); ?>
-    <?php bc_adm_foot(); ?>
     
     <script>
         function triggerAdminManualSync() {
@@ -929,4 +928,4 @@
         </div>
     </div>
     <?php endforeach; ?>
-</html>
+    <?php bc_adm_foot(); ?>

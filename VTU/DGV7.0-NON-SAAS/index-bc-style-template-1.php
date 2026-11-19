@@ -91,1291 +91,643 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
 $email_share = "mailto:?subject=" . $share_text . "&body=" . urlencode($current_url);
 $contact_email = "mailto:" . (($vendor_account_details['email'] ?? '') ?: '');
 ?>
+<?php
+// ── Freelancer landing (2026-11 redesign of template 1) ─────────────────
+// The brand name is automated: every mention on this page uses $site_title,
+// which the preamble above resolved from the saved site details. Services
+// switched off in bc-admin (Service Control) are not advertised here.
+$site_name_e = htmlspecialchars((string)$site_title, ENT_QUOTES, 'UTF-8');
+$site_name_initial = strtoupper(substr(trim((string)$site_title) !== '' ? trim((string)$site_title) : 'F', 0, 1));
+$lp_vid = (isset($vendor_account_details) && is_array($vendor_account_details) && !empty($vendor_account_details['id'])) ? (int)$vendor_account_details['id'] : 0;
+
+$lp_on = function ($service) use ($lp_vid) {
+    return function_exists('isServiceEnabled') ? (bool) isServiceEnabled($service, $lp_vid) : true;
+};
+$lp_airtime = $lp_on('airtime');
+$lp_data = $lp_on('data');
+$lp_cable = $lp_on('cable');
+$lp_electric = $lp_on('electric');
+$lp_betting = $lp_on('betting');
+$lp_exam = $lp_on('exam');
+$lp_vtu_any = $lp_airtime || $lp_data || $lp_cable || $lp_electric || $lp_betting || $lp_exam;
+$lp_vtu_list = array();
+if ($lp_airtime) $lp_vtu_list[] = 'airtime';
+if ($lp_data) $lp_vtu_list[] = 'data';
+if ($lp_electric) $lp_vtu_list[] = 'electricity';
+if ($lp_cable) $lp_vtu_list[] = 'cable TV';
+if ($lp_betting) $lp_vtu_list[] = 'betting';
+if ($lp_exam) $lp_vtu_list[] = 'exam PIN';
+$lp_cards = $lp_on('virtual_card');
+$lp_receive = $lp_on('bank_transfer');
+$lp_send = $lp_on('share_fund') || $lp_on('withdraw');
+$lp_fx_toggle = $lp_on('currency_conversion');
+// Live conversion is offered only while Currency Conversion is ON in
+// bc-admin AND the FX API is configured there (Service Control -> Currency
+// Conversion API). Otherwise the converter is not rendered at all.
+$lp_fx_key = ($lp_vid > 0 && function_exists('getVendorOption')) ? trim((string) getVendorOption($lp_vid, 'fx_api_key', '')) : '';
+$lp_fx_live = $lp_fx_toggle && $lp_fx_key !== '';
+$lp_currencies = array('NGN', 'USD', 'GBP', 'EUR', 'KES', 'GHS', 'UGX', 'TZS', 'CAD', 'AED');
+$lp_personas = array(
+    array('Freelancers', 'FR', 'Invoices, transfers and top-ups in one free account.'),
+    array('Creators', 'CR', 'Get paid by brands and platforms without chasing payments.'),
+    array('Consultants', 'CO', 'Bill clients professionally and track every payment.'),
+    array('Coaches', 'CH', 'Collect session fees by link, invoice or QR code.'),
+    array('Beauty pros', 'BP', 'Take deposits and payments straight to your account.'),
+    array('Makers', 'MK', 'Sell your work and keep the income separate from personal cash.'),
+    array('Tech & devs', 'TD', 'Receive contract payments in the currencies clients use.'),
+    array('Drivers & riders', 'DR', 'Daily earnings, top-ups and bills in one place.'),
+);
+$lp_contact_email = (isset($vendor_account_details['email']) && $vendor_account_details['email']) ? $vendor_account_details['email'] : '';
+$brand_colour = '#287bff';
+if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
+    $lp_bc = mysqli_query($connection_server, "SELECT primary_color FROM sas_vendor_style_templates WHERE vendor_id='" . $lp_vid . "' LIMIT 1");
+    if ($lp_bc && ($lp_bc_row = mysqli_fetch_assoc($lp_bc)) && !empty($lp_bc_row['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $lp_bc_row['primary_color'])) {
+        $brand_colour = $lp_bc_row['primary_color'];
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($site_title); ?> — Digital Payments Made Simple</title>
-    <meta name="description" content="<?php echo htmlspecialchars($site_title); ?> is a one-stop platform for instant Airtime, Data, Electricity, Cable TV, Crypto, Gift Cards and more. Fast, secure, 24/7.">
+    <title><?php echo htmlspecialchars($site_title); ?> — Free account for freelancers</title>
+    <meta name="description" content="<?php echo htmlspecialchars($site_title); ?> is a free account for freelancers: get paid by invoice, bank transfer or QR code, then top up airtime, data and bills in seconds.">
     <?php if (!empty($meta_keywords)): ?>
     <meta name="keywords" content="<?php echo htmlspecialchars($meta_keywords); ?>">
     <?php endif; ?>
-    <!-- Open Graph -->
     <meta property="og:title" content="<?php echo htmlspecialchars($site_title); ?>">
-    <meta property="og:description" content="Buy Airtime, Data, Electricity tokens, Cable TV, Exam Pins and more — instantly. Join thousands of happy users.">
+    <meta property="og:description" content="Free account for freelancers who run their own show.">
     <meta property="og:image" content="<?php echo $site_logo; ?>">
     <meta property="og:url" content="<?php echo htmlspecialchars($current_url); ?>">
     <meta property="og:type" content="website">
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?php echo htmlspecialchars($site_title); ?>">
-    <meta name="twitter:description" content="Digital payments made simple — Airtime, Data, Bills, Crypto & more.">
-    <meta name="twitter:image" content="<?php echo $site_logo; ?>">
-    <!-- Font Awesome 6 (free) -->
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
-    <!-- Google Font: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet">
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="<?php echo $site_logo; ?>">
-    <!-- PWA -->
-    <meta name="theme-color" content="#1e3a8a">
-    <?php if (!empty($hero_image)): ?>
-        <link rel="preload" as="image" href="<?php echo htmlspecialchars($hero_image); ?>">
-    <?php endif; ?>
-    <style>
-        /* ── Reset & base ──────────────────────────────────────────── */
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-
-        /* ── Sticky header / glass nav ─────────────────────────────── */
-        #siteHeader {
-            position: sticky;
-            top: 0;
-            z-index: 900;
-            background: rgba(248,250,252,0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid transparent;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        #siteHeader.scrolled {
-            border-bottom-color: #e2e8f0;
-            box-shadow: 0 4px 20px -8px rgba(30,58,138,0.12);
-        }
-        .header-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 18px 0;
-        }
-        .nav-cta {
-            background: #1e3a8a !important;
-            color: white !important;
-            padding: 10px 22px;
-            border-radius: 50px;
-            font-weight: 600 !important;
-            transition: background 0.2s, transform 0.15s !important;
-        }
-        .nav-cta:hover { background: #0f2b6b !important; transform: translateY(-1px); }
-
-        /* ── Hero ─────────────────────────────────────────────────── */
-        .hero-wrap {
-            position: relative;
-            overflow: hidden;
-            padding: 80px 0 100px;
-        }
-        .hero-blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            opacity: 0.22;
-            animation: floatBlob 8s ease-in-out infinite alternate;
-            pointer-events: none;
-        }
-        .hero-blob-1 { width: 500px; height: 500px; background: #3b82f6; top: -150px; left: -100px; animation-duration: 9s; }
-        .hero-blob-2 { width: 400px; height: 400px; background: #a855f7; bottom: -100px; right: -80px; animation-duration: 11s; animation-delay: -3s; }
-        .hero-blob-3 { width: 300px; height: 300px; background: #fbbf24; top: 60%; left: 40%; animation-duration: 7s; animation-delay: -5s; }
-        @keyframes floatBlob {
-            0%   { transform: translate(0,0) scale(1); }
-            100% { transform: translate(30px,20px) scale(1.08); }
-        }
-        .hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: #eff6ff;
-            color: #1e3a8a;
-            border: 1px solid #bfdbfe;
-            padding: 6px 16px;
-            border-radius: 50px;
-            font-size: 0.87rem;
-            font-weight: 600;
-            margin-bottom: 22px;
-        }
-        .hero-badge .dot {
-            width: 8px; height: 8px;
-            background: #22c55e;
-            border-radius: 50%;
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50%       { transform: scale(1.4); opacity: 0.6; }
-        }
-
-        /* ── Stats bar ────────────────────────────────────────────── */
-        .stats-bar { background: #1e3a8a; padding: 36px 0; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            text-align: center;
-        }
-        .stat-item { color: white; }
-        .stat-number { font-size: 2.2rem; font-weight: 900; display: block; line-height: 1; margin-bottom: 6px; }
-        .stat-label { font-size: 0.9rem; opacity: 0.8; font-weight: 500; }
-
-        /* ── Section helpers ──────────────────────────────────────── */
-        .section-wrap { padding: 80px 0; }
-        .section-header { text-align: center; margin-bottom: 56px; }
-        .section-eyebrow {
-            display: inline-block;
-            font-size: 0.82rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: #1e3a8a;
-            background: #eff6ff;
-            padding: 4px 14px;
-            border-radius: 50px;
-            margin-bottom: 14px;
-        }
-        .section-header h2 { font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 800; color: #0b2b4a; margin-bottom: 14px; }
-        .section-header p { color: #64748b; font-size: 1.02rem; max-width: 560px; margin: 0 auto; }
-
-        /* ── How it works ─────────────────────────────────────────── */
-        .steps-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 32px;
-            position: relative;
-        }
-        .steps-grid::before {
-            content: '';
-            position: absolute;
-            top: 44px; left: 16.5%; right: 16.5%;
-            height: 2px;
-            background: linear-gradient(90deg, #bfdbfe, #1e3a8a, #bfdbfe);
-            z-index: 0;
-        }
-        .step-card {
-            background: white;
-            border-radius: 28px;
-            padding: 36px 28px;
-            text-align: center;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 8px 24px -12px #94a3b8;
-            position: relative;
-            z-index: 1;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .step-card:hover { transform: translateY(-5px); box-shadow: 0 20px 32px -12px #1e3a8a40; }
-        .step-num {
-            width: 56px; height: 56px;
-            margin: 0 auto 20px;
-            background: #1e3a8a;
-            color: white;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.4rem; font-weight: 900;
-            box-shadow: 0 8px 20px -6px #1e3a8a80;
-        }
-        .step-card h3 { font-size: 1.15rem; font-weight: 700; color: #0b2b4a; margin-bottom: 10px; }
-        .step-card p { color: #64748b; font-size: 0.93rem; line-height: 1.6; }
-
-        /* ── Testimonials ─────────────────────────────────────────── */
-        .testimonials-wrap { background: #f0f6ff; }
-        .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
-        .testimonial-card {
-            background: white; border-radius: 24px; padding: 32px 26px;
-            border: 1px solid #e2e8f0; box-shadow: 0 8px 24px -12px #94a3b860;
-            transition: transform 0.2s;
-        }
-        .testimonial-card:hover { transform: translateY(-4px); }
-        .stars { color: #fbbf24; font-size: 1.05rem; margin-bottom: 14px; }
-        .testimonial-card blockquote {
-            font-size: 0.96rem; color: #334155; line-height: 1.7;
-            font-style: italic; margin-bottom: 20px; border: none; padding: 0;
-        }
-        .testimonial-author { display: flex; align-items: center; gap: 12px; }
-        .author-avatar {
-            width: 44px; height: 44px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1rem; font-weight: 700; color: white; flex-shrink: 0;
-        }
-        .author-name { font-weight: 700; font-size: 0.93rem; color: #0b2b4a; }
-        .author-role { font-size: 0.78rem; color: #64748b; }
-
-        /* ── App Download ─────────────────────────────────────────── */
-        .app-download-section {
-            background: linear-gradient(135deg, #0b2b4a 0%, #1e3a8a 60%, #3b82f6 100%);
-            border-radius: 40px; padding: 64px 48px;
-            display: flex; align-items: center; gap: 48px; flex-wrap: wrap;
-            overflow: hidden; position: relative;
-        }
-        .app-download-section::before { content:''; position:absolute; right:-80px; top:-80px; width:350px; height:350px; background:rgba(255,255,255,0.04); border-radius:50%; }
-        .app-download-section::after  { content:''; position:absolute; left:-60px; bottom:-80px; width:280px; height:280px; background:rgba(255,255,255,0.04); border-radius:50%; }
-        .app-info { flex: 1; min-width: 250px; position: relative; z-index: 1; }
-        .app-info h2 { font-size: 2rem; font-weight: 900; color: white; margin-bottom: 14px; line-height: 1.25; }
-        .app-info p  { color: rgba(255,255,255,0.75); font-size: 1rem; margin-bottom: 28px; line-height: 1.7; }
-        .app-badges { display: flex; gap: 14px; flex-wrap: wrap; }
-        .app-badge {
-            display: inline-flex; align-items: center; gap: 10px;
-            background: rgba(255,255,255,0.12); color: white;
-            padding: 12px 20px; border-radius: 14px;
-            text-decoration: none; font-weight: 600; font-size: 0.93rem;
-            border: 1px solid rgba(255,255,255,0.2);
-            transition: background 0.2s, transform 0.15s;
-        }
-        .app-badge:hover { background: rgba(255,255,255,0.22); transform: translateY(-2px); }
-        .app-badge i { font-size: 1.4rem; }
-        .app-badge-sub  { font-size: 0.7rem; font-weight: 400; opacity: 0.8; display: block; }
-        .app-badge-main { font-size: 0.97rem; display: block; line-height: 1.2; }
-        .app-img { flex: 0 0 auto; position: relative; z-index: 1; }
-        .app-img img { height: 190px; border-radius: 18px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
-
-        /* ── FAQ ──────────────────────────────────────────────────── */
-        .faq-list { max-width: 820px; margin: 0 auto; }
-        .faq-item {
-            background: white; border-radius: 16px; margin-bottom: 12px;
-            border: 1px solid #e2e8f0; overflow: hidden;
-            box-shadow: 0 4px 12px -6px #94a3b840;
-        }
-        .faq-q {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 20px 24px; font-weight: 600; font-size: 1rem;
-            cursor: pointer; color: #0f2b4f; user-select: none;
-        }
-        .faq-q i { transition: transform 0.3s; color: #1e3a8a; flex-shrink: 0; margin-left: 12px; }
-        .faq-a {
-            max-height: 0; overflow: hidden;
-            transition: max-height 0.35s ease, padding 0.2s;
-            padding: 0 24px; color: #475569; font-size: 0.96rem; line-height: 1.7;
-        }
-        .faq-item.open .faq-a { max-height: 400px; padding: 0 24px 20px; }
-        .faq-item.open .faq-q i { transform: rotate(45deg); }
-
-        /* ── CTA Banner ───────────────────────────────────────────── */
-        .cta-banner {
-            background: linear-gradient(135deg, #0b2b4a 0%, #1e3a8a 100%);
-            border-radius: 32px; padding: 64px 48px; text-align: center;
-            position: relative; overflow: hidden;
-        }
-        .cta-banner h2 { font-size: 2.2rem; font-weight: 900; color: white; margin-bottom: 12px; }
-        .cta-banner p  { color: rgba(255,255,255,0.75); font-size: 1.05rem; margin-bottom: 32px; }
-        .cta-banner .btn-primary { background: white; color: #1e3a8a; }
-        .cta-banner .btn-primary:hover { background: #f1f5f9; }
-
-        /* ── Scroll reveal ────────────────────────────────────────── */
-        .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.6s ease, transform 0.6s ease; }
-        .reveal.visible { opacity: 1; transform: none; }
-        .reveal-delay-1 { transition-delay: 0.1s; }
-        .reveal-delay-2 { transition-delay: 0.2s; }
-        .reveal-delay-3 { transition-delay: 0.3s; }
-
-        /* ── modern floating social - lighter, glassy ── */
-        .float-share {
-            position: fixed;
-            right: 24px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 999;
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 12px 8px;
-            border-radius: 32px;
-            box-shadow: 0 10px 30px -10px rgba(0,20,50,0.2);
-            border: 1px solid rgba(255,255,255,0.5);
-        }
-        .float-share a {
-            color: #1e3a8a;
-            background: white;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            font-size: 1.3rem;
-            transition: 0.2s;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            border: 1px solid rgba(0,0,0,0.02);
-        }
-        .float-share a:hover {
-            background: #1e3a8a;
-            color: white;
-            transform: translateY(-3px);
-            box-shadow: 0 15px 20px -8px #1e3a8a60;
-        }
-
-        /* container */
-        .container {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 0 32px;
-        }
-
-        /* header - rendered inside sticky #siteHeader */
-        .logo img {
-            height: 42px;
-            width: auto;
-            display: block;
-        }
-        nav {
-            display: flex;
-            gap: 28px;
-            align-items: center;
-        }
-        nav a {
-            font-weight: 500;
-            color: #334155;
-            text-decoration: none;
-            font-size: 0.98rem;
-            transition: color 0.2s;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        nav a:hover { color: #1e3a8a; }
-        .nav-toggle {
-            display: none;
-            font-size: 1.4rem;
-            cursor: pointer;
-            color: #1e3a8a;
-        }
-
-        /* hero - two-col with blobs */
-        .hero {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            align-items: center;
-            gap: 60px;
-            flex-wrap: wrap;
-        }
-        .hero-content { flex: 1; min-width: 300px; }
-        .hero h1 {
-            font-size: clamp(2.4rem, 5vw, 3.8rem);
-            font-weight: 900;
-            line-height: 1.15;
-            background: linear-gradient(145deg, #0b2b4a 0%, #1e3a8a 60%, #3b82f6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 20px;
-        }
-        .hero p {
-            font-size: 1.15rem;
-            color: #475569;
-            max-width: 480px;
-            margin-bottom: 34px;
-            line-height: 1.7;
-        }
-        .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 14px 30px;
-            border-radius: 50px;
-            font-weight: 700;
-            text-decoration: none;
-            transition: all 0.2s;
-            font-size: 0.97rem;
-        }
-        .btn-primary {
-            background: #1e3a8a;
-            color: white;
-            box-shadow: 0 8px 20px -6px #1e3a8a80;
-        }
-        .btn-primary:hover { background: #0f2b6b; transform: translateY(-2px); box-shadow: 0 16px 28px -8px #0f2b6b80; }
-        .btn-secondary {
-            background: #fbbf24;
-            color: #1e293b;
-            box-shadow: 0 8px 20px -6px #fbbf2480;
-        }
-        .btn-secondary:hover { background: #f59e0b; transform: translateY(-2px); }
-        .hero-image { flex: 1; min-width: 280px; display: flex; justify-content: center; }
-        .hero-image img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 28px;
-            box-shadow: 0 30px 60px -20px #1e3a8a60;
-            border: 1px solid rgba(255,255,255,0.4);
-        }
-
-        /* section titles (legacy) */
-        .section-title {
-            font-size: 2rem;
-            font-weight: 800;
-            margin: 60px 0 24px;
-            color: #0b2b4a;
-            position: relative;
-            padding-bottom: 10px;
-        }
-        .section-title::after {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0;
-            width: 60px; height: 4px;
-            background: #1e3a8a;
-            border-radius: 4px;
-        }
-
-        /* service cards */
-        .service-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-            gap: 22px;
-            margin: 0 0 40px;
-        }
-        .service-card {
-            background: white;
-            padding: 28px 16px;
-            border-radius: 24px;
-            text-align: center;
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: 1px solid #f1f5f9;
-            box-shadow: 0 6px 20px -10px #94a3b8;
-        }
-        .service-card:hover { transform: translateY(-6px); box-shadow: 0 20px 30px -12px #1e3a8a50; border-color: #cbd5e1; }
-        .service-icon-wrap {
-            width: 64px; height: 64px;
-            margin: 0 auto 16px;
-            background: linear-gradient(145deg, #e0f2fe, #f0f9ff);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.75rem; color: #1e3a8a;
-            box-shadow: 0 4px 10px #b0c4de28;
-        }
-        .service-card h3 { font-size: 1rem; font-weight: 700; color: #0b2b4a; margin-bottom: 5px; }
-        .service-card p  { color: #64748b; font-size: 0.82rem; }
-
-        /* why choose us cards */
-        .why-vtu { display: flex; gap: 28px; flex-wrap: wrap; margin: 0 0 40px; }
-        .why-card {
-            flex: 1;
-            background: white;
-            padding: 36px 28px;
-            border-radius: 32px;
-            box-shadow: 0 12px 28px -16px #1e293b;
-            border: 1px solid #f1f5f9;
-            transition: box-shadow 0.2s;
-            min-width: 220px;
-        }
-        .why-card:hover { box-shadow: 0 24px 36px -16px #1e3a8a60; }
-        .why-card i { font-size: 2.6rem; color: #1e3a8a; margin-bottom: 18px; }
-        .why-card h3 { font-size: 1.4rem; font-weight: 700; color: #0b2b4a; margin-bottom: 12px; }
-        .why-card p { color: #475569; line-height: 1.7; }
-
-        /* about accordion - modern */
-        .accordion-block {
-            background: white;
-            border-radius: 32px;
-            padding: 24px 32px;
-            margin: 60px 0 20px;
-            box-shadow: 0 20px 35px -20px #1e293b;
-            border: 1px solid #eef2f6;
-        }
-        .accordion-item {
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .accordion-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            font-weight: 600;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #0f2b4f;
-        }
-        .accordion-header i {
-            transition: transform 0.3s;
-            color: #1e3a8a;
-        }
-        .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease;
-            padding: 0 8px 0 0;
-            color: #334155;
-        }
-        .accordion-item.active .accordion-content {
-            max-height: 400px;
-            padding-bottom: 24px;
-        }
-        .accordion-item.active .accordion-header i {
-            transform: rotate(45deg);
-        }
-        .about-text {
-            column-count: 2;
-            column-gap: 40px;
-            line-height: 1.7;
-        }
-        .about-text p {
-            margin-bottom: 16px;
-        }
-
-        /* privacy static - clean */
-        .privacy-static {
-            background: white;
-            border-radius: 32px;
-            padding: 40px;
-            margin: 60px 0 20px;
-            box-shadow: 0 20px 35px -20px #1e293b;
-            border: 1px solid #eef2f6;
-        }
-        .privacy-static h2 {
-            font-size: 2rem;
-            color: #0b2b4a;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .privacy-text {
-            column-count: 2;
-            column-gap: 40px;
-            line-height: 1.7;
-            color: #334155;
-        }
-        .privacy-text p {
-            margin-bottom: 16px;
-        }
-
-        /* hidden owner note (not used) */
-        .owner-note {
-            display: none;
-        }
-
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(4px);
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        }
-        .modal.active {
-            display: flex;
-        }
-        .modal-content {
-            background: white;
-            max-width: 450px;
-            width: 90%;
-            padding: 40px;
-            border-radius: 48px;
-            box-shadow: 0 30px 60px -20px #0b2b4a;
-            position: relative;
-            border: 1px solid #eef2f6;
-        }
-        .modal-close {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-            font-size: 1.5rem;
-            color: #94a3b8;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .modal-close:hover {
-            color: #1e293b;
-        }
-        .modal-content h2 {
-            font-size: 2rem;
-            color: #0b2b4a;
-            margin-bottom: 12px;
-        }
-        .modal-content p {
-            color: #475569;
-            margin-bottom: 28px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            font-weight: 500;
-            color: #334155;
-            margin-bottom: 6px;
-        }
-        .form-group input, .form-group textarea {
-            width: 100%;
-            padding: 14px 18px;
-            border: 1px solid #e2e8f0;
-            border-radius: 30px;
-            font-family: 'Inter', sans-serif;
-            font-size: 1rem;
-            transition: 0.2s;
-            background: #f8fafc;
-        }
-        .form-group input:focus, .form-group textarea:focus {
-            outline: none;
-            border-color: #1e3a8a;
-            box-shadow: 0 0 0 3px #1e3a8a20;
-        }
-        .form-group textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        .modal-send {
-            background: #25D366;
-            color: white;
-            border: none;
-            padding: 16px 28px;
-            border-radius: 60px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            width: 100%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: 0.2s;
-            box-shadow: 0 10px 20px -8px #075e54;
-        }
-        .modal-send:hover {
-            background: #20b859;
-            transform: translateY(-2px);
-            box-shadow: 0 18px 25px -10px #065e4e;
-        }
-
-        /* PWA Styles */
-        .network-status {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            padding: 12px 24px;
-            border-radius: 50px;
-            font-weight: 600;
-            z-index: 10001;
-            transition: 0.5s;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .network-status.active {
-            transform: translateX(-50%) translateY(0);
-        }
-        .network-status.online { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .network-status.offline { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-
-        .pwa-modal {
-            display: none;
-            position: fixed;
-            bottom: 30px;
-            left: 0;
-            width: 100%;
-            padding: 0 20px;
-            z-index: 10002;
-            animation: slideUp 0.5s ease-out;
-        }
-        .pwa-modal.active { display: block; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-        .pwa-content {
-            background: white;
-            border-radius: 30px;
-            padding: 24px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-            max-width: 500px;
-            margin: 0 auto;
-            border: 1px solid #eef2f6;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-        .pwa-icon img { width: 60px; height: 60px; border-radius: 15px; }
-        .pwa-info { flex: 1; }
-        .pwa-info h4 { margin: 0; color: #0b2b4a; }
-        .pwa-info p { margin: 4px 0 0; font-size: 0.9rem; color: #64748b; }
-        .pwa-actions { display: flex; gap: 10px; }
-        .btn-install { background: #1e3a8a; color: white; border: none; padding: 12px 24px; border-radius: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .btn-install:hover { background: #0f172a; }
-        .btn-close-pwa { background: #f1f5f9; color: #64748b; border: none; padding: 12px; border-radius: 15px; cursor: pointer; }
-
-        /* footer modern - grid layout */
-        footer {
-            background: #0b1e33;
-            color: #cbd5e1;
-            padding: 64px 0 36px;
-            margin-top: 40px;
-            border-radius: 48px 48px 0 0;
-        }
-        .footer-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
-            gap: 48px;
-            margin-bottom: 48px;
-        }
-        .footer-brand p { font-size: 0.9rem; color: #94a3b8; line-height: 1.7; max-width: 280px; margin-bottom: 20px; }
-        .footer-brand img { height: 38px; filter: brightness(0) invert(1); opacity: 0.85; margin-bottom: 14px; display: block; }
-        .footer-social { display: flex; gap: 10px; }
-        .footer-social a {
-            width: 38px; height: 38px;
-            background: rgba(255,255,255,0.07);
-            color: #cbd5e1;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 10px; font-size: 1rem;
-            transition: all 0.2s; text-decoration: none;
-        }
-        .footer-social a:hover { background: #1e3a8a; color: white; transform: translateY(-2px); }
-        .footer-col h5 { font-weight: 700; color: white; margin-bottom: 18px; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.08em; }
-        .footer-col a {
-            display: block; color: #94a3b8; text-decoration: none;
-            margin-bottom: 10px; font-size: 0.88rem;
-            transition: color 0.2s; cursor: pointer;
-        }
-        .footer-col a:hover { color: white; }
-        .footer-bottom {
-            border-top: 1px solid rgba(255,255,255,0.07);
-            padding-top: 28px;
-            display: flex; justify-content: space-between; align-items: center;
-            flex-wrap: wrap; gap: 14px;
-        }
-        .footer-copyright { font-size: 0.85rem; color: #64748b; }
-        .footer-badges { display: flex; gap: 16px; color: #64748b; font-size: 0.8rem; flex-wrap: wrap; }
-
-        /* responsiveness */
-        @media (max-width: 1024px) {
-            .footer-grid { grid-template-columns: 1fr 1fr; }
-            .steps-grid { gap: 20px; }
-            .steps-grid::before { display: none; }
-        }
-        @media (max-width: 768px) {
-            .container { padding: 0 20px; }
-            .float-share { display: none; }
-            .hero-wrap { padding: 50px 0 60px; }
-            .hero h1 { font-size: 2.3rem; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .steps-grid { grid-template-columns: 1fr; }
-            .testimonials-grid { grid-template-columns: 1fr; }
-            .about-text, .privacy-text { column-count: 1; }
-            .app-download-section { flex-direction: column; padding: 44px 28px; }
-            .cta-banner { padding: 44px 28px; }
-            .cta-banner h2 { font-size: 1.8rem; }
-            .nav-toggle { display: block; }
-            nav {
-                display: none;
-                flex-direction: column;
-                position: absolute;
-                top: 74px; left: 0;
-                width: 100%;
-                background: white;
-                padding: 18px 20px;
-                box-shadow: 0 12px 20px rgba(0,0,0,0.08);
-                z-index: 1000;
-                gap: 12px;
-            }
-            nav.active { display: flex; }
-            .nav-cta { display: inline-flex; width: fit-content; }
-        }
-        @media (max-width: 480px) {
-            .footer-grid { grid-template-columns: 1fr; }
-            .footer-bottom { flex-direction: column; align-items: flex-start; }
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="theme-color" content="<?php echo $brand_colour; ?>">
     <?php echo $custom_header; ?>
+<style>
+/* ── Freelancer landing (2026-11 redesign of template 1) ─────────────── */
+:root{
+    --brand: <?php echo $brand_colour; ?>;
+    --ink:#0b1220; --muted:#5b6b82; --paper:#f6f8fb; --card:#ffffff;
+    --line:#e4eaf2; --dark:#0b1220; --dark2:#111c33;
+    --radius:22px; --shadow:0 24px 48px -24px rgba(2,6,23,.25);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;overflow-x:hidden}
+a{text-decoration:none;color:inherit}
+img{max-width:100%}
+.lp-wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+.lp-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--brand)}
+.lp-h2{font-size:clamp(1.7rem,3.4vw,2.5rem);font-weight:900;letter-spacing:-.02em;line-height:1.12;margin:.5rem 0 .6rem}
+.lp-sub{color:var(--muted);max-width:640px}
+.lp-section{padding:84px 0 8px}
+.lp-btn{display:inline-flex;align-items:center;gap:8px;background:var(--brand);color:#fff;font-weight:800;
+    padding:.85rem 1.7rem;border-radius:999px;box-shadow:0 14px 28px -12px var(--brand);transition:transform .15s ease}
+.lp-btn:hover{transform:translateY(-2px)}
+.lp-btn--ghost{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.lp-btn--light{background:#fff;color:var(--ink);box-shadow:none}
+
+/* nav */
+.lp-nav{position:sticky;top:0;z-index:900;background:rgba(246,248,251,.88);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.lp-nav__in{display:flex;align-items:center;gap:26px;padding:14px 0}
+.lp-brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.06rem;letter-spacing:-.02em}
+.lp-brand img{height:36px;width:auto;border-radius:8px}
+.lp-brand__mark{width:36px;height:36px;border-radius:11px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:900}
+.lp-brand small{display:block;font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lp-links{display:flex;gap:22px;margin-left:auto;font-weight:600;font-size:.92rem;color:var(--muted)}
+.lp-links a:hover{color:var(--ink)}
+.lp-nav__cta{display:flex;gap:10px;align-items:center;margin-left:8px}
+.lp-login{font-weight:700}
+@media(max-width:900px){.lp-links{display:none}}
+
+/* hero */
+.lp-hero{padding:72px 0 30px;background:
+    radial-gradient(700px 320px at 85% -10%,color-mix(in srgb,var(--brand) 20%,transparent),transparent 60%),
+    radial-gradient(600px 300px at 0% 0%,rgba(2,6,23,.05),transparent 55%)}
+.lp-hero__grid{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}
+@media(max-width:960px){.lp-hero__grid{grid-template-columns:1fr}}
+.lp-h1{font-size:clamp(2.3rem,5vw,3.6rem);font-weight:900;letter-spacing:-.03em;line-height:1.05;margin:.7rem 0 1rem}
+.lp-hero p.lede{color:var(--muted);font-size:1.08rem;max-width:520px}
+.lp-cta-row{display:flex;gap:12px;flex-wrap:wrap;margin:26px 0 14px}
+.lp-trust{color:var(--muted);font-size:.86rem;font-weight:600}
+.lp-phone{background:var(--dark);color:#e8eefb;border-radius:30px;padding:24px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.lp-phone::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 200px at 85% -10%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 60%)}
+.lp-phone>*{position:relative}
+.lp-phone__name{font-weight:800}
+.lp-phone__bal{font-size:2rem;font-weight:900;letter-spacing:-.02em;margin:2px 0 0}
+.lp-phone__sub{color:#9fb0cc;font-size:.8rem}
+.lp-pockets{display:grid;gap:10px;margin:18px 0}
+.lp-pocket{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px}
+.lp-pocket b{font-size:.92rem}
+.lp-pocket span{color:#9fb0cc;font-size:.78rem;display:block}
+.lp-actions{display:flex;gap:8px;flex-wrap:wrap}
+.lp-actions span{background:#fff;color:var(--ink);font-weight:800;font-size:.8rem;border-radius:999px;padding:.5rem .95rem}
+.lp-actions span.alt{background:rgba(255,255,255,.1);color:#e8eefb;border:1px solid rgba(255,255,255,.16)}
+.lp-feed{margin-top:18px;display:grid;gap:8px}
+.lp-feed__row{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);border-radius:14px;padding:10px 14px;font-size:.88rem}
+.lp-feed__row .amt{font-weight:800;color:#7ee2a8}
+
+/* feature cards */
+.lp-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
+@media(max-width:960px){.lp-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.lp-cards{grid-template-columns:1fr}}
+.lp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
+.lp-card h3{font-size:1.05rem;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+.lp-card p{color:var(--muted);font-size:.9rem}
+.lp-cardmock{background:linear-gradient(135deg,var(--dark),var(--dark2));color:#fff;border-radius:16px;padding:16px;margin-top:14px}
+.lp-cardmock .num{font-family:ui-monospace,monospace;letter-spacing:.12em;margin-top:16px}
+.lp-fee-row{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:8px 0;font-size:.9rem}
+.lp-fee-row:last-child{border-bottom:0}
+.lp-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.lp-chips span{background:color-mix(in srgb,var(--brand) 10%,#fff);color:var(--brand);border:1px solid color-mix(in srgb,var(--brand) 25%,#fff);font-weight:700;font-size:.78rem;border-radius:999px;padding:.35rem .8rem}
+.lp-marquee{overflow:hidden;margin-top:14px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.lp-marquee__track{display:flex;gap:10px;width:max-content;animation:lpScroll 26s linear infinite}
+.lp-marquee__track span{border:1px solid var(--line);border-radius:999px;padding:.4rem .9rem;font-weight:800;font-size:.8rem;background:#fff}
+@keyframes lpScroll{to{transform:translateX(-50%)}}
+
+/* panels (receive / spend) */
+.lp-panels{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
+@media(max-width:960px){.lp-panels{grid-template-columns:1fr}}
+.lp-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
+.lp-panel h3{font-weight:800;font-size:1.02rem;margin-bottom:6px}
+.lp-panel p{color:var(--muted);font-size:.9rem}
+.lp-mock{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:14px;display:grid;gap:8px;font-size:.86rem}
+.lp-mock__row{display:flex;justify-content:space-between;gap:10px}
+.lp-mock__row span{color:var(--muted)}
+.lp-mock__row b{font-weight:700;text-align:right}
+.lp-badge{display:inline-block;background:#e8f9ee;color:#15803d;font-weight:800;font-size:.68rem;border-radius:999px;padding:.15rem .6rem;letter-spacing:.06em}
+.lp-qr{display:grid;place-items:center;text-align:center;padding:18px 10px}
+.lp-qr__box{width:118px;height:118px;border-radius:16px;background:
+    repeating-conic-gradient(var(--ink) 0 25%,#fff 0 50%) 0 0/22px 22px;border:6px solid var(--ink)}
+.lp-qr p{margin-top:12px}
+
+/* steps */
+.lp-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
+@media(max-width:960px){.lp-steps{grid-template-columns:1fr}}
+.lp-step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+.lp-step__n{width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;font-weight:900;display:grid;place-items:center;margin-bottom:12px}
+.lp-step h3{font-size:1rem;font-weight:800}
+.lp-step p{color:var(--muted);font-size:.9rem}
+
+/* personas */
+.lp-personas{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:30px}
+@media(max-width:960px){.lp-personas{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.lp-personas{grid-template-columns:1fr}}
+.lp-persona{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.lp-persona__ph{height:86px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 65%,#0b1220),var(--dark2));display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.3rem;letter-spacing:.04em;margin-bottom:14px}
+.lp-persona h3{font-size:.98rem;font-weight:800}
+.lp-persona p{color:var(--muted);font-size:.86rem}
+
+/* converter */
+.lp-fx{background:var(--dark);color:#e8eefb;border-radius:26px;padding:26px;margin-top:26px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.lp-fx::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 200px at 85% -10%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 60%)}
+.lp-fx>*{position:relative}
+.lp-fx__grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end;margin-top:16px}
+@media(max-width:700px){.lp-fx__grid{grid-template-columns:1fr}}
+.lp-fx label{font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9fb0cc;display:block}
+.lp-fx .fx-field{display:flex;gap:8px;margin-top:8px}
+.lp-fx input,.lp-fx select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:14px;padding:.8rem .9rem;font:inherit;font-weight:700;width:100%}
+.lp-fx select{width:auto}
+.lp-fx option{color:#0b1220}
+.lp-fx__swap{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#fff;color:var(--ink);font-weight:900;border:0;cursor:pointer;margin-bottom:2px}
+.lp-fx__rate{margin-top:14px;color:#9fb0cc;font-size:.88rem}
+.lp-fx__rate b{color:#7ee2a8}
+.lp-live{display:inline-block;background:#e8f9ee;color:#15803d;font-weight:800;font-size:.66rem;border-radius:999px;padding:.2rem .6rem;letter-spacing:.08em;vertical-align:middle}
+
+/* spend tiles */
+.lp-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px}
+@media(max-width:960px){.lp-tiles{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.lp-tiles{grid-template-columns:1fr}}
+.lp-tile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.lp-tile h3{font-size:.96rem;font-weight:800}
+.lp-tile p{color:var(--muted);font-size:.87rem}
+
+/* pricing */
+.lp-price{background:var(--card);border:1px solid var(--line);border-radius:26px;overflow:hidden;margin-top:28px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
+.lp-price__row{display:flex;justify-content:space-between;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);font-size:.94rem}
+.lp-price__row:last-child{border-bottom:0}
+.lp-price__row b{font-weight:800}
+.lp-price__head{background:var(--dark);color:#fff;padding:20px 22px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
+.lp-free{color:#7ee2a8;letter-spacing:.08em;font-size:.78rem}
+
+/* faq */
+.lp-faq{display:grid;gap:12px;margin-top:26px;max-width:820px}
+.lp-faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 20px}
+.lp-faq summary{font-weight:800;cursor:pointer}
+.lp-faq p{color:var(--muted);font-size:.92rem;margin-top:8px}
+
+/* final cta + footer */
+.lp-final{background:var(--dark);color:#fff;border-radius:28px;padding:48px 34px;margin:84px 0 0;text-align:center;position:relative;overflow:hidden}
+.lp-final::before{content:"";position:absolute;inset:0;background:radial-gradient(520px 240px at 50% -20%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 65%)}
+.lp-final>*{position:relative}
+.lp-final h2{font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:900;letter-spacing:-.02em}
+.lp-final form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+.lp-final input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:999px;padding:.85rem 1.2rem;font:inherit;min-width:min(320px,80vw)}
+.lp-footer{padding:44px 0 54px;color:var(--muted);font-size:.88rem}
+.lp-footer__grid{display:flex;gap:26px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start}
+.lp-footer a:hover{color:var(--ink)}
+#cookieBanner{position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;background:var(--dark);color:#e8eefb;border-radius:18px;padding:16px 20px;box-shadow:var(--shadow)}
+#cookieBanner .row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;max-width:1100px;margin:0 auto}
+#cookieBanner p{flex:1;min-width:220px;font-size:.88rem}
+#cookieBanner button{border-radius:999px;padding:.55rem 1.2rem;font-weight:800;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer}
+#cookieBanner button.acc{background:#fff;color:var(--ink);border-color:#fff}
+</style>
 </head>
 <body>
 
-<?php if(isServiceEnabled('crypto_hub')): ?>
-<script defer src="https://www.livecoinwatch.com/static/lcw-widget.js"></script>
-<div class="livecoinwatch-widget-5" lcw-base="USD" lcw-color-tx="#0f172a" lcw-marquee-1="coins" lcw-marquee-2="movers" lcw-marquee-items="15" lcw-font-weight="600" style="border-bottom: 1px solid #e2e8f0; background: #ffffff;"></div>
-<?php endif; ?>
-
-<!-- FLOATING SOCIAL SHARE -->
-<div class="float-share">
-    <a href="<?php echo $facebook_share; ?>" target="_blank" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
-    <a href="<?php echo $twitter_share; ?>" target="_blank" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
-    <a href="<?php echo $linkedin_share; ?>" target="_blank" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
-    <a href="<?php echo $email_share; ?>" aria-label="Email"><i class="fa fa-envelope"></i></a>
-</div>
-
-<!-- ══════════ STICKY HEADER ══════════ -->
-<header id="siteHeader">
-<div class="container header-inner">
-    <div class="logo">
-        <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>">
+<header class="lp-nav">
+    <div class="lp-wrap lp-nav__in">
+        <a class="lp-brand" href="./">
+            <?php if (!empty($site_logo) && strpos((string)$site_logo, 'placeholder') === false): ?>
+                <img src="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo $site_name_e; ?>">
+            <?php else: ?>
+                <span class="lp-brand__mark"><?php echo $site_name_initial; ?></span>
+            <?php endif; ?>
+            <span><?php echo $site_name_e; ?><small>for Freelancers</small></span>
+        </a>
+        <nav class="lp-links">
+            <a href="#features">Features</a>
+            <a href="#get-paid">Get paid</a>
+            <a href="#currencies">Currencies</a>
+            <a href="#spend">Spend</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+        <div class="lp-nav__cta">
+            <a class="lp-login" href="web/Login.php">Log in</a>
+            <a class="lp-btn" href="web/Register.php">Open free account</a>
+        </div>
     </div>
-    <div class="nav-toggle" onclick="toggleNav()">
-        <i class="fas fa-bars"></i>
-    </div>
-    <nav id="mainNav">
-        <a href="#services" onclick="closeNav()">Services</a>
-        <a href="#how-it-works" onclick="closeNav()">How It Works</a>
-        <a href="blog.php" onclick="closeNav()">Blog</a>
-        <a href="web/APIDocs.php" onclick="closeNav()">API Docs</a>
-        <a href="#about" onclick="closeNav()">About</a>
-        <a href="<?php echo $contact_email; ?>" onclick="closeNav();">Contact</a>
-        <a href="web/Register.php" class="nav-cta" onclick="closeNav()"><i class="fas fa-bolt"></i> Get Started</a>
-    </nav>
-</div>
 </header>
 
-<main>
+<!-- ── HERO ─────────────────────────────────────────────────────── -->
+<section class="lp-hero">
+    <div class="lp-wrap lp-hero__grid">
+        <div>
+            <span class="lp-eyebrow">For freelancers &amp; the self-employed</span>
+            <h1 class="lp-h1">Free account for freelancers who run their own show.</h1>
+            <p class="lede">Get paid by invoice, bank transfer or QR code. Keep your freelance income in one account<?php if ($lp_cards): ?>, spend it with <?php echo $site_name_e; ?> cards<?php endif; ?><?php if ($lp_vtu_any): ?>, and top up airtime, data and bills in seconds<?php endif; ?>.</p>
+            <div class="lp-cta-row">
+                <a class="lp-btn" href="web/Register.php">Open free account</a>
+                <a class="lp-btn lp-btn--ghost" href="#get-paid">See how it works</a>
+            </div>
+            <p class="lp-trust">No setup fee &nbsp;·&nbsp; No monthly fee &nbsp;·&nbsp; Sign up in minutes</p>
+        </div>
+        <div class="lp-phone" aria-hidden="true">
+            <div class="lp-phone__name">Kate Bennett</div>
+            <div class="lp-phone__sub">Total balance · across 3 pockets</div>
+            <div class="lp-phone__bal">4,812.40 <span style="font-size:1rem;">USD</span></div>
+            <div class="lp-pockets">
+                <div class="lp-pocket"><div><b>Client income</b><span>Main pocket</span></div><b>3,120.00</b></div>
+                <div class="lp-pocket"><div><b>Tax pot</b><span>Set aside automatically</span></div><b>1,040.00</b></div>
+                <div class="lp-pocket"><div><b>Savings</b><span>Rainy-day fund</span></div><b>652.40</b></div>
+            </div>
+            <div class="lp-actions"><span>Add</span><?php if ($lp_send): ?><span>Send</span><?php endif; ?><?php if ($lp_fx_toggle): ?><span>Exchange</span><?php endif; ?><span class="alt">Top up</span></div>
+            <div class="lp-feed">
+                <div class="lp-feed__row"><span>Amara Okafor · Invoice paid</span><span class="amt">+120.00</span></div>
+                <div class="lp-feed__row"><span>James Mwangi · Bank transfer</span><span class="amt">+65.00</span></div>
+                <div class="lp-feed__row"><span>Tunde Bello · QR payment</span><span class="amt">+35.00</span></div>
+            </div>
+        </div>
+    </div>
 
-<!-- ══════════ HERO ══════════ -->
-<div class="hero-wrap">
-    <div class="hero-blob hero-blob-1"></div>
-    <div class="hero-blob hero-blob-2"></div>
-    <div class="hero-blob hero-blob-3"></div>
-    <div class="container">
-        <div class="hero">
-            <div class="hero-content reveal">
-                <div class="hero-badge"><span class="dot"></span> Trusted by 50K+ users across Nigeria</div>
-                <h1>Digital Payments<br>Made Simple</h1>
-                <p>Your all-in-one platform for instant Airtime, Data, TV subscriptions, Electricity bills, Crypto, and much more — 24/7, zero downtime.</p>
-                <div class="hero-buttons">
-                    <a href="web/Register.php" class="btn btn-primary"><i class="fas fa-bolt"></i> Get started free</a>
-                    <a href="web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Login</a>
-                    <?php echo getAndroidDownloadButton(); ?>
+    <!-- feature cards -->
+    <div class="lp-wrap">
+        <div class="lp-cards" id="features">
+            <?php if ($lp_cards): ?>
+            <div class="lp-card">
+                <h3>All cards included</h3>
+                <p>Virtual and physical VISA cards for online and in-store spending, ready in minutes.</p>
+                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Virtual</div><div class="num">VISA •••• 2257</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett</div></div>
+            </div>
+            <?php endif; ?>
+            <div class="lp-card">
+                <h3>No setup or monthly fees</h3>
+                <p>The freelancer account is free to open and free to keep. No small print.</p>
+                <div style="margin-top:10px">
+                    <div class="lp-fee-row"><span>Setup</span><b>0.00</b></div>
+                    <div class="lp-fee-row"><span>Monthly</span><b>0.00</b></div>
+                    <div class="lp-fee-row"><span>Maintenance</span><b>0.00</b></div>
                 </div>
             </div>
-            <div class="hero-image reveal reveal-delay-2">
-                <img src="<?php echo $hero_image; ?>" alt="<?php echo htmlspecialchars($site_title); ?> dashboard">
+            <?php if ($lp_vtu_any): ?>
+            <div class="lp-card">
+                <h3>Instant VTU top-ups</h3>
+                <p>Buy airtime, data, electricity and TV subscriptions right from your balance — no separate app.</p>
+                <div class="lp-chips">
+                    <?php if ($lp_airtime): ?><span>Airtime</span><?php endif; ?>
+                    <?php if ($lp_data): ?><span>Data</span><?php endif; ?>
+                    <?php if ($lp_electric): ?><span>Electricity</span><?php endif; ?>
+                    <?php if ($lp_cable): ?><span>TV</span><?php endif; ?>
+                    <?php if ($lp_betting): ?><span>Betting</span><?php endif; ?>
+                    <?php if ($lp_exam): ?><span>Exam PINs</span><?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            <div class="lp-card">
+                <h3>Supported currencies</h3>
+                <p>Hold and spend in the currencies your clients already pay in.</p>
+                <div class="lp-marquee"><div class="lp-marquee__track">
+                    <?php foreach (array_merge($lp_currencies, $lp_currencies) as $cur): ?><span><?php echo $cur; ?></span><?php endforeach; ?>
+                </div></div>
+            </div>
+            <div class="lp-card">
+                <h3>Keep your freelance income separate</h3>
+                <p>Client money lands in its own account — away from personal spending and easy to track at tax time.</p>
+                <div class="lp-feed" style="margin-top:14px">
+                    <div class="lp-feed__row" style="background:var(--paper)"><span>Amara Okafor</span><span class="amt" style="color:#15803d">+120.00</span></div>
+                    <div class="lp-feed__row" style="background:var(--paper)"><span>James Mwangi</span><span class="amt" style="color:#15803d">+65.00</span></div>
+                    <div class="lp-feed__row" style="background:var(--paper)"><span>Tunde Bello</span><span class="amt" style="color:#15803d">+35.00</span></div>
+                </div>
+            </div>
+            <div class="lp-card">
+                <h3>Client payments via invoice</h3>
+                <p>Send a branded invoice and get paid straight into your account. No chasing, no awkward reminders.</p>
+                <div class="lp-mock">
+                    <div class="lp-mock__row"><span>Bright Studio Ltd</span><b>Website redesign</b></div>
+                    <div class="lp-mock__row"><span>Total</span><b>1,000.00 USD</b></div>
+                    <div class="lp-mock__row"><span>Status</span><span class="lp-badge">PAID</span></div>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<!-- ══════════ STATS BAR ══════════ -->
-<div class="stats-bar">
-    <div class="container">
-        <div class="stats-grid">
-            <div class="stat-item reveal">
-                <span class="stat-number" data-target="50000">0</span>
-                <span class="stat-label">Happy Users</span>
+<!-- ── RECEIVE ──────────────────────────────────────────────────── -->
+<section class="lp-section" id="get-paid">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">Receive</span>
+        <h2 class="lp-h2">Three ways to get paid. Zero chasing.</h2>
+        <p class="lp-sub">However your clients prefer to pay, the money lands in your <?php echo $site_name_e; ?> account — ready to split, save or spend.</p>
+        <div class="lp-panels">
+            <?php if ($lp_receive): ?>
+            <div class="lp-panel">
+                <h3>By bank transfer</h3>
+                <p>Your own dedicated account number. Clients pay like a local — you get notified instantly.</p>
+                <div class="lp-mock">
+                    <div class="lp-mock__row"><span>Account number</span><b>8012 345 678</b></div>
+                    <div class="lp-mock__row"><span>Expected · Amara Okafor</span><b>+120.00</b></div>
+                    <div class="lp-mock__row"><span>Expected · James Mwangi</span><b>+65.00</b></div>
+                    <div class="lp-mock__row"><span>Local / International</span><b>Both</b></div>
+                </div>
             </div>
-            <div class="stat-item reveal reveal-delay-1">
-                <span class="stat-number" data-target="1000000">0</span>
-                <span class="stat-label">Transactions Processed</span>
+            <?php endif; ?>
+            <div class="lp-panel">
+                <h3>By invoice</h3>
+                <p>Create a branded invoice in seconds and share the payment link anywhere.</p>
+                <div class="lp-mock">
+                    <div class="lp-mock__row"><span>Client</span><b>Bright Studio Ltd</b></div>
+                    <div class="lp-mock__row"><span>Service</span><b>Website redesign</b></div>
+                    <div class="lp-mock__row"><span>Total</span><b>1,000.00 USD</b></div>
+                    <div class="lp-mock__row"><span>Due</span><b>On receipt · 30 days · Custom</b></div>
+                </div>
             </div>
-            <div class="stat-item reveal reveal-delay-2">
-                <span class="stat-number" data-target="99" data-suffix=".9%">0</span>
-                <span class="stat-label">Platform Uptime</span>
-            </div>
-            <div class="stat-item reveal reveal-delay-3">
-                <span class="stat-number">24/7</span>
-                <span class="stat-label">Customer Support</span>
+            <div class="lp-panel">
+                <h3>By QR code</h3>
+                <p>Show your code in person or on screen. Clients scan and pay — card, Apple Pay or Google Pay.</p>
+                <div class="lp-qr">
+                    <div class="lp-qr__box" role="img" aria-label="QR code placeholder"></div>
+                    <p><b>SCAN TO PAY</b><br>Pay to Kate Bennett · 1,000.00 USD<br><span style="color:var(--muted);font-size:.8rem">Apple Pay · Google Pay · Card</span></p>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<!-- ══════════ SERVICES ══════════ -->
-<div class="container" id="services" style="padding:80px 32px 40px;">
-    <div class="section-header reveal">
-        <span class="section-eyebrow">What we offer</span>
-        <h2>⚡ Digital Services at Your Fingertips</h2>
-        <p>Everything you need in one place — fast, affordable, and available round the clock.</p>
+<!-- ── MANAGE ───────────────────────────────────────────────────── -->
+<section class="lp-section" id="manage">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">Manage</span>
+        <h2 class="lp-h2">Your freelance money, all together.</h2>
+        <div class="lp-steps">
+            <div class="lp-step"><div class="lp-step__n">1</div><h3>Get your own account</h3><p>Open free in minutes and receive client payments into an account that is yours alone.</p></div>
+            <div class="lp-step"><div class="lp-step__n">2</div><h3>Split into pockets</h3><p>Separate client income, tax money and savings so every payment has a job.</p></div>
+            <div class="lp-step"><div class="lp-step__n">3</div><h3><?php echo $lp_fx_toggle ? 'Exchange &amp; send' : 'Send &amp; spend'; ?></h3><p><?php echo $lp_fx_toggle ? 'Convert between currencies at live rates and send to any bank, or spend with your card.' : 'Send to any bank account or spend straight from your balance.'; ?></p></div>
+        </div>
     </div>
-    <div class="service-grid">
-        <?php if(isServiceEnabled('airtime')): ?>
-        <div class="service-card reveal"><div class="service-icon-wrap"><i class="fas fa-phone-alt"></i></div><h3>Buy Airtime</h3><p>MTN, Glo, Airtel, 9mobile &amp; discounts</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('data')): ?>
-        <div class="service-card reveal reveal-delay-1"><div class="service-icon-wrap"><i class="fas fa-wifi"></i></div><h3>Buy Data</h3><p>Fast bundles, all networks</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('electric')): ?>
-        <div class="service-card reveal reveal-delay-2"><div class="service-icon-wrap"><i class="fas fa-bolt"></i></div><h3>Electricity</h3><p>Prepaid/postpaid token instantly</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('cable')): ?>
-        <div class="service-card reveal"><div class="service-icon-wrap"><i class="fas fa-tv"></i></div><h3>Cable TV</h3><p>DSTV, GOtv, StarTimes renewal</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('bank_transfer')): ?>
-        <div class="service-card reveal reveal-delay-1"><div class="service-icon-wrap"><i class="fas fa-university"></i></div><h3>Wallet to Bank</h3><p>Instant withdrawal to any bank</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('bulk_sms')): ?>
-        <div class="service-card reveal reveal-delay-2"><div class="service-icon-wrap"><i class="fas fa-comment-dots"></i></div><h3>Bulk SMS</h3><p>Customized, high delivery</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('exam')): ?>
-        <div class="service-card reveal"><div class="service-icon-wrap"><i class="fas fa-graduation-cap"></i></div><h3>Exam Pin</h3><p>WAEC, NECO, NABTEB e-pins</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('recharge_card')): ?>
-        <div class="service-card reveal reveal-delay-1"><div class="service-icon-wrap"><i class="fas fa-print"></i></div><h3>Recharge Card Printing</h3><p>Print &amp; sell e-pins</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('data_card')): ?>
-        <div class="service-card reveal reveal-delay-2"><div class="service-icon-wrap"><i class="fas fa-database"></i></div><h3>Data Card Printing</h3><p>Generate data bundle pins</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('gift_card')): ?>
-        <div class="service-card reveal"><div class="service-icon-wrap"><i class="fas fa-gift"></i></div><h3>Gift Cards</h3><p>Trade local &amp; international</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('virtual_card')): ?>
-        <div class="service-card reveal reveal-delay-1"><div class="service-icon-wrap"><i class="fas fa-credit-card"></i></div><h3>Virtual Cards</h3><p>Dollar &amp; Naira for online payments</p></div>
-        <?php endif; ?>
-        <?php if(isServiceEnabled('crypto_hub')): ?>
-        <div class="service-card reveal reveal-delay-2"><div class="service-icon-wrap"><i class="fas fa-coins"></i></div><h3>Crypto Hub</h3><p>Send, Swap, Hold Stable Coins</p></div>
-        <?php endif; ?>
-    </div>
-</div>
+</section>
 
-<!-- ══════════ HOW IT WORKS ══════════ -->
-<div id="how-it-works" style="background:white; padding:80px 0;">
-<div class="container">
-    <div class="section-header reveal">
-        <span class="section-eyebrow">Simple process</span>
-        <h2>Get started in 3 easy steps</h2>
-        <p>No paperwork. No waiting. Just fast, reliable digital payments in minutes.</p>
-    </div>
-    <div class="steps-grid">
-        <div class="step-card reveal">
-            <div class="step-num">1</div>
-            <h3>Create an Account</h3>
-            <p>Sign up in under 60 seconds. Provide your name, email, and phone number — that's all you need to get started.</p>
-        </div>
-        <div class="step-card reveal reveal-delay-1">
-            <div class="step-num">2</div>
-            <h3>Fund Your Wallet</h3>
-            <p>Top up instantly via Paystack, Monnify, or bank transfer. Your balance is available immediately.</p>
-        </div>
-        <div class="step-card reveal reveal-delay-2">
-            <div class="step-num">3</div>
-            <h3>Buy Any Service</h3>
-            <p>Select a service, enter the details, and confirm. Delivery is instant — airtime, data, electricity tokens, and more.</p>
+<!-- ── PERSONAS ─────────────────────────────────────────────────── -->
+<section class="lp-section" id="who">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">For independent workers</span>
+        <h2 class="lp-h2">Whatever you do, <?php echo $site_name_e; ?> helps you get paid and stay in control.</h2>
+        <div class="lp-personas">
+            <?php foreach ($lp_personas as $persona): ?>
+            <div class="lp-persona">
+                <div class="lp-persona__ph"><?php echo $persona[1]; ?></div>
+                <h3><?php echo $persona[0]; ?></h3>
+                <p><?php echo $persona[2]; ?></p>
+            </div>
+            <?php endforeach; ?>
         </div>
     </div>
-</div>
-</div>
+</section>
 
-<!-- ══════════ WHY CHOOSE US ══════════ -->
-<div class="container" style="padding:80px 32px 20px;">
-    <div class="section-header reveal">
-        <span class="section-eyebrow">Our edge</span>
-        <h2>Why thousands choose us</h2>
-    </div>
-    <div class="why-vtu">
-        <div class="why-card reveal">
-            <i class="fas fa-rocket"></i>
-            <h3>Instant &amp; Reliable</h3>
-            <p>We aggregate the best discounts across MTN, Glo, Airtel, and 9mobile. With real-time wallet funding and 24/7 automated delivery, you never have to wait. 99.9% uptime guaranteed.</p>
+<!-- ── CURRENCIES ───────────────────────────────────────────────── -->
+<section class="lp-section" id="currencies">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">Supported currencies</span>
+        <h2 class="lp-h2">Get paid locally. Work globally.</h2>
+        <p class="lp-sub">Hold balances in <b>NGN · USD · GBP · EUR</b> with real account details, and spend in 10+ currencies wherever your work takes you.</p>
+        <div class="lp-chips" style="margin-top:18px">
+            <?php foreach ($lp_currencies as $cur): ?><span><?php echo $cur; ?></span><?php endforeach; ?>
         </div>
-        <div class="why-card reveal reveal-delay-1">
-            <i class="fas fa-shield-alt"></i>
-            <h3>Secure &amp; Trusted</h3>
-            <p>Industry-standard encryption protects every transaction. We partner with major providers for electricity (IKEDC, EKEDC, KEDCO) and TV (DSTV, GOtv, StarTimes). No hidden charges — ever.</p>
-        </div>
-        <div class="why-card reveal reveal-delay-2">
-            <i class="fas fa-chart-line"></i>
-            <h3>Earn as You Grow</h3>
-            <p>Become an agent and earn commissions on every transaction. Our reseller programme lets you build a business selling airtime, data, and bills with full automation support.</p>
-        </div>
-    </div>
-</div>
 
-<!-- ══════════ TESTIMONIALS ══════════ -->
-<div style="background:#f0f6ff; padding:80px 0; margin-top:40px;">
-<div class="container">
-    <div class="section-header reveal">
-        <span class="section-eyebrow">What users say</span>
-        <h2>Loved by customers</h2>
-        <p>Join tens of thousands who rely on us every day for seamless digital payments.</p>
+        <?php if ($lp_fx_live): ?>
+        <!-- Live converter: rendered only when Currency Conversion is ON in
+             bc-admin and the vendor's FX API key is configured. Rates come
+             from web/api/exchange-rate.php (getLiveExchangeRate). -->
+        <div class="lp-fx" id="fxConverter">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+                <h3 style="font-weight:900;font-size:1.1rem">Currency converter</h3>
+                <span class="lp-live" id="fxLiveBadge">LIVE RATE</span>
+            </div>
+            <div class="lp-fx__grid">
+                <div>
+                    <label for="fxAmount">You exchange</label>
+                    <div class="fx-field">
+                        <input id="fxAmount" type="number" value="100" min="0" step="any" inputmode="decimal">
+                        <select id="fxFrom" aria-label="From currency">
+                            <?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'USD' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" class="lp-fx__swap" id="fxSwap" title="Swap currencies" aria-label="Swap currencies">⇄</button>
+                <div>
+                    <label for="fxResult">You get</label>
+                    <div class="fx-field">
+                        <input id="fxResult" type="text" readonly value="—">
+                        <select id="fxTo" aria-label="To currency">
+                            <?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'NGN' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <p class="lp-fx__rate" id="fxRateLine">Fetching the live rate…</p>
+        </div>
+        <script>
+        (function () {
+            var amountEl = document.getElementById('fxAmount'),
+                fromEl = document.getElementById('fxFrom'),
+                toEl = document.getElementById('fxTo'),
+                resultEl = document.getElementById('fxResult'),
+                lineEl = document.getElementById('fxRateLine'),
+                badgeEl = document.getElementById('fxLiveBadge'),
+                timer = null, seq = 0;
+
+            function fmt(n) {
+                return Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            function convert() {
+                var from = fromEl.value, to = toEl.value, amount = parseFloat(amountEl.value) || 0, my = ++seq;
+                lineEl.textContent = 'Fetching the live rate…';
+                fetch('web/api/exchange-rate.php?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to), {headers: {'Accept': 'application/json'}})
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (my !== seq) return;
+                        var rate = parseFloat(data && data.rate);
+                        if (!rate || rate <= 0) throw new Error('bad rate');
+                        resultEl.value = fmt(amount * rate);
+                        lineEl.innerHTML = '1 ' + from + ' = <b>' + fmt(rate) + ' ' + to + '</b> · live rate, updates as you type';
+                        badgeEl.style.display = '';
+                    })
+                    .catch(function () {
+                        if (my !== seq) return;
+                        resultEl.value = '—';
+                        badgeEl.style.display = 'none';
+                        lineEl.textContent = 'Live rate unavailable right now — please try again in a moment.';
+                    });
+            }
+            function schedule() { clearTimeout(timer); timer = setTimeout(convert, 250); }
+            [amountEl, fromEl, toEl].forEach(function (el) {
+                el.addEventListener('input', schedule);
+                el.addEventListener('change', schedule);
+            });
+            document.getElementById('fxSwap').addEventListener('click', function () {
+                var t = fromEl.value; fromEl.value = toEl.value; toEl.value = t; convert();
+            });
+            convert();
+        })();
+        </script>
+        <?php endif; ?>
     </div>
-    <div class="testimonials-grid">
-        <div class="testimonial-card reveal">
-            <div class="stars">★★★★★</div>
-            <blockquote>"Fastest airtime top-up I've ever used. The instant delivery is just incredible — I've never had a failed transaction in over 6 months."</blockquote>
-            <div class="testimonial-author">
-                <div class="author-avatar" style="background:#1e3a8a;">AK</div>
-                <div><div class="author-name">Adaeze K.</div><div class="author-role">Regular User, Lagos</div></div>
+</section>
+
+<!-- ── SPEND ────────────────────────────────────────────────────── -->
+<section class="lp-section" id="spend">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">Spend</span>
+        <h2 class="lp-h2">Spend it your way — cards, wallets and VTU top-ups.</h2>
+        <?php if ($lp_cards): ?>
+        <div class="lp-panels" style="grid-template-columns:1fr 1fr">
+            <div class="lp-panel">
+                <h3>Virtual card</h3>
+                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Virtual</div><div class="num">VISA •••• 2257</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett · Show details · Freeze card · Card settings</div></div>
+            </div>
+            <div class="lp-panel">
+                <h3>Physical card</h3>
+                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Physical</div><div class="num">VISA •••• 8841</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett · Monthly limit 620.00 of 1,000.00</div></div>
             </div>
         </div>
-        <div class="testimonial-card reveal reveal-delay-1">
-            <div class="stars">★★★★★</div>
-            <blockquote>"I run a data reselling business and this platform cut my costs by 30%. The agent pricing and instant commission system is unmatched."</blockquote>
-            <div class="testimonial-author">
-                <div class="author-avatar" style="background:#0891b2;">TM</div>
-                <div><div class="author-name">Tunde M.</div><div class="author-role">Data Reseller, Abuja</div></div>
-            </div>
-        </div>
-        <div class="testimonial-card reveal reveal-delay-2">
-            <div class="stars">★★★★★</div>
-            <blockquote>"The electricity token delivery is real-time. I've been paying my IKEDC bills here for over a year — zero stress, always instant."</blockquote>
-            <div class="testimonial-author">
-                <div class="author-avatar" style="background:#059669;">FN</div>
-                <div><div class="author-name">Fatima N.</div><div class="author-role">Homeowner, Port Harcourt</div></div>
-            </div>
+        <?php endif; ?>
+        <div class="lp-tiles">
+            <?php if ($lp_cards): ?><div class="lp-tile"><h3>Physical &amp; virtual cards</h3><p>Spend online and in-store, anywhere VISA is accepted.</p></div><?php endif; ?>
+            <div class="lp-tile"><h3>Mobile wallets</h3><p>Add your card to Apple Pay or Google Pay and tap to pay.</p></div>
+            <?php if ($lp_cards): ?><div class="lp-tile"><h3>Spend controls &amp; limits</h3><p>Freeze a card, set monthly limits and see every transaction live.</p></div><?php endif; ?>
+            <?php if ($lp_airtime || $lp_data): ?><div class="lp-tile"><h3>Airtime &amp; data top-ups</h3><p>Top up any Nigerian network in seconds, straight from your balance.</p></div><?php endif; ?>
+            <?php if ($lp_cable || $lp_electric): ?><div class="lp-tile"><h3>Bills &amp; utilities</h3><p>Electricity tokens and TV subscriptions, settled instantly.</p></div><?php endif; ?>
+            <?php if ($lp_fx_toggle): ?><div class="lp-tile"><h3>Spend in many currencies</h3><p>Your balance works across borders — no separate accounts to juggle.</p></div><?php endif; ?>
         </div>
     </div>
-</div>
-</div>
+</section>
 
-<!-- ══════════ APP DOWNLOAD ══════════ -->
-<div class="container" id="download" style="padding:80px 32px;">
-    <div class="app-download-section reveal">
-        <div class="app-info">
-            <h2>Take us everywhere<br>with the mobile app</h2>
-            <p>Download our Android app for the ultimate experience. Push notifications for transactions, biometric login, and offline balance viewing — all in your pocket.</p>
-            <div class="app-badges">
-                <?php if (!empty($apk_download_url)): ?>
-                <a href="<?php echo htmlspecialchars($apk_download_url); ?>" class="app-badge" target="_blank" rel="noopener">
-                    <i class="fab fa-android"></i>
-                    <div><span class="app-badge-sub">Download APK</span><span class="app-badge-main">Android App</span></div>
-                </a>
+<!-- ── PRICING ──────────────────────────────────────────────────── -->
+<section class="lp-section" id="pricing">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">Free</span>
+        <h2 class="lp-h2">Free means free. No small print.</h2>
+        <div class="lp-price">
+            <div class="lp-price__head"><span>Freelancer plan</span><span class="lp-free">FREE</span></div>
+            <div class="lp-price__row"><span>Account opening</span><b>Free</b></div>
+            <div class="lp-price__row"><span>Monthly fee</span><b>Free</b></div>
+            <?php if ($lp_cards): ?>
+            <div class="lp-price__row"><span>Virtual cards</span><b>Free</b></div>
+            <?php endif; ?>
+            <div class="lp-price__row"><span>Sending invoices</span><b>Free</b></div>
+            <?php if ($lp_cards): ?>
+            <div class="lp-price__row"><span>Physical card delivery</span><b>At cost</b></div>
+            <?php endif; ?>
+            <?php if ($lp_fx_live): ?>
+            <div class="lp-price__row"><span>Currency exchange</span><b>Live market rate</b></div>
+            <?php endif; ?>
+        </div>
+        <div class="lp-chips" style="margin-top:22px">
+            <span>Coming soon</span><span>Payment links</span><span>Expense receipts</span><span>Recurring invoices</span><span>Bulk VTU for teams</span>
+        </div>
+    </div>
+</section>
+
+<!-- ── FAQ ──────────────────────────────────────────────────────── -->
+<section class="lp-section" id="faq">
+    <div class="lp-wrap">
+        <span class="lp-eyebrow">FAQ</span>
+        <h2 class="lp-h2">Questions, answered.</h2>
+        <div class="lp-faq">
+            <details><summary>Who can open a <?php echo $site_name_e; ?> freelancer account?</summary><p>Any freelancer, creator, consultant or independent worker who wants client payments kept separate from personal money. Sign-up takes minutes.</p></details>
+            <details><summary>Is the account really free?</summary><p>Yes. Opening, monthly and maintenance fees are all zero on the Freelancer plan — see the pricing table above.</p></details>
+            <details><summary>How do my clients pay me?</summary><p>By bank transfer to your dedicated account number, by invoice link, or by scanning your QR code — whichever suits them.</p></details>
+            <details><summary>Can I keep business and personal money separate?</summary><p>Yes. Client income lands in its own account and can be split into pockets for taxes, savings and spending.</p></details>
+            <?php if ($lp_vtu_any): ?>
+            <details><summary>What VTU services are included?</summary><p><?php echo $site_name_e; ?> includes instant <?php echo implode(', ', $lp_vtu_list); ?> top-ups straight from your balance.</p></details>
+            <?php endif; ?>
+            <details><summary>How long does sign-up take?</summary><p>A few minutes. Open your free account, verify your details, and you can receive your first payment the same day.</p></details>
+        </div>
+
+        <div class="lp-final">
+            <h2>Open your free freelancer account.</h2>
+            <p style="color:#9fb0cc">Join freelancers who get paid faster and keep every currency in one place.</p>
+            <form method="get" action="web/Register.php">
+                <input type="email" name="email" placeholder="Enter your email" aria-label="Email address">
+                <button class="lp-btn lp-btn--light" type="submit">Start free</button>
+            </form>
+            <p class="lp-trust" style="color:#9fb0cc;margin-top:16px">No setup fee · No monthly fee · Cancel anytime</p>
+        </div>
+    </div>
+</section>
+
+<footer class="lp-footer">
+    <div class="lp-wrap lp-footer__grid">
+        <div>
+            <div class="lp-brand" style="margin-bottom:8px">
+                <?php if (!empty($site_logo) && strpos((string)$site_logo, 'placeholder') === false): ?>
+                    <img src="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo $site_name_e; ?>">
+                <?php else: ?>
+                    <span class="lp-brand__mark"><?php echo $site_name_initial; ?></span>
                 <?php endif; ?>
-                <a href="#" class="app-badge" onclick="if(window.deferredPWAPrompt){installPWA();}else{alert('Add this page to your home screen via your browser menu.');}return false;">
-                    <i class="fas fa-mobile-alt"></i>
-                    <div><span class="app-badge-sub">Add to home screen</span><span class="app-badge-main">Install PWA</span></div>
-                </a>
+                <span><?php echo $site_name_e; ?></span>
             </div>
+            <p>Free account for freelancers who run their own show.</p>
         </div>
-        <div class="app-img">
-            <img src="<?php echo $hero_image; ?>" alt="App screenshot">
+        <div>
+            <p><a href="#features">Features</a> · <a href="#get-paid">Get paid</a> · <a href="#currencies">Currencies</a> · <a href="#faq">FAQ</a></p>
+            <p style="margin-top:8px"><a href="web/Login.php">Log in</a> · <a href="web/Register.php">Open free account</a><?php if (!empty($lp_contact_email)): ?> · <a href="mailto:<?php echo htmlspecialchars($lp_contact_email, ENT_QUOTES, 'UTF-8'); ?>">Contact us</a><?php endif; ?></p>
         </div>
-    </div>
-</div>
-
-<!-- ══════════ ABOUT (accordion) ══════════ -->
-<div class="container" id="about" style="padding:0 32px 40px;">
-    <div class="accordion-block reveal">
-        <div class="accordion-item active" id="aboutAccordion">
-            <div class="accordion-header" onclick="toggleAccordion('aboutAccordion')">
-                <span><i class="fas fa-address-card" style="margin-right:12px;color:#1e3a8a;"></i> About Us</span>
-                <i class="fas fa-plus-circle"></i>
-            </div>
-            <div class="accordion-content">
-                <div class="about-text">
-                    <p><strong><?php echo htmlspecialchars($site_title); ?></strong> is a next-gen digital services platform built for the Nigerian VTU market. We connect you to essential daily utilities — airtime, data, electricity, cable TV, exam pins, and even card printing — all in one unified interface. Our mission: simplify payments through innovation and reliability.</p>
-                    <p>We serve thousands of users across Nigeria and are continuously expanding. Our platform is secure, fast, and built with love by developers who understand the local market. 🚀</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ══════════ FAQ ══════════ -->
-<div style="padding:60px 0;">
-<div class="container">
-    <div class="section-header reveal">
-        <span class="section-eyebrow">FAQ</span>
-        <h2>Frequently Asked Questions</h2>
-        <p>Everything you need to know before getting started.</p>
-    </div>
-    <div class="faq-list">
-        <div class="faq-item reveal">
-            <div class="faq-q" onclick="toggleFAQ(this)">How do I fund my wallet?<i class="fas fa-plus"></i></div>
-            <div class="faq-a">You can fund your wallet instantly using Paystack (card or bank transfer), Monnify, or any of our other supported payment gateways. Simply navigate to <strong>Fund Wallet</strong> in your dashboard, enter the amount, choose your preferred channel, and complete the payment. Your balance is credited immediately.</div>
-        </div>
-        <div class="faq-item reveal reveal-delay-1">
-            <div class="faq-q" onclick="toggleFAQ(this)">How long does airtime / data delivery take?<i class="fas fa-plus"></i></div>
-            <div class="faq-a">Delivery is instant — typically within a few seconds. In rare cases during network congestion, delivery can take up to 5 minutes. If a transaction takes longer than 10 minutes, use the <strong>Requery</strong> feature in your transaction history to check the status and trigger a re-delivery.</div>
-        </div>
-        <div class="faq-item reveal reveal-delay-2">
-            <div class="faq-q" onclick="toggleFAQ(this)">Can I become a reseller / agent?<i class="fas fa-plus"></i></div>
-            <div class="faq-a">Yes! We have a full reseller programme. After registering as a standard user, you can upgrade your account level to <strong>Agent</strong> or <strong>API</strong> to access discounted prices and higher transaction limits. Contact support to learn more about the upgrade process.</div>
-        </div>
-        <div class="faq-item reveal">
-            <div class="faq-q" onclick="toggleFAQ(this)">Is my personal data secure?<i class="fas fa-plus"></i></div>
-            <div class="faq-a">Absolutely. We use TLS encryption for all data in transit. Passwords are hashed and never stored in plain text. Payment credentials are tokenised and processed by PCI-DSS compliant gateways — we never see or store your card details.</div>
-        </div>
-        <div class="faq-item reveal reveal-delay-1">
-            <div class="faq-q" onclick="toggleFAQ(this)">What if I make a wrong transaction?<i class="fas fa-plus"></i></div>
-            <div class="faq-a">Please double-check all details before confirming, as completed VTU transactions cannot be reversed by the network operator. If the transaction fails or you were charged but nothing was delivered, the amount will be reversed to your wallet automatically within minutes. Contact support if it doesn't resolve.</div>
-        </div>
-    </div>
-</div>
-</div>
-
-<!-- ══════════ PRIVACY TEASER ══════════ -->
-<div class="container" id="privacy" style="padding:0 32px 60px;">
-    <div class="privacy-static reveal" style="text-align:center;">
-        <h2><i class="fas fa-lock" style="color:#1e3a8a;"></i> Your Privacy Matters</h2>
-        <div class="privacy-text">
-            <p><strong>Your data belongs to you.</strong> We collect only the information needed to process your transactions securely. We never sell your personal data.</p>
-            <p>We are fully committed to compliance with the <strong>Nigeria Data Protection Act 2023</strong>, CBN KYC/AML guidelines, and global best practices.</p>
-            <p style="margin-top:14px;">
-                <a href="web/policy/privacy.php" style="color:#1e3a8a;font-weight:700;text-decoration:underline;">Read our full Privacy Policy →</a>
-            </p>
-        </div>
-    </div>
-</div>
-
-<!-- ══════════ CTA BANNER ══════════ -->
-<div class="container" style="padding:0 32px 80px;">
-    <div class="cta-banner reveal">
-        <h2>One platform — infinite possibilities</h2>
-        <p>Join 50K+ Nigerians already using <?php echo htmlspecialchars($site_title); ?> for fast, reliable digital payments.</p>
-        <a href="web/Register.php" class="btn btn-primary"><i class="fas fa-bolt"></i> Create free account</a>
-    </div>
-</div>
-
-<div id="contact" class="owner-note"></div>
-
-</main>
-
-<div id="networkStatus" class="network-status"></div>
-
-<div id="pwaInstallModal" class="pwa-modal">
-    <div class="pwa-content">
-        <div class="pwa-icon">
-            <img src="<?php echo $site_logo; ?>" alt="App Icon">
-        </div>
-        <div class="pwa-info">
-            <h4>Install our App</h4>
-            <p>Get the best experience on your home screen.</p>
-        </div>
-        <div class="pwa-actions">
-            <button class="btn-install" onclick="installPWA()">Install</button>
-            <button class="btn-close-pwa" onclick="closeInstallModal()"><i class="fas fa-times"></i></button>
-        </div>
-    </div>
-</div>
-
-<!-- ══════════ FOOTER ══════════ -->
-<footer>
-    <div class="container">
-        <div class="footer-grid">
-            <div class="footer-brand">
-                <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>">
-                <p>Your all-in-one VTU platform for instant airtime, data, electricity, cable TV, and more. Fast, secure, and available 24/7.</p>
-                <div class="footer-social">
-                    <a href="<?php echo $facebook_share; ?>" target="_blank" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
-                    <a href="<?php echo $twitter_share; ?>" target="_blank" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
-                    <a href="<?php echo $linkedin_share; ?>" target="_blank" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
-                </div>
-            </div>
-            <div class="footer-col">
-                <h5>Company</h5>
-                <a href="#about">About Us</a>
-                <a href="blog.php">Blog</a>
-                <a href="web/Pricing.php">Product Pricing</a>
-                <a href="web/APIDocs.php">API Docs</a>
-                <a href="web/policy/terms.php">Terms of Service</a>
-                <a href="web/policy/privacy.php">Privacy Policy</a>
-            </div>
-            <div class="footer-col">
-                <h5>Services</h5>
-                <a href="web/Login.php">Buy Airtime</a>
-                <a href="web/Login.php">Buy Data</a>
-                <a href="web/Login.php">Pay Electricity</a>
-                <a href="web/Login.php">Cable TV</a>
-                <a href="web/Login.php">Crypto Hub</a>
-                <a href="web/Login.php">Gift Cards</a>
-            </div>
-            <div class="footer-col">
-                <h5>Legal</h5>
-                <a href="web/policy/aml.php">AML Policy</a>
-                <a href="web/policy/kyc.php">KYC Policy</a>
-                <a href="web/policy/refund.php">Refund Policy</a>
-                <a href="web/policy/risk-disclosure.php">Risk Disclosure</a>
-            </div>
-        </div>
-        <div class="footer-bottom">
-            <div class="footer-copyright">© <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_title); ?> — VTU &amp; Digital Payments. All rights reserved.</div>
-            <div class="footer-badges">
-                <span><i class="fas fa-shield-alt"></i> Secure Platform</span>
-                <span>MTN • Glo • Airtel • 9mobile</span>
-                <span>DSTV • GOtv • WAEC • NECO</span>
-            </div>
-        </div>
+        <p>© <?php echo date('Y'); ?> <?php echo $site_name_e; ?>. All rights reserved.</p>
     </div>
 </footer>
 
-<!-- GDPR COOKIE CONSENT BANNER -->
-<div id="cookieBanner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:9999;
-    background:rgba(11,27,51,0.97); color:#e2e8f0; padding:20px 28px;
-    box-shadow:0 -4px 24px rgba(0,0,0,0.4); backdrop-filter:blur(8px);
-    font-family:'Inter',sans-serif; animation:slideUpCookie 0.4s ease;">
-    <style>
-        @keyframes slideUpCookie { from { transform:translateY(100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
-        #cookieBanner a { color:#93c5fd; text-decoration:underline; }
-        #cookieBanner .cookie-inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
-        #cookieBanner p { font-size:0.9rem; flex:1; min-width:220px; line-height:1.6; }
-        #cookieBanner .cookie-btns { display:flex; gap:10px; flex-shrink:0; }
-        #cookieBanner .btn-accept { background:#1e3a8a; color:white; border:none; padding:10px 24px; border-radius:6px; font-weight:700; cursor:pointer; font-size:0.88rem; transition:background 0.2s; }
-        #cookieBanner .btn-accept:hover { background:#1d4ed8; }
-        #cookieBanner .btn-decline { background:transparent; color:#94a3b8; border:1px solid #334155; padding:10px 18px; border-radius:6px; cursor:pointer; font-size:0.88rem; transition:all 0.2s; }
-        #cookieBanner .btn-decline:hover { border-color:#94a3b8; color:#e2e8f0; }
-    </style>
-    <div class="cookie-inner">
-        <p><i class="fas fa-cookie-bite" style="color:#fbbf24;margin-right:6px;"></i> We use cookies to enhance your experience, analyse traffic, and for security purposes. By continuing to use our platform you agree to our use of essential cookies. <a href="web/policy/privacy.php#cookies">Learn more</a></p>
-        <div class="cookie-btns">
-            <button class="btn-accept" onclick="acceptCookies()">Accept &amp; Continue</button>
-            <button class="btn-decline" onclick="declineCookies()">Decline</button>
-        </div>
+<div id="cookieBanner" style="display:none">
+    <div class="row">
+        <p>We use cookies to improve your experience and keep your account secure. By continuing, you accept our cookie use.</p>
+        <button type="button" onclick="declineCookies()">Decline</button>
+        <button type="button" class="acc" onclick="acceptCookies()">Accept</button>
     </div>
 </div>
-
-<!-- JavaScript -->
 <script>
-    /* ── Sticky header scroll effect ── */
-    const siteHeader = document.getElementById('siteHeader');
-    window.addEventListener('scroll', () => {
-        siteHeader.classList.toggle('scrolled', window.scrollY > 10);
-    }, { passive: true });
-
-    /* ── Mobile nav ── */
-    function toggleNav() { document.getElementById('mainNav').classList.toggle('active'); }
-    function closeNav()  { document.getElementById('mainNav').classList.remove('active'); }
-
-    /* ── About accordion ── */
-    function toggleAccordion(id) { document.getElementById(id).classList.toggle('active'); }
-    window.addEventListener('load', () => document.getElementById('aboutAccordion').classList.add('active'));
-
-    /* ── FAQ accordion ── */
-    function toggleFAQ(header) {
-        const item   = header.parentElement;
-        const isOpen = item.classList.contains('open');
-        document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
-        if (!isOpen) item.classList.add('open');
-    }
-
-    /* ── Animated counters ── */
-    function animateCounter(el) {
-        const target = parseInt(el.dataset.target, 10);
-        const suffix = el.dataset.suffix || '';
-        if (isNaN(target)) return;
-        const duration = 1800, step = 16;
-        const increment = target / (duration / step);
-        let current = 0;
-        const timer = setInterval(() => {
-            current = Math.min(current + increment, target);
-            let display = Math.floor(current);
-            if (target >= 1000000) display = (display / 1000000).toFixed(1) + 'M+';
-            else if (target >= 1000) display = (display / 1000).toFixed(0) + 'K+';
-            el.textContent = display + suffix;
-            if (current >= target) clearInterval(timer);
-        }, step);
-    }
-
-    /* ── Scroll-reveal via IntersectionObserver ── */
-    const revealObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (!entry.isIntersecting) return;
-            entry.target.classList.add('visible');
-            revealObserver.unobserve(entry.target);
-        });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
-
-    /* ── Trigger stat counters when stats bar enters viewport ── */
-    const statsBar = document.querySelector('.stats-bar');
-    if (statsBar) {
-        new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (!entry.isIntersecting) return;
-                entry.target.querySelectorAll('[data-target]').forEach(el => {
-                    if (!el.dataset.animated) { el.dataset.animated = '1'; animateCounter(el); }
-                });
-                entry.target.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
-            });
-        }, { threshold: 0.3 }).observe(statsBar);
-    }
-
-    /* ── GDPR Cookie Consent ── */
     function acceptCookies() {
         localStorage.setItem('cookie_consent', 'accepted');
         document.getElementById('cookieBanner').style.display = 'none';
@@ -1393,6 +745,7 @@ $contact_email = "mailto:" . (($vendor_account_details['email'] ?? '') ?: '');
     })();
 </script>
 <script src="asset/pwa-handler.js"></script>
+
 <?php echo $custom_footer; ?>
 </body>
 </html>
