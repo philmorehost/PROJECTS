@@ -61,10 +61,10 @@ bc_adm_head("Fund Wallet | " . ($get_all_super_admin_site_details["site_title"])
                         ?>
                     </div>
 
-                    <?php if (isset($_GET['purpose']) && $_GET['purpose'] == 'plisio_activation'): ?>
+                    <?php if (false): // §28: legacy gateway activation checkout removed ?>
                         <div class="alert alert-primary rounded-4 mb-4">
-                             <h6 class="fw-bold mb-1"><i class="bi bi-rocket-takeoff me-2"></i>Plisio Activation</h6>
-                             <p class="small mb-0">You are completing the payment to unlock the Plisio Crypto Gateway.</p>
+                             <h6 class="fw-bold mb-1"><i class="bi bi-rocket-takeoff me-2"></i>Gateway Activation</h6>
+                             <p class="small mb-0">You are completing the payment to unlock the crypto gateway.</p>
                         </div>
                     <?php elseif (isset($_GET['purpose']) && $_GET['purpose'] == 'payout_activation'): ?>
                         <div class="alert alert-primary rounded-4 mb-4">

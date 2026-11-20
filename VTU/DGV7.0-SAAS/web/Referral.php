@@ -2,6 +2,12 @@
 include("../func/bc-config.php");
 include_once(__DIR__ . "/../func/bc-fintech-services.php");
 
+if (function_exists('isServiceEnabled') && !isServiceEnabled('referral')) {
+    $_SESSION["product_purchase_response"] = "The referral program is currently unavailable.";
+    header("Location: Dashboard.php");
+    exit();
+}
+
 if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
     header("Location: Login.php");
     exit();

@@ -24,7 +24,7 @@ if (!function_exists('bc_retired_gateways')) {
     function bc_retired_gateways() {
         return [
             'plisio' => [
-                'reason'      => 'Plisio.net is no longer operating. Crypto deposits and payouts are unavailable until the Klasha / Flutterwave stablecoin adapters are live.',
+                'reason'      => 'This crypto payment service is no longer operating. Crypto deposits and payouts now run through the replacement gateway APIs (Klasha / Flutterwave) once activated for your store.',
                 'replacement' => 'klasha,flutterwave',
             ],
         ];

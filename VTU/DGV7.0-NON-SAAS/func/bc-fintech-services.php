@@ -10,14 +10,15 @@
  *   - The frontend renders EXACTLY the active provider's services. Switching the
  *     active provider in bc-admin → Service Control changes what users see; no
  *     other provider's services leak into the page.
- *   - BTC swap: checked against the client brief — neither Klasha nor Flutterwave
- *     offers a BTC swap rail in this catalogue, so BTC pairs are only offered by
- *     the legacy Plisio rail. When Klasha/Flutterwave is active, BTC is hidden
- *     rather than silently routed elsewhere.
+ *   - BTC swap: none of the current providers offers a BTC swap rail, so BTC
+ *     pairs are hidden rather than silently routed elsewhere (§28: the legacy
+ *     Plisio rail was removed entirely).
  *
  * This file is side-effect free apart from lazy CREATE TABLE IF NOT EXISTS calls
  * inside the functions that need the tables.
  */
+
+require_once(__DIR__ . '/bc-fintech-api-access.php');
 
 if (!function_exists('bc_svc_provider_catalogue')) {
     /**
@@ -31,7 +32,7 @@ if (!function_exists('bc_svc_provider_catalogue')) {
                 'tagline' => 'Cross-border payouts, multi-currency wallets & live FX',
                 'services' => [
                     'china_payout' => ['label' => 'Payout to China', 'page' => 'IntlTransfer.php', 'note' => 'Direct settlement to Chinese bank accounts & mobile wallets'],
-                    'wire_transfer' => ['label' => 'Wire Transfer', 'page' => 'IntlTransfer.php', 'note' => 'Klasha Wire quotes locked at live FX before you send'],
+                    'wire_transfer' => ['label' => 'Wire Transfer', 'page' => 'IntlTransfer.php', 'note' => 'Wire quotes locked at live FX before you send'],
                     'multi_currency_wallet' => ['label' => 'Multi-Currency Wallet', 'page' => 'IntlTransfer.php', 'note' => 'NGN, GHS, USD & ZAR wallets under one account'],
                     'stablecoin_wallet' => ['label' => 'USDC / USDT Wallet', 'page' => 'CryptoHub.php', 'note' => 'Hold and move USDC & USDT'],
                     'fx_rates' => ['label' => 'Live Exchange Rates', 'page' => 'IntlTransfer.php', 'note' => 'Real-time rates before every conversion'],
@@ -52,7 +53,7 @@ if (!function_exists('bc_svc_provider_catalogue')) {
                     'invoicing' => ['label' => 'Invoicing', 'page' => 'IntlTransfer.php', 'note' => 'Branded invoices that get you paid faster'],
                     'single_bulk_transfers' => ['label' => 'Single & Bulk Transfers', 'page' => 'IntlTransfer.php', 'note' => 'Pay bank accounts, mobile money & stablecoin wallets'],
                     'pos_request' => ['label' => 'POS Devices', 'page' => 'POSRequest.php', 'note' => 'Request a point-of-sale terminal for your business'],
-                    'virtual_card' => ['label' => 'Virtual Dollar Card', 'page' => 'VirtualCard.php', 'note' => 'USD virtual cards issued via Flutterwave'],
+                    'virtual_card' => ['label' => 'Virtual Dollar Card', 'page' => 'VirtualCard.php', 'note' => 'USD virtual cards, issued instantly'],
                 ],
                 'crypto_assets' => ['USDC', 'USDT'],
                 'btc_swap' => false,
@@ -60,7 +61,7 @@ if (!function_exists('bc_svc_provider_catalogue')) {
             ],
             'platnova' => [
                 'label' => 'Platnova',
-                'tagline' => 'Tuition worldwide & Platnova-style cross-border workflow',
+                'tagline' => 'Tuition worldwide & cross-border payments',
                 'services' => [
                     'tuition' => ['label' => 'Pay Tuition Worldwide', 'page' => 'Tuition.php', 'note' => '160+ universities, student ID validated before payment'],
                     'multi_currency_wallet' => ['label' => 'Multi-Currency Wallet', 'page' => 'IntlTransfer.php', 'note' => 'Fund via local conversion or USDC/USDT at live FX'],
@@ -70,33 +71,28 @@ if (!function_exists('bc_svc_provider_catalogue')) {
                 'btc_swap' => false,
                 'currencies' => ['NGN', 'USD', 'GBP', 'EUR', 'CNY'],
             ],
-            'plisio' => [
-                'label' => 'Plisio (legacy crypto)',
-                'tagline' => 'Crypto deposits, swaps & withdrawals',
-                'services' => [
-                    'crypto_deposit' => ['label' => 'Crypto Deposit', 'page' => 'CryptoHub.php', 'note' => 'Invoice-based crypto deposits'],
-                    'crypto_swap' => ['label' => 'Crypto Swap', 'page' => 'CryptoHub.php', 'note' => 'Swap between supported assets'],
-                    'crypto_withdraw' => ['label' => 'Crypto Withdrawal', 'page' => 'CryptoHub.php', 'note' => 'Withdraw to an external wallet'],
-                ],
-                'crypto_assets' => ['BTC', 'ETH', 'USDT', 'USDC', 'LTC', 'DOGE', 'TRX'],
-                'btc_swap' => true,
-                'currencies' => ['NGN'],
-            ],
         ];
     }
 }
 
 if (!function_exists('bc_svc_active_provider')) {
     /**
-     * The provider the vendor has switched on. Defaults to the legacy Plisio rail so
-     * existing crypto merchants see no change until an admin deliberately switches.
+     * The provider the vendor has switched on (§28: the legacy Plisio rail was
+     * removed; the default is the first API the vendor may actually use).
      */
     function bc_svc_active_provider($vendor_id) {
         $vendor_id = (int)$vendor_id;
         $value = function_exists('getVendorOption') ? (string)getVendorOption($vendor_id, 'fintech_active_provider', '') : '';
         $value = strtolower(trim($value));
         $catalogue = bc_svc_provider_catalogue();
-        return isset($catalogue[$value]) ? $value : 'plisio';
+        if (isset($catalogue[$value])) return $value;
+        // §28: Plisio is gone. Default to the first API this vendor may use
+        // (all three on NON-SAAS; purchased ones on SAAS), else Flutterwave.
+        if (function_exists('bc_fintech_api_accessible_providers')) {
+            $usable = bc_fintech_api_accessible_providers($vendor_id);
+            if ($usable) return $usable[0];
+        }
+        return 'flutterwave';
     }
 }
 

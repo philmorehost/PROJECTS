@@ -142,7 +142,7 @@ $h = $web_http_host . '/bc-spadmin/';
   <h4><i class="bi bi-currency-bitcoin me-2"></i>Crypto &amp; Settings</h4>
   <div class="row g-0">
     <div class="col-md-4 pe-md-2">
-      <?php spa_card('currency-bitcoin','#0d6efd','Crypto Hub','Configure platform-wide crypto settings.',$h.'CryptoHub.php'); ?>
+      <?php spa_card('plug','#0d6efd','Fintech API Prices','Set the Flutterwave / Klasha / Platnova API access prices vendors pay.',$h.'PaymentGateway.php'); ?>
     </div>
     <div class="col-md-4 px-md-2">
       <?php spa_card('credit-card','#198754','Payment Gateway','Configure global payment gateway keys.',$h.'PaymentGateway.php'); ?>

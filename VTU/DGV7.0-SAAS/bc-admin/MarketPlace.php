@@ -24,14 +24,21 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
                 $offset_statement = "";
             }
             
-            if(isset($_GET["searchq"]) && !empty(trim(strip_tags($_GET["searchq"])))){
+            // §28 marketplace category filter (chips below). Values map to api_type slugs.
+        $market_cat = trim(strip_tags(strtolower($_GET["cat"] ?? "")));
+        $market_cat_allowed = array("airtime","shared-data","sme-data","cg-data","dd-data","betting","datacard","rechargecard","electric","cable","exam","bulk-sms","finance-hub","gift-card","chimoney","identity-verification","esim","virtual-card","intl-transfer","payment-gateway");
+        if (!in_array($market_cat, $market_cat_allowed, true)) $market_cat = "";
+        $cat_statement = ($market_cat !== "") ? " && api_type='".mysqli_real_escape_string($connection_server, $market_cat)."'" : "";
+        $cat_parameter = ($market_cat !== "") ? "cat=".$market_cat."&&" : "";
+
+        if(isset($_GET["searchq"]) && !empty(trim(strip_tags($_GET["searchq"])))){
                 $search_statement = " && (api_website LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR api_type LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR description LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR price LIKE '%".trim(strip_tags($_GET["searchq"]))."%')";
                 $search_parameter = "searchq=".trim(strip_tags($_GET["searchq"]))."&&";
             }else{
                 $search_statement = "";
                 $search_parameter = "";
             }
-            $get_active_user_details = mysqli_query($connection_server, "SELECT * FROM sas_api_marketplace_listings WHERE $status_statement $search_statement ORDER BY date DESC LIMIT 20 $offset_statement");
+            $get_active_user_details = mysqli_query($connection_server, "SELECT * FROM sas_api_marketplace_listings WHERE $status_statement $search_statement $cat_statement ORDER BY date DESC LIMIT 20 $offset_statement");
         ?>
 
         <div class="alert alert-info border-0 rounded-4 shadow-sm mb-4 p-4 d-flex align-items-start">
@@ -67,12 +74,48 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
                 </form>
             </div>
         </div>
+        <?php
+        // §28: category filter chips. eSIM included; the Custom Gateway card below is SAAS-only.
+        $market_chips = array("" => "All APIs", "airtime" => "Airtime", "shared-data" => "Data", "electric" => "Electricity", "cable" => "Cable TV", "exam" => "Exam Pins", "bulk-sms" => "Bulk SMS", "identity-verification" => "Identity", "esim" => "eSIM", "virtual-card" => "Virtual Card", "intl-transfer" => "International Transfer", "payment-gateway" => "Payment Gateway");
+        ?>
+        <div class="card shadow-sm border-0 rounded-4 mb-4">
+            <div class="card-body py-3 px-4">
+                <div class="d-flex flex-wrap gap-2">
+                    <?php foreach ($market_chips as $chip_value => $chip_label): ?>
+                    <a href="MarketPlace.php<?php echo $chip_value === "" ? "" : ("?cat=" . $chip_value); ?>" class="btn btn-sm rounded-pill px-3 fw-bold<?php echo $market_cat === $chip_value ? " btn-primary" : " btn-light border"; ?>"><?php echo $chip_label; ?></a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <?php
+        // §28: SAAS-only Custom Gateway API listing. NON-SAAS installs get the
+        // gateway APIs by default, so the paid listing is not offered there.
+        if (!function_exists("bc_is_saas_edition") && is_file(__DIR__ . "/../func/bc-edition.php")) include_once(__DIR__ . "/../func/bc-edition.php");
+        if (function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : false) {
+            if (!function_exists("bc_fintech_api_providers") && is_file(__DIR__ . "/../func/bc-fintech-api-access.php")) include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
+            if (function_exists("bc_fintech_api_providers")) foreach (bc_fintech_api_providers() as $mkt_slug => $mkt_provider):
+                if (bc_fintech_api_has_access($get_logged_admin_details, $mkt_slug)) continue;
+                $mkt_price = (float)bc_fintech_api_price($mkt_slug);
+        ?>
+        <div class="card shadow-sm border-0 rounded-4 mb-4" style="background: linear-gradient(120deg, #0f172a, #1e293b); color:#fff;">
+            <div class="card-body p-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-4 d-flex align-items-center justify-content-center" style="width:56px;height:56px;background:rgba(255,255,255,.12);"><i class="bi bi-plug fs-3"></i></div>
+                    <div>
+                        <h5 class="fw-bold mb-1"><?php echo htmlspecialchars((string)$mkt_provider["label"]); ?> API Access</h5>
+                        <p class="mb-0 small text-white-50">Custom gateway API for payments, cards & transfers. <?php echo $mkt_price > 0 ? ("One-time activation: ₦" . number_format($mkt_price, 2)) : "Free activation."; ?></p>
+                    </div>
+                </div>
+                <a href="PaymentGateway.php#fintech-api-access" class="btn btn-light rounded-pill px-4 fw-bold flex-shrink-0"><i class="bi bi-cart-plus me-2"></i>Get Access</a>
+            </div>
+        </div>
+        <?php endforeach; } ?>
 
         <style>
             .product-card { transition: all 0.3s cubic-bezier(.25,.8,.25,1); border: 1px solid #edf2f7; }
             .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important; }
             .hover-lift:active { transform: scale(0.98); }
-            .module-icon { width: 60px; height: 60px; background: rgba(13, 110, 253, 0.1); color: #0d6efd; display: flex; align-items: center; justify-content: center; border-radius: 15px; margin-bottom: 20px; }
+            .module-icon { width: 60px; height: 60px; background: color-mix(in srgb, var(--brand, #0f766e) 12%, transparent); color: var(--brand-ink, var(--brand, #0f766e)); display: flex; align-items: center; justify-content: center; border-radius: 15px; margin-bottom: 20px; }
             .price-tag { font-size: 1.25rem; font-weight: 800; color: #1a202c; }
         </style>
 
@@ -142,9 +185,9 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
             <div class="small text-muted">Showing page <?php echo isset($_GET["page"]) ? $_GET["page"] : 1; ?></div>
             <div class="d-flex gap-2">
                 <?php if(isset($_GET["page"]) && $_GET["page"] > 1): ?>
-                    <a href="MarketPlace.php?<?php echo $search_parameter; ?>page=<?php echo ($_GET["page"] - 1); ?>" class="btn btn-outline-primary btn-sm rounded-pill px-4">Previous</a>
+                    <a href="MarketPlace.php?<?php echo $search_parameter . $cat_parameter; ?>page=<?php echo ($_GET["page"] - 1); ?>" class="btn btn-outline-primary btn-sm rounded-pill px-4">Previous</a>
                 <?php endif; ?>
-                <a href="MarketPlace.php?<?php echo $search_parameter; ?>page=<?php echo (isset($_GET["page"]) ? $_GET["page"] + 1 : 2); ?>" class="btn btn-primary btn-sm rounded-pill px-4">Next Page</a>
+                <a href="MarketPlace.php?<?php echo $search_parameter . $cat_parameter; ?>page=<?php echo (isset($_GET["page"]) ? $_GET["page"] + 1 : 2); ?>" class="btn btn-primary btn-sm rounded-pill px-4">Next Page</a>
             </div>
         </div>
       </div>

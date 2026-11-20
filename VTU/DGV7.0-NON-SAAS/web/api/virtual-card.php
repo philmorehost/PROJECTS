@@ -54,8 +54,8 @@ if ($action === 'list_cards') {
     // §25: Flutterwave is the only virtual-card provider.
     $products = [[
         "id" => "flw_usd",
-        "name" => "Flutterwave USD Virtual Card",
-        "description" => "USD virtual card issued via Flutterwave, accepted worldwide.",
+        "name" => "USD Virtual Card",
+        "description" => "USD virtual card accepted worldwide.",
         "logo" => "",
         "currency" => "USD",
     ]];

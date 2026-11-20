@@ -15,295 +15,29 @@ if(!isServiceEnabled('crypto_hub')){
     exit();
 }
 
-// §25: this page adapts to the vendor's ACTIVE provider (bc-admin → Service
-// Control). While a provider other than the legacy Plisio rail is active, only
-// that provider's assets/services exist here and every trade action fails
-// closed through the provider seam — Plisio is never called behind the scenes.
+// §28: this page adapts to the vendor's ACTIVE provider (bc-admin → Service
+// Control). Only that provider's assets/services exist here and every trade
+// action fails closed through the provider seam.
 include_once(__DIR__ . "/../func/bc-fintech-services.php");
 $crypto_provider = bc_svc_active_provider($vid);
-$crypto_provider_mode = $crypto_provider !== 'plisio';
+$crypto_provider_mode = true; // §28: the legacy provider is removed; provider mode is the only mode.
 $crypto_provider_label = bc_svc_provider_label($crypto_provider);
 if ($crypto_provider_mode && (isset($_POST['action']) || isset($_GET['get_rate']))) {
-    echo json_encode(['status' => 'error', 'message' => $crypto_provider_label . ' crypto services are being provisioned for this platform. No trade was executed.']);
+    echo json_encode(['status' => 'error', 'message' => 'Crypto services are being provisioned for this platform. No trade was executed.']);
     exit();
 }
 
-// Handle AJAX Rate Fetching
-if (isset($_GET['get_rate'])) {
-    $from = strtoupper($_GET['from']);
-    $to = strtoupper($_GET['to']);
-    $rate = getPlisioExchangeRate($from, $to, $vid);
-    echo json_encode(['rate' => $rate]);
-    exit();
-}
+// §28: the legacy crypto provider was removed entirely. Every trade action
+// (rate/deposit/swap/withdraw/manual sync) is refused by the gate above until
+// the service is provisioned on the vendor's ACTIVE gateway API — no call is
+// ever routed to the retired provider behind the scenes. Wallet balances and
+// history below are local records and stay fully visible.
 
-// Handle Deposit/Invoice Creation
-if (isset($_POST['action']) && $_POST['action'] == 'create_invoice') {
-    $currency = mysqli_real_escape_string($connection_server, $_POST['currency']);
-    $amount = (float)($_POST['amount'] ?? 0);
-
-    if ($amount <= 0) {
-        echo json_encode(['status' => 'error', 'message' => 'Minimum deposit amount is 1.00']);
-        exit();
-    }
-
-    $params = [
-        'currency' => $currency,
-        'order_number' => 'DEP_' . time() . '_' . rand(10, 99),
-        'order_name' => 'Wallet Deposit - ' . $username,
-        'callback_url' => $web_http_host . '/users-plisio.php',
-        'email' => $get_logged_user_details['email'],
-        'amount' => $amount
-    ];
-
-    $res = createPlisioInvoice($params, $vid);
-    if (($res['status'] ?? '') == 'success') {
-        $tx_data = $res['data'];
-        $internal_ref = $params['order_number'];
-        $actual_amount = $tx_data['invoice_total_sum'] ?? $amount;
-        $logged_tx_id = logCryptoTransaction($vid, $username, 'deposit', $currency, $actual_amount, 2, $tx_data['txn_id'], $tx_data['invoice_url'], $tx_data['wallet_hash'] ?? '', ['order_number' => $internal_ref, 'total_sum' => $actual_amount], $internal_ref, $tx_data['view_key'] ?? '');
-
-        if ($logged_tx_id) {
-            $tx_data['local_invoice_url'] = 'ViewCryptoInvoice.php?ref=' . $internal_ref;
-            echo json_encode(['status' => 'success', 'data' => $tx_data]);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Failed to log transaction internally.']);
-        }
-    } else {
-        $err_msg = $res['data']['message'] ?? $res['message'] ?? 'Plisio Error';
-        echo json_encode(['status' => 'error', 'message' => $err_msg]);
-    }
-    exit();
-}
-
-// Handle Swap
-if (isset($_POST['action']) && $_POST['action'] == 'swap') {
-    $from = strtoupper(mysqli_real_escape_string($connection_server, $_POST['from']));
-    $to = strtoupper(mysqli_real_escape_string($connection_server, $_POST['to']));
-    $amount = (float)$_POST['amount'];
-
-    if ($from == $to) {
-        echo json_encode(['status' => 'error', 'message' => 'Cannot swap same currency']);
-        exit();
-    }
-
-    $wallets = getUserCryptoWallets($vid, $username);
-    if (($wallets[$from]['balance'] ?? 0) < $amount) {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient Balance']);
-        exit();
-    }
-
-    $rate = getPlisioExchangeRate($from, $to, $vid);
-    if ($rate <= 0) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid Exchange Rate']);
-        exit();
-    }
-
-    $gross_target_amount = $amount * $rate;
-    $fee_amount = 0;
-    $net_target_amount = $gross_target_amount;
-
-    if ($to == 'NGN') {
-        $select_v = mysqli_query($connection_server, "SELECT crypto_swap_fee FROM sas_vendors WHERE id='$vid' LIMIT 1");
-        $rv = mysqli_fetch_assoc($select_v);
-        $swap_fee_percent = (float)($rv['crypto_swap_fee'] ?? 0);
-
-        if ($swap_fee_percent > 0) {
-            $fee_amount = ($swap_fee_percent / 100) * $gross_target_amount;
-            $net_target_amount = $gross_target_amount - $fee_amount;
-        }
-    }
-
-    // Internal ledger swap
-    if (updateUserCryptoBalance($vid, $username, $from, $amount, 'debit')) {
-        if ($to == 'NGN') {
-            // Credit main wallet
-            chargeOtherUser($username, "credit", "crypto_swap", "Crypto Swap", "SWP_" . time(), "INTERNAL", $gross_target_amount, $net_target_amount, "Swap $amount $from to Naira (Fee: ₦" . number_format($fee_amount, 2) . ")", "WEB", $_SERVER['HTTP_HOST'], 1);
-
-            logCryptoTransaction($vid, $username, 'swap_out', $from, $amount, 1, 'INTERNAL_SWAP', '', '', ['to' => $to, 'rate' => $rate, 'fee' => $fee_amount]);
-
-            // §25 referral engine: completed crypto volume counts toward the $100 mark.
-            if (function_exists('bc_referral_record_volume')) {
-                $uid_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vid' AND username='$username' LIMIT 1");
-                $uid_r = $uid_q ? mysqli_fetch_assoc($uid_q) : null;
-                if ($uid_r) {
-                    $usd_vol = in_array($from, ['USDT_TRX', 'USDT', 'USDC'], true) ? (float)$amount : (float)$amount * (float)getPlisioExchangeRate($from, 'USD', $vid);
-                    if ($usd_vol > 0) bc_referral_record_volume($vid, (int)$uid_r['id'], $usd_vol, 'crypto');
-                }
-            }
-
-            $success_msg = 'Swap Successful. ₦' . number_format($net_target_amount, 2) . ' credited to your wallet after ₦' . number_format($fee_amount, 2) . ' fee.';
-            echo json_encode(['status' => 'success', 'message' => $success_msg]);
-        } else {
-            // Live Crypto-to-Crypto Swap via Plisio Withdrawal (Auto-Conversion on Provider Side)
-            // Plisio supports cross-currency withdrawals (e.g. BTC to ETH) using the psys_cid parameter for source and the destination address for currency
-            // Note: This requires the provider balance to be sufficient.
-
-            // To ensure 100% API connectivity, we attempt to process this via Plisio withdrawal if a wallet address exists
-            $to_wallet = $wallets[$to]['address'] ?? '';
-            if (!empty($to_wallet)) {
-                // Determine precision from currencies list
-                $cur_from = null; foreach($currencies as $c) if($c['cid'] == $from) { $cur_from = $c; break; }
-                $precision = (int)($cur_from['precision'] ?? 8);
-                $formatted_amount = number_format($amount, $precision, '.', '');
-
-                $res = plisioCashOut([
-                    'psys_cid' => $from,
-                    'amount' => $formatted_amount,
-                    'to' => $to_wallet,
-                    'type' => 'cash_out'
-                ], $vid);
-
-                if (($res['status'] ?? '') == 'success') {
-                    // Update internal ledger for 'to' currency once API confirms (or assume success for UX)
-                    updateUserCryptoBalance($vid, $username, $to, $net_target_amount, 'credit');
-                    logCryptoTransaction($vid, $username, 'swap_out', $from, $amount, 1, $res['data']['txn_id'], '', $to_wallet, ['to' => $to, 'rate' => $rate]);
-                    logCryptoTransaction($vid, $username, 'swap_in', $to, $net_target_amount, 1, $res['data']['txn_id'], '', $to_wallet, ['from' => $from, 'rate' => $rate]);
-                    echo json_encode(['status' => 'success', 'message' => "Live Swap of $amount $from to $to initiated via API."]);
-                } else {
-                    // Rollback 'from' balance if API fails
-                    updateUserCryptoBalance($vid, $username, $from, $amount, 'credit');
-                    echo json_encode(['status' => 'error', 'message' => 'API Swap Failed: ' . ($res['message'] ?? 'Provider Error')]);
-                }
-            } else {
-                // Fallback to internal swap if user hasn't generated a wallet for the target currency yet
-                updateUserCryptoBalance($vid, $username, $to, $net_target_amount, 'credit');
-                logCryptoTransaction($vid, $username, 'swap_out', $from, $amount, 1, 'INTERNAL_SWAP', '', '', ['to' => $to, 'rate' => $rate]);
-                logCryptoTransaction($vid, $username, 'swap_in', $to, $net_target_amount, 1, 'INTERNAL_SWAP', '', '', ['from' => $from, 'rate' => $rate]);
-                echo json_encode(['status' => 'success', 'message' => "Swap of $amount $from to $to completed internally."]);
-            }
-        }
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Internal Swap Error']);
-    }
-    exit();
-}
-
-// Handle OTP Sending
-if (isset($_POST['action']) && $_POST['action'] == 'send_otp') {
-    $otp = generateOTP();
-    $_SESSION["crypto_withdrawal_otp"] = $otp;
-    $_SESSION["crypto_withdrawal_otp_time"] = time();
-
-    $subject = "Crypto Withdrawal OTP";
-    $body = "Your verification code for crypto withdrawal is: <b>$otp</b>. This code expires in 10 minutes.";
-    sendVendorEmail($get_logged_user_details["email"], $subject, $body);
-
-    echo json_encode(['status' => 'success', 'message' => 'OTP sent to your email']);
-    exit();
-}
-
-
-// Handle Manual Sync (Self-Help)
-if (isset($_POST['action']) && $_POST['action'] == 'manual_sync') {
-    $ref = mysqli_real_escape_string($connection_server, $_POST['reference']);
-
-    // Search by Reference or Blockchain TXID
-    $q = mysqli_query($connection_server, "SELECT * FROM `sas_crypto_transactions` WHERE (`reference`='$ref' OR `blockchain_txid`='$ref') AND `vendor_id`='$vid' AND `username`='$username' LIMIT 1");
-    $tx = mysqli_fetch_assoc($q);
-
-    if (!$tx) {
-        echo json_encode(['status' => 'error', 'message' => 'Transaction reference or Blockchain TXID not found in your history.']);
-        exit();
-    }
-
-    if ($tx['status'] == 1) {
-        echo json_encode(['status' => 'success', 'message' => 'This transaction is already completed and credited.']);
-        exit();
-    }
-
-    // Try to sync with Plisio
-    $res = getPlisioTransactionDetails($tx['plisio_tx_id'], $vid);
-    if (($res['status'] ?? '') == 'success') {
-        $data = $res['data'];
-        $new_st = $data['status'] ?? '';
-        $status_code = (int)($data['status_code'] ?? 0);
-
-        if ($new_st == 'completed' || $new_st == 'mismatch' || $status_code === 31) {
-            $amount = $data['amount'] ?? $tx['amount'];
-            $blockchain_txid = $data['tx_id'] ?? '';
-            if (is_array($blockchain_txid)) $blockchain_txid = implode(',', $blockchain_txid);
-            $blockchain_txid_esc = mysqli_real_escape_string($connection_server, $blockchain_txid);
-
-            if (updateUserCryptoBalance($vid, $username, $tx['currency_code'], $amount, 'credit')) {
-                mysqli_query($connection_server, "UPDATE `sas_crypto_transactions` SET `status`='1', `amount`='$amount', `blockchain_txid`='$blockchain_txid_esc' WHERE `id`='".$tx['id']."'");
-                echo json_encode(['status' => 'success', 'message' => 'Success! Payment detected and wallet credited.']);
-            } else {
-                echo json_encode(['status' => 'error', 'message' => 'Payment detected but failed to update wallet. Please contact support.']);
-            }
-        } else {
-            echo json_encode(['status' => 'info', 'message' => "Plisio reports status: $new_st. If you just paid, please wait for network confirmations."]);
-        }
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Could not verify status with provider: ' . ($res['message'] ?? 'Unknown Error')]);
-    }
-    exit();
-}
-
-// Handle Withdrawal (External Crypto)
-if (isset($_POST['action']) && $_POST['action'] == 'withdraw') {
-    $currency = mysqli_real_escape_string($connection_server, $_POST['currency']);
-    $amount = (float)$_POST['amount'];
-    $address = mysqli_real_escape_string($connection_server, $_POST['address']);
-    $pin = $_POST['pin'];
-    $otp = $_POST['otp'] ?? '';
-
-    // Verify PIN
-    if (!verifyUserPIN($pin, $get_logged_user_details)) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid Transaction PIN']);
-        exit();
-    }
-
-    // Verify OTP
-    if (empty($_SESSION["crypto_withdrawal_otp"]) || $otp !== $_SESSION["crypto_withdrawal_otp"]) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid Email OTP']);
-        exit();
-    }
-    if (time() - $_SESSION["crypto_withdrawal_otp_time"] > 600) {
-        echo json_encode(['status' => 'error', 'message' => 'OTP has expired']);
-        exit();
-    }
-
-    $wallets = getUserCryptoWallets($vid, $username);
-    if (($wallets[$currency]['balance'] ?? 0) < $amount) {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient Balance']);
-        exit();
-    }
-
-    $v_q = mysqli_query($connection_server, "SELECT approve_withdrawal FROM sas_vendors WHERE id='$vid' LIMIT 1");
-    $v_r = mysqli_fetch_assoc($v_q);
-    $needs_approval = ($v_r['approve_withdrawal'] == 1);
-
-    if ($needs_approval) {
-        updateUserCryptoBalance($vid, $username, $currency, $amount, 'debit');
-        $w_ref = 'CW_' . time() . '_' . rand(10, 99);
-        mysqli_query($connection_server, "INSERT INTO sas_crypto_withdrawals (vendor_id, username, reference, currency_code, crypto_amount, ngn_amount, address, status) VALUES ('$vid', '$username', '$w_ref', '$currency', '$amount', 0, '$address', 'pending')");
-        echo json_encode(['status' => 'success', 'message' => 'Withdrawal request submitted for approval']);
-    } else {
-        // Direct cash out via Plisio
-        $res = plisioCashOut([
-            'psys_cid' => $currency,
-            'amount' => $amount,
-            'address' => $address,
-            'type' => 'cash_out'
-        ], $vid);
-
-        if (($res['status'] ?? '') == 'success') {
-            updateUserCryptoBalance($vid, $username, $currency, $amount, 'debit');
-            logCryptoTransaction($vid, $username, 'withdrawal', $currency, $amount, 1, $res['data']['txn_id'], '', $address);
-            echo json_encode(['status' => 'success', 'message' => 'Withdrawal processed successfully']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => $res['message'] ?? 'Plisio Withdrawal Failed']);
-        }
-    }
-    exit();
-}
-
-$currencies = $crypto_provider_mode ? [] : getPlisioCurrencies($vid);
+$currencies = []; // §28: no provider currency catalogue is consulted.
 $userWallets = getUserCryptoWallets($vid, $username);
-$supported = $crypto_provider_mode ? bc_svc_provider_assets($vid) : ['BTC', 'ETH', 'LTC', 'TRX', 'USDT_TRX', 'USDC', 'BCH', 'DOGE'];
+$supported = bc_svc_provider_assets($vid);
 
-// Filter supported currencies to only those returned by Plisio (ensure they are active)
+// Keep only assets that exist in the active provider's catalogue
 $active_supported = [];
 foreach($supported as $s) {
     foreach($currencies as $c) {
@@ -341,8 +75,8 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 <?php if ($crypto_provider_mode): ?>
 <div class="alert alert-info border-0 rounded-4 shadow-sm d-flex align-items-center gap-3">
     <i class="bi bi-diagram-3 fs-4"></i>
-    <div><strong>Powered by <?php echo htmlspecialchars($crypto_provider_label); ?></strong><br>
-    <span class="small">Showing exactly <?php echo htmlspecialchars($crypto_provider_label); ?>'s crypto services: <?php echo htmlspecialchars(implode(', ', bc_svc_provider_assets($vid))); ?>. BTC swap is not offered by this provider, so BTC pairs are hidden. Trades activate as soon as the provider connection is configured by admin.</span></div>
+    <div><strong>Crypto Services</strong><br>
+    <span class="small">Showing exactly the crypto services enabled on this platform: <?php echo htmlspecialchars(implode(', ', bc_svc_provider_assets($vid))); ?>. Where a swap pair is not offered, it is hidden. Trades activate as soon as the service connection is configured by admin.</span></div>
 </div>
 <?php endif; ?>
 
@@ -419,7 +153,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                 $bal = $userWallets[$cid]['balance'] ?? 0;
                 $label = ($cid == 'USDT_TRX') ? 'USDT' : $cid;
                 $icon = strtolower(str_replace('_', '-', $cid)) . ".png";
-                // Only show if asset is in active Plisio list or has balance
+                // Only show if asset is in the active provider catalogue or has balance
                 $is_active = false; foreach($currencies as $c) if($c['cid'] == $cid) { $is_active = true; break; }
                 if(!$is_active && $bal <= 0) continue;
             ?>
@@ -600,7 +334,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                             <i class="bi bi-info-circle me-2"></i>Send exactly the amount shown on the invoice. Funds will be credited after 1 confirmation.
                         </div>
                         <a href="" id="depLocalInvoice" class="btn btn-primary w-100 rounded-pill py-2 mb-2">View My Invoice</a>
-                        <a href="" id="depInvoiceLink" target="_blank" class="btn btn-link btn-sm">View Official Plisio Invoice</a>
+                        <a href="" id="depInvoiceLink" target="_blank" class="btn btn-link btn-sm">View Payment Invoice</a>
                     </div>
                 </div>
             </div>

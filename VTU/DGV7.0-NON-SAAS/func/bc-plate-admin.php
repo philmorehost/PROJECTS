@@ -330,7 +330,6 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Payment Orders',  'href' => 'PaymentOrders.php',      'icon' => 'receipt',      'match' => array('PaymentOrders.php')),
                     array('label' => 'Email Templates', 'href' => 'EmailTemplates.php',     'icon' => 'envelope',     'match' => array('EmailTemplates.php')),
                     array('label' => 'Reports',         'href' => 'SubscriptionReports.php','icon' => 'bar-chart',   'match' => array('SubscriptionReports.php')),
-                    array('label' => 'Crypto',          'href' => 'CryptoHub.php',          'icon' => 'currency-bitcoin','match' => array('CryptoHub.php')),
                     array('label' => 'Account Settings', 'href' => 'AccountSettings.php',   'icon' => 'gear',         'match' => array('AccountSettings.php')),
                     array('label' => 'Cron Jobs',       'href' => 'CronJobs.php',           'icon' => 'clock-history','match' => array('CronJobs.php')),
                     array('label' => 'Update System',   'href' => 'UpdateSystem.php',       'icon' => 'cloud-arrow-up','match' => array('UpdateSystem.php')),
@@ -506,6 +505,14 @@ if (!function_exists('bc_adm_css')) {
             background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
             box-shadow: var(--shadow); padding: 8px; display: none; z-index: 60; }
         .pk-app__menu.is-open { display: block; }
+        .pk-app__wrap .dropdown, .pk-app__wrap .btn-group { position: relative; }
+        .pk-app__wrap .dropdown-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 65; display: none; min-width: 220px;
+            background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; list-style: none; margin: 0; }
+        .pk-app__wrap .dropdown-menu.show { display: block; }
+        .pk-app__wrap .dropdown-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border: 0; background: none;
+            border-radius: 10px; color: var(--ink); text-decoration: none; font-size: .88rem; text-align: left; cursor: pointer; }
+        .pk-app__wrap .dropdown-item:hover { background: var(--wash); color: var(--brand-ink, var(--brand)); }
+        .pk-app__wrap .dropdown-divider { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
         .pk-app__menu a { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
             border-radius: 10px; color: var(--ink); text-decoration: none; font-size: .88rem; }
         .pk-app__menu a:hover { background: var(--wash); color: var(--brand); }
@@ -515,7 +522,7 @@ if (!function_exists('bc_adm_css')) {
             border: 1px solid var(--line) !important; border-radius: 8px !important;
             padding: 4px 10px !important; margin: 0 2px; background: var(--surface) !important; color: var(--ink) !important; }
         .pk-app__wrap .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-            background: var(--brand) !important; border-color: var(--brand) !important; color: #fff !important; }
+            background: var(--brand) !important; border-color: var(--brand) !important; color: var(--brand-fg, #fff) !important; }
         .pk-app__wrap .dataTables_wrapper .dataTables_filter input,
         .pk-app__wrap .dataTables_wrapper .dataTables_length select {
             border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); color: var(--ink); }
@@ -625,6 +632,9 @@ if (!function_exists('bc_adm_topbar')) {
         <?php if ($crumb !== ''): ?><p class="pk-app__crumb"><?php echo htmlspecialchars($crumb); ?></p><?php endif; ?>
     </div>
     <div class="pk-app__actions">
+        <?php if ($area === 'admin'): ?>
+            <a class="pk-app__action" href="<?php echo htmlspecialchars(bc_adm_url('VendorPortal.php', $area)); ?>"><?php echo bc_adm_icon('globe'); ?> Portal</a>
+        <?php endif; ?>
         <?php if (!empty($opts['actions'])): ?>
             <?php foreach ((array)$opts['actions'] as $action): ?>
                 <a class="pk-app__action<?php echo !empty($action['danger']) ? ' pk-app__action--danger' : ''; ?>"
@@ -923,6 +933,12 @@ if (!function_exists('bc_adm_foot')) {
 
     // Bootstrap-compat: the retired bundle is gone, so the handful of data attributes the
     // compat layer renders are wired here instead of shipping all of Bootstrap's JS.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            Array.prototype.forEach.call(document.querySelectorAll('.dropdown-menu.show'), function (m) { m.classList.remove('show'); });
+            Array.prototype.forEach.call(document.querySelectorAll('[data-bs-toggle="dropdown"][aria-expanded="true"]'), function (t) { t.setAttribute('aria-expanded', 'false'); });
+        }
+    });
     document.addEventListener('click', function (e) {
         var dismiss = e.target.closest('[data-bs-dismiss]');
         if (dismiss) {
@@ -935,6 +951,25 @@ if (!function_exists('bc_adm_foot')) {
                 if (modal) modal.classList.remove('show');
             }
         }
+        // Dropdowns (§28): open only on click, close on any outside click or Esc.
+        var dropToggle = e.target.closest('[data-bs-toggle="dropdown"]');
+        var openMenus = document.querySelectorAll('.dropdown-menu.show');
+        if (!dropToggle) {
+            Array.prototype.forEach.call(openMenus, function (m) { m.classList.remove('show'); });
+            Array.prototype.forEach.call(document.querySelectorAll('[data-bs-toggle="dropdown"][aria-expanded="true"]'), function (t) { t.setAttribute('aria-expanded', 'false'); });
+        } else {
+            e.preventDefault();
+            var dropWrap = dropToggle.closest('.dropdown, .btn-group, .dropdown-center');
+            var dropMenu = dropWrap ? dropWrap.querySelector('.dropdown-menu') : null;
+            var willOpen = !(dropMenu && dropMenu.classList.contains('show'));
+            Array.prototype.forEach.call(openMenus, function (m) { m.classList.remove('show'); });
+            Array.prototype.forEach.call(document.querySelectorAll('[data-bs-toggle="dropdown"][aria-expanded="true"]'), function (t) { t.setAttribute('aria-expanded', 'false'); });
+            if (dropMenu && willOpen) {
+                dropMenu.classList.add('show');
+                dropToggle.setAttribute('aria-expanded', 'true');
+            }
+        }
+
         var toggle = e.target.closest('[data-bs-toggle]');
         if (toggle && toggle.getAttribute('data-bs-toggle') === 'modal') {
             var m = document.getElementById((toggle.getAttribute('data-bs-target') || '').replace('#', ''));

@@ -1,5 +1,6 @@
 <?php session_start();
 include("../func/bc-admin-config.php");
+include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
 
 // Migration: Create table if not exists
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_control (
@@ -43,15 +44,16 @@ $services = [
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',
     'intl_transfer' => 'Send Money Abroad (International Transfer)',
-    'tuition' => 'Pay Tuition Worldwide (Platnova)',
-    'esim' => 'eSIM (1GLOBAL)',
-    'pos_request' => 'POS Device Requests (Flutterwave)',
+    'tuition' => 'Pay Tuition Worldwide',
+    'esim' => 'Travel eSIM',
+    'pos_request' => 'POS Device Requests',
     'currency_conversion' => 'Currency Conversion (Live FX Rates)',
     'nin_card' => 'Digital NIN Slip',
     'bvn_verify' => 'BVN Verification',
     'virtual_bank_display' => 'Virtual Bank Button (Off by Default)',
     'ai_suite' => 'AI Business Suite',
-    'vtu_coins' => 'VTU Coins & Loyalty Program'
+    'vtu_coins' => 'VTU Coins & Loyalty Program',
+    'referral' => 'Refer & Earn (Referral Program)'
 ];
 
 $gateways = [
@@ -87,8 +89,10 @@ if (isset($_POST['save-fx-api'])) {
 if (isset($_POST['save-active-provider'])) {
     $vid = (int)$get_logged_admin_details['id'];
     $provider = strtolower(trim(strip_tags($_POST['fintech_active_provider'] ?? '')));
-    $allowed = ['klasha', 'flutterwave', 'platnova', 'plisio'];
-    if (!in_array($provider, $allowed, true)) $provider = 'plisio';
+    // §28: Plisio is retired. Only APIs the vendor may use (included on
+    // NON-SAAS, purchased on SAAS) can become the active provider.
+    $allowed = function_exists('bc_fintech_api_accessible_providers') ? bc_fintech_api_accessible_providers($vid) : ['flutterwave'];
+    if (!in_array($provider, $allowed, true)) $provider = $allowed[0] ?? 'flutterwave';
     if (function_exists('setVendorOption')) setVendorOption($vid, 'fintech_active_provider', $provider);
     $_SESSION["product_purchase_response"] = "Active provider switched. Customer pages now show exactly the selected provider's services.";
     header("Location: ServiceControl.php");
@@ -116,13 +120,18 @@ if (isset($_POST['save-provider-credentials'])) {
             mysqli_query($connection_server, "INSERT INTO sas_payment_gateways (vendor_id, gateway_name, public_key, secret_key, encrypt_key, percentage, status) VALUES ('$vid', '$gateway_e', '', '$secret_e', '', '0', '$status')");
         }
     };
-    $upsert_key('platnova', $_POST['platnova_api_key'] ?? '');
+    if (function_exists('bc_fintech_api_access') && !bc_fintech_api_access($vid, 'platnova')) {
+        $_SESSION["api_access_notice"] = "Platnova credentials were NOT saved: Platnova API access has not been purchased. Buy it under Payment Gateways → Fintech API Access.";
+    } else {
+        $upsert_key('platnova', $_POST['platnova_api_key'] ?? '');
+    }
     $upsert_key('oneglobal', $_POST['oneglobal_access_token'] ?? '');
     if (function_exists('setVendorOption')) {
         setVendorOption($vid, 'klasha_login_email', trim(strip_tags($_POST['klasha_login_email'] ?? '')));
         setVendorOption($vid, 'klasha_business_id', trim(strip_tags($_POST['klasha_business_id'] ?? '')));
     }
-    $_SESSION["product_purchase_response"] = "Provider API credentials saved.";
+    $_SESSION["product_purchase_response"] = "Provider API credentials saved." . (!empty($_SESSION["api_access_notice"]) ? " " . $_SESSION["api_access_notice"] : "");
+    unset($_SESSION["api_access_notice"]);
     header("Location: ServiceControl.php");
     exit();
 }
@@ -265,10 +274,10 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
 
             <div class="col-lg-6 mb-4"><div class="card shadow-sm border-0 rounded-4 mb-4"><div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h5></div>                    <div class="card-body border-top">
                         <h6 class="fw-bold mb-1"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h6>
-                        <p class="small text-muted">Customer pages (Crypto, Send Money Abroad, Tuition, eSIM, POS, Virtual Card) display exactly this provider's services. Klasha/Flutterwave BTC swap is not offered, so BTC pairs hide automatically when either is active.</p>
+                        <p class="small text-muted">Customer pages (Crypto, Send Money Abroad, Tuition, eSIM, POS, Virtual Card) display exactly this provider's services. BTC swap is not offered by the new payment APIs, so BTC pairs hide automatically while one of them is active.</p>
                         <form method="post" action="" class="d-flex flex-wrap gap-2 align-items-center">
                             <select name="fintech_active_provider" class="form-select" style="max-width:280px;">
-                                <?php $active_provider = function_exists('getVendorOption') ? getVendorOption((int)$get_logged_admin_details['id'], 'fintech_active_provider', 'plisio') : 'plisio'; foreach (['klasha' => 'Klasha', 'flutterwave' => 'Flutterwave', 'platnova' => 'Platnova', 'plisio' => 'Plisio (legacy crypto)'] as $pv => $pl): ?>
+                                <?php $active_provider = function_exists('bc_svc_active_provider') ? bc_svc_active_provider((int)$get_logged_admin_details['id']) : (function_exists('getVendorOption') ? getVendorOption((int)$get_logged_admin_details['id'], 'fintech_active_provider', 'flutterwave') : 'flutterwave'); $provider_options = []; foreach (bc_fintech_api_accessible_providers((int)$get_logged_admin_details['id']) as $pv) { $provider_options[$pv] = bc_fintech_api_providers()[$pv]['label']; } if (!$provider_options) $provider_options = ['flutterwave' => 'Flutterwave']; foreach ($provider_options as $pv => $pl): ?>
                                 <option value="<?php echo $pv; ?>" <?php echo $active_provider === $pv ? 'selected' : ''; ?>><?php echo $pl; ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -276,7 +285,7 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
                         </form>
                         <hr class="my-4">
                         <h6 class="fw-bold mb-1"><i class="bi bi-key me-2"></i>Provider API Credentials <span class="badge bg-success">§26 live</span></h6>
-                        <p class="small text-muted">Endpoints now follow the official Klasha, Flutterwave, Platnova and 1GLOBAL documentation. Klasha &amp; Flutterwave keys are saved under <a href="PaymentGateway.php">Payment Gateways</a> (Klasha: Public Key = merchant public key, Secret Key = account password or Bearer token, Encrypt Key = encryption key). Save the Platnova / 1GLOBAL credentials and the Klasha login helpers here. Blank key fields keep the stored key.</p>
+                        <p class="small text-muted">Endpoints follow the official provider documentation. Only APIs with active access (see Payment Gateways → Fintech API Access) can be switched on. Klasha &amp; Flutterwave keys are saved under <a href="PaymentGateway.php">Payment Gateways</a> (Klasha: Public Key = merchant public key, Secret Key = account password or Bearer token, Encrypt Key = encryption key). Save the Platnova / 1GLOBAL credentials and the Klasha login helpers here. Blank key fields keep the stored key.</p>
                         <?php
                             $cred_vid = (int)$get_logged_admin_details['id'];
                             $platnova_row = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT secret_key FROM sas_payment_gateways WHERE vendor_id='$cred_vid' && gateway_name='platnova' LIMIT 1"));

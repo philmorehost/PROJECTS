@@ -39,9 +39,9 @@ bc_app_topbar(array("title" => "REQUEST POS DEVICE", "crumb" => "Home / POS"));
 ?>
 <section class="section dashboard">
     <div class="card border-0 shadow-sm rounded-4 mb-4"><div class="card-body p-4">
-        <span class="badge bg-primary mb-2">Powered by Flutterwave</span>
+        <span class="badge bg-primary mb-2">POS Terminals</span>
         <h4 class="fw-bold mb-1">Point of Sale (POS) device requests</h4>
-        <p class="text-muted small mb-0">Accept card and transfer payments in-store. Tell us about your business and we will provision a Flutterwave POS terminal for you.</p>
+        <p class="text-muted small mb-0">Accept card and transfer payments in-store. Tell us about your business and we will provision a POS terminal for you.</p>
     </div></div>
     <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
         <h6 class="fw-bold mb-3">Request a POS device</h6>

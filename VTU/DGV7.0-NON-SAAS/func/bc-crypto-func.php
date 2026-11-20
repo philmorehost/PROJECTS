@@ -1,5 +1,13 @@
 <?php
 /**
+ * §28 RETIREMENT NOTE: the legacy crypto provider behind these helpers was
+ * removed from DGV7.0. Nothing in the product calls the provider any more:
+ * no invoices, rates, swaps or cash-outs are created through this file.
+ * The helpers are retained ONLY so historical records can be reconciled
+ * (stored keys/invoice ids stay readable by bc-admin → Crypto Invoices).
+ * New crypto traffic runs on the vendor's active gateway API instead.
+ */
+/**
  * Plisio Crypto Hub Integration Functions
  * Reference: https://plisio.net/documentation
  */
