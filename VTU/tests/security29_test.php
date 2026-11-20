@@ -165,4 +165,35 @@ foreach ($editions as $ed) {
     sec_check_true("$ed bridge rejects expired keys", strpos(src($root, $ed, 'func/bc-fintech-gate.php'), 'API_KEY_EXPIRED') !== false);
 }
 
+// the platform cron page must list the rotation job, or expiry never runs
+sec_check_true('spadmin cron page lists api-key rotation', strpos(src($root, 'DGV7.0-SAAS', 'bc-spadmin/CronJobs.php'), 'api-key-rotation-cron.php') !== false);
+// withdrawal approvals are step-up gated in both editions
+foreach ($editions as $ed) {
+    sec_check_true("$ed withdrawal approval requires step-up", strpos(src($root, $ed, 'bc-admin/Withdrawals.php'), "bc_stepup_admin_verify(\$get_logged_admin_details, \$_POST, 'withdrawal_approve')") !== false);
+}
+
+// ── app withdrawal contract (both editions) ───────────────────────────────
+// The mobile apps withdraw through web/api/withdrawal.php. Every auth mode
+// (developer key AND app session) must pass PIN + second factor; the old
+// api_key-only challenge left app-token requests with PIN alone and never
+// asked authenticator users for a code at all.
+foreach ($editions as $ed) {
+    $w = src($root, $ed, 'web/api/withdrawal.php');
+    sec_check_true("$ed app withdrawal challenges TOTP users", strpos($w, 'totp_required') !== false);
+    sec_check_true("$ed app withdrawal challenges email OTP", strpos($w, 'otp_required') !== false);
+    sec_check_false("$ed app withdrawal step-up is not key-mode-only", strpos($w, "bc_api_auth_mode") !== false);
+    sec_check_true("$ed app withdrawal throttles the PIN", strpos($w, 'bc_verify_pin_secure') !== false);
+    sec_check_true("$ed app withdrawal verifies via step-up module", strpos($w, 'bc_stepup_actor_second_factor') !== false);
+    sec_check_true("$ed profile advertises totp_enabled", strpos(src($root, $ed, 'web/api/profile.php'), 'totp_enabled') !== false);
+}
+
+// ── step-up second factor, functional (no DB: the TOTP path is pure) ─────
+$actor = array('id' => 7, 'vendor_id' => 3, 'two_factor_type' => 'totp', 'totp_secret' => $gen, 'totp_last_step' => 0);
+$fresh_code = bc_totp_code($gen, time());
+sec_check('step-up accepts a fresh authenticator code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array('totp_code' => $fresh_code), 'api_withdrawal'), '');
+$actor['totp_last_step'] = (int)floor(time() / 30);
+sec_check_true('step-up rejects the replayed code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array('totp_code' => $fresh_code), 'api_withdrawal') !== '');
+sec_check_true('step-up rejects a missing code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array(), 'api_withdrawal') !== '');
+sec_check_true('step-up rejects a wrong code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array('totp_code' => '000000'), 'api_withdrawal') !== '');
+
 echo "$count security29 checks passed\n";

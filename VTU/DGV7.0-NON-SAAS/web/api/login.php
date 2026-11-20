@@ -86,6 +86,7 @@ if (mysqli_num_rows($check_user) == 1) {
                     "kyc_status" => (int)$user_detail['kyc_status'],
                     "security_pin_set" => $pin_set,
                     "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
+                    "totp_enabled" => (($user_detail['two_factor_type'] ?? 'none') === 'totp') ? 1 : 0,
                     "ai_status" => (int)$get_vendor['ai_status']
                 ]
             ];
