@@ -459,9 +459,18 @@ if ($connection_server) {
 
         // §29: a forced password change confines the web session to Account
         // Settings until a new password is set.
-        if (function_exists('bc_password_change_required') && bc_password_change_required($get_logged_user_details)) {
+        // §44: the confinement target pages must be reachable, or two gates
+        // bounce the user between them forever (ERR_TOO_MANY_REDIRECTS):
+        // SecurityQuest.php is where the security-question gate below sends
+        // everyone without its cookie, so a confined user must be able to
+        // answer it there; logout must always stay reachable. While confined,
+        // the other redirect gates below (suspension, minimum funding,
+        // security question) are suppressed: §29 wins, and they resume as
+        // soon as the password has been changed.
+        $sec29_confined = function_exists('bc_password_change_required') && bc_password_change_required($get_logged_user_details);
+        if ($sec29_confined) {
             $sec29_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-            if ($sec29_script !== 'AccountSettings.php') {
+            if (!in_array($sec29_script, array('AccountSettings.php', 'SecurityQuest.php', 'logout.php'), true)) {
                 header('Location: /web/AccountSettings.php?force_password=1');
                 exit();
             }
@@ -510,7 +519,7 @@ if ($connection_server) {
                         unset($_SESSION['force_billing_recheck']);
                     }
 
-					if ($is_suspended) {
+					if ($is_suspended && empty($sec29_confined)) {
 						header("Location: /web/Suspended.php");
 						exit();
 					}
@@ -647,7 +656,7 @@ if ($connection_server) {
 									$config_user_total_funding = $_SESSION['total_funding_cache'];
 								}
 
-								if ($config_user_total_funding < $min_funding) {
+								if ($config_user_total_funding < $min_funding && empty($sec29_confined)) {
 									$_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_user_details["firstname"]) . ", kindly fund your wallet with minimum of N" . number_format($min_funding - $config_user_total_funding) . " to unlock features.";
 									if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/Dashboard.php", "/web/AISuite.php", "/web/AI-Assistant.php", "/web/SecurityQuest.php"))) {
 										header("Location: /web/Fund.php");
@@ -659,7 +668,7 @@ if ($connection_server) {
 					}
 
 					// Security Question Check
-					if (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"]) {
+					if (empty($sec29_confined) && (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"])) {
 						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php"))) {
 							header("Location: /web/SecurityQuest.php");
 							exit();

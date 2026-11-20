@@ -67,9 +67,11 @@ if ($connection_server) {
 
                     // §29: a forced password change confines the admin session to
                     // Account Settings until a new password is set.
-                    if (function_exists('bc_password_change_required') && bc_password_change_required($get_logged_admin_details)) {
+                    $sec29_admin_confined = function_exists('bc_password_change_required') && bc_password_change_required($get_logged_admin_details);
+                    if ($sec29_admin_confined) {
                         $sec29_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-                        if ($sec29_script !== 'AccountSettings.php') {
+                        // §44: the confinement target + logout must stay reachable while confined.
+                        if (!in_array($sec29_script, array('AccountSettings.php', 'admin-logout.php', 'logout.php'), true)) {
                             header('Location: /bc-admin/AccountSettings.php?force_password=1');
                             exit();
                         }
@@ -84,7 +86,8 @@ if ($connection_server) {
                         if (function_exists('bc_is_saas_edition') && bc_is_saas_edition()) {
                             $sec33_totp_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_totp' LIMIT 1");
                             $sec33_force_totp = $sec33_totp_q ? (string)(mysqli_fetch_assoc($sec33_totp_q)['option_value'] ?? '0') : '0';
-                            if ($sec33_force_totp === '1' && (string)($get_logged_admin_details['two_factor_type'] ?? 'none') !== 'totp') {
+                            $sec33_admin_confined = ($sec33_force_totp === '1' && (string)($get_logged_admin_details['two_factor_type'] ?? 'none') !== 'totp');
+                                if (!empty($sec33_admin_confined)) {
                                 $sec33_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
                                 if ($sec33_script !== 'AccountSettings.php') {
                                     header('Location: /bc-admin/AccountSettings.php?force_totp=1');
@@ -93,6 +96,7 @@ if ($connection_server) {
                             }
                         }
                     }
+                    $bc_admin_confined = !empty($sec29_admin_confined) || !empty($sec33_admin_confined);
                     // §33: platform "logout all sessions" epoch check.
                     if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
                         session_destroy();
