@@ -213,7 +213,7 @@ if (!function_exists('bc_adm_item_icon')) {
             'SalesCalculator.php' => 'calculator', 'SenderIDRequests.php' => 'send-check', 'SelfSubmitPayment.php' => 'cash-stack',
             'PaymentGateway.php' => 'credit-card', 'LoyaltySettings.php' => 'award', 'CoinConversions.php' => 'arrow-repeat',
             'CryptoHub.php' => 'currency-bitcoin', 'CryptoInvoices.php' => 'file-earmark-text', 'FloatServiceIcons.php' => 'grid-1x2',
-            'KYCManagement.php' => 'person-check', 'BusinessKYB.php' => 'building-check', 'SupportChat.php' => 'chat-dots',
+            'KYCManagement.php' => 'person-check', 'BusinessKYB.php' => 'building-check', 'SupportChat.php' => 'chat-dots', 'AccountDeletionRequests.php' => 'person-x',
             'ChatSettings.php' => 'chat-square-text', 'BruteForceSecurity.php' => 'shield-exclamation', 'ServiceControl.php' => 'toggles',
             'MarketPlace.php' => 'shop', 'ProductSetUp.php' => 'box-seam', 'IdentityAPI.php' => 'fingerprint',
             'Airtime.php' => 'phone', 'SharedData.php' => 'diagram-3', 'SmeData.php' => 'database', 'CorporateData.php' => 'building',
@@ -360,12 +360,13 @@ if (!function_exists('bc_adm_menu')) {
             )),
             array('label' => 'Business Management', 'items' => array(
                 array('label' => 'Manage User', 'icon' => 'menu-button-wide',
-                      'match' => array('CreateUser.php','KnowledgeBase.php','Users.php','Transactions.php','BatchTransactions.php','PaymentOrders.php','FundTransferRequests.php','ShareFund.php','APIRequests.php','NumberChecker.php','CryptoInvoices.php','Withdrawals.php'),
+                      'match' => array('CreateUser.php','KnowledgeBase.php','Users.php','AccountDeletionRequests.php','Transactions.php','BatchTransactions.php','PaymentOrders.php','FundTransferRequests.php','ShareFund.php','APIRequests.php','NumberChecker.php','CryptoInvoices.php','Withdrawals.php'),
                       'children' => array(
                     array('label' => 'Create User',           'href' => 'CreateUser.php',           'match' => array('CreateUser.php')),
                     array('label' => 'API Access Requests',   'href' => 'APIRequests.php',          'match' => array('APIRequests.php')),
                     array('label' => 'Knowledge Base',        'href' => 'KnowledgeBase.php',        'match' => array('KnowledgeBase.php')),
                     array('label' => 'Users',                 'href' => 'Users.php',                'match' => array('Users.php')),
+                    array('label' => 'Account Deletion Requests', 'href' => 'AccountDeletionRequests.php', 'match' => array('AccountDeletionRequests.php')),
                     array('label' => 'Crypto Invoices',       'href' => 'CryptoInvoices.php',       'match' => array('CryptoInvoices.php')),
                     array('label' => 'Transactions',          'href' => 'Transactions.php',         'match' => array('Transactions.php')),
                     array('label' => 'Number Credit Checker', 'href' => 'NumberChecker.php',        'match' => array('NumberChecker.php')),
