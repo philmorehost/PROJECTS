@@ -426,13 +426,10 @@ if ($connection_server) {
         if ($select_vendor_table) {
                 unset($_SESSION["admin_to_user_redirect"]);
 
-		// Check for vendor expiry
-		if ($select_vendor_table["expiry_date"] && strtotime($select_vendor_table["expiry_date"]) < time()) {
-			if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Inactive.php", "/web/Login.php", "/logout.php", "/admin-logout.php", "/bc-admin/Login.php", "/bc-admin/RenewSubscription.php", "/bc-spadmin/VerifyOTP.php", "/web/LockoutResolution.php", "/web/AISuite.php", "/web/AI-Assistant.php"))) {
-				header("Location: /web/Inactive.php");
-				exit();
-			}
-		}
+        // Also enforce after tenant resolution (temporary vendor URLs included).
+        if (bc_vendor_subscription_expired($select_vendor_table)) {
+            bc_vendor_expiry_response(isset($_SERVER['HTTP_X_APP_SOURCE']));
+        }
 
 		if (isset($_SESSION["user_session"])) {
 			$username = mysqli_real_escape_string($connection_server, $_SESSION["user_session"]);

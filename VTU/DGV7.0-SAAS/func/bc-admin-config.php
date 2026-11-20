@@ -122,6 +122,25 @@ if ($connection_server) {
                 if (mysqli_num_rows($get_logged_admin_query) == 1) {
                     $get_logged_admin_details = mysqli_fetch_array($get_logged_admin_query);
 
+                    // An expired account has exactly one operational destination.
+                    // Check the authenticated vendor too (including platform-host logins).
+                    if (bc_vendor_subscription_expired($get_logged_admin_details)
+                        && (int)$get_logged_admin_details['status'] === 1
+                        && (int)$get_logged_admin_details['is_blocked'] === 0) {
+                        if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
+                            session_destroy();
+                            header('Location: /bc-admin/Login.php');
+                            exit();
+                        }
+                        $GLOBALS['bc_vendor_is_expired'] = true;
+                        header('Cache-Control: no-store');
+                        if (($_SERVER['SCRIPT_NAME'] ?? '') !== '/bc-admin/RenewSubscription.php') {
+                            header('Location: /bc-admin/RenewSubscription.php');
+                            exit();
+                        }
+                        // Do not let billing, KYC or enrolment redirects trap renewal.
+                        return;
+                    }
                     // §29: a forced password change confines the admin session to
                     // Account Settings until a new password is set.
                     $sec29_admin_confined = function_exists('bc_password_change_required') && bc_password_change_required($get_logged_admin_details);
@@ -186,7 +205,7 @@ if ($connection_server) {
                     if (($get_logged_admin_details["status"] == 1 && $get_logged_admin_details["is_blocked"] == 0) || (isset($_SESSION["spadmin_vendor_auth"]))) {
                         // Check for vendor expiry
                         $is_expired = false;
-                        if ($get_logged_admin_details["expiry_date"] && strtotime($get_logged_admin_details["expiry_date"]) < time()) {
+                        if (bc_vendor_subscription_expired($get_logged_admin_details)) {
                             $is_expired = true;
                         }
 
