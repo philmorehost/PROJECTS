@@ -255,4 +255,20 @@ foreach ($editions as $ed) {
     sec_check_true("$ed ShareFund audits executions", strpos($share, "'user_wallet_' . \$transType") !== false);
 }
 
+// ── §31 TOTP enrolment on upgraded installs ───────────────────────────────
+// totp_secret/two_factor_type exist in bc-tables.php only inside CREATE TABLE
+// IF NOT EXISTS, so pre-§29 installs never got the columns and enrolment
+// died with "Could not start authenticator setup". The idempotent migrator
+// must backfill both columns for every actor table, in both editions.
+foreach ($editions as $ed) {
+    $su = src($root, $ed, 'func/bc-stepup.php');
+    sec_check("$ed ensure-schema backfills totp_secret on 3 tables", substr_count($su, '"VARCHAR(225) NULL"'), 3);
+    sec_check("$ed ensure-schema backfills two_factor_type on 3 tables", substr_count($su, "two_factor_type'       => \"VARCHAR(20) NOT NULL DEFAULT 'none'\""), 3);
+    foreach (array('sas_users', 'sas_vendors', 'sas_super_admin') as $tbl) {
+        sec_check_true("$ed ensure-schema covers $tbl", strpos($su, "'$tbl' => array(") !== false);
+    }
+    // every enrolment write targets columns the migrator guarantees
+    sec_check_true("$ed begin-enrolment writes the backfilled columns", strpos($su, "SET totp_secret=?, two_factor_type='pending'") !== false);
+}
+
 echo "$count security29 checks passed\n";

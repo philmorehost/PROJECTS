@@ -190,18 +190,28 @@ if (!function_exists('bc_security_ensure_schema')) {
             PRIMARY KEY (id), KEY vendor_created (vendor_id, created_at), KEY action_created (action, created_at)
         )");
 
+        // totp_secret / two_factor_type live in bc-tables.php only as part of
+        // CREATE TABLE IF NOT EXISTS, so installs that predate §29 never got
+        // them and TOTP enrolment failed with "Could not start authenticator
+        // setup" (§31). They must be backfilled here for every actor table.
         $cols = array(
             'sas_users' => array(
                 'force_password_change' => "TINYINT(1) NOT NULL DEFAULT 0",
                 'api_key_created_at'    => "DATETIME NULL",
                 'api_key_expires_at'    => "DATETIME NULL",
+                'totp_secret'           => "VARCHAR(225) NULL",
+                'two_factor_type'       => "VARCHAR(20) NOT NULL DEFAULT 'none'",
                 'totp_last_step'        => "BIGINT NOT NULL DEFAULT 0",
             ),
             'sas_vendors' => array(
                 'force_password_change' => "TINYINT(1) NOT NULL DEFAULT 0",
+                'totp_secret'           => "VARCHAR(225) NULL",
+                'two_factor_type'       => "VARCHAR(20) NOT NULL DEFAULT 'none'",
                 'totp_last_step'        => "BIGINT NOT NULL DEFAULT 0",
             ),
             'sas_super_admin' => array(
+                'totp_secret'           => "VARCHAR(225) NULL",
+                'two_factor_type'       => "VARCHAR(20) NOT NULL DEFAULT 'none'",
                 'totp_last_step'        => "BIGINT NOT NULL DEFAULT 0",
             ),
         );
