@@ -499,9 +499,9 @@ bc_app_head("Product Pricing & Discounts | " . ($get_all_site_details["site_titl
                 
                 <!-- Pricing Tier Key Legend -->
                 <div class="d-flex flex-wrap gap-2 text-muted small">
-                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-smart">Tier 1</span> Smart User</span>
-                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-agent">Tier 2</span> Agent Vendor</span>
-                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-api">Tier 3</span> API Partner</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-smart">Personal</span> Personal (Smart legacy)</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-agent">Personal</span> Personal (Agent legacy)</span>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="badge-tier badge-tier-api">Business</span> Business (API)</span>
                 </div>
             </div>
 
@@ -551,9 +551,9 @@ bc_app_head("Product Pricing & Discounts | " . ($get_all_site_details["site_titl
                                                 <th>Brand</th>
                                                 <th>Plan / Desc</th>
                                                 <th>Detail</th>
-                                                <th>Smart (T1)</th>
-                                                <th>Agent (T2)</th>
-                                                <th>API (T3)</th>
+                                                <th>Personal (T1)</th>
+                                                <th>Personal (T2)</th>
+                                                <th>Business (T3)</th>
                                             </tr>
                                         </thead>
                                         <tbody>

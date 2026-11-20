@@ -116,6 +116,9 @@ if (!function_exists('bc_fintech_provider_registry')) {
                     'transfers'          => '', // AWAITS REAL SPEC
                     'bulk_transfers'     => '', // AWAITS REAL SPEC
                     'pos_request'        => '', // AWAITS REAL SPEC
+                    'virtual_cards'        => '', // AWAITS REAL SPEC (Flutterwave virtual cards)
+                    'virtual_cards_fund'   => '', // AWAITS REAL SPEC
+                    'virtual_cards_status' => '', // AWAITS REAL SPEC
                     'regional_toggles'   => '', // AWAITS REAL SPEC
                 ],
                 // Field paths carried over from the LIVE users-flutterwave.php handler,

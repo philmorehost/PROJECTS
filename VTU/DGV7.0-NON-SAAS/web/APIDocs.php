@@ -455,7 +455,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 								<div class="bg-light p-5 rounded-4 text-center mt-4 border">
 									<i class="bi bi-lock display-4 text-primary mb-3"></i>
 									<h5 class="fw-bold"><?php echo ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] != 1) ? 'API Access Disabled' : 'Upgrade to API Level Required'; ?></h5>
-									<p class="text-muted small mb-4">Integrate our services into your own apps and websites by becoming an API Vendor.</p>
+									<p class="text-muted small mb-4">Integrate our services into your own apps and websites by becoming a Business account.</p>
 									<?php if ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] != 1): ?>
 										<div class="alert alert-warning py-2 mb-0 rounded-pill px-4 d-inline-block fw-bold small"><i class="bi bi-info-circle me-1"></i> Contact Administrator to enable your API access.</div>
 									<?php elseif ($api_request_status === 'pending'): ?>

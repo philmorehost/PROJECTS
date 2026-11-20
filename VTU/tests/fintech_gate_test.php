@@ -293,6 +293,10 @@ function fake_mysqli_query_raw($db, $sql) {
         $GLOBALS['db']['affected'] = 1;
         return true;
     }
+    if (preg_match("/UPDATE sas_chat_threads SET ticket_no='([A-Z]+-\\d+)' WHERE id='(\\d+)'/s", $sql, $m)) {
+        $GLOBALS['db']['affected'] = 1;
+        return true;
+    }
     if (preg_match("/UPDATE sas_chat_threads\s+SET status='pending_agent', ai_enabled=0\s+WHERE id='(\\d+)' AND vendor_id='(\\d+)'/s", $sql, $m)) {
         $GLOBALS['db']['chat_threads'][(int)$m[1]]['status'] = 'pending_agent';
         $GLOBALS['db']['chat_threads'][(int)$m[1]]['ai_enabled'] = 0;
@@ -2345,7 +2349,10 @@ $required_nav_pages = [
     'Electric.php', 'Betting.php', 'Exam.php', 'Fund.php', 'VirtualBanks.php',
     'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php',
     'NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php',
-    'CryptoHub.php', 'AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php',
+    // §25: AISuite.php left the nav (VTU-purchase AI retired); Support (AI-Assistant.php),
+    // Refer & Earn and the new provider services joined it.
+    'CryptoHub.php', 'AI-Assistant.php', 'Referral.php', 'IntlTransfer.php', 'Tuition.php',
+    'ESIM.php', 'POSRequest.php', 'BulkSMS.php', 'SubmitSenderID.php',
     'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php', 'Transactions.php', 'BatchTransactions.php',
     'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php',
     'PaymentOrders.php', 'SubmitPayment.php', 'AccountSettings.php',

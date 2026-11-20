@@ -33,7 +33,7 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
             <i class="bi bi-info-circle-fill fs-4 me-3"></i>
             <div>
                 <small class="fw-bold d-block">Pricing Transparency</small>
-                <span class="small">Our prices are tiered based on your account level. Smart Users get standard discounts, while Agents and API Vendors enjoy higher profit margins.</span>
+                <span class="small">Our prices are tiered by account type. Personal accounts get standard discounts, while Business accounts enjoy higher profit margins and Developer API access.</span>
             </div>
         </div>
 
@@ -52,11 +52,14 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Network</th><th>Smart (%)</th><th>Agent (%)</th><th>API (%)</th>
+                                        <th>Network</th><th>Personal (%)</th><th>Business (%)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php
+                                    // §25 two-tier pricing: Personal keeps the viewer's legacy discount table
+                                    // (Agent/Reseller rates retained), Business uses the API table.
+                                    $pricing_personal_is_agent = (int)($get_logged_user_details["account_level"] ?? 1) === 2;
                                     $has_data = false;
                                     $product_names = array("mtn", "airtel", "9mobile", "glo");
                                     foreach($product_names as $pname) {
@@ -74,15 +77,14 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                                                     $has_data = true;
                                                     echo '<tr>
                                                         <td><span class="badge network-badge bg-dark">'.strtoupper($pname).'</span></td>
-                                                        <td class="fw-bold text-primary">'.toDecimal($d1["val_1"], 2).'%</td>
-                                                        <td class="fw-bold text-success">'.toDecimal($d2["val_1"], 2).'%</td>
+                                                        <td class="fw-bold text-primary">'.toDecimal(($pricing_personal_is_agent ? $d2 : $d1)["val_1"], 2).'%</td>
                                                         <td class="fw-bold text-indigo">'.toDecimal($d3["val_1"], 2).'%</td>
                                                     </tr>';
                                                 }
                                             }
                                         }
                                     }
-                                    if(!$has_data) echo '<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Airtime pricing not yet configured. Please contact admin.</td></tr>';
+                                    if(!$has_data) echo '<tr><td colspan="3" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Airtime pricing not yet configured. Please contact admin.</td></tr>';
                                     ?>
                                 </tbody>
                             </table>
@@ -104,7 +106,7 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Network</th><th>Plan</th><th>Type</th><th>Smart</th><th>Agent</th><th>API</th>
+                                        <th>Network</th><th>Plan</th><th>Type</th><th>Personal</th><th>Business</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -141,13 +143,12 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                                                 <td><small class="fw-bold">'.strtoupper($pname).'</small></td>
                                                 <td>'.$name.'</td>
                                                 <td><span class="badge bg-light text-dark border">'.strtoupper(str_replace('-data','',$row['api_type'])).'</span></td>
-                                                <td class="fw-bold">₦'.number_format($row['p1']).'</td>
-                                                <td class="fw-bold">₦'.number_format($row['p2']).'</td>
+                                                <td class="fw-bold">₦'.number_format($pricing_personal_is_agent ? $row['p2'] : $row['p1']).'</td>
                                                 <td class="fw-bold">₦'.number_format($row['p3']).'</td>
                                             </tr>';
                                         }
                                     }
-                                    if(!$has_data) echo '<tr><td colspan="6" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Data pricing not yet configured. Please contact admin.</td></tr>';
+                                    if(!$has_data) echo '<tr><td colspan="5" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Data pricing not yet configured. Please contact admin.</td></tr>';
                                     ?>
                                 </tbody>
                             </table>
@@ -169,7 +170,7 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Provider</th><th>Package</th><th>Smart</th><th>Agent</th><th>API</th>
+                                        <th>Provider</th><th>Package</th><th>Personal</th><th>Business</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -195,15 +196,14 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                                                     echo '<tr>
                                                         <td><small class="fw-bold">'.strtoupper($pname).'</small></td>
                                                         <td>'.$name.'</td>
-                                                        <td class="fw-bold">₦'.number_format($row['p1']).'</td>
-                                                        <td class="fw-bold">₦'.number_format($row['p2']).'</td>
+                                                        <td class="fw-bold">₦'.number_format($pricing_personal_is_agent ? $row['p2'] : $row['p1']).'</td>
                                                         <td class="fw-bold">₦'.number_format($row['p3']).'</td>
                                                     </tr>';
                                                 }
                                             }
                                         }
                                     }
-                                    if(!$has_data) echo '<tr><td colspan="5" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Cable TV pricing not yet configured. Please contact admin.</td></tr>';
+                                    if(!$has_data) echo '<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Cable TV pricing not yet configured. Please contact admin.</td></tr>';
                                     ?>
                                 </tbody>
                             </table>
@@ -225,7 +225,7 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Provider</th><th>Smart (%)</th><th>Agent (%)</th><th>API (%)</th>
+                                        <th>Provider</th><th>Personal (%)</th><th>Business (%)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -247,15 +247,14 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                                                     $has_data = true;
                                                     echo '<tr>
                                                         <td><small class="fw-bold">'.strtoupper($pname).'</small></td>
-                                                        <td class="text-primary fw-bold">'.toDecimal($d1["val_1"], 2).'%</td>
-                                                        <td class="text-success fw-bold">'.toDecimal($d2["val_1"], 2).'%</td>
+                                                        <td class="text-primary fw-bold">'.toDecimal(($pricing_personal_is_agent ? $d2 : $d1)["val_1"], 2).'%</td>
                                                         <td class="text-indigo fw-bold">'.toDecimal($d3["val_1"], 2).'%</td>
                                                     </tr>';
                                                 }
                                             }
                                         }
                                     }
-                                    if(!$has_data) echo '<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Utility pricing not yet configured. Please contact admin.</td></tr>';
+                                    if(!$has_data) echo '<tr><td colspan="3" class="empty-state"><i class="bi bi-exclamation-circle"></i><br>Utility pricing not yet configured. Please contact admin.</td></tr>';
                                     ?>
                                 </tbody>
                             </table>

@@ -732,7 +732,7 @@ function validateAPIDomain($user_details) {
 function accountLevel($levelNumber)
 {
 	if (is_numeric($levelNumber)) {
-		$account_level_details = array(1 => "Smart User", 2 => "Agent Vendor", 3 => "API Vendor");
+		$account_level_details = array(1 => "Personal", 2 => "Personal (Agent legacy)", 3 => "Business");
 		if ($account_level_details[$levelNumber] == true) {
 			return $account_level_details[$levelNumber];
 		} else {

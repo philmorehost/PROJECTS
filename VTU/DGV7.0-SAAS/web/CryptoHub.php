@@ -15,6 +15,19 @@ if(!isServiceEnabled('crypto_hub')){
     exit();
 }
 
+// §25: this page adapts to the vendor's ACTIVE provider (bc-admin → Service
+// Control). While a provider other than the legacy Plisio rail is active, only
+// that provider's assets/services exist here and every trade action fails
+// closed through the provider seam — Plisio is never called behind the scenes.
+include_once(__DIR__ . "/../func/bc-fintech-services.php");
+$crypto_provider = bc_svc_active_provider($vid);
+$crypto_provider_mode = $crypto_provider !== 'plisio';
+$crypto_provider_label = bc_svc_provider_label($crypto_provider);
+if ($crypto_provider_mode && (isset($_POST['action']) || isset($_GET['get_rate']))) {
+    echo json_encode(['status' => 'error', 'message' => $crypto_provider_label . ' crypto services are being provisioned for this platform. No trade was executed.']);
+    exit();
+}
+
 // Handle AJAX Rate Fetching
 if (isset($_GET['get_rate'])) {
     $from = strtoupper($_GET['from']);
@@ -117,6 +130,16 @@ if (isset($_POST['action']) && $_POST['action'] == 'swap') {
             chargeOtherUser($username, "credit", "crypto_swap", "Crypto Swap", "SWP_" . time(), "INTERNAL", $gross_target_amount, $net_target_amount, "Swap $amount $from to Naira (Fee: ₦" . number_format($fee_amount, 2) . ")", "WEB", $_SERVER['HTTP_HOST'], 1);
 
             logCryptoTransaction($vid, $username, 'swap_out', $from, $amount, 1, 'INTERNAL_SWAP', '', '', ['to' => $to, 'rate' => $rate, 'fee' => $fee_amount]);
+
+            // §25 referral engine: completed crypto volume counts toward the $100 mark.
+            if (function_exists('bc_referral_record_volume')) {
+                $uid_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vid' AND username='$username' LIMIT 1");
+                $uid_r = $uid_q ? mysqli_fetch_assoc($uid_q) : null;
+                if ($uid_r) {
+                    $usd_vol = in_array($from, ['USDT_TRX', 'USDT', 'USDC'], true) ? (float)$amount : (float)$amount * (float)getPlisioExchangeRate($from, 'USD', $vid);
+                    if ($usd_vol > 0) bc_referral_record_volume($vid, (int)$uid_r['id'], $usd_vol, 'crypto');
+                }
+            }
 
             $success_msg = 'Swap Successful. ₦' . number_format($net_target_amount, 2) . ' credited to your wallet after ₦' . number_format($fee_amount, 2) . ' fee.';
             echo json_encode(['status' => 'success', 'message' => $success_msg]);
@@ -291,9 +314,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'withdraw') {
     exit();
 }
 
-$currencies = getPlisioCurrencies($vid);
+$currencies = $crypto_provider_mode ? [] : getPlisioCurrencies($vid);
 $userWallets = getUserCryptoWallets($vid, $username);
-$supported = ['BTC', 'ETH', 'LTC', 'TRX', 'USDT_TRX', 'USDC', 'BCH', 'DOGE'];
+$supported = $crypto_provider_mode ? bc_svc_provider_assets($vid) : ['BTC', 'ETH', 'LTC', 'TRX', 'USDT_TRX', 'USDC', 'BCH', 'DOGE'];
 
 // Filter supported currencies to only those returned by Plisio (ensure they are active)
 $active_supported = [];
@@ -330,6 +353,13 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 </style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "CRYPTO", "crumb" => "Home / Crypto")); ?>
+<?php if ($crypto_provider_mode): ?>
+<div class="alert alert-info border-0 rounded-4 shadow-sm d-flex align-items-center gap-3">
+    <i class="bi bi-diagram-3 fs-4"></i>
+    <div><strong>Powered by <?php echo htmlspecialchars($crypto_provider_label); ?></strong><br>
+    <span class="small">Showing exactly <?php echo htmlspecialchars($crypto_provider_label); ?>'s crypto services: <?php echo htmlspecialchars(implode(', ', bc_svc_provider_assets($vid))); ?>. BTC swap is not offered by this provider, so BTC pairs are hidden. Trades activate as soon as the provider connection is configured by admin.</span></div>
+</div>
+<?php endif; ?>
 
     <section class="section dashboard">
 
@@ -399,7 +429,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         </div>
         <div class="row g-3 mb-4">
             <?php
-            $display_coins = ['BTC', 'ETH', 'LTC', 'USDT_TRX', 'TRX', 'USDC', 'BCH', 'DOGE'];
+            $display_coins = $crypto_provider_mode ? bc_svc_provider_assets($vid) : ['BTC', 'ETH', 'LTC', 'USDT_TRX', 'TRX', 'USDC', 'BCH', 'DOGE'];
             foreach($display_coins as $cid):
                 $bal = $userWallets[$cid]['balance'] ?? 0;
                 $label = ($cid == 'USDT_TRX') ? 'USDT' : $cid;

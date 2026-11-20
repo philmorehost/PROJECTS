@@ -59,6 +59,8 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 		font-size: .72rem; font-weight: 700; backdrop-filter: blur(8px); transition: all .2s;
 	}
 	.db-action i { font-size: 1.2rem; }
+	.db-action, .db-action:hover, .db-action:focus { color: #fff !important; text-decoration: none; }
+	.db-action span { display: block; color: #fff; font-size: .78rem; font-weight: 700; letter-spacing: .02em; line-height: 1.2; }
 	.db-action:hover { background: rgba(255,255,255,.26); color: #fff; transform: translateY(-2px); }
 	.db-meta {
 		background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16);
@@ -118,28 +120,6 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 	}
 </style>
 	<section class="section dashboard">
-        <!-- AI Awareness Spotlight -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 rounded-4 shadow-sm overflow-hidden" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);">
-                    <div class="card-body p-4 d-flex align-items-center justify-content-between position-relative">
-                        <div class="position-absolute end-0 top-0 opacity-10" style="font-size: 8rem; transform: translate(20%, -20%); pointer-events: none;">
-                            <i class="bi bi-cpu"></i>
-                        </div>
-                        <div class="d-flex align-items-center gap-3 position-relative z-1">
-                            <div class="bg-white bg-opacity-20 rounded-circle p-3 shadow-sm d-none d-md-block">
-                                <i class="bi bi-robot text-white fs-2"></i>
-                            </div>
-                            <div>
-                                <h5 class="fw-bold text-white mb-1">Meet Your AI Assistant! <span class="badge-new ms-2">NEW</span></h5>
-                                <p class="text-white opacity-75 small mb-0">Buy <b>Airtime, Data, Cable</b> &amp; pay <b>Bills</b> just by chatting with our AI Engine.</p>
-                            </div>
-                        </div>
-                        <a href="AISuite.php" class="btn btn-light rounded-pill px-4 fw-bold text-primary shadow-sm position-relative z-1">Try AI Now</a>
-                    </div>
-                </div>
-            </div>
-        </div>
         <?php if(!$is_kyc_compliant && $get_logged_user_details["kyc_status"] != 1 && isKYCEnforced()): ?>
         <div class="alert alert-warning border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center justify-content-between p-4" style="background: linear-gradient(45deg, #fff3cd, #fff8e1);">
             <div class="d-flex align-items-center">
@@ -203,11 +183,11 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                     </div>
 
                     <div class="row row-cols-4 g-2 mt-4">
-                        <div class="col"><a href="Fund.php" class="db-action"><i class="bi bi-plus-lg"></i>Fund</a></div>
-                        <div class="col"><a href="SubmitPayment.php" class="db-action"><i class="bi bi-cash-coin"></i>Submit</a></div>
-                        <div class="col"><a href="ShareFund.php" class="db-action"><i class="bi bi-send"></i>Share</a></div>
+                        <div class="col"><a href="Fund.php" class="db-action"><i class="bi bi-plus-lg"></i><span>Fund</span></a></div>
+                        <div class="col"><a href="SubmitPayment.php" class="db-action"><i class="bi bi-cash-coin"></i><span>Submit</span></a></div>
+                        <div class="col"><a href="ShareFund.php" class="db-action"><i class="bi bi-send"></i><span>Share</span></a></div>
                         <?php if(isServiceEnabled('crypto_hub')): ?>
-                        <div class="col"><a href="CryptoHub.php" class="db-action"><i class="bi bi-currency-bitcoin"></i>Crypto</a></div>
+                        <div class="col"><a href="CryptoHub.php" class="db-action"><i class="bi bi-currency-bitcoin"></i><span>Crypto</span></a></div>
                         <?php endif; ?>
                     </div>
 
@@ -219,7 +199,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 </div>
                 <div class="col-md-5">
                     <div class="db-meta">
-                        <div class="rowline"><span class="k">Account Type</span><span class="v"><?php echo accountLevel($get_logged_user_details["account_level"]); ?></span></div>
+                        <div class="rowline"><span class="k">Account Type</span><span class="v"><?php echo function_exists('bc_fintech_account_type') ? ucfirst(bc_fintech_account_type($get_logged_user_details) ?: 'personal') : accountLevel($get_logged_user_details["account_level"]); ?></span></div>
                         <div class="rowline"><span class="k">Username</span><span class="v">@<?php echo $get_logged_user_details["username"]; ?></span></div>
                     </div>
                 </div>
@@ -263,54 +243,56 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
             <?php endif; ?>
         </div>
 
+        <!-- New Fintech Services -->
+        <div class="row g-3 mb-4">
+            <?php if(isServiceEnabled('intl_transfer')): ?>
+            <div class="col-md-4">
+                <a href="IntlTransfer.php" class="text-decoration-none">
+                    <div class="db-feature">
+                        <div class="svc-ic ic-teal mb-0"><i class="bi bi-globe"></i></div>
+                        <div><div class="svc-name">Send Money Abroad</div><div class="svc-sub">China payout, wire &amp; global transfers</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
+                    </div>
+                </a>
+            </div>
+            <?php endif; ?>
+            <?php if(isServiceEnabled('tuition')): ?>
+            <div class="col-md-4">
+                <a href="Tuition.php" class="text-decoration-none">
+                    <div class="db-feature">
+                        <div class="svc-ic ic-sky mb-0"><i class="bi bi-mortarboard"></i></div>
+                        <div><div class="svc-name">Pay Tuition Worldwide</div><div class="svc-sub">160+ universities, ID validated</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
+                    </div>
+                </a>
+            </div>
+            <?php endif; ?>
+            <?php if(isServiceEnabled('esim')): ?>
+            <div class="col-md-4">
+                <a href="ESIM.php" class="text-decoration-none">
+                    <div class="db-feature">
+                        <div class="svc-ic ic-violet mb-0"><i class="bi bi-sim"></i></div>
+                        <div><div class="svc-name">Travel eSIM</div><div class="svc-sub">Data in 190+ countries, QR activation</div></div>
+                        <i class="bi bi-chevron-right chev"></i>
+                    </div>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
         <div class="row g-4">
             <!-- Services Grid -->
             <div class="col-lg-8">
                 <div class="db-card">
                     <div class="db-card__title">All Services</div>
                     <p class="db-card__sub">Everything you can buy, pay and print — in one place.</p>
-                    <div class="row row-cols-3 row-cols-md-4 row-cols-xl-5 g-3">
-                        <?php if(isServiceEnabled('data')): ?>
-                        <div class="col"><a href="Data.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-blue"><i class="bi bi-wifi"></i></div><div class="svc-name">Data</div><div class="svc-sub">Top-up data</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('airtime')): ?>
-                        <div class="col"><a href="Airtime.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-green"><i class="bi bi-telephone"></i></div><div class="svc-name">Airtime</div><div class="svc-sub">Buy airtime</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('cable')): ?>
-                        <div class="col"><a href="Cable.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-purple"><i class="bi bi-tv"></i></div><div class="svc-name">Cable TV</div><div class="svc-sub">Subscriptions</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('electric')): ?>
-                        <div class="col"><a href="Electric.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-orange"><i class="bi bi-lightbulb"></i></div><div class="svc-name">Electricity</div><div class="svc-sub">Buy tokens</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('exam')): ?>
-                        <div class="col"><a href="Exam.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-pink"><i class="bi bi-card-list"></i></div><div class="svc-name">Exam Pins</div><div class="svc-sub">Result checkers</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('betting')): ?>
-                        <div class="col"><a href="Betting.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-red"><i class="bi bi-trophy"></i></div><div class="svc-name">Betting</div><div class="svc-sub">Fund wallets</div></div></a></div>
-                        <?php endif; ?>
-                        <div class="col"><a href="ShareFund.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-teal"><i class="bi bi-send"></i></div><div class="svc-name">Transfer</div><div class="svc-sub">Share funds</div></div></a></div>
-                        <?php if(isServiceEnabled('bank_transfer')): ?>
-                        <div class="col"><a href="SendFund.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-indigo"><i class="bi bi-bank"></i></div><div class="svc-name">Wallet to Bank</div><div class="svc-sub">Withdraw</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('crypto_hub')): ?>
-                        <div class="col"><a href="CryptoHub.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-amber"><i class="bi bi-currency-bitcoin"></i></div><div class="svc-name">Crypto</div><div class="svc-sub">Trade assets</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('virtual_card')): ?>
-                        <div class="col"><a href="VirtualCard.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-indigo"><i class="bi bi-credit-card-2-front"></i></div><div class="svc-name">Virtual Card</div><div class="svc-sub">Dollar cards</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('gift_card')): ?>
-                        <div class="col"><a href="GiftCard.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-cyan"><i class="bi bi-gift"></i></div><div class="svc-name">Gift Card</div><div class="svc-sub">Buy &amp; trade</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('data_card')): ?>
-                        <div class="col"><a href="PrintHub.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-slate"><i class="bi bi-printer"></i></div><div class="svc-name">Print Cards</div><div class="svc-sub">Recharge &amp; data pins</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('bulk_sms')): ?>
-                        <div class="col"><a href="BulkSMS.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-sky"><i class="bi bi-chat-square-text"></i></div><div class="svc-name">Bulk SMS</div><div class="svc-sub">Send campaigns</div></div></a></div>
-                        <?php endif; ?>
-                        <?php if(isServiceEnabled('ai_suite')): ?>
-                        <div class="col"><a href="AISuite.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-violet"><i class="bi bi-robot"></i></div><div class="svc-name">AI Suite</div><div class="svc-sub">Chat &amp; automate</div></div></a></div>
-                        <?php endif; ?>
-                        <div class="col"><a href="Transactions.php" class="text-decoration-none h-100 d-block"><div class="svc-tile"><div class="svc-ic ic-lime"><i class="bi bi-receipt"></i></div><div class="svc-name">History</div><div class="svc-sub">Transactions</div></div></a></div>
+                    <div class="list-group list-group-flush">
+                        <a href="Hub.php?g=pay-bills" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-lightning-charge text-primary"></i><span class="fw-bold flex-grow-1">Pay Bills</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="Hub.php?g=wallet-transfers" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-wallet2 text-primary"></i><span class="fw-bold flex-grow-1">Wallet &amp; Transfers</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="Hub.php?g=verify-print" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-briefcase text-primary"></i><span class="fw-bold flex-grow-1">Verify &amp; Print</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="PrintHub.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-printer text-primary"></i><span class="fw-bold flex-grow-1">PrintHub</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="Hub.php?g=tools-api" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-building text-primary"></i><span class="fw-bold flex-grow-1">Tools &amp; API</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="Hub.php?g=history-tools" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-clock-history text-primary"></i><span class="fw-bold flex-grow-1">History &amp; Tools</span><i class="bi bi-chevron-right text-muted"></i></a>
+                        <a href="Hub.php?g=settings-help" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0"><i class="bi bi-gear text-primary"></i><span class="fw-bold flex-grow-1">Settings &amp; Help</span><i class="bi bi-chevron-right text-muted"></i></a>
                     </div>
                 </div>
 
@@ -354,47 +336,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 
             <!-- Side Cards -->
             <div class="col-lg-4">
-                <!-- AI ELIGIBILITY CARD (NEW) -->
-                <?php
-                $v_ai_q = mysqli_query($connection_server, "SELECT ai_status, voice_tx_threshold FROM sas_vendors WHERE id='".$get_logged_user_details["vendor_id"]."'");
-                $v_ai = mysqli_fetch_assoc($v_ai_q);
 
-                if (($v_ai['ai_status'] ?? 0) == 1):
-                    $tx_count_q = mysqli_query($connection_server, "SELECT COUNT(*) as c FROM sas_transactions WHERE username='".$get_logged_user_details["username"]."' AND status=1");
-                    $tx_count = ($tx_count_q && $row_c = mysqli_fetch_assoc($tx_count_q)) ? (int)$row_c['c'] : 0;
-                    $threshold = (int)($v_ai['voice_tx_threshold'] ?? 50);
-                    $v_status = (int)$get_logged_user_details['ai_voice_status'];
-
-                    if ($v_status == 1 || (int)$get_logged_user_details['ai_status'] == 1): ?>
-                        <div class="db-card" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none;">
-                            <h6 class="fw-bold mb-2 text-white"><i class="bi bi-cpu-fill me-2"></i>AI Access Active/Pending</h6>
-                            <p class="small opacity-75 mb-0">Your AI Assistant access is active or pending review.</p>
-                            <a href="AISuite.php" class="btn btn-light btn-sm w-100 rounded-pill fw-bold text-primary shadow-sm mt-3">GO TO AI SUITE</a>
-                        </div>
-                    <?php elseif ($v_status == 0): ?>
-                        <div class="db-card" style="<?php echo ($tx_count >= $threshold) ? 'background: linear-gradient(135deg, #0b1220, #4338ca); color: white; border: none;' : ''; ?>">
-                            <h6 class="fw-bold mb-2">
-                                <i class="bi <?php echo ($tx_count >= $threshold) ? 'bi-stars' : 'bi-lock-fill'; ?> me-2"></i>
-                                <?php echo ($tx_count >= $threshold) ? 'AI Reward Unlocked!' : 'Autonomous AI'; ?>
-                            </h6>
-                            <p class="small opacity-75 mb-3">
-                                <?php if ($tx_count >= $threshold): ?>
-                                    You've completed <?php echo $tx_count; ?> transactions! Apply now for "Zero-Click" Voice commands.
-                                <?php else: ?>
-                                    Complete <?php echo $threshold; ?> successful transactions to unlock Voice AI.
-                                    <strong>(<?php echo $tx_count; ?>/<?php echo $threshold; ?> done)</strong>
-                                <?php endif; ?>
-                            </p>
-                            <?php if ($tx_count >= $threshold): ?>
-                                <a href="AISuite.php" class="btn btn-light btn-sm w-100 rounded-pill fw-bold text-primary shadow-sm">APPLY FOR AI ACCESS</a>
-                            <?php else: ?>
-                                <div class="progress rounded-pill" style="height: 6px; background: #e2e8f0;">
-                                    <div class="progress-bar bg-primary" style="width: <?php echo min(100, ($tx_count/$threshold)*100); ?>%"></div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                <?php endif; ?>
 
                 <!-- VTU Coins Card -->
                 <a href="PointsHistory.php" class="text-decoration-none">
@@ -416,24 +358,6 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                     </div>
                 </a>
 
-                <!-- Referral Card -->
-                <div class="db-card">
-                    <div class="db-side-title">Refer and Earn</div>
-                    <?php
-                    $stmt = mysqli_prepare($connection_server, "SELECT COUNT(*) as referral_count FROM sas_users WHERE referral_id = ?");
-                    mysqli_stmt_bind_param($stmt, "i", $get_logged_user_details["id"]);
-                    mysqli_stmt_execute($stmt);
-                    $referral_count = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['referral_count'];
-                    ?>
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="svc-ic ic-blue mb-0 me-3"><i class="bi bi-people"></i></div>
-                        <div>
-                            <div class="h4 fw-bold text-dark mb-0"><?php echo $referral_count; ?></div>
-                            <div class="small text-muted">Successful Referrals</div>
-                        </div>
-                    </div>
-                    <button class="btn btn-outline-primary w-100 rounded-pill fw-bold small" onclick="copyReferLink();">COPY REFERRAL LINK</button>
-                </div>
 
                 <!-- Stats Cards -->
                 <?php
@@ -463,43 +387,21 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 ?>
                 <div class="row g-3 mb-4">
                     <div class="col-6">
-                        <div class="db-stat" style="border-left: 4px solid var(--ok);">
-                            <div class="k">Total Deposit</div>
-                            <div class="v">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
+                        <div class="p-3 rounded-4 h-100 text-white" style="background: linear-gradient(135deg, #047857, #065f46);">
+                            <div class="d-flex justify-content-between align-items-start"><span class="small fw-bold text-uppercase" style="letter-spacing:.08em; opacity:.85;">Total Deposit</span><i class="bi bi-arrow-down-circle-fill fs-5 opacity-75"></i></div>
+                            <div class="h5 fw-bold mb-0 mt-2">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
+                            <span class="small" style="opacity:.8;">All money in</span>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="db-stat" style="border-left: 4px solid var(--bad);">
-                            <div class="k">Total Spent</div>
-                            <div class="v">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
+                        <div class="p-3 rounded-4 h-100 text-white" style="background: linear-gradient(135deg, #0f172a, #334155);">
+                            <div class="d-flex justify-content-between align-items-start"><span class="small fw-bold text-uppercase" style="letter-spacing:.08em; opacity:.85;">Total Spent</span><i class="bi bi-arrow-up-circle-fill fs-5 opacity-75"></i></div>
+                            <div class="h5 fw-bold mb-0 mt-2">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
+                            <span class="small" style="opacity:.8;">All money out</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Upgrade Card -->
-                <?php if ($get_logged_user_details["account_level"] < 2) : ?>
-                <div class="db-card">
-                    <div class="db-side-title">Upgrade Account</div>
-                    <form method="post" action="handle_upgrade.php">
-                        <select name="upgrade-type" class="form-select mb-3 rounded-3" required>
-                            <option value="" hidden>Choose Level</option>
-                            <?php
-                            $account_level_upgrade_array = array(1 => "smart", 2 => "agent");
-                            foreach ($account_level_upgrade_array as $index => $account_levels) {
-                                if ($index > $get_logged_user_details["account_level"]) {
-                                    $stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_user_upgrade_price WHERE vendor_id=? AND account_type=? LIMIT 1");
-                                    mysqli_stmt_bind_param($stmt, "is", $get_logged_user_details["vendor_id"], $index);
-                                    mysqli_stmt_execute($stmt);
-                                    $get_upgrade_price = mysqli_fetch_array(mysqli_stmt_get_result($stmt));
-                                    echo '<option value="' . $account_levels . '">' . accountLevel($index) . ' @ N' . number_format($get_upgrade_price["price"], 2) . '</option>';
-                                }
-                            }
-                            ?>
-                        </select>
-                        <button name="upgrade-user" type="submit" class="btn btn-dark w-100 rounded-pill fw-bold">PROCEED UPGRADE</button>
-                    </form>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
 	</section>
@@ -511,13 +413,6 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 			navigator.clipboard.writeText(accountNumber).then(() => {
 				Swal.fire({ icon: 'success', title: 'Copied!', text: 'Account number copied: ' + accountNumber, timer: 2000, showConfirmButton: false });
 			}).catch(err => { console.error('Failed to copy: ', err); });
-		}
-		let ReferLink = '<?php echo bc_app_root_url("Register.php"); ?>?referral=<?php echo $get_logged_user_details["username"]; ?>';
-		const copyReferLink = async () => {
-			try {
-				await navigator.clipboard.writeText(ReferLink);
-				Swal.fire({ icon: 'success', title: 'Copied!', text: 'Referral link copied: ' + ReferLink, timer: 2000, showConfirmButton: false });
-			} catch (err) { console.error('Failed to copy: ' + err); }
 		}
 	</script>
 	<script src="/asset/biometric-handler.js"></script>

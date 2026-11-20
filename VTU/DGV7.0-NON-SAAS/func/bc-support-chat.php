@@ -89,6 +89,8 @@ if (!function_exists('bc_chat_open_thread')) {
 
         $id = mysqli_insert_id($connection_server);
         if (!$id) return null;
+        $ticket_no = 'SUP-' . str_pad((string)$id, 6, '0', STR_PAD_LEFT);
+        mysqli_query($connection_server, "UPDATE sas_chat_threads SET ticket_no='$ticket_no' WHERE id='$id'");
         return bc_chat_thread_get($vendor_id, $id);
     }
 }
@@ -449,6 +451,8 @@ if (!function_exists('bc_chat_ai_call')) {
     }
 }
 
+
+
 if (!function_exists('bc_chat_ai_reply')) {
     /**
      * Generate and post the assistant's reply to a thread.
@@ -478,6 +482,17 @@ if (!function_exists('bc_chat_ai_reply')) {
         }
         $prompt = implode("\n", array_slice($lines, -12));
         if ($prompt === '') return 0;
+
+        // §25: the web layer may register a context provider so the assistant can
+        // reference the customer's own recent activity. The engine itself stays
+        // money-blind: it never queries accounts or transactions directly.
+        $ctx_provider = $GLOBALS['bc_chat_context_provider'] ?? null;
+        if (is_callable($ctx_provider)) {
+            $ctx = (string)$ctx_provider($vendor_id, (int)($thread['user_id'] ?? 0));
+            if ($ctx !== '') {
+                $prompt .= "\n\n[Customer account context — recent activity]\n" . $ctx;
+            }
+        }
 
         $reply = bc_chat_ai_call($vendor_id, $prompt);
 
@@ -514,6 +529,8 @@ if (!function_exists('bc_chat_public_thread')) {
             'status'    => (string)$thread['status'],
             'ai_active' => ((int)$thread['ai_enabled'] === 1 && $thread['status'] === 'open'),
             'subject'   => (string)$thread['subject'],
+            'ticket_no' => (string)($thread['ticket_no'] ?? ''),
+            'unread'    => (int)($thread['unread_for_user'] ?? 0),
         ];
     }
 }

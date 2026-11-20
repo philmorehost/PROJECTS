@@ -1252,3 +1252,93 @@ lm_edition **30**, htaccess **224**.
 Test counts after this change: gate **1053**, policy **70**, plate_app **149**,
 plate_admin **708**, plate_migration **1020**, backoffice_regression **184**,
 lm_edition **30**, htaccess **224**.
+
+## §25 — Dashboard redesign, provider-dynamic services, Flutterwave-only cards, free support & client landing (2026-11-20)
+
+Implements the MZEE SITE UPGRADE client brief + Blueprint BP-DGV7-2026-01 items
+that remained after §24, in both editions.
+
+- **Dashboard (`web/Dashboard.php`)** redesigned modern-fintech style:
+  removed the "Meet Your AI Assistant!" banner, the "Autonomous AI" eligibility
+  card, the Referral card (now the dedicated `web/Referral.php`) and the
+  Upgrade Account card (Business upgrade lives in the menu). Wallet-card
+  actions (Fund/Submit/Share/Crypto) now render explicit icon + text labels in
+  white — the labels previously inherited the brand link colour on the brand
+  hero and were unreadable. Total Deposit / Total Spent became gradient stat
+  cards. "All Services" is now text links matching the sidebar menu exactly
+  (`Hub.php?g=pay-bills|wallet-transfers|verify-print`, `PrintHub.php`,
+  `?g=tools-api`, `?g=history-tools`, `?g=settings-help`). New feature row:
+  Send Money Abroad, Pay Tuition Worldwide, Travel eSIM; the Crypto Hub /
+  Virtual Dollar Card / Gift Cards cards keep the requested copy.
+- **Shell footer bug:** `.pk-app__foot` printed after the offset content
+  column and slid under the fixed 268px sidebar, leaving only the tail of the
+  "Platform Guide" link visible at the sidebar's bottom (the stray menu text in
+  the client screenshot). The footer now offsets itself by `--side-w`
+  (reset on mobile). Also: nav gains Refer & Earn + the four new services,
+  "AI Assistant Terminal/AI Suite" become **Support**, the topbar Refer button
+  opens the Referral page, and the retired VTU-purchase AI widget
+  (`ai-assistant.js`) is no longer injected.
+- **Two tiers everywhere:** `accountLevel()` now displays Personal /
+  Personal (Agent legacy) / Business (discount tables keyed by level are
+  untouched, so legacy Agent discounts are retained inside Personal).
+  `web/Pricing.php` (SAAS) shows two columns — Personal (the viewer's own
+  legacy table: Agent rates for ex-Agent users) and Business (API table);
+  NON-SAAS titles became Personal (T1) / Personal (T2) / Business (T3).
+  API docs say "Business account", never "API Vendor".
+- **Provider layer (`func/bc-fintech-services.php`):** catalogue of what
+  Klasha / Flutterwave / Platnova / legacy-Plisio offer (per the client PDF),
+  the vendor's active provider (`fintech_active_provider`, switched in
+  bc-admin → Service Control), and generic provider service requests
+  (`sas_service_requests`). Checked per the brief: **neither Klasha nor
+  Flutterwave offers a BTC swap**, so BTC pairs exist only on the legacy rail.
+  `web/CryptoHub.php` follows the switch: in provider mode only that
+  provider's assets render and every trade action fails closed through the
+  registry seam; the Plisio rail is untouched while it stays active (default).
+  New pages: `IntlTransfer.php` (with the embossed 3-step China payout visual),
+  `Tuition.php` (Platnova, 160+ universities, student-ID validation),
+  `ESIM.php` (1GLOBAL, LemFi-style QR/SM-DP+ one-tap flow), `POSRequest.php`
+  (Flutterwave POS device requests) — all record requests and render exactly
+  the active provider's services.
+- **Referral (`web/Referral.php`, under Tools & API):** LemFi-style $10/$10
+  program with visual 3-step diagram and progress bars. Volume counts ONLY
+  completed Crypto + International Transfer transactions toward the referee's
+  $100 threshold (`bc_referral_record_volume()`, hooked into completed crypto
+  swaps; idempotent ledger payout of both $10 rewards, FX-converted, left
+  `pending_rate`/`pending_payout` rather than guessing when it cannot pay).
+  Creator/influencer application form → `sas_creator_applications` (T&Cs apply).
+- **Virtual Card is Flutterwave ONLY:** new `func/bc-virtualcard-flutterwave.php`
+  adapter via the provider registry (fail-closed until endpoints are
+  configured); web page, ajax, `web/api/virtual-card.php` and
+  `bc-admin/VirtualCard.php` all route through it. Removed: BSICards gateway +
+  bridge, all Chimoney card functions (its FX-rate lookup for gift cards is
+  kept), the Chimoney card webhook, and the `bsicards` SAAS marketplace type.
+  Legacy cards are listed read-only and refuse funding with an explanation.
+- **AI → Chat Support:** `web/AI-Assistant.php` is now the free Support page
+  (AI first, human handoff, users never pay). Threads carry `SUP-######`
+  ticket numbers (shown to the user, in the widget, and in bc-admin →
+  Support Chat, which opens them as tickets). The chat widget badge shows a
+  live unread response **count**. The AI can inspect the customer's own recent
+  transactions (service/status/date) via a context callback registered by
+  `web/ajax-support-chat.php` — the chat engine itself stays money-blind
+  (gate-tested), never states balances, and still escalates to humans.
+  NON-SAAS AISettings states owner-funded AI (direct API) and points at
+  AIMarketing + Chat Settings; SAAS admin AI (marketplace) unchanged.
+- **Landing (`index-bc-style-template-1.php`)** rebuilt to the client's
+  freelancer template: sticky navbar with automated site name/logo, hero with
+  bento widgets (virtual/physical card toggle, currency pills, invoice-paid
+  mini, zero-fee card, instant VTU top-ups, income separation), floating
+  subnav, Receive (bank transfer/invoice/QR), Manage pockets, the embossed
+  3-step **Payout to China** workflow (Wallet provisioning → Instant funding →
+  China settlement), red Spend section, six-feature Currencies grid (with the
+  gated live FX converter kept), new-services strip (Send Abroad, Tuition,
+  eSIM, POS, Crypto, Gift Cards, $10/$10 Referral, free support), FAQ, CTA and
+  footer. `--brand-red` is the bc-admin-selected primary colour; all branding,
+  logo and contact email are automated; sections stay gated by
+  `isServiceEnabled()`. Template 6 untouched.
+
+Test counts after this change: gate **1053**, policy **70**, plate_app **154**,
+plate_admin **708**, plate_migration **1090**, backoffice_regression **184**,
+lm_edition **30**, htaccess **224**, plus new **upgrade25 193**. Contracts
+updated deliberately: plate_app/plate_migration/fintech_gate now pin the
+retired AI widget, the Support nav, the two-tier Pricing titles and the §25
+new pages instead of the pre-§25 bodies.

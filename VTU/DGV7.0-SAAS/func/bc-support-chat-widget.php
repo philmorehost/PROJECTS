@@ -182,6 +182,7 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
 
     function applyThread(t) {
         if (!t) return;
+        if (typeof t.unread === "number" && panel.getAttribute("data-open") !== "1") { unreadCount = t.unread; showBadge(); }
         threadId = t.id;
         statusEl.textContent = t.status === "with_agent" ? "A person is replying"
             : t.status === "pending_agent" ? "Connecting you to a person…"
@@ -193,10 +194,18 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
         if (on) log.scrollTop = log.scrollHeight;
     }
 
+    var unreadCount = 0;
+    function showBadge() {
+        // Live response count: how many support replies are waiting unread.
+        badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+        badge.style.display = unreadCount > 0 ? "block" : "none";
+    }
+
     function open() {
         panel.setAttribute("data-open", "1");
         launcher.setAttribute("aria-expanded", "true");
-        badge.style.display = "none";
+        unreadCount = 0;
+        showBadge();
         input.focus();
         if (opened) return;
         opened = true;
@@ -229,8 +238,11 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
                 var fresh = res.messages || [];
                 var fromAgent = false;
                 fresh.forEach(function (m) { if (m.who === "agent" || m.who === "ai") fromAgent = true; paint(m); });
-                // While the panel is shut, new answers surface as a badge instead of silently landing.
-                if (fromAgent && panel.getAttribute("data-open") !== "1") badge.style.display = "block";
+                // While the panel is shut, new answers surface as a live count badge.
+                if (fromAgent && panel.getAttribute("data-open") !== "1") {
+                    unreadCount += fresh.filter(function (m) { return m.who === "agent" || m.who === "ai"; }).length;
+                    showBadge();
+                }
             }).catch(function () { /* a dropped poll is not an error worth showing */ });
         }, 5000);
     }

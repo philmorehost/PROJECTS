@@ -279,8 +279,11 @@ chk(strpos($html, 'linear-gradient(135deg, var(--brand)') !== false, 'visual pas
 // the support chat widget; bc_app_widgets() must keep all three alive.
 chk(strpos($html5, 'referralModal') !== false, 'referral modal is rendered by the shell foot');
 chk(strpos($html5, 'copyReferLinkModal') !== false, 'referral copy helper is rendered');
-chk(strpos($html5, 'ai-assistant.js') !== false, 'AI assistant is injected for an ai_suite tenant');
-chk(strpos($html5, '__ai_handler_url') !== false, 'AI assistant handler URL is rendered');
+// §25: the VTU-purchase AI widget was retired (users were not buying VTU via AI);
+// free AI + human support chat replaces it on every page instead.
+chk(strpos($html5, 'ai-assistant.js') === false, 'retired VTU-purchase AI widget is not injected');
+chk(strpos($html5, '__ai_handler_url') === false, 'AI purchase handler URL is not rendered');
+chk(strpos($app_src, 'bc-support-chat-widget.php') !== false, 'free support chat widget is included by the shell foot');
 chk(strpos($html5, '/web/Register.php?referral=adaobi') !== false, 'referral link carries the username');
 
 echo "plate_app_test: $checks checks\n";

@@ -41,6 +41,10 @@ $services = [
     'virtual_card' => 'Virtual Card System',
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',
+    'intl_transfer' => 'Send Money Abroad (International Transfer)',
+    'tuition' => 'Pay Tuition Worldwide (Platnova)',
+    'esim' => 'eSIM (1GLOBAL)',
+    'pos_request' => 'POS Device Requests (Flutterwave)',
     'currency_conversion' => 'Currency Conversion (Live FX Rates)',
     'nin_card' => 'Digital NIN Slip',
     'bvn_verify' => 'BVN Verification',
@@ -71,6 +75,20 @@ if (isset($_POST['save-fx-api'])) {
     $_SESSION["product_purchase_response"] = $fx_key !== ''
         ? "Currency conversion API saved. Live rates are now used wherever currency conversion applies."
         : "Currency conversion API key removed. Live currency conversion stays off until a key is saved.";
+    header("Location: ServiceControl.php");
+    exit();
+}
+
+// §25: active fintech provider. The user frontend (Crypto, Send Money Abroad,
+// tuition, eSIM, POS, virtual card) renders EXACTLY this provider's services;
+// switching here is the single source of truth, so frontend and backend cannot drift.
+if (isset($_POST['save-active-provider'])) {
+    $vid = (int)$get_logged_admin_details['id'];
+    $provider = strtolower(trim(strip_tags($_POST['fintech_active_provider'] ?? '')));
+    $allowed = ['klasha', 'flutterwave', 'platnova', 'plisio'];
+    if (!in_array($provider, $allowed, true)) $provider = 'plisio';
+    if (function_exists('setVendorOption')) setVendorOption($vid, 'fintech_active_provider', $provider);
+    $_SESSION["product_purchase_response"] = "Active provider switched. Customer pages now show exactly the selected provider's services.";
     header("Location: ServiceControl.php");
     exit();
 }
@@ -209,6 +227,19 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
             <?php include(__DIR__ . "/../func/bc-service-matrix-render.php"); ?>
             <?php include(__DIR__ . "/../func/bc-account-backfill-render.php"); ?>
 
+            <div class="col-lg-6 mb-4"><div class="card shadow-sm border-0 rounded-4 mb-4"><div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h5></div>                    <div class="card-body border-top">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h6>
+                        <p class="small text-muted">Customer pages (Crypto, Send Money Abroad, Tuition, eSIM, POS, Virtual Card) display exactly this provider's services. Klasha/Flutterwave BTC swap is not offered, so BTC pairs hide automatically when either is active.</p>
+                        <form method="post" action="" class="d-flex flex-wrap gap-2 align-items-center">
+                            <select name="fintech_active_provider" class="form-select" style="max-width:280px;">
+                                <?php $active_provider = function_exists('getVendorOption') ? getVendorOption((int)$get_logged_admin_details['id'], 'fintech_active_provider', 'plisio') : 'plisio'; foreach (['klasha' => 'Klasha', 'flutterwave' => 'Flutterwave', 'platnova' => 'Platnova', 'plisio' => 'Plisio (legacy crypto)'] as $pv => $pl): ?>
+                                <option value="<?php echo $pv; ?>" <?php echo $active_provider === $pv ? 'selected' : ''; ?>><?php echo $pl; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" name="save-active-provider" class="btn btn-primary fw-bold">Switch Provider</button>
+                        </form>
+                    </div>
+</div></div>
             <div class="col-lg-6">
                 <div class="card shadow-sm border-0 rounded-4">
                     <div class="card-header bg-white py-3 border-0">
@@ -385,3 +416,4 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
 
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
+                        

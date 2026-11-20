@@ -135,6 +135,27 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/tests/upgrade25_test.php'
       - 'VTU/DGV7.0-SAAS/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
@@ -257,6 +278,27 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/tests/upgrade25_test.php'
       - 'VTU/DGV7.0-SAAS/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
@@ -321,6 +363,7 @@ jobs:
           php -l VTU/tests/plate_migration_test.php
           php -l VTU/tests/plate_bodies.php
           php -l VTU/tests/backoffice_regression_test.php
+          php -l VTU/tests/upgrade25_test.php
           php -l VTU/DGV7.0-SAAS/func/bc-spadmin-config.php
           php -l VTU/DGV7.0-SAAS/func/bc-levelup.php
           php -l LM/check-update.php
@@ -338,6 +381,7 @@ jobs:
           php -n VTU/tests/plate_migration_test.php
           php -n VTU/tests/backoffice_regression_test.php
           php -n VTU/tests/lm_edition_test.php
+          php -n VTU/tests/upgrade25_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e

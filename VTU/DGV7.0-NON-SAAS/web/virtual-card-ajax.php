@@ -1,7 +1,6 @@
 <?php session_start();
 require_once("../func/bc-config.php");
-require_once("../func/api-gateway/chimoney.php");
-require_once("../func/api-gateway/bsicards.php");
+require_once("../func/bc-virtualcard-flutterwave.php");
 
 $vid = resolveVendorID();
 $uname = $_SESSION["user_session"] ?? "";
@@ -57,11 +56,7 @@ if ($action === 'issue_card') {
 
     if ($u_r['balance'] >= $total_ngn) {
         // Routing logic based on product_id prefix
-        if (strpos($product_id, 'bsi_') === 0) {
-            $res = issueVirtualCardBSICards($vid, $uname, $product_id, $amount_usd);
-        } else {
-            $res = issueVirtualCard($vid, $uname, $name_on_card, $u_r['email'], $amount_usd);
-        }
+        $res = issueVirtualCardFlutterwave($vid, $uname, $name_on_card, $u_r['email'], $amount_usd);
 
         if ($res['status'] === 'success') {
             chargeOtherUser($uname, "debit", "virtual_card", "Virtual Card Issuance", $res['reference'], $res['card_id'] ?? $res['reference'], $total_ngn, $total_ngn, "New Virtual Card Issuance: $name_on_card ($$amount_usd)", "WEB", $_SERVER['HTTP_HOST'], 1);
@@ -89,11 +84,7 @@ if ($action === 'fund_card') {
         $c_q = mysqli_query($connection_server, "SELECT provider FROM sas_virtual_cards_v2 WHERE reference='$ref_esc' LIMIT 1");
         $card_data = mysqli_fetch_assoc($c_q);
 
-        if ($card_data['provider'] === 'bsicards') {
-            $res = fundVirtualCardBSICards($vid, $card_ref, $amount_usd);
-        } else {
-            $res = fundVirtualCardV2($vid, $uname, $card_ref, $amount_usd);
-        }
+        $res = fundVirtualCardFlutterwave($vid, $uname, $card_ref, $amount_usd);
 
         if ($res['status'] === 'success') {
             chargeOtherUser($uname, "debit", "virtual_card", "Virtual Card Funding", "FND".time(), $card_ref, $total_ngn, $total_ngn, "Virtual Card Top-up: $$amount_usd", "WEB", $_SERVER['HTTP_HOST'], 1);
@@ -134,7 +125,7 @@ if ($action === 'reactivate_card') {
     $u_r = mysqli_fetch_assoc($u_q);
 
     if ($u_r['balance'] >= 2000) { // Minimum threshold to allow reactivation
-        $res = unfreezeVirtualCardV2($vid, $card_ref);
+        $res = unfreezeVirtualCardFlutterwave($vid, $card_ref);
         echo json_encode($res);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Minimum NGN 2,000 balance required to reactivate.']);

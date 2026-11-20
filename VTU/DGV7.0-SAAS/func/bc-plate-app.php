@@ -179,7 +179,7 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'Wallet & Transfers', 'icon' => 'wallet2', 'id' => 'wallet-transfers',
-                'match' => array('Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'CoinConversion.php', 'VirtualCard.php', 'GiftCard.php', 'CryptoHub.php'),
+                'match' => array('Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'CoinConversion.php', 'VirtualCard.php', 'GiftCard.php', 'CryptoHub.php', 'IntlTransfer.php', 'Tuition.php', 'ESIM.php', 'POSRequest.php'),
                 'items' => array(
                     array('label' => 'Fund with ATM Card', 'href' => 'Fund.php', 'icon' => 'credit-card-2-front'),
                     array('label' => 'Fund via Bank Transfer', 'href' => 'VirtualBanks.php', 'icon' => 'bank'),
@@ -189,6 +189,10 @@ if (!function_exists('bc_app_menu')) {
                     array('label' => 'Virtual Card', 'href' => 'VirtualCard.php', 'icon' => 'credit-card', 'service' => 'virtual_card'),
                     array('label' => 'Gift Card', 'href' => 'GiftCard.php', 'icon' => 'gift', 'service' => 'gift_card'),
                     array('label' => 'Crypto', 'href' => 'CryptoHub.php', 'icon' => 'currency-bitcoin', 'service' => 'crypto_hub'),
+                    array('label' => 'Send Money Abroad', 'href' => 'IntlTransfer.php', 'icon' => 'globe', 'service' => 'intl_transfer'),
+                    array('label' => 'Pay Tuition Worldwide', 'href' => 'Tuition.php', 'icon' => 'mortarboard', 'service' => 'tuition'),
+                    array('label' => 'eSIM', 'href' => 'ESIM.php', 'icon' => 'sim', 'service' => 'esim'),
+                    array('label' => 'Request POS Device', 'href' => 'POSRequest.php', 'icon' => 'calculator', 'service' => 'pos_request'),
                 ),
             ),
             array(
@@ -207,10 +211,10 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'Tools & API', 'icon' => 'building', 'id' => 'tools-api',
-                'match' => array('AISuite.php', 'AI-Assistant.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php'),
+                'match' => array('AI-Assistant.php', 'Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php'),
                 'items' => array(
-                    array('label' => 'AI Suite', 'href' => 'AISuite.php', 'icon' => 'robot', 'service' => 'ai_suite', 'badge' => 'NEW'),
-                    array('label' => 'AI Assistant Terminal', 'href' => 'AI-Assistant.php', 'icon' => 'chat-dots', 'service' => 'ai_suite'),
+                    array('label' => 'Support', 'href' => 'AI-Assistant.php', 'icon' => 'chat-dots'),
+                    array('label' => 'Refer & Earn', 'href' => 'Referral.php', 'icon' => 'gift', 'badge' => 'NEW'),
                     array('label' => 'Bulk SMS', 'href' => 'BulkSMS.php', 'icon' => 'chat-square-text', 'service' => 'bulk_sms'),
                     array('label' => 'Submit SMS ID', 'href' => 'SubmitSenderID.php', 'icon' => 'send-check', 'service' => 'bulk_sms'),
                     array('label' => 'Account Pricing', 'href' => 'Pricing.php', 'icon' => 'tags'),
@@ -529,6 +533,10 @@ if (!function_exists('bc_app_css')) {
             display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 16px 26px 22px;
             border-top: 1px solid var(--line); background: var(--surface);
             color: var(--muted); font-size: .8rem;
+            /* The footer is printed after the offset content column, so it must clear the
+               fixed sidebar itself — otherwise its first ~268px hides under the rail and
+               only the tail of the last link shows (the reported "Guide" leak). */
+            margin-left: var(--side-w);
         }
         .pk-app__foot a { color: var(--muted); margin-left: 10px; }
         @media (max-width: 640px) { .pk-app__hide-sm { display: none; } }
@@ -922,6 +930,7 @@ if (!function_exists('bc_app_css')) {
             .pk-app__side { transform: translateX(-100%); box-shadow: var(--shadow); }
             .pk-app__side.is-open { transform: none; }
             .pk-app__main { margin-left: 0; }
+            .pk-app__foot { margin-left: 0; }
             .pk-app__burger { display: inline-flex; }
             .pk-app__content { padding: 18px 14px 34px; }
             .pk-app__top { padding: 12px 14px; }
@@ -1236,9 +1245,9 @@ if (!function_exists('bc_app_topbar')) {
         <a class="pk-app__iconbtn" href="<?php echo htmlspecialchars(bc_app_url('SiteMap.php')); ?>" title="Platform Guide">
             <i class="bi bi-map" aria-hidden="true"></i><span class="pk-app__hide-sm">Guide</span>
         </a>
-        <button class="pk-app__iconbtn" type="button" data-bs-toggle="modal" data-bs-target="#referralModal" title="Refer and Earn">
+        <a class="pk-app__iconbtn" href="<?php echo htmlspecialchars(bc_app_url('Referral.php')); ?>" title="Refer and Earn">
             <i class="bi bi-gift" aria-hidden="true"></i><span class="pk-app__hide-sm">Refer</span>
-        </button>
+        </a>
         <?php if ($notification !== ''): ?>
             <button class="pk-app__iconbtn" type="button" id="pkAppNotice" title="Message from support">
                 <i class="bi bi-bell" aria-hidden="true"></i><span class="pk-app__dot">1</span>
@@ -1358,38 +1367,6 @@ if (!function_exists('bc_app_widgets')) {
             ? $GLOBALS['get_logged_user_details'] : null;
         $host = isset($GLOBALS['web_http_host']) && $GLOBALS['web_http_host'] !== ''
             ? (string)$GLOBALS['web_http_host'] : bc_app_base();
-
-        if ($user && function_exists('isServiceEnabled') && isServiceEnabled('ai_suite')) {
-            $current_page = basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '');
-            $vtu_pages = array('Airtime.php', 'Data.php', 'Cable.php', 'Electric.php', 'Betting.php', 'Exam.php', 'BulkAirtime.php', 'BulkData.php', 'BulkSMS.php', 'AI-Assistant.php');
-            if (!in_array($current_page, $vtu_pages, true)):
-                $ai_token_bal = (int)($user['ai_token_balance'] ?? 0);
-                $ai_user_ctx  = function_exists('bc_get_ai_user_context') ? bc_get_ai_user_context($user) : array();
-                $init_msg = "Hello! I'm your AI Assistant. How can I help you?";
-                $page_tips = array(
-                    'Airtime.php'  => 'Try: "Buy MTN 100 airtime for 08012345678"',
-                    'Data.php'     => 'Try: "Buy Airtel 2GB SME data for 08123456789"',
-                    'Electric.php' => 'Try: "Pay 2000 for IKEDC Prepaid 010123456789"',
-                    'Cable.php'    => 'Try: "Renew DSTV Compact for 123456789"',
-                );
-                if (isset($page_tips[$current_page])) {
-                    $init_msg .= ' You can say something like: ' . $page_tips[$current_page];
-                }
-                ?>
-<script>
-  window.__ai_enabled     = true;
-  window.__ai_page_slug   = <?php echo json_encode(preg_replace('/[^a-z0-9_]/', '_', strtolower(basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '', '.php')))); ?>;
-  window.__ai_handler_url = <?php echo json_encode($host . '/web/ai-handler.php?context=user'); ?>;
-  window.__ai_guide_url   = <?php echo json_encode($host . '/web/ai-guide-cache.php?context=user'); ?>;
-  window.__ai_tokens      = <?php echo (int)$ai_token_bal; ?>;
-  window.__ai_context     = <?php echo json_encode($ai_user_ctx, JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP) ?: '{}'; ?>;
-  window.__ai_auto_open   = false;
-  window.__ai_init_msg    = <?php echo json_encode($init_msg, JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>;
-</script>
-<script src="<?php echo htmlspecialchars($host, ENT_QUOTES, 'UTF-8'); ?>/jsfile/ai-assistant.js" defer></script>
-                <?php
-            endif;
-        }
 
         if ($user && !empty($user['username'])):
             ?>
