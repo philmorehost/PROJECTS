@@ -1,4 +1,18 @@
 <?php
+// §35: cron endpoints must never be web-invokable — CLI, or the cron secret
+// (same bc_get_or_create_cron_secret() pattern as process_mail_queue.php).
+// Without this, anyone could trigger provider deactivation, AI mailings and
+// report generation — and their cost — with one anonymous GET.
+if (PHP_SAPI !== 'cli') {
+    require_once __DIR__ . '/../func/bc-connect.php';
+    $bc_cron_given = (string)($_GET['key'] ?? '');
+    if (!function_exists('bc_get_or_create_cron_secret') || $bc_cron_given === '' || !hash_equals(bc_get_or_create_cron_secret($connection_server), $bc_cron_given)) {
+        http_response_code(403);
+        exit('Forbidden');
+    }
+    unset($bc_cron_given);
+}
+
 /**
  * Cron: Background Bulk Airtime/Data Queue Processor
  *

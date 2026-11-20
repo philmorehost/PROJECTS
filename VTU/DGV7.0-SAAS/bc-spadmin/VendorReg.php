@@ -51,6 +51,17 @@
     $valid_exts = array_column($domain_extension_options, 'extension');
 
     if(isset($_POST["create-profile"])){
+        // §35: this public registration form is the attacker's front door —
+        // a code payload in a name/website field is scored by IP and refused.
+        foreach (array("first", "last", "address", "website-url") as $bc_reg_field) {
+            if (function_exists('bc_content_code_scan') && bc_content_code_scan((string)($_POST[$bc_reg_field] ?? ''))) {
+                if (function_exists('bc_abuse_signal')) bc_abuse_signal(0, 'ip', (string)($_SERVER['REMOTE_ADDR'] ?? ''), 'code_injection_attempt', 'vendor registration field ' . $bc_reg_field);
+                $_SESSION["product_purchase_response"] = "Registration could not be completed. Please use plain text (no code or scripts) in the form.";
+                header("Location: " . $_SERVER["REQUEST_URI"]);
+                exit;
+            }
+        }
+        unset($bc_reg_field);
         $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
         $last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
         $address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));

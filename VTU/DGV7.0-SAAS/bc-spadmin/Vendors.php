@@ -331,16 +331,16 @@ bc_adm_head('', array("area" => "spadmin"));
                                     <tr>
                                         <td class="ps-3">
                                             <div class="d-flex align-items-center">
-                                                <div class="bg-primary bg-opacity-10 text-dark-primary rounded-circle p-2 me-3 fw-bold small"><?php echo strtoupper(substr($user['firstname'],0,1).substr($user['lastname'],0,1)); ?></div>
+                                                <div class="bg-primary bg-opacity-10 text-dark-primary rounded-circle p-2 me-3 fw-bold small"><?php echo htmlspecialchars((string)strtoupper(substr((string)$user['firstname'],0,1).substr((string)$user['lastname'],0,1)), ENT_QUOTES, 'UTF-8'); ?></div>
                                                 <div>
-                                                    <div class="fw-bold text-dark mb-0"><?php echo $user['firstname'].' '.$user['lastname']; ?></div>
-                                                    <div class="small text-muted"><?php echo $user['email']; ?></div>
+                                                    <div class="fw-bold text-dark mb-0"><?php echo htmlspecialchars((string)($user['firstname'].' '.$user['lastname']), ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    <div class="small text-muted"><?php echo htmlspecialchars((string)$user['email'], ENT_QUOTES, 'UTF-8'); ?></div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
                                             <div class="d-flex flex-column">
-                                                <a href="//<?php echo $user['website_url']; ?>" target="_blank" class="small text-decoration-none"><i class="bi bi-link-45deg me-1"></i>Site: <?php echo $user['website_url']; ?></a>
+                                                <a href="//<?php echo htmlspecialchars((string)(function_exists('bc_clean_vendor_domain') ? bc_clean_vendor_domain((string)$user['website_url']) : $user['website_url']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="small text-decoration-none"><i class="bi bi-link-45deg me-1"></i>Site: <?php echo htmlspecialchars((string)$user['website_url'], ENT_QUOTES, 'UTF-8'); ?></a>
                                                 <?php if(!empty($user['access_hash'])): ?>
                                                     <?php $vendor_portal_url = bc_temporary_vendor_portal_url($user['access_hash']); ?>
                                                     <?php if($vendor_portal_url !== ''): ?>
@@ -351,7 +351,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                         </td>
                                         <td>
                                             <div class="fw-bold">₦<?php echo number_format($user['balance'],2); ?></div>
-                                            <div class="small text-muted"><?php echo $user['phone_number']; ?></div>
+                                            <div class="small text-muted"><?php echo htmlspecialchars((string)$user['phone_number'], ENT_QUOTES, 'UTF-8'); ?></div>
                                         </td>
                                         <td>
                                             <?php if(!empty($user['bvn'])): ?>
@@ -373,15 +373,15 @@ bc_adm_head('', array("area" => "spadmin"));
                                             if($expired): ?>
                                                 <span class="badge bg-danger rounded-pill mt-1" style="font-size: 10px;">EXPIRED</span>
                                             <?php else: ?>
-                                                <span class="badge bg-light text-dark border rounded-pill mt-1" style="font-size: 10px;">Expires: <?php echo $user['expiry_date'] ?? 'N/A'; ?></span>
+                                                <span class="badge bg-light text-dark border rounded-pill mt-1" style="font-size: 10px;">Expires: <?php echo htmlspecialchars((string)($user['expiry_date'] ?? 'N/A'), ENT_QUOTES, 'UTF-8'); ?></span>
                                             <?php endif; ?>
                                         </td>
                                         <td class="text-end pe-3">
                                             <div class="btn-group btn-group-sm">
-                                                <a href="VendorEdit.php?vendorID=<?php echo $user['id']; ?>" class="btn btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
-                                                <button onclick="loginVendorAccount('<?php echo $user['id']; ?>', '<?php echo $user['email']; ?>')" class="btn btn-outline-warning" title="Login"><i class="bi bi-box-arrow-in-right"></i></button>
-                                                <a href="ManageVendorSubscription.php?id=<?php echo $user['id']; ?>" class="btn btn-outline-info" title="Billing"><i class="bi bi-credit-card"></i></a>
-                                                <button onclick="updateVendorAccountStatus('2','<?php echo $user['id']; ?>','<?php echo $user['email']; ?>')" class="btn btn-outline-danger" title="Suspend"><i class="bi bi-slash-circle"></i></button>
+                                                <a href="VendorEdit.php?vendorID=<?php echo (int)$user['id']; ?>" class="btn btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
+                                                <button onclick="loginVendorAccount('<?php echo (int)$user['id']; ?>', '<?php echo htmlspecialchars(addslashes((string)$user['email']), ENT_QUOTES, 'UTF-8'); ?>')" class="btn btn-outline-warning" title="Login"><i class="bi bi-box-arrow-in-right"></i></button>
+                                                <a href="ManageVendorSubscription.php?id=<?php echo (int)$user['id']; ?>" class="btn btn-outline-info" title="Billing"><i class="bi bi-credit-card"></i></a>
+                                                <button onclick="updateVendorAccountStatus('2','<?php echo (int)$user['id']; ?>','<?php echo htmlspecialchars(addslashes((string)$user['email']), ENT_QUOTES, 'UTF-8'); ?>')" class="btn btn-outline-danger" title="Suspend"><i class="bi bi-slash-circle"></i></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -405,12 +405,12 @@ bc_adm_head('', array("area" => "spadmin"));
                                     <?php while($user = mysqli_fetch_assoc($get_inactive_user_details)): ?>
                                     <tr>
                                         <td class="ps-3">
-                                            <div class="fw-bold text-dark mb-0"><?php echo $user['firstname'].' '.$user['lastname']; ?></div>
-                                            <div class="small text-muted"><?php echo $user['email']; ?></div>
+                                            <div class="fw-bold text-dark mb-0"><?php echo htmlspecialchars((string)($user['firstname'].' '.$user['lastname']), ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <div class="small text-muted"><?php echo htmlspecialchars((string)$user['email'], ENT_QUOTES, 'UTF-8'); ?></div>
                                         </td>
                                         <td>
                                             <div class="d-flex flex-column">
-                                                <div class="small fw-bold"><?php echo $user['website_url']; ?></div>
+                                                <div class="small fw-bold"><?php echo htmlspecialchars((string)$user['website_url'], ENT_QUOTES, 'UTF-8'); ?></div>
                                                 <?php if(!empty($user['access_hash'])): ?>
                                                     <?php $vendor_portal_url = bc_temporary_vendor_portal_url($user['access_hash']); ?>
                                                     <?php if($vendor_portal_url !== ''): ?>
@@ -426,11 +426,11 @@ bc_adm_head('', array("area" => "spadmin"));
                                                 <span class="badge bg-warning bg-opacity-10 text-warning border">Suspended</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="small"><?php echo $user['expiry_date'] ?? 'N/A'; ?></td>
+                                        <td class="small"><?php echo htmlspecialchars((string)($user['expiry_date'] ?? 'N/A'), ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td class="text-end pe-3">
                                             <div class="btn-group btn-group-sm">
-                                                <a href="VendorEdit.php?vendorID=<?php echo $user['id']; ?>" class="btn btn-outline-primary" title="Edit/Renew"><i class="bi bi-pencil"></i></a>
-                                                <button onclick="updateVendorAccountStatus('1','<?php echo $user['id']; ?>','<?php echo $user['email']; ?>')" class="btn btn-outline-success" title="Activate"><i class="bi bi-check-circle"></i></button>
+                                                <a href="VendorEdit.php?vendorID=<?php echo (int)$user['id']; ?>" class="btn btn-outline-primary" title="Edit/Renew"><i class="bi bi-pencil"></i></a>
+                                                <button onclick="updateVendorAccountStatus('1','<?php echo (int)$user['id']; ?>','<?php echo htmlspecialchars(addslashes((string)$user['email']), ENT_QUOTES, 'UTF-8'); ?>')" class="btn btn-outline-success" title="Activate"><i class="bi bi-check-circle"></i></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -457,12 +457,12 @@ bc_adm_head('', array("area" => "spadmin"));
                                     <?php while($user = mysqli_fetch_assoc($get_deleted_user_details)): ?>
                                     <tr>
                                         <td class="ps-3">
-                                            <div class="fw-bold text-dark mb-0"><?php echo $user['firstname'].' '.$user['lastname']; ?></div>
-                                            <div class="small text-muted"><?php echo $user['email']; ?></div>
+                                            <div class="fw-bold text-dark mb-0"><?php echo htmlspecialchars((string)($user['firstname'].' '.$user['lastname']), ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <div class="small text-muted"><?php echo htmlspecialchars((string)$user['email'], ENT_QUOTES, 'UTF-8'); ?></div>
                                         </td>
                                         <td>
                                             <div class="d-flex flex-column">
-                                                <div class="small fw-bold"><?php echo $user['website_url']; ?></div>
+                                                <div class="small fw-bold"><?php echo htmlspecialchars((string)$user['website_url'], ENT_QUOTES, 'UTF-8'); ?></div>
                                                 <?php if(!empty($user['access_hash'])): ?>
                                                     <?php $vendor_portal_url = bc_temporary_vendor_portal_url($user['access_hash']); ?>
                                                     <?php if($vendor_portal_url !== ''): ?>
@@ -471,9 +471,9 @@ bc_adm_head('', array("area" => "spadmin"));
                                                 <?php endif; ?>
                                             </div>
                                         </td>
-                                        <td class="small text-muted"><?php echo $user['reg_date']; ?></td>
+                                        <td class="small text-muted"><?php echo htmlspecialchars((string)$user['reg_date'], ENT_QUOTES, 'UTF-8'); ?></td>
                                         <td class="text-end pe-3">
-                                            <button onclick="updateVendorAccountStatus('1','<?php echo $user['id']; ?>','<?php echo $user['email']; ?>')" class="btn btn-outline-success btn-sm px-3 rounded-pill">Restore</button>
+                                            <button onclick="updateVendorAccountStatus('1','<?php echo (int)$user['id']; ?>','<?php echo htmlspecialchars(addslashes((string)$user['email']), ENT_QUOTES, 'UTF-8'); ?>')" class="btn btn-outline-success btn-sm px-3 rounded-pill">Restore</button>
                                         </td>
                                     </tr>
                                     <?php endwhile; ?>

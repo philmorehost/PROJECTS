@@ -132,6 +132,8 @@
     include_once(__DIR__ . "/bc-bulk-queue.php");
     include_once(__DIR__ . "/bc-mail-queue.php");
     include_once(__DIR__ . "/bc-demo-mode.php");
+    // §35: abuse guard (malicious-vendor / probe detection + automatic blocking).
+    include_once(__DIR__ . "/bc-abuse-guard.php");
     // DGV7 fintech access policy. The policy file is side-effect free; the gate adds the
     // schema, app-token and route-decision helpers. Loading them here means /web/api/* (which
     // includes only bc-connect.php) has the same helpers as web pages.

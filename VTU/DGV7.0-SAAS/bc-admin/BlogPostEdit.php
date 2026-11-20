@@ -47,6 +47,13 @@ if (isset($_POST['save_post'])) {
     }
 
     $author_id = $get_logged_admin_details['id'];
+    // §35: a code payload in the (plain-text) post title is refused + scored.
+    if (function_exists('bc_content_code_scan') && bc_content_code_scan((string)$_POST['title'])) {
+        if (function_exists('bc_abuse_signal')) bc_abuse_signal((int)$get_logged_admin_details['id'], 'vendor', (string)$get_logged_admin_details['id'], 'code_injection_attempt', 'blog post title');
+        $_SESSION['page_alert'] = "Error: The post title contains code or script content, which is not allowed.";
+        header("Location: BlogPostEdit.php" . ($post_id ? "?edit_id=$post_id" : ""));
+        exit();
+    }
     $title = $_POST['title'];
     $content = base64_encode($_POST['content']);
     $status = $_POST['status'] === 'published' ? 'published' : 'draft';
@@ -63,7 +70,8 @@ if (isset($_POST['save_post'])) {
         // Security: Validate file type and size
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         $max_size = 5 * 1024 * 1024; // 5MB max
-        $file_type = mime_content_type($_FILES['featured_image']['tmp_name']) ?: $_FILES['featured_image']['type'];
+        // §35: server-side MIME only — the client-supplied type is attacker text.
+        $file_type = function_exists('mime_content_type') ? (mime_content_type($_FILES['featured_image']['tmp_name']) ?: '') : '';
 
         if (!in_array($file_type, $allowed_types)) {
             $_SESSION['page_alert'] = "Error: Only JPG, PNG, GIF, and WebP images are allowed.";
@@ -77,9 +85,21 @@ if (isset($_POST['save_post'])) {
             exit();
         }
 
-        // Use a safe filename - strip all non-alphanumeric chars except dot and underscore
-        $ext = pathinfo($_FILES['featured_image']['name'], PATHINFO_EXTENSION);
-        $ext = preg_replace('/[^a-zA-Z0-9]/', '', $ext);
+        // §35: the stored extension derives from the VALIDATED MIME type,
+        // never the client filename — a real image named shell.php lands as
+        // .png, and an executable filename is scored as a webshell attempt.
+        $bc_client_ext = strtolower(pathinfo($_FILES['featured_image']['name'], PATHINFO_EXTENSION));
+        if (in_array($bc_client_ext, array('php', 'phtml', 'phar', 'cgi', 'pl', 'py', 'asp', 'aspx', 'jsp', 'sh', 'exe', 'com', 'htaccess'), true)
+            && function_exists('bc_abuse_signal')) {
+            bc_abuse_signal((int)$get_logged_admin_details['id'], 'vendor', (string)$get_logged_admin_details['id'], 'webshell_upload_attempt', 'blog featured image named .' . $bc_client_ext);
+        }
+        $bc_mime_ext = array('image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp');
+        $ext = $bc_mime_ext[$file_type] ?? '';
+        if ($ext === '') {
+            $_SESSION['page_alert'] = "Error: Only JPG, PNG, GIF, and WebP images are allowed.";
+            header("Location: BlogPostEdit.php" . ($post_id ? "?edit_id=$post_id" : ""));
+            exit();
+        }
         $filename = time() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
         $target_file = $upload_dir . $filename;
 
