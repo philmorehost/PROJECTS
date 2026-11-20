@@ -165,4 +165,11 @@ foreach ($editions as $ed) {
     sec_check_true("$ed bridge rejects expired keys", strpos(src($root, $ed, 'func/bc-fintech-gate.php'), 'API_KEY_EXPIRED') !== false);
 }
 
+// the platform cron page must list the rotation job, or expiry never runs
+sec_check_true('spadmin cron page lists api-key rotation', strpos(src($root, 'DGV7.0-SAAS', 'bc-spadmin/CronJobs.php'), 'api-key-rotation-cron.php') !== false);
+// withdrawal approvals are step-up gated in both editions
+foreach ($editions as $ed) {
+    sec_check_true("$ed withdrawal approval requires step-up", strpos(src($root, $ed, 'bc-admin/Withdrawals.php'), "bc_stepup_admin_verify(\$get_logged_admin_details, \$_POST, 'withdrawal_approve')") !== false);
+}
+
 echo "$count security29 checks passed\n";

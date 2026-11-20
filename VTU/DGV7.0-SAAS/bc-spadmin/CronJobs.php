@@ -135,6 +135,15 @@ bc_adm_head("Platform Cron Jobs | Super Admin", array("area" => "spadmin"));
                         </div>
                     </div>
 
+                    <!-- API key rotation (§29) -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold small text-uppercase d-flex align-items-center gap-2">API Key Rotation &amp; App Token Cleanup <span class="badge bg-success bg-opacity-10 text-success schedule-badge">Daily at 02:00</span></h6>
+                        <p class="text-muted small mb-2">Regenerates Business developer API keys whose 60-day window has closed (owners are emailed to copy the new key — the key itself is never emailed), stamps a first window on unscheduled legacy keys, rotates Personal app keys daily, and prunes dead app sessions. Without this job, key expiry is not enforced on schedule.</p>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">COPY</button>
+                            <code>0 2 * * * <?php echo $php_bin; ?> <?php echo realpath($root . '/func/api-key-rotation-cron.php'); ?> &gt;&gt; <?php echo $logs_dir; ?>/api_keys.log 2&gt;&amp;1</code>
+                        </div>
+                    </div>
+
                     <!-- Subscription reminders -->
                     <div class="mb-4">
                         <h6 class="fw-bold small text-uppercase d-flex align-items-center gap-2">Subscription Reminders <span class="badge bg-success bg-opacity-10 text-success schedule-badge">Daily at 00:15</span></h6>
