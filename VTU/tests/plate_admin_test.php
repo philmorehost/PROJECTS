@@ -109,6 +109,11 @@ achk(strpos($admin_html, '<title>Users | Adaobo Super</title>') !== false, 'admi
 achk(strpos($admin_html, '--brand: #123456') !== false, 'admin brand colour reaches the design tokens');
 achk(strpos($admin_html, 'Adaobo Super') !== false, 'admin site title is rendered');
 achk(substr_count($admin_html, '<body') === 1, 'admin renders exactly one body tag');
+// §36: the shell's receipt modal must be SELF-HIDING in the rendered output —
+// standalone pages (e.g. the Platform Updater) load no shell/Bootstrap CSS,
+// so a modal hidden only by stylesheet leaks into the footer there.
+achk(strpos($admin_html, 'id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="display:none;z-index:2000;"') !== false, 'admin receipt modal renders with inline display:none');
+achk(!preg_match('/<div class="modal" id="[^"]+"(?![^>]*display:none)/', $admin_html), 'every shell modal in the admin render starts hidden');
 achk(strpos($admin_html, '/bc-admin/Dashboard.php') !== false, 'admin rail links to its dashboard');
 achk(strpos($admin_html, '/bc-admin/Hub.php?g=manage-user') !== false, 'admin nav links main items to their Hub page');
 achk(strpos($admin_html, '/bc-admin/Users.php') === false, 'sub-items are not in the admin sidebar any more');
