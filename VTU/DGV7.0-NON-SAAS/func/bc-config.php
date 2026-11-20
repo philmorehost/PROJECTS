@@ -491,6 +491,15 @@ if ($connection_server) {
             exit();
         }
 
+        // §35: URL probe inspection for signed-in customers (abuse guard);
+        // an actor whose probes just earned a 24h IP block is cut off here.
+        if (function_exists('bc_abuse_inspect_request')
+            && bc_abuse_inspect_request((int)($get_logged_user_details['vendor_id'] ?? 0), 'user', (string)($get_logged_user_details['username'] ?? '')) === 'ip_blocked') {
+            session_destroy();
+            http_response_code(403);
+            exit('Blocked');
+        }
+
 
 				// Check for KYC Expiry
 				if ($get_logged_user_details['kyc_status'] == 2 && !empty($get_logged_user_details['kyc_id_expiry'])) {

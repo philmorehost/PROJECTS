@@ -62,6 +62,8 @@
     include_once(__DIR__ . "/bc-bulk-queue.php");
     include_once(__DIR__ . "/bc-mail-queue.php");
     include_once(__DIR__ . "/bc-demo-mode.php");
+    // §35: abuse guard (malicious-vendor / probe detection + automatic blocking).
+    include_once(__DIR__ . "/bc-abuse-guard.php");
     include_once(__DIR__ . "/voveid-client.php");
     // DGV7 fintech access policy (identical to the SAAS edition; see bc-fintech-policy.php).
     include_once(__DIR__ . "/bc-fintech-policy.php");

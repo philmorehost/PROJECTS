@@ -100,6 +100,16 @@ if ($connection_server) {
                         exit();
                     }
 
+                    // §35: URL probe inspection — a signed-in vendor scanning for
+                    // traversal/SQLi/code paths is scored by the abuse guard; the
+                    // moment it auto-suspends the vendor, this session dies too.
+                    if (function_exists('bc_abuse_inspect_request')
+                        && bc_abuse_inspect_request((int)$get_logged_admin_details['id'], 'vendor', (string)$get_logged_admin_details['id']) === 'suspended') {
+                        session_destroy();
+                        header("Location: /bc-admin/Login.php");
+                        exit();
+                    }
+
 
                 // Ensure access_hash is never empty for the portal link
                 if (empty($get_logged_admin_details['access_hash'])) {

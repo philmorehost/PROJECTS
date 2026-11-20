@@ -47,6 +47,13 @@ if (isset($_POST['save_post'])) {
     }
 
     $author_id = $get_logged_admin_details['id'];
+    // §35: a code payload in the (plain-text) post title is refused + scored.
+    if (function_exists('bc_content_code_scan') && bc_content_code_scan((string)$_POST['title'])) {
+        if (function_exists('bc_abuse_signal')) bc_abuse_signal((int)$get_logged_admin_details['id'], 'vendor', (string)$get_logged_admin_details['id'], 'code_injection_attempt', 'blog post title');
+        $_SESSION['page_alert'] = "Error: The post title contains code or script content, which is not allowed.";
+        header("Location: BlogPostEdit.php" . ($post_id ? "?edit_id=$post_id" : ""));
+        exit();
+    }
     $title = $_POST['title'];
     $content = base64_encode($_POST['content']);
     $status = $_POST['status'] === 'published' ? 'published' : 'draft';

@@ -303,6 +303,16 @@ if (isset($_POST["update-theme"])) {
 
 if (isset($_POST["update-profile"])) {
     bc_demo_guard_edit($connection_server);
+    // §35: profile names are strip_tagged on save, which neutralises a code
+    // payload — but the ATTEMPT is scored by the abuse guard.
+    foreach (array("first", "last", "address", "phone") as $bc_scan_field) {
+        if (function_exists('bc_content_code_scan') && bc_content_code_scan((string)($_POST[$bc_scan_field] ?? ''))) {
+            if (function_exists('bc_abuse_signal')) bc_abuse_signal((int)$get_logged_admin_details["id"], 'vendor', (string)$get_logged_admin_details["id"], 'code_injection_attempt', 'profile field ' . $bc_scan_field);
+            break;
+        }
+    }
+    unset($bc_scan_field);
+
     $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
     $last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
     $address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
@@ -1153,6 +1163,31 @@ if (isset($_POST["update-referral-details"])) {
 
 if (isset($_POST["update-site-details"])) {
     bc_demo_guard_edit($connection_server);
+    // §35: plain-text site fields must never carry code. strip_tags would
+    // silently hide the attempt; instead the save is refused and the actor
+    // is scored by the abuse guard (repeated attempts auto-suspend on SAAS).
+    foreach (array("site-title", "site-desc", "meta-keywords", "meta-author", "favicon-url", "og-image", "apk-download-url", "social-twitter", "social-facebook", "social-instagram", "social-whatsapp") as $bc_scan_field) {
+        if (function_exists('bc_content_code_scan') && bc_content_code_scan((string)($_POST[$bc_scan_field] ?? ''))) {
+            if (function_exists('bc_abuse_signal')) bc_abuse_signal((int)$get_logged_admin_details["id"], 'vendor', (string)$get_logged_admin_details["id"], 'code_injection_attempt', 'site-details field ' . $bc_scan_field);
+            $_SESSION["product_purchase_response"] = "Settings were not saved: text settings cannot contain code or script content.";
+            header("Location: " . $_SERVER["REQUEST_URI"]);
+            exit;
+        }
+    }
+    unset($bc_scan_field);
+    // The custom head/footer code fields are a deliberate script-injection
+    // feature for the vendor's OWN storefront (analytics/pixels) — but PHP
+    // tags are never legitimate there, so they are refused + scored as well.
+    foreach (array("custom-head-code", "custom-footer-code") as $bc_code_field) {
+        if (preg_match('/<\?(php|=)/i', (string)($_POST[$bc_code_field] ?? ''))) {
+            if (function_exists('bc_abuse_signal')) bc_abuse_signal((int)$get_logged_admin_details["id"], 'vendor', (string)$get_logged_admin_details["id"], 'code_injection_attempt', 'site-details field ' . $bc_code_field);
+            $_SESSION["product_purchase_response"] = "Settings were not saved: custom code cannot contain PHP tags.";
+            header("Location: " . $_SERVER["REQUEST_URI"]);
+            exit;
+        }
+    }
+    unset($bc_code_field);
+
     $site_title     = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["site-title"])));
     $site_desc      = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["site-desc"])));
     $apk_download_url = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["apk-download-url"] ?? "")));

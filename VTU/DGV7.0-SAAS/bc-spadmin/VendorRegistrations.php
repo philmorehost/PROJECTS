@@ -351,7 +351,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="small"><strong>Method:</strong> <?php echo ucwords(str_replace('_', ' ', $row['payment_method'])); ?></div>
+                                            <div class="small"><strong>Method:</strong> <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)$row['payment_method'])), ENT_QUOTES, 'UTF-8'); ?></div>
                                             <div class="mt-1">
                                                 <?php if(trim($row['payment_status']) == 'paid'): ?>
                                                     <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">Verified Paid</span>

@@ -135,6 +135,16 @@ if ($connection_server) {
                         exit();
                     }
 
+                    // §35: URL probe inspection — a signed-in vendor scanning for
+                    // traversal/SQLi/code paths is scored by the abuse guard; the
+                    // moment it auto-suspends the vendor, this session dies too.
+                    if (function_exists('bc_abuse_inspect_request')
+                        && bc_abuse_inspect_request((int)$get_logged_admin_details['id'], 'vendor', (string)$get_logged_admin_details['id']) === 'suspended') {
+                        session_destroy();
+                        header("Location: /bc-admin/Login.php");
+                        exit();
+                    }
+
 
                     // Repair missing and legacy short portal hashes. Existing 32-character MD5
                     // values are intentionally rotated: portal links are bearer credentials and
