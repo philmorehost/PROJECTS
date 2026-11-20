@@ -250,3 +250,6 @@
 		header("Location: " . $protocol . $non_www . $_SERVER["REQUEST_URI"]);
         exit();
 	}
+// Enforce SaaS subscription expiry on landing pages, web pages and APIs alike.
+require_once __DIR__ . "/bc-vendor-expiry.php";
+bc_enforce_vendor_expiry($connection_server);
