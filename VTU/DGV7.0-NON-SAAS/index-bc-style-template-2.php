@@ -398,6 +398,14 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
                     <li><a href="/web/APIDocs.php">Webhook Setup</a></li>
                 </ul>
             </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="/web/policy/privacy.php">Privacy Policy</a></li>
+                    <li><a href="/web/policy/terms.php">Terms of Service</a></li>
+                    <li><a href="/web/DeleteAccount.php">Delete My Account</a></li>
+                </ul>
+            </div>
         </div>
         <div class="container footer-bottom">
             <div>&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_title); ?>. All rights reserved.</div>

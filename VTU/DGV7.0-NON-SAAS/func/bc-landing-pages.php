@@ -426,6 +426,9 @@ footer b{color:var(--ink)}
         <a href="web/Register.php">Create account</a>
         <a href="web/Login.php">Log in</a>
         <a href="blog.php">Blog</a>
+        <a href="Privacy.php">Privacy Policy</a>
+        <a href="Terms.php">Terms of Service</a>
+        <a href="web/DeleteAccount.php">Delete my account</a>
     </div>
 </div>
 <p style="margin-top:26px">© <?php echo date('Y'); ?> <?php echo bc_landing_e($ctx['site_name']); ?>. Virtual assets and international transfers carry risk — only transact what you understand and can afford.</p>
@@ -513,7 +516,7 @@ if (!function_exists('bc_landing_render_referral')) {
         <p class="sub">Referral cash is only half the story. Everyday purchases earn you <b>loyalty coins</b>, and coins turn back into wallet money.</p>
         <div class="feat">
             <div class="f"><b>🪙 How you earn coins</b><p>Successful purchases across the platform credit coins to your balance automatically. Your referrer bonus — <?php echo bc_landing_e(number_format($ctx['bonus_coins'])); ?> coins — also lands the moment a friend you invited makes their first successful purchase.</p></div>
-            <div class="f"><b>🔁 Converting coins</b><p>Coins convert at <b><?php echo bc_landing_e(number_format($rate, 0)); ?> coins = ₦1.00</b>. Convert from <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> coins upward: Coins = 50,000 → ₦<?php echo bc_landing_e(number_format(50000 / $rate, 2)); ?>. Conversions are reviewed and approved by our team, then credited to your wallet.</p></div>
+            <div class="f"><b>🔁 Converting coins</b><p>Coins convert at <b><?php echo bc_landing_e(number_format($rate, 0)); ?> coins = ₦1.00</b>. Convert from <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> coins upward — for example, 50,000 coins → ₦<?php echo bc_landing_e(number_format(50000 / $rate, 2)); ?>. Conversions are reviewed and approved by our team, then credited to your wallet.</p></div>
             <div class="f"><b>🏦 Withdrawing</b><p>Converted funds sit in your wallet balance — spend them on any service, or withdraw to your bank under the wallet withdrawal limits in Account Settings. Referral cash rewards are wallet funds from the moment they land.</p></div>
             <div class="f"><b>📊 Track everything</b><p>Your Referral dashboard shows each invited friend, their qualifying progress toward $<?php echo bc_landing_e(number_format($qual, 0)); ?>, and every reward paid. Points history shows each coin earned and converted.</p></div>
         </div>
@@ -635,6 +638,100 @@ if (!function_exists('bc_landing_render_service')) {
         <h2>Try <?php echo bc_landing_e($s['name']); ?> now</h2>
         <p style="opacity:.9">Free account, instant wallet, coins on every purchase.</p>
         <a class="btn btn-dark" href="web/Register.php">Create free account</a>
+    </div>
+</div>
+<?php
+        bc_landing_foot($ctx);
+    }
+}
+
+if (!function_exists('bc_landing_legal_sections')) {
+    /**
+     * §43 — Privacy / Terms content. One source, two renderers: the root
+     * landing pages (Privacy.php / Terms.php) and web/policy/*.php, which
+     * homepage templates 2 & 3 already link to. {site} is replaced with the
+     * vendor's trading name at render time.
+     */
+    function bc_landing_legal_sections($kind) {
+        if ($kind === 'terms') {
+            return array(
+                array('title' => '1. Acceptance of these terms', 'body' => array(
+                    'By creating an account or using {site} (the "Platform"), you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use the Platform. We may update these terms; continued use after an update means you accept the revised terms.')),
+                array('title' => '2. Our services', 'body' => array(
+                    '{site} provides digital and financial services which may include airtime and data, cable TV and electricity payments, exam PINs, betting wallet funding, gift cards, cryptocurrency exchange, international transfers, virtual cards, eSIM and bulk SMS. Services are delivered through our own systems and third-party providers; availability can vary by provider and region.')),
+                array('title' => '3. Accounts and eligibility', 'body' => array(
+                    'You must be at least 18 years old (or the age of majority where you live) and provide accurate registration details. You are responsible for activity under your account and for keeping your password, security PIN and one-time codes confidential. Identity verification (KYC) may be required for some services and limits.')),
+                array('title' => '4. Wallet, payments and fees', 'body' => array(
+                    'Your wallet holds prepaid funds for spending on the Platform; it is not a bank account and balances do not earn interest. Prices, provider fees, FX rates and margins are displayed before you confirm a transaction — check them, because confirmed transactions are processed immediately. Where a provider fails a transaction, the amount is reversed to your wallet.')),
+                array('title' => '5. Cryptocurrency and international transfers', 'body' => array(
+                    'Virtual asset prices are volatile and can lose value quickly; past performance never guarantees future results. International transfers are subject to destination-country rules, compliance checks and settlement times shown at quote. Only transact what you understand and can afford to lose.')),
+                array('title' => '6. Referrals and loyalty coins', 'body' => array(
+                    'Referral rewards and loyalty coins follow the programme terms shown on our Refer & Earn page and in bc-admin Loyalty Settings, which may change. Self-referrals, duplicate accounts and other abuse do not earn and may lead to forfeiture and suspension. Coins have no cash value outside the Platform conversion programme.')),
+                array('title' => '7. Acceptable use', 'body' => array(
+                    'You must not use the Platform for fraud, money laundering, terrorist financing, sanctions evasion, or any unlawful purpose; must not attempt to compromise our systems; and must only transact with funds and instruments you lawfully control. We may monitor, decline or reverse transactions that breach this clause or legal obligations.')),
+                array('title' => '8. Suspension, closure and account deletion', 'body' => array(
+                    'We may suspend or close accounts that breach these terms, present legal or security risk, or remain inactive under our retention rules. You may request deletion of your account at any time from the Delete My Account page; deletion is reviewed and approved by our team, after which the account is closed and, on final erasure, permanently removed subject to legal retention duties.')),
+                array('title' => '9. Liability', 'body' => array(
+                    'The Platform is provided "as is". To the maximum extent permitted by law, {site} is not liable for indirect or consequential losses, provider outages, or losses from market movements. Nothing in these terms limits liability that cannot lawfully be limited.')),
+                array('title' => '10. Contact', 'body' => array(
+                    'Questions about these terms? Reach us through the support chat on this site.')),
+            );
+        }
+        return array(
+            array('title' => '1. Overview', 'body' => array(
+                'This Privacy Policy explains what personal information {site} ("we", "us") collects, how we use it, who we share it with, and the choices you have. By using our website, apps and services you agree to this policy.')),
+            array('title' => '2. Information we collect', 'body' => array(
+                'Account information — name, username, email address, phone number and password (stored hashed).',
+                'Verification information — where required for KYC, identity documents, BVN/NIN and related checks.',
+                'Transaction information — services you buy, amounts, wallet and ledger history, beneficiaries and delivery details.',
+                'Technical information — device, browser, IP address and usage logs needed to run and secure the service.')),
+            array('title' => '3. How we use your information', 'body' => array(
+                'To create and operate your account, deliver the services you buy, process payments and prevent fraud. To verify identity where the law or our risk rules require it. To send service messages (receipts, security codes, account alerts) and, with your consent where required, product updates. To improve our services and meet legal, tax and regulatory obligations.')),
+            array('title' => '4. Who we share it with', 'body' => array(
+                'We share the minimum necessary with: payment and service providers who fulfil your transactions (networks, billers, card and transfer partners); identity-verification providers; and regulators, law-enforcement or courts where legally required. We do not sell your personal information.')),
+            array('title' => '5. Cookies and analytics', 'body' => array(
+                'We use cookies and similar technologies that are necessary for sign-in, security and preferences, and — where configured — privacy-respecting analytics and advertising pixels described in the site\'s cookie notices. You can control cookies in your browser settings.')),
+            array('title' => '6. How we protect your information', 'body' => array(
+                'Passwords and security PINs are stored hashed, sensitive operations require step-up verification, sessions can be revoked, and access to production data is restricted to authorised staff. No system is perfectly secure, but we work to protect your information against unauthorised access, loss or misuse.')),
+            array('title' => '7. How long we keep it', 'body' => array(
+                'We keep account and transaction records for as long as your account is open and afterwards only as long as financial, tax and anti-money-laundering laws require, after which records are deleted or anonymised.')),
+            array('title' => '8. Your rights', 'body' => array(
+                'Subject to applicable law you may request access to, correction of, or deletion of your personal information, and object to certain processing. You can request account deletion from our Delete My Account page (web/DeleteAccount.php): we verify it is really you with a code sent to your registered email, our team reviews the request, and on approval your account is closed and later permanently erased subject to section 7.')),
+            array('title' => '9. Children', 'body' => array(
+                'Our services are not directed at children below the age of majority, and we do not knowingly collect their information.')),
+            array('title' => '10. Changes and contact', 'body' => array(
+                'We may update this policy and will post the new version here with a revised date. For privacy questions or requests, contact us through the support chat on this site.')),
+        );
+    }
+
+    function bc_landing_render_legal($ctx, $kind) {
+        $is_terms = ($kind === 'terms');
+        $title = $is_terms ? 'Terms of Service' : 'Privacy Policy';
+        bc_landing_head($ctx, $title, $title . ' for ' . $ctx['site_name'] . ' — plain-language rules for using our services.');
+        bc_landing_nav($ctx, '');
+        ?>
+<div class="wrap">
+    <div class="hero">
+        <span class="kick"><?php echo $is_terms ? '📜 Terms' : '🔒 Privacy'; ?></span>
+        <h1><?php echo bc_landing_e($title); ?></h1>
+        <p>Last updated <?php echo date('F d, Y'); ?>. Written in plain language — the short version is: we collect what we need to run your account, we never sell it, and you can ask us to delete it.</p>
+        <div class="hero-cta">
+            <a class="btn btn-dark" href="<?php echo $is_terms ? 'Privacy.php' : 'Terms.php'; ?>">Read the <?php echo $is_terms ? 'Privacy Policy' : 'Terms of Service'; ?></a>
+            <a class="btn btn-brand" href="web/DeleteAccount.php">Delete my account</a>
+        </div>
+    </div>
+    <section class="blk" style="padding-top:16px">
+        <?php foreach (bc_landing_legal_sections($kind) as $sec): ?>
+        <details open>
+            <summary><?php echo bc_landing_e(str_replace('{site}', $ctx['site_name'], $sec['title'])); ?></summary>
+            <?php foreach ($sec['body'] as $para): ?><p><?php echo bc_landing_e(str_replace('{site}', $ctx['site_name'], $para)); ?></p><?php endforeach; ?>
+        </details>
+        <?php endforeach; ?>
+    </section>
+    <div class="cta-band">
+        <h2>Questions about your data?</h2>
+        <p style="opacity:.9">Message us any time through support, or manage your account below.</p>
+        <a class="btn btn-dark" href="web/DeleteAccount.php">Request account deletion</a>
     </div>
 </div>
 <?php

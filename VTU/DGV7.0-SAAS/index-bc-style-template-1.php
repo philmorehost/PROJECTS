@@ -596,7 +596,7 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
       </div>
       <div><h4>Product</h4><ul><li><a href="#receive">Receive</a></li><li><a href="#manage">Manage</a></li><li><a href="#spend">Spend</a></li><li><a href="#currencies">Currencies</a></li></ul></div>
       <div><h4>VTU services</h4><ul><?php foreach (array_slice($lp_vtu_list, 0, 5) as $v): ?><li style="text-transform:capitalize;"><?php echo htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); ?></li><?php endforeach; ?><li><a href="#soon">eSIM · Tuition · POS</a></li></ul></div>
-      <div><h4>Company</h4><ul><li><a href="#faq">About</a></li><li><a href="web/Login.php">Support</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+      <div><h4>Company</h4><ul><li><a href="#faq">About</a></li><li><a href="web/Login.php">Support</a></li><li><a href="Privacy.php">Privacy</a></li><li><a href="Terms.php">Terms</a></li></ul></div>
     </div>
     <p style="color:var(--text-muted-light);font-size:.85rem;margin-top:34px;">© <?php echo date('Y'); ?> <?php echo $site_name_e; ?>. All rights reserved.</p>
   </div>
