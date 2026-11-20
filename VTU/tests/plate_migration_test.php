@@ -34,7 +34,8 @@ $retired = array('assets-2/', 'bc-header.php', 'bc-footer.php');
 // not the standard pagetitle shape.
 $handDone = array(
     'DGV7.0-SAAS/web/ai-budgeting.php', 'DGV7.0-NON-SAAS/web/ai-budgeting.php',
-    'DGV7.0-NON-SAAS/web/AI-Assistant.php', 'DGV7.0-NON-SAAS/web/Pricing.php',
+    // §25: AI-Assistant.php became the free Support page in both editions.
+    'DGV7.0-SAAS/web/AI-Assistant.php', 'DGV7.0-NON-SAAS/web/AI-Assistant.php', 'DGV7.0-NON-SAAS/web/Pricing.php',
     // No pagetitle block, or a print document with its own action bar.
     'DGV7.0-SAAS/web/APIDocs.php', 'DGV7.0-NON-SAAS/web/APIDocs.php',
     'DGV7.0-SAAS/web/GiftCard.php', 'DGV7.0-NON-SAAS/web/GiftCard.php',
@@ -66,7 +67,9 @@ foreach ($editions as $edition) {
     }
     $app = file_get_contents($root . '/' . $edition . '/func/bc-plate-app.php');
     chk(strpos($app, 'bc-support-chat-widget.php') !== false, "$edition console shell renders the support chat widget");
-    chk(strpos($app, 'ai-assistant.js') !== false, "$edition console shell injects the AI assistant");
+    // §25: the VTU-purchase AI widget was retired; free AI + human support chat replaces it.
+    chk(strpos($app, 'ai-assistant.js') === false, "$edition console shell no longer injects the retired AI assistant");
+    chk(strpos($app, 'bc-support-chat-widget.php') !== false, "$edition console shell injects the support chat widget");
     chk(strpos($app, 'referralModal') !== false, "$edition console shell renders the referral modal");
     $adm = file_get_contents($root . '/' . $edition . '/func/bc-plate-admin.php');
     chk(strpos($adm, 'forcePinModal') !== false, "$edition admin shell renders the forced PIN setup");
@@ -145,6 +148,16 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // Pricing.php moved to the two-tier model in §25: Smart/Agent/API columns
+        // became Personal/Business (Personal keeps the viewer's legacy discount
+        // table), so pin the tier contract instead of the old body.
+        if ($name === 'Pricing.php' && strpos($rel, 'DGV7.0-SAAS') === 0) {
+            chk(strpos($cur, '<th>Personal (%)</th><th>Business (%)</th>') !== false, "$label shows Personal/Business pricing tiers");
+            chk(strpos($cur, 'pricing_personal_is_agent') !== false, "$label keeps legacy Agent discounts inside Personal");
+            chk(strpos($cur, '<th>Smart') === false && strpos($cur, '<th>Agent') === false && strpos($cur, '<th>API') === false, "$label drops the retired three-tier titles");
+            continue;
+        }
+
         // SendFund.php is redesigned on the shell (2026-11): a fintech hero,
         // step pills and a search-as-you-type bank picker replace the old
         // TomSelect dropdown — its library was never loaded by the shell, so
@@ -190,6 +203,15 @@ foreach ($editions as $edition) {
             foreach ($payBills[$name] as $token) {
                 chk(strpos($cur, $token) !== false, "$label keeps $token");
             }
+            continue;
+        }
+
+        // §25 new services are shell-native pages with no pre-migration body:
+        // they must use the shell and record provider requests via the shared helper.
+        $newServices = array('ESIM.php', 'Tuition.php', 'POSRequest.php', 'IntlTransfer.php', 'Referral.php');
+        if (in_array($name, $newServices, true)) {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
+            chk(strpos($cur, 'bc-fintech-services.php') !== false, "$label loads the provider service layer");
             continue;
         }
 

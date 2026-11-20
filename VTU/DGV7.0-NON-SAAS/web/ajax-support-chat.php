@@ -96,6 +96,34 @@ if ($action === 'send') {
 
     // Re-read: posting bumped last_message_at, and a reply may change status.
     $thread = bc_chat_thread_get($bc_chat_vendor_id, $thread_id);
+    
+// §25: account context for the support assistant — the customer's own recent
+// activity (service, status, date only; never balances or credentials), so the
+// AI can guide from real events and escalate with facts. Registered as a
+// callback so the chat engine itself stays money-blind.
+if (!function_exists('bc_chat_user_context')) {
+    function bc_chat_user_context($vendor_id, $user_id) {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return '';
+        $vendor_id = (int)$vendor_id; $user_id = (int)$user_id;
+        if ($vendor_id <= 0 || $user_id <= 0) return '';
+        $q = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE vendor_id='$vendor_id' AND id='$user_id' LIMIT 1");
+        $u = $q ? mysqli_fetch_assoc($q) : null;
+        if (!$u) return '';
+        $uname = mysqli_real_escape_string($connection_server, (string)$u['username']);
+        $q2 = mysqli_query($connection_server, "SELECT type_alternative, status, date FROM sas_transactions
+            WHERE vendor_id='$vendor_id' AND username='$uname' ORDER BY id DESC LIMIT 5");
+        if (!$q2 || mysqli_num_rows($q2) === 0) return 'No recent transactions on this account.';
+        $lines = [];
+        while ($r = mysqli_fetch_assoc($q2)) {
+            $status = (int)$r['status'] === 1 ? 'successful' : 'not completed';
+            $lines[] = '- ' . ($r['type_alternative'] ?: 'transaction') . ' (' . $status . ', ' . $r['date'] . ')';
+        }
+        return implode("\n", $lines);
+    }
+}
+$GLOBALS['bc_chat_context_provider'] = 'bc_chat_user_context';
+
     bc_chat_ai_reply($bc_chat_vendor_id, $thread);
 
     $messages = bc_chat_messages($bc_chat_vendor_id, $thread_id, 0, 100);

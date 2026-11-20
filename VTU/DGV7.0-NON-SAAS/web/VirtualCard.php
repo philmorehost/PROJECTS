@@ -1,6 +1,6 @@
 <?php session_start();
 include("../func/bc-config.php");
-require_once("../func/api-gateway/chimoney.php");
+require_once("../func/bc-virtualcard-flutterwave.php");
 
 $vid = resolveVendorID();
 $uname = $_SESSION["user_session"] ?? "";
@@ -19,10 +19,9 @@ while ($r = mysqli_fetch_assoc($q_cards)) {
 
 // Fetch installed products for issuance
 $products = [];
-$q_prod = mysqli_query($connection_server, "SELECT g.* FROM sas_global_virtual_card_products g JOIN sas_vendor_virtual_card_products v ON g.chimoney_product_id = v.chimoney_product_id WHERE v.vendor_id='$vid' AND v.status=1");
-while ($p = mysqli_fetch_assoc($q_prod)) {
-    $products[] = $p;
-}
+// §25: Flutterwave is the ONLY virtual-card provider. One USD product; legacy
+// Chimoney/BSICards products and tables are no longer consulted.
+$products = [['product_id' => 'flw_usd', 'name' => 'Flutterwave USD Virtual Card']];
 
 // Fetch Profit Settings for UI display
 $q_set = mysqli_query($connection_server, "SELECT * FROM sas_settings WHERE vendor_id='$vid' AND setting_name LIKE 'vc_%'");
@@ -257,7 +256,7 @@ bc_app_head("Virtual Card Dashboard | " . ($get_all_site_details["site_title"]))
                             <label class="form-label small fw-bold">Select Card Product</label>
                             <select name="product_id" class="form-select rounded-3">
                                 <?php foreach($products as $p): ?>
-                                <option value="<?php echo $p['chimoney_product_id']; ?>"><?php echo $p['name']; ?> (USD)</option>
+                                <option value="<?php echo $p['product_id']; ?>"><?php echo $p['name']; ?> (USD)</option>
                                 <?php endforeach; if(empty($products)) echo "<option disabled>No products available. Contact Admin.</option>"; ?>
                             </select>
                         </div>

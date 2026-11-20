@@ -400,9 +400,11 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                             <div class="row g-4">
                                 <?php
                                 // Klasha lives here too: sas_bank_transfer_gateways is the provider-key
-                                // table the Phase 3 adapter reads (func/bc-fintech-providers.php). It stays
-                                // unusable until bc_fintech_provider_registry() is filled from the signed-off
-                                // Klasha specification and provider_ready is switched on.
+                                // table the adapter reads (func/bc-fintech-providers.php). §26 wired the
+                                // registry from the official Klasha docs: Public Key = merchant public
+                                // key (x-auth-token), Secret Key = account password (exchanged for a
+                                // Bearer token at login; a pasted Bearer token also works), Encrypt Key
+                                // = merchant encryption key. Set the login email under Service Control.
                                 $withdrawal_gateways = ["payhub", "paystack", "klasha"];
                                 foreach($withdrawal_gateways as $wg_name):
                                     // Same ordering as getWithdrawalGatewayDetails(), so the credentials shown
@@ -429,7 +431,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                             <input name="secret-key[]" type="password" value="<?php echo $wg_data['secret_key'] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Secret Key" />
                                         </div>
                                         <div class="mb-0">
-                                            <label class="form-label small fw-bold text-muted"><?php echo ($wg_name == 'paystack') ? 'NOT REQUIRED' : (($wg_name == 'klasha') ? 'VERIF-HASH / ENCRYPT KEY' : 'ENCRYPT KEY / APP ID'); ?></label>
+                                            <label class="form-label small fw-bold text-muted"><?php echo ($wg_name == 'paystack') ? 'NOT REQUIRED' : (($wg_name == 'klasha') ? 'ENCRYPTION KEY' : 'ENCRYPT KEY / APP ID'); ?></label>
                                             <input name="encrypt-key[]" type="text" value="<?php echo $wg_data['encrypt_key'] ?? ''; ?>" class="form-control rounded-3" placeholder="Optional" />
                                         </div>
                                     </div>

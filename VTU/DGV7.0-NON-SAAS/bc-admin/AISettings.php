@@ -210,6 +210,12 @@ bc_adm_head("AI Control Center | " . ($get_all_super_admin_site_details["site_ti
 <?php bc_adm_topbar(array("area" => "admin", "title" => "Intelligence Command Center", "crumb" => "Home / AI Control")); ?>
 
     <section class="section dashboard">
+        <div class="alert alert-info border-0 rounded-4 shadow-sm">
+            <strong><i class="bi bi-stars me-2"></i>AI on this installation is owner-funded.</strong>
+            End users are never billed for AI: support chat (<a href="ChatSettings.php" class="alert-link">Chat Settings</a>) and the
+            <a href="AIMarketing.php" class="alert-link">AI Marketing Studio</a> run on your own direct API key configured here.
+            The old per-user AI token billing for VTU purchases has been retired — users get free AI + human support instead.
+        </div>
         <?php if (isset($_SESSION["product_purchase_response"])): ?>
             <div class="alert alert-info border-0 rounded-4 shadow-sm animate__animated animate__fadeInDown">
                 <i class="bi bi-info-circle me-2"></i> <?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); unset($_SESSION["product_purchase_response"]); ?>

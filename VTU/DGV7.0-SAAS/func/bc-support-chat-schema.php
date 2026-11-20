@@ -22,6 +22,7 @@ if (!function_exists('bc_chat_ensure_schema')) {
             user_id INT UNSIGNED NOT NULL,
             username VARCHAR(191) NOT NULL DEFAULT '',
             subject VARCHAR(255) NOT NULL DEFAULT '',
+            ticket_no VARCHAR(32) NOT NULL DEFAULT '',
             status VARCHAR(32) NOT NULL DEFAULT 'open',
             assigned_admin VARCHAR(191) NOT NULL DEFAULT '',
             last_message_at DATETIME NULL,
@@ -48,6 +49,9 @@ if (!function_exists('bc_chat_ensure_schema')) {
             KEY idx_thread (thread_id, id),
             KEY idx_vendor (vendor_id)
         )");
+
+        // §25: every thread carries a human-readable support ticket number.
+        @mysqli_query($connection_server, "ALTER TABLE sas_chat_threads ADD COLUMN ticket_no VARCHAR(32) NOT NULL DEFAULT ''");
 
         // Audit trail. Separate from messages because events are operational (claimed, closed,
         // escalated) and must not appear in the customer's transcript.

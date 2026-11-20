@@ -15,8 +15,12 @@
  * Exit code is 0 whenever the check ran, 2 on usage error.
  */
 
-// Providers covered: klasha, flutterwave. The registry is the source of truth, so a
-// provider added there is reported here automatically.
+// Providers covered: klasha, flutterwave, platnova, oneglobal. The registry is the
+// source of truth, so a provider added there is reported here automatically.
+// Since §26 the registry ships the documented endpoints; what keeps a provider
+// "not configured" here is missing credentials and the deliberately-unmapped
+// pieces (e.g. Klasha's undocumented webhook signature, Flutterwave's
+// undocumented virtual-card paths).
 $root = dirname(__DIR__);
 $args = (isset($argv) && is_array($argv)) ? array_slice($argv, 1) : [];
 $edition = 'DGV7.0-SAAS';
@@ -107,8 +111,8 @@ foreach (bc_fintech_provider_list() as $slug) {
 echo str_repeat('-', 64) . "\n";
 if ($unconfigured > 0) {
     echo "{$unconfigured} provider(s) not configured. No provider calls were made.\n";
-    echo "Fill bc_fintech_provider_registry() from the signed-off specification,\n";
-    echo "save credentials in bc-admin/PaymentGateway.php, then re-run.\n";
+    echo "Save credentials in bc-admin (Payment Gateways / Service Control),\n";
+    echo "then re-run. Endpoints follow the official provider docs (§26).\n";
 } else {
     echo "Every provider is configured. This script made no provider calls.\n";
 }

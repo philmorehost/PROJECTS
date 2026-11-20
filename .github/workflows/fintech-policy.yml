@@ -135,6 +135,28 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/tests/upgrade25_test.php'
+      - 'VTU/tests/provider_live_test.php'
       - 'VTU/DGV7.0-SAAS/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
@@ -257,6 +279,28 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/users-flutterwave.php'
       - 'VTU/tests/provider_smoke.php'
       - 'VTU/tests/htaccess_context_test.py'
+      - 'VTU/DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php'
+      - 'VTU/DGV7.0-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Dashboard.php'
+      - 'VTU/DGV7.0-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Referral.php'
+      - 'VTU/DGV7.0-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/IntlTransfer.php'
+      - 'VTU/DGV7.0-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/Tuition.php'
+      - 'VTU/DGV7.0-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/ESIM.php'
+      - 'VTU/DGV7.0-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/POSRequest.php'
+      - 'VTU/DGV7.0-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/AI-Assistant.php'
+      - 'VTU/DGV7.0-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/VirtualCard.php'
+      - 'VTU/DGV7.0-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/DGV7.0-NON-SAAS/web/virtual-card-ajax.php'
+      - 'VTU/tests/upgrade25_test.php'
+      - 'VTU/tests/provider_live_test.php'
       - 'VTU/DGV7.0-SAAS/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
@@ -296,7 +340,8 @@ jobs:
                         index-bc-style-template-6.php users-plisio.php \
                         func/bc-fintech-providers.php func/bc-fintech-ledger.php \
                         func/bc-fintech-webhook.php func/bc-fintech-klasha.php \
-                        func/bc-fintech-flutterwave.php users-klasha.php \
+                        func/bc-fintech-flutterwave.php func/bc-fintech-platnova.php \
+                        func/bc-fintech-oneglobal.php func/bc-virtualcard-flutterwave.php users-klasha.php \
                         users-flutterwave.php func/bc-plate-auth.php \
                         func/bc-plate-app.php func/bc-installer-shell.php \
                         web/Dashboard.php \
@@ -321,6 +366,8 @@ jobs:
           php -l VTU/tests/plate_migration_test.php
           php -l VTU/tests/plate_bodies.php
           php -l VTU/tests/backoffice_regression_test.php
+          php -l VTU/tests/upgrade25_test.php
+          php -l VTU/tests/provider_live_test.php
           php -l VTU/DGV7.0-SAAS/func/bc-spadmin-config.php
           php -l VTU/DGV7.0-SAAS/func/bc-levelup.php
           php -l LM/check-update.php
@@ -338,6 +385,8 @@ jobs:
           php -n VTU/tests/plate_migration_test.php
           php -n VTU/tests/backoffice_regression_test.php
           php -n VTU/tests/lm_edition_test.php
+          php -n VTU/tests/upgrade25_test.php
+          php -n VTU/tests/provider_live_test.php
       - name: Apache .htaccess context and parity
         run: |
           set -e
@@ -356,6 +405,7 @@ jobs:
                       bc-fintech-wallet.php bc-dashboard-accounts.php \
                       bc-fintech-providers.php bc-fintech-ledger.php bc-fintech-webhook.php \
                       bc-fintech-klasha.php bc-fintech-flutterwave.php \
+                      bc-fintech-platnova.php bc-fintech-oneglobal.php bc-virtualcard-flutterwave.php \
                       bc-plate-auth.php bc-plate-app.php bc-plate-admin.php bc-installer-shell.php; do
             cmp "VTU/DGV7.0-SAAS/func/${file}" "VTU/DGV7.0-NON-SAAS/func/${file}"
           done
@@ -446,7 +496,7 @@ jobs:
           # Phase 3: the adapters must never move a balance themselves. bc_fintech_ledger_post()
           # is the only writer for provider money movement.
           for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
-            for adapter in bc-fintech-klasha.php bc-fintech-flutterwave.php; do
+            for adapter in bc-fintech-klasha.php bc-fintech-flutterwave.php bc-fintech-platnova.php bc-fintech-oneglobal.php; do
               if grep -qE 'UPDATE[[:space:]]+sas_(users|user_crypto_wallets)' "VTU/${edition}/func/${adapter}"; then
                 echo "${adapter} writes a balance directly"; exit 1
               fi
@@ -454,11 +504,13 @@ jobs:
                 echo "${adapter} bypasses the ledger primitive"; exit 1
               fi
             done
-            # Klasha's payload crypto is an explicit seam: no cipher may be shipped until the
-            # scheme is verified. The 3DES scheme in the brief is UNVERIFIED.
-            if grep -qiE 'openssl_(encrypt|decrypt)|CRYPT_(3DES|BF)' "VTU/${edition}/func/bc-fintech-klasha.php"; then
-              echo "klasha adapter ships a payload cipher"; exit 1
-            fi
+            # §26: Klasha's payload schemes are verified against the official docs, so the
+            # adapter MUST ship both documented ciphers (3DES for the Payments API,
+            # OpenSSL-salted AES-256-CBC for the wallet APIs). Correctness of the
+            # algorithms themselves is proven by known-answer tests in provider_live_test.php.
+            grep -q 'des-ede3-cbc' "VTU/${edition}/func/bc-fintech-klasha.php" || { echo "klasha adapter lost the documented 3DES cipher"; exit 1; }
+            grep -q 'aes-256-cbc' "VTU/${edition}/func/bc-fintech-klasha.php" || { echo "klasha adapter lost the documented AES cipher"; exit 1; }
+            grep -q 'Salted__' "VTU/${edition}/func/bc-fintech-klasha.php" || { echo "klasha adapter lost the OpenSSL salted format"; exit 1; }
             # Webhook endpoints must read the raw body so signatures are checked over the
             # exact delivered bytes.
             grep -q 'bc_fintech_webhook_raw_input()' "VTU/${edition}/users-klasha.php"

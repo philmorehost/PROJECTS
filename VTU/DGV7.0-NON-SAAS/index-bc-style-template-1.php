@@ -151,604 +151,470 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($site_title); ?> — Free account for freelancers</title>
-    <meta name="description" content="<?php echo htmlspecialchars($site_title); ?> is a free account for freelancers: get paid by invoice, bank transfer or QR code, then top up airtime, data and bills in seconds.">
-    <?php if (!empty($meta_keywords)): ?>
-    <meta name="keywords" content="<?php echo htmlspecialchars($meta_keywords); ?>">
-    <?php endif; ?>
-    <meta property="og:title" content="<?php echo htmlspecialchars($site_title); ?>">
-    <meta property="og:description" content="Free account for freelancers who run their own show.">
-    <meta property="og:image" content="<?php echo $site_logo; ?>">
-    <meta property="og:url" content="<?php echo htmlspecialchars($current_url); ?>">
-    <meta property="og:type" content="website">
+    <?php if (function_exists('seo_render_head_tags')) { seo_render_head_tags($site_details, $vendor_account_details); } ?>
+    <title><?php echo $site_name_e; ?> — Free Account for Freelancers Who Run Their Own Show</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>">
-    <meta name="theme-color" content="<?php echo $brand_colour; ?>">
-    <?php echo $custom_header; ?>
-<style>
-/* ── Freelancer landing (2026-11 redesign of template 1) ─────────────── */
-:root{
-    --brand: <?php echo $brand_colour; ?>;
-    --ink:#0b1220; --muted:#5b6b82; --paper:#f6f8fb; --card:#ffffff;
-    --line:#e4eaf2; --dark:#0b1220; --dark2:#111c33;
-    --radius:22px; --shadow:0 24px 48px -24px rgba(2,6,23,.25);
-}
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;overflow-x:hidden}
-a{text-decoration:none;color:inherit}
-img{max-width:100%}
-.lp-wrap{max-width:1180px;margin:0 auto;padding:0 22px}
-.lp-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--brand)}
-.lp-h2{font-size:clamp(1.7rem,3.4vw,2.5rem);font-weight:900;letter-spacing:-.02em;line-height:1.12;margin:.5rem 0 .6rem}
-.lp-sub{color:var(--muted);max-width:640px}
-.lp-section{padding:84px 0 8px}
-.lp-btn{display:inline-flex;align-items:center;gap:8px;background:var(--brand);color:#fff;font-weight:800;
-    padding:.85rem 1.7rem;border-radius:999px;box-shadow:0 14px 28px -12px var(--brand);transition:transform .15s ease}
-.lp-btn:hover{transform:translateY(-2px)}
-.lp-btn--ghost{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none}
-.lp-btn--light{background:#fff;color:var(--ink);box-shadow:none}
-
-/* nav */
-.lp-nav{position:sticky;top:0;z-index:900;background:rgba(246,248,251,.88);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
-.lp-nav__in{display:flex;align-items:center;gap:26px;padding:14px 0}
-.lp-brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.06rem;letter-spacing:-.02em}
-.lp-brand img{height:36px;width:auto;border-radius:8px}
-.lp-brand__mark{width:36px;height:36px;border-radius:11px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:900}
-.lp-brand small{display:block;font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.lp-links{display:flex;gap:22px;margin-left:auto;font-weight:600;font-size:.92rem;color:var(--muted)}
-.lp-links a:hover{color:var(--ink)}
-.lp-nav__cta{display:flex;gap:10px;align-items:center;margin-left:8px}
-.lp-login{font-weight:700}
-@media(max-width:900px){.lp-links{display:none}}
-
-/* hero */
-.lp-hero{padding:72px 0 30px;background:
-    radial-gradient(700px 320px at 85% -10%,color-mix(in srgb,var(--brand) 20%,transparent),transparent 60%),
-    radial-gradient(600px 300px at 0% 0%,rgba(2,6,23,.05),transparent 55%)}
-.lp-hero__grid{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}
-@media(max-width:960px){.lp-hero__grid{grid-template-columns:1fr}}
-.lp-h1{font-size:clamp(2.3rem,5vw,3.6rem);font-weight:900;letter-spacing:-.03em;line-height:1.05;margin:.7rem 0 1rem}
-.lp-hero p.lede{color:var(--muted);font-size:1.08rem;max-width:520px}
-.lp-cta-row{display:flex;gap:12px;flex-wrap:wrap;margin:26px 0 14px}
-.lp-trust{color:var(--muted);font-size:.86rem;font-weight:600}
-.lp-phone{background:var(--dark);color:#e8eefb;border-radius:30px;padding:24px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-.lp-phone::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 200px at 85% -10%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 60%)}
-.lp-phone>*{position:relative}
-.lp-phone__name{font-weight:800}
-.lp-phone__bal{font-size:2rem;font-weight:900;letter-spacing:-.02em;margin:2px 0 0}
-.lp-phone__sub{color:#9fb0cc;font-size:.8rem}
-.lp-pockets{display:grid;gap:10px;margin:18px 0}
-.lp-pocket{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px}
-.lp-pocket b{font-size:.92rem}
-.lp-pocket span{color:#9fb0cc;font-size:.78rem;display:block}
-.lp-actions{display:flex;gap:8px;flex-wrap:wrap}
-.lp-actions span{background:#fff;color:var(--ink);font-weight:800;font-size:.8rem;border-radius:999px;padding:.5rem .95rem}
-.lp-actions span.alt{background:rgba(255,255,255,.1);color:#e8eefb;border:1px solid rgba(255,255,255,.16)}
-.lp-feed{margin-top:18px;display:grid;gap:8px}
-.lp-feed__row{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.05);border-radius:14px;padding:10px 14px;font-size:.88rem}
-.lp-feed__row .amt{font-weight:800;color:#7ee2a8}
-
-/* feature cards */
-.lp-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
-@media(max-width:960px){.lp-cards{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.lp-cards{grid-template-columns:1fr}}
-.lp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
-.lp-card h3{font-size:1.05rem;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
-.lp-card p{color:var(--muted);font-size:.9rem}
-.lp-cardmock{background:linear-gradient(135deg,var(--dark),var(--dark2));color:#fff;border-radius:16px;padding:16px;margin-top:14px}
-.lp-cardmock .num{font-family:ui-monospace,monospace;letter-spacing:.12em;margin-top:16px}
-.lp-fee-row{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:8px 0;font-size:.9rem}
-.lp-fee-row:last-child{border-bottom:0}
-.lp-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.lp-chips span{background:color-mix(in srgb,var(--brand) 10%,#fff);color:var(--brand);border:1px solid color-mix(in srgb,var(--brand) 25%,#fff);font-weight:700;font-size:.78rem;border-radius:999px;padding:.35rem .8rem}
-.lp-marquee{overflow:hidden;margin-top:14px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
-.lp-marquee__track{display:flex;gap:10px;width:max-content;animation:lpScroll 26s linear infinite}
-.lp-marquee__track span{border:1px solid var(--line);border-radius:999px;padding:.4rem .9rem;font-weight:800;font-size:.8rem;background:#fff}
-@keyframes lpScroll{to{transform:translateX(-50%)}}
-
-/* panels (receive / spend) */
-.lp-panels{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
-@media(max-width:960px){.lp-panels{grid-template-columns:1fr}}
-.lp-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
-.lp-panel h3{font-weight:800;font-size:1.02rem;margin-bottom:6px}
-.lp-panel p{color:var(--muted);font-size:.9rem}
-.lp-mock{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:14px;display:grid;gap:8px;font-size:.86rem}
-.lp-mock__row{display:flex;justify-content:space-between;gap:10px}
-.lp-mock__row span{color:var(--muted)}
-.lp-mock__row b{font-weight:700;text-align:right}
-.lp-badge{display:inline-block;background:#e8f9ee;color:#15803d;font-weight:800;font-size:.68rem;border-radius:999px;padding:.15rem .6rem;letter-spacing:.06em}
-.lp-qr{display:grid;place-items:center;text-align:center;padding:18px 10px}
-.lp-qr__box{width:118px;height:118px;border-radius:16px;background:
-    repeating-conic-gradient(var(--ink) 0 25%,#fff 0 50%) 0 0/22px 22px;border:6px solid var(--ink)}
-.lp-qr p{margin-top:12px}
-
-/* steps */
-.lp-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
-@media(max-width:960px){.lp-steps{grid-template-columns:1fr}}
-.lp-step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
-.lp-step__n{width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;font-weight:900;display:grid;place-items:center;margin-bottom:12px}
-.lp-step h3{font-size:1rem;font-weight:800}
-.lp-step p{color:var(--muted);font-size:.9rem}
-
-/* personas */
-.lp-personas{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:30px}
-@media(max-width:960px){.lp-personas{grid-template-columns:1fr 1fr}}
-@media(max-width:560px){.lp-personas{grid-template-columns:1fr}}
-.lp-persona{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
-.lp-persona__ph{height:86px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 65%,#0b1220),var(--dark2));display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.3rem;letter-spacing:.04em;margin-bottom:14px}
-.lp-persona h3{font-size:.98rem;font-weight:800}
-.lp-persona p{color:var(--muted);font-size:.86rem}
-
-/* converter */
-.lp-fx{background:var(--dark);color:#e8eefb;border-radius:26px;padding:26px;margin-top:26px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-.lp-fx::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 200px at 85% -10%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 60%)}
-.lp-fx>*{position:relative}
-.lp-fx__grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end;margin-top:16px}
-@media(max-width:700px){.lp-fx__grid{grid-template-columns:1fr}}
-.lp-fx label{font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9fb0cc;display:block}
-.lp-fx .fx-field{display:flex;gap:8px;margin-top:8px}
-.lp-fx input,.lp-fx select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:14px;padding:.8rem .9rem;font:inherit;font-weight:700;width:100%}
-.lp-fx select{width:auto}
-.lp-fx option{color:#0b1220}
-.lp-fx__swap{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#fff;color:var(--ink);font-weight:900;border:0;cursor:pointer;margin-bottom:2px}
-.lp-fx__rate{margin-top:14px;color:#9fb0cc;font-size:.88rem}
-.lp-fx__rate b{color:#7ee2a8}
-.lp-live{display:inline-block;background:#e8f9ee;color:#15803d;font-weight:800;font-size:.66rem;border-radius:999px;padding:.2rem .6rem;letter-spacing:.08em;vertical-align:middle}
-
-/* spend tiles */
-.lp-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px}
-@media(max-width:960px){.lp-tiles{grid-template-columns:1fr 1fr}}
-@media(max-width:560px){.lp-tiles{grid-template-columns:1fr}}
-.lp-tile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
-.lp-tile h3{font-size:.96rem;font-weight:800}
-.lp-tile p{color:var(--muted);font-size:.87rem}
-
-/* pricing */
-.lp-price{background:var(--card);border:1px solid var(--line);border-radius:26px;overflow:hidden;margin-top:28px;box-shadow:0 10px 24px -18px rgba(2,6,23,.25)}
-.lp-price__row{display:flex;justify-content:space-between;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);font-size:.94rem}
-.lp-price__row:last-child{border-bottom:0}
-.lp-price__row b{font-weight:800}
-.lp-price__head{background:var(--dark);color:#fff;padding:20px 22px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
-.lp-free{color:#7ee2a8;letter-spacing:.08em;font-size:.78rem}
-
-/* faq */
-.lp-faq{display:grid;gap:12px;margin-top:26px;max-width:820px}
-.lp-faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 20px}
-.lp-faq summary{font-weight:800;cursor:pointer}
-.lp-faq p{color:var(--muted);font-size:.92rem;margin-top:8px}
-
-/* final cta + footer */
-.lp-final{background:var(--dark);color:#fff;border-radius:28px;padding:48px 34px;margin:84px 0 0;text-align:center;position:relative;overflow:hidden}
-.lp-final::before{content:"";position:absolute;inset:0;background:radial-gradient(520px 240px at 50% -20%,color-mix(in srgb,var(--brand) 55%,transparent),transparent 65%)}
-.lp-final>*{position:relative}
-.lp-final h2{font-size:clamp(1.8rem,3.6vw,2.6rem);font-weight:900;letter-spacing:-.02em}
-.lp-final form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
-.lp-final input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:999px;padding:.85rem 1.2rem;font:inherit;min-width:min(320px,80vw)}
-.lp-footer{padding:44px 0 54px;color:var(--muted);font-size:.88rem}
-.lp-footer__grid{display:flex;gap:26px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start}
-.lp-footer a:hover{color:var(--ink)}
-#cookieBanner{position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;background:var(--dark);color:#e8eefb;border-radius:18px;padding:16px 20px;box-shadow:var(--shadow)}
-#cookieBanner .row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;max-width:1100px;margin:0 auto}
-#cookieBanner p{flex:1;min-width:220px;font-size:.88rem}
-#cookieBanner button{border-radius:999px;padding:.55rem 1.2rem;font-weight:800;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer}
-#cookieBanner button.acc{background:#fff;color:var(--ink);border-color:#fff}
-</style>
+    <style>
+    /* Client freelancer landing template, rebuilt on automated site
+       details: --brand-red becomes the bc-admin-selected primary colour, and every
+       brand mention uses the automated site name/logo/contact. */
+    :root{
+      --bg-dark:#0a0a0a; --bg-card-dark:#141414; --bg-card-darker:#0f0f0f;
+      --bg-light:#ffffff; --bg-subtle:#f5f5f7;
+      --brand-red:<?php echo htmlspecialchars($brand_colour, ENT_QUOTES, 'UTF-8'); ?>;
+      --brand-red-dark:color-mix(in srgb, var(--brand-red) 82%, #000);
+      --text-white:#ffffff; --text-muted-dark:#a1a1aa;
+      --text-dark:#0a0a0a; --text-muted-light:#52525b;
+      --border-dark:rgba(255,255,255,.08); --border-light:rgba(0,0,0,.08);
+      --green-badge-bg:rgba(22,163,74,.16); --green-badge-text:#4ade80;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--text-dark);background:var(--bg-light)}
+    h1,h2,h3,.display-font{font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.03em}
+    a{text-decoration:none;color:inherit}
+    .container{max-width:1200px;margin:0 auto;padding:0 24px}
+    .navbar{background:#fff;border-bottom:1px solid var(--border-light);position:sticky;top:0;z-index:100}
+    .navbar-inner{display:flex;align-items:center;justify-content:space-between;height:76px;gap:16px}
+    .brand-logo{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:18px;letter-spacing:-.04em}
+    .brand-logo img{height:34px;width:auto}
+    .brand-logo .vtu-bubble{background:var(--brand-red);color:#fff;padding:2px 8px;border-radius:8px;font-size:13px;letter-spacing:0}
+    .nav-links{display:flex;gap:26px;align-items:center;font-weight:600;font-size:15px}
+    .nav-links a:hover{color:var(--brand-red)}
+    .new-tag{background:var(--brand-red);color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;vertical-align:middle;margin-left:5px}
+    .nav-actions{display:flex;gap:18px;align-items:center;font-weight:600}
+    .btn-red{background:var(--brand-red);color:#fff;padding:12px 22px;border-radius:999px;font-weight:700;display:inline-block;border:0;cursor:pointer}
+    .btn-red:hover{background:var(--brand-red-dark);color:#fff}
+    .btn-outline-dark{border:1.5px solid var(--text-dark);padding:11px 22px;border-radius:999px;font-weight:700;display:inline-block}
+    .hero-section{padding:74px 0 60px;background:linear-gradient(180deg,#fff, var(--bg-subtle))}
+    .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+    .eyebrow-red{color:var(--brand-red);font-weight:800;font-size:12px;letter-spacing:.14em}
+    .hero-title{font-size:clamp(2.4rem,5vw,3.7rem);line-height:1.02;margin:16px 0 18px}
+    .hero-title .accent{color:var(--brand-red)}
+    .hero-sub{font-size:1.12rem;color:var(--text-muted-light);line-height:1.65;max-width:520px}
+    .hero-cta-row{display:flex;gap:14px;margin:28px 0 18px;flex-wrap:wrap}
+    .hero-checks{display:flex;gap:22px;color:var(--text-muted-light);font-size:.92rem;flex-wrap:wrap}
+    .hero-checks span::before{content:"✓";color:var(--brand-red);font-weight:800;margin-right:6px}
+    .bento-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .bento-col{display:flex;flex-direction:column;gap:16px}
+    .bento-card{background:var(--bg-card-dark);color:#fff;border-radius:20px;padding:22px}
+    .bento-card.white{background:#fff;color:var(--text-dark);border:1px solid var(--border-light)}
+    .bento-card.red{background:var(--brand-red)}
+    .bento-card h4{font-family:'Inter';letter-spacing:0;font-size:.95rem;margin-bottom:14px}
+    .virtual-card-preview{background:linear-gradient(135deg,#26262b,#101013);border:1px solid var(--border-dark);border-radius:16px;padding:18px;min-height:130px;display:flex;flex-direction:column;justify-content:space-between}
+    .card-top-row,.card-bottom-row{display:flex;justify-content:space-between;align-items:center}
+    .card-toggle-pill{display:inline-flex;background:#1e1e22;border-radius:999px;padding:4px;margin-top:14px}
+    .card-toggle-pill button{border:0;background:transparent;color:#d4d4d8;padding:7px 16px;border-radius:999px;font-weight:700;cursor:pointer}
+    .card-toggle-pill button.active{background:#fff;color:#0a0a0a}
+    .currency-pills{display:flex;gap:10px;flex-wrap:wrap}
+    .flag-dot{background:#1e1e22;border:1px solid var(--border-dark);padding:8px 14px;border-radius:999px;font-weight:700;font-size:.9rem}
+    .invoice-mini-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .paid-pill{background:var(--green-badge-bg);color:var(--green-badge-text);font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px}
+    .fee-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--border-light);font-size:.95rem}
+    .fee-row:last-child{border-bottom:0}
+    .vtu-tags{display:flex;gap:8px;flex-wrap:wrap}
+    .vtu-tags span{background:rgba(255,255,255,.18);padding:7px 13px;border-radius:999px;font-weight:700;font-size:.85rem}
+    .tx-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border-dark)}
+    .tx-item:last-child{border-bottom:0}
+    .tx-left{display:flex;gap:10px;align-items:center}
+    .avatar-badge{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem;background:var(--brand-red);color:#fff}
+    .avatar-badge.white{background:#fff;color:#0a0a0a}.avatar-badge.gray{background:#3f3f46;color:#fff}
+    .tx-name{font-weight:700;font-size:.9rem}.tx-desc{font-size:.75rem;color:var(--text-muted-dark)}
+    .tx-amount{font-weight:800;color:#4ade80}
+    .floating-subnav-wrap{position:sticky;top:88px;z-index:90;display:flex;justify-content:center;padding:10px 16px}
+    .floating-subnav{background:rgba(10,10,10,.92);backdrop-filter:blur(8px);border-radius:999px;padding:8px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:center}
+    .floating-subnav a{color:#e4e4e7;padding:9px 14px;border-radius:999px;font-size:13px;font-weight:600}
+    .floating-subnav a:hover{background:#26262b;color:#fff}
+    section.block{padding:84px 0}
+    .section-title-lg{font-size:clamp(2rem,4vw,3rem);line-height:1.05;margin:14px 0}
+    .receive-header{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:end;margin-bottom:44px}
+    .receive-sub{color:var(--text-muted-light);line-height:1.7}
+    .three-ways-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .way-card{border-radius:24px;padding:28px;min-height:340px;display:flex;flex-direction:column;justify-content:space-between;gap:22px}
+    .way-card.light{background:var(--bg-subtle);border:1px solid var(--border-light)}
+    .way-card.dark{background:var(--bg-card-dark);color:#fff}
+    .way-card h3{font-size:1.35rem;margin-bottom:8px}
+    .way-card p{color:var(--text-muted-light);line-height:1.6;font-size:.95rem}
+    .way-card.dark p{color:var(--text-muted-dark)}
+    .transfer-list-box,.invoice-box,.qr-box{background:#fff;border:1px solid var(--border-light);border-radius:16px;padding:18px;color:var(--text-dark)}
+    .way-card.dark .transfer-list-box,.way-card.dark .invoice-box,.way-card.dark .qr-box{background:#1a1a1e;border-color:var(--border-dark);color:#fff}
+    .transfer-row{display:flex;justify-content:space-between;padding:7px 0;font-size:.9rem}
+    .dark-section{background:var(--bg-dark);color:#fff}
+    .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+    .step-card{background:var(--bg-card-dark);border:1px solid var(--border-dark);border-radius:20px;padding:26px}
+    .step-card .n{color:var(--brand-red);font-weight:800;font-size:.8rem;letter-spacing:.12em}
+    .step-card h3{margin:10px 0 8px;font-size:1.2rem}
+    .step-card p{color:var(--text-muted-dark);line-height:1.65;font-size:.94rem}
+    .china-section{background:linear-gradient(135deg, var(--bg-dark), #1b0505);}
+    .china-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:30px;box-shadow:inset 0 1px 0 rgba(255,255,255,.15), 0 24px 50px -30px rgba(0,0,0,.8)}
+    .spend-section{background:var(--brand-red);color:#fff}
+    .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+    .feature-card{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:26px}
+    .feature-card h3{margin-bottom:8px;font-size:1.15rem}
+    .feature-card p{opacity:.88;line-height:1.65;font-size:.94rem}
+    .feature-grid.light .feature-card{background:#fff;border-color:var(--border-light);color:var(--text-dark)}
+    .feature-grid.light .feature-card p{color:var(--text-muted-light);opacity:1}
+    .svc-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
+    .svc-card{background:#fff;border:1px solid var(--border-light);border-radius:20px;padding:24px}
+    .svc-card h3{font-size:1.05rem;margin-bottom:6px}
+    .svc-card p{color:var(--text-muted-light);font-size:.9rem;line-height:1.6}
+    .svc-card a{color:var(--brand-red);font-weight:800;font-size:.9rem}
+    .faq-item{border-bottom:1px solid var(--border-light);padding:20px 0}
+    .faq-item summary{font-weight:800;cursor:pointer;font-size:1.05rem}
+    .faq-item p{color:var(--text-muted-light);line-height:1.7;margin-top:10px;max-width:760px}
+    .cta-section{background:var(--bg-dark);color:#fff;border-radius:28px;padding:60px 40px;text-align:center}
+    .cta-form{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap}
+    .cta-form input{padding:14px 20px;border-radius:999px;border:1px solid var(--border-dark);background:#141414;color:#fff;min-width:280px}
+    footer.site{padding:56px 0 34px;border-top:1px solid var(--border-light)}
+    .footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:30px}
+    footer.site h4{font-size:.95rem;margin-bottom:14px}
+    footer.site li{list-style:none;margin-bottom:9px;color:var(--text-muted-light);font-size:.92rem}
+    .fx-box{background:#fff;border:1px solid var(--border-light);border-radius:20px;padding:26px;margin-top:36px}
+    .fx-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end;margin-top:16px}
+    .fx-box input,.fx-box select{width:100%;padding:12px;border:1px solid var(--border-light);border-radius:12px;font:inherit}
+    @media(max-width:900px){
+      .hero-grid,.receive-header{grid-template-columns:1fr}
+      .three-ways-grid,.steps-grid,.feature-grid,.svc-strip,.footer-grid{grid-template-columns:1fr 1fr}
+      .nav-links{display:none}
+    }
+    @media(max-width:560px){.three-ways-grid,.steps-grid,.feature-grid,.svc-strip,.footer-grid,.bento-grid{grid-template-columns:1fr}}
+    </style>
 </head>
 <body>
 
-<header class="lp-nav">
-    <div class="lp-wrap lp-nav__in">
-        <a class="lp-brand" href="./">
-            <?php if (!empty($site_logo) && strpos((string)$site_logo, 'placeholder') === false): ?>
-                <img src="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo $site_name_e; ?>">
-            <?php else: ?>
-                <span class="lp-brand__mark"><?php echo $site_name_initial; ?></span>
-            <?php endif; ?>
-            <span><?php echo $site_name_e; ?><small>for Freelancers</small></span>
-        </a>
-        <nav class="lp-links">
-            <a href="#features">Features</a>
-            <a href="#get-paid">Get paid</a>
-            <a href="#currencies">Currencies</a>
-            <a href="#spend">Spend</a>
-            <a href="#faq">FAQ</a>
-        </nav>
-        <div class="lp-nav__cta">
-            <a class="lp-login" href="web/Login.php">Log in</a>
-            <a class="lp-btn" href="web/Register.php">Open free account</a>
-        </div>
+<!-- NAVBAR (client template) -->
+<header class="navbar">
+  <div class="container navbar-inner">
+    <a href="#" class="brand-logo">
+      <?php if (!empty($site_logo) && strpos((string)$site_logo, 'placeholder') === false): ?>
+        <img src="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo $site_name_e; ?>">
+      <?php endif; ?>
+      <span><?php echo $site_name_e; ?></span><span class="vtu-bubble">VTU</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#who">Freelancers <span class="new-tag">NEW</span></a>
+      <a href="#manage">Business</a>
+      <a href="#spend">VTU Services</a>
+      <a href="#faq">Company</a>
+    </nav>
+    <div class="nav-actions">
+      <a href="web/Login.php">Log in</a>
+      <a href="web/Register.php" class="btn-red">Start free</a>
     </div>
+  </div>
 </header>
 
-<!-- ── HERO ─────────────────────────────────────────────────────── -->
-<section class="lp-hero">
-    <div class="lp-wrap lp-hero__grid">
-        <div>
-            <span class="lp-eyebrow">For freelancers &amp; the self-employed</span>
-            <h1 class="lp-h1">Free account for freelancers who run their own show.</h1>
-            <p class="lede">Get paid by invoice, bank transfer or QR code. Keep your freelance income in one account<?php if ($lp_cards): ?>, spend it with <?php echo $site_name_e; ?> cards<?php endif; ?><?php if ($lp_vtu_any): ?>, and top up airtime, data and bills in seconds<?php endif; ?>.</p>
-            <div class="lp-cta-row">
-                <a class="lp-btn" href="web/Register.php">Open free account</a>
-                <a class="lp-btn lp-btn--ghost" href="#get-paid">See how it works</a>
-            </div>
-            <p class="lp-trust">No setup fee &nbsp;·&nbsp; No monthly fee &nbsp;·&nbsp; Sign up in minutes</p>
-        </div>
-        <div class="lp-phone" aria-hidden="true">
-            <div class="lp-phone__name">Kate Bennett</div>
-            <div class="lp-phone__sub">Total balance · across 3 pockets</div>
-            <div class="lp-phone__bal">4,812.40 <span style="font-size:1rem;">USD</span></div>
-            <div class="lp-pockets">
-                <div class="lp-pocket"><div><b>Client income</b><span>Main pocket</span></div><b>3,120.00</b></div>
-                <div class="lp-pocket"><div><b>Tax pot</b><span>Set aside automatically</span></div><b>1,040.00</b></div>
-                <div class="lp-pocket"><div><b>Savings</b><span>Rainy-day fund</span></div><b>652.40</b></div>
-            </div>
-            <div class="lp-actions"><span>Add</span><?php if ($lp_send): ?><span>Send</span><?php endif; ?><?php if ($lp_fx_toggle): ?><span>Exchange</span><?php endif; ?><span class="alt">Top up</span></div>
-            <div class="lp-feed">
-                <div class="lp-feed__row"><span>Amara Okafor · Invoice paid</span><span class="amt">+120.00</span></div>
-                <div class="lp-feed__row"><span>James Mwangi · Bank transfer</span><span class="amt">+65.00</span></div>
-                <div class="lp-feed__row"><span>Tunde Bello · QR payment</span><span class="amt">+35.00</span></div>
-            </div>
-        </div>
+<!-- HERO -->
+<section class="hero-section" id="who">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow-red">FOR FREELANCERS &amp; THE SELF-EMPLOYED</span>
+      <h1 class="hero-title">Free account for <span class="accent">freelancers</span> who run their own show.</h1>
+      <p class="hero-sub">Get paid by invoice, bank transfer or QR code. Keep your freelance income in one account, spend it with <?php echo $site_name_e; ?> cards, send money abroad, and top up airtime, data and bills in seconds.</p>
+      <div class="hero-cta-row">
+        <a href="web/Register.php" class="btn-red">Open free account</a>
+        <a href="#receive" class="btn-outline-dark">See how it works</a>
+      </div>
+      <div class="hero-checks"><span>No setup fee</span><span>No monthly fee</span><span>Sign up in minutes</span></div>
     </div>
-
-    <!-- feature cards -->
-    <div class="lp-wrap">
-        <div class="lp-cards" id="features">
-            <?php if ($lp_cards): ?>
-            <div class="lp-card">
-                <h3>All cards included</h3>
-                <p>Virtual and physical VISA cards for online and in-store spending, ready in minutes.</p>
-                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Virtual</div><div class="num">VISA •••• 2257</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett</div></div>
-            </div>
-            <?php endif; ?>
-            <div class="lp-card">
-                <h3>No setup or monthly fees</h3>
-                <p>The freelancer account is free to open and free to keep. No small print.</p>
-                <div style="margin-top:10px">
-                    <div class="lp-fee-row"><span>Setup</span><b>0.00</b></div>
-                    <div class="lp-fee-row"><span>Monthly</span><b>0.00</b></div>
-                    <div class="lp-fee-row"><span>Maintenance</span><b>0.00</b></div>
-                </div>
-            </div>
-            <?php if ($lp_vtu_any): ?>
-            <div class="lp-card">
-                <h3>Instant VTU top-ups</h3>
-                <p>Buy airtime, data, electricity and TV subscriptions right from your balance — no separate app.</p>
-                <div class="lp-chips">
-                    <?php if ($lp_airtime): ?><span>Airtime</span><?php endif; ?>
-                    <?php if ($lp_data): ?><span>Data</span><?php endif; ?>
-                    <?php if ($lp_electric): ?><span>Electricity</span><?php endif; ?>
-                    <?php if ($lp_cable): ?><span>TV</span><?php endif; ?>
-                    <?php if ($lp_betting): ?><span>Betting</span><?php endif; ?>
-                    <?php if ($lp_exam): ?><span>Exam PINs</span><?php endif; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-            <div class="lp-card">
-                <h3>Supported currencies</h3>
-                <p>Hold and spend in the currencies your clients already pay in.</p>
-                <div class="lp-marquee"><div class="lp-marquee__track">
-                    <?php foreach (array_merge($lp_currencies, $lp_currencies) as $cur): ?><span><?php echo $cur; ?></span><?php endforeach; ?>
-                </div></div>
-            </div>
-            <div class="lp-card">
-                <h3>Keep your freelance income separate</h3>
-                <p>Client money lands in its own account — away from personal spending and easy to track at tax time.</p>
-                <div class="lp-feed" style="margin-top:14px">
-                    <div class="lp-feed__row" style="background:var(--paper)"><span>Amara Okafor</span><span class="amt" style="color:#15803d">+120.00</span></div>
-                    <div class="lp-feed__row" style="background:var(--paper)"><span>James Mwangi</span><span class="amt" style="color:#15803d">+65.00</span></div>
-                    <div class="lp-feed__row" style="background:var(--paper)"><span>Tunde Bello</span><span class="amt" style="color:#15803d">+35.00</span></div>
-                </div>
-            </div>
-            <div class="lp-card">
-                <h3>Client payments via invoice</h3>
-                <p>Send a branded invoice and get paid straight into your account. No chasing, no awkward reminders.</p>
-                <div class="lp-mock">
-                    <div class="lp-mock__row"><span>Bright Studio Ltd</span><b>Website redesign</b></div>
-                    <div class="lp-mock__row"><span>Total</span><b>1,000.00 USD</b></div>
-                    <div class="lp-mock__row"><span>Status</span><span class="lp-badge">PAID</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ── RECEIVE ──────────────────────────────────────────────────── -->
-<section class="lp-section" id="get-paid">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">Receive</span>
-        <h2 class="lp-h2">Three ways to get paid. Zero chasing.</h2>
-        <p class="lp-sub">However your clients prefer to pay, the money lands in your <?php echo $site_name_e; ?> account — ready to split, save or spend.</p>
-        <div class="lp-panels">
-            <?php if ($lp_receive): ?>
-            <div class="lp-panel">
-                <h3>By bank transfer</h3>
-                <p>Your own dedicated account number. Clients pay like a local — you get notified instantly.</p>
-                <div class="lp-mock">
-                    <div class="lp-mock__row"><span>Account number</span><b>8012 345 678</b></div>
-                    <div class="lp-mock__row"><span>Expected · Amara Okafor</span><b>+120.00</b></div>
-                    <div class="lp-mock__row"><span>Expected · James Mwangi</span><b>+65.00</b></div>
-                    <div class="lp-mock__row"><span>Local / International</span><b>Both</b></div>
-                </div>
-            </div>
-            <?php endif; ?>
-            <div class="lp-panel">
-                <h3>By invoice</h3>
-                <p>Create a branded invoice in seconds and share the payment link anywhere.</p>
-                <div class="lp-mock">
-                    <div class="lp-mock__row"><span>Client</span><b>Bright Studio Ltd</b></div>
-                    <div class="lp-mock__row"><span>Service</span><b>Website redesign</b></div>
-                    <div class="lp-mock__row"><span>Total</span><b>1,000.00 USD</b></div>
-                    <div class="lp-mock__row"><span>Due</span><b>On receipt · 30 days · Custom</b></div>
-                </div>
-            </div>
-            <div class="lp-panel">
-                <h3>By QR code</h3>
-                <p>Show your code in person or on screen. Clients scan and pay — card, Apple Pay or Google Pay.</p>
-                <div class="lp-qr">
-                    <div class="lp-qr__box" role="img" aria-label="QR code placeholder"></div>
-                    <p><b>SCAN TO PAY</b><br>Pay to Kate Bennett · 1,000.00 USD<br><span style="color:var(--muted);font-size:.8rem">Apple Pay · Google Pay · Card</span></p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ── MANAGE ───────────────────────────────────────────────────── -->
-<section class="lp-section" id="manage">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">Manage</span>
-        <h2 class="lp-h2">Your freelance money, all together.</h2>
-        <div class="lp-steps">
-            <div class="lp-step"><div class="lp-step__n">1</div><h3>Get your own account</h3><p>Open free in minutes and receive client payments into an account that is yours alone.</p></div>
-            <div class="lp-step"><div class="lp-step__n">2</div><h3>Split into pockets</h3><p>Separate client income, tax money and savings so every payment has a job.</p></div>
-            <div class="lp-step"><div class="lp-step__n">3</div><h3><?php echo $lp_fx_toggle ? 'Exchange &amp; send' : 'Send &amp; spend'; ?></h3><p><?php echo $lp_fx_toggle ? 'Convert between currencies at live rates and send to any bank, or spend with your card.' : 'Send to any bank account or spend straight from your balance.'; ?></p></div>
-        </div>
-    </div>
-</section>
-
-<!-- ── PERSONAS ─────────────────────────────────────────────────── -->
-<section class="lp-section" id="who">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">For independent workers</span>
-        <h2 class="lp-h2">Whatever you do, <?php echo $site_name_e; ?> helps you get paid and stay in control.</h2>
-        <div class="lp-personas">
-            <?php foreach ($lp_personas as $persona): ?>
-            <div class="lp-persona">
-                <div class="lp-persona__ph"><?php echo $persona[1]; ?></div>
-                <h3><?php echo $persona[0]; ?></h3>
-                <p><?php echo $persona[2]; ?></p>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-
-<!-- ── CURRENCIES ───────────────────────────────────────────────── -->
-<section class="lp-section" id="currencies">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">Supported currencies</span>
-        <h2 class="lp-h2">Get paid locally. Work globally.</h2>
-        <p class="lp-sub">Hold balances in <b>NGN · USD · GBP · EUR</b> with real account details, and spend in 10+ currencies wherever your work takes you.</p>
-        <div class="lp-chips" style="margin-top:18px">
-            <?php foreach ($lp_currencies as $cur): ?><span><?php echo $cur; ?></span><?php endforeach; ?>
-        </div>
-
-        <?php if ($lp_fx_live): ?>
-        <!-- Live converter: rendered only when Currency Conversion is ON in
-             bc-admin and the vendor's FX API key is configured. Rates come
-             from web/api/exchange-rate.php (getLiveExchangeRate). -->
-        <div class="lp-fx" id="fxConverter">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-                <h3 style="font-weight:900;font-size:1.1rem">Currency converter</h3>
-                <span class="lp-live" id="fxLiveBadge">LIVE RATE</span>
-            </div>
-            <div class="lp-fx__grid">
-                <div>
-                    <label for="fxAmount">You exchange</label>
-                    <div class="fx-field">
-                        <input id="fxAmount" type="number" value="100" min="0" step="any" inputmode="decimal">
-                        <select id="fxFrom" aria-label="From currency">
-                            <?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'USD' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                <button type="button" class="lp-fx__swap" id="fxSwap" title="Swap currencies" aria-label="Swap currencies">⇄</button>
-                <div>
-                    <label for="fxResult">You get</label>
-                    <div class="fx-field">
-                        <input id="fxResult" type="text" readonly value="—">
-                        <select id="fxTo" aria-label="To currency">
-                            <?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'NGN' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <p class="lp-fx__rate" id="fxRateLine">Fetching the live rate…</p>
-        </div>
-        <script>
-        (function () {
-            var amountEl = document.getElementById('fxAmount'),
-                fromEl = document.getElementById('fxFrom'),
-                toEl = document.getElementById('fxTo'),
-                resultEl = document.getElementById('fxResult'),
-                lineEl = document.getElementById('fxRateLine'),
-                badgeEl = document.getElementById('fxLiveBadge'),
-                timer = null, seq = 0;
-
-            function fmt(n) {
-                return Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            }
-            function convert() {
-                var from = fromEl.value, to = toEl.value, amount = parseFloat(amountEl.value) || 0, my = ++seq;
-                lineEl.textContent = 'Fetching the live rate…';
-                fetch('web/api/exchange-rate.php?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to), {headers: {'Accept': 'application/json'}})
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (my !== seq) return;
-                        var rate = parseFloat(data && data.rate);
-                        if (!rate || rate <= 0) throw new Error('bad rate');
-                        resultEl.value = fmt(amount * rate);
-                        lineEl.innerHTML = '1 ' + from + ' = <b>' + fmt(rate) + ' ' + to + '</b> · live rate, updates as you type';
-                        badgeEl.style.display = '';
-                    })
-                    .catch(function () {
-                        if (my !== seq) return;
-                        resultEl.value = '—';
-                        badgeEl.style.display = 'none';
-                        lineEl.textContent = 'Live rate unavailable right now — please try again in a moment.';
-                    });
-            }
-            function schedule() { clearTimeout(timer); timer = setTimeout(convert, 250); }
-            [amountEl, fromEl, toEl].forEach(function (el) {
-                el.addEventListener('input', schedule);
-                el.addEventListener('change', schedule);
-            });
-            document.getElementById('fxSwap').addEventListener('click', function () {
-                var t = fromEl.value; fromEl.value = toEl.value; toEl.value = t; convert();
-            });
-            convert();
-        })();
-        </script>
-        <?php endif; ?>
-    </div>
-</section>
-
-<!-- ── SPEND ────────────────────────────────────────────────────── -->
-<section class="lp-section" id="spend">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">Spend</span>
-        <h2 class="lp-h2">Spend it your way — cards, wallets and VTU top-ups.</h2>
+    <div class="bento-grid">
+      <div class="bento-col">
         <?php if ($lp_cards): ?>
-        <div class="lp-panels" style="grid-template-columns:1fr 1fr">
-            <div class="lp-panel">
-                <h3>Virtual card</h3>
-                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Virtual</div><div class="num">VISA •••• 2257</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett · Show details · Freeze card · Card settings</div></div>
+        <div class="bento-card">
+          <h4>All cards included</h4>
+          <div class="virtual-card-preview">
+            <div class="card-top-row"><span id="heroCardType">Virtual</span><strong><?php echo $site_name_e; ?></strong></div>
+            <div class="card-bottom-row"><span id="heroCardDigits">•••• 2257</span><strong style="font-style:italic;font-size:16px;">VISA</strong></div>
+          </div>
+          <div style="text-align:center;">
+            <div class="card-toggle-pill">
+              <button type="button" class="active" onclick="toggleHeroCard('virtual', this)">Virtual</button>
+              <button type="button" onclick="toggleHeroCard('physical', this)">Physical</button>
             </div>
-            <div class="lp-panel">
-                <h3>Physical card</h3>
-                <div class="lp-cardmock"><div style="font-weight:800;"><?php echo $site_name_e; ?> · Physical</div><div class="num">VISA •••• 8841</div><div style="color:#9fb0cc;font-size:.78rem;margin-top:6px;">Kate Bennett · Monthly limit 620.00 of 1,000.00</div></div>
-            </div>
+          </div>
         </div>
         <?php endif; ?>
-        <div class="lp-tiles">
-            <?php if ($lp_cards): ?><div class="lp-tile"><h3>Physical &amp; virtual cards</h3><p>Spend online and in-store, anywhere VISA is accepted.</p></div><?php endif; ?>
-            <div class="lp-tile"><h3>Mobile wallets</h3><p>Add your card to Apple Pay or Google Pay and tap to pay.</p></div>
-            <?php if ($lp_cards): ?><div class="lp-tile"><h3>Spend controls &amp; limits</h3><p>Freeze a card, set monthly limits and see every transaction live.</p></div><?php endif; ?>
-            <?php if ($lp_airtime || $lp_data): ?><div class="lp-tile"><h3>Airtime &amp; data top-ups</h3><p>Top up any Nigerian network in seconds, straight from your balance.</p></div><?php endif; ?>
-            <?php if ($lp_cable || $lp_electric): ?><div class="lp-tile"><h3>Bills &amp; utilities</h3><p>Electricity tokens and TV subscriptions, settled instantly.</p></div><?php endif; ?>
-            <?php if ($lp_fx_toggle): ?><div class="lp-tile"><h3>Spend in many currencies</h3><p>Your balance works across borders — no separate accounts to juggle.</p></div><?php endif; ?>
+        <div class="bento-card">
+          <h4>Supported currencies</h4>
+          <div class="currency-pills"><span class="flag-dot">🇳🇬 NGN</span><span class="flag-dot">🇺🇸 USD</span><span class="flag-dot">🇬🇧 GBP</span><span class="flag-dot">🇪🇺 EUR</span></div>
         </div>
+        <div class="bento-card">
+          <h4>Client payments via invoice</h4>
+          <div class="invoice-mini-row">
+            <div><div style="font-size:11px;color:#a1a1aa;">Bright Studio Ltd · Website redesign</div><strong style="font-size:15px;">1,000.00 USD</strong></div>
+            <span class="paid-pill">PAID</span>
+          </div>
+        </div>
+      </div>
+      <div class="bento-col">
+        <div class="bento-card white">
+          <h4>No setup or monthly fees</h4>
+          <div class="fee-row"><span>Setup fee</span><strong>0.00</strong></div>
+          <div class="fee-row"><span>Monthly fee</span><strong>0.00</strong></div>
+          <div class="fee-row"><span>Maintenance</span><strong>0.00</strong></div>
+        </div>
+        <?php if ($lp_vtu_any): ?>
+        <div class="bento-card red">
+          <h4>Instant VTU top-ups</h4>
+          <div class="vtu-tags"><?php foreach (array_slice($lp_vtu_list, 0, 4) as $v): ?><span><?php echo ucfirst(htmlspecialchars($v, ENT_QUOTES, 'UTF-8')); ?></span><?php endforeach; ?></div>
+        </div>
+        <?php endif; ?>
+        <div class="bento-card">
+          <h4>Keep your freelance income separate</h4>
+          <div class="tx-item"><div class="tx-left"><div class="avatar-badge">AO</div><div><div class="tx-name">Amara Okafor</div><div class="tx-desc">Logo design project</div></div></div><span class="tx-amount">+ 120.00</span></div>
+          <div class="tx-item"><div class="tx-left"><div class="avatar-badge white">JM</div><div><div class="tx-name">James Mwangi</div><div class="tx-desc">Personal training session</div></div></div><span class="tx-amount">+ 65.00</span></div>
+          <div class="tx-item"><div class="tx-left"><div class="avatar-badge gray">TB</div><div><div class="tx-name">Tunde Bello</div><div class="tx-desc">Haircut &amp; beard trim</div></div></div><span class="tx-amount">+ 35.00</span></div>
+        </div>
+      </div>
     </div>
+  </div>
 </section>
 
-<!-- ── PRICING ──────────────────────────────────────────────────── -->
-<section class="lp-section" id="pricing">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">Free</span>
-        <h2 class="lp-h2">Free means free. No small print.</h2>
-        <div class="lp-price">
-            <div class="lp-price__head"><span>Freelancer plan</span><span class="lp-free">FREE</span></div>
-            <div class="lp-price__row"><span>Account opening</span><b>Free</b></div>
-            <div class="lp-price__row"><span>Monthly fee</span><b>Free</b></div>
-            <?php if ($lp_cards): ?>
-            <div class="lp-price__row"><span>Virtual cards</span><b>Free</b></div>
-            <?php endif; ?>
-            <div class="lp-price__row"><span>Sending invoices</span><b>Free</b></div>
-            <?php if ($lp_cards): ?>
-            <div class="lp-price__row"><span>Physical card delivery</span><b>At cost</b></div>
-            <?php endif; ?>
-            <?php if ($lp_fx_live): ?>
-            <div class="lp-price__row"><span>Currency exchange</span><b>Live market rate</b></div>
-            <?php endif; ?>
-        </div>
-        <div class="lp-chips" style="margin-top:22px">
-            <span>Coming soon</span><span>Payment links</span><span>Expense receipts</span><span>Recurring invoices</span><span>Bulk VTU for teams</span>
-        </div>
+<!-- FLOATING SUBNAV -->
+<div class="floating-subnav-wrap">
+  <nav class="floating-subnav">
+    <a href="#who">Who</a><a href="#receive">Receive</a><a href="#manage">Manage</a><a href="#currencies">Currencies</a><a href="#spend">Spend</a><a href="#free">Free</a><a href="#soon">Soon</a><a href="#faq">FAQ</a>
+    <a href="web/Register.php" class="btn-red" style="padding:9px 18px;font-size:13px;">Start free</a>
+  </nav>
+</div>
+
+<!-- RECEIVE -->
+<section class="block" id="receive" style="padding-top:30px;">
+  <div class="container">
+    <div class="receive-header">
+      <div><span class="eyebrow-red">RECEIVE</span><h2 class="section-title-lg">Three ways to get paid.<br>Zero chasing.</h2></div>
+      <p class="receive-sub">Clients pay the way they prefer. Every payment lands in your <?php echo $site_name_e; ?> account and is matched to the right job.</p>
     </div>
+    <div class="three-ways-grid">
+      <div class="way-card light">
+        <div><h3>By bank transfer</h3><p>Get paid straight into your own dedicated account number.</p></div>
+        <div class="transfer-list-box">
+          <div style="font-size:11px;color:#71717a;margin-bottom:8px;">Expected transfers</div>
+          <div class="transfer-row"><span>Bright Studio Ltd</span><strong>+ 1,000.00</strong></div>
+          <div class="transfer-row"><span>Kijani Media</span><strong>+ 2,106.50</strong></div>
+          <div class="transfer-row"><span>Urban Gallery</span><strong>+ 650.00</strong></div>
+        </div>
+      </div>
+      <div class="way-card dark">
+        <div><h3>By invoice</h3><p>Send branded invoices and keep client payments organised.</p></div>
+        <div class="invoice-box">
+          <div style="font-size:11px;color:#a1a1aa;">New invoice</div>
+          <div class="transfer-row"><span>Client</span><strong>Bright Studio Ltd</strong></div>
+          <div class="transfer-row"><span>Service</span><strong>Website redesign package</strong></div>
+          <div class="transfer-row"><span>Total</span><strong>1,000.00 USD</strong></div>
+          <a href="web/Register.php" class="btn-red" style="padding:9px 18px;font-size:13px;margin-top:10px;">Create invoice</a>
+        </div>
+      </div>
+      <div class="way-card light">
+        <div><h3>By QR code</h3><p>Let clients pay on the spot by card, Apple Pay or Google Pay.</p></div>
+        <div class="qr-box" style="text-align:center;">
+          <div style="font-size:11px;letter-spacing:.14em;color:#71717a;">SCAN TO PAY</div>
+          <div style="font-size:52px;line-height:1.2;">▦</div>
+          <div>Pay to <strong><?php echo $site_name_e; ?></strong></div>
+          <div style="font-weight:800;">Amount 1,000.00 USD</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<!-- ── FAQ ──────────────────────────────────────────────────────── -->
-<section class="lp-section" id="faq">
-    <div class="lp-wrap">
-        <span class="lp-eyebrow">FAQ</span>
-        <h2 class="lp-h2">Questions, answered.</h2>
-        <div class="lp-faq">
-            <details><summary>Who can open a <?php echo $site_name_e; ?> freelancer account?</summary><p>Any freelancer, creator, consultant or independent worker who wants client payments kept separate from personal money. Sign-up takes minutes.</p></details>
-            <details><summary>Is the account really free?</summary><p>Yes. Opening, monthly and maintenance fees are all zero on the Freelancer plan — see the pricing table above.</p></details>
-            <details><summary>How do my clients pay me?</summary><p>By bank transfer to your dedicated account number, by invoice link, or by scanning your QR code — whichever suits them.</p></details>
-            <details><summary>Can I keep business and personal money separate?</summary><p>Yes. Client income lands in its own account and can be split into pockets for taxes, savings and spending.</p></details>
-            <?php if ($lp_vtu_any): ?>
-            <details><summary>What VTU services are included?</summary><p><?php echo $site_name_e; ?> includes instant <?php echo implode(', ', $lp_vtu_list); ?> top-ups straight from your balance.</p></details>
-            <?php endif; ?>
-            <details><summary>How long does sign-up take?</summary><p>A few minutes. Open your free account, verify your details, and you can receive your first payment the same day.</p></details>
-        </div>
-
-        <div class="lp-final">
-            <h2>Open your free freelancer account.</h2>
-            <p style="color:#9fb0cc">Join freelancers who get paid faster and keep every currency in one place.</p>
-            <form method="get" action="web/Register.php">
-                <input type="email" name="email" placeholder="Enter your email" aria-label="Email address">
-                <button class="lp-btn lp-btn--light" type="submit">Start free</button>
-            </form>
-            <p class="lp-trust" style="color:#9fb0cc;margin-top:16px">No setup fee · No monthly fee · Cancel anytime</p>
-        </div>
+<!-- MANAGE -->
+<section class="block dark-section" id="manage">
+  <div class="container">
+    <span class="eyebrow-red">MANAGE</span>
+    <h2 class="section-title-lg">Your freelance money, all together.</h2>
+    <p style="color:var(--text-muted-dark);max-width:640px;line-height:1.7;">Keep freelance income and personal money separate, hold balances in several currencies, and exchange when you need to.</p>
+    <div class="steps-grid">
+      <div class="step-card"><div class="n">STEP 01</div><h3>Get paid into your own account</h3><p>Client payments arrive in a dedicated account in your name, separate from your personal money.</p></div>
+      <div class="step-card"><div class="n">STEP 02</div><h3>Split income into pockets</h3><p>Set aside money for tax, savings and running costs the moment a payment lands.</p></div>
+      <div class="step-card"><div class="n">STEP 03</div><h3>Exchange and send when you need to</h3><p>Move between currencies and pay suppliers or yourself in a couple of taps.</p></div>
     </div>
+  </div>
 </section>
 
-<footer class="lp-footer">
-    <div class="lp-wrap lp-footer__grid">
-        <div>
-            <div class="lp-brand" style="margin-bottom:8px">
-                <?php if (!empty($site_logo) && strpos((string)$site_logo, 'placeholder') === false): ?>
-                    <img src="<?php echo htmlspecialchars((string)$site_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo $site_name_e; ?>">
-                <?php else: ?>
-                    <span class="lp-brand__mark"><?php echo $site_name_initial; ?></span>
-                <?php endif; ?>
-                <span><?php echo $site_name_e; ?></span>
-            </div>
-            <p>Free account for freelancers who run their own show.</p>
-        </div>
-        <div>
-            <p><a href="#features">Features</a> · <a href="#get-paid">Get paid</a> · <a href="#currencies">Currencies</a> · <a href="#faq">FAQ</a></p>
-            <p style="margin-top:8px"><a href="web/Login.php">Log in</a> · <a href="web/Register.php">Open free account</a><?php if (!empty($lp_contact_email)): ?> · <a href="mailto:<?php echo htmlspecialchars($lp_contact_email, ENT_QUOTES, 'UTF-8'); ?>">Contact us</a><?php endif; ?></p>
-        </div>
-        <p>© <?php echo date('Y'); ?> <?php echo $site_name_e; ?>. All rights reserved.</p>
+<!-- CHINA PAYOUT — embossed 3-step workflow (client requirement) -->
+<section class="block china-section dark-section" id="china">
+  <div class="container">
+    <span class="eyebrow-red">PAYOUT TO CHINA</span>
+    <h2 class="section-title-lg">From your wallet to China, in three steps.</h2>
+    <p style="color:var(--text-muted-dark);max-width:680px;line-height:1.7;">Powered by Klasha Wire: provision a USD wallet, fund it instantly, and settle directly to Chinese bank accounts and mobile wallets.</p>
+    <div class="steps-grid">
+      <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 01 · WALLET PROVISIONING</div><h3 style="margin:10px 0 8px;">Create USD Wallet</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Open a multi-currency USD virtual wallet inside your <?php echo $site_name_e; ?> dashboard with instant verification.</p></div>
+      <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 02 · INSTANT FUNDING</div><h3 style="margin:10px 0 8px;">Fund USD Account</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Fund via local currency conversion (NGN/GHS/ZAR), virtual accounts, or stablecoins (USDC/USDT) at live FX rates.</p></div>
+      <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 03 · CHINA SETTLEMENT</div><h3 style="margin:10px 0 8px;">Transfer to China</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Lock a live Klasha Wire FX quote and execute direct cross-border payouts to Chinese bank accounts and mobile wallets.</p></div>
     </div>
+  </div>
+</section>
+
+<!-- WORKERS BANNER -->
+<section class="block" id="workers" style="padding-bottom:0;">
+  <div class="container" style="text-align:center;">
+    <span class="eyebrow-red">FOR INDEPENDENT WORKERS</span>
+    <h2 class="section-title-lg">Whatever you do, <?php echo $site_name_e; ?> helps you get paid<br>and stay on top of it.</h2>
+    <p style="color:var(--text-muted-light);">From the studio to the salon — your money moves with you.</p>
+  </div>
+</section>
+
+<!-- SPEND -->
+<section class="block spend-section" id="spend">
+  <div class="container">
+    <span class="eyebrow-red" style="color:#fff;">SPEND</span>
+    <h2 class="section-title-lg">Spend it your way — cards, wallets and VTU top-ups.</h2>
+    <div class="feature-grid">
+      <?php if ($lp_cards): ?><div class="feature-card"><h3>💳 Physical &amp; virtual cards</h3><p>Create virtual cards instantly for subscriptions and online tools; order a physical card for everyday spending.</p></div><?php endif; ?>
+      <div class="feature-card"><h3>📱 Mobile wallets</h3><p>Add your card to Apple Pay or Google Pay and tap to pay anywhere contactless is accepted.</p></div>
+      <div class="feature-card"><h3>🛡️ Spend controls &amp; limits</h3><p>Set daily or monthly limits, freeze a card in a tap and get notified on every payment.</p></div>
+      <?php if ($lp_airtime || $lp_data): ?><div class="feature-card"><h3>📶 Airtime &amp; data top-ups</h3><p>Recharge any network straight from your balance — for yourself, your team or your clients.</p></div><?php endif; ?>
+      <?php if ($lp_electric || $lp_cable): ?><div class="feature-card"><h3>⚡ Bills &amp; utilities</h3><p>Pay electricity, cable TV and internet bills without leaving the app.</p></div><?php endif; ?>
+      <?php if ($lp_fx_toggle): ?><div class="feature-card"><h3>🌐 Spend in many currencies</h3><p>Pay international tools and suppliers with transparent exchange rates shown up front.</p></div><?php endif; ?>
+    </div>
+  </div>
+</section>
+
+<!-- CURRENCIES -->
+<section class="block" id="currencies">
+  <div class="container">
+    <span class="eyebrow-red">CURRENCIES</span>
+    <h2 class="section-title-lg">One account. Many currencies.</h2>
+    <div class="feature-grid light">
+      <div class="feature-card"><h3>Multi-currency accounts</h3><p>Get USD, GBP and EUR accounts to receive payments globally, alongside your NGN wallet.</p></div>
+      <div class="feature-card"><h3>Live exchange rates</h3><p>Real-time FX before every conversion — the rate you see is the rate you get.</p></div>
+      <div class="feature-card"><h3>Stablecoins</h3><p>Send and receive USDC and USDT globally with ease, and swap into your wallet balance.</p></div>
+      <div class="feature-card"><h3>Wire transfers</h3><p>Send wires and cross-border payouts — including direct settlement to China.</p></div>
+      <div class="feature-card"><h3>Payment links &amp; invoices</h3><p>Share a link or send a branded invoice and get paid without chasing.</p></div>
+      <div class="feature-card"><h3>Single &amp; bulk transfers</h3><p>Pay one person or a whole payroll to bank accounts, mobile money and stablecoin wallets.</p></div>
+    </div>
+
+    <?php if ($lp_fx_live): ?>
+    <div class="fx-box" id="fxConverter">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h3 style="font-weight:800;font-size:1.1rem;">Currency converter</h3>
+        <span style="background:rgba(22,163,74,.14);color:#15803d;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;">LIVE RATE</span>
+      </div>
+      <div class="fx-grid">
+        <div><label for="fxAmount">You exchange</label>
+          <input id="fxAmount" type="number" value="100" min="0" step="any" inputmode="decimal">
+          <select id="fxFrom" aria-label="From currency" style="margin-top:8px;"><?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'USD' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?></select>
+        </div>
+        <button type="button" id="fxSwap" title="Swap currencies" aria-label="Swap currencies" style="border:1px solid var(--border-light);background:#fff;border-radius:50%;width:44px;height:44px;cursor:pointer;">⇄</button>
+        <div><label for="fxResult">You get</label>
+          <input id="fxResult" type="text" readonly value="—">
+          <select id="fxTo" aria-label="To currency" style="margin-top:8px;"><?php foreach ($lp_currencies as $cur): ?><option value="<?php echo $cur; ?>"<?php echo $cur === 'NGN' ? ' selected' : ''; ?>><?php echo $cur; ?></option><?php endforeach; ?></select>
+        </div>
+      </div>
+      <p id="fxRateLine" style="color:var(--text-muted-light);margin-top:14px;font-size:.9rem;">Fetching the live rate…</p>
+    </div>
+    <script>
+    (function () {
+      var amountEl=document.getElementById('fxAmount'),fromEl=document.getElementById('fxFrom'),toEl=document.getElementById('fxTo'),resultEl=document.getElementById('fxResult'),lineEl=document.getElementById('fxRateLine');
+      function convert(){
+        var amount=parseFloat(amountEl.value)||0,from=fromEl.value,to=toEl.value;
+        if(from===to){resultEl.value=amount.toLocaleString(undefined,{maximumFractionDigits:2});lineEl.textContent='1 '+from+' = 1 '+to;return;}
+        fetch('web/api/exchange-rate.php?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to),{headers:{'Accept':'application/json'}})
+          .then(function(r){return r.json();})
+          .then(function(d){
+            var rate=d&&(d.rate||(d.data&&d.data.rate));
+            if(!rate){lineEl.textContent='Live rate unavailable right now.';resultEl.value='—';return;}
+            resultEl.value=(amount*rate).toLocaleString(undefined,{maximumFractionDigits:2});
+            lineEl.textContent='1 '+from+' = '+rate.toLocaleString(undefined,{maximumFractionDigits:4})+' '+to+' · live mid-market rate';
+          }).catch(function(){lineEl.textContent='Live rate unavailable right now.';});
+      }
+      [amountEl,fromEl,toEl].forEach(function(el){el.addEventListener('input',convert);el.addEventListener('change',convert);});
+      document.getElementById('fxSwap').addEventListener('click',function(){var t=fromEl.value;fromEl.value=toEl.value;toEl.value=t;convert();});
+      convert();
+    })();
+    </script>
+    <?php endif; ?>
+  </div>
+</section>
+
+<!-- NEW SERVICES -->
+<section class="block" id="soon" style="background:var(--bg-subtle);">
+  <div class="container">
+    <span class="eyebrow-red">NEW ON <?php echo strtoupper($site_name_e); ?></span>
+    <h2 class="section-title-lg">More ways to run your show.</h2>
+    <div class="svc-strip">
+      <div class="svc-card"><h3>🌍 Send money abroad</h3><p>Global transfers, wire payouts and direct settlement to China at live FX.</p><a href="web/Register.php">Start sending →</a></div>
+      <div class="svc-card"><h3>🎓 Pay tuition worldwide</h3><p>Tuition to 160+ universities with student ID validation before settlement.</p><a href="web/Register.php">Pay tuition →</a></div>
+      <div class="svc-card"><h3>📶 Travel eSIM</h3><p>Data in 190+ countries. Buy a plan, scan the QR code, land connected.</p><a href="web/Register.php">Get an eSIM →</a></div>
+      <div class="svc-card"><h3>🧾 POS devices</h3><p>Request a point-of-sale terminal and accept card payments in-store.</p><a href="web/Register.php">Request POS →</a></div>
+      <div class="svc-card"><h3>₿ Crypto hub</h3><p>Buy, sell and swap crypto and stablecoins from your wallet.</p><a href="web/Register.php">Trade crypto →</a></div>
+      <div class="svc-card"><h3>🎁 Gift cards</h3><p>Buy and trade gift cards at competitive rates, credited instantly.</p><a href="web/Register.php">Trade gift cards →</a></div>
+      <div class="svc-card"><h3>💵 Refer &amp; earn $10 + $10</h3><p>You get $10, your friend gets $10 — once they transact $100 in Crypto &amp; International Transfers.</p><a href="web/Register.php">Refer friends →</a></div>
+      <div class="svc-card"><h3>🤖 Free AI + human support</h3><p>Instant AI answers with a human team one tap away. Support is always free.</p><a href="web/Register.php">Chat with us →</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- FREE -->
+<section class="block" id="free">
+  <div class="container" style="text-align:center;">
+    <span class="eyebrow-red">FREE</span>
+    <h2 class="section-title-lg">From the studio to the salon —<br>your money moves with you.</h2>
+    <p style="color:var(--text-muted-light);max-width:620px;margin:0 auto;line-height:1.7;">No setup fee. No monthly fee. No maintenance charges. Open your account in minutes and keep every fee transparent after that.</p>
+    <div style="display:flex;gap:14px;justify-content:center;margin-top:28px;flex-wrap:wrap;">
+      <span class="flag-dot" style="background:var(--bg-subtle);border-color:var(--border-light);">Available amount 9,088.10 · Card •••• 8841</span>
+      <span class="flag-dot" style="background:var(--bg-subtle);border-color:var(--border-light);">✓ Payment complete · Apple Pay · Google Pay</span>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="block" id="faq" style="padding-top:0;">
+  <div class="container">
+    <span class="eyebrow-red">FAQ</span>
+    <h2 class="section-title-lg">Questions, answered.</h2>
+    <details class="faq-item" open><summary>Who can open a <?php echo $site_name_e; ?> freelancer account?</summary><p>Freelancers, sole traders, creators and anyone who is self-employed can apply. You will need a valid ID and a few details about the work you do.</p></details>
+    <details class="faq-item"><summary>Is the account really free?</summary><p>Yes. There are zero setup fees, zero monthly subscription fees, and zero account maintenance charges.</p></details>
+    <details class="faq-item"><summary>How do my clients pay me?</summary><p>Clients can pay you directly via dedicated local or multi-currency bank transfer, branded payment invoices, or instant QR code checkout.</p></details>
+    <details class="faq-item"><summary>Can I keep business and personal money separate?</summary><p>Yes. You can organize incoming client payments into separate pockets for taxes, savings, and operating expenses.</p></details>
+    <details class="faq-item"><summary>What VTU services are included?</summary><p>Instant airtime top-ups, mobile data bundles across all networks, electricity meter tokens, and cable TV subscriptions straight from your wallet balance.</p></details>
+    <details class="faq-item"><summary>How does the referral program work?</summary><p>Share your link. When your friend completes $100 in Crypto or International Transfers, you each receive $10. Other products do not count toward the $100. Creators and influencers can also apply to promote the program — T&amp;Cs apply.</p></details>
+    <details class="faq-item"><summary>How long does sign-up take?</summary><p>Registration takes only a few minutes with instant digital verification so you can start receiving payments right away.</p></details>
+  </div>
+</section>
+
+<!-- SIGNUP CTA -->
+<section class="block" id="signup" style="padding-top:0;">
+  <div class="container">
+    <div class="cta-section">
+      <h2 class="section-title-lg" style="margin-top:0;">Open your free freelancer account.</h2>
+      <p style="color:var(--text-muted-dark);">Get paid, manage income and spend from one account — in minutes.</p>
+      <form class="cta-form" method="get" action="web/Register.php">
+        <input type="email" name="email" placeholder="Email address" aria-label="Email address">
+        <button type="submit" class="btn-red">Start free</button>
+      </form>
+      <p style="color:var(--text-muted-dark);font-size:.85rem;margin-top:16px;">No setup fee · No monthly fee · Cancel anytime</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="site">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="#" class="brand-logo"><span><?php echo $site_name_e; ?></span><span class="vtu-bubble">VTU</span></a>
+        <p style="color:var(--text-muted-light);line-height:1.7;margin-top:14px;max-width:320px;">One account for freelancers to get paid, manage money, spend and top up.</p>
+        <?php if (!empty($lp_contact_email)): ?><p style="margin-top:10px;"><a href="mailto:<?php echo htmlspecialchars($lp_contact_email, ENT_QUOTES, 'UTF-8'); ?>" style="color:var(--brand-red);font-weight:700;"><?php echo htmlspecialchars($lp_contact_email, ENT_QUOTES, 'UTF-8'); ?></a></p><?php endif; ?>
+      </div>
+      <div><h4>Product</h4><ul><li><a href="#receive">Receive</a></li><li><a href="#manage">Manage</a></li><li><a href="#spend">Spend</a></li><li><a href="#currencies">Currencies</a></li></ul></div>
+      <div><h4>VTU services</h4><ul><?php foreach (array_slice($lp_vtu_list, 0, 5) as $v): ?><li style="text-transform:capitalize;"><?php echo htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); ?></li><?php endforeach; ?><li><a href="#soon">eSIM · Tuition · POS</a></li></ul></div>
+      <div><h4>Company</h4><ul><li><a href="#faq">About</a></li><li><a href="web/Login.php">Support</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+    </div>
+    <p style="color:var(--text-muted-light);font-size:.85rem;margin-top:34px;">© <?php echo date('Y'); ?> <?php echo $site_name_e; ?>. All rights reserved.</p>
+  </div>
 </footer>
 
-<div id="cookieBanner" style="display:none">
-    <div class="row">
-        <p>We use cookies to improve your experience and keep your account secure. By continuing, you accept our cookie use.</p>
-        <button type="button" onclick="declineCookies()">Decline</button>
-        <button type="button" class="acc" onclick="acceptCookies()">Accept</button>
-    </div>
-</div>
 <script>
-    function acceptCookies() {
-        localStorage.setItem('cookie_consent', 'accepted');
-        document.getElementById('cookieBanner').style.display = 'none';
-    }
-    function declineCookies() {
-        localStorage.setItem('cookie_consent', 'declined');
-        document.getElementById('cookieBanner').style.display = 'none';
-    }
-    (function() {
-        if (!localStorage.getItem('cookie_consent')) {
-            setTimeout(function() {
-                document.getElementById('cookieBanner').style.display = 'block';
-            }, 1500);
-        }
-    })();
+function toggleHeroCard(type, btn) {
+  document.querySelectorAll('.card-toggle-pill button').forEach(function (b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('heroCardType').textContent = type === 'virtual' ? 'Virtual' : 'Physical';
+  document.getElementById('heroCardDigits').textContent = type === 'virtual' ? '•••• 2257' : '•••• 8841';
+}
 </script>
-<script src="asset/pwa-handler.js"></script>
-
-<?php echo $custom_footer; ?>
 </body>
 </html>
-<?php
-ob_end_flush();
-?>

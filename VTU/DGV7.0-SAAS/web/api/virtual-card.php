@@ -1,8 +1,7 @@
 <?php session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
-require_once("../../func/api-gateway/chimoney.php");
-require_once("../../func/api-gateway/bsicards.php");
+require_once("../../func/bc-virtualcard-flutterwave.php");
 include_once("../../func/bc-giftcard-func.php");
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -52,17 +51,14 @@ if ($action === 'list_cards') {
         ];
     }
 
-    $products = [];
-    $q_prod = mysqli_query($connection_server, "SELECT g.* FROM sas_global_virtual_card_products g JOIN sas_vendor_virtual_card_products v ON g.chimoney_product_id = v.chimoney_product_id WHERE v.vendor_id='$vendor_id' AND v.status=1");
-    while ($p = mysqli_fetch_assoc($q_prod)) {
-        $products[] = [
-            "id" => $p['chimoney_product_id'],
-            "name" => $p['name'],
-            "description" => $p['description'],
-            "logo" => $p['logo_url'],
-            "currency" => $p['currency']
-        ];
-    }
+    // §25: Flutterwave is the only virtual-card provider.
+    $products = [[
+        "id" => "flw_usd",
+        "name" => "Flutterwave USD Virtual Card",
+        "description" => "USD virtual card issued via Flutterwave, accepted worldwide.",
+        "logo" => "",
+        "currency" => "USD",
+    ]];
 
     echo json_encode(["status" => "success", "cards" => $cards, "available_products" => $products, "rate" => $usd_rate, "issuance_fee" => $issuance_profit_usd, "funding_fee_pct" => $funding_fee_percent]);
 }
@@ -96,11 +92,7 @@ elseif ($action === 'issue') {
         exit;
     }
 
-    if (strpos($product_id, 'bsi_') === 0) {
-        $res = issueVirtualCardBSICards($vendor_id, $username, $product_id, $amount_usd);
-    } else {
-        $res = issueVirtualCard($vendor_id, $username, $card_name, $user['email'], $amount_usd);
-    }
+    $res = issueVirtualCardFlutterwave($vendor_id, $username, $card_name, $user['email'], $amount_usd);
 
     if ($res['status'] === 'success') {
         chargeOtherUser($username, "debit", "virtual_card", "Virtual Card Issuance", $res['reference'], $res['card_id'] ?? $res['reference'], $total_ngn, $total_ngn, "New Virtual Card: $card_name ($$amount_usd)", "APP", $_SERVER['HTTP_HOST'], 1);
@@ -141,11 +133,7 @@ elseif ($action === 'fund') {
     $c_q = mysqli_query($connection_server, "SELECT provider FROM sas_virtual_cards_v2 WHERE reference='$reference' LIMIT 1");
     $card_data = mysqli_fetch_assoc($c_q);
 
-    if ($card_data['provider'] === 'bsicards') {
-        $res = fundVirtualCardBSICards($vendor_id, $reference, $amount_usd);
-    } else {
-        $res = fundVirtualCardV2($vendor_id, $username, $reference, $amount_usd);
-    }
+    $res = fundVirtualCardFlutterwave($vendor_id, $username, $reference, $amount_usd);
 
     if ($res['status'] === 'success') {
         chargeOtherUser($username, "debit", "virtual_card", "Virtual Card Funding", "FND".time(), $reference, $total_ngn, $total_ngn, "Virtual Card Top-up: $$amount_usd", "APP", $_SERVER['HTTP_HOST'], 1);

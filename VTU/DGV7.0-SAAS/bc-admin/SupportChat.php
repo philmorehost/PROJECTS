@@ -90,6 +90,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                            href="SupportChat.php?thread=<?php echo (int)$t['id']; ?>">
                             <div class="d-flex justify-content-between">
                                 <strong class="small"><?php echo htmlspecialchars((string)$t['username']); ?></strong>
+                                <?php if (!empty($t['ticket_no'])): ?><span class="badge bg-dark ms-1"><?php echo htmlspecialchars((string)$t['ticket_no']); ?></span><?php endif; ?>
                                 <?php if ((int)$t['unread_for_agent'] > 0): ?>
                                     <span class="badge bg-danger"><?php echo (int)$t['unread_for_agent']; ?></span>
                                 <?php endif; ?>
@@ -109,6 +110,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                         <a class="d-block text-decoration-none border rounded p-2 mb-2 <?php echo $view_id === (int)$t['id'] ? 'border-primary' : ''; ?>"
                            href="SupportChat.php?thread=<?php echo (int)$t['id']; ?>">
                             <strong class="small d-block"><?php echo htmlspecialchars((string)$t['username']); ?></strong>
+                            <?php if (!empty($t['ticket_no'])): ?><span class="badge bg-dark"><?php echo htmlspecialchars((string)$t['ticket_no']); ?></span><?php endif; ?>
                             <span class="text-muted small"><?php echo htmlspecialchars((string)($t['last_message_at'] ?: '')); ?></span>
                         </a>
                     <?php endforeach; endif; ?>
@@ -126,6 +128,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
                                 <h5 class="card-title mb-1"><?php echo htmlspecialchars((string)$view['username']); ?></h5>
+                                <?php if (!empty($view['ticket_no'])): ?><span class="badge bg-dark"><?php echo htmlspecialchars((string)$view['ticket_no']); ?></span><?php endif; ?>
                                 <span class="badge bg-secondary"><?php echo htmlspecialchars((string)$view['status']); ?></span>
                                 <?php if ((int)$view['ai_enabled'] === 1): ?>
                                     <span class="badge bg-info">assistant active</span>
