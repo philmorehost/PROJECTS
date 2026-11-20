@@ -1,16 +1,36 @@
 <?php session_start();
     include("../func/bc-admin-config.php");
         
+    // §30: crediting/debiting a user wallet takes the full step-up now —
+    // CSRF + Security PIN + authenticator/email code — not the PIN alone.
+    if(isset($_POST["send_stepup_code"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'share_fund', 'Share Fund')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
+        header("Location: ShareFund.php");
+        exit();
+    }
+
     if(isset($_POST["share-fund"])){
-        $pin = mysqli_real_escape_string($connection_server, $_POST['security_pin']);
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         if (empty($get_logged_admin_details['security_pin'])) {
              $_SESSION['product_purchase_response'] = "Error: Please set your Security PIN in Account Settings first.";
              header("Location: AccountSettings.php");
              exit();
         }
 
-        if (!verifyUserPIN($pin, $get_logged_admin_details)) {
-             $_SESSION['product_purchase_response'] = "Error: Invalid Security PIN.";
+        $sec30_input = array(
+            'pin'      => (string)($_POST['security_pin'] ?? ''),
+            'otp_code' => (string)($_POST['otp_code'] ?? ''),
+            'totp_code' => (string)($_POST['totp_code'] ?? ''),
+        );
+        $sec30_err = function_exists('bc_stepup_admin_verify')
+            ? bc_stepup_admin_verify($get_logged_admin_details, $sec30_input, 'share_fund')
+            : 'Verification is unavailable.';
+        if ($sec30_err !== '') {
+             $_SESSION['product_purchase_response'] = "Error: " . $sec30_err;
              header("Location: ShareFund.php");
              exit();
         }
@@ -41,6 +61,7 @@
 			if(mysqli_num_rows($get_logged_user_query) == 1){
 				$credit_other_user = chargeOtherUser($user, $transType, $user, ucwords("wallet ".$type), $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], "1");
 				if(in_array($credit_other_user, array("success"))){
+					if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'user_wallet_' . $transType, (string)$user, ucwords($type) . ' of N' . $amount . ' (ref ' . $reference . ')');
 					$json_response_array = array("reference" => $reference, "status" => "success", "desc" => ucwords($user." ".$type."ed with N".$amount." successfully"));
                 	$json_response_encode = json_encode($json_response_array,true);
 				}
@@ -105,6 +126,7 @@ bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]),
                 </div>
                 <div class="card-body p-4 p-md-5">
                     <form method="post" action="">
+                        <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                         <div class="mb-4">
                             <label class="form-label small fw-bold text-muted text-uppercase mb-2">Recipient Username</label>
                             <div class="input-group input-group-lg">
@@ -165,6 +187,16 @@ bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]),
                             <label class="form-label small fw-bold text-danger text-uppercase mb-2"><i class="bi bi-shield-lock me-1"></i>Admin Security PIN</label>
                             <input name="security_pin" type="password" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="****" class="form-control form-control-lg text-center fw-bold bg-light border-0" style="letter-spacing: 10px; font-size: 24px;" required/>
                             <div class="form-text text-center mt-2 small">Verify your identity to authorize this transfer.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-danger text-uppercase mb-2"><i class="bi bi-phone-lock me-1"></i>Authenticator / Email Code</label>
+                            <div class="input-group input-group-lg">
+                                <input name="otp_code" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6-digit code" class="form-control text-center fw-bold bg-light border-0" style="letter-spacing: 6px;"/>
+                                <input type="hidden" name="totp_code" value=""/>
+                                <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-outline-danger fw-bold">Email me a code</button>
+                            </div>
+                            <div class="form-text text-center mt-2 small">Enter your authenticator code, or request an email code. Required with your PIN for every credit, debit and refund.</div>
                         </div>
 
                         <button id="proceedBtn" name="share-fund" type="submit" class="btn btn-primary btn-lg w-100 rounded-4 py-3 fw-bold shadow-sm mb-3" style="pointer-events: none; opacity:0.6;">

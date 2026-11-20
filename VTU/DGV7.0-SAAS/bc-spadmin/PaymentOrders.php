@@ -1,15 +1,53 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
     
-    if(isset($_GET["order-ref"])){
-    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-status"])));
-    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
+    // §30: approving a vendor payment order credits the vendor's wallet — it
+    // now takes POST + CSRF + the super-admin step-up (PIN + authenticator/
+    // email code), acts only on still-pending orders, and is audited. (Was a
+    // session-only GET link, replayable even against rejected orders.)
+    if(isset($_POST["send_stepup_code"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'vendor_payment_approve', 'Vendor Payment Approval')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email. Enter it in the approval dialog." : "Error: $send_err";
+        header("Location: /bc-spadmin/PaymentOrders.php");
+        exit();
+    }
+
+    if(isset($_POST["order-ref"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"])));
+    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
     	$statusArray = array(1, 2);
     	if(is_numeric($status)){
     		if(in_array($status, $statusArray)){
     			$select_payment_order = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE reference='".$reference."'");
     			if(mysqli_num_rows($select_payment_order) == 1){
     				$get_payment_order = mysqli_fetch_array($select_payment_order);
+				// §30 guards: non-pending orders are final; approvals need step-up.
+				// $status is flipped to 99 to neutralise the legacy action blocks
+				// below while keeping their response/redirect plumbing.
+				if((string)$get_payment_order["status"] !== "2"){
+					$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
+					$status = 99;
+				} elseif((int)$status === 2) {
+					$sec30_err = function_exists('bc_stepup_spadmin_verify') ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $_POST, 'vendor_payment_approve') : 'Verification is unavailable.';
+					if ($sec30_err !== '') {
+						$json_response_encode = json_encode(array("desc" => $sec30_err),true);
+						$status = 99;
+					}
+				} elseif((int)$status === 1) {
+					// Rejection moves no money: PIN-checked only (same throttle).
+					$sec30_reject_input = $_POST;
+					$sec30_reject_input['pin_check_only'] = '1';
+					$sec30_err2 = function_exists('bc_stepup_spadmin_verify') ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec30_reject_input, 'vendor_payment_approve') : 'Verification is unavailable.';
+					if ($sec30_err2 !== '') {
+						$json_response_encode = json_encode(array("desc" => $sec30_err2),true);
+						$status = 99;
+					}
+					if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_rejected', (string)$reference, 'Rejected vendor payment order');
+				}
 					$get_vendors_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='".$get_payment_order["vendor_id"]."'"));
 					if(isset($get_vendors_details["id"])){
 						$verified_vendors_details = $get_vendors_details;
@@ -39,6 +77,7 @@
 							$credit_other_user = chargeOtherVendor($user, $transType, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"], "1");
 							if(in_array($credit_other_user, array("success"))){
 								$update_payment_status = mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='1' WHERE reference='".$reference."'");
+						if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($verified_vendors_details["email"] ?? 'vendor'));
 								$json_response_array = array("desc" => ucwords($verified_vendors_details["email"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 								$json_response_encode = json_encode($json_response_array,true);
 							}
@@ -173,8 +212,8 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
                                         <td><?php echo tranStatus($row["status"]); ?></td>
                                         <td class="text-end pe-4">
                                             <div class="btn-group btn-group-sm">
-                                                <button onclick="superAdminPaymentOrderStatus('2','<?php echo $row['reference']; ?>','<?php echo $v_email; ?>')" class="btn btn-success px-3">Approve</button>
-                                                <button onclick="superAdminPaymentOrderStatus('1','<?php echo $row['reference']; ?>','<?php echo $v_email; ?>')" class="btn btn-danger px-3">Reject</button>
+                                                <button type="button" class="btn btn-success px-3" data-bs-toggle="modal" data-bs-target="#approveOrderModal" data-ref="<?php echo htmlspecialchars($row['reference'], ENT_QUOTES, 'UTF-8'); ?>" data-status="2" data-vendor="<?php echo htmlspecialchars($v_email, ENT_QUOTES, 'UTF-8'); ?>">Approve</button>
+                                                <button type="button" class="btn btn-danger px-3" data-bs-toggle="modal" data-bs-target="#approveOrderModal" data-ref="<?php echo htmlspecialchars($row['reference'], ENT_QUOTES, 'UTF-8'); ?>" data-status="1" data-vendor="<?php echo htmlspecialchars($v_email, ENT_QUOTES, 'UTF-8'); ?>">Reject</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -233,7 +272,7 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
                                         <td class="small text-muted">Mode: <?php echo $row["mode"]; ?><br>Date: <?php echo formDate($row["date"]); ?></td>
                                         <td><div class="fw-bold text-danger">₦<?php echo number_format($row["discounted_amount"], 2); ?></div></td>
                                         <td><?php echo tranStatus($row["status"]); ?></td>
-                                        <td class="text-end pe-4"><button onclick="superAdminPaymentOrderStatus('2','<?php echo $row['reference']; ?>','<?php echo $v_email; ?>')" class="btn btn-outline-success btn-sm rounded-pill px-3">Re-Approve</button></td>
+                                        <td class="text-end pe-4"><span class="text-muted small" title="Rejected orders are final and cannot be re-approved">—</span></td>
                                     </tr>
                                     <?php endwhile; else: ?>
                                     <tr><td colspan="5" class="text-center py-5 text-muted">No rejected orders found</td></tr>
@@ -260,5 +299,57 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
 	
 	
 
+
+<!-- §30: step-up approval dialog (PIN + authenticator/email code) -->
+<div class="modal fade" id="approveOrderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" class="modal-content border-0 shadow">
+      <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+      <input type="hidden" name="order-ref" id="aoRef" value="">
+      <input type="hidden" name="order-status" id="aoStatus" value="">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold" id="aoTitle">Confirm Approval</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted" id="aoDesc"></p>
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-muted">SECURITY PIN</label>
+          <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" class="form-control text-center fw-bold" placeholder="****" required>
+        </div>
+        <div class="mb-1">
+          <label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE</label>
+          <div class="input-group">
+            <input name="otp_code" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" class="form-control text-center fw-bold" placeholder="6-digit code">
+            <input type="hidden" name="totp_code" value="">
+            <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-outline-primary fw-bold">Email code</button>
+          </div>
+          <div class="form-text">Approvals need the code as well as your PIN. Rejections need the PIN only — press Email code first if you have no authenticator.</div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold" id="aoSubmit">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('approveOrderModal').addEventListener('show.bs.modal', function (ev) {
+    var btn = ev.relatedTarget;
+    if (!btn) return;
+    var status = btn.getAttribute('data-status');
+    var ref = btn.getAttribute('data-ref');
+    var vendor = btn.getAttribute('data-vendor') || '';
+    document.getElementById('aoRef').value = ref;
+    document.getElementById('aoStatus').value = status;
+    var approve = status === '2';
+    document.getElementById('aoTitle').textContent = approve ? 'Confirm Approval' : 'Confirm Rejection';
+    document.getElementById('aoDesc').textContent = (approve ? 'Credit ' : 'Reject the order from ') + vendor + ' (Ref: ' + ref + ').';
+    var submit = document.getElementById('aoSubmit');
+    submit.textContent = approve ? 'Approve & Credit' : 'Reject Order';
+    submit.className = 'btn rounded-pill px-4 fw-bold ' + (approve ? 'btn-success' : 'btn-danger');
+});
+</script>
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>

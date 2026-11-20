@@ -201,6 +201,9 @@ if (!function_exists('bc_security_ensure_schema')) {
                 'force_password_change' => "TINYINT(1) NOT NULL DEFAULT 0",
                 'totp_last_step'        => "BIGINT NOT NULL DEFAULT 0",
             ),
+            'sas_super_admin' => array(
+                'totp_last_step'        => "BIGINT NOT NULL DEFAULT 0",
+            ),
         );
         foreach ($cols as $table => $defs) {
             foreach ($defs as $col => $def) {
@@ -303,9 +306,15 @@ if (!function_exists('bc_stepup_actor_second_factor')) {
      */
     function bc_stepup_actor_second_factor($table, $actor_row, $identity, $input, $context) {
         global $connection_server;
-        $vendor_id = $table === 'sas_vendors' ? (int)($actor_row['id'] ?? 0) : (int)($actor_row['vendor_id'] ?? 0);
+        if ($table === 'sas_vendors') {
+            $vendor_id = (int)($actor_row['id'] ?? 0);
+        } elseif ($table === 'sas_super_admin') {
+            $vendor_id = 0; // platform scope: OTP/audit rows carry vendor 0
+        } else {
+            $vendor_id = (int)($actor_row['vendor_id'] ?? 0);
+        }
         $actor_id  = (int)($actor_row['id'] ?? 0);
-        if ($vendor_id <= 0 || $actor_id <= 0) return 'Step-up verification is unavailable.';
+        if ($actor_id <= 0 || ($table !== 'sas_super_admin' && $vendor_id <= 0)) return 'Step-up verification is unavailable.';
 
         $enrolled = (($actor_row['two_factor_type'] ?? 'none') === 'totp') && !empty($actor_row['totp_secret']);
         if ($enrolled) {
@@ -410,6 +419,45 @@ if (!function_exists('bc_stepup_admin_verify')) {
             return 'Invalid Security PIN';
         }
         return bc_stepup_actor_second_factor('sas_vendors', $vendor_row, $identity, $input, $context);
+    }
+}
+
+if (!function_exists('bc_stepup_spadmin_verify')) {
+    /**
+     * Full bc-spadmin (super admin) step-up for platform money movement
+     * (crediting/debiting vendor and user wallets): security PIN (throttled)
+     * + second factor — authenticator code when enrolled, otherwise an
+     * emailed OTP. Returns '' or a generic error.
+     */
+    function bc_stepup_spadmin_verify($spadmin_row, $input, $context) {
+        global $connection_server;
+        if (!is_array($spadmin_row) || empty($spadmin_row['id'])) return 'Step-up verification is unavailable.';
+        $admin_id = (int)$spadmin_row['id'];
+        $identity = (string)($spadmin_row['email'] ?? ('spadmin#' . $admin_id));
+
+        if (empty($spadmin_row['security_pin'])) {
+            return 'Set a Security PIN in Account Settings before moving platform funds.';
+        }
+        if (function_exists('bc_is_rate_limited') && bc_is_rate_limited('spadmin_pin_fail_' . $context, (string)$admin_id, 5, 300)) {
+            if (function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_PIN_LOCKED', $context, $identity, 'Too many wrong PIN attempts');
+            return 'Too many wrong PIN attempts. Wait a few minutes and try again.';
+        }
+        $pin = (string)($input['pin'] ?? ($input['security_pin'] ?? ''));
+        if (!function_exists('verifyUserPIN') || !verifyUserPIN($pin, $spadmin_row)) {
+            if ($connection_server instanceof mysqli && function_exists('bc_ensure_security_tables')) {
+                // Read/write keys must match exactly, or the lockout never fires.
+                bc_ensure_security_tables();
+                $action = mysqli_real_escape_string($connection_server, 'spadmin_pin_fail_' . $context);
+                $key = mysqli_real_escape_string($connection_server, (string)$admin_id);
+                mysqli_query($connection_server, "INSERT INTO sas_rate_limits (action, rate_key, attempted_at) VALUES ('$action', '$key', NOW())");
+            }
+            if (function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_PIN_FAILED', $context, $identity, 'Wrong PIN');
+            return 'Invalid Security PIN';
+        }
+        if (!empty($input['pin_check_only'])) {
+            return '';
+        }
+        return bc_stepup_actor_second_factor('sas_super_admin', $spadmin_row, $identity, $input, $context);
     }
 }
 

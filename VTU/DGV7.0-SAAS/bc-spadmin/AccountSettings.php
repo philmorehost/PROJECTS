@@ -471,6 +471,37 @@
         exit();
     }
 
+    // §30: super-admin Google Authenticator (TOTP) enrolment. Required, with
+    // the PIN, for platform funding and payment-order approvals; when it is
+    // not enrolled the second factor falls back to an emailed code.
+    if (isset($_POST["totp-begin"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $ok = function_exists('bc_totp_begin_enrolment') && bc_totp_begin_enrolment('sas_super_admin', (int)$get_logged_spadmin_details["id"]) !== '';
+        if ($ok && function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_TOTP_SETUP_STARTED', 'account', (string)$get_logged_spadmin_details["email"], 'Authenticator setup started');
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator setup started: add the secret shown below, then confirm with a code." : "Error: Could not start authenticator setup.";
+        header("Location: AccountSettings.php");
+        exit();
+    }
+    if (isset($_POST["totp-confirm"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $fresh_q = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE id='" . (int)$get_logged_spadmin_details["id"] . "' LIMIT 1");
+        $fresh = $fresh_q ? mysqli_fetch_array($fresh_q) : null;
+        $ok = $fresh && function_exists('bc_totp_confirm_enrolment') && bc_totp_confirm_enrolment('sas_super_admin', $fresh, (string)($_POST["totp_code"] ?? ''));
+        if ($ok && function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_TOTP_ENABLED', 'account', (string)$get_logged_spadmin_details["email"], 'Authenticator enabled');
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator app enabled. It is now required with your PIN for funding and approvals." : "Error: That code did not match. Check the app and try again.";
+        header("Location: AccountSettings.php");
+        exit();
+    }
+    if (isset($_POST["totp-disable"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $pin_ok = function_exists('verifyUserPIN') && verifyUserPIN((string)($_POST["pin"] ?? ''), $get_logged_spadmin_details);
+        $ok = $pin_ok && function_exists('bc_totp_disable') && bc_totp_disable('sas_super_admin', (int)$get_logged_spadmin_details["id"]);
+        if ($ok && function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_TOTP_DISABLED', 'account', (string)$get_logged_spadmin_details["email"], 'Authenticator disabled');
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator app disabled. Funding will require emailed codes until you enrol again." : "Error: Enter your current Security PIN to disable the authenticator.";
+        header("Location: AccountSettings.php");
+        exit();
+    }
+
     if(isset($_POST["change-password"])){
         $old_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["old-pass"])));
         $new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new-pass"])));
@@ -1203,6 +1234,41 @@ bc_adm_head('', array("area" => "spadmin"));
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div class="card border border-primary border-opacity-25 rounded-4 shadow-none mb-4">
+                                    <div class="card-body p-4">
+                                        <h6 class="fw-bold mb-3"><i class="bi bi-phone-lock me-2 text-primary"></i>My Super Admin Authenticator App (2FA)</h6>
+                                        <p class="text-muted small">Funding a vendor or user wallet, and approving vendor payment orders, require your Security PIN <strong>plus</strong> this authenticator code. If you never enrol, a 6-digit code is emailed to you each time instead — enrol here for the stronger option.</p>
+                                        <?php
+                                        $sec30_q = mysqli_query($connection_server, "SELECT two_factor_type, totp_secret FROM sas_super_admin WHERE id='" . (int)$get_logged_spadmin_details["id"] . "' LIMIT 1");
+                                        $sec30_row = $sec30_q ? mysqli_fetch_assoc($sec30_q) : array('two_factor_type' => 'none', 'totp_secret' => '');
+                                        $sec30_state = (string)($sec30_row['two_factor_type'] ?? 'none');
+                                        ?>
+                                        <?php if ($sec30_state === 'totp'): ?>
+                                            <p class="small text-success fw-bold mb-2">Enabled — funding and approvals require this code with your PIN.</p>
+                                            <form method="post" class="row g-2 align-items-end">
+                                                <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                                                <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
+                                                <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
+                                            </form>
+                                        <?php elseif ($sec30_state === 'pending'): ?>
+                                            <?php $sec30_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec30_row['totp_secret']) : ''; ?>
+                                            <p class="small text-muted">Add this secret to Google Authenticator, then enter the 6-digit code:</p>
+                                            <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec30_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
+                                            <p class="small text-muted text-break">Or paste: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec30_secret, (string)$get_logged_spadmin_details['email'], 'VTU Platform') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
+                                            <form method="post" class="row g-2 align-items-end">
+                                                <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                                                <div class="col-md-4"><input name="totp_code" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control" placeholder="6-digit code" inputmode="numeric" required /></div>
+                                                <div class="col-md-4"><button name="totp-confirm" type="submit" class="btn btn-primary rounded-pill fw-bold">Confirm &amp; enable</button></div>
+                                            </form>
+                                        <?php else: ?>
+                                            <form method="post">
+                                                <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                                                <button name="totp-begin" type="submit" class="btn btn-primary rounded-pill fw-bold">Set up authenticator</button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
 
