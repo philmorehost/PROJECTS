@@ -2449,15 +2449,15 @@ if (!function_exists('lm_github_pull')) {
         $timings['package'] = round(microtime(true) - $timed, 2);
 
         $timed = microtime(true);
-        if (!@rename($normalizedPath, $targetFile)) {
-            if (!@copy($normalizedPath, $targetFile)) {
-                @unlink($normalizedPath);
-                $result['message'] = 'Could not move the package into ' . $tierDir . ' (check permissions).';
-                return $result;
-            }
+        // Robust move with a real diagnosis on failure (permissions vs disk
+        // space vs cross-device) instead of the old bare "(check permissions)"
+        // for every cause. Staging preserves the previous release on failure.
+        $moved = lm_store_package_file($normalizedPath, $tierDir, $targetFile);
+        if (!$moved['ok']) {
+            $result['message'] = $moved['error'];
             @unlink($normalizedPath);
+            return $result;
         }
-        @chmod($targetFile, 0644);
 
         // Last checkpoint before the point of no return: after this the release
         // exists, and undoing it would mean deleting a published version.
