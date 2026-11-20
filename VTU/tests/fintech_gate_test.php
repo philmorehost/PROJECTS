@@ -1840,24 +1840,33 @@ load_edition($root, 'DGV7.0-SAAS', [
 $registry = bc_fintech_provider_registry();
 gtrue('registry lists klasha', isset($registry['klasha']));
 gtrue('registry lists flutterwave', isset($registry['flutterwave']));
-gcheck('provider list is stable', bc_fintech_provider_list(), ['klasha', 'flutterwave']);
+gcheck('provider list is stable', bc_fintech_provider_list(), ['klasha', 'flutterwave', 'platnova', 'oneglobal']);
 gcheck('unknown provider has no config', bc_fintech_provider_config('teleport'), null);
 
-// Klasha is genuinely unconfigured: nothing is guessed.
-gcheck('klasha base URL is empty', $registry['klasha']['base_url'], '');
-foreach (['verify', 'quote', 'beneficiary', 'payout', 'wallet', 'fx', 'collection'] as $ep) {
-    gcheck("klasha endpoint $ep is empty", $registry['klasha']['endpoints'][$ep], '');
+// §26: Klasha is wired from the official docs (developers.klasha.com). Only the
+// webhook signature stays unmapped — the docs publish no scheme — so the
+// webhook path remains fail-closed by design.
+gcheck('klasha base URL is the documented live env_url', $registry['klasha']['base_url'], 'https://gate.klasapps.com/pay');
+foreach (['verify' => '/nucleus/tnx/collection/status', 'quote' => '/wallet/swap/generate/quote', 'beneficiary' => '/merchant/merchantbeneficiary/create', 'payout' => '/wallet/wire/initiate', 'wallet' => '/wallet/stable-coin/get-wallet', 'fx' => '/wallet/swap/generate/quote', 'collection' => '/wallet/stable-coin/create-wallet', 'login' => '/auth/account/v2/login', 'cny_quote' => '/wallet/merchant/quotation/v2', 'virtual_account' => '/wallet/virtual/v3/business/create/account'] as $ep => $path) {
+    gcheck("klasha endpoint $ep is the documented path", $registry['klasha']['endpoints'][$ep], $path);
 }
-foreach (['event_id', 'reference', 'amount', 'currency', 'status'] as $field) {
-    gcheck("klasha field $field is unmapped", bc_fintech_provider_field('klasha', $field), '');
+gcheck('klasha event_id stays unmapped (documented payloads carry none)', bc_fintech_provider_field('klasha', 'event_id'), '');
+foreach (['event_type' => 'event', 'reference' => 'data.tnxRef', 'amount' => 'data.sourceAmount', 'currency' => 'data.sourceCurrency', 'status' => 'data.status'] as $field => $path) {
+    gcheck("klasha field $field is mapped from the documented webhook payload", bc_fintech_provider_field('klasha', $field), $path);
 }
-gcheck('klasha signature scheme is empty', $registry['klasha']['signature']['header'], '');
-gcheck('klasha payload crypto scheme is empty', bc_klasha_crypto_scheme(), '');
+gcheck('klasha signature scheme stays empty (undocumented -> webhook closed)', $registry['klasha']['signature']['header'], '');
+gcheck('klasha wallet crypto scheme is the documented OpenSSL AES', bc_klasha_crypto_scheme(), 'aes-256-cbc-openssl');
+gcheck('klasha payments crypto scheme is the documented 3DES', bc_klasha_payments_crypto_scheme(), '3des-cbc');
 
-// The new Flutterwave endpoints are empty too; only the live verify shape is known.
-gcheck('flutterwave base URL is empty', $registry['flutterwave']['base_url'], '');
-foreach (['bills_categories', 'bills_validate', 'bills', 'payments', 'payment_plans', 'virtual_accounts', 'transfers', 'bulk_transfers', 'pos_request', 'regional_toggles'] as $ep) {
-    gcheck("flutterwave endpoint $ep is empty", $registry['flutterwave']['endpoints'][$ep], '');
+// §26: Flutterwave is wired from developer.flutterwave.com/api. Virtual cards,
+// POS requests and regional toggles are absent from the current official API
+// index, so those paths stay EMPTY and fail closed.
+gcheck('flutterwave base URL is the documented host', $registry['flutterwave']['base_url'], 'https://api.flutterwave.com');
+foreach (['verify' => '/v3/transactions/{id}/verify', 'bills_categories' => '/v3/top-bill-categories', 'bills_validate' => '/v3/bill-items/{item_code}/validate', 'bills' => '/v3/billers/{biller_code}/items/{item_code}/payment', 'payments' => '/v3/payments', 'payment_plans' => '/v3/payment-plans', 'virtual_accounts' => '/v3/virtual-account-numbers', 'transfers' => '/v3/transfers', 'transfer_rates' => '/v3/transfers/rates', 'bulk_transfers' => '/v3/bulk-transfers'] as $ep => $path) {
+    gcheck("flutterwave endpoint $ep is the documented path", $registry['flutterwave']['endpoints'][$ep], $path);
+}
+foreach (['pos_request', 'virtual_cards', 'virtual_cards_fund', 'virtual_cards_status', 'regional_toggles'] as $ep) {
+    gcheck("flutterwave endpoint $ep stays empty (not in current official docs)", $registry['flutterwave']['endpoints'][$ep], '');
 }
 gcheck('flutterwave verify field map is the live one', bc_fintech_provider_field('flutterwave', 'reference'), 'data.tx_ref');
 
@@ -1868,9 +1877,13 @@ gcheck('no credentials -> credentials_not_configured',
 $GLOBALS['db']['gateways']['sas_bank_transfer_gateways:7:klasha'] = [
     'vendor_id' => 7, 'gateway_name' => 'klasha', 'public_key' => 'pk', 'secret_key' => 'sk', 'encrypt_key' => 'eh', 'status' => 1,
 ];
+// §26: the registry now ships the documented base URL, so this step clears it
+// through the override seam to keep exercising the refusal order.
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = '';
 gcheck('credentials but no base URL -> base_url_not_configured',
     bc_fintech_provider_configured(7, 'klasha', 'quote')['reason'], 'base_url_not_configured');
 $GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = 'https://sandbox.klasha.test';
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['endpoints']['quote'] = '';
 gcheck('base URL but no endpoint -> endpoint_not_configured',
     bc_fintech_provider_configured(7, 'klasha', 'quote')['reason'], 'endpoint_not_configured');
 $GLOBALS['bc_fintech_provider_config_overrides']['klasha']['endpoints']['quote'] = '/v1/quote';
@@ -1880,19 +1893,24 @@ gcheck('endpoint refusal message is the documented one',
 
 // The URL builder never guesses.
 gcheck('url builder refuses an empty endpoint',
-    bc_fintech_provider_url('klasha', 'payout', 7)['reason'], 'endpoint_not_configured');
+    bc_fintech_provider_url('flutterwave', 'regional_toggles', 7)['reason'], 'endpoint_not_configured');
 unset($GLOBALS['bc_fintech_provider_config_overrides']['klasha']);
+$GLOBALS['bc_fintech_provider_config_overrides']['flutterwave']['base_url'] = '';
 gcheck('url builder refuses an empty base URL',
-    bc_fintech_provider_url('klasha', 'quote', 7)['reason'], 'base_url_not_configured');
+    bc_fintech_provider_url('flutterwave', 'transfers', 7)['reason'], 'base_url_not_configured');
+unset($GLOBALS['bc_fintech_provider_config_overrides']['flutterwave']);
 
-// An unconfigured adapter must refuse BEFORE any network activity.
+// An unconfigured adapter must refuse BEFORE any network activity. (§26 clears
+// the shipped base URL / endpoint through the override seam to prove it.)
 $GLOBALS['bc_fintech_http_calls'] = [];
 $GLOBALS['bc_fintech_http_transport'] = function () { return ['ok' => true, 'status' => 200, 'body' => '{}', 'json' => [], 'error' => '']; };
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = '';
 $refused = bc_klasha_request(7, 'quote', 'POST', ['a' => 1]);
 gfalse('unconfigured adapter refuses', $refused['ok']);
 gcheck('unconfigured adapter reason', $refused['reason'], 'base_url_not_configured');
 gcheck('unconfigured adapter made no HTTP call', count($GLOBALS['bc_fintech_http_calls']), 0);
 $GLOBALS['bc_fintech_provider_config_overrides']['klasha']['base_url'] = 'https://sandbox.klasha.test';
+$GLOBALS['bc_fintech_provider_config_overrides']['klasha']['endpoints']['quote'] = '';
 $refused_ep = bc_klasha_request(7, 'quote', 'POST', ['a' => 1]);
 gcheck('an adapter with no endpoint path refuses', $refused_ep['reason'], 'endpoint_not_configured');
 gcheck('still no HTTP call', count($GLOBALS['bc_fintech_http_calls']), 0);
@@ -2402,9 +2420,13 @@ gtrue('schema creates sas_fintech_ledger', strpos($schema_src, 'sas_fintech_ledg
 gtrue('webhook uniqueness is enforced', strpos($schema_src, 'uniq_provider_event (provider, event_id)') !== false);
 gfalse('schema runs no DROP/TRUNCATE', (bool)preg_match('/\b(DROP|TRUNCATE)\b/i', $schema_src));
 
-// TheKlasha crypto seam must not ship a cipher.
+// §26: the Klasha crypto seam now ships exactly the two documented ciphers —
+// 3DES-CBC for the Payments API and OpenSSL-salted AES-256-CBC for the wallet
+// APIs — and still no invented scheme.
 $klasha_src = php_strip_whitespace($root . '/DGV7.0-SAAS/func/bc-fintech-klasha.php');
-gfalse('klasha ships no openssl cipher', (bool)preg_match('/openssl_(encrypt|decrypt)|CRYPT_(3DES|BF|CRYPT)/i', $klasha_src));
+gtrue('klasha ships the documented 3DES cipher', strpos($klasha_src, 'des-ede3-cbc') !== false);
+gtrue('klasha ships the documented OpenSSL-salted AES cipher', strpos($klasha_src, 'Salted__') !== false && strpos($klasha_src, 'aes-256-cbc') !== false);
+gtrue('klasha obtains its Bearer token from the documented login endpoint', strpos($klasha_src, 'bc_klasha_bearer_token') !== false);
 
 // The legacy second Flutterwave credit path is a known retirement item, not a silent one.
 $doc = file_get_contents($root . '/DGV7_FINTECH_UPGRADE.md');

@@ -1,6 +1,8 @@
 <?php session_start();
 include("../func/bc-config.php");
 include_once(__DIR__ . "/../func/bc-fintech-services.php");
+include_once(__DIR__ . "/../func/bc-fintech-klasha.php");
+include_once(__DIR__ . "/../func/bc-fintech-flutterwave.php");
 
 if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
     header("Location: Login.php");
@@ -32,8 +34,33 @@ if (isset($_POST['send_transfer'])) {
         $notice_type = 'danger';
     } else {
         $ref = bc_svc_request_create($vid, $svc_user, 'intl_transfer', $provider, $payload);
+        // §26: indicative LIVE quote from the active provider (read-only — a
+        // quote moves no money; settlement still follows the recorded request).
+        $quote_note = '';
+        if ($ref !== '' && $provider === 'klasha' && function_exists('bc_klasha_fx_quote')) {
+            $q = bc_klasha_fx_quote($vid, [
+                'sourceCurrency' => 'USD',
+                'sourceAmount' => number_format($amount_usd, 2, '.', ''),
+                'destinationCurrency' => $payload['currency'],
+                'mode' => 'SOURCE',
+            ]);
+            $qd = (isset($q['json']['data']) && is_array($q['json']['data'])) ? $q['json']['data'] : [];
+            if (!empty($q['ok']) && isset($qd['destinationAmount']) && is_numeric($qd['destinationAmount'])) {
+                $quote_note = ' Indicative live Klasha quote: $' . number_format($amount_usd, 2) . ' ≈ ' . number_format((float)$qd['destinationAmount'], 2) . ' ' . $payload['currency'] . (isset($qd['rate']) ? ' at rate ' . $qd['rate'] : '') . ' (fees confirmed at settlement).';
+            }
+        } elseif ($ref !== '' && $provider === 'flutterwave' && function_exists('bc_flw_endpoint')) {
+            $q = bc_flw_endpoint($vid, 'transfer_rates', 'GET', [
+                'source_currency' => 'USD',
+                'destination_currency' => $payload['currency'],
+                'amount' => $amount_usd,
+            ]);
+            $qd = (isset($q['json']['data']) && is_array($q['json']['data'])) ? $q['json']['data'] : [];
+            if (!empty($q['ok']) && isset($qd['rate']) && is_numeric($qd['rate'])) {
+                $quote_note = ' Indicative live Flutterwave rate: 1 USD = ' . $qd['rate'] . ' ' . $payload['currency'] . ' (fees confirmed at settlement).';
+            }
+        }
         $notice = $ref !== ''
-            ? "Transfer request received ($ref). We will confirm the live rate and complete your payout shortly."
+            ? "Transfer request received ($ref). We will confirm the live rate and complete your payout shortly." . $quote_note
             : 'We could not record your request. Please try again.';
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }

@@ -95,6 +95,38 @@ if (isset($_POST['save-active-provider'])) {
     exit();
 }
 
+// §26: live provider credentials for the newly documented APIs. Klasha and
+// Flutterwave keys keep their existing homes (PaymentGateway.php); Platnova's
+// X-API-Key and 1GLOBAL's OAuth access token live in sas_payment_gateways
+// under their provider names, which is where func/bc-fintech-providers.php
+// reads them. A blank key field keeps the stored key (never wipes it).
+if (isset($_POST['save-provider-credentials'])) {
+    $vid = (int)$get_logged_admin_details['id'];
+    $upsert_key = function ($gateway, $secret) use ($connection_server, $vid) {
+        $gateway_e = mysqli_real_escape_string($connection_server, $gateway);
+        $existing = mysqli_query($connection_server, "SELECT id, secret_key FROM sas_payment_gateways WHERE vendor_id='$vid' && gateway_name='$gateway_e' LIMIT 1");
+        $row = $existing ? mysqli_fetch_assoc($existing) : null;
+        $secret = trim((string)$secret);
+        if ($secret === '' && $row) $secret = (string)$row['secret_key'];
+        $secret_e = mysqli_real_escape_string($connection_server, $secret);
+        $status = $secret !== '' ? 1 : 2;
+        if ($row) {
+            mysqli_query($connection_server, "UPDATE sas_payment_gateways SET secret_key='$secret_e', status='$status' WHERE vendor_id='$vid' && gateway_name='$gateway_e'");
+        } else {
+            mysqli_query($connection_server, "INSERT INTO sas_payment_gateways (vendor_id, gateway_name, public_key, secret_key, encrypt_key, percentage, status) VALUES ('$vid', '$gateway_e', '', '$secret_e', '', '0', '$status')");
+        }
+    };
+    $upsert_key('platnova', $_POST['platnova_api_key'] ?? '');
+    $upsert_key('oneglobal', $_POST['oneglobal_access_token'] ?? '');
+    if (function_exists('setVendorOption')) {
+        setVendorOption($vid, 'klasha_login_email', trim(strip_tags($_POST['klasha_login_email'] ?? '')));
+        setVendorOption($vid, 'klasha_business_id', trim(strip_tags($_POST['klasha_business_id'] ?? '')));
+    }
+    $_SESSION["product_purchase_response"] = "Provider API credentials saved.";
+    header("Location: ServiceControl.php");
+    exit();
+}
+
 if (isset($_POST['toggle_service'])) {
     $service_name = mysqli_real_escape_string($connection_server, $_POST['service_name']);
     $status = (int)$_POST['status'];
@@ -241,6 +273,37 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
                                 <?php endforeach; ?>
                             </select>
                             <button type="submit" name="save-active-provider" class="btn btn-primary fw-bold">Switch Provider</button>
+                        </form>
+                        <hr class="my-4">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-key me-2"></i>Provider API Credentials <span class="badge bg-success">§26 live</span></h6>
+                        <p class="small text-muted">Endpoints now follow the official Klasha, Flutterwave, Platnova and 1GLOBAL documentation. Klasha &amp; Flutterwave keys are saved under <a href="PaymentGateway.php">Payment Gateways</a> (Klasha: Public Key = merchant public key, Secret Key = account password or Bearer token, Encrypt Key = encryption key). Save the Platnova / 1GLOBAL credentials and the Klasha login helpers here. Blank key fields keep the stored key.</p>
+                        <?php
+                            $cred_vid = (int)$get_logged_admin_details['id'];
+                            $platnova_row = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT secret_key FROM sas_payment_gateways WHERE vendor_id='$cred_vid' && gateway_name='platnova' LIMIT 1"));
+                            $oneglobal_row = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT secret_key FROM sas_payment_gateways WHERE vendor_id='$cred_vid' && gateway_name='oneglobal' LIMIT 1"));
+                            $klasha_email = function_exists('getVendorOption') ? (string)getVendorOption($cred_vid, 'klasha_login_email', '') : '';
+                            $klasha_biz = function_exists('getVendorOption') ? (string)getVendorOption($cred_vid, 'klasha_business_id', '') : '';
+                        ?>
+                        <form method="post" action="">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Platnova API Key (X-API-Key) <?php echo !empty($platnova_row['secret_key']) ? '<span class="badge bg-success">saved</span>' : '<span class="badge bg-secondary">not set</span>'; ?></label>
+                                <input type="password" name="platnova_api_key" class="form-control" autocomplete="new-password" placeholder="Paste Platnova API key">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">1GLOBAL Connect Access Token (OAuth Bearer) <?php echo !empty($oneglobal_row['secret_key']) ? '<span class="badge bg-success">saved</span>' : '<span class="badge bg-secondary">not set</span>'; ?></label>
+                                <input type="password" name="oneglobal_access_token" class="form-control" autocomplete="new-password" placeholder="Paste 1GLOBAL access token">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Klasha Login Email</label>
+                                    <input type="email" name="klasha_login_email" class="form-control" value="<?php echo htmlspecialchars($klasha_email); ?>" placeholder="Klasha account email">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Klasha Business ID (China payouts)</label>
+                                    <input type="text" name="klasha_business_id" class="form-control" value="<?php echo htmlspecialchars($klasha_biz); ?>" placeholder="e.g. 999">
+                                </div>
+                            </div>
+                            <button type="submit" name="save-provider-credentials" class="btn btn-outline-primary fw-bold">Save API Credentials</button>
                         </form>
                     </div>
 </div></div>

@@ -10,6 +10,13 @@
  * endpoints are not configured in the registry. No other provider is consulted,
  * on any code path.
  *
+ * §26 STATUS (official docs re-checked 2026-11-20): developer.flutterwave.com's
+ * current API index no longer publishes a Virtual Cards API, so the registry's
+ * virtual_cards* endpoints stay EMPTY and this adapter keeps refusing with
+ * 'endpoint_not_configured' rather than calling an undocumented URL. The day
+ * Flutterwave documents (or re-documents) card issuance, fill those three
+ * registry paths and this adapter goes live unchanged.
+ *
  * Return shape matches the legacy adapters so callers keep working:
  *   ['status' => 'success'|'error', 'message' => ..., 'reference' => ..., 'card_id' => ...]
  */

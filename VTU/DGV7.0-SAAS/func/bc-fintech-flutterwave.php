@@ -10,12 +10,16 @@
  *   (bc_fintech_webhook_claim / bc_fintech_ledger_post) instead of writing a second
  *   credit path.
  *
- * WHAT IS CONFIG-DRIVEN AND EMPTY
- *   base_url and every NEW endpoint path (bills, payment links, payment plans,
- *   virtual accounts, transfers, bulk transfers, POS, regional toggles) default to
- *   EMPTY and refuse while empty. Only the transaction-verify call keeps a URL: it
- *   is the one the live handler already uses, carried over rather than guessed, and
- *   the registry overrides it the moment the Phase 3 spec is supplied.
+ * LIVE ENDPOINTS (§26, official docs retrieved 2026-11-20)
+ *   developer.flutterwave.com/api now backs the registry: bills (categories,
+ *   validate, purchase), hosted checkout (POST /v3/payments), payment plans,
+ *   virtual account numbers, transfers + transfer rates and bulk transfers are
+ *   all configured. The transaction-verify call keeps using the URL the live
+ *   handler already proved; the registry base URL agrees with it.
+ *
+ *   STILL EMPTY ON PURPOSE: the current official API index publishes no
+ *   Virtual Cards, POS-request or regional-toggle endpoints, so those registry
+ *   paths remain EMPTY and every dependent flow fails closed.
  *
  * RLUSD
  *   Never enabled from the catalogue. bc_flw_asset_enabled() requires an explicit
@@ -153,10 +157,13 @@ if (!function_exists('bc_flw_bills_categories')) {
 }
 
 if (!function_exists('bc_flw_bills_validate')) {
-    /** Bill validation. Requires a non-empty payload; forwards it unchanged. */
+    /**
+     * Bill validation (documented as GET /v3/bill-items/{item_code}/validate):
+     * payload carries item_code (path) plus code/customer (query string).
+     */
     function bc_flw_bills_validate($vendor_id, array $payload) {
         if (!$payload) return bc_flw_refusal('missing_payload');
-        return bc_flw_endpoint($vendor_id, 'bills_validate', 'POST', $payload);
+        return bc_flw_endpoint($vendor_id, 'bills_validate', 'GET', $payload);
     }
 }
 

@@ -3,24 +3,36 @@
  * DGV7 phase 3 — provider registry, credentials, asset gating and the HTTP seam.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * DOCUMENTATION BLOCKER — READ THIS BEFORE EDITING
+ * LIVE SPECIFICATION — §26 (2026-11-20)
  * ═══════════════════════════════════════════════════════════════════════════
- * The sandbox in which this was written cannot reach the Klasha or Flutterwave
- * documentation hosts. Every value that a real API specification would settle
- * therefore defaults to EMPTY in bc_fintech_provider_registry():
+ * Every non-empty value below was transcribed from the provider's OFFICIAL
+ * documentation, supplied by the site owner and retrieved 2026-11-20:
  *
- *   - base_url           EMPTY  (no host is guessed)
- *   - endpoints[<key>]   EMPTY  (no path is guessed)
- *   - fields[<key>]      EMPTY  (no payload field name is guessed)
- *   - signature          EMPTY for Klasha (the "3DES payload encryption" in the
- *                        brief is UNVERIFIED; see bc-fintech-klasha.php)
+ *   Klasha      https://developers.klasha.com/ (llms.txt + per-page .md)
+ *   Flutterwave https://developer.flutterwave.com/api (llms.txt index)
+ *   Platnova    https://docs.platnova.com/ (guides + embedded OpenAPI)
+ *   1GLOBAL     https://docs.1global.com/api/ + the 1GLOBAL Connect API
+ *               portal it links to (docs.connect.1global.com recipes)
+ *
+ * What REMAINS empty is empty on purpose — the current official docs do not
+ * publish it, and this layer never guesses a URL or a signature scheme:
+ *
+ *   - Flutterwave virtual_cards / pos_request / regional_toggles: the current
+ *     API index lists no Virtual Cards, POS or regional-toggle endpoints.
+ *     Card issuance therefore still fails closed (see
+ *     bc-virtualcard-flutterwave.php).
+ *   - Klasha webhook signature: the docs publish webhook payload shapes but
+ *     NO signature header/algorithm, so Klasha webhooks keep refusing at the
+ *     signature step. Klasha transaction state is instead confirmed through
+ *     the documented Transaction Status API (endpoints['verify']).
+ *   - Platnova webhook signing + 1GLOBAL webhooks: signing details not yet
+ *     mapped; no webhook credit path exists for these providers.
  *
  * An adapter refuses to run while any value it needs is empty. It returns a
  * machine-readable reason ('endpoint_not_configured', 'base_url_not_configured',
  * 'credentials_not_configured', 'field_mapping_not_configured',
- * 'signature_scheme_not_configured') and NEVER calls a guessed URL. Fill the
- * registry from the signed-off provider specification, then run
- * `php VTU/tests/provider_smoke.php` to confirm each provider reports ready.
+ * 'signature_scheme_not_configured') and NEVER calls a guessed URL. Run
+ * `php VTU/tests/provider_smoke.php` to see each provider's readiness.
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * CREDENTIALS
@@ -57,36 +69,62 @@ if (!function_exists('bc_fintech_provider_registry')) {
         return [
             'klasha' => [
                 'label'    => 'Klasha',
-                'base_url' => '', // AWAITS REAL SPEC
+                // developers.klasha.com/overview/parameters: env_url live is
+                // https://gate.klasapps.com/pay, sandbox https://dev.kcookery.com.
+                'base_url' => 'https://gate.klasapps.com/pay',
+                'sandbox_url' => 'https://dev.kcookery.com',
                 'endpoints' => [
-                    'verify'         => '', // AWAITS REAL SPEC
-                    'quote'          => '', // AWAITS REAL SPEC
-                    'beneficiary'    => '', // AWAITS REAL SPEC
-                    'payout'         => '', // AWAITS REAL SPEC
-                    'wallet'         => '', // AWAITS REAL SPEC
-                    'fx'             => '', // AWAITS REAL SPEC
-                    'collection'     => '', // AWAITS REAL SPEC
+                    // overview/authentication: POST login -> data.token (Bearer).
+                    'login'          => '/auth/account/v2/login',
+                    // bank-account-collection/virtual-account-creation: polling a
+                    // collection's status by the bank session id (gateRef).
+                    'verify'         => '/nucleus/tnx/collection/status',
+                    // transfers/swap-api: wallet-to-wallet FX quote (AES-encrypted).
+                    'quote'          => '/wallet/swap/generate/quote',
+                    'swap_initiate'  => '/wallet/swap/initiate',
+                    // transfers/klasha-wire-api (AES-encrypted payloads).
+                    'wire_quote'     => '/wallet/wire/generate/quote',
+                    'beneficiary'    => '/merchant/merchantbeneficiary/create',
+                    'payout'         => '/wallet/wire/initiate',
+                    'wire_fetch'     => '/wallet/wire/fetch/all',
+                    // transfers/payout/cny-payout-new-encryption (AES-encrypted).
+                    'cny_quote'      => '/wallet/merchant/quotation/v2',
+                    'cny_banks'      => '/wallet/merchant/bank/transfer/request/banks/CNY',
+                    'cny_payout'     => '/wallet/merchant/{businessId}/bank/transfer/v2/request',
+                    // transfers/stablecoin-wallets-swaps-and-payouts (plain JSON).
+                    'wallet'         => '/wallet/stable-coin/get-wallet',
+                    'stablecoin_create_wallet' => '/wallet/stable-coin/create-wallet',
+                    'stablecoin_validate'      => '/wallet/stable-coin/validate-address',
+                    'stablecoin_fees'          => '/wallet/stable-coin/fees',
+                    'stablecoin_payout'        => '/wallet/stable-coin/v2/create-payout',
+                    // bank-account-collection/virtual-account-creation (AES-encrypted).
+                    'virtual_account' => '/wallet/virtual/v3/business/create/account',
+                    'fx'             => '/wallet/swap/generate/quote',
+                    'collection'     => '/wallet/stable-coin/create-wallet',
                 ],
-                // Payload field paths, dot-separated. Empty means "not mapped".
+                // Webhook payload shape, misc/webhook: {event, data:{...}}.
+                // event_id stays EMPTY: the documented payloads carry no event id,
+                // which (with the unmapped signature) keeps the webhook path closed.
                 'fields' => [
                     'event_id'       => '',
-                    'event_type'     => '',
-                    'reference'      => '',
-                    'amount'         => '',
-                    'currency'       => '',
-                    'status'         => '',
-                    'success_values' => '',
-                    'account'        => '',
+                    'event_type'     => 'event',
+                    'reference'      => 'data.tnxRef',
+                    'amount'         => 'data.sourceAmount',
+                    'currency'       => 'data.sourceCurrency',
+                    'status'         => 'data.status',
+                    'success_values' => 'successful,success',
+                    'account'        => 'data.customer.email',
                     'fee'            => '',
                 ],
-                // Webhook verification request/response mapping. Empty = refuse.
-                'verify_request'  => [], // request key => payload field key
+                // Transaction Status API: POST {gateRef}; the documented response
+                // carries root-level status/destinationAmount/destinationCurrency.
+                'verify_request'  => ['gateRef' => 'reference'],
                 'response_fields' => [
                     'reference'      => '',
-                    'amount'         => '',
-                    'currency'       => '',
-                    'status'         => '',
-                    'success_values' => '',
+                    'amount'         => 'destinationAmount',
+                    'currency'       => 'destinationCurrency',
+                    'status'         => 'status',
+                    'success_values' => 'successful,success',
                     'fee'            => '',
                 ],
                 // What the provider could support. RLUSD is deliberately absent.
@@ -94,32 +132,43 @@ if (!function_exists('bc_fintech_provider_registry')) {
                 'auth'     => [
                     'header'       => 'Authorization',
                     'prefix'       => 'Bearer ',
-                    'token_header' => 'x-auth-token', // sent as well; AWAITS REAL SPEC
+                    'token_header' => 'x-auth-token', // merchant PUBLIC key (overview/authentication)
                 ],
-                // UNVERIFIED. Empty header + empty algorithm means the webhook is
-                // refused until the signature scheme is confirmed.
+                // The docs publish NO webhook signature scheme. Empty header +
+                // empty algorithm means the webhook is refused, never guessed.
                 'signature' => ['mode' => 'required', 'header' => '', 'algorithm' => ''],
-                'crypto'    => ['scheme' => ''], // AWAITS REAL SPEC — do not guess 3DES
+                // Two documented schemes: AES-256-CBC/OpenSSL ("Salted__",
+                // EVP_BytesToKey-MD5) for wallet/wire/payout APIs, and 3DES-CBC
+                // (des-ede3-cbc, official PHP snippet) for the Payments API.
+                'crypto'    => ['scheme' => 'aes-256-cbc-openssl', 'payments_scheme' => '3des-cbc'],
                 'credential_tables' => ['sas_bank_transfer_gateways'],
             ],
             'flutterwave' => [
                 'label'    => 'Flutterwave',
-                'base_url' => '', // AWAITS REAL SPEC
+                // developer.flutterwave.com/api: every endpoint is served from
+                // https://api.flutterwave.com with a Bearer secret key.
+                'base_url' => 'https://api.flutterwave.com',
                 'endpoints' => [
-                    'verify'             => '', // AWAITS REAL SPEC
-                    'bills_categories'   => '', // AWAITS REAL SPEC
-                    'bills_validate'     => '', // AWAITS REAL SPEC
-                    'bills'              => '', // AWAITS REAL SPEC
-                    'payments'           => '', // AWAITS REAL SPEC (payment links)
-                    'payment_plans'      => '', // AWAITS REAL SPEC (invoices)
-                    'virtual_accounts'   => '', // AWAITS REAL SPEC
-                    'transfers'          => '', // AWAITS REAL SPEC
-                    'bulk_transfers'     => '', // AWAITS REAL SPEC
-                    'pos_request'        => '', // AWAITS REAL SPEC
-                    'virtual_cards'        => '', // AWAITS REAL SPEC (Flutterwave virtual cards)
-                    'virtual_cards_fund'   => '', // AWAITS REAL SPEC
-                    'virtual_cards_status' => '', // AWAITS REAL SPEC
-                    'regional_toggles'   => '', // AWAITS REAL SPEC
+                    'verify'             => '/v3/transactions/{id}/verify',
+                    'bills_categories'   => '/v3/top-bill-categories',
+                    'bills_validate'     => '/v3/bill-items/{item_code}/validate',
+                    'bills'              => '/v3/billers/{biller_code}/items/{item_code}/payment',
+                    'payments'           => '/v3/payments', // hosted checkout / payment link
+                    'payment_plans'      => '/v3/payment-plans', // invoicing plans
+                    'virtual_accounts'   => '/v3/virtual-account-numbers',
+                    'transfers'          => '/v3/transfers',
+                    'transfer_rates'     => '/v3/transfers/rates',
+                    'bulk_transfers'     => '/v3/bulk-transfers',
+                    // NOT in the current official API index (retrieved 2026-11-20):
+                    // no POS-request or regional-toggle API is published, and the
+                    // Virtual Cards API no longer appears in the docs. These stay
+                    // EMPTY so every dependent flow fails closed rather than
+                    // calling an undocumented URL.
+                    'pos_request'        => '', // NOT DOCUMENTED — dashboard flow
+                    'virtual_cards'        => '', // NOT IN CURRENT DOCS
+                    'virtual_cards_fund'   => '', // NOT IN CURRENT DOCS
+                    'virtual_cards_status' => '', // NOT IN CURRENT DOCS
+                    'regional_toggles'   => '', // NOT DOCUMENTED
                 ],
                 // Field paths carried over from the LIVE users-flutterwave.php handler,
                 // which already verifies against api.flutterwave.com/v3. These are known,
@@ -144,6 +193,68 @@ if (!function_exists('bc_fintech_provider_registry')) {
                 'signature' => ['mode' => 'optional', 'header' => 'verif-hash', 'algorithm' => 'plain_compare'],
                 'crypto'    => ['scheme' => ''],
                 'credential_tables' => ['sas_payment_gateways', 'sas_bank_transfer_gateways'],
+            ],
+            'platnova' => [
+                'label'    => 'Platnova',
+                // docs.platnova.com: production https://api.platnova.com, sandbox
+                // https://sandbox.api.platnova.co. Auth is the X-API-Key header
+                // ONLY — never Bearer, never a query parameter — and money-moving
+                // requests require an Idempotency-Key header.
+                'base_url' => 'https://api.platnova.com',
+                'sandbox_url' => 'https://sandbox.api.platnova.co',
+                'endpoints' => [
+                    // payments/sending-payments + payments/verification guides.
+                    'payments_send'   => '/v1/payments/send',
+                    'payments_verify' => '/v1/payments/verify',
+                    'payments_by_key' => '/v1/payments/by-key/{key}',
+                    // Bank lists / account-name resolution for bank transfers.
+                    'banks'           => '/v1/banks/{country}',
+                    'banks_verify'    => '/v1/banks/verify',
+                    // api-reference/cards/create (embedded OpenAPI): virtual cards.
+                    'cards_create'    => '/v1/cards/create',
+                    // partners/esim: partner eSIM catalogue, purchase and delivery.
+                    'esim_plans'        => '/v1/partner/esim/plans',
+                    'esim_orders'       => '/v1/partner/esim/orders',
+                    'esim_order'        => '/v1/partner/esim/orders/{partner_reference}',
+                    'esim_install_link' => '/v1/partner/esim/orders/{partner_reference}/install-link',
+                ],
+                'fields' => [],
+                'verify_request'  => [],
+                'response_fields' => [],
+                // What the provider could support. RLUSD is deliberately absent.
+                'assets'   => ['USDC', 'USDT'],
+                // The API key travels in secret_key and is sent verbatim.
+                'auth'     => ['header' => 'X-API-Key', 'prefix' => ''],
+                // Webhooks v2 are signed, but the signing header/algorithm have
+                // not been mapped from partners/webhooks yet: no webhook credit
+                // path exists for Platnova, so this stays fail-closed.
+                'signature' => ['mode' => 'required', 'header' => '', 'algorithm' => ''],
+                'crypto'    => ['scheme' => ''],
+                'credential_tables' => ['sas_payment_gateways'],
+            ],
+            'oneglobal' => [
+                'label'    => '1GLOBAL',
+                // 1GLOBAL Connect API (the eSIM ordering API linked from
+                // docs.1global.com): production host services.truphone.com.
+                // The recipes document POST /connect-api/v2/orders and polling
+                // GET /connect-api/v2/orders/{id}; auth is an OAuth2 Bearer
+                // access token, stored here as the gateway secret_key.
+                'base_url' => 'https://services.truphone.com/connect-api/v2',
+                'endpoints' => [
+                    'orders' => '/orders',
+                    'order'  => '/orders/{id}',
+                    // The product-catalogue path is referenced by the recipes
+                    // but its URL was not confirmed: stays closed.
+                    'catalogue' => '', // NOT CONFIRMED
+                ],
+                'fields' => [],
+                'verify_request'  => [],
+                'response_fields' => [],
+                'assets'   => [],
+                'auth'     => ['header' => 'Authorization', 'prefix' => 'Bearer '],
+                'signature' => ['mode' => 'required', 'header' => '', 'algorithm' => ''],
+                'crypto'    => ['scheme' => ''],
+                'credential_tables' => ['sas_payment_gateways'],
             ],
         ];
     }
@@ -262,6 +373,9 @@ if (!function_exists('bc_fintech_provider_refusal_message')) {
             'credentials_not_configured'  => 'Provider credentials are not saved.',
             'base_url_not_configured'     => 'Provider base URL is not configured.',
             'endpoint_not_configured'     => 'endpoint not configured',
+            'endpoint_parameter_missing'  => 'A required endpoint parameter is missing.',
+            'encryption_key_not_configured' => 'Provider encryption key is not saved.',
+            'encryption_unavailable'      => 'Payload encryption is unavailable on this server.',
             'field_mapping_not_configured'=> 'Provider field mapping is not configured.',
             'signature_scheme_not_configured' => 'Provider signature scheme is not configured.',
         ];
@@ -302,14 +416,27 @@ if (!function_exists('bc_fintech_provider_url')) {
     /**
      * Resolve an endpoint to a full URL. Returns ['ok' => bool, 'reason' => string,
      * 'url' => string]. Never guesses: an empty base URL or path is a refusal.
+     *
+     * Documented endpoints may carry {placeholder} path segments (for example
+     * Flutterwave's /v3/billers/{biller_code}/items/{item_code}/payment or
+     * Klasha's /wallet/merchant/{businessId}/...). $params supplies the values;
+     * a placeholder with no supplied value is a refusal, never a literal call.
      */
-    function bc_fintech_provider_url($provider, $endpoint, $vendor_id = 0) {
+    function bc_fintech_provider_url($provider, $endpoint, $vendor_id = 0, array $params = []) {
         $config = bc_fintech_provider_config($provider);
         if ($config === null) return ['ok' => false, 'reason' => 'unknown_provider', 'url' => ''];
         $base = trim((string)($config['base_url'] ?? ''));
         if ($base === '') return ['ok' => false, 'reason' => 'base_url_not_configured', 'url' => ''];
         $path = trim((string)($config['endpoints'][$endpoint] ?? ''));
         if ($path === '') return ['ok' => false, 'reason' => 'endpoint_not_configured', 'url' => ''];
+        if (preg_match_all('/\{([A-Za-z0-9_]+)\}/', $path, $matches)) {
+            foreach (array_unique($matches[1]) as $token) {
+                if (!isset($params[$token]) || (string)$params[$token] === '') {
+                    return ['ok' => false, 'reason' => 'endpoint_parameter_missing', 'url' => ''];
+                }
+                $path = str_replace('{' . $token . '}', rawurlencode((string)$params[$token]), $path);
+            }
+        }
         // A full URL in the endpoint overrides the base; otherwise base + path.
         if (preg_match('#^https?://#i', $path)) return ['ok' => true, 'reason' => '', 'url' => $path];
         return ['ok' => true, 'reason' => '', 'url' => rtrim($base, '/') . '/' . ltrim($path, '/')];
@@ -358,11 +485,24 @@ if (!function_exists('bc_fintech_provider_http')) {
         } elseif ($method !== '') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
-        if ($payload !== null && $payload !== '') {
+        if ($method !== 'GET' && $payload !== null && $payload !== '') {
             curl_setopt($ch, CURLOPT_POSTFIELDS, is_string($payload) ? $payload : json_encode($payload));
         }
-        if ($headers) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, array_values($headers));
+        // GET payloads travel as a query string (documented list/lookup calls).
+        if ($method === 'GET' && is_array($payload) && $payload) {
+            $glue = strpos($url, '?') === false ? '?' : '&';
+            curl_setopt($ch, CURLOPT_URL, $url . $glue . http_build_query($payload));
+        }
+
+        // The seam receives headers as a name => value map (what the tests
+        // inspect); cURL wants "Name: value" lines. Numeric entries are
+        // already formatted lines and pass through untouched.
+        $header_lines = [];
+        foreach ((array)$headers as $name => $value) {
+            $header_lines[] = is_int($name) ? (string)$value : $name . ': ' . $value;
+        }
+        if ($header_lines) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $header_lines);
         }
 
         $body = curl_exec($ch);
@@ -394,7 +534,7 @@ if (!function_exists('bc_fintech_provider_request')) {
      * Returns ['ok' => bool, 'reason' => string, 'status' => int, 'json' => array|null,
      *          'body' => string, 'error' => string, 'url' => string].
      */
-    function bc_fintech_provider_request($vendor_id, $provider, $endpoint, $method = 'GET', ?array $payload = null) {
+    function bc_fintech_provider_request($vendor_id, $provider, $endpoint, $method = 'GET', ?array $payload = null, array $extra_headers = []) {
         $slug = strtolower(trim((string)$provider));
         $check = bc_fintech_provider_configured($vendor_id, $slug, $endpoint);
         if (!$check['ready']) {
@@ -407,7 +547,20 @@ if (!function_exists('bc_fintech_provider_request')) {
 
         $config = bc_fintech_provider_config($slug);
         $creds = bc_fintech_provider_credentials($vendor_id, $slug);
-        $url = bc_fintech_provider_url($slug, $endpoint, $vendor_id);
+
+        // {placeholder} path segments are filled from same-named payload keys,
+        // which are then removed from the body (they belong in the URL).
+        $params = [];
+        $path_template = (string)($config['endpoints'][$endpoint] ?? '');
+        if ($payload !== null && preg_match_all('/\{([A-Za-z0-9_]+)\}/', $path_template, $matches)) {
+            foreach (array_unique($matches[1]) as $token) {
+                if (array_key_exists($token, $payload)) {
+                    $params[$token] = $payload[$token];
+                    unset($payload[$token]);
+                }
+            }
+        }
+        $url = bc_fintech_provider_url($slug, $endpoint, $vendor_id, $params);
         if (!$url['ok']) {
             return [
                 'ok' => false, 'reason' => $url['reason'], 'status' => 0,
@@ -423,14 +576,19 @@ if (!function_exists('bc_fintech_provider_request')) {
         if ($headerName !== '') {
             $headers[$headerName] = $prefix . (string)$creds['secret_key'];
         }
-        // Klasha's brief specifies a second token header. Sent only when configured;
-        // the value is the stored secret until the real spec says otherwise.
+        // Klasha's second header is the merchant PUBLIC key (x-auth-token in the
+        // official docs) — not the secret. Sent only when configured.
         $tokenHeader = trim((string)($auth['token_header'] ?? ''));
         if ($tokenHeader !== '' && !isset($headers[$tokenHeader])) {
-            $headers[$tokenHeader] = (string)$creds['secret_key'];
+            $headers[$tokenHeader] = (string)$creds['public_key'];
         }
         $headers['Content-Type'] = 'application/json';
         $headers['Accept'] = 'application/json';
+        foreach ($extra_headers as $name => $value) {
+            if (is_string($name) && $name !== '' && is_scalar($value)) {
+                $headers[$name] = (string)$value;
+            }
+        }
 
         $response = bc_fintech_provider_http($slug, $method, $url['url'], $headers, $payload);
         $response['reason'] = $response['ok'] ? '' : 'http_' . (int)$response['status'];

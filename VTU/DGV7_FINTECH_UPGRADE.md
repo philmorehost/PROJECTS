@@ -1342,3 +1342,124 @@ lm_edition **30**, htaccess **224**, plus new **upgrade25 193**. Contracts
 updated deliberately: plate_app/plate_migration/fintech_gate now pin the
 retired AI widget, the Support nav, the two-tier Pricing titles and the §25
 new pages instead of the pre-§25 bodies.
+
+## §26 — Live provider endpoints from the official docs (2026-11-20)
+
+The site owner supplied the four official API references (Klasha
+https://developers.klasha.com/ , Flutterwave
+https://developer.flutterwave.com/api , Platnova https://docs.platnova.com/ ,
+1GLOBAL https://docs.1global.com/api/ ). Every endpoint, auth rule and cipher
+below was transcribed from those docs (retrieved 2026-11-20, including the
+machine-readable llms.txt indexes, per-page Markdown, Platnova's embedded
+OpenAPI and Klasha's linked Postman collection). Nothing was invented: what
+the current docs do not publish stays fail-closed, as before.
+
+### Provider registry (`func/bc-fintech-providers.php`, both editions)
+
+- **Klasha** — base `https://gate.klasapps.com/pay` (the docs' live `env_url`;
+  sandbox `https://dev.kcookery.com`). Wired: login
+  (`/auth/account/v2/login`), Transaction Status verify
+  (`/nucleus/tnx/collection/status`, `gateRef`), Swap quote/confirm, Klasha
+  Wire (beneficiary, quote, initiate, fetch), CNY payout (quotation v2, bank
+  codes, initiate under `/wallet/merchant/{businessId}/...`), stablecoin
+  wallets/fees/validate/v2 payout, and virtual-account creation. Webhook
+  payload fields are mapped from `misc/webhook` (`data.tnxRef`,
+  `data.sourceAmount`, ...); `event_id` stays unmapped because the documented
+  payloads carry none.
+- **Flutterwave** — base `https://api.flutterwave.com`. Wired: transaction
+  verify, bill categories (`/v3/top-bill-categories`), bill validate
+  (GET `/v3/bill-items/{item_code}/validate`), bill purchase
+  (`/v3/billers/{biller_code}/items/{item_code}/payment`), hosted checkout
+  (`POST /v3/payments`), payment plans, virtual account numbers, transfers,
+  transfer rates and bulk transfers.
+- **Platnova (new provider)** — base `https://api.platnova.com`, `X-API-Key`
+  header only. Wired: payments send/verify, bank list + account-name verify,
+  card creation (`/v1/cards/create`), and the partner eSIM API (plans,
+  orders, order status, install link). Credentials: gateway row `platnova`
+  in `sas_payment_gateways`, API key in the secret field.
+- **1GLOBAL (new provider, slug `oneglobal`)** — Connect API at
+  `https://services.truphone.com/connect-api/v2`: create order, poll order.
+  The Truphone management API at docs.1global.com has no eSIM ordering; the
+  Connect recipes supply the order flow and the completed-order shape
+  (`output.matching_id/iccid`, `_metadata.links._lpa/_qrcode/_smdp`).
+  Credentials: gateway row `oneglobal`, OAuth Bearer token as the secret.
+
+Endpoint paths may carry `{placeholder}` segments; the request seam fills
+them from same-named payload keys and refuses (`endpoint_parameter_missing`)
+rather than ever calling a literal-brace URL. The cURL branch of the HTTP
+seam now converts the seam's `name => value` header map into proper
+`Name: value` lines (previously `array_values()` dropped the names, which
+would have broken every real call) and sends GET payloads as query strings.
+
+### Still fail-closed — deliberately
+
+- **Flutterwave virtual cards, POS requests, regional toggles:** the current
+  official API index publishes none of them (the Virtual Cards API no longer
+  appears in the docs). Registry paths stay empty; the Flutterwave-only card
+  adapter keeps refusing with `endpoint_not_configured`. Fill the three
+  registry paths if Flutterwave documents them and it goes live unchanged.
+- **Klasha webhooks:** payload shapes are documented, a signature scheme is
+  not. The signature header/algorithm stay empty, so `users-klasha.php`
+  keeps refusing every delivery; collections are confirmed through the
+  Transaction Status API instead.
+- **Platnova / 1GLOBAL webhooks and the 1GLOBAL product catalogue:** signing
+  details / catalogue path not yet transcribed; no webhook credit path
+  exists for these providers.
+- **Platnova customer & virtual-account creation:** flows are documented but
+  the raw paths were not transcribed verbatim, so no wrapper invents them.
+
+### Klasha adapter (`func/bc-fintech-klasha.php`)
+
+- Auth per docs: `x-auth-token` = merchant **public** key; `Authorization:
+  Bearer` = token from `POST /auth/account/v2/login` (or a pasted JWT).
+  Credential mapping on the existing gateway row: public_key → x-auth-token,
+  encrypt_key → encryption key, secret_key → account password **or** Bearer
+  token. Vendor options `klasha_login_email` / `klasha_business_id` (set in
+  Service Control) supply the login username and the CNY `{businessId}`.
+- The brief's "3DES" question is settled — the docs publish **two** schemes,
+  both now implemented and known-answer tested: 3DES-CBC (`des-ede3-cbc`,
+  official PHP snippet) for the Payments API, and AES-256-CBC in the OpenSSL
+  salted format (EVP_BytesToKey/MD5, "Salted__") for the wallet/Wire/Swap/
+  CNY/virtual-account APIs, sent as `{"message": "<ciphertext>"}`. Unknown
+  schemes and missing OpenSSL refuse (`encryption_unavailable`) — never a
+  plaintext fallback for an endpoint that requires encryption.
+
+### Admin & pages
+
+- `bc-admin/ServiceControl.php`: the Active Fintech Provider card now also
+  saves Platnova / 1GLOBAL credentials and the Klasha login helpers (blank
+  key fields keep the stored key). Klasha's PaymentGateway field is labelled
+  "ENCRYPTION KEY" with the mapping documented inline.
+- `web/ESIM.php`: when Platnova partner eSIM is configured, plans render
+  live from `/v1/partner/esim/plans` with real kobo pricing; orders record
+  against the shown rail. Display-only — no wallet is debited from the page
+  (purchases debit the merchant's Platnova wallet and deliver by webhook, so
+  order execution stays with the recorded-request workflow until priced
+  checkout is enabled).
+- `web/IntlTransfer.php`: after recording a request, the notice shows an
+  indicative **live quote** — Klasha Swap FX quote or Flutterwave transfer
+  rates, per the active provider. Quotes move no money.
+
+### Tests & CI
+
+- New `VTU/tests/provider_live_test.php` (**71** checks locally; the
+  OpenSSL-dependent known-answer vectors and encrypted-call assertions run
+  in CI's PHP): registry values, placeholder URLs, AES/3DES KATs generated
+  with an independent implementation, Klasha login + encrypted CNY flow,
+  Platnova X-API-Key/idempotency headers, 1GLOBAL order extraction, the
+  preserved fail-closed set, and cross-edition parity of all §26 files.
+- `fintech_gate_test.php` §19 now pins the documented registry (gate count
+  **1053 → 1065**); the refusal-order contracts are unchanged but clear the
+  shipped values through the override seam to keep exercising them. The old
+  "klasha ships no cipher" guard is reversed in the test and in CI: both
+  documented ciphers must now be present. CI also lints/runs the new test
+  and adapters, parity-compares them, and covers them with the
+  no-direct-balance-write rule.
+- `provider_smoke.php` reports all four providers; the remaining "not
+  configured" items are exactly the deliberate gaps above (plus credentials
+  until an admin saves them).
+
+Test counts after this change: gate **1065**, policy **70**, plate_app
+**154**, plate_admin **708**, plate_migration **1090**,
+backoffice_regression **184**, lm_edition **30**, htaccess **224**,
+upgrade25 **193**, provider_live **71** (local no-OpenSSL branch).

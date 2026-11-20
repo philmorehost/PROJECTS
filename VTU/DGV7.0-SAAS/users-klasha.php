@@ -2,10 +2,13 @@
 /**
  * Klasha collection/payout webhook.
  *
- * DGV7 phase 3. Klasha replaces the retired Plisio for USDC/USDT collection and
- * payout, but NOTHING is live until the provider specification is supplied:
- * bc_fintech_provider_registry() leaves Klasha's base URL, endpoint paths, field
- * mapping and signature scheme EMPTY, and the handler refuses while they are.
+ * DGV7 phase 3 + §26. Klasha's API endpoints, field mapping and payload ciphers
+ * are wired from the official docs, but this webhook STAYS fail-closed: the
+ * docs publish webhook payload shapes yet no signature scheme, and
+ * bc_fintech_provider_registry() therefore leaves Klasha's signature header and
+ * algorithm EMPTY. The handler refuses every delivery at the signature step and
+ * nothing is credited here; collection state is confirmed through Klasha's
+ * Transaction Status API instead (bc_klasha_verify()).
  *
  * Contract obeyed here:
  *   - read the RAW php://input body (never a re-encoded copy) so the signature is
