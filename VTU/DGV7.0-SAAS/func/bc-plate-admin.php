@@ -803,7 +803,7 @@ if (!function_exists('bc_adm_widgets')) {
 <!-- Forced Security PIN setup — required to self-unblock via the anti-brute-force
      lockout flow (web/LockoutResolution.php). Modal, not a redirect, so it works
      on whatever page the admin is already on. -->
-<div class="modal" id="forcePinModal" tabindex="-1" aria-hidden="true">
+<div class="modal" id="forcePinModal" tabindex="-1" aria-hidden="true" style="display:none;">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-body" style="padding:8px;">
@@ -830,6 +830,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var modalEl = document.getElementById('forcePinModal');
     if (!modalEl) return;
     modalEl.classList.add('show');
+    modalEl.style.display = 'flex';
 
     var errBox = document.getElementById('forcePinError');
     var submitBtn = document.getElementById('forcePinSubmit');
@@ -859,6 +860,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (data) {
             if (data.ok) {
                 modalEl.classList.remove('show');
+                modalEl.style.display = 'none';
             } else {
                 showErr(data.msg || 'Could not save PIN. Please try again.');
                 submitBtn.disabled = false;
@@ -896,7 +898,7 @@ if (!function_exists('bc_adm_foot')) {
 <!-- §32 transaction receipt: history rows + post-purchase "View Receipt" call
      showTransactionDetails(ref[, isAdmin]); it fetches a scoped JSON payload
      (provider internals are staff-only) and offers PDF / image downloads. -->
-<div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="z-index:2000;">
+<div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="display:none;z-index:2000;">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header border-0 pb-0">
@@ -957,7 +959,7 @@ if (!function_exists('bc_adm_foot')) {
     }
     function closeModal(el) {
         el.classList.remove('show');
-        el.style.display = '';
+        el.style.display = 'none';
         if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance) {
             var inst = window.bootstrap.Modal.getInstance(el);
             if (inst) inst.hide();
