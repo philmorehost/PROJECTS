@@ -1383,7 +1383,7 @@ if (!function_exists('bc_app_widgets')) {
         if ($user && !empty($user['username'])):
             ?>
 <!-- Referral Modal -->
-<div class="modal" id="referralModal" tabindex="-1" aria-labelledby="referralModalLabel" aria-hidden="true">
+<div class="modal" id="referralModal" tabindex="-1" aria-labelledby="referralModalLabel" aria-hidden="true" style="display:none;">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
@@ -1437,7 +1437,7 @@ if (!function_exists('bc_app_foot')) {
 <!-- §32 transaction receipt: history rows + post-purchase "View Receipt" call
      showTransactionDetails(ref[, isAdmin]); it fetches a scoped JSON payload
      (provider internals are staff-only) and offers PDF / image downloads. -->
-<div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="z-index:2000;">
+<div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="display:none;z-index:2000;">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header border-0 pb-0">
@@ -1498,7 +1498,7 @@ if (!function_exists('bc_app_foot')) {
     }
     function closeModal(el) {
         el.classList.remove('show');
-        el.style.display = '';
+        el.style.display = 'none';
         if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance) {
             var inst = window.bootstrap.Modal.getInstance(el);
             if (inst) inst.hide();
