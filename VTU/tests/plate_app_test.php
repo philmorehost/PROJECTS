@@ -180,6 +180,10 @@ chk(strpos($html, 'Wallet &amp; Transfers') !== false, 'topbar crumb is escaped'
 chk(strpos($html, 'Page body') !== false, 'page body survives between the helpers');
 chk(strpos($html, '</html>') !== false, 'foot closes the document');
 chk(strpos($html, 'pkAppBurger') !== false, 'shell script is printed');
+// §36: shell-owned modals must be SELF-HIDING in the rendered output (see
+// plate_admin_test) — CSS-hidden-only modals leak on standalone pages.
+chk(strpos($html, 'id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="display:none;z-index:2000;"') !== false, 'app receipt modal renders with inline display:none');
+chk(!preg_match('/<div class="modal" id="[^"]+"(?![^>]*display:none)/', $html), 'every shell modal in the app render starts hidden');
 
 // Navigation: the sidebar lists main items only, each linking to its Hub page;
 // the sub-items live on the Hub matrix, with the same service gates applied.
