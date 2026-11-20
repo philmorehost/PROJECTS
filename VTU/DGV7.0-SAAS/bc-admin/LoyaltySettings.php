@@ -31,6 +31,20 @@ if ($check_exists && mysqli_num_rows($check_exists) == 0) {
 
 // Handle form submission to update loyalty settings
 if (isset($_POST["update-loyalty-settings"])) {
+    bc_validate_csrf();
+    require_once __DIR__ . '/../func/bc-referral-coins.php';
+    $reward_coins = bc_referral_coin_amount($_POST['referral_reward_coins'] ?? '');
+    if ($reward_coins === null) {
+        $_SESSION['product_purchase_response'] = 'Referral coins must be a whole number between 0 and 9,999,999.';
+        header('Location: LoyaltySettings.php'); exit;
+    }
+    $conversion_rate = filter_var($_POST['conversion_rate'] ?? '', FILTER_VALIDATE_FLOAT);
+    $min_conversion_threshold = filter_var($_POST['min_conversion_threshold'] ?? '', FILTER_VALIDATE_INT);
+    if ($conversion_rate === false || !is_finite($conversion_rate) || $conversion_rate <= 0 || $conversion_rate > 1000000000
+        || $min_conversion_threshold === false || $min_conversion_threshold < 1 || $min_conversion_threshold > 1000000000) {
+        $_SESSION['product_purchase_response'] = 'Enter a positive conversion rate and minimum coin threshold.';
+        header('Location: LoyaltySettings.php'); exit;
+    }
     // Update daily bonus amounts in the wide table format
     $day1 = (int)$_POST["bonus_day_1"];
     $day2 = (int)$_POST["bonus_day_2"];
@@ -39,7 +53,7 @@ if (isset($_POST["update-loyalty-settings"])) {
     $day5 = (int)$_POST["bonus_day_5"];
     $day6 = (int)$_POST["bonus_day_6"];
     $day7 = (int)$_POST["bonus_day_7"];
-    $first_purchase_bonus = (int)$_POST["first_purchase_bonus"];
+    $first_purchase_bonus = 0; // retired: first purchases cannot unlock referral coins
 
     $query_bonus = "INSERT INTO sas_loyalty_bonus_settings (vendor_id, day_1_bonus, day_2_bonus, day_3_bonus, day_4_bonus, day_5_bonus, day_6_bonus, day_7_bonus, first_purchase_bonus)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -58,22 +72,14 @@ if (isset($_POST["update-loyalty-settings"])) {
     mysqli_stmt_execute($stmt_bonus);
 
     // Update conversion rate and minimum threshold in the key-value settings table
-    $conversion_rate = mysqli_real_escape_string($connection_server, $_POST["conversion_rate"]);
-    $min_conversion_threshold = mysqli_real_escape_string($connection_server, $_POST["min_conversion_threshold"]);
     $coins_email_threshold = (int)mysqli_real_escape_string($connection_server, $_POST["coins_email_threshold"] ?? 0);
-    // §34: referral programme terms — reward paid to BOTH sides and the
-    // qualifying volume that unlocks it. Stored in sas_settings so the
-    // referral engine, the web Refer & Earn page and the app API all read
-    // exactly what the admin saved here.
-    $referral_reward_usd = max(0.0, (float)($_POST["referral_reward_usd"] ?? 10));
-    $referral_qualifying_usd = max(0.0, (float)($_POST["referral_qualifying_usd"] ?? 100));
 
     $settings_to_update = [
         'points_conversion_rate' => $conversion_rate,
         'min_points_conversion' => $min_conversion_threshold,
         'coins_email_threshold' => $coins_email_threshold,
-        'referral_reward_usd' => $referral_reward_usd,
-        'referral_qualifying_usd' => $referral_qualifying_usd,
+        'referral_reward_coins' => $reward_coins,
+        'referral_qualifying_usd' => 100,
     ];
 
     foreach ($settings_to_update as $name => $value) {
@@ -96,7 +102,7 @@ $loyalty_settings_row = mysqli_stmt_get_result($stmt);
 $loyalty_settings = mysqli_fetch_assoc($loyalty_settings_row);
 
 // Fetch conversion rate and minimum threshold from sas_settings
-$stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_settings WHERE vendor_id = ? AND setting_name IN ('points_conversion_rate', 'min_points_conversion', 'coins_email_threshold', 'referral_reward_usd', 'referral_qualifying_usd')");
+$stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_settings WHERE vendor_id = ? AND setting_name IN ('points_conversion_rate', 'min_points_conversion', 'coins_email_threshold', 'referral_reward_coins', 'referral_qualifying_usd')");
 mysqli_stmt_bind_param($stmt, "i", $vendor_id);
 mysqli_stmt_execute($stmt);
 $settings_query = mysqli_stmt_get_result($stmt);
@@ -107,8 +113,9 @@ while($row = mysqli_fetch_assoc($settings_query)){
 $points_conversion_rate = $settings['points_conversion_rate'] ?? 500;
 $min_points_conversion = $settings['min_points_conversion'] ?? 100;
 $coins_email_threshold = $settings['coins_email_threshold'] ?? 0;
-$referral_reward_usd = isset($settings['referral_reward_usd']) && (float)$settings['referral_reward_usd'] > 0 ? (float)$settings['referral_reward_usd'] : 10;
-$referral_qualifying_usd = isset($settings['referral_qualifying_usd']) && (float)$settings['referral_qualifying_usd'] > 0 ? (float)$settings['referral_qualifying_usd'] : 100;
+$referral_reward_coins = $settings['referral_reward_coins'] ?? 1000;
+$referral_qualifying_usd = 100;
+
 
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
@@ -126,7 +133,7 @@ bc_adm_head("Loyalty Settings | " . ($get_all_super_admin_site_details["site_tit
                         <h5 class="fw-bold mb-0">Daily Streak Bonuses</h5>
                     </div>
                     <div class="card-body p-4">
-                        <form method="post">
+                        <form method="post"><?php echo bc_csrf_field(); ?>
                             <div class="row g-3">
                                 <?php for ($day = 1; $day <= 7; $day++) : ?>
                                     <div class="col-md-4 col-6">
@@ -169,32 +176,25 @@ bc_adm_head("Loyalty Settings | " . ($get_all_super_admin_site_details["site_tit
                                 <p class="small text-muted mt-2">When a user's coins reach this amount, they automatically receive an email guide on converting to wallet funds. Set 0 to disable.</p>
                             </div>
                             <div class="col-md-6">
-                                <label for="referral_reward_usd" class="form-label small fw-bold text-muted text-uppercase">Referral Reward (USD)</label>
+                                <label for="referral_reward_coins" class="form-label small fw-bold text-muted text-uppercase">Coins per Referred Friend</label>
                                 <div class="input-group input-group-lg">
-                                    <span class="input-group-text bg-light small">$</span>
-                                    <input type="number" step="0.01" min="0" class="form-control rounded-3" id="referral_reward_usd" name="referral_reward_usd" value="<?php echo htmlspecialchars((string)$referral_reward_usd); ?>" required>
+                                    <span class="input-group-text bg-light small">Coins</span>
+                                    <input type="number" step="1" min="0" max="9999999" class="form-control rounded-3" id="referral_reward_coins" name="referral_reward_coins" value="<?php echo htmlspecialchars((string)$referral_reward_coins); ?>" required>
                                 </div>
-                                <p class="small text-muted mt-2">Paid to BOTH the referrer and the referred user (converted to &#8358; at the live exchange rate) once the referred user reaches the qualifying volume.</p>
+                                <p class="small text-muted mt-2">Default: 1,000 coins for the referrer only. Coins remain locked until the friend completes $100 in verified Crypto or International Transfers. Set 0 to disable rewards.</p>
                             </div>
                             <div class="col-md-6">
                                 <label for="referral_qualifying_usd" class="form-label small fw-bold text-muted text-uppercase">Qualifying Volume (USD)</label>
                                 <div class="input-group input-group-lg">
                                     <span class="input-group-text bg-light small">$</span>
-                                    <input type="number" step="0.01" min="0" class="form-control rounded-3" id="referral_qualifying_usd" name="referral_qualifying_usd" value="<?php echo htmlspecialchars((string)$referral_qualifying_usd); ?>" required>
+                                    <input type="number" step="0.01" min="0" class="form-control rounded-3" id="referral_qualifying_usd" readonly value="<?php echo htmlspecialchars((string)$referral_qualifying_usd); ?>" required>
                                 </div>
                                 <p class="small text-muted mt-2">Cumulative Crypto &amp; International Transfer volume a referred user must transact before the referral reward pays out. Other products never count.</p>
                             </div>
                             <div class="col-12">
                                 <hr class="my-2 opacity-25">
                             </div>
-                            <div class="col-12">
-                                <label for="first_purchase_bonus" class="form-label small fw-bold text-muted text-uppercase">Referral Sign-up Bonus</label>
-                                <div class="input-group input-group-lg">
-                                    <input type="number" class="form-control rounded-3" id="first_purchase_bonus" name="first_purchase_bonus" value="<?php echo $loyalty_settings['first_purchase_bonus'] ?? 100; ?>" required>
-                                    <span class="input-group-text bg-light small"><i class="bi bi-gem text-warning me-1"></i> Coins</span>
-                                </div>
-                                <p class="small text-muted mt-2">Bonus awarded to referrer upon first successful purchase by referee</p>
-                            </div>
+                            <div class="col-12"><div class="alert alert-info">Only completed, verified settlements count. Funding, quotes, pending, failed and reversed transactions are excluded. Locked rewards cannot be converted or withdrawn. <a href="ReferralSettlements.php">Review qualifying settlements</a>.</div></div>
                         </div>
                         <div class="mt-4">
                             <button name="update-loyalty-settings" type="submit" class="btn btn-primary btn-lg px-5 rounded-pill fw-bold shadow-sm">

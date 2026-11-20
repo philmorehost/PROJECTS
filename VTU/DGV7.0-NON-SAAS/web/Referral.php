@@ -20,10 +20,11 @@ include_once(__DIR__ . "/../func/bc-plate-app.php");
 $ref_link = bc_app_root_url("Register.php") . "?referral=" . urlencode((string)$svc_user['username']);
 $stats = bc_referral_progress_for_user($vid, (int)$svc_user['id']);
 $ref_cfg = bc_referral_settings($vid);
-$ref_reward_fmt = number_format((float)$ref_cfg['reward_usd'], 2);
+$ref_reward_fmt = number_format((int)$ref_cfg['reward_coins']);
 $ref_qual_fmt = number_format((float)$ref_cfg['qualifying_usd'], 2);
 $notice = ''; $notice_type = 'info';
 if (isset($_POST['apply_creator'])) {
+    bc_validate_csrf();
     $full_name = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['full_name'] ?? '')));
     $email = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['email'] ?? '')));
     $platform = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['platform'] ?? '')));
@@ -52,15 +53,15 @@ bc_app_topbar(array("title" => "REFER & EARN", "crumb" => "Home / Refer & Earn")
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white" style="background: linear-gradient(135deg, #0b1220, #312e81);">
         <div class="card-body p-4 p-md-5">
             <span class="badge bg-warning text-dark mb-2">REFERRAL PROGRAM</span>
-            <h3 class="fw-bold">You get $<?php echo $ref_reward_fmt; ?>. Your friend gets $<?php echo $ref_reward_fmt; ?>.</h3>
-            <p class="opacity-75 mb-0">When someone you refer completes a minimum of <strong>$<?php echo $ref_qual_fmt; ?> in Crypto &amp; International Transfers</strong>, you BOTH receive $<?php echo $ref_reward_fmt; ?>. Other products do not count toward the $<?php echo $ref_qual_fmt; ?>.</p>
+            <h3 class="fw-bold">Earn <?php echo $ref_reward_fmt; ?> coins per friend.</h3>
+            <p class="opacity-75 mb-0">When someone you refer completes a minimum of <strong>$<?php echo $ref_qual_fmt; ?> in Crypto &amp; International Transfers</strong>, your <?php echo $ref_reward_fmt; ?> referral coins unlock for conversion. Only completed, verified settlements count; funding, pending requests and reversals do not. Other products do not count toward the $<?php echo $ref_qual_fmt; ?>.</p>
         </div>
     </div>
 
     <div class="row g-3 mb-4 text-center">
         <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-share-fill fs-3 text-primary"></i><strong class="d-block mt-2">1 · Share your link</strong><span class="small text-muted">Send your personal referral link to friends.</span></div></div>
         <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-graph-up-arrow fs-3 text-primary"></i><strong class="d-block mt-2">2 · They transact $<?php echo $ref_qual_fmt; ?></strong><span class="small text-muted">In Crypto or International Transfers — other products don't count.</span></div></div>
-        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-cash-coin fs-3 text-primary"></i><strong class="d-block mt-2">3 · You both get $<?php echo $ref_reward_fmt; ?></strong><span class="small text-muted">$<?php echo $ref_reward_fmt; ?> lands in your wallet and $<?php echo $ref_reward_fmt; ?> in theirs, automatically.</span></div></div>
+        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-cash-coin fs-3 text-primary"></i><strong class="d-block mt-2">3 · Unlock <?php echo $ref_reward_fmt; ?> coins</strong><span class="small text-muted">Coins become available for conversion after eligibility checks. Reversed transactions can revoke a reward.</span></div></div>
     </div>
 
     <div class="row g-4">
@@ -74,14 +75,15 @@ bc_app_topbar(array("title" => "REFER & EARN", "crumb" => "Home / Refer & Earn")
                 <div class="row text-center g-3 mb-4">
                     <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo (int)$stats['referred']; ?></div><span class="small text-muted">People referred</span></div>
                     <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo (int)$stats['qualified']; ?></div><span class="small text-muted">Qualified ($<?php echo $ref_qual_fmt; ?>+)</span></div>
-                    <div class="col-4"><div class="h4 fw-bold mb-0">$<?php echo number_format($stats['earned_usd'], 2); ?></div><span class="small text-muted">Earned so far</span></div>
+                    <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo number_format($stats['earned_coins']); ?> coins</div><span class="small text-muted">Unlocked rewards</span></div>
                 </div>
+                <div class="alert alert-info small"><strong><?php echo number_format($stats['locked_coins']); ?> locked coins</strong> — not spendable or withdrawable. Each friend needs $100 of verified Crypto &amp; International Transfers. Identity verification is required. Terms apply. <?php if ($stats['legacy_locked_coins'] > 0): ?>An additional <?php echo number_format($stats['legacy_locked_coins']); ?> legacy referral coins are held until all previously rewarded friends are verified.<?php endif; ?></div>
                 <?php if ($stats['rows']): ?>
                 <h6 class="fw-bold mb-2">Referral progress</h6>
                 <?php foreach ($stats['rows'] as $r): $pct = min(100, ((float)$r['qualifying_usd'] / max(1.0, (float)$ref_cfg['qualifying_usd'])) * 100); ?>
                     <div class="mb-3">
-                        <div class="d-flex justify-content-between small"><span><strong>@<?php echo htmlspecialchars($r['referee_name'] ?? 'user'); ?></strong></span><span>$<?php echo number_format((float)$r['qualifying_usd'], 2); ?> / $<?php echo $ref_qual_fmt; ?> <?php echo (int)$r['rewarded'] === 1 ? '· <span class="text-success fw-bold">Rewarded</span>' : ''; ?></span></div>
-                        <div class="progress rounded-pill" style="height:8px;"><div class="progress-bar" style="width: <?php echo $pct; ?>%"></div></div>
+                        <div class="d-flex justify-content-between small"><span><strong>@<?php echo htmlspecialchars($r['referee_name'] ?? 'user'); ?></strong></span><span>$<?php echo number_format((float)$r['qualifying_usd'], 2); ?> / $<?php echo $ref_qual_fmt; ?> <?php echo (int)$r['rewarded'] === 1 ? '· <span class="text-success fw-bold">Unlocked</span>' : '· ' . htmlspecialchars(str_replace('_',' ', $r['reward_status'])); ?></span></div>
+                        <div class="small text-muted mb-1"><?php echo number_format($r['coins']); ?> coins · $<?php echo number_format($r['remaining_usd'],2); ?> remaining · <?php echo round($pct); ?>% complete</div><div class="progress rounded-pill" role="progressbar" aria-label="Qualifying transaction progress" aria-valuenow="<?php echo round($pct); ?>" aria-valuemin="0" aria-valuemax="100" style="height:8px;"><div class="progress-bar" style="width: <?php echo $pct; ?>%"></div></div>
                     </div>
                 <?php endforeach; ?>
                 <?php else: ?>
@@ -95,7 +97,7 @@ bc_app_topbar(array("title" => "REFER & EARN", "crumb" => "Home / Refer & Earn")
                 <h6 class="fw-bold">Promote the referral program. Get paid.</h6>
                 <p class="small text-muted">Models, content creators and influencers can apply to promote this program for paid partnerships. T&amp;Cs apply.</p>
                 <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-                <form method="post">
+                <form method="post"><?php echo bc_csrf_field(); ?>
                     <div class="mb-2"><input type="text" name="full_name" class="form-control" placeholder="Full name" required></div>
                     <div class="mb-2"><input type="email" name="email" class="form-control" placeholder="Email address" required></div>
                     <div class="mb-2"><select name="platform" class="form-select"><option>Instagram</option><option>TikTok</option><option>YouTube</option><option>X (Twitter)</option><option>Facebook</option><option>Other</option></select></div>

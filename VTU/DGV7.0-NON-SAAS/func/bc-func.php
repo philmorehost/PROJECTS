@@ -699,52 +699,8 @@ function chargeUser($type, $product_unique_id, $type_alternative, $reference, $a
 						sendVendorEmail($get_vendor_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
 						// Email End
 
-						// --- First Purchase Referral Bonus ---
-						if ($status == 1 && !empty($get_logged_user_det["referral_id"]) && $get_logged_user_det["referral_bonus_awarded"] == 0) {
-							// Check if this is the user's first successful transaction
-							$query_first_trans = "SELECT id FROM sas_transactions WHERE vendor_id = ? AND username = ? AND status = 1 LIMIT 2";
-							$stmt_first_trans = mysqli_prepare($connection_server, $query_first_trans);
-							mysqli_stmt_bind_param($stmt_first_trans, "is", $get_logged_user_det["vendor_id"], $get_logged_user_det["username"]);
-							mysqli_stmt_execute($stmt_first_trans);
-							$result_first_trans = mysqli_stmt_get_result($stmt_first_trans);
-
-							if (mysqli_num_rows($result_first_trans) == 1) {
-								// Fetch referral bonus amount
-								$query_bonus_settings = "SELECT first_purchase_bonus FROM sas_loyalty_bonus_settings WHERE vendor_id = ? LIMIT 1";
-								$stmt_bonus_settings = mysqli_prepare($connection_server, $query_bonus_settings);
-								mysqli_stmt_bind_param($stmt_bonus_settings, "i", $get_logged_user_det["vendor_id"]);
-								mysqli_stmt_execute($stmt_bonus_settings);
-								$result_bonus_settings = mysqli_stmt_get_result($stmt_bonus_settings);
-								$bonus_settings = mysqli_fetch_assoc($result_bonus_settings);
-								$bonus_amount = $bonus_settings['first_purchase_bonus'] ?? 100;
-
-								// Get referrer details
-								$query_referrer = "SELECT * FROM sas_users WHERE id = ? AND vendor_id = ?";
-								$stmt_referrer = mysqli_prepare($connection_server, $query_referrer);
-								mysqli_stmt_bind_param($stmt_referrer, "ii", $get_logged_user_det["referral_id"], $get_logged_user_det["vendor_id"]);
-								mysqli_stmt_execute($stmt_referrer);
-								$result_referrer = mysqli_stmt_get_result($stmt_referrer);
-								$referrer = mysqli_fetch_assoc($result_referrer);
-
-								if ($referrer) {
-									// Award bonus to referrer
-									$log_type_bonus = 'REFERRAL_BONUS';
-									$query_log_bonus = "INSERT INTO sas_points_log (vendor_id, username, point_amount, log_type) VALUES (?, ?, ?, ?)";
-									$stmt_log_bonus = mysqli_prepare($connection_server, $query_log_bonus);
-									mysqli_stmt_bind_param($stmt_log_bonus, "isis", $referrer['vendor_id'], $referrer['username'], $bonus_amount, $log_type_bonus);
-									mysqli_stmt_execute($stmt_log_bonus);
-
-									// Notify the referrer if their coins crossed the conversion-email threshold
-									bc_maybe_send_coin_guide_email($referrer['vendor_id'], $referrer['username']);
-
-									// Mark bonus as awarded
-									$query_update_user = "UPDATE sas_users SET referral_bonus_awarded = 1 WHERE id = ?";
-									$stmt_update_user = mysqli_prepare($connection_server, $query_update_user);
-									mysqli_stmt_bind_param($stmt_update_user, "i", $get_logged_user_det["id"]);
-									mysqli_stmt_execute($stmt_update_user);
-								}
-							}
-						}
+						// Referral coins are never awarded on a first purchase.
+                        // Only audited qualifying settlements unlock the reward.
 
 						return "success";
 					} else {

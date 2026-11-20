@@ -1,35 +1,5 @@
 <?php
-/**
- * web/api/referral.php
- *
- * App/API endpoint for the "Refer and Earn" referral feature.
- *
- * Everything here mirrors the web implementation exactly, so the app and the website can never
- * disagree about a number:
- *
- *   code        the referral code IS the username        (web/Register.php matches username=)
- *   link        <host>/web/Register.php?referral=<username>
- *                                                        (web/Dashboard.php copyReferLink())
- *   reward      the vendor's first_purchase_bonus VTU Coins, paid to the REFERRER when the
- *               referred user completes their FIRST successful transaction
- *                                                        (func/bc-func.php first-purchase block)
- *   count       rows in sas_users whose referral_id is this user
- *                                                        (web/Dashboard.php referral card)
- *
- * GET -> {
- *   status, data: {
- *     referral_code, referral_link, share_message,
- *     referral_bonus, coins_enabled, coins_balance, coins_from_referrals,
- *     total_referrals, qualified_referrals, pending_referrals,
- *     referred_users: [ { username, name, joined, qualified } ]
- *   }
- * }
- *
- * A referral starts as "pending" and becomes "qualified" once that user's first transaction
- * succeeds and the bonus is actually paid (referral_bonus_awarded flips to 1). Reporting the two
- * separately matters: showing everyone the number of people who signed up would promise coins
- * that have not been earned yet.
- */
+/** Authenticated referral growth and locked/unlocked coin rewards. */
 session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
@@ -118,37 +88,20 @@ if (!empty($bc_ref_columns)) {
 $bc_ref_schema_ready = in_array('referral_id', $bc_ref_columns)
     && in_array('referral_bonus_awarded', $bc_ref_columns);
 
-// ── Referral totals ───────────────────────────────────────────────────────────
-// referral_bonus_awarded lives on the REFERRED user and means "this user's first purchase has
-// already paid their referrer", so qualified counts the referrals that actually earned coins.
-$total_referrals = 0; $qualified_referrals = 0;
-$stmt = mysqli_prepare($connection_server,
-    "SELECT COUNT(*) AS total,
-            SUM(CASE WHEN referral_bonus_awarded = 1 THEN 1 ELSE 0 END) AS qualified
-     FROM sas_users WHERE vendor_id = ? AND referral_id = ?");
-if ($stmt) { mysqli_stmt_bind_param($stmt, "is", $vendor_id, $user_id); }
-$totals = bc_referral_fetch_row($stmt);
-if ($totals) {
-    $total_referrals     = (int) ($totals['total'] ?? 0);
-    $qualified_referrals = (int) ($totals['qualified'] ?? 0);
+require_once __DIR__ . '/../../func/bc-fintech-services.php';
+try {
+    $growth = bc_referral_progress_for_user((int)$vendor_id, (int)$user_id);
+    $cfg = bc_referral_settings((int)$vendor_id);
+} catch (Throwable $e) {
+    http_response_code(503);
+    echo json_encode(array('status'=>'error','message'=>'Referral progress is temporarily unavailable.'));
+    exit;
 }
-$pending_referrals = max(0, $total_referrals - $qualified_referrals);
-
-// ── Coins earned specifically from referrals (the ledger IS the source of truth) ──
-$coins_from_referrals = 0;
-$stmt = mysqli_prepare($connection_server,
-    "SELECT COALESCE(SUM(point_amount), 0) AS coins FROM sas_points_log
-     WHERE vendor_id = ? AND username = ? AND log_type = 'REFERRAL_BONUS'");
-if ($stmt) { mysqli_stmt_bind_param($stmt, "is", $vendor_id, $username); }
-$earned = bc_referral_fetch_row($stmt);
-if ($earned) { $coins_from_referrals = (int) ($earned['coins'] ?? 0); }
-
-// ── Current bonus amount, coin balance and whether coins are switched on ──────
-$referral_bonus = 100;
-$stmt = mysqli_prepare($connection_server, "SELECT first_purchase_bonus FROM sas_loyalty_bonus_settings WHERE vendor_id = ? LIMIT 1");
-if ($stmt) { mysqli_stmt_bind_param($stmt, "i", $vendor_id); }
-$lr = bc_referral_fetch_row($stmt);
-if ($lr && isset($lr['first_purchase_bonus'])) { $referral_bonus = (int) $lr['first_purchase_bonus']; }
+$total_referrals=$growth['referred'];
+$qualified_referrals=$growth['qualified'];
+$pending_referrals=max(0,$total_referrals-$qualified_referrals);
+$coins_from_referrals=$growth['earned_coins'];
+$referral_bonus=$cfg['reward_coins'];
 
 // get_user_vtu_details() and isServiceEnabled() live in bc-func.php and query sas_points_log /
 // sas_conversions / sas_services directly. On an install where any of those is missing they raise
@@ -172,26 +125,12 @@ try {
 $host_base = !empty($web_http_host) ? rtrim($web_http_host, '/') : ("https://" . bc_safe_host());
 $referral_link = $host_base . "/web/Register.php?referral=" . rawurlencode($username);
 
-// ── The people this user referred ─────────────────────────────────────────────
-$referred_users = [];
-$stmt = mysqli_prepare($connection_server,
-    "SELECT username, firstname, lastname, referral_bonus_awarded, reg_date
-     FROM sas_users WHERE vendor_id = ? AND referral_id = ? ORDER BY id DESC LIMIT 50");
-if ($stmt) { mysqli_stmt_bind_param($stmt, "is", $vendor_id, $user_id); }
-if ($stmt !== false && $stmt !== null && mysqli_stmt_execute($stmt)) {
-    $rq = mysqli_stmt_get_result($stmt);
-    if ($rq) {
-        while ($row = mysqli_fetch_assoc($rq)) {
-            $name = trim(($row['firstname'] ?? '') . ' ' . ($row['lastname'] ?? ''));
-            $referred_users[] = [
-                "username"  => $row['username'],
-                "name"      => $name !== '' ? $name : $row['username'],
-                "joined"    => $row['reg_date'],
-                "qualified" => ((int) ($row['referral_bonus_awarded'] ?? 0) === 1) ? "Yes" : "No",
-            ];
-        }
-    }
-}
+$referred_users = array_map(function($r) {
+    return array('username'=>$r['referee_name'], 'name'=>$r['referee_name'], 'joined'=>$r['reg_date'],
+        'qualified'=>$r['rewarded'] ? 'Yes' : 'No', 'qualifying_usd'=>$r['qualifying_usd'],
+        'remaining_usd'=>$r['remaining_usd'], 'progress_percent'=>$r['progress_percent'],
+        'reward_coins'=>$r['coins'], 'reward_status'=>$r['reward_status']);
+}, $growth['rows']);
 
 echo json_encode([
     "status" => "success",
@@ -200,6 +139,9 @@ echo json_encode([
         "referral_link"         => $referral_link,
         "share_message"         => "Join me on " . ($get_all_site_details["site_title"] ?? "") . " and get started. Use my referral code: " . $username,
         "referral_bonus"        => $referral_bonus,
+        "locked_referral_coins" => $growth['locked_coins'],
+        "legacy_locked_referral_coins" => $growth['legacy_locked_coins'],
+        "unlocked_referral_coins" => $growth['earned_coins'],
         "referral_reward_usd"     => function_exists('bc_referral_settings') ? (float) bc_referral_settings((int) $vendor_id)['reward_usd'] : 10.0,
         "referral_qualifying_usd" => function_exists('bc_referral_settings') ? (float) bc_referral_settings((int) $vendor_id)['qualifying_usd'] : 100.0,
         "coins_enabled"         => $coins_enabled,
