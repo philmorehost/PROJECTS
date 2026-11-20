@@ -13,8 +13,63 @@ if (session_status() === PHP_SESSION_NONE) {
 
 define('BC_ENCRYPTION_SECRET', 'bc_license_secure_platform_2024_v1');
 
-function bc_get_encryption_key(): string {
-    $domain = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+/** §34: canonical host for license purposes — lowercase, no port, no trailing dot. */
+function bc_canonical_host(?string $host = null): string {
+    $host = $host ?? ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost');
+    $host = strtolower(trim((string)$host));
+    $host = preg_replace('/:.*$/', '', $host);
+    return rtrim($host, '.');
+}
+
+/** §34: read one sas_super_admin_options license row (false when unavailable). */
+function bc_license_option_read(string $name) {
+    global $connection_server;
+    if (!($connection_server instanceof mysqli)) return false;
+    $name_esc = mysqli_real_escape_string($connection_server, $name);
+    $q = @mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='$name_esc' LIMIT 1");
+    $row = $q ? mysqli_fetch_assoc($q) : null;
+    return $row ? (string)$row['option_value'] : false;
+}
+
+/** §34: existence-checked upsert (older schema variant has no unique key). */
+function bc_license_option_store(string $name, string $value): bool {
+    global $connection_server;
+    if (!($connection_server instanceof mysqli)) return false;
+    $name_esc = mysqli_real_escape_string($connection_server, $name);
+    $value_esc = mysqli_real_escape_string($connection_server, $value);
+    $existing = @mysqli_query($connection_server, "SELECT option_name FROM sas_super_admin_options WHERE option_name='$name_esc' LIMIT 1");
+    if ($existing && mysqli_num_rows($existing) > 0) {
+        return (bool) @mysqli_query($connection_server, "UPDATE sas_super_admin_options SET option_value='$value_esc' WHERE option_name='$name_esc'");
+    }
+    return (bool) @mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('$name_esc', '$value_esc')");
+}
+
+/** §34: persist a validated license in the database (survives redeploys and
+ * host variants; the encrypted file stays as the offline copy). */
+function bc_license_db_store(string $code, string $domain): bool {
+    $ok = bc_license_option_store('license_key', $code);
+    bc_license_option_store('license_domain', $domain);
+    bc_license_option_store('license_status', 'valid');
+    bc_license_option_store('license_last_check', date('Y-m-d H:i:s'));
+    return $ok;
+}
+
+/** §34: the domain the license was validated under (stored), else canonical host. */
+function bc_license_domain(): string {
+    static $domain = null;
+    if ($domain === null) {
+        $stored = bc_license_option_read('license_domain');
+        $domain = ($stored !== false && $stored !== '') ? bc_canonical_host($stored) : bc_canonical_host();
+    }
+    return $domain;
+}
+
+function bc_get_encryption_key(?string $domain = null): string {
+    // §34: key under the licensed domain, not the raw request host — the raw
+    // HTTP_HOST varies (port, case, www, IP) and every variant used to make
+    // the saved token undecryptable: empty License field, updater sending an
+    // empty license_key, License Manager HTTP 400.
+    $domain = $domain ?? bc_license_domain();
     $raw_key = hash('sha256', BC_ENCRYPTION_SECRET . '::' . $domain, true);
     return $raw_key;
 }
@@ -27,9 +82,9 @@ function bc_encrypt_activation(string $code): string {
     return base64_encode($combined);
 }
 
-function bc_decrypt_activation(string $encrypted_code): string {
+function bc_decrypt_activation(string $encrypted_code, ?string $domain = null): string {
     try {
-        $key = bc_get_encryption_key();
+        $key = bc_get_encryption_key($domain);
         $combined = base64_decode($encrypted_code, true);
         if ($combined === false || strlen($combined) < 16) {
             return '';
@@ -51,8 +106,26 @@ function bc_read_activation(): string {
         @include $file;
         $encrypted_token = $bc_activation_token ?? '';
         if (!empty($encrypted_token)) {
-            return bc_decrypt_activation($encrypted_token);
+            $code = bc_decrypt_activation($encrypted_token);
+            if ($code !== '') return $code;
+            // Legacy tokens were encrypted under the raw request host
+            // (port/case/www included). Try that exact key before giving up.
+            $legacy_host = (string)($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost');
+            if ($legacy_host !== bc_license_domain()) {
+                $code = bc_decrypt_activation($encrypted_token, $legacy_host);
+                if ($code !== '') {
+                    bc_write_activation($code); // heal: re-encrypt under the licensed domain
+                    return $code;
+                }
+            }
         }
+    }
+    // §34: database fallback (the SAAS edition's design). A redeploy wipes
+    // func/levelup.php; the saved license must not vanish with it.
+    $db_code = bc_license_option_read('license_key');
+    if ($db_code !== false && $db_code !== '') {
+        bc_write_activation($db_code); // heal the file copy (best effort)
+        return $db_code;
     }
     return '';
 }
@@ -65,7 +138,11 @@ function bc_write_activation(string $code): bool {
                '// Generated on ' . date('Y-m-d H:i:s') . "\n" .
                '// DO NOT MODIFY - License is domain-locked and cannot be transferred' . "\n" .
                '$bc_activation_token = ' . var_export($encrypted_code, true) . ';' . "\n";
-    return @file_put_contents($file, $content) !== false;
+    $ok = @file_put_contents($file, $content) !== false;
+    // §34: the database copy is authoritative for reads; persist it too so a
+    // failed file write (permissions/redeploy) can no longer lose the license.
+    if ($ok) bc_license_option_store('license_key', $code);
+    return $ok;
 }
 
 function bc_clear_integrity_cache(): bool {
@@ -185,7 +262,7 @@ function bc_verify_integrity(): bool {
         return false;
     }
 
-    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+    $host = bc_license_domain();
     $cache_dir = __DIR__ . '/cache';
     if (!file_exists($cache_dir)) {
         @mkdir($cache_dir, 0755, true);

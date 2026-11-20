@@ -19,6 +19,9 @@ bc_referral_ensure_schema();
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 $ref_link = bc_app_root_url("Register.php") . "?referral=" . urlencode((string)$svc_user['username']);
 $stats = bc_referral_progress_for_user($vid, (int)$svc_user['id']);
+$ref_cfg = bc_referral_settings($vid);
+$ref_reward_fmt = number_format((float)$ref_cfg['reward_usd'], 2);
+$ref_qual_fmt = number_format((float)$ref_cfg['qualifying_usd'], 2);
 $notice = ''; $notice_type = 'info';
 if (isset($_POST['apply_creator'])) {
     $full_name = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['full_name'] ?? '')));
@@ -49,15 +52,15 @@ bc_app_topbar(array("title" => "REFER & EARN", "crumb" => "Home / Refer & Earn")
     <div class="card border-0 shadow-sm rounded-4 mb-4 text-white" style="background: linear-gradient(135deg, #0b1220, #312e81);">
         <div class="card-body p-4 p-md-5">
             <span class="badge bg-warning text-dark mb-2">REFERRAL PROGRAM</span>
-            <h3 class="fw-bold">You get $10. Your friend gets $10.</h3>
-            <p class="opacity-75 mb-0">When someone you refer completes a minimum of <strong>$100 in Crypto &amp; International Transfers</strong>, you BOTH receive $10. Other products do not count toward the $100.</p>
+            <h3 class="fw-bold">You get $<?php echo $ref_reward_fmt; ?>. Your friend gets $<?php echo $ref_reward_fmt; ?>.</h3>
+            <p class="opacity-75 mb-0">When someone you refer completes a minimum of <strong>$<?php echo $ref_qual_fmt; ?> in Crypto &amp; International Transfers</strong>, you BOTH receive $<?php echo $ref_reward_fmt; ?>. Other products do not count toward the $<?php echo $ref_qual_fmt; ?>.</p>
         </div>
     </div>
 
     <div class="row g-3 mb-4 text-center">
         <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-share-fill fs-3 text-primary"></i><strong class="d-block mt-2">1 · Share your link</strong><span class="small text-muted">Send your personal referral link to friends.</span></div></div>
-        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-graph-up-arrow fs-3 text-primary"></i><strong class="d-block mt-2">2 · They transact $100</strong><span class="small text-muted">In Crypto or International Transfers — other products don't count.</span></div></div>
-        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-cash-coin fs-3 text-primary"></i><strong class="d-block mt-2">3 · You both get $10</strong><span class="small text-muted">$10 lands in your wallet and $10 in theirs, automatically.</span></div></div>
+        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-graph-up-arrow fs-3 text-primary"></i><strong class="d-block mt-2">2 · They transact $<?php echo $ref_qual_fmt; ?></strong><span class="small text-muted">In Crypto or International Transfers — other products don't count.</span></div></div>
+        <div class="col-md-4"><div class="p-4 bg-white border rounded-4 h-100 shadow-sm"><i class="bi bi-cash-coin fs-3 text-primary"></i><strong class="d-block mt-2">3 · You both get $<?php echo $ref_reward_fmt; ?></strong><span class="small text-muted">$<?php echo $ref_reward_fmt; ?> lands in your wallet and $<?php echo $ref_reward_fmt; ?> in theirs, automatically.</span></div></div>
     </div>
 
     <div class="row g-4">
@@ -70,14 +73,14 @@ bc_app_topbar(array("title" => "REFER & EARN", "crumb" => "Home / Refer & Earn")
                 </div>
                 <div class="row text-center g-3 mb-4">
                     <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo (int)$stats['referred']; ?></div><span class="small text-muted">People referred</span></div>
-                    <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo (int)$stats['qualified']; ?></div><span class="small text-muted">Qualified ($100+)</span></div>
+                    <div class="col-4"><div class="h4 fw-bold mb-0"><?php echo (int)$stats['qualified']; ?></div><span class="small text-muted">Qualified ($<?php echo $ref_qual_fmt; ?>+)</span></div>
                     <div class="col-4"><div class="h4 fw-bold mb-0">$<?php echo number_format($stats['earned_usd'], 2); ?></div><span class="small text-muted">Earned so far</span></div>
                 </div>
                 <?php if ($stats['rows']): ?>
                 <h6 class="fw-bold mb-2">Referral progress</h6>
-                <?php foreach ($stats['rows'] as $r): $pct = min(100, ((float)$r['qualifying_usd'] / 100) * 100); ?>
+                <?php foreach ($stats['rows'] as $r): $pct = min(100, ((float)$r['qualifying_usd'] / max(1.0, (float)$ref_cfg['qualifying_usd'])) * 100); ?>
                     <div class="mb-3">
-                        <div class="d-flex justify-content-between small"><span><strong>@<?php echo htmlspecialchars($r['referee_name'] ?? 'user'); ?></strong></span><span>$<?php echo number_format((float)$r['qualifying_usd'], 2); ?> / $100 <?php echo (int)$r['rewarded'] === 1 ? '· <span class="text-success fw-bold">Rewarded</span>' : ''; ?></span></div>
+                        <div class="d-flex justify-content-between small"><span><strong>@<?php echo htmlspecialchars($r['referee_name'] ?? 'user'); ?></strong></span><span>$<?php echo number_format((float)$r['qualifying_usd'], 2); ?> / $<?php echo $ref_qual_fmt; ?> <?php echo (int)$r['rewarded'] === 1 ? '· <span class="text-success fw-bold">Rewarded</span>' : ''; ?></span></div>
                         <div class="progress rounded-pill" style="height:8px;"><div class="progress-bar" style="width: <?php echo $pct; ?>%"></div></div>
                     </div>
                 <?php endforeach; ?>

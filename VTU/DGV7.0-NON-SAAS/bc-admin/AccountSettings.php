@@ -75,7 +75,7 @@ if (isset($_POST['set-mail-batch-size'])) {
 }
 
 $license_code = bc_read_activation();
-$license_domain = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$license_domain = function_exists('bc_license_domain') ? bc_license_domain() : ($_SERVER['HTTP_HOST'] ?? 'localhost');
 $license_valid = bc_verify_integrity();
 $license_status_label = $license_valid ? 'Valid' : 'Invalid';
 $license_status_class = $license_valid ? 'success' : 'danger';
@@ -87,6 +87,10 @@ if (isset($_POST["save-license-key"])) {
     } else {
         bc_clear_integrity_cache();
         if (bc_validate_activation_code($new_license_key, $license_domain)) {
+            // §34: persist to the database as well as the encrypted file — the
+            // file copy alone vanished on redeploys/host changes, leaving the
+            // License field empty and the updater sending an empty key.
+            if (function_exists('bc_license_db_store')) bc_license_db_store($new_license_key, $license_domain);
             if (bc_write_activation($new_license_key)) {
                 bc_write_integrity_cache(true);
                 $_SESSION["product_purchase_response"] = "License key updated and validated successfully.";
@@ -291,8 +295,17 @@ if (isset($_POST["update-theme"])) {
             $json_response_array = array("desc" => $theme_saved ? "Theme & Color Created Successfully" : "Theme & Color Could Not Be Created: " . mysqli_error($connection_server));
         } else {
             $theme_saved = mysqli_query($connection_server, "UPDATE sas_vendor_style_templates SET template_name='$template', primary_color='$primary_color' WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
-if (function_exists("setSuperAdminOption")) { setSuperAdminOption("brand_style_cache_ver", time()); } unset($_SESSION["vendor_style_template_cache"]);
             $json_response_array = array("desc" => $theme_saved ? "Theme & Color Updated Successfully" : "Theme & Color Could Not Be Updated: " . mysqli_error($connection_server));
+        }
+        // §34: bump the shared style-cache version on EVERY save (first save
+        // included) so signed-in customers pick up the new colour on their
+        // next page load instead of keeping the session-cached old one.
+        if (!empty($theme_saved)) {
+            // NON-SAAS super-admin options live in sas_settings (vendor_id=1);
+            // setSuperAdminOption() does not exist in this edition, which is why
+            // the old guarded bump silently never happened here.
+            if (function_exists("setVendorOption")) { setVendorOption(1, "brand_style_cache_ver", time()); }
+            unset($_SESSION["vendor_style_template_cache"]);
         }
         $json_response_encode = json_encode($json_response_array, true);
     } else {

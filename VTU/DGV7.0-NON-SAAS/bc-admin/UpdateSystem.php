@@ -11,7 +11,7 @@ if (isset($_SESSION)) {
 
 $current_version = getSuperAdminOption('system_version', '7.00');
 $license_key = bc_read_activation();
-$license_domain = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$license_domain = function_exists('bc_license_domain') ? bc_license_domain() : ($_SERVER['HTTP_HOST'] ?? 'localhost');
 
 // Check for updates from License Manager
 $api_url = "https://manager.pmhserver.name.ng/check-update.php";
@@ -99,7 +99,11 @@ if ($response === false) {
     }
 }
 
-if ($response === false) {
+// §34: never ask the License Manager with an empty key — that only produces
+// a raw HTTP 400. Point the admin at the fix instead.
+if (trim((string)$license_key) === '') {
+    $error_msg = 'No license key is saved on this installation, so the update check cannot run. Go to Account Settings -> License Info, enter your activation code and click Save License Key, then return here.';
+} elseif ($response === false) {
     $diagnostic = implode('; ', $transport_errors);
     error_log('[DGV updater] License Manager transport failure: ' . $diagnostic);
     $error_msg = 'Could not connect to the License Manager over HTTPS. ' . $diagnostic;

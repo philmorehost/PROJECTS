@@ -273,8 +273,14 @@ if (isset($_POST["update-theme"])) {
             $json_response_array = array("desc" => $theme_saved ? "Theme & Color Created Successfully" : "Theme & Color Could Not Be Created: " . mysqli_error($connection_server));
         } else {
             $theme_saved = mysqli_query($connection_server, "UPDATE sas_vendor_style_templates SET template_name='$template', primary_color='$primary_color' WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
-if (function_exists("setSuperAdminOption")) { setSuperAdminOption("brand_style_cache_ver", time()); } unset($_SESSION["vendor_style_template_cache"]);
             $json_response_array = array("desc" => $theme_saved ? "Theme & Color Updated Successfully" : "Theme & Color Could Not Be Updated: " . mysqli_error($connection_server));
+        }
+        // §34: bump the shared style-cache version on EVERY save (first save
+        // included) so signed-in customers pick up the new colour on their
+        // next page load instead of keeping the session-cached old one.
+        if (!empty($theme_saved)) {
+            if (function_exists("setSuperAdminOption")) { setSuperAdminOption("brand_style_cache_ver", time()); }
+            unset($_SESSION["vendor_style_template_cache"]);
         }
     } else {
         if (empty($color_scheme)) {
