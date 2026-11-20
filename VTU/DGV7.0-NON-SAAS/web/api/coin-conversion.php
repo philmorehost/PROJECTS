@@ -15,6 +15,7 @@
 session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
+require_once __DIR__."/../../func/bc-referral-coins.php";
 
 // Accept input from the app bridge (api_post_info_from_app) or a raw JSON body.
 if (isset($api_post_info_from_app) && is_array($api_post_info_from_app)) {
@@ -65,35 +66,16 @@ $balance = (int)($vtu['total_points'] ?? 0);
 $action = strtolower(trim($input['action'] ?? ''));
 
 if ($action === 'submit') {
-    $points = (int)($input['points'] ?? 0);
-    if ($points <= 0) {
-        echo json_encode(["status" => "error", "message" => "Invalid point amount"]);
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(array('status'=>'error','message'=>'Use POST to submit a conversion.'));
         exit;
     }
-    if ($points < $min_points) {
-        echo json_encode(["status" => "error", "message" => "Minimum conversion is " . $min_points . " points"]);
-        exit;
-    }
-    if ($points > $balance) {
-        echo json_encode(["status" => "error", "message" => "Insufficient points balance"]);
-        exit;
-    }
-
-    $amount = $points / ($rate > 0 ? $rate : 1);
-    $stmt = mysqli_prepare($connection_server, "INSERT INTO sas_conversions (vendor_id, username, points, amount, status) VALUES (?, ?, ?, ?, 'pending')");
-    mysqli_stmt_bind_param($stmt, "isid", $vendor_id, $username, $points, $amount);
-    if (mysqli_stmt_execute($stmt)) {
-        // Notify the vendor admin of the new conversion request (same as the web flow).
-        bc_send_admin_coin_conversion_email($vendor_id, $username, $points, $amount);
-        echo json_encode([
-            "status" => "success",
-            "message" => "Conversion request submitted and pending admin approval",
-            "points" => $points,
-            "amount" => round($amount, 2)
-        ]);
-    } else {
-        echo json_encode(["status" => "error", "message" => "Failed to submit conversion request"]);
-    }
+    $raw=$input['points']??'';
+    $points=preg_match('/^[1-9][0-9]{0,9}$/D',(string)$raw) ? (int)$raw : 0;
+    $r=bc_coin_conversion_change((int)$vendor_id,$username,$points);
+    if ($r['ok']) bc_send_admin_coin_conversion_email($vendor_id,$username,$r['points'],$r['amount']);
+    echo json_encode(array('status'=>$r['ok']?'success':'error','message'=>$r['message'],'points'=>$r['points']??0,'amount'=>$r['amount']??0));
     exit;
 }
 

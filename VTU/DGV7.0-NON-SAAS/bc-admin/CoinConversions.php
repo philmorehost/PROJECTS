@@ -2,89 +2,24 @@
 session_start();
 include("../func/bc-admin-config.php");
 
-// Handle status updates
-if (isset($_GET['action']) && isset($_GET['id'])) {
-    $action = $_GET['action'];
-    $conversion_id = (int)$_GET['id'];
-    $vendor_id = $get_logged_admin_details["id"];
-
-    // Fetch the conversion request
-    $query = "SELECT * FROM sas_conversions WHERE id = ? AND vendor_id = ?";
-    $stmt = mysqli_prepare($connection_server, $query);
-    mysqli_stmt_bind_param($stmt, "ii", $conversion_id, $vendor_id);
+require_once __DIR__.'/../func/bc-referral-coins.php';
+// All mutations are CSRF-protected POSTs, serialised with the points owner.
+if (isset($_POST['action'], $_POST['id'])) {
+    bc_validate_csrf();
+    $vendor_id=(int)$get_logged_admin_details['id'];
+    $id=(int)$_POST['id'];
+    $stmt=mysqli_prepare($connection_server, "SELECT username FROM sas_conversions WHERE id=? AND vendor_id=?");
+    mysqli_stmt_bind_param($stmt,'ii',$id,$vendor_id);
     mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $conversion = mysqli_fetch_assoc($result);
-
-    if ($conversion && $conversion['status'] === 'pending') {
-        if ($action === 'approve') {
-            // --- Approval Logic ---
-            mysqli_begin_transaction($connection_server);
-            try {
-                // 1. Get user's point balance from sas_points_log
-                $points_query = "SELECT SUM(point_amount) as total_points FROM sas_points_log WHERE username = ? AND vendor_id = ?";
-                $points_stmt = mysqli_prepare($connection_server, $points_query);
-                mysqli_stmt_bind_param($points_stmt, "si", $conversion['username'], $vendor_id);
-                mysqli_stmt_execute($points_stmt);
-                $points_result = mysqli_stmt_get_result($points_stmt);
-                $user_points = mysqli_fetch_assoc($points_result)['total_points'];
-
-                if ($user_points >= $conversion['points']) {
-                    // 2. Log the point debit transaction
-                    $log_type_debit = 'CONVERSION_DEBIT';
-                    $sql_log_debit = "INSERT INTO sas_points_log (username, vendor_id, point_amount, log_type) VALUES (?, ?, ?, ?)";
-                    $stmt_log_debit = mysqli_prepare($connection_server, $sql_log_debit);
-                    $negative_points = -$conversion['points'];
-                    mysqli_stmt_bind_param($stmt_log_debit, "sids", $conversion['username'], $vendor_id, $negative_points, $log_type_debit);
-                    mysqli_stmt_execute($stmt_log_debit);
-
-                    // 3. Credit user's main balance
-                    $sql_credit_balance = "UPDATE sas_users SET balance = balance + ? WHERE username = ? AND vendor_id = ?";
-                    $stmt_credit = mysqli_prepare($connection_server, $sql_credit_balance);
-                    mysqli_stmt_bind_param($stmt_credit, "dsi", $conversion['amount'], $conversion['username'], $vendor_id);
-                    mysqli_stmt_execute($stmt_credit);
-
-                    // 4. Update conversion status
-                    $update_query = "UPDATE sas_conversions SET status = 'approved', completion_date = NOW() WHERE id = ?";
-                    $update_stmt = mysqli_prepare($connection_server, $update_query);
-                    mysqli_stmt_bind_param($update_stmt, "i", $conversion_id);
-                    mysqli_stmt_execute($update_stmt);
-
-                    mysqli_commit($connection_server);
-                    $_SESSION["product_purchase_response"] = "Conversion approved successfully.";
-                    // Notify the user that their conversion was approved
-                    bc_send_user_coin_conversion_status_email($vendor_id, $conversion['username'], 'approved', $conversion['points'], $conversion['amount']);
-                } else {
-                    // Not enough points, reject it
-                    $update_query = "UPDATE sas_conversions SET status = 'rejected', completion_date = NOW() WHERE id = ?";
-                    $update_stmt = mysqli_prepare($connection_server, $update_query);
-                    mysqli_stmt_bind_param($update_stmt, "i", $conversion_id);
-                    mysqli_stmt_execute($update_stmt);
-                    mysqli_commit($connection_server);
-                    $_SESSION["product_purchase_response"] = "Conversion rejected due to insufficient points.";
-                    // Notify the user that their conversion was rejected
-                    bc_send_user_coin_conversion_status_email($vendor_id, $conversion['username'], 'rejected', $conversion['points'], $conversion['amount']);
-                }
-
-            } catch (mysqli_sql_exception $exception) {
-                mysqli_rollback($connection_server);
-                $_SESSION["product_purchase_response"] = "An error occurred during approval.";
-            }
-        } elseif ($action === 'reject') {
-            // --- Rejection Logic ---
-            $update_query = "UPDATE sas_conversions SET status = 'rejected', completion_date = NOW() WHERE id = ?";
-            $update_stmt = mysqli_prepare($connection_server, $update_query);
-            mysqli_stmt_bind_param($update_stmt, "i", $conversion_id);
-            mysqli_stmt_execute($update_stmt);
-            $_SESSION["product_purchase_response"] = "Conversion rejected successfully.";
-            // Notify the user that their conversion was rejected
-            bc_send_user_coin_conversion_status_email($vendor_id, $conversion['username'], 'rejected', $conversion['points'], $conversion['amount']);
-        }
+    $conversion=mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    if ($conversion) {
+        $r=bc_coin_conversion_change($vendor_id,$conversion['username'],null,$id,(string)$_POST['action']);
+        $_SESSION['product_purchase_response']=$r['message'];
+        if ($r['ok']) bc_send_user_coin_conversion_status_email($vendor_id,$conversion['username'],$_POST['action']==='approve'?'approved':'rejected',$r['points'],$r['amount']);
     }
-
-    header("Location: CoinConversions.php");
-    exit();
+    header('Location: CoinConversions.php'); exit;
 }
+
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Coin Conversions | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
@@ -135,10 +70,7 @@ bc_adm_head("Coin Conversions | " . ($get_all_super_admin_site_details["site_tit
                                 echo "<td>" . number_format($row['points']) . "</td>";
                                 echo "<td>" . number_format($row['amount'], 2) . "</td>";
                                 echo "<td>" . $row['request_date'] . "</td>";
-                                echo '<td>
-                                        <a href="?action=approve&id=' . $row['id'] . '" class="btn btn-primary btn-sm">Approve</a>
-                                        <a href="?action=reject&id=' . $row['id'] . '" class="btn btn-danger btn-sm">Reject</a>
-                                      </td>';
+                                echo '<td><form method="post">'.bc_csrf_field().'<input type="hidden" name="id" value="'.(int)$row['id'].'"><button name="action" value="approve" class="btn btn-primary btn-sm">Approve</button> <button name="action" value="reject" class="btn btn-danger btn-sm">Reject</button></form></td>';
                                 echo "</tr>";
                             }
                         } else {

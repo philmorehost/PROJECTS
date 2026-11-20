@@ -1,6 +1,7 @@
 <?php
 session_start();
 include("../func/bc-config.php");
+require_once __DIR__."/../func/bc-referral-coins.php";
 
 if(!isServiceEnabled('vtu_coins')) {
     header("Location: Dashboard.php");
@@ -33,32 +34,12 @@ while($row = mysqli_fetch_assoc($history_query)){
 
 // Handle form submission
 if (isset($_POST["convert-coins"])) {
-    $points_to_convert = (int) mysqli_real_escape_string($connection_server, $_POST["points"]);
-
-    // --- Validation ---
-    if ($points_to_convert <= 0) {
-        $_SESSION["product_purchase_response"] = "Invalid point amount entered.";
-    } elseif ($points_to_convert < $min_points_conversion) {
-        $_SESSION["product_purchase_response"] = "You must convert at least " . $min_points_conversion . " points.";
-    } elseif ($points_to_convert > $user_points_balance) {
-        $_SESSION["product_purchase_response"] = "Insufficient points balance.";
-    } else {
-        // --- Conversion Logic ---
-        $amount_in_naira = $points_to_convert / $points_conversion_rate;
-        $username = $get_logged_user_details["username"];
-
-        // Use prepared statements to prevent SQL injection
-        $query = "INSERT INTO sas_conversions (vendor_id, username, points, amount, status) VALUES (?, ?, ?, ?, 'pending')";
-        $stmt = mysqli_prepare($connection_server, $query);
-        mysqli_stmt_bind_param($stmt, "isid", $vendor_id, $username, $points_to_convert, $amount_in_naira);
-        if (mysqli_stmt_execute($stmt)) {
-            // Notify the vendor admin of the new conversion request
-            bc_send_admin_coin_conversion_email($vendor_id, $username, $points_to_convert, $amount_in_naira);
-            $_SESSION["product_purchase_response"] = "Conversion request for " . $points_to_convert . " points submitted successfully! It is pending admin approval.";
-        } else {
-            $_SESSION["product_purchase_response"] = "An error occurred. Please try again.";
-        }
-    }
+    bc_validate_csrf();
+    $raw = $_POST['points'] ?? '';
+    $points = preg_match('/^[1-9][0-9]{0,9}$/D', (string)$raw) ? (int)$raw : 0;
+    $r = bc_coin_conversion_change((int)$vendor_id, $username, $points);
+    $_SESSION['product_purchase_response'] = $r['message'];
+    if ($r['ok']) bc_send_admin_coin_conversion_email($vendor_id,$username,$r['points'],$r['amount']);
     header("Location: " . $_SERVER["REQUEST_URI"]);
     exit();
 }
@@ -94,7 +75,7 @@ bc_app_head("Convert Coins | " . ($get_all_site_details["site_title"]));
                         </div>
                     </div>
 
-                    <form method="post" action="">
+                    <form method="post" action=""><?php echo bc_csrf_field(); ?>
                         <div class="mb-3">
                             <label for="points" class="form-label small fw-bold text-uppercase">Points to Convert</label>
                             <input type="number" class="form-control form-control-lg fw-bold" id="points" name="points" placeholder="0" required onkeyup="calculateNairaValue()">

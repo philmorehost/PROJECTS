@@ -6,12 +6,9 @@
  * Modelled on the "refer and earn" explainer pattern popularised by fintech
  * landing pages (big display type, three-step cards, earn calculator, FAQ),
  * but written for this platform's actual referral engine:
- *   - the configured USD reward is paid in NAIRA CASH to BOTH wallets when the
- *     referred user's Crypto + International Transfer volume reaches the
- *     qualifying USD volume (func/bc-fintech-services.php);
- *   - the referrer also earns loyalty coins on the referee's first purchase;
- *   - coins convert to wallet funds at the vendor's points conversion rate
- *     (default 500 coins = ₦1.00, minimum 100 coins, admin-approved).
+ *   - referral coins unlock after $100 of verified qualifying settlements;
+ *   - pending referral coins never enter the spendable points ledger;
+ *   - unlocked coins convert through the admin-reviewed conversion workflow.
  * Every number on the page comes from the vendor's own Loyalty Settings, so
  * the marketing copy can never drift from the money rules.
  *
@@ -24,8 +21,8 @@ if (!function_exists('bc_landing_context')) {
         global $connection_server;
         $ctx = array(
             'vendor_id' => 0, 'site_name' => 'Our Platform', 'logo' => '',
-            'brand' => '#5a31f4', 'reward_usd' => 10.0, 'qualifying_usd' => 100.0,
-            'bonus_coins' => 100, 'coin_rate' => 500.0, 'coin_min' => 100,
+            'brand' => '#5a31f4', 'reward_usd' => 0.0, 'qualifying_usd' => 100.0,
+            'bonus_coins' => 1000, 'coin_rate' => 500.0, 'coin_min' => 100,
             'usd_rate' => 0.0,
         );
         if (!($connection_server instanceof mysqli)) return $ctx;
@@ -441,104 +438,21 @@ footer b{color:var(--ink)}
 
 if (!function_exists('bc_landing_render_referral')) {
     function bc_landing_render_referral($ctx) {
-        $reward = $ctx['reward_usd'];
-        $qual = $ctx['qualifying_usd'];
-        $rate = $ctx['coin_rate'] > 0 ? $ctx['coin_rate'] : 500;
-        $fx = $ctx['usd_rate'] > 0 ? $ctx['usd_rate'] : 1550;
-        $ngn = $reward * $fx;
-        $coins_equiv = (int)round($ngn * $rate);
-        bc_landing_head($ctx, 'Refer & Earn — $' . rtrim(rtrim(number_format($reward, 2), '0'), '.') . ' for you, $' . rtrim(rtrim(number_format($reward, 2), '0'), '.') . ' for them',
-            'Invite friends and earn: when they transact the qualifying volume in crypto or international transfers, you both get paid — in cash, straight to your wallets.');
+        $coins = (int)$ctx['bonus_coins'];
+        $rate = max(0.000001, (float)$ctx['coin_rate']);
+        bc_landing_head($ctx, 'Refer & Earn — ' . number_format($coins) . ' coins per qualified friend',
+            'Invite friends, track their verified transaction progress and unlock referral coins.');
         bc_landing_nav($ctx, 'refer');
         ?>
-<div class="wrap">
-    <div class="hero">
-        <span class="kick">Refer &amp; Earn</span>
-        <h1>Invite friends.<br><span class="hl">You both earn.</span></h1>
-        <p>Share your link. When a friend you invited transacts <b>$<?php echo bc_landing_e(number_format($qual, 0)); ?></b> in Crypto or International Transfers, <b>you each get $<?php echo bc_landing_e(number_format($reward, 0)); ?></b> — paid in naira, straight to your wallets. No points maze, no expiring vouchers.</p>
-        <div class="hero-cta">
-            <a class="btn btn-dark" href="web/Referral.php">Get my invite link</a>
-            <a class="btn btn-brand" href="#how">How it works</a>
-        </div>
-        <div class="stats">
-            <div class="stat"><b>$<?php echo bc_landing_e(number_format($reward, 0)); ?> × 2</b><span>paid to BOTH of you, in ₦ cash</span></div>
-            <div class="stat"><b>$<?php echo bc_landing_e(number_format($qual, 0)); ?></b><span>qualifying crypto / transfer volume</span></div>
-            <div class="stat"><b><?php echo bc_landing_e(number_format($ctx['bonus_coins'])); ?> coins</b><span>bonus to you on their first purchase</span></div>
-            <div class="stat"><b><?php echo bc_landing_e(number_format($rate, 0)); ?> = ₦1</b><span>coin conversion rate, anytime</span></div>
-        </div>
-    </div>
-
-    <div class="cards3" id="how">
-        <div class="step" style="background:#b8f1cc"><div class="n">Step 1</div><h3>Join &amp; share</h3><p>Create your free account, copy your personal invite link from the Referral dashboard, and send it to friends, family or your whole contact list.</p></div>
-        <div class="step" style="background:#d9d6fe"><div class="n">Step 2</div><h3>They transact</h3><p>Your friend signs up with your link and uses Crypto or International Transfer. Every qualifying transaction moves their progress bar — you can watch it live on your dashboard.</p></div>
-        <div class="step" style="background:#fde68a"><div class="n">Step 3</div><h3>You both earn</h3><p>The moment their cumulative qualifying volume reaches $<?php echo bc_landing_e(number_format($qual, 0)); ?>, $<?php echo bc_landing_e(number_format($reward, 0)); ?> (converted at the live rate) is credited to <b>both</b> wallets automatically. Plus <?php echo bc_landing_e(number_format($ctx['bonus_coins'])); ?> bonus coins land with you on their very first purchase.</p></div>
-    </div>
-
-    <div class="calc" id="calculator">
-        <h2>What is $<?php echo bc_landing_e(number_format($reward, 0)); ?> worth?</h2>
-        <p style="opacity:.8;max-width:560px;line-height:1.6">The reward is configured in dollars but paid in naira at the live exchange rate on payout day. Try the numbers — and see what the same money would be in loyalty coins.</p>
-        <div class="calc-grid">
-            <div>
-                <label for="lc-fx">Live rate used (₦ per $1)</label>
-                <input id="lc-fx" type="number" min="1" step="any" value="<?php echo bc_landing_e(rtrim(rtrim(number_format($fx, 2), '0'), '.')); ?>">
-                <label for="lc-friends" style="margin-top:16px">Friends who qualify</label>
-                <input id="lc-friends" type="number" min="1" step="1" value="5">
-            </div>
-            <div class="out">
-                <span>Each of you receives, per qualified friend</span>
-                <b id="lc-ngn">₦<?php echo bc_landing_e(number_format($ngn, 2)); ?></b>
-                <span id="lc-coins">≈ <?php echo bc_landing_e(number_format($coins_equiv)); ?> coins if it were paid in coins (it is paid in cash — coins are just the yardstick: <?php echo bc_landing_e(number_format($rate, 0)); ?> coins = ₦1)</span>
-                <span style="margin-top:14px">Your total from <b style="display:inline;font-size:15px;color:#fff" id="lc-n">5</b> qualified friends</span>
-                <b id="lc-total">₦<?php echo bc_landing_e(number_format($ngn * 5, 2)); ?></b>
-                <span>…and every friend still gets their own ₦<?php echo bc_landing_e(number_format($ngn, 2)); ?>. There is no cap on invites.</span>
-            </div>
-        </div>
-    </div>
-    <script>
-    (function(){
-        var reward=<?php echo json_encode($reward); ?>, rate=<?php echo json_encode($rate); ?>;
-        var fxEl=document.getElementById('lc-fx'), nEl=document.getElementById('lc-friends');
-        function fmt(n,d){return n.toLocaleString('en-NG',{minimumFractionDigits:d,maximumFractionDigits:d});}
-        function go(){
-            var fx=parseFloat(fxEl.value)||0, n=Math.max(1,parseInt(nEl.value)||1);
-            var ngn=reward*fx;
-            document.getElementById('lc-ngn').textContent='₦'+fmt(ngn,2);
-            document.getElementById('lc-coins').textContent='≈ '+fmt(Math.round(ngn*rate),0)+' coins if it were paid in coins (it is paid in cash — coins are just the yardstick: '+fmt(rate,0)+' coins = ₦1)';
-            document.getElementById('lc-n').textContent=n;
-            document.getElementById('lc-total').textContent='₦'+fmt(ngn*n,2);
-        }
-        fxEl.addEventListener('input',go); nEl.addEventListener('input',go);
-    })();
-    </script>
-
-    <section class="blk">
-        <h2>Coins, explained</h2>
-        <p class="sub">Referral cash is only half the story. Everyday purchases earn you <b>loyalty coins</b>, and coins turn back into wallet money.</p>
-        <div class="feat">
-            <div class="f"><b>🪙 How you earn coins</b><p>Successful purchases across the platform credit coins to your balance automatically. Your referrer bonus — <?php echo bc_landing_e(number_format($ctx['bonus_coins'])); ?> coins — also lands the moment a friend you invited makes their first successful purchase.</p></div>
-            <div class="f"><b>🔁 Converting coins</b><p>Coins convert at <b><?php echo bc_landing_e(number_format($rate, 0)); ?> coins = ₦1.00</b>. Convert from <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> coins upward — for example, 50,000 coins → ₦<?php echo bc_landing_e(number_format(50000 / $rate, 2)); ?>. Conversions are reviewed and approved by our team, then credited to your wallet.</p></div>
-            <div class="f"><b>🏦 Withdrawing</b><p>Converted funds sit in your wallet balance — spend them on any service, or withdraw to your bank under the wallet withdrawal limits in Account Settings. Referral cash rewards are wallet funds from the moment they land.</p></div>
-            <div class="f"><b>📊 Track everything</b><p>Your Referral dashboard shows each invited friend, their qualifying progress toward $<?php echo bc_landing_e(number_format($qual, 0)); ?>, and every reward paid. Points history shows each coin earned and converted.</p></div>
-        </div>
-    </section>
-
-    <section class="blk" style="padding-top:10px">
-        <h2>Questions</h2>
-        <details><summary>What counts toward the $<?php echo bc_landing_e(number_format($qual, 0)); ?> qualifying volume?</summary><p>Only <b>Crypto</b> and <b>International Transfer</b> transactions count, cumulatively — many small trades add up exactly like one big one. Airtime, data and other bill payments never count toward referral volume (they still earn the buyer loyalty coins).</p></details>
-        <details><summary>When exactly do we get paid?</summary><p>Automatically, the moment your friend's cumulative qualifying volume crosses $<?php echo bc_landing_e(number_format($qual, 0)); ?>. The dollar reward is converted at that day's live rate and credited to both wallets — yours and theirs. It pays once per invited friend.</p></details>
-        <details><summary>Why is the reward paid in naira, not coins?</summary><p>Because cash is more useful: wallet funds spend on every service or withdraw to your bank. Coins are the loyalty currency for everyday purchases; the page above shows the coin-equivalent (at <?php echo bc_landing_e(number_format($rate, 0)); ?> coins = ₦1) purely so you can compare values.</p></details>
-        <details><summary>Is there a limit to how many friends I can invite?</summary><p>No cap. Every friend who qualifies earns both of you the reward, and your dashboard tracks them all.</p></details>
-        <details><summary>Can I invite myself or game the system?</summary><p>Self-referrals and duplicate accounts are filtered by the programme rules and do not earn. Play fair — genuine friends, genuine earnings.</p></details>
-    </section>
-
-    <div class="cta-band">
-        <h2>Your link is worth $<?php echo bc_landing_e(number_format($reward, 0)); ?> a friend.</h2>
-        <p style="opacity:.9">Create your free account and start sharing in under two minutes.</p>
-        <a class="btn btn-dark" href="web/Register.php">Create free account</a>
-    </div>
-</div>
-<?php
-        bc_landing_foot($ctx);
+<div class="wrap"><div class="hero"><span class="kick">Grow together</span>
+<h1>Real friends.<br><span class="hl">Real progress.</span></h1>
+<p>Earn <strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong> when a friend you refer completes <strong>$100</strong> in verified Crypto or International Transfers. Referral coins stay locked until the conditions are met.</p>
+<div class="hero-cta"><a class="btn btn-brand" href="web/Referral.php">See my referral growth</a><a class="btn btn-dark" href="#how">How it works</a></div>
+<div class="stats"><div class="stat"><b><?php echo number_format($coins); ?> coins</b><span>current reward per qualified friend</span></div><div class="stat"><b>$100</b><span>minimum verified transaction volume</span></div><div class="stat"><b>0 spendable</b><span>until your friend qualifies</span></div><div class="stat"><b>One reward</b><span>per genuine referred friend</span></div></div></div>
+<div class="cards3" id="how"><div class="step" style="background:#b8f1cc"><div class="n">01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></div><div class="step" style="background:#d9d6fe"><div class="n">02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed and amount remaining toward $100. Pending requests and quotes do not count.</p></div><div class="step" style="background:#fde68a"><div class="n">03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, the referrer's coins unlock for conversion. No separate cash reward is paid to either wallet.</p></div></div>
+<section class="blk"><h2>Understand your reward</h2><div class="feat"><div class="f"><b>Only settled activity</b><p>Completed Crypto trades and International Transfers count after provider confirmation. Deposits, funding, internal transfers, fees, failed transactions, requests and quotes do not count.</p></div><div class="f"><b>Locked means locked</b><p>Pending referral coins cannot be spent, converted or withdrawn. A reversal that brings qualifying volume below $100 revokes the reward.</p></div><div class="f"><b>Coins to wallet funds</b><p>The current conversion rate is <?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins per ₦1. Conversion requests require at least <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins and admin approval. Bank withdrawals remain subject to wallet limits.</p></div><div class="f"><b>Genuine referrals only</b><p>Self-referrals do not qualify. Active accounts, distinct contact details, verified emails and settlement review are required. Rewards cannot be earned repeatedly by reversing and repeating a transaction.</p></div></div></section>
+<div class="cta-band"><h2>Your next milestone starts with a friend.</h2><p>See who joined, what remains and which rewards are unlocked.</p><a class="btn btn-dark" href="web/Referral.php">Open referral dashboard</a></div></div>
+<?php bc_landing_foot($ctx);
     }
 }
 
