@@ -125,16 +125,18 @@ if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 0) {
     }
 }
 
-// Send OTP email
-$subject = "Your Email Verification Code";
-$body    = "Hello <strong>" . htmlspecialchars($first) . "</strong>,<br><br>"
-         . "To complete your registration please enter the verification code below.<br><br>"
-         . "<div style=\"font-size:36px;font-weight:bold;letter-spacing:12px;text-align:center;"
-         . "background:#f0f4ff;padding:20px 10px;border-radius:8px;margin:10px 0;\">"
-         . $otp
-         . "</div><br>"
-         . "This code expires in <strong>10 minutes</strong>.<br><br>"
-         . "If you did not attempt to register, please ignore this email.";
+// §46: copy-friendly code email — code first in the subject and preview so
+// it can be copied from the inbox list; digit boxes in the body.
+$otp_mail = function_exists('bc_otp_email') ? bc_otp_email($otp, 'registration', $first) : null;
+$subject = $otp_mail ? $otp_mail['subject'] : "Your Email Verification Code";
+$body    = $otp_mail ? $otp_mail['body']
+    : "Hello <strong>" . htmlspecialchars($first) . "</strong>,<br><br>"
+    . "To complete your registration please enter the verification code below.<br><br>"
+    . "<div style=\"font-size:36px;font-weight:bold;letter-spacing:12px;text-align:center;background:#f0f4ff;padding:20px 10px;border-radius:8px;margin:10px 0;\">"
+    . $otp
+    . "</div><br>"
+    . "This code expires in <strong>10 minutes</strong>.<br><br>"
+    . "If you did not attempt to register, please ignore this email.";
 sendVendorEmail($email, $subject, $body);
 
 echo json_encode(["status" => "success", "message" => "Verification code sent to " . htmlspecialchars($email)]);

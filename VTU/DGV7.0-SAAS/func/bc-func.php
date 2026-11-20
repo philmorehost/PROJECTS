@@ -1034,7 +1034,7 @@ function chargeUser($type, $product_unique_id, $type_alternative, $reference, $a
 					$charge_user = true; // Debit already committed by atomic function
 					if ($insert_transaction) {
 						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
 						$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
 						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1042,7 +1042,7 @@ function chargeUser($type, $product_unique_id, $type_alternative, $reference, $a
 							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 						}
 
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
 						$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
 						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1132,7 +1132,7 @@ function chargeUser($type, $product_unique_id, $type_alternative, $reference, $a
 						if ($bc_dup_refund) { return "failed"; }
 				if (($user_balance_before_credit !== false) && ($charge_user == true)) {
 					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
 					$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
 					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1140,7 +1140,7 @@ function chargeUser($type, $product_unique_id, $type_alternative, $reference, $a
 						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 					}
 
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
 					$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
 					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1235,7 +1235,7 @@ function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative,
 						}
 					if (($user_balance_before_debit !== false) && ($charge_user == true)) {
 						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
 						$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
 						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1247,7 +1247,7 @@ function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative,
 						$vendor_lastname = $get_vendor_det ? ($get_vendor_det["lastname"] ?? "") : "";
 						$vendor_email = $get_vendor_det ? ($get_vendor_det["email"] ?? "") : "";
 
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
 						$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
 						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1284,7 +1284,7 @@ function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative,
 						if ($bc_dup_refund) { return "failed"; }
 				if (($user_balance_before_credit !== false) && ($charge_user == true)) {
 					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
 					$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
 					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1296,7 +1296,7 @@ function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative,
 					$vendor_lastname = $get_vendor_det ? ($get_vendor_det["lastname"] ?? "") : "";
 					$vendor_email = $get_vendor_det ? ($get_vendor_det["email"] ?? "") : "";
 
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
 					$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
 					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1369,7 +1369,7 @@ function chargeVendor($type, $product_unique_id, $type_alternative, $reference, 
 					$charge_user = ($bc_bal_delta === "success");
 					if ($insert_transaction && ($charge_user == true)) {
 						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
 						$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
 						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1377,7 +1377,7 @@ function chargeVendor($type, $product_unique_id, $type_alternative, $reference, 
 							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 						}
 
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
 						$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
 						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1410,7 +1410,7 @@ function chargeVendor($type, $product_unique_id, $type_alternative, $reference, 
 				$charge_user = ($bc_bal_delta === "success");
 				if ($insert_transaction && ($charge_user == true)) {
 					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
 					$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
 					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1418,7 +1418,7 @@ function chargeVendor($type, $product_unique_id, $type_alternative, $reference, 
 						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 					}
 
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
 					$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
 					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1484,7 +1484,7 @@ function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternat
 					$charge_user = ($bc_bal_delta === "success");
 					if ($insert_transaction && ($charge_user == true)) {
 						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
 						$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
 						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1492,7 +1492,7 @@ function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternat
 							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 						}
 
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 						$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
 						$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
 						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -1525,7 +1525,7 @@ function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternat
 				$charge_user = ($bc_bal_delta === "success");
 				if ($insert_transaction && ($charge_user == true)) {
 					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
 					$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
 					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
@@ -1533,7 +1533,7 @@ function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternat
 						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
 					}
 
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description);
+					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 					$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
 					$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
 					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -2138,7 +2138,7 @@ function updateProductPurchaseList($reference, $item_id, $product_type)
 			// Email Beginning
 			$vendor_id_func = resolveVendorID();
 			$get_vendor_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id_func' LIMIT 1"));
-			$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_details["username"], "{firstname}" => $get_logged_user_details["firstname"], "{lastname}" => $get_logged_user_details["lastname"], "{limit}" => $limit, "{type}" => $product_type, "{id}" => $item_id);
+			$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_details["username"], "{firstname}" => $get_logged_user_details["firstname"], "{lastname}" => $get_logged_user_details["lastname"], "{limit}" => $limit, "{type}" => $product_type, "{id}" => $item_id, "{phone}" => ($get_logged_user_details["phone_number"] ?? ""), "{email}" => ($get_logged_user_details["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
 			$raw_transaction_template_subject = "URGENT: Max Daily Tx Limit Reached - User: {username}";
 			$raw_transaction_template_body = "Dear {admin_firstname}, " . "\n\n" . "User {username} ({firstname} {lastname}) has hit the Max Daily Limit ({limit}) for {type} ID: {id}." . "\n\n" . "This phone number is now locked for the rest of today, but the user's account remains active. To allow purchases on this number again, whitelist it in Validated IDs or raise the daily limit." . "\n\n" . "Please review this activity immediately.";
 			foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
@@ -6789,14 +6789,13 @@ function bc_send_user_login_otp($user_detail, $vendor_id) {
     $otp = bc_issue_otp('user_login', $username, (int)$vendor_id, array('ip' => $_SERVER['REMOTE_ADDR'] ?? ''), 600);
     if ($otp === '') return '';
 
-    $body = "Hello <strong>" . htmlspecialchars((string)$user_detail['firstname'], ENT_QUOTES, 'UTF-8') . "</strong>,<br><br>"
-          . "Your sign-in verification code is:<br><br>"
-          . "<div style=\"font-size:34px;font-weight:bold;letter-spacing:10px;text-align:center;background:#f0f4ff;padding:18px 10px;border-radius:8px;\">"
-          . $otp . "</div><br>"
-          . "This code expires in <strong>10 minutes</strong> and can be used once.<br><br>"
-          . "If you did not try to sign in, change your password immediately - someone has your password.";
+    // §46: copy-friendly code email (code-first subject, digit boxes, inbox preview).
+    $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($otp, 'sign-in', (string)($user_detail['firstname'] ?? '')) : null;
+    $body = $otp_mail
+        ? $otp_mail['body'] . "<p style=\"margin-top:10px;\">If you did not try to sign in, change your password immediately - someone may have your password.</p>"
+        : "Hello <strong>" . htmlspecialchars((string)$user_detail['firstname'], ENT_QUOTES, 'UTF-8') . "</strong>,<br><br>Your sign-in verification code is: <b>" . $otp . "</b><br>This code expires in <strong>10 minutes</strong> and can be used once.<br><br>If you did not try to sign in, change your password immediately - someone has your password.";
 
-    if (!sendVendorEmail($email, "Your Sign-In Verification Code", $body)) return '';
+    if (!sendVendorEmail($email, $otp_mail ? $otp_mail['subject'] : "Your Sign-In Verification Code", $body)) return '';
     return $otp;
 }
 

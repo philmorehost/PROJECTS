@@ -2267,7 +2267,10 @@ gtrue('the customer subject is personalised', strpos($GLOBALS['sent_mail'][0]['s
 gtrue('gross and net are both reported', strpos($GLOBALS['sent_mail'][0]['body'], '2000.00 @ 1980.00') !== false);
 gtrue('the balance movement is reported', strpos($GLOBALS['sent_mail'][0]['body'], '100.00 -> 2080.00') !== false);
 gtrue('the vendor receipt names the account', strpos($GLOBALS['sent_mail'][1]['body'], 'for payer (Pay Er)') !== false);
-gtrue('the receipt carries the provider description', strpos($GLOBALS['sent_mail'][0]['body'], 'Wallet Funding via FLUTTERWAVE (NGN)') !== false);
+// §46: customer receipts never name the payment provider/API — a generic,
+// provider-free description is used instead.
+gtrue('the receipt carries a provider-free description', strpos($GLOBALS['sent_mail'][0]['body'], 'Wallet Funding (NGN)') !== false);
+gtrue('the receipt never names the provider', strpos($GLOBALS['sent_mail'][0]['body'], 'FLUTTERWAVE') === false);
 
 // A mailer that throws must not fail the credit, release the claim, or credit twice.
 $GLOBALS['sent_mail'] = [];

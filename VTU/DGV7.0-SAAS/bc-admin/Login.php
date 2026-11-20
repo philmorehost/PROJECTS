@@ -118,10 +118,11 @@
                             'tries' => 0,
                             'sent' => time(),
                         );
+                        $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($login_otp, 'sign-in', (string)($bc_g_admin["firstname"] ?? '')) : null;
                         sendVendorEmail(
                             $bc_g_admin["email"],
-                            "Your login security code",
-                            "<p>Your one-time login code is <b style=\"font-size:20px;letter-spacing:3px;\">" . $login_otp . "</b></p><p>It expires in 10 minutes. If you did not try to sign in, change your password immediately.</p>"
+                            $otp_mail ? $otp_mail['subject'] : "Your login security code",
+                            $otp_mail ? $otp_mail['body'] : "<p>Your one-time login code is <b style=\"font-size:20px;letter-spacing:3px;\">" . $login_otp . "</b></p><p>It expires in 10 minutes. If you did not try to sign in, change your password immediately.</p>"
                         );
                         $_SESSION["product_purchase_response"] = "Security code sent to " . $bc_g_admin["email"] . ". Enter the 6-digit code to finish signing in.";
                         header("Location: ".$_SERVER["REQUEST_URI"]);
@@ -197,10 +198,11 @@
                                     'tries' => 0,
                                     'sent' => time(),
                                 );
+                                $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($login_otp, 'sign-in', (string)($admin_detail["firstname"] ?? '')) : null;
                                 sendVendorEmail(
                                     $admin_detail["email"],
-                                    "Your login security code",
-                                    "<p>Your one-time login code is <b style=\"font-size:20px;letter-spacing:3px;\">" . $login_otp . "</b></p><p>It expires in 10 minutes. If you did not try to sign in, change your password immediately.</p>"
+                                    $otp_mail ? $otp_mail['subject'] : "Your login security code",
+                                    $otp_mail ? $otp_mail['body'] : "<p>Your one-time login code is <b style=\"font-size:20px;letter-spacing:3px;\">" . $login_otp . "</b></p><p>It expires in 10 minutes. If you did not try to sign in, change your password immediately.</p>"
                                 );
                                 $_SESSION["product_purchase_response"] = "Security code sent to " . $admin_detail["email"] . ". Enter the 6-digit code to finish signing in.";
                                 header("Location: ".$_SERVER["REQUEST_URI"]);

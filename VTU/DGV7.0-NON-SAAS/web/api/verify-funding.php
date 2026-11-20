@@ -97,7 +97,8 @@ if ($gateway === 'flutterwave') {
 if ($verified && $verified_amount > 0) {
     $fee_percent = (float)($gw['percentage'] ?? 0);
     $discounted_amount = $verified_amount - ($verified_amount * ($fee_percent / 100));
-    $desc = "Wallet Funding via " . strtoupper($gateway) . " (Ref: $gw_ref)";
+    // §46: transaction descriptions reach customer emails — never name the payment gateway/provider.
+    $desc = "Wallet Funding (Ref: $reference)";
 
     $res = chargeOtherUser($username, "credit", strtoupper($gateway), "Wallet Funding", $reference, $gw_ref, $verified_amount, $discounted_amount, $desc, "APP", $gateway . ".com", 1);
     if ($res === "success") {

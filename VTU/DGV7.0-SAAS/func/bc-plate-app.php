@@ -59,7 +59,8 @@ if (!function_exists('bc_app_site')) {
             $details = $GLOBALS['get_all_site_details'];
         }
 
-        $title = 'FintechFlow';
+        // §46: never invent a brand name — fall back to this site's own host.
+        $title = (string)($_SERVER['HTTP_HOST'] ?? 'Admin Panel');
         if (!empty($details['site_title'])) {
             $title = (string)$details['site_title'];
         } elseif (!empty($GLOBALS['site_title'])) {
