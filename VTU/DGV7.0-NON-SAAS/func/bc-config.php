@@ -220,6 +220,7 @@ if ($connection_server) {
             // Core Security columns for everyone
             $core = array(
                 "security_pin" => "VARCHAR(255)",
+                "google_id" => "VARCHAR(255)",
                 "is_blocked" => "TINYINT(1) DEFAULT 0",
                 "failed_login_count" => "INT DEFAULT 0",
                 "last_failed_login" => "TIMESTAMP NULL",

@@ -5574,6 +5574,24 @@ function verifyGoogleToken($id_token) {
     return json_decode($response, true);
 }
 
+/**
+ * Section 38: strict validation of a Google ID-token payload for ADMIN sign-in.
+ * verifyGoogleToken() only fetches Google's tokeninfo response; callers must still
+ * prove the token was minted for THIS site's OAuth client (aud), by Google (iss),
+ * for a verified mailbox, and has not expired.
+ */
+function bc_google_payload_valid($payload, $client_id) {
+    if (!is_array($payload) || trim((string)$client_id) === '') return false;
+    if (empty($payload['sub']) || empty($payload['email'])) return false;
+    $iss = (string)($payload['iss'] ?? '');
+    if ($iss !== 'accounts.google.com' && $iss !== 'https://accounts.google.com') return false;
+    if (!isset($payload['aud']) || !hash_equals(trim((string)$client_id), (string)$payload['aud'])) return false;
+    $verified = $payload['email_verified'] ?? false;
+    if ($verified !== true && $verified !== 'true' && $verified !== 1 && $verified !== '1') return false;
+    if (isset($payload['exp']) && (int)$payload['exp'] < time()) return false;
+    return true;
+}
+
 function generateOTP($length = 6) {
     return substr(str_shuffle("0123456789"), 0, $length);
 }

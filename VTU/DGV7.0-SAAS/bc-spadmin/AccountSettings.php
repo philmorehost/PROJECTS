@@ -445,6 +445,11 @@
         $force_user_login_otp = isset($_POST["force_user_login_otp"]) ? '1' : '0';
         $user_otp_saved = setSuperAdminOption('force_user_login_otp', $force_user_login_otp);
 
+        // Section 38: platform Google Client ID powering Super Admin Google sign-in
+        // and Google-verified password reset (bc-spadmin/Login.php, PasswordRecovery.php).
+        $spadmin_google_client_id = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["spadmin_google_client_id"] ?? '')));
+        setSuperAdminOption('spadmin_google_client_id', $spadmin_google_client_id);
+
         // Daily password-reset limit (per account, default 1)
         $reset_daily_limit = max(1, (int)($_POST["password_reset_daily_limit"] ?? 1));
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('password_reset_daily_limit', '$reset_daily_limit') ON DUPLICATE KEY UPDATE option_value='$reset_daily_limit'");
@@ -1229,6 +1234,11 @@ bc_adm_head('', array("area" => "spadmin"));
                                             <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every customer must enter a one-time code emailed to them at sign-in on the website and mobile apps. Vendors cannot disable this platform requirement.</p>
                                         </div>
                                         <input type="checkbox" name="force_user_login_otp" class="form-check-input ms-0" id="forceUserLoginOtp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_user_login_otp == '1') ? 'checked' : ''; ?>>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="form-check-label fw-bold h6 mb-1 text-dark-primary" for="spadminGoogleClientId">Super Admin Google Client ID</label>
+                                        <p class="text-dark-primary small mb-2" style="opacity: 0.8;">Powers &ldquo;Sign in with Google&rdquo; and Google-verified password reset on the Super Admin login. Create an OAuth <b>Web</b> client in Google Cloud Console, add this site as an authorised JavaScript origin, and paste its Client ID here. Leave empty to hide the Google options.</p>
+                                        <input type="text" name="spadmin_google_client_id" id="spadminGoogleClientId" class="form-control" value="<?php echo htmlspecialchars(getSuperAdminOption('spadmin_google_client_id', ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. 12345678-abc.apps.googleusercontent.com" autocomplete="off">
                                     </div>
                                 </div>
 
