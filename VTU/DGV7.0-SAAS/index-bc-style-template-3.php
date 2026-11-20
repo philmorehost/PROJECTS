@@ -2,7 +2,8 @@
 // Initialize SEO engine and variables
 include_once(__DIR__ . "/func/bc-seo.php");
 
-$site_title       = 'FintechFlow';
+// §46: default to this site's own host; the vendor's saved Site Name overwrites it below.
+$site_title       = (string)($_SERVER['HTTP_HOST'] ?? '');
 $site_logo        = '';
 $header_image_url = '';
 $apk_download_url = '';

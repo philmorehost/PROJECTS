@@ -42,6 +42,8 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 					$raw_log_template_subject = str_replace($array_key, $array_val, $raw_log_template_subject);
 					$raw_log_template_body = str_replace($array_key, $array_val, $raw_log_template_body);
 				}
+				// §46: lead with the code so it can be copied from the inbox list without opening the mail.
+				$raw_log_template_subject = (string)($_SESSION["user-recovery-code"]) . " is your password reset code" . ($raw_log_template_subject !== '' ? ' — ' . $raw_log_template_subject : '');
 				sendVendorEmail($get_user_personal_details["email"], $raw_log_template_subject, $raw_log_template_body);
 				// Email End
 				// Record the reset request — repeated requests for the same account lock it out.

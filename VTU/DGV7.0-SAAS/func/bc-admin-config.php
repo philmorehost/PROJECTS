@@ -50,6 +50,25 @@ if ($connection_server) {
     if (!is_array($get_all_super_admin_site_details)) {
         $get_all_super_admin_site_details = array('site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel');
     }
+    // §46: the vendor's own website details (sas_site_details) so the back
+    // office brand shows the Site Name THIS vendor set in Account Settings.
+    // Session-cached for 60s, same pattern as the web bootstrap.
+    $bc_admin_site_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
+    if ($bc_admin_site_vid > 0 && $connection_server) {
+        if (!isset($_SESSION['admin_site_details_cache']) || (int)($_SESSION['admin_site_details_vid'] ?? 0) !== $bc_admin_site_vid || (time() - (int)($_SESSION['admin_site_details_time'] ?? 0) > 60)) {
+            $bc_admin_site_q = mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='$bc_admin_site_vid' LIMIT 1");
+            $bc_admin_site_row = $bc_admin_site_q ? mysqli_fetch_array($bc_admin_site_q) : null;
+            if (is_array($bc_admin_site_row)) {
+                $_SESSION['admin_site_details_cache'] = $bc_admin_site_row;
+                $_SESSION['admin_site_details_vid'] = $bc_admin_site_vid;
+                $_SESSION['admin_site_details_time'] = time();
+                $get_all_site_details = $bc_admin_site_row;
+            }
+        } elseif (isset($_SESSION['admin_site_details_cache'])) {
+            $get_all_site_details = $_SESSION['admin_site_details_cache'];
+        }
+    }
+
 
     $checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT id FROM sas_super_admin LIMIT 1");
     if ($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1) {

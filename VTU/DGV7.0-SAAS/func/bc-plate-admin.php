@@ -61,14 +61,30 @@ if (!function_exists('bc_adm_site')) {
      */
     function bc_adm_site($area = null) {
         $area = $area ?: bc_adm_area();
-        $key  = $area === 'spadmin' ? 'get_all_spadmin_site_details' : 'get_all_super_admin_site_details';
+        // §46: the brand must show the Site Name the owner actually set for
+        // THIS website. bc-spadmin sets the platform name in
+        // sas_super_admin_site_details (bc-spadmin-config loads it as
+        // get_all_super_admin_site_details — the old key here,
+        // 'get_all_spadmin_site_details', never exists, so the brand fell
+        // back to a hard-coded product name). A vendor sets their own name
+        // in sas_site_details, loaded by bc-admin-config as
+        // get_all_site_details; that wins in the vendor back office, with
+        // the platform row as fallback.
+        $keys = $area === 'spadmin'
+            ? array('get_all_super_admin_site_details', 'get_all_spadmin_site_details', 'get_all_site_details')
+            : array('get_all_site_details', 'get_all_super_admin_site_details');
         $details = array();
-        if (isset($GLOBALS[$key]) && is_array($GLOBALS[$key])) {
-            $details = $GLOBALS[$key];
-        } elseif (isset($GLOBALS['get_all_site_details']) && is_array($GLOBALS['get_all_site_details'])) {
-            $details = $GLOBALS['get_all_site_details'];
+        foreach ($keys as $key) {
+            if (isset($GLOBALS[$key]) && is_array($GLOBALS[$key]) && !empty($GLOBALS[$key]['site_title'])) {
+                $details = $GLOBALS[$key];
+                break;
+            }
         }
-        $title = 'FintechFlow';
+        if (!$details && isset($GLOBALS[$keys[0]]) && is_array($GLOBALS[$keys[0]])) {
+            $details = $GLOBALS[$keys[0]];
+        }
+        // §46: never invent a brand name — fall back to this site's own host.
+        $title = (string)($_SERVER['HTTP_HOST'] ?? 'Admin Panel');
         if (!empty($details['site_title'])) {
             $title = (string)$details['site_title'];
         } elseif (!empty($GLOBALS['site_title'])) {

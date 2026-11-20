@@ -363,10 +363,13 @@ if (!function_exists('bc_stepup_send_email_otp')) {
         $code = bc_issue_otp('stepup_' . $context, (string)$identity, (int)$vendor_id, array(), 600);
         if ($code === '') return 'Could not send the verification code. Please try again.';
         if (function_exists('sendVendorEmail') && filter_var((string)$email, FILTER_VALIDATE_EMAIL)) {
-            $body = "Your verification code for <b>" . htmlspecialchars((string)$action_label, ENT_QUOTES, 'UTF-8') . "</b> is "
+            // §46: same copy-friendly code format as the login OTP.
+            $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($code, (string)$action_label) : null;
+            $body = $otp_mail ? $otp_mail['body']
+                : "Your verification code for <b>" . htmlspecialchars((string)$action_label, ENT_QUOTES, 'UTF-8') . "</b> is "
                 . "<b style=\"font-size:20px;letter-spacing:3px;\">" . $code . "</b>.<br>It expires in 10 minutes. "
                 . "If you did not request this, change your password and contact support immediately.";
-            sendVendorEmail((string)$email, 'Verification Code — ' . (string)$action_label, $body);
+            sendVendorEmail((string)$email, $otp_mail ? $otp_mail['subject'] : 'Verification Code — ' . (string)$action_label, $body);
         }
         return '';
     }

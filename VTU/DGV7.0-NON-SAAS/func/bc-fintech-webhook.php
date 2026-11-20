@@ -509,7 +509,8 @@ if (!function_exists('bc_fintech_webhook_notify')) {
             $gross = $amount + $fee;
             $after = ($balance_after === null || !is_numeric($balance_after)) ? null : (float)$balance_after;
             $before = ($after === null) ? null : $after - $amount;
-            $description = 'Wallet Funding via ' . strtoupper((string)$provider) . ' (' . strtoupper((string)$currency) . ')';
+            // §46: never name the payment provider in customer-facing receipts.
+            $description = 'Wallet Funding (' . strtoupper((string)$currency) . ')';
 
             $funding_subject = bc_fintech_email_template($vendor_id, 'user-funding', 'subject');
             $funding_body    = bc_fintech_email_template($vendor_id, 'user-funding', 'body');
@@ -523,6 +524,12 @@ if (!function_exists('bc_fintech_webhook_notify')) {
             $shared = [
                 '{firstname}' => (string)($user['firstname'] ?? ''),
                 '{lastname}' => (string)($user['lastname'] ?? ''),
+                // §46: receipts carry the customer's phone/email and our own reference.
+                '{phone}' => (string)($user['phone_number'] ?? ''),
+                '{email}' => (string)($user['email'] ?? ''),
+                '{reference}' => (string)$reference,
+                '{status}' => 'Success',
+                '{date}' => date('d M Y, h:i A'),
                 '{balance_before}' => $before === null ? '' : $dec($before),
                 '{balance_after}' => $after === null ? '' : $dec($after),
                 '{amount}' => $dec($gross) . ' @ ' . $dec($amount),
