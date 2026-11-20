@@ -1,19 +1,8 @@
 
-    function superAdminPaymentOrderStatus(status, reference, user){
-    	var statusArray = ["1","2"];
-    	var actionArray = {"1":"reject", "2":"accept"};
-    	if(Number(status) && (statusArray.indexOf(status) !== -1)){
-    		if(confirm("Are you sure you want to "+actionArray[status]+" "+user+"'s payment order?")){
-    			window.location.href = "/bc-spadmin/PaymentOrders.php?order-status="+status+"&order-ref="+reference;
-    		}else{
-    			alert("Action Cancelled");
-    		}
-    	}else{
-    		alert("Invalid Payment Status");
-    	}
-    }
-
-    function updateVendorAccountStatus(status, userID, user){
+    /* \u00a730: order approvals moved to the step-up modal on the page itself
+       (POST + CSRF + Security PIN + authenticator/email code). The old GET
+       handler (order-status/order-ref) no longer has a server-side action. */
+function updateVendorAccountStatus(status, userID, user){
     	var statusArray = ["1","2","3"];
     	var actionArray = {"1":"activate", "2":"block", "3":"delete"};
     	if(Number(status) && (statusArray.indexOf(status) !== -1)){

@@ -1,5 +1,11 @@
 <?php session_start();
     include("../func/bc-admin-config.php");
+
+    // Edition marker (this file is shared byte-for-byte between the trees):
+    // a standalone install has no platform wallet to fund, so its hero drops
+    // the Add Funds CTA and the SAAS add-on store.
+    if (!function_exists("bc_is_saas_edition") && is_file(__DIR__ . "/../func/bc-edition.php")) include_once(__DIR__ . "/../func/bc-edition.php");
+    $bc_is_saas_ed = function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : true;
     
     $select_vendor_super_admin_status_message = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_status_messages");
     if(mysqli_num_rows($select_vendor_super_admin_status_message) == 1){
@@ -282,47 +288,63 @@
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php"); bc_adm_head("Dashboard | " . $get_all_super_admin_site_details["site_title"]); ?>
 <style>
-    /* Dashboard — fintech redesign v2 (2026-11) on the admin shell tokens.
-       All queries, handlers and modal contracts are unchanged. */
+    /* Dashboard — fintech redesign v4 (2026-11): premium hero + glass metrics
+       on the admin shell tokens. Queries, handlers and JS contracts unchanged. */
     .ad2-hero {
-        position: relative; overflow: hidden; color: #fff; border-radius: 24px;
-        padding: 2rem; margin-bottom: 1.5rem;
+        position: relative; overflow: hidden; color: #fff; border-radius: 28px;
+        padding: 2.2rem; margin-bottom: 1.5rem; isolation: isolate;
         background:
-            radial-gradient(640px 300px at 88% -10%, color-mix(in srgb, var(--brand) 55%, transparent), transparent 60%),
-            radial-gradient(420px 240px at -5% 110%, color-mix(in srgb, var(--brand) 30%, transparent), transparent 55%),
-            linear-gradient(135deg, #0b1220 0%, #101c33 55%, color-mix(in srgb, var(--brand-dark) 60%, #0b1220) 100%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 24px 44px -20px rgba(2,6,23,.7);
+            radial-gradient(680px 320px at 88% -10%, color-mix(in srgb, var(--brand) 58%, transparent), transparent 62%),
+            radial-gradient(460px 260px at -5% 115%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 58%),
+            linear-gradient(128deg, #0a111f 0%, #101c33 52%, color-mix(in srgb, var(--brand-dark, var(--brand)) 62%, #0a111f) 100%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,255,255,.06), 0 28px 50px -22px rgba(2,6,23,.75);
     }
-    /* §28 v3: fintech glass actions inside the hero + soft balance glow */
-    .ad2-hero__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.15rem; }
+    .ad2-hero::before {
+        content: ""; position: absolute; inset: 0; z-index: -1; opacity: .5;
+        background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+        background-size: 34px 34px;
+        -webkit-mask-image: radial-gradient(70% 90% at 70% 0%, #000 30%, transparent 100%);
+                mask-image: radial-gradient(70% 90% at 70% 0%, #000 30%, transparent 100%);
+    }
+    .ad2-hero::after {
+        content: ""; position: absolute; z-index: -1; width: 340px; height: 340px; right: -90px; top: -130px;
+        border-radius: 50%; filter: blur(10px);
+        background: radial-gradient(circle, color-mix(in srgb, var(--brand) 42%, transparent) 0%, transparent 65%);
+    }
+    .ad2-eyebrow { display: inline-flex; align-items: center; gap: .5rem; font-size: .7rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; opacity: .85; }
+    .ad2-live { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: ad2-pulse 2.2s infinite; }
+    @keyframes ad2-pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 70% { box-shadow: 0 0 0 7px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+    .ad2-balance { font-size: 2.85rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; word-break: break-all; text-shadow: 0 8px 36px color-mix(in srgb, var(--brand) 70%, transparent); }
+    .ad2-hero__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.2rem; }
     .ad2-action {
-        display: inline-flex; align-items: center; gap: .45rem; padding: .55rem .95rem;
+        display: inline-flex; align-items: center; gap: .45rem; padding: .58rem 1rem;
         border-radius: 999px; font-size: .8rem; font-weight: 700; text-decoration: none;
-        background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.22); color: #fff;
-        backdrop-filter: blur(8px); transition: all .18s ease;
+        background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.26); color: #fff;
+        backdrop-filter: blur(10px); transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
     }
-    .ad2-action:hover { background: rgba(255,255,255,.22); color: #fff; transform: translateY(-2px); }
+    .ad2-action:hover { background: rgba(255,255,255,.24); color: #fff; transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(2,6,23,.6); }
     .ad2-action i { font-size: .95rem; }
-    .ad2-balance { text-shadow: 0 6px 32px color-mix(in srgb, var(--brand) 65%, transparent); }
-    .ad2-metric { transition: transform .18s ease, background .18s ease; }
-    .ad2-metric:hover { transform: translateY(-2px); background: rgba(255,255,255,.14); }
-    .ad2-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .72; }
-    .ad2-balance { font-size: 2.7rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; word-break: break-all; }
     .ad2-metric {
-        background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.18);
-        border-radius: 16px; padding: 1rem 1.1rem; backdrop-filter: blur(8px); height: 100%;
+        display: flex; align-items: flex-start; gap: .8rem; height: 100%;
+        background: linear-gradient(160deg, rgba(255,255,255,.13), rgba(255,255,255,.06));
+        border: 1px solid rgba(255,255,255,.2); border-radius: 18px; padding: 1rem 1.1rem;
+        backdrop-filter: blur(10px); transition: transform .18s ease, background .18s ease, border-color .18s ease;
     }
-    .ad2-metric .k { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .78; }
-    .ad2-metric .v { font-size: 1.32rem; font-weight: 800; word-break: break-all; }
+    .ad2-metric:hover { transform: translateY(-3px); background: linear-gradient(160deg, rgba(255,255,255,.18), rgba(255,255,255,.09)); border-color: rgba(255,255,255,.35); }
+    .ad2-metric__ic { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; display: grid; place-items: center; font-size: 1.02rem; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.26); }
+    .ad2-metric .k { font-size: .66rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; opacity: .8; }
+    .ad2-metric .v { font-size: 1.3rem; font-weight: 800; line-height: 1.2; word-break: break-all; }
     .ad2-card {
-        background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
-        box-shadow: 0 1px 2px rgba(11,18,32,.05), 0 14px 30px -18px rgba(11,18,32,.22);
-        padding: 1.4rem; height: 100%; display: flex; flex-direction: column;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 22px;
+        box-shadow: 0 1px 2px rgba(11,18,32,.05), 0 16px 34px -20px rgba(11,18,32,.28);
+        padding: 1.45rem; height: 100%; display: flex; flex-direction: column;
+        transition: transform .18s ease, box-shadow .18s ease;
     }
+    .ad2-card:hover { transform: translateY(-2px); box-shadow: 0 2px 3px rgba(11,18,32,.05), 0 22px 40px -20px rgba(11,18,32,.32); }
     .ad2-card__head { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.1rem; }
-    .ad2-card__title { font-size: 1rem; font-weight: 800; color: var(--ink); margin: 0; }
+    .ad2-card__title { font-size: 1rem; font-weight: 800; letter-spacing: -.01em; color: var(--ink); margin: 0; }
     .ad2-card__sub { font-size: .78rem; color: var(--muted); }
-    .ad2-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.25rem; flex: 0 0 auto; }
+    .ad2-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.25rem; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(11,18,32,.05); }
     .ic-amber { background: #fffbeb; color: #d97706; } .ic-red { background: #fef2f2; color: #dc2626; }
     .ic-blue { background: #eff6ff; color: #2563eb; } .ic-indigo { background: #eef2ff; color: #4f46e5; }
     .ic-green { background: #ecfdf5; color: #059669; } .ic-teal { background: #f0fdfa; color: #0d9488; }
@@ -335,11 +357,11 @@
     .ad2-alert--info { border-left: 4px solid var(--brand); }
     .ad2-tile {
         position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: .45rem; text-decoration: none; height: 100%; min-height: 92px; padding: .9rem .4rem;
-        background: var(--wash); border: 1px solid var(--line); border-radius: 16px;
+        gap: .5rem; text-decoration: none; height: 100%; min-height: 96px; padding: .95rem .4rem;
+        background: var(--wash); border: 1px solid var(--line); border-radius: 18px;
         transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
     }
-    .ad2-tile i { font-size: 1.4rem; }
+    .ad2-tile i { font-size: 1.25rem; padding: .6rem; border-radius: 14px; background: color-mix(in srgb, currentColor 10%, transparent); line-height: 1; }
     .ad2-tile span { font-size: .72rem; font-weight: 700; color: var(--ink); text-align: center; }
     .ad2-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
     .ad2-tile__badge {
@@ -360,7 +382,9 @@
     }
     .ad2-addon { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
     .ad2-addon:last-child { border-bottom: 0; }
-    @media (max-width: 767px) { .ad2-balance { font-size: 1.9rem; } .ad2-hero { padding: 1.3rem; } }
+    .ad2-hero .btn:focus-visible, .ad2-action:focus-visible, .ad2-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    @media (max-width: 767px) { .ad2-balance { font-size: 1.95rem; } .ad2-hero { padding: 1.35rem; border-radius: 22px; } }
+    @media (prefers-reduced-motion: reduce) { .ad2-live { animation: none; } .ad2-card, .ad2-metric, .ad2-action, .ad2-tile { transition: none; } }
   </style>
     <?php bc_adm_sidebar(); ?>
 
@@ -419,11 +443,15 @@
     <div class="ad2-hero">
         <div class="row align-items-center position-relative" style="z-index: 2;">
             <div class="col-lg-5 mb-4 mb-lg-0 text-center text-lg-start">
-                <div class="ad2-eyebrow mb-1">Total API Balance</div>
+                <div class="ad2-eyebrow mb-1"><span class="ad2-live" aria-hidden="true"></span>Total API Balance</div>
                 <div class="ad2-balance mb-3">₦<?php echo number_format($get_logged_admin_details["balance"], 2); ?></div>
                 <div class="d-flex gap-2 justify-content-center justify-content-lg-start">
+                    <?php if ($bc_is_saas_ed): ?>
                     <a href="Fund.php" class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-primary">Add Funds</a>
                     <a href="Transactions.php" class="btn btn-outline-light btn-sm rounded-pill px-3 fw-bold">History</a>
+                    <?php else: ?>
+                    <a href="Transactions.php" class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-primary">History</a>
+                    <?php endif; ?>
                 </div>
                 <div class="ad2-hero__actions justify-content-center justify-content-lg-start">
                     <a class="ad2-action" href="VendorPortal.php"><i class="bi bi-globe"></i>Portal</a>
@@ -436,11 +464,14 @@
                 <div class="row g-3">
                     <div class="col-6 col-md-4">
                         <div class="ad2-metric">
+                            <div class="ad2-metric__ic"><i class="bi bi-people-fill"></i></div>
+                            <div>
                             <div class="k">Total Users</div>
                             <div class="v"><?php
                                 $get_total_users = mysqli_query($connection_server, "SELECT COUNT(*) as count FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."'");
                                 echo number_format(mysqli_fetch_assoc($get_total_users)['count'] ?? 0);
                             ?></div>
+                            </div>
                         </div>
                     </div>
                     <?php
@@ -487,18 +518,26 @@
                     ?>
                     <div class="col-6 col-md-4">
                         <div class="ad2-metric">
+                            <div class="ad2-metric__ic"><i class="bi bi-arrow-down-circle-fill"></i></div>
+                            <div>
                             <div class="k">Total Deposits</div>
                             <div class="v">₦<?php echo number_format($stats_cache['deposit'], 2); ?></div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-12 col-md-4">
                         <div class="ad2-metric">
+                            <div class="ad2-metric__ic"><i class="bi bi-graph-up-arrow"></i></div>
+                            <div>
                             <div class="k">Total Sales</div>
                             <div class="v">₦<?php echo number_format($stats_cache['spent'], 2); ?></div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-12">
                         <div class="ad2-metric">
+                            <div class="ad2-metric__ic"><i class="bi bi-shield-check"></i></div>
+                            <div>
                             <div class="k" style="color: #fcd34d;">24h Payout Limit</div>
                             <div class="v">
                                 <?php
@@ -510,6 +549,7 @@
                                     echo "$current_payouts / $daily_limit";
                                 ?>
                                 <small class="fw-normal opacity-75 ms-1" style="font-size: 0.7rem;">Requests</small>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -593,9 +633,15 @@
                 <p class="small text-muted mb-3">You don't have an active plan yet. Choose one to unlock full platform features.</p>
                 <?php endif; ?>
 
+                <?php if ($bc_is_saas_ed): ?>
                 <a href="RenewSubscription.php" class="btn btn-primary rounded-pill fw-bold py-2 mt-auto">
                   <i class="bi bi-arrow-repeat me-2"></i><?php echo ($status_text === 'Active' || $status_text === 'Expired') ? 'Renew / Upgrade Plan' : 'Choose a Plan'; ?>
                 </a>
+                <?php else: ?>
+                <a href="VendorPortal.php" class="btn btn-primary rounded-pill fw-bold py-2 mt-auto">
+                  <i class="bi bi-globe me-2"></i>View Subscription
+                </a>
+                <?php endif; ?>
             </div>
           </div>
 
@@ -705,7 +751,7 @@
 
     <!-- Row -->
     <div class="row g-4">
-        <div class="col-12 col-lg-6">
+        <div class="col-12 <?php echo $bc_is_saas_ed ? 'col-lg-6' : 'col-lg-12'; ?>">
             <div class="ad2-card">
                 <div class="ad2-card__head justify-content-between">
                     <div class="d-flex align-items-center gap-2">
@@ -747,6 +793,7 @@
             </div>
         </div>
 
+        <?php if ($bc_is_saas_ed): ?>
         <div class="col-12 col-lg-6">
             <div class="ad2-card">
                 <div class="ad2-card__head justify-content-between">
@@ -796,6 +843,7 @@
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
     <!-- Row End -->
     </section>

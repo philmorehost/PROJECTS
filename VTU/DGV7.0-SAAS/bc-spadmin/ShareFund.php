@@ -1,7 +1,28 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
          
+    // §30: platform funding moves other people's money — it now takes CSRF +
+    // the super admin's Security PIN + authenticator/email code (step-up).
+    if(isset($_POST["send_stepup_code"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'share_fund', 'Platform Funding')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
+        header("Location: ShareFund.php");
+        exit();
+    }
+
     if(isset($_POST["share-fund"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec30_err = function_exists('bc_stepup_spadmin_verify')
+            ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $_POST, 'share_fund')
+            : 'Verification is unavailable.';
+        if ($sec30_err !== '') {
+            $_SESSION["product_purchase_response"] = "Error: " . $sec30_err;
+            header("Location: ShareFund.php");
+            exit();
+        }
         $target = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["target"] ?? "vendor")));
         $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["type"]))));
         $amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/","",trim(strip_tags($_POST["amount"]))));
@@ -26,6 +47,7 @@
         }
 
         if($response === "success"){
+            if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'wallet_' . $transType, (string)$identifier, ucwords($type) . ' of N' . $amount . ' to ' . $target . ($target === "user" ? ' (vendor #' . $vid . ')' : '') . ' (ref ' . $reference . ')');
             $_SESSION["product_purchase_response"] = ucwords($identifier." ".$type."ed with N".$amount." successfully");
         } else {
             $_SESSION["product_purchase_response"] = "Transaction Failed: Check balance or account status.";
@@ -65,6 +87,7 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
                 </div>
                 <div class="card-body p-4 p-md-5 pt-0">
                     <form method="post">
+                        <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                         <div class="row g-3 mb-4 bg-light p-3 rounded-4 border">
                             <div class="col-md-12">
                                 <label class="form-label small fw-bold text-muted text-uppercase">Target Account Type</label>
@@ -116,6 +139,22 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
                                 <label class="form-label small fw-bold text-muted text-uppercase">Amount (₦)</label>
                                 <input name="amount" type="number" step="0.01" class="form-control form-control-lg rounded-3" placeholder="0.00" required />
                             </div>
+                        </div>
+
+                        <div class="row g-3 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase"><i class="bi bi-shield-lock me-1"></i>Security PIN</label>
+                                <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="****" class="form-control form-control-lg rounded-3 text-center fw-bold" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase"><i class="bi bi-phone-lock me-1"></i>Authenticator / Email Code</label>
+                                <div class="input-group input-group-lg">
+                                    <input name="otp_code" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6-digit code" class="form-control rounded-start-3 text-center fw-bold" />
+                                    <input type="hidden" name="totp_code" value="" />
+                                    <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-outline-primary fw-bold">Email code</button>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-0">Every execution needs your PIN plus an authenticator code (or an emailed code). Set both up in Account Settings.</p>
                         </div>
 
                         <button name="share-fund" type="submit" class="btn btn-primary btn-lg w-100 rounded-pill fw-bold shadow-sm py-3 mt-2">

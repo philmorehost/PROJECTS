@@ -210,6 +210,42 @@ function bc_log_ai_intelligence($vendor_id, $type, $content, $metadata = []) {
 }
 
 // STANDALONE: SA global service control removed — only vendor-local setting applies.
+/**
+ * SQL predicate for real sales (money that LEFT a wallet for a service).
+ * Mirrors the SAAS edition (shared bc-admin/Dashboard.php calls this; its
+ * absence here was a fatal that truncated the NON-SAAS dashboard after the
+ * first hero metric). The ledger records balance_before/balance_after,
+ * which is authoritative: a debit (purchase) ends with a LOWER balance.
+ * Refunds, transfers and wallet credits are excluded explicitly.
+ */
+function bc_sql_successful_sale($prefix = '') {
+    $p = $prefix === '' ? '' : rtrim($prefix, '.') . '.';
+    return "{$p}status=1
+        AND {$p}balance_after < {$p}balance_before
+        AND {$p}type_alternative NOT LIKE '%refund%'
+        AND {$p}product_unique_id NOT LIKE '%refund%'
+        AND {$p}type_alternative NOT LIKE '%credit%'
+        AND {$p}type_alternative NOT LIKE '%received%'
+        AND {$p}type_alternative NOT LIKE '%commission%'
+        AND {$p}product_unique_id NOT IN ('wallet_funding','manual_funding','wallet_credit')
+        AND {$p}product_unique_id NOT LIKE '%transfer%'";
+}
+
+/**
+ * SQL predicate for real money that ENTERED a wallet (deposit).
+ * Only completed funding/credit rows, never a refund or a reversal.
+ */
+function bc_sql_successful_deposit($prefix = '') {
+    $p = $prefix === '' ? '' : rtrim($prefix, '.') . '.';
+    return "{$p}status=1
+        AND {$p}balance_after > {$p}balance_before
+        AND {$p}type_alternative NOT LIKE '%refund%'
+        AND {$p}product_unique_id NOT LIKE '%refund%'
+        AND ({$p}product_unique_id IN ('wallet_funding','manual_funding','wallet_credit')
+             OR {$p}type_alternative LIKE '%wallet funding%'
+             OR {$p}type_alternative LIKE '%wallet credit%')";
+}
+
 function isServiceEnabled($name, $vid = null) {
     global $connection_server;
     static $static_service_cache = [];

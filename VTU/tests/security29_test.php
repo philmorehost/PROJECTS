@@ -196,4 +196,79 @@ sec_check_true('step-up rejects the replayed code', bc_stepup_actor_second_facto
 sec_check_true('step-up rejects a missing code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array(), 'api_withdrawal') !== '');
 sec_check_true('step-up rejects a wrong code', bc_stepup_actor_second_factor('sas_users', $actor, 'user@example.com', array('totp_code' => '000000'), 'api_withdrawal') !== '');
 
+// ── §30 wallet-credit security gate ───────────────────────────────────────
+// Crediting a wallet by hand moves money just like an approval, so every
+// manual credit surface takes the same step-up: Security PIN + authenticator
+// code (or an emailed code). Before this, bc-spadmin could credit anything
+// with a bare session, approvals were replayable GET links, and bc-admin's
+// ShareFund stopped at the PIN.
+
+// the super-admin verifier + platform-scope schema plumbing exist
+$stepup_src = src($root, 'DGV7.0-SAAS', 'func/bc-stepup.php');
+sec_check_true('stepup defines spadmin verifier', strpos($stepup_src, 'function bc_stepup_spadmin_verify') !== false);
+sec_check_true('stepup schema gives super_admin replay column', strpos($stepup_src, "'sas_super_admin'") !== false);
+sec_check_true('spadmin PIN failures are throttled', strpos($stepup_src, 'spadmin_pin_fail_') !== false);
+sec_check_true('spadmin verifier honours pin_check_only', strpos($stepup_src, "pin_check_only") !== false);
+
+// bc-spadmin funding: step-up runs before any wallet function
+$sp_share = src($root, 'DGV7.0-SAAS', 'bc-spadmin/ShareFund.php');
+$pos_verify = strpos($sp_share, 'bc_stepup_spadmin_verify');
+$pos_vendor = strpos($sp_share, 'chargeOtherVendor(');
+$pos_user = strpos($sp_share, 'chargeOtherUser(');
+sec_check_true('spadmin ShareFund verifies step-up', $pos_verify !== false);
+sec_check_true('spadmin ShareFund checks CSRF', strpos($sp_share, 'bc_validate_csrf') !== false);
+sec_check_true('spadmin ShareFund can email a code', strpos($sp_share, 'send_stepup_code') !== false);
+sec_check_true('spadmin ShareFund verify precedes vendor credit', $pos_verify < $pos_vendor);
+sec_check_true('spadmin ShareFund verify precedes user credit', $pos_verify < $pos_user);
+sec_check_true('spadmin ShareFund audits executions', strpos($sp_share, "'wallet_' . \$transType") !== false);
+
+// bc-spadmin payment orders: POST-only approvals behind step-up + pending guard
+$sp_orders = src($root, 'DGV7.0-SAAS', 'bc-spadmin/PaymentOrders.php');
+sec_check_false('spadmin orders have no GET approval handler', strpos($sp_orders, 'isset($_GET["order-ref"])') !== false);
+sec_check_true('spadmin orders take POST approvals', strpos($sp_orders, 'isset($_POST["order-ref"])') !== false);
+sec_check_true('spadmin orders guard non-pending orders', strpos($sp_orders, 'no longer pending') !== false);
+sec_check_true('spadmin orders require step-up to approve', strpos($sp_orders, "bc_stepup_spadmin_verify(\$get_logged_spadmin_details, \$_POST, 'vendor_payment_approve')") !== false);
+sec_check_true('spadmin orders use a step-up modal', strpos($sp_orders, 'approveOrderModal') !== false);
+sec_check_true('spadmin orders audit approvals', strpos($sp_orders, "'vendor_payment_approved'") !== false);
+sec_check_true('spadmin orders have no Re-Approve path', strpos($sp_orders, 'Re-Approve') === false);
+
+// the approval helper no longer builds GET approval URLs in either edition
+foreach ($editions as $ed) {
+    $js = src($root, $ed, 'jsfile/bc-custom-super.js');
+    sec_check_false("$ed super JS has no GET approval URL", strpos($js, 'order-status=') !== false);
+}
+
+// the super admin can enrol an authenticator (email codes are the fallback)
+$sp_settings = src($root, 'DGV7.0-SAAS', 'bc-spadmin/AccountSettings.php');
+sec_check_true('spadmin settings enrol TOTP on sas_super_admin', strpos($sp_settings, "bc_totp_begin_enrolment('sas_super_admin'") !== false);
+sec_check_true('spadmin settings confirm TOTP', strpos($sp_settings, "bc_totp_confirm_enrolment('sas_super_admin'") !== false);
+
+// bc-admin ShareFund: upgraded from PIN-only to full step-up in both editions
+foreach ($editions as $ed) {
+    $share = src($root, $ed, 'bc-admin/ShareFund.php');
+    $pos_verify = strpos($share, "bc_stepup_admin_verify(\$get_logged_admin_details, \$sec30_input, 'share_fund')");
+    sec_check_true("$ed ShareFund requires full admin step-up", $pos_verify !== false);
+    sec_check_true("$ed ShareFund checks CSRF", strpos($share, 'bc_validate_csrf') !== false);
+    sec_check_true("$ed ShareFund can email a code", strpos($share, 'send_stepup_code') !== false);
+    sec_check_true("$ed ShareFund dropped the PIN-only gate", strpos($share, "verifyUserPIN(\$pin, \$get_logged_admin_details)") === false);
+    sec_check_true("$ed ShareFund verify precedes the credit call", $pos_verify < strpos($share, 'chargeOtherUser('));
+    sec_check_true("$ed ShareFund audits executions", strpos($share, "'user_wallet_' . \$transType") !== false);
+}
+
+// ── §31 TOTP enrolment on upgraded installs ───────────────────────────────
+// totp_secret/two_factor_type exist in bc-tables.php only inside CREATE TABLE
+// IF NOT EXISTS, so pre-§29 installs never got the columns and enrolment
+// died with "Could not start authenticator setup". The idempotent migrator
+// must backfill both columns for every actor table, in both editions.
+foreach ($editions as $ed) {
+    $su = src($root, $ed, 'func/bc-stepup.php');
+    sec_check("$ed ensure-schema backfills totp_secret on 3 tables", substr_count($su, '"VARCHAR(225) NULL"'), 3);
+    sec_check("$ed ensure-schema backfills two_factor_type on 3 tables", substr_count($su, "two_factor_type'       => \"VARCHAR(20) NOT NULL DEFAULT 'none'\""), 3);
+    foreach (array('sas_users', 'sas_vendors', 'sas_super_admin') as $tbl) {
+        sec_check_true("$ed ensure-schema covers $tbl", strpos($su, "'$tbl' => array(") !== false);
+    }
+    // every enrolment write targets columns the migrator guarantees
+    sec_check_true("$ed begin-enrolment writes the backfilled columns", strpos($su, "SET totp_secret=?, two_factor_type='pending'") !== false);
+}
+
 echo "$count security29 checks passed\n";

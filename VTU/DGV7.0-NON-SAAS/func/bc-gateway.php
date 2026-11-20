@@ -138,6 +138,183 @@ if (!function_exists('bc_gateway_provider_verdict')) {
     }
 }
 
+
+if (!function_exists('bc_gateway_word_verdict')) {
+    /**
+     * Map a free-text provider status (a word, a short message, or a sentence like
+     * "Transaction was successful" / "Insufficient balance, try again") onto
+     * successful|pending|failed — or NULL when it carries no verdict we recognise.
+     *
+     * Gateway files historically parked ANY unrecognised reply in their catch-all
+     * "failed" branch, so a provider that delivered while answering "success" or
+     * "ORDER_COMPLETED" was recorded as failed AND refunded: the customer kept the
+     * service and the money (§32). NULL means "not evidence of failure" — callers
+     * must park the transaction as pending and let the requery queue decide.
+     */
+    function bc_gateway_word_verdict($text)
+    {
+        $t = strtolower(trim((string)$text));
+        if ($t === '') {
+            return null;
+        }
+
+        // Single-token answers reuse the vocabulary of bc_gateway_provider_verdict().
+        $token = trim($t, " \t\n\r\0\x0B.:;,-");
+        if (in_array($token, array('successful', 'success', 'successfull', 'completed', 'complete', 'delivered', 'done', 'ok', '200'), true)) {
+            return 'successful';
+        }
+        if (in_array($token, array('pending', 'processing', 'process', 'queued', 'queue', 'in-progress', 'in_progress', 'awaiting', 'submitted', 'received'), true)) {
+            return 'pending';
+        }
+        if (in_array($token, array('failed', 'fail', 'failure', 'cancelled', 'canceled', 'rejected', 'reverse', 'reversed', 'refunded', 'refund', 'error', 'declined', 'invalid', 'expired'), true)) {
+            return 'failed';
+        }
+
+        // Sentences: hard failure signatures first, so "transaction was not
+        // successful" or "completed but reversed" can never read as success.
+        if (preg_match('/\b(insufficient|declined|rejected|cancelled|canceled|reversed|refunded|not successful|unsuccessful|unsuccessfully|failed|failure|out of stock|sold out|invalid|expired|denied|blocked)\b/', $t)) {
+            return 'failed';
+        }
+        if (preg_match('/\b(successful|successfully|success|completed|complete|delivered|credited|approved|done)\b/', $t)) {
+            return 'successful';
+        }
+        if (preg_match('/\b(pending|processing|queued|awaiting|submitted|in progress|received)\b/', $t)) {
+            return 'pending';
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('bc_gateway_failure_needs_operator')) {
+    /** Failures caused by OUR side (balance, stock, credentials) need a human. */
+    function bc_gateway_failure_needs_operator($text)
+    {
+        return (bool)preg_match('/\b(insufficient|out of stock|sold out|unauthori[sz]ed|invalid (api[- ]?key|key|credential)|low balance|account (suspended|disabled|blocked))\b/i', (string)$text);
+    }
+}
+
+if (!function_exists('bc_gateway_notify_issue')) {
+    /**
+     * Email an upstream-provider problem to the operator of this install — the
+     * super admin on SAAS, the vendor/admin on NON-SAAS — so it can be
+     * investigated. End users never see provider internals; errors go here and
+     * to logs/gateway-raw.log instead. Throttled to one mail per distinct
+     * problem per 30 minutes so a provider outage cannot flood the inbox.
+     * Best-effort: never breaks the purchase that triggered it.
+     */
+    function bc_gateway_notify_issue($kind, $transition, $provider_text = '', $raw = '', $label = '')
+    {
+        static $sent = false;
+        if ($sent) {
+            return false;
+        }
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) {
+            return false;
+        }
+
+        $vendor_id = (int)($GLOBALS['get_logged_user_details']['vendor_id'] ?? ($GLOBALS['get_transaction_data']['vendor_id'] ?? 0));
+        $fingerprint = md5($kind . '|' . $transition . '|' . strtolower(trim((string)$provider_text)) . '|' . $vendor_id);
+        $state_file = __DIR__ . '/../logs/gateway-notify.state';
+        $now = time();
+        $state = array();
+        if (is_file($state_file)) {
+            $decoded = json_decode((string)@file_get_contents($state_file), true);
+            if (is_array($decoded)) {
+                $state = $decoded;
+            }
+        }
+        if (isset($state[$fingerprint]) && ($now - (int)$state[$fingerprint]) < 1800) {
+            return false;
+        }
+
+        if (!function_exists('bc_is_saas_edition') && file_exists(__DIR__ . '/bc-edition.php')) {
+            include_once(__DIR__ . '/bc-edition.php');
+        }
+        $is_saas = function_exists('bc_is_saas_edition') ? bc_is_saas_edition() : false;
+
+        $recipients = array();
+        if ($is_saas) {
+            $q = @mysqli_query($connection_server, "SELECT email FROM sas_super_admin WHERE email<>'' ORDER BY id ASC LIMIT 5");
+            if ($q) {
+                while ($r = mysqli_fetch_assoc($q)) {
+                    $recipients[] = $r['email'];
+                }
+            }
+        }
+        if (!$recipients) {
+            $q = $vendor_id > 0
+                ? @mysqli_query($connection_server, "SELECT email FROM sas_vendors WHERE id='$vendor_id' LIMIT 1")
+                : @mysqli_query($connection_server, "SELECT email FROM sas_vendors WHERE email<>'' ORDER BY id ASC LIMIT 1");
+            if ($q) {
+                while ($r = mysqli_fetch_assoc($q)) {
+                    $recipients[] = $r['email'];
+                }
+            }
+        }
+        if (!$recipients) {
+            return false;
+        }
+
+        $host = (string)($_SERVER['HTTP_HOST'] ?? 'cli');
+        $reference = (string)($GLOBALS['reference'] ?? ($GLOBALS['requery_reference'] ?? ''));
+        $username = (string)($GLOBALS['get_logged_user_details']['username'] ?? ($GLOBALS['get_transaction_data']['username'] ?? ''));
+        $excerpt = trim((string)$raw);
+        if (strlen($excerpt) > 600) {
+            $excerpt = substr($excerpt, 0, 600) . '...[truncated]';
+        }
+        $excerpt = (string)preg_replace('/(api[_-]?key|token|authorization)(["\']?\s*[:=]\s*["\']?)[A-Za-z0-9._\-]+/i', '$1$2***', $excerpt);
+        $esc = function ($v) {
+            return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+        };
+        $body = '<p>An upstream provider reply could not be settled automatically and needs investigation.</p>'
+            . '<table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">'
+            . '<tr><td><b>Site</b></td><td>' . $esc($host) . '</td></tr>'
+            . '<tr><td><b>Time</b></td><td>' . $esc(date('Y-m-d H:i:s')) . '</td></tr>'
+            . '<tr><td><b>Issue</b></td><td>' . $esc($kind) . ($label !== '' ? ' (' . $esc($label) . ')' : '') . '</td></tr>'
+            . '<tr><td><b>Classification</b></td><td>' . $esc($transition) . '</td></tr>'
+            . '<tr><td><b>Provider status</b></td><td>' . $esc($provider_text) . '</td></tr>'
+            . ($reference !== '' ? '<tr><td><b>Reference</b></td><td>' . $esc($reference) . '</td></tr>' : '')
+            . ($username !== '' ? '<tr><td><b>Customer</b></td><td>' . $esc($username) . '</td></tr>' : '')
+            . ($vendor_id > 0 ? '<tr><td><b>Vendor ID</b></td><td>' . $esc($vendor_id) . '</td></tr>' : '')
+            . '<tr><td><b>Raw response</b></td><td><pre style="white-space:pre-wrap;word-break:break-word;">' . $esc($excerpt) . '</pre></td></tr>'
+            . '</table>'
+            . '<p>The customer was NOT shown provider details. Any affected purchase has been left pending for requery (never refunded on an uncertain reply), so no money moves until the provider confirms the real outcome.</p>';
+
+        $subject = 'Gateway provider issue - investigation needed';
+        $delivered = false;
+        foreach ($recipients as $to) {
+            if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            if ($is_saas && function_exists('sendSuperAdminEmail')) {
+                @sendSuperAdminEmail($to, $subject, $body);
+                $delivered = true;
+            } elseif (function_exists('sendVendorEmail')) {
+                @sendVendorEmail($to, $subject, $body);
+                $delivered = true;
+            }
+        }
+        if (!$delivered) {
+            return false;
+        }
+
+        $sent = true;
+        $state[$fingerprint] = $now;
+        foreach ($state as $k => $ts) {
+            if (($now - (int)$ts) > 86400) {
+                unset($state[$k]);
+            }
+        }
+        @file_put_contents($state_file, json_encode($state), LOCK_EX);
+        if (function_exists('bc_gateway_log_raw_response')) {
+            bc_gateway_log_raw_response($kind . ' ' . $transition . ' text=' . trim((string)$provider_text), 'ISSUE-NOTIFIED');
+        }
+        return true;
+    }
+}
+
 if (!function_exists('bc_gateway_refund_is_safe')) {
     /**
      * May this outcome be refunded?
@@ -162,7 +339,15 @@ if (!function_exists('bc_gateway_refund_is_safe')) {
         // that is a sentinel, not a provider verdict, so it must not authorise a refund.
         $word = trim(strtolower((string)$api_response_text));
 
-        return $word !== '' && !in_array($word, array('1', '0', 'true', 'false'), true);
+        if ($word === '' || in_array($word, array('1', '0', 'true', 'false'), true)) {
+            return false;
+        }
+
+        // §32: only a DEFINITIVE provider failure may authorise a refund. Any other
+        // wording - including success words a gateway catch-all mislabelled as
+        // "failed" - means the provider may already have delivered and charged our
+        // wallet, so the money stays put and requery establishes the truth.
+        return bc_gateway_word_verdict($word) === 'failed';
     }
 }
 
@@ -213,7 +398,50 @@ if (!function_exists('bc_gateway_settle_purchase')) {
      */
     function bc_gateway_settle_purchase(&$api_response, &$api_response_text, &$api_response_description, &$api_response_status, $label = '', $raw_response = '', $on_unknown = 'pending')
     {
-        if (in_array($api_response, array("successful", "pending", "failed"), true)) {
+        // §32 second opinion: gateway catch-alls park ANY unrecognised provider
+        // reply in the "failed" branch, including replies that mean the service
+        // was DELIVERED ("success", "ORDER_COMPLETED", ...). Refunding those hands
+        // the customer the service AND the money. A failure may only stand when
+        // the provider's own words definitively say it failed; anything else is
+        // corrected here, before any refund branch can run.
+        if ($api_response === "failed") {
+            $verdict = function_exists('bc_gateway_word_verdict') ? bc_gateway_word_verdict($api_response_text) : null;
+            if ($verdict === 'successful') {
+                $api_response = "successful";
+                $api_response_status = 1;
+                bc_gateway_log_raw_response($raw_response, "VERDICT-CORRECTED(failed=>successful)");
+                bc_gateway_notify_issue('classification_corrected', 'failed=>successful', $api_response_text, $raw_response, $label);
+                return true;
+            }
+            if ($verdict === 'pending') {
+                $api_response = "pending";
+                $api_response_status = 2;
+                bc_gateway_notify_issue('provider_pending', 'failed=>pending', $api_response_text, $raw_response, $label);
+                return true;
+            }
+            if ($verdict === null) {
+                // Unknown wording is not proof of failure: park as pending for
+                // the requery queue instead of letting the refund branch run.
+                $failed_text = $api_response_text;
+                $api_response = "pending";
+                $api_response_text = "";
+                $api_response_status = 2;
+                if (trim((string)$api_response_description) === '' || stripos((string)$api_response_description, 'Transaction Failed') === 0) {
+                    $api_response_description = "Transaction Pending | awaiting confirmation from the upstream gateway";
+                }
+                bc_gateway_log_raw_response($raw_response, "UNRESOLVED-FAILED");
+                bc_gateway_notify_issue('unresolved_failure', 'failed=>pending', $failed_text, $raw_response, $label);
+                return true;
+            }
+            // Definitive provider failure: the refund may proceed. Failures caused
+            // by our own side (balance/stock/credentials) are still escalated.
+            if (function_exists('bc_gateway_failure_needs_operator') && bc_gateway_failure_needs_operator($api_response_text)) {
+                bc_gateway_notify_issue('provider_failure', 'failed', $api_response_text, $raw_response, $label);
+            }
+            return false;
+        }
+
+        if (in_array($api_response, array("successful", "pending"), true)) {
             return false;
         }
 
@@ -227,6 +455,7 @@ if (!function_exists('bc_gateway_settle_purchase')) {
         $api_response_status = ($api_response === "failed") ? 3 : 2;
 
         bc_gateway_log_raw_response($raw_response, "UNRESOLVED(" . $previous . ")");
+        bc_gateway_notify_issue('unresolved_reply', $previous . '=>' . $api_response, $api_response_text, $raw_response, $label);
 
         return true;
     }
