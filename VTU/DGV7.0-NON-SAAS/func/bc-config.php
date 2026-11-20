@@ -676,11 +676,13 @@ $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
 $vendor_primary_color = "#287bff";
 if ($connection_server && isset($select_vendor_table["id"])) {
     $v_id_tpl = (int)$select_vendor_table["id"];
-    if (!isset($_SESSION['vendor_style_template_cache']) || ($_SESSION['vendor_style_template_vid'] ?? 0) != $v_id_tpl) {
+    $tpl_cache_ver = (int)(is_callable('getSuperAdminOption') ? getSuperAdminOption('brand_style_cache_ver', 0) : 0);
+    if (!isset($_SESSION['vendor_style_template_cache']) || ($_SESSION['vendor_style_template_vid'] ?? 0) != $v_id_tpl || (int)($_SESSION['vendor_style_template_ver'] ?? 0) != $tpl_cache_ver) {
         $q_tpl = mysqli_query($connection_server, "SELECT template_name, primary_color FROM sas_vendor_style_templates WHERE vendor_id='$v_id_tpl' LIMIT 1");
         $tpl_data = ($q_tpl && mysqli_num_rows($q_tpl) > 0) ? mysqli_fetch_assoc($q_tpl) : null;
         $_SESSION['vendor_style_template_cache'] = $tpl_data;
         $_SESSION['vendor_style_template_vid'] = $v_id_tpl;
+        $_SESSION['vendor_style_template_ver'] = $tpl_cache_ver;
     } else {
         $tpl_data = $_SESSION['vendor_style_template_cache'];
     }

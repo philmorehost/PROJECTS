@@ -44,7 +44,7 @@ bc_adm_head('', array("area" => "spadmin"));
                 <style>
                     .product-card { transition: all 0.3s cubic-bezier(.25,.8,.25,1); border: 1px solid #edf2f7; position: relative; }
                     .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important; }
-                    .module-icon { width: 60px; height: 60px; background: rgba(13, 110, 253, 0.1); color: #0d6efd; display: flex; align-items: center; justify-content: center; border-radius: 15px; margin-bottom: 20px; }
+                    .module-icon { width: 60px; height: 60px; background: color-mix(in srgb, var(--brand, #0f766e) 12%, transparent); color: var(--brand-ink, var(--brand, #0f766e)); display: flex; align-items: center; justify-content: center; border-radius: 15px; margin-bottom: 20px; }
                     .price-tag { font-size: 1.25rem; font-weight: 800; color: #1a202c; }
                     .status-badge { position: absolute; top: 20px; right: 20px; }
                 </style>

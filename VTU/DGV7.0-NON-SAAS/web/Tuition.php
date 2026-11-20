@@ -50,7 +50,7 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
 ?>
 <section class="section dashboard">
     <div class="card border-0 shadow-sm rounded-4 mb-4"><div class="card-body p-4">
-        <span class="badge bg-primary mb-2">Powered by Platnova</span>
+        <span class="badge bg-primary mb-2">Tuition Payments</span>
         <h4 class="fw-bold mb-1">Pay tuition to 160+ universities worldwide</h4>
         <p class="text-muted small mb-0">Search your institution, validate the student ID, and settle in the school's currency at live FX — no correspondent-bank delays.</p>
     </div></div>

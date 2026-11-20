@@ -1474,3 +1474,41 @@ compact small-screen variant. Breakpoints (Bootstrap `row-cols`):
 2-up on phones, 3-up from `sm`, 4-up from `lg`; tiles stretch so rows
 stay even. The seven hub links are unchanged (still pinned by
 upgrade25, which now also asserts the grid markup, 193 → 195).
+
+## §28 — Commercialised gateway APIs, vendor portal, Plisio removal, service-control completion & chat redesign (2026-11-20)
+
+Brief-driven round covering sixteen operator asks across both editions.
+
+### Edition marker + commercialised API access
+- New per-tree `func/bc-edition.php` (`bc_script_edition()`/`bc_is_saas_edition()`; `'saas'` in the SAAS tree, `'non-saas'` in NON-SAAS — deliberately the one func file that differs between editions).
+- New byte-identical `func/bc-fintech-api-access.php`: Flutterwave (global payments), Klasha (payouts/crypto) and Platnova are the three commercialised APIs. NON-SAAS includes all three by default. On SAAS a vendor needs the super-admin price to be 0 or a vendor grant (`fintech_api_access_<slug>`); prices live in `fintech_api_price_<slug>` super-admin options (default ₦50,000 each), editable in `bc-spadmin → Payment Gateway → Fintech API Access Prices`.
+- `bc-admin → Payment Gateway` gained a "Fintech API Access" section (`buy-fintech-api`: wallet charge via `chargeVendor`, grant on success, free at price 0), locks the Flutterwave/Platnova credential cards and the Klasha payout card until access is owned, and lists Platnova alongside the other gateways. Locked cards emit placeholder fields so `gateway-name[]` indexes never shift.
+- `bc-admin → Service Control` only offers the vendor's *accessible* providers for the active-provider switch, and locks Platnova credential saves without API access. Provider names were scrubbed from every customer-visible string (badges, notes, errors); identifiers, endpoints and webhook URLs are untouched. Live trading rails remain the §26 documented endpoints (Klasha crypto dual-scheme, Flutterwave, Platnova, 1GLOBAL) — nothing was invented, empty paths stay fail-closed.
+
+### Service Control completion
+- The spadmin global catalogue and the bc-admin catalogue now hold the identical 40-service key set (incl. `referral`, `withdraw` (Wallet-to-Bank), `share_fund`, `virtual_bank_display`, `esim`, `tuition`, `pos_request`, `print_*`). Refer & Earn is gated by the new `referral` toggle in the nav and `web/Referral.php`; off means the menu item, dashboard tile and page all disappear, and the shell grid reflows.
+
+### Vendor portal (bc-admin)
+- New `bc-admin/VendorPortal.php` (both editions): subscription snapshot with renew/history links and a domain panel. SAAS vendors submit domain-change requests into `sas_vendor_domain_requests` (one open request at a time); the super admin approves in `bc-spadmin → Domain Requests`, which performs the switch and, where cPanel is configured, adds the new addon domain and removes the old one. The admin topbar now carries a **Portal** action (globe icon) on every page; the dead **REFRESH/SYNC** actions were removed from the admin dashboard. The dashboard also got the v3 fintech hero (glass quick actions: Portal / Service Control / Payment Gateway / Manage Users; balance glow) in both editions — the file was already shared, so NON-SAAS receives the same design.
+
+### Brand colour
+- Root cause of "web pages no longer reflect colour updates": `func/bc-config.php` cached the vendor template/colour in the session with no invalidation. The cache is now version-checked against the `brand_style_cache_ver` super-admin option, which `bc-admin → Account Settings` bumps on every branding save (plus a local session unset).
+- Contrast guardrails: the shells compute `--brand-fg` (readable foreground on the brand colour, from luminance) and `--brand-ink` (brand darkened for text on light surfaces); primary buttons, badges, pagination, outline hovers, `text-primary`/`text-dark-primary` and DataTables' current-page button all use them. The `bc-spadmin`/`bc-admin` marketplace module icons moved from hard-coded Bootstrap blue to brand tokens.
+
+### Plisio removed totally
+- The defunct provider is gone from the product: no catalogue entry, no marketplace/API listing, no customer page calls it. `web/CryptoHub.php` and `web/api/crypto.php` route every trade action through the active-provider gate (fail-closed with provider-neutral copy); `web/ViewCryptoInvoice.php` is read-only history (no regeneration, no sync, no live fetch; QR renders from the stored address); `bc-admin/CryptoHub.php` leaves crypto cash-outs pending instead of paying them out; `func/crypto-cron.php` is an intentional no-op so existing cPanel schedules keep succeeding; the spadmin fee card, the dead activate-card branch and its checkout JS were deleted.
+- Fixed a live bug found on the way: `web/api/crypto.php` tested `$action` *before* assigning it, so the retired-gateway refusal never fired at runtime. The guard is now genuinely first, and the invoice/swap/withdraw branch bodies contain no provider calls at all.
+- Deliberately preserved reconciliation spine (pinned by the gate suite §11): the gateway-policy refusal (`bc_gateway_is_retired`), `users-plisio.php` answering **410** before any legacy handling, the stored-key lookup in `func/bc-crypto-func.php` (now header-marked reconciliation-only), fresh installs seeding the service off, and the SAAS activation-fee handler refusing *before* billing. History stays auditable; no new traffic is possible.
+
+### PrintHub, navigation, marketplace, users, chat
+- PrintHub's NIN/BVN cards were removed (they live only under Verify & Print); standalone nav links (PrintHub, Refer & Earn) now render the same chevron as grouped items.
+- Marketplace gained category filter chips (Airtime, Data, Electricity, Cable TV, Exam Pins, Bulk SMS, Identity, **eSIM**, Virtual Card, International Transfer, Payment Gateway); spadmin can now create eSIM/virtual-card/intl-transfer/payment-gateway listings, and SAAS marketplaces show a "Custom Gateway API" card per unpurchased API that deep-links to the gateway-page buy flow (absent on NON-SAAS, which includes the APIs by default).
+- `bc-spadmin/Users.php` Manage dropdowns (and all back-office dropdowns) are driven by the shell's hand-rolled handler: open on click only, close on outside-click/Esc, correct positioning inside `.btn-group`.
+- `bc-spadmin/CryptoHub.php` was deleted (vendors control their own APIs from bc-admin); the sitemap card now points at Fintech API Prices, and the spadmin nav dropped the dead entry.
+- Chat widget redesigned (both editions): brand-gradient launcher with chat/close icon swap and unread badge, avatar header with presence dot, per-sender message styling, quick-reply chips — configurable per tenant in `bc-admin → Chat Settings` (one per line, max 5) with sensible defaults; chips render as text nodes only.
+
+### Held / follow-ups
+- Phase 1C Step 3 (`api_key` lockdown) remains held until the Bearer-token mobile build ships.
+- Crypto trading on the new rails stays fail-closed until the Klasha wallet/swap flow is wired end-to-end (quote → beneficiary → ledger); balances and history are unaffected.
+
+Test counts after §28: gate 1065 · upgrade25 260/0 · provider_live 71 · policy 70 · plate_app 154 · plate_admin 711 · plate_migration 1084 · backoffice 184/0 · lm 30/0 · htaccess 224. Two pre-§28 pins (legacy swap handlers, referral volume from swaps) were updated to the fail-closed contract with in-test rationale.

@@ -293,6 +293,19 @@
             linear-gradient(135deg, #0b1220 0%, #101c33 55%, color-mix(in srgb, var(--brand-dark) 60%, #0b1220) 100%);
         box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 24px 44px -20px rgba(2,6,23,.7);
     }
+    /* §28 v3: fintech glass actions inside the hero + soft balance glow */
+    .ad2-hero__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.15rem; }
+    .ad2-action {
+        display: inline-flex; align-items: center; gap: .45rem; padding: .55rem .95rem;
+        border-radius: 999px; font-size: .8rem; font-weight: 700; text-decoration: none;
+        background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.22); color: #fff;
+        backdrop-filter: blur(8px); transition: all .18s ease;
+    }
+    .ad2-action:hover { background: rgba(255,255,255,.22); color: #fff; transform: translateY(-2px); }
+    .ad2-action i { font-size: .95rem; }
+    .ad2-balance { text-shadow: 0 6px 32px color-mix(in srgb, var(--brand) 65%, transparent); }
+    .ad2-metric { transition: transform .18s ease, background .18s ease; }
+    .ad2-metric:hover { transform: translateY(-2px); background: rgba(255,255,255,.14); }
     .ad2-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .72; }
     .ad2-balance { font-size: 2.7rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; word-break: break-all; }
     .ad2-metric {
@@ -351,7 +364,7 @@
   </style>
     <?php bc_adm_sidebar(); ?>
 
-  	<?php bc_adm_topbar(array("title" => "DASHBOARD", "crumb" => "Home / Dashboard", "actions" => array(array("label" => "REFRESH", "href" => "?"), array("label" => "SYNC", "href" => "?")))); ?>
+  	<?php bc_adm_topbar(array("title" => "DASHBOARD", "crumb" => "Home / Dashboard")); ?>
 
     <section class="section dashboard">
     <?php
@@ -411,6 +424,12 @@
                 <div class="d-flex gap-2 justify-content-center justify-content-lg-start">
                     <a href="Fund.php" class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-primary">Add Funds</a>
                     <a href="Transactions.php" class="btn btn-outline-light btn-sm rounded-pill px-3 fw-bold">History</a>
+                </div>
+                <div class="ad2-hero__actions justify-content-center justify-content-lg-start">
+                    <a class="ad2-action" href="VendorPortal.php"><i class="bi bi-globe"></i>Portal</a>
+                    <a class="ad2-action" href="ServiceControl.php"><i class="bi bi-sliders"></i>Service Control</a>
+                    <a class="ad2-action" href="PaymentGateway.php"><i class="bi bi-credit-card-2-front"></i>Payment Gateway</a>
+                    <a class="ad2-action" href="Users.php"><i class="bi bi-people"></i>Manage Users</a>
                 </div>
             </div>
             <div class="col-lg-7">

@@ -73,7 +73,7 @@ bc_app_topbar(array("title" => "ESIM", "crumb" => "Home / eSIM"));
 ?>
 <section class="section dashboard">
     <div class="card border-0 shadow-sm rounded-4 mb-4"><div class="card-body p-4">
-        <span class="badge bg-primary mb-2">Powered by <?php echo htmlspecialchars($esim_rail); ?></span>
+        <span class="badge bg-primary mb-2">Travel eSIM</span>
         <h4 class="fw-bold mb-1">Travel eSIM — data in 190+ countries</h4>
         <p class="text-muted small mb-0">Buy a plan, scan the QR code, and land connected. One-tap activation on iOS &amp; Android, exactly like the LemFi eSIM flow.</p>
     </div></div>

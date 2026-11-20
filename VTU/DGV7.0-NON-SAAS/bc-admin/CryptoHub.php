@@ -55,21 +55,11 @@ if (isset($_POST['action'])) {
                     $_SESSION['product_purchase_response'] = "PayHub Error: " . ($res['message'] ?? 'Unknown');
                 }
             } else {
-                // Direct cash out via Plisio (Crypto to Crypto)
-                $res = plisioCashOut([
-                    'psys_cid' => $currency,
-                    'amount' => $amount,
-                    'address' => $address,
-                    'type' => 'cash_out'
-                ], $vid);
-
-                if (($res['status'] ?? '') == 'success') {
-                    mysqli_query($connection_server, "UPDATE sas_crypto_withdrawals SET status='completed' WHERE reference='$ref'");
-                    logCryptoTransaction($vid, $r['username'], 'withdrawal', $currency, $amount, 1, $res['data']['txn_id'], '', $address);
-                    $_SESSION['product_purchase_response'] = "Crypto Withdrawal approved and processed via Plisio.";
-                } else {
-                    $_SESSION['product_purchase_response'] = "Plisio Error: " . ($res['message'] ?? 'Unknown');
-                }
+                // §28: the legacy crypto cash-out rail was removed. No replacement
+                // payout rail is wired yet, so the withdrawal stays PENDING and no
+                // funds move — the admin settles it once a gateway API cash-out is
+                // provisioned, or rejects it to refund the user automatically.
+                $_SESSION['product_purchase_response'] = "Crypto cash-out is unavailable while the new gateway connection is being finalised. The withdrawal was left pending and no funds were moved.";
             }
         }
     } elseif ($_POST['action'] == 'reject_withdrawal') {
@@ -117,7 +107,7 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
 
                 <div class="card shadow-sm border-0 rounded-4 p-4 bg-dark text-white">
                     <h6 class="fw-bold mb-3"><i class="bi bi-gear-wide-connected me-2 text-info"></i>Automation (Cron)</h6>
-                    <p class="small opacity-75">To ensure crypto deposits reflect automatically, set up a Cron Job in your cPanel to run every 2-5 minutes.</p>
+                    <p class="small opacity-75">Crypto deposits on the current gateway connection confirm inside the app. Pending legacy deposits are settled from Crypto Invoices; the sync cron below is retained for compatibility.</p>
                     <div class="bg-white bg-opacity-10 p-3 rounded mb-3 text-break border border-white border-opacity-10" style="font-family: 'Courier New', Courier, monospace; font-size: 0.8rem;">
                         php <?php echo realpath(__DIR__ . '/../func/crypto-cron.php'); ?>
                     </div>

@@ -21,34 +21,11 @@ $_SESSION['vendor_id'] = $vid; // Inject into session for logic that relies on i
 $GLOBALS['vendor_id'] = $vid;
 resolveVendorID(true); // Force resolution from global if available
 
-// Handle Invoice Regeneration (Publicly accessible for specific invoice)
+// §28: invoice regeneration created NEW deposits on the removed legacy provider.
+// This page is read-only history now: it displays the stored invoice and never
+// contacts a provider. New deposits start from the Crypto Hub.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') == 'regenerate_invoice') {
-    $params = [
-        'currency' => $tx['currency_code'],
-        'order_number' => 'DEP_' . time() . '_' . rand(10, 99),
-        'order_name' => 'Wallet Deposit - ' . $tx['username'],
-        'callback_url' => $web_http_host . '/users-plisio.php',
-        'email' => $tx['username'] . '@' . parse_url($web_http_host, PHP_URL_HOST), // Fallback email
-        'amount' => $tx['amount']
-    ];
-
-    // Try to get user's real email for better UX
-    $u_q = mysqli_query($connection_server, "SELECT email FROM sas_users WHERE username='".$tx['username']."' AND vendor_id='$vid' LIMIT 1");
-    if($u_r = mysqli_fetch_assoc($u_q)) $params['email'] = $u_r['email'];
-
-    $res = createPlisioInvoice($params, $vid);
-    if (($res['status'] ?? '') == 'success') {
-        $tx_data = $res['data'];
-        $internal_ref = $params['order_number'];
-        $actual_amount = $tx_data['invoice_total_sum'] ?? $tx['amount'];
-        if (logCryptoTransaction($vid, $tx['username'], 'deposit', $tx['currency_code'], $actual_amount, 2, $tx_data['txn_id'], $tx_data['invoice_url'], $tx_data['wallet_hash'] ?? '', ['order_number' => $internal_ref, 'total_sum' => $actual_amount], $internal_ref, $tx_data['view_key'] ?? '')) {
-            echo json_encode(['status' => 'success', 'url' => 'ViewCryptoInvoice.php?ref=' . $internal_ref]);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Failed to log new transaction internally.']);
-        }
-    } else {
-        echo json_encode(['status' => 'error', 'message' => $res['message'] ?? 'Plisio Error during regeneration']);
-    }
+    echo json_encode(['status' => 'error', 'message' => 'This invoice can no longer be regenerated. Please start a new deposit from the Crypto Hub.']);
     exit();
 }
 
@@ -64,48 +41,21 @@ if ($tx['status'] == 2) {
     }
 }
 
-// Check status via AJAX if requested
+// §28: status checks read the LOCAL record only — the legacy provider is gone,
+// so nothing is polled and no balance is credited from an external response here.
+// (Payment confirmation for legacy invoices stays with admin reconciliation.)
 if (isset($_GET['check_status'])) {
-    if (isset($_GET['sync']) && $tx['status'] == 2 && !empty($tx['plisio_tx_id'])) {
-        $res = getPlisioTransactionDetails($tx['plisio_tx_id'], $tx['vendor_id']);
-        if (($res['status'] ?? '') == 'success') {
-            $new_st = $res['data']['status'] ?? '';
-            if ($new_st == 'completed' || $new_st == 'mismatch') {
-                $amount = $res['data']['amount'] ?? $tx['amount'];
-                if (updateUserCryptoBalance($tx['vendor_id'], $tx['username'], $tx['currency_code'], $amount, 'credit')) {
-                    mysqli_query($connection_server, "UPDATE sas_crypto_transactions SET status='1', amount='$amount' WHERE reference='".$tx['reference']."'");
-                    $tx['status'] = '1';
-                }
-            } elseif ($new_st == 'expired' || $new_st == 'cancelled') {
-                mysqli_query($connection_server, "UPDATE sas_crypto_transactions SET status='3' WHERE reference='".$tx['reference']."'");
-                $tx['status'] = '3';
-            }
-        }
-    }
     echo json_encode(['status' => $tx['status']]);
     exit();
 }
 
-$currencies = getPlisioCurrencies($tx['vendor_id']);
-$cur_info = null;
-foreach($currencies as $c) if($c['cid'] == $tx['currency_code']) { $cur_info = $c; break; }
+// Static network labels for the locally supported set (no provider lookup).
+$crypto_network_names = ['BTC' => 'Bitcoin', 'ETH' => 'Ethereum', 'LTC' => 'Litecoin', 'TRX' => 'TRON', 'USDT_TRX' => 'Tether (TRC-20)', 'USDC' => 'USD Coin', 'BCH' => 'Bitcoin Cash', 'DOGE' => 'Dogecoin'];
+$cur_info = isset($crypto_network_names[$tx['currency_code']]) ? ['cid' => $tx['currency_code'], 'name' => $crypto_network_names[$tx['currency_code']]] : null;
 
-// Robust White Label: Fetch live data from Plisio using the View Key if available
+// Stored invoice data only; the QR below is generated from the stored address.
 $live_qr = "";
 $live_amount = $tx['amount'];
-if (!empty($tx['plisio_tx_id']) && !empty($tx['view_key']) && $tx['status'] == 2) {
-    $plisio_data = getPlisioPublicInvoice($tx['plisio_tx_id'], $tx['view_key']);
-    if (($plisio_data['status'] ?? '') == 'success') {
-        $live_qr = $plisio_data['data']['qr_code'] ?? "";
-        $live_amount = $plisio_data['data']['amount'] ?? $tx['amount'];
-        // Update local address if missing or changed
-        if (!empty($plisio_data['data']['wallet_hash']) && $plisio_data['data']['wallet_hash'] != $tx['address']) {
-            $new_addr = mysqli_real_escape_string($connection_server, $plisio_data['data']['wallet_hash']);
-            mysqli_query($connection_server, "UPDATE `sas_crypto_transactions` SET `address`='$new_addr' WHERE `id`='".$tx['id']."'");
-            $tx['address'] = $plisio_data['data']['wallet_hash'];
-        }
-    }
-}
 
 $status_map = [
     '1' => ['Success', 'success', 'bi-check-circle-fill'],
@@ -184,9 +134,9 @@ bc_app_head("Crypto Invoice | " . ($get_all_site_details["site_title"]));
                         <?php elseif(empty($tx['address'])): ?>
                         <div class="alert alert-warning border-0 rounded-4 mb-4">
                             <h6 class="fw-bold">White Label Not Enabled</h6>
-                            <p class="small mb-3 text-muted">Direct address display is currently unavailable. Please use the official Plisio gateway to complete your payment.</p>
+                            <p class="small mb-3 text-muted">Direct address display is currently unavailable. Please use the secure payment page to complete your payment.</p>
                             <a href="<?php echo $tx['invoice_url']; ?>" target="_blank" class="btn btn-warning w-100 rounded-pill fw-bold py-2">
-                                Go to Plisio Invoice <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                Go to Payment Page <i class="bi bi-box-arrow-up-right ms-1"></i>
                             </a>
                         </div>
                         <?php endif; ?>

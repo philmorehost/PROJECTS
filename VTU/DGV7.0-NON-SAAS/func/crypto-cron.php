@@ -1,7 +1,7 @@
 <?php
 /**
  * Global Crypto Transaction Sync Cron
- * This script checks all pending crypto deposits and updates their status.
+ * §28: legacy provider removed — no-op (see body). Kept for cron compatibility.
  */
 include_once(__DIR__ . "/bc-connect.php");
 include_once(__DIR__ . "/bc-crypto-func.php");
@@ -18,49 +18,12 @@ if (!$connection_server) {
     exit;
 }
 
-// Get pending transactions (status 2) created in the last 48 hours to avoid indefinite polling of very old ones
-$q = mysqli_query($connection_server, "SELECT * FROM `sas_crypto_transactions` WHERE `status`='2' AND `type`='deposit' AND `plisio_tx_id` != '' AND `created_at` > DATE_SUB(NOW(), INTERVAL 48 HOUR) ORDER BY `created_at` DESC");
-
-if (!$q) {
-    logCron("Error fetching transactions: " . mysqli_error($connection_server));
-    exit;
-}
-
+// §28: the legacy crypto provider was removed, so there is no external status
+// feed to poll. Pending legacy deposits are settled by admin reconciliation
+// (bc-admin → Crypto Invoices). This cron intentionally performs no provider
+// calls and no balance changes; it stays in place so existing cPanel schedules
+// keep succeeding instead of erroring.
 $count = 0;
-while ($tx = mysqli_fetch_assoc($q)) {
-    $count++;
-    $ref = $tx['reference'];
-    $vid = $tx['vendor_id'];
-
-    // Query Plisio for current status
-    $res = getPlisioTransactionDetails($tx['plisio_tx_id'], $vid);
-
-    if (($res['status'] ?? '') == 'success') {
-        $data = $res['data'];
-        $new_st = $data['status'] ?? '';
-
-        if ($new_st == 'completed' || $new_st == 'mismatch') {
-            $amount = $data['amount'] ?? $tx['amount'];
-            if (updateUserCryptoBalance($vid, $tx['username'], $tx['currency_code'], $amount, 'credit')) {
-                mysqli_query($connection_server, "UPDATE `sas_crypto_transactions` SET `status`='1', `amount`='$amount' WHERE `id`='".$tx['id']."'");
-                logCron("SUCCESS: $ref credited with $amount " . $tx['currency_code']);
-            } else {
-                logCron("ERROR: Failed to update wallet for $ref");
-            }
-        } elseif ($new_st == 'expired' || $new_st == 'cancelled' || $new_st == 'error') {
-            mysqli_query($connection_server, "UPDATE `sas_crypto_transactions` SET `status`='3' WHERE `id`='".$tx['id']."'");
-            logCron("EXPIRED/FAILED: $ref marked as $new_st");
-        } else {
-            // Still pending (new, pending, etc.)
-            logCron("INFO: $ref is still $new_st");
-        }
-    } else {
-        logCron("WARNING: Could not fetch Plisio status for $ref: " . ($res['message'] ?? 'Unknown Error'));
-    }
-
-    // Small sleep to avoid hitting rate limits if many transactions exist
-    usleep(100000); // 0.1s
-}
 
 logCron("--- Crypto Cron Finished ($count processed) ---");
 ?>

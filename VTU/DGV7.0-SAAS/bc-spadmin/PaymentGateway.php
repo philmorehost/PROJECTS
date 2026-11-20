@@ -7,7 +7,6 @@
 	
 	if(isset($_POST["update-kyc-details"])){
         $force_kyc = isset($_POST["force_kyc"]) ? 1 : 0;
-        $plisio_fee = mysqli_real_escape_string($connection_server, (float)$_POST["plisio_activation_fee"]);
         $nin_card_fee = mysqli_real_escape_string($connection_server, (float)$_POST["nin_card_activation_fee"]);
         $bvn_verify_fee = mysqli_real_escape_string($connection_server, (float)($_POST["bvn_verify_activation_fee"] ?? 5000));
         $identity_api_fee = mysqli_real_escape_string($connection_server, (float)($_POST["identity_api_activation_fee"] ?? 7000));
@@ -15,7 +14,11 @@
         $local_identity_min_balance = mysqli_real_escape_string($connection_server, (float)($_POST["local_identity_min_balance"] ?? 1000));
 
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_kyc', '$force_kyc') ON DUPLICATE KEY UPDATE option_value='$force_kyc'");
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('plisio_activation_fee', '$plisio_fee') ON DUPLICATE KEY UPDATE option_value='$plisio_fee'");
+        // §28: commercialised fintech API prices (vendors buy these in bc-admin → Payment Gateway).
+        foreach (array('flutterwave', 'klasha', 'platnova') as $fintech_slug) {
+            $fintech_price = mysqli_real_escape_string($connection_server, (float)($_POST["fintech_api_price_" . $fintech_slug] ?? 50000));
+            mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('fintech_api_price_$fintech_slug', '$fintech_price') ON DUPLICATE KEY UPDATE option_value='$fintech_price'");
+        }
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('nin_card_activation_fee', '$nin_card_fee') ON DUPLICATE KEY UPDATE option_value='$nin_card_fee'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('bvn_verify_activation_fee', '$bvn_verify_fee') ON DUPLICATE KEY UPDATE option_value='$bvn_verify_fee'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('identity_api_activation_fee', '$identity_api_fee') ON DUPLICATE KEY UPDATE option_value='$identity_api_fee'");
@@ -292,9 +295,6 @@ bc_adm_head('', array("area" => "spadmin"));
                                     $q_opt = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_kyc'");
                                     $force_kyc_val = ($q_opt && mysqli_num_rows($q_opt) > 0) ? mysqli_fetch_assoc($q_opt)['option_value'] : '0';
 
-                                    $q_pfee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='plisio_activation_fee'");
-                                    $plisio_fee_val = ($q_pfee && mysqli_num_rows($q_pfee) > 0) ? mysqli_fetch_assoc($q_pfee)['option_value'] : '10000';
-
                                     $ki_rules_q = mysqli_query($connection_server, "SELECT COUNT(*) c FROM sas_super_admin_kyc_verifications WHERE status='1'");
                                     $ki_active_rules = (int)(($ki_rules_q ? mysqli_fetch_assoc($ki_rules_q)['c'] : 0));
                                     $ki_effective = ($force_kyc_val == 1 && $ki_active_rules > 0);
@@ -334,16 +334,24 @@ bc_adm_head('', array("area" => "spadmin"));
                                 <h6 class="fw-bold text-dark mb-0 border-bottom pb-2"><i class="bi bi-cash-coin me-2"></i>Service Activation Fees</h6>
                             </div>
 
-                            <div class="col-md-12">
+                            <div class="col-12">
+                                <h6 class="fw-bold text-dark mb-0 border-bottom pb-2"><i class="bi bi-plug me-2"></i>Fintech API Access Prices (SAAS vendors)</h6>
+                                <p class="small text-muted mb-0">Vendors buy these APIs from their Payment Gateway page. NON-SAAS installs include all three by default. Set 0 to make an API free.</p>
+                            </div>
+                            <?php foreach (array('flutterwave' => 'Flutterwave', 'klasha' => 'Klasha', 'platnova' => 'Platnova') as $fintech_slug => $fintech_label):
+                                $q_fintech_price = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='fintech_api_price_$fintech_slug'");
+                                $fintech_price_val = ($q_fintech_price && mysqli_num_rows($q_fintech_price) > 0) ? mysqli_fetch_assoc($q_fintech_price)['option_value'] : '50000';
+                            ?>
+                            <div class="col-md-4">
                                 <div class="p-4 border rounded-4 bg-light shadow-sm">
-                                    <h6 class="fw-bold text-dark mb-2">Plisio Activation Fee (NGN)</h6>
+                                    <h6 class="fw-bold text-dark mb-2"><?php echo $fintech_label; ?> API Price (NGN)</h6>
                                     <div class="input-group">
                                         <span class="input-group-text bg-white border-0">₦</span>
-                                        <input name="plisio_activation_fee" type="number" step="0.01" class="form-control form-control-lg border-0 bg-white" value="<?php echo $plisio_fee_val; ?>" placeholder="10000.00">
+                                        <input name="fintech_api_price_<?php echo $fintech_slug; ?>" type="number" step="0.01" min="0" class="form-control form-control-lg border-0 bg-white" value="<?php echo htmlspecialchars($fintech_price_val); ?>" placeholder="50000.00">
                                     </div>
-                                    <p class="small text-muted mt-2 mb-0">The one-time fee vendors must pay to unlock the Plisio (Crypto) payment gateway in their admin panel.</p>
                                 </div>
                             </div>
+                            <?php endforeach; ?>
 
                             <div class="col-md-12">
                                 <?php
@@ -617,20 +625,20 @@ bc_adm_head('', array("area" => "spadmin"));
                                             </div>
                                         </div>
 
-                                        <div class="mb-3" <?php if($gateway_name == 'plisio') echo 'style="display:none;"'; ?>>
+                                        <div class="mb-3">
                                             <label class="form-label small fw-bold text-muted">PUBLIC KEY</label>
-                                            <input name="public-key[]" type="text" value="<?php echo $get_gateway_details["public_key"]; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name == 'plisio') ? 'Not Required' : 'Enter Public Key'; ?>" />
+                                            <input name="public-key[]" type="text" value="<?php echo $get_gateway_details["public_key"]; ?>" class="form-control rounded-3" placeholder="Enter Public Key" />
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold text-muted">SECRET KEY</label>
                                             <input name="secret-key[]" type="password" value="<?php echo $get_gateway_details["secret_key"]; ?>" class="form-control rounded-3" placeholder="Enter Secret Key" />
                                         </div>
                                         <div class="row g-3 mb-3">
-                                            <div class="col-6" <?php if($gateway_name == 'plisio') echo 'style="display:none;"'; ?>>
+                                            <div class="col-6">
                                                 <label class="form-label small fw-bold text-muted"><?php echo ($gateway_name === 'monnify') ? 'CONTRACT CODE' : 'ENCRYPT KEY'; ?></label>
-                                                <input name="encrypt-key[]" type="text" value="<?php echo $get_gateway_details["encrypt_key"]; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name === 'monnify') ? 'Enter Contract Code' : ($gateway_name == 'plisio' ? 'Not Required' : 'Optional'); ?>" />
+                                                <input name="encrypt-key[]" type="text" value="<?php echo $get_gateway_details["encrypt_key"]; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name === 'monnify') ? 'Enter Contract Code' : 'Optional'; ?>" />
                                             </div>
-                                            <div class="<?php echo ($gateway_name == 'plisio') ? 'col-12' : 'col-6'; ?>">
+                                            <div class="col-6">
                                                 <label class="form-label small fw-bold text-muted">DISCOUNT (%)</label>
                                                 <input name="payment-percent[]" type="number" step="0.001" value="<?php echo $get_gateway_details["percentage"]; ?>" class="form-control rounded-3" placeholder="0.000" />
                                             </div>

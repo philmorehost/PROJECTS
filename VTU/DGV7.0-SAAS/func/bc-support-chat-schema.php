@@ -92,7 +92,8 @@ if (!function_exists('bc_chat_settings')) {
      * Chat settings for one tenant, with defaults applied.
      *
      * The API key is returned to server-side callers only. Nothing in this array may be echoed into
-     * a page: bc-support-chat-widget.php reads 'chat_welcome' and nothing else reaches the browser.
+     * a page: the widget reads 'chat_welcome'/'chat_handoff'/'chat_quick_replies' (admin-authored
+     * public text, rendered as text nodes) — the API key never reaches the browser.
      */
     function bc_chat_settings($vendor_id) {
         global $connection_server;
@@ -106,6 +107,7 @@ if (!function_exists('bc_chat_settings')) {
             'chat_ai_key'      => '',
             'chat_welcome'     => 'Hi! Ask us anything about your account, transfers or payments.',
             'chat_handoff'     => 'A member of our team will continue from here.',
+            'chat_quick_replies' => '',
         ];
         if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return $defaults;
 
@@ -136,7 +138,7 @@ if (!function_exists('bc_chat_setting_save')) {
         $vendor_id = (int)$vendor_id;
         if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return false;
 
-        $allowed = ['chat_enabled', 'chat_ai_enabled', 'chat_ai_provider', 'chat_ai_model', 'chat_ai_key', 'chat_welcome', 'chat_handoff'];
+        $allowed = ['chat_enabled', 'chat_ai_enabled', 'chat_ai_provider', 'chat_ai_model', 'chat_ai_key', 'chat_welcome', 'chat_handoff', 'chat_quick_replies'];
         if (!in_array($name, $allowed, true)) return false;
 
         $name  = mysqli_real_escape_string($connection_server, $name);

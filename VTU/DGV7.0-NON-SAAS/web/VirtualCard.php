@@ -21,7 +21,7 @@ while ($r = mysqli_fetch_assoc($q_cards)) {
 $products = [];
 // §25: Flutterwave is the ONLY virtual-card provider. One USD product; legacy
 // Chimoney/BSICards products and tables are no longer consulted.
-$products = [['product_id' => 'flw_usd', 'name' => 'Flutterwave USD Virtual Card']];
+$products = [['product_id' => 'flw_usd', 'name' => 'USD Virtual Card']];
 
 // Fetch Profit Settings for UI display
 $q_set = mysqli_query($connection_server, "SELECT * FROM sas_settings WHERE vendor_id='$vid' AND setting_name LIKE 'vc_%'");

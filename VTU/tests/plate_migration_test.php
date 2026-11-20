@@ -137,9 +137,11 @@ foreach ($editions as $edition) {
         if ($name === 'CryptoHub.php') {
             chk(strpos($cur, 'data-pkx="page-redesign"') !== false, "$label carries the redesign layer");
             chk(strpos($cur, 'coin-icons-row') !== false, "$label keeps the coin icon row");
-            foreach (array('create_invoice', 'swap', 'send_otp', 'manual_sync', 'withdraw') as $act) {
-                chk(strpos($cur, "'$act'") !== false, "$label keeps the $act handler");
-            }
+            // §28: the legacy provider handlers were removed entirely. Every trade
+            // action is refused by the provider gate at the top of the page, and no
+            // retired-provider function may be called from this page any more.
+            chk(strpos($cur, 'crypto_provider_mode') !== false, "$label refuses trade actions through the provider gate");
+            chk(strpos($cur, 'getPlisio') === false && strpos($cur, 'createPlisioInvoice') === false && strpos($cur, 'plisioCashOut') === false, "$label calls no retired-provider functions");
             foreach (array('id="depositModal"', 'id="swapModal"', 'id="withdrawModal"', 'id="selfHelpModal"',
                            'id="swapForm"', 'id="withdrawForm"', 'id="withdrawCid"', 'id="syncRef"') as $id) {
                 chk(strpos($cur, $id) !== false, "$label renders $id");
@@ -212,6 +214,16 @@ foreach ($editions as $edition) {
         if (in_array($name, $newServices, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             chk(strpos($cur, 'bc-fintech-services.php') !== false, "$label loads the provider service layer");
+            continue;
+        }
+
+        // §28: ViewCryptoInvoice.php became read-only history — it displays the
+        // stored invoice and never contacts a provider (no regeneration, sync or
+        // live fetch), so its PHP changed legitimately. Pin the new contract.
+        if ($name === 'ViewCryptoInvoice.php') {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
+            chk(strpos($cur, 'createPlisioInvoice') === false && strpos($cur, 'getPlisioTransactionDetails') === false && strpos($cur, 'getPlisioPublicInvoice') === false, "$label calls no retired-provider functions");
+            chk(strpos($cur, 'can no longer be regenerated') !== false, "$label refuses invoice regeneration");
             continue;
         }
 

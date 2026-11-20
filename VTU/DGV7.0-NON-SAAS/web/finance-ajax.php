@@ -42,7 +42,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'create_checkout') {
 
              $p_uid = ($target == 'plisio_activation') ? 'plisio_activation' : (($target == 'payout_activation') ? 'payout_activation' : 'wallet_funding');
              $type_alt = ($target == 'plisio_activation' || $target == 'payout_activation') ? 'Service Activation' : 'Wallet Funding';
-             $desc = ($target == 'plisio_activation') ? 'Plisio Crypto Gateway Activation Fee' : (($target == 'payout_activation') ? 'Withdrawal Module Activation Fee' : 'Wallet funding via ATM/Transfer');
+             $desc = ($target == 'plisio_activation') ? 'Crypto Gateway Activation Fee' : (($target == 'payout_activation') ? 'Withdrawal Module Activation Fee' : 'Wallet funding via ATM/Transfer');
 
              mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) VALUES ('$vid', '$p_uid', '$type_alt', '$reference', '$amount', '$amount', '$bal', '$bal', '$desc', '".bc_safe_host_sql($connection_server)."', '2')");
         }

@@ -182,9 +182,9 @@ if (!function_exists('bc_app_menu')) {
                 'match' => array('Fund.php', 'VirtualBanks.php', 'SendFund.php', 'ShareFund.php', 'CoinConversion.php', 'VirtualCard.php', 'GiftCard.php', 'CryptoHub.php', 'IntlTransfer.php', 'Tuition.php', 'ESIM.php', 'POSRequest.php'),
                 'items' => array(
                     array('label' => 'Fund with ATM Card', 'href' => 'Fund.php', 'icon' => 'credit-card-2-front'),
-                    array('label' => 'Fund via Bank Transfer', 'href' => 'VirtualBanks.php', 'icon' => 'bank'),
-                    array('label' => 'Wallet to Bank', 'href' => 'SendFund.php', 'icon' => 'arrow-up-right-circle', 'service' => 'bank_transfer'),
-                    array('label' => 'Share Fund', 'href' => 'ShareFund.php', 'icon' => 'share'),
+                    array('label' => 'Fund via Bank Transfer', 'href' => 'VirtualBanks.php', 'icon' => 'bank', 'service' => 'virtual_bank_display'),
+                    array('label' => 'Wallet to Bank', 'href' => 'SendFund.php', 'icon' => 'arrow-up-right-circle', 'service' => 'withdraw'),
+                    array('label' => 'Share Fund', 'href' => 'ShareFund.php', 'icon' => 'share', 'service' => 'share_fund'),
                     array('label' => 'Convert Coins', 'href' => 'CoinConversion.php', 'icon' => 'arrow-left-right', 'service' => 'vtu_coins'),
                     array('label' => 'Virtual Card', 'href' => 'VirtualCard.php', 'icon' => 'credit-card', 'service' => 'virtual_card'),
                     array('label' => 'Gift Card', 'href' => 'GiftCard.php', 'icon' => 'gift', 'service' => 'gift_card'),
@@ -214,7 +214,7 @@ if (!function_exists('bc_app_menu')) {
                 'match' => array('AI-Assistant.php', 'Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php'),
                 'items' => array(
                     array('label' => 'Support', 'href' => 'AI-Assistant.php', 'icon' => 'chat-dots'),
-                    array('label' => 'Refer & Earn', 'href' => 'Referral.php', 'icon' => 'gift', 'badge' => 'NEW'),
+                    array('label' => 'Refer & Earn', 'href' => 'Referral.php', 'icon' => 'gift', 'badge' => 'NEW', 'service' => 'referral'),
                     array('label' => 'Bulk SMS', 'href' => 'BulkSMS.php', 'icon' => 'chat-square-text', 'service' => 'bulk_sms'),
                     array('label' => 'Submit SMS ID', 'href' => 'SubmitSenderID.php', 'icon' => 'send-check', 'service' => 'bulk_sms'),
                     array('label' => 'Account Pricing', 'href' => 'Pricing.php', 'icon' => 'tags'),
@@ -371,6 +371,15 @@ if (!function_exists('bc_app_css')) {
         if (is_string($brand) && preg_match('/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/', $brand, $bc_rgb_m)) {
             $bc_brand_rgb = hexdec($bc_rgb_m[1]) . ', ' . hexdec($bc_rgb_m[2]) . ', ' . hexdec($bc_rgb_m[3]);
         }
+        // §28 contrast guardrail: text ON the brand colour must stay readable for
+        // ANY tenant-picked brand. A light brand (e.g. amber) gets dark text; a
+        // dark brand keeps white. --brand-ink is the brand darkened enough to be
+        // readable as text on white surfaces.
+        $bc_brand_fg = '#ffffff';
+        if (isset($bc_rgb_m)) {
+            $bc_lum = (0.2126 * hexdec($bc_rgb_m[1]) + 0.7152 * hexdec($bc_rgb_m[2]) + 0.0722 * hexdec($bc_rgb_m[3])) / 255;
+            if ($bc_lum > 0.55) $bc_brand_fg = '#0b1220';
+        }
         ?><style>
         :root {
             --brand: <?php echo $brand; ?>;
@@ -392,6 +401,8 @@ if (!function_exists('bc_app_css')) {
             --wash-rgb: 246, 248, 251;
             /* Derived, so a tenant's own brand colour never gets a teal hover state. */
             --brand-dark: color-mix(in srgb, var(--brand) 82%, #000);
+            --brand-fg: <?php echo $bc_brand_fg; ?>;
+            --brand-ink: color-mix(in srgb, var(--brand) 60%, #000);
             --ink: #0b1220;
             --muted: #64748b;
             --line: #e2e8f0;
@@ -647,20 +658,20 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .text-muted { color: var(--muted) !important; }
         .pk-app__wrap .text-dark { color: var(--ink) !important; }
         .pk-app__wrap .text-white { color: #fff !important; }
-        .pk-app__wrap .text-primary { color: var(--brand) !important; }
+        .pk-app__wrap .text-primary { color: var(--brand-ink) !important; }
         .pk-app__wrap .text-secondary { color: var(--muted) !important; }
         .pk-app__wrap .text-success { color: var(--ok) !important; }
         .pk-app__wrap .text-danger { color: var(--bad) !important; }
         .pk-app__wrap .text-warning { color: var(--warn) !important; }
         .pk-app__wrap .text-info { color: var(--info) !important; }
-        .pk-app__wrap .text-dark-primary { color: var(--brand) !important; }
+        .pk-app__wrap .text-dark-primary { color: var(--brand-ink) !important; }
         .pk-app__wrap .text-body { color: var(--ink) !important; }
         /* Background utilities follow Bootstrap semantics: bg-opacity-* tints the
            element's own bg-* colour (via --bs-bg-opacity). The previous white-tint
            version made bg-<colour> bg-opacity-10 badges/buttons render white-on-white. */
         .pk-app__wrap .bg-light { background-color: rgba(var(--wash-rgb), var(--bs-bg-opacity, 1)) !important; }
         .pk-app__wrap .bg-white { background-color: rgba(255, 255, 255, var(--bs-bg-opacity, 1)) !important; }
-        .pk-app__wrap .bg-primary { background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
+        .pk-app__wrap .bg-primary { background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity, 1)) !important; color: var(--brand-fg); }
         .pk-app__wrap .bg-secondary { background-color: rgba(var(--muted-rgb), var(--bs-bg-opacity, 1)) !important; }
         .pk-app__wrap .bg-success { background-color: rgba(var(--ok-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
         .pk-app__wrap .bg-danger { background-color: rgba(var(--bad-rgb), var(--bs-bg-opacity, 1)) !important; color: #fff; }
@@ -730,7 +741,7 @@ if (!function_exists('bc_app_css')) {
             text-decoration: none; transition: background .15s ease, color .15s ease;
         }
         .pk-app__wrap .btn:hover { background: #eceff4; }
-        .pk-app__wrap .btn-primary { background: var(--brand); color: #fff; }
+        .pk-app__wrap .btn-primary { background: var(--brand); color: var(--brand-fg); }
         .pk-app__wrap .btn-primary:hover { background: var(--brand-dark); }
         .pk-app__wrap .btn-secondary { background: #e2e8f0; color: var(--ink); }
         .pk-app__wrap .btn-success { background: var(--ok); color: #fff; }
@@ -739,7 +750,7 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .btn-dark { background: var(--ink); color: #fff; }
         .pk-app__wrap .btn-light { background: #fff; color: var(--ink); border-color: var(--line); }
         .pk-app__wrap .btn-outline-primary { background: transparent; color: var(--brand); border-color: var(--brand); }
-        .pk-app__wrap .btn-outline-primary:hover { background: var(--brand); color: #fff; }
+        .pk-app__wrap .btn-outline-primary:hover { background: var(--brand); color: var(--brand-fg); }
         .pk-app__wrap .btn-outline-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
         .pk-app__wrap .btn-outline-light { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
         .pk-app__wrap .btn-outline-success { background: transparent; color: var(--ok); border-color: var(--ok); }
@@ -747,7 +758,7 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .btn-outline-danger { background: transparent; color: var(--bad); border-color: var(--bad); }
         .pk-app__wrap .btn-outline-danger:hover { background: var(--bad); color: #fff; }
         .pk-app__wrap .btn-outline-warning { background: transparent; color: var(--warn); border-color: var(--warn); }
-        .pk-app__wrap .btn-outline-warning:hover { background: var(--warn); color: #fff; }
+        .pk-app__wrap .btn-outline-warning:hover { background: var(--warn); color: #451a03; }
         .pk-app__wrap .btn-outline-info { background: transparent; color: var(--info); border-color: var(--info); }
         .pk-app__wrap .btn-outline-info:hover { background: var(--info); color: #fff; }
         .pk-app__wrap .btn-outline-dark { background: transparent; color: var(--ink); border-color: var(--ink); }
@@ -767,7 +778,7 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .alert-secondary { background: var(--wash); border-color: var(--line); color: var(--ink); }
         .pk-app__wrap .badge { display: inline-block; padding: 3px 8px; border-radius: 999px;
             font-size: .72rem; font-weight: 700; background: var(--wash); color: var(--muted); }
-        .pk-app__wrap .badge.bg-primary, .pk-app__wrap .badge-primary { background: var(--brand); color: #fff; }
+        .pk-app__wrap .badge.bg-primary, .pk-app__wrap .badge-primary { background: var(--brand); color: var(--brand-fg); }
         .pk-app__wrap .badge.bg-success, .pk-app__wrap .badge-success { background: var(--ok); color: #fff; }
         .pk-app__wrap .badge.bg-warning, .pk-app__wrap .badge-warning { background: var(--warn); color: #fff; }
         .pk-app__wrap .badge.bg-danger, .pk-app__wrap .badge-danger { background: var(--bad); color: #fff; }
@@ -889,11 +900,11 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .btn:active { transform: translateY(1px); }
         .pk-app__wrap .btn-primary {
             background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
-            border: none; color: #fff;
+            border: none; color: var(--brand-fg);
             box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 75%, transparent);
         }
-        .pk-app__wrap .btn-primary:hover { background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand) 130%); color: #fff; }
-        .pk-app__wrap .btn-outline-primary { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line)); color: var(--brand); background: transparent; }
+        .pk-app__wrap .btn-primary:hover { background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand) 130%); color: var(--brand-fg); }
+        .pk-app__wrap .btn-outline-primary { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line)); color: var(--brand-ink); background: transparent; }
         .pk-app__wrap .btn-outline-primary:hover { background: color-mix(in srgb, var(--brand) 8%, var(--surface)); color: var(--brand-dark); }
         .pk-app__wrap .badge { border-radius: 999px; padding: 5px 10px; font-weight: 700; letter-spacing: .02em; }
         .pk-app__wrap .alert { border-radius: 14px; border: 1px solid var(--line); border-left: 4px solid var(--brand); padding: 14px 16px; }
@@ -920,10 +931,10 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .progress { height: 8px; border-radius: 999px; background: var(--wash); overflow: hidden; }
         .pk-app__wrap .progress-bar { background: linear-gradient(90deg, var(--brand), var(--brand-dark)); border-radius: 999px; }
         .pk-app__wrap .pagination .page-link { border-radius: 10px !important; border: 1px solid var(--line); color: var(--ink); margin: 0 2px; }
-        .pk-app__wrap .pagination .page-item.active .page-link { background: var(--brand); border-color: var(--brand); color: #fff; }
-        .pk-app__wrap a { color: var(--brand); }
-        .pk-app__wrap .text-primary { color: var(--brand) !important; }
-        .pk-app__wrap .bg-primary { background: var(--brand) !important; }
+        .pk-app__wrap .pagination .page-item.active .page-link { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
+        .pk-app__wrap a { color: var(--brand-ink); }
+        .pk-app__wrap .text-primary { color: var(--brand-ink) !important; }
+        .pk-app__wrap .bg-primary { background: var(--brand) !important; color: var(--brand-fg); }
         .pk-app__wrap hr { border: 0; border-top: 1px solid var(--line); opacity: 1; }
         @keyframes pk-app__spin { to { transform: rotate(360deg); } }
         @media (max-width: 1080px) {
@@ -957,7 +968,7 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .btn { border-radius: 12px; }
         .pk-app__wrap .btn-primary {
             background: linear-gradient(135deg, var(--brand), var(--brand-dark)) !important;
-            border: none; color: #fff !important;
+            border: none; color: var(--brand-fg) !important;
             box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--brand) 80%, transparent);
         }
         .pk-app__wrap .btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
@@ -1185,6 +1196,7 @@ if (!function_exists('bc_app_sidebar')) {
                         <span class="pk-app__gicon"><?php echo bc_app_icon(isset($item['icon']) ? $item['icon'] : 'circle'); ?></span>
                         <span class="pk-app__glabel"><?php echo htmlspecialchars($item['label']); ?></span>
                         <?php if (!empty($item['badge'])): ?><span class="pk-app__badge"><?php echo htmlspecialchars($item['badge']); ?></span><?php endif; ?>
+                        <i class="bi bi-arrow-right-circle pk-app__chev" aria-hidden="true"></i>
                     </a>
                 <?php endforeach; ?>
             <?php else: ?>

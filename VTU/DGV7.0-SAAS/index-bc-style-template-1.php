@@ -431,11 +431,11 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
   <div class="container">
     <span class="eyebrow-red">PAYOUT TO CHINA</span>
     <h2 class="section-title-lg">From your wallet to China, in three steps.</h2>
-    <p style="color:var(--text-muted-dark);max-width:680px;line-height:1.7;">Powered by Klasha Wire: provision a USD wallet, fund it instantly, and settle directly to Chinese bank accounts and mobile wallets.</p>
+    <p style="color:var(--text-muted-dark);max-width:680px;line-height:1.7;">Provision a USD wallet, fund it instantly, and settle directly to Chinese bank accounts and mobile wallets.</p>
     <div class="steps-grid">
       <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 01 · WALLET PROVISIONING</div><h3 style="margin:10px 0 8px;">Create USD Wallet</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Open a multi-currency USD virtual wallet inside your <?php echo $site_name_e; ?> dashboard with instant verification.</p></div>
       <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 02 · INSTANT FUNDING</div><h3 style="margin:10px 0 8px;">Fund USD Account</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Fund via local currency conversion (NGN/GHS/ZAR), virtual accounts, or stablecoins (USDC/USDT) at live FX rates.</p></div>
-      <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 03 · CHINA SETTLEMENT</div><h3 style="margin:10px 0 8px;">Transfer to China</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Lock a live Klasha Wire FX quote and execute direct cross-border payouts to Chinese bank accounts and mobile wallets.</p></div>
+      <div class="china-card"><div class="n" style="color:var(--brand-red);font-weight:800;letter-spacing:.12em;font-size:.8rem;">STEP 03 · CHINA SETTLEMENT</div><h3 style="margin:10px 0 8px;">Transfer to China</h3><p style="color:var(--text-muted-dark);line-height:1.65;">Lock a live FX quote and execute direct cross-border payouts to Chinese bank accounts and mobile wallets.</p></div>
     </div>
   </div>
 </section>

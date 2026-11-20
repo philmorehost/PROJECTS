@@ -46,7 +46,7 @@ if (isset($_POST['send_transfer'])) {
             ]);
             $qd = (isset($q['json']['data']) && is_array($q['json']['data'])) ? $q['json']['data'] : [];
             if (!empty($q['ok']) && isset($qd['destinationAmount']) && is_numeric($qd['destinationAmount'])) {
-                $quote_note = ' Indicative live Klasha quote: $' . number_format($amount_usd, 2) . ' ≈ ' . number_format((float)$qd['destinationAmount'], 2) . ' ' . $payload['currency'] . (isset($qd['rate']) ? ' at rate ' . $qd['rate'] : '') . ' (fees confirmed at settlement).';
+                $quote_note = ' Indicative live quote: $' . number_format($amount_usd, 2) . ' ≈ ' . number_format((float)$qd['destinationAmount'], 2) . ' ' . $payload['currency'] . (isset($qd['rate']) ? ' at rate ' . $qd['rate'] : '') . ' (fees confirmed at settlement).';
             }
         } elseif ($ref !== '' && $provider === 'flutterwave' && function_exists('bc_flw_endpoint')) {
             $q = bc_flw_endpoint($vid, 'transfer_rates', 'GET', [
@@ -56,7 +56,7 @@ if (isset($_POST['send_transfer'])) {
             ]);
             $qd = (isset($q['json']['data']) && is_array($q['json']['data'])) ? $q['json']['data'] : [];
             if (!empty($q['ok']) && isset($qd['rate']) && is_numeric($qd['rate'])) {
-                $quote_note = ' Indicative live Flutterwave rate: 1 USD = ' . $qd['rate'] . ' ' . $payload['currency'] . ' (fees confirmed at settlement).';
+                $quote_note = ' Indicative live rate: 1 USD = ' . $qd['rate'] . ' ' . $payload['currency'] . ' (fees confirmed at settlement).';
             }
         }
         $notice = $ref !== ''
@@ -74,9 +74,9 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
 <section class="section dashboard">
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body p-4">
-            <span class="badge bg-primary mb-2">Powered by <?php echo htmlspecialchars($provider_label); ?></span>
+            <span class="badge bg-primary mb-2">International Transfers</span>
             <h4 class="fw-bold mb-1">Send money across borders</h4>
-            <p class="text-muted small mb-0">Services below are exactly what your active provider (<?php echo htmlspecialchars($provider_label); ?>) offers. Switch providers in admin and this page follows — nothing from another provider is shown.</p>
+            <p class="text-muted small mb-0">Services below are exactly what is enabled on this platform. Nothing else is shown.</p>
         </div>
     </div>
 
@@ -96,7 +96,7 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
     <div class="row g-4">
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
-                <h6 class="fw-bold mb-3">What <?php echo htmlspecialchars($provider_label); ?> offers you</h6>
+                <h6 class="fw-bold mb-3">What you can do</h6>
                 <?php foreach ($services as $slug => $svc): ?>
                     <div class="d-flex gap-3 mb-3">
                         <i class="bi bi-check-circle-fill text-success mt-1"></i>

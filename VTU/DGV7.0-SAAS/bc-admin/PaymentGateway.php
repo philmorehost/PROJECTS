@@ -1,8 +1,42 @@
 <?php session_start();
     include("../func/bc-admin-config.php");
+	// §28: commercialised fintech API access. NON-SAAS includes all three APIs;
+	// SAAS vendors buy each one here, charged to the vendor wallet. Prices are set
+	// by the super admin in bc-spadmin → Payment Gateway (default ₦50,000).
+	include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
+	if (isset($_POST["buy-fintech-api"])) {
+		$api_vid  = (int)$get_logged_admin_details['id'];
+		$api_slug = strtolower(trim(strip_tags((string)$_POST["buy-fintech-api"])));
+		$api_list = bc_fintech_api_providers();
+		if (!isset($api_list[$api_slug])) {
+			$_SESSION["product_purchase_response"] = "Unknown API selected.";
+		} elseif (bc_fintech_api_access($api_vid, $api_slug)) {
+			$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access is already active on your account.";
+		} else {
+			$api_price = bc_fintech_api_price($api_slug);
+			if ($api_price <= 0) {
+				bc_fintech_api_grant($api_vid, $api_slug, 'FREE');
+				$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access activated.";
+			} elseif ((float)($get_logged_admin_details['balance'] ?? 0) >= $api_price) {
+				$api_ref = "API_" . strtoupper($api_slug) . "_" . time();
+				$api_res = chargeVendor("debit", "fintech_api_access", "API Access", $api_ref, $api_price, $api_price, $api_list[$api_slug]['label'] . " API Access", $_SERVER['HTTP_HOST'], 1);
+				if ($api_res === "success") {
+					bc_fintech_api_grant($api_vid, $api_slug, $api_ref);
+					$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access activated successfully.";
+				} else {
+					$_SESSION["product_purchase_response"] = "Error: Activation failed during billing.";
+				}
+			} else {
+				$_SESSION["product_purchase_response"] = "Error: Insufficient vendor wallet balance. You need NGN " . number_format($api_price, 2) . " for the " . $api_list[$api_slug]['label'] . " API.";
+			}
+		}
+		header("Location: " . $_SERVER["REQUEST_URI"]);
+		exit();
+	}
+
 	
 	$kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
-    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "beewave", "payhub");
+    $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "beewave", "payhub", "platnova");
 	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/users-monnify.php", "flutterwave" => $web_http_host . "/users-flutterwave.php", "paystack" => $web_http_host . "/users-paystack.php", "payvessel" => $web_http_host . "/users-payvessel.php", "beewave" => $web_http_host . "/users-beewave.php", "payhub" => $web_http_host . "/users-payhub.php");
 	
 	if(isset($_POST["update-kyc-details"])){
@@ -101,7 +135,7 @@
         $public_key = $_POST["public-key"];
         $secret_key = $_POST["secret-key"];
         $encrypt_key = $_POST["encrypt-key"];
-        $withdrawal_gateway_array = array("payhub", "paystack");
+        $withdrawal_gateway_array = array("payhub", "paystack", "klasha");
         $withdrawal_gateway_warnings = array();
 
         if(count($gateway_name) > 0){
@@ -113,6 +147,10 @@
                 $each_gateway_status = isset($_POST["withdrawal-status-".$each_gateway_name]) ? "1" : "2";
 
                 // Safety: Only update if secret key is provided, or if just changing status
+                if($each_gateway_name == 'klasha' && function_exists('bc_fintech_api_access') && !bc_fintech_api_access((int)$get_logged_admin_details["id"], 'klasha')){
+                    $withdrawal_gateway_warnings[] = "KLASHA credentials were NOT saved: Klasha API access has not been purchased. Buy it in the Fintech API Access section above.";
+                    continue;
+                }
                 if(in_array($each_gateway_name, $withdrawal_gateway_array)){
                     // Deliberately NOT "INSERT ... ON DUPLICATE KEY UPDATE". sas_bank_transfer_gateways
                     // has no PRIMARY KEY and no UNIQUE index on (vendor_id, gateway_name), so MySQL can
@@ -422,6 +460,9 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                                 <input name="gateway-name[]" value="<?php echo $wg_name; ?>" hidden />
                                             </div>
                                         </div>
+                                        <?php if($wg_name == 'klasha' && function_exists('bc_fintech_api_access') && !bc_fintech_api_access((int)$get_logged_admin_details["id"], 'klasha')): ?>
+                                        <div class="alert alert-warning small rounded-3">Klasha API access has not been purchased — these credentials will not save yet. <a href="#fintech-api-access" class="fw-bold">Buy API access</a></div>
+                                        <?php endif; ?>
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold text-muted">PUBLIC KEY</label>
                                             <input name="public-key[]" type="text" value="<?php echo $wg_data['public_key'] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Public Key" />
@@ -505,6 +546,50 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
             </div>
 
 
+            
+            <!-- §28 Fintech API Access (commercialised APIs) -->
+            <div class="card shadow-sm border-0 rounded-4 mb-4" id="fintech-api-access">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-primary">Fintech API Access</h5>
+                    <div class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3"><?php echo bc_is_saas_edition() ? 'Paid Add-ons' : 'Included'; ?></div>
+                </div>
+                <div class="card-body p-4">
+                    <p class="small text-muted mb-4">These APIs power the new fintech services (global payments, China payouts, tuition &amp; eSIM). <?php echo bc_is_saas_edition() ? 'Buy access once per API; you can then save its keys below and switch it on in Service Control.' : 'All three APIs are included with your script by default — just save your keys below.'; ?></p>
+                    <div class="row g-4">
+                        <?php foreach (bc_fintech_api_providers() as $api_slug => $api_meta):
+                            $api_has_access = bc_fintech_api_access((int)$get_logged_admin_details['id'], $api_slug);
+                            $api_price = bc_fintech_api_price($api_slug);
+                        ?>
+                        <div class="col-md-4">
+                            <div class="p-4 border rounded-4 h-100 d-flex flex-column" style="background:#f8fafc;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="fw-bold mb-0"><?php echo htmlspecialchars($api_meta['label']); ?> API</h6>
+                                    <?php if ($api_has_access): ?>
+                                        <span class="badge bg-success rounded-pill">Access Active</span>
+                                    <?php elseif (!bc_is_saas_edition()): ?>
+                                        <span class="badge bg-success rounded-pill">Included</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary rounded-pill">Locked</span>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="small text-muted flex-grow-1"><?php echo htmlspecialchars($api_meta['powers']); ?></p>
+                                <?php if (bc_is_saas_edition() && !$api_has_access): ?>
+                                    <div class="h5 fw-bold text-primary mb-3">₦<?php echo number_format($api_price, 2); ?> <span class="small text-muted fw-normal">one-time</span></div>
+                                    <form method="post">
+                                        <button type="submit" name="buy-fintech-api" value="<?php echo $api_slug; ?>" class="btn btn-primary rounded-pill w-100 fw-bold" onclick="return confirm('Charge ₦<?php echo number_format($api_price, 2); ?> from your vendor wallet for the <?php echo htmlspecialchars($api_meta['label']); ?> API?')">
+                                            <i class="bi bi-unlock me-1"></i> Buy API Access
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <div class="small text-success fw-bold"><i class="bi bi-check2-circle me-1"></i><?php echo bc_is_saas_edition() ? 'Purchased — save your keys below.' : 'Included by default — save your keys below.'; ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
             <!-- Payment Gateways Grid -->
             <div class="card shadow-sm border-0 rounded-4">
                 <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
@@ -517,8 +602,9 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                             <?php foreach($payment_gateway_array as $gateway_name):
                                 $get_gateway_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_payment_gateways WHERE vendor_id='".$get_logged_admin_details["id"]."' && gateway_name='$gateway_name'"));
                                 $is_enabled = ($get_gateway_details && $get_gateway_details["status"] == 1);
-                                $is_plisio = ($gateway_name == 'plisio');
-                                $is_activated = ($is_plisio) ? ($get_logged_admin_details['plisio_activated'] == 1) : true;
+                                $is_api_locked = in_array($gateway_name, array('flutterwave', 'platnova'), true)
+                                    && function_exists('bc_fintech_api_access')
+                                    && !bc_fintech_api_access((int)$get_logged_admin_details["id"], $gateway_name);
                             ?>
                             <div class="col-md-6">
                                 <div class="card border rounded-4 h-100 mb-0 shadow-none">
@@ -536,45 +622,32 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                             </div>
                                         </div>
 
-                                        <?php if(!$is_activated):
-                                            $q_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='plisio_activation_fee'");
-                                            $plis_fee = (float)(mysqli_fetch_assoc($q_fee)['option_value'] ?? 10000);
-                                        ?>
+                                        <?php if($is_api_locked): ?>
                                             <div class="text-center py-4 bg-light rounded-4 border mb-3">
                                                 <i class="bi bi-lock-fill text-warning display-6 mb-2"></i>
-                                                <h6 class="fw-bold mb-1">Gateway Locked</h6>
-                                                <p class="small text-muted mb-3">Activate Plisio Crypto Gateway to accept payments in BTC, ETH, USDT and more.</p>
-                                                <div class="h5 fw-bold text-primary mb-3">One-time Fee: ₦<?php echo number_format($plis_fee, 2); ?></div>
-
-                                                <div class="px-3">
-                                                    <button type="button" class="btn btn-primary rounded-pill btn-sm w-100 fw-bold mb-2" onclick="initiatePlisioActivation(<?php echo $plis_fee; ?>)">
-                                                        <i class="bi bi-credit-card me-1"></i> Pay with Card/Bank
-                                                    </button>
-                                                    <button type="submit" name="activate-plisio-wallet" class="btn btn-outline-dark rounded-pill btn-sm w-100 fw-bold" onclick="return confirm('Charge ₦<?php echo number_format($plis_fee, 2); ?> from your vendor wallet to activate Plisio?')">
-                                                        <i class="bi bi-wallet2 me-1"></i> Pay from Wallet
-                                                    </button>
-                                                </div>
+                                                <h6 class="fw-bold mb-1">API Access Required</h6>
+                                                <p class="small text-muted mb-3">Buy the <?php echo strtoupper($gateway_name); ?> API in the Fintech API Access section above to save keys here.</p>
+                                                <a href="#fintech-api-access" class="btn btn-primary rounded-pill btn-sm fw-bold px-4">View API Access</a>
                                             </div>
-                                            <input name="gateway-name[]" value="<?php echo $gateway_name; ?>" hidden />
                                             <input name="public-key[]" value="" hidden />
                                             <input name="secret-key[]" value="" hidden />
                                             <input name="encrypt-key[]" value="" hidden />
                                             <input name="payment-percent[]" value="0" hidden />
                                         <?php else: ?>
-                                            <div class="mb-3" <?php if($gateway_name == 'plisio') echo 'style="display:none;"'; ?>>
+                                            <div class="mb-3">
                                                 <label class="form-label small fw-bold text-muted">PUBLIC KEY</label>
-                                                <input name="public-key[]" type="text" value="<?php echo $get_gateway_details["public_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name == 'plisio') ? 'Not Required' : 'Enter Public Key'; ?>" />
+                                                <input name="public-key[]" type="text" value="<?php echo $get_gateway_details["public_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Public Key" />
                                             </div>
                                             <div class="mb-3">
                                                 <label class="form-label small fw-bold text-muted">SECRET KEY</label>
                                                 <input name="secret-key[]" type="password" value="<?php echo $get_gateway_details["secret_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Secret Key" />
                                             </div>
                                             <div class="row g-3 mb-3">
-                                                <div class="col-6" <?php if($gateway_name == 'plisio') echo 'style="display:none;"'; ?>>
+                                                <div class="col-6">
                                                     <label class="form-label small fw-bold text-muted"><?php echo ($gateway_name === 'monnify') ? 'CONTRACT CODE' : 'ENCRYPT KEY'; ?></label>
-                                                    <input name="encrypt-key[]" type="text" value="<?php echo $get_gateway_details["encrypt_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name === 'monnify') ? 'Enter Contract Code' : ($gateway_name == 'plisio' ? 'Not Required' : 'Optional'); ?>" />
+                                                    <input name="encrypt-key[]" type="text" value="<?php echo $get_gateway_details["encrypt_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name === 'monnify') ? 'Enter Contract Code' : 'Optional'; ?>" />
                                                 </div>
-                                                <div class="<?php echo ($gateway_name == 'plisio') ? 'col-12' : 'col-6'; ?>">
+                                                <div class="col-6">
                                                     <label class="form-label small fw-bold text-muted">FEE (%)</label>
                                                     <input name="payment-percent[]" type="number" step="0.001" value="<?php echo $get_gateway_details["percentage"] ?? '0'; ?>" class="form-control rounded-3" placeholder="0.000" />
                                                 </div>
@@ -583,7 +656,11 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold text-muted">WEBHOOK URL</label>
                                             <div class="input-group input-group-sm">
-                                                <input type="text" value="<?php echo $payment_gateway_webhook_array[$gateway_name]; ?>" class="form-control bg-light border-0" readonly />
+                                                <?php if (!empty($payment_gateway_webhook_array[$gateway_name])): ?>
+                                                    <input type="text" value="<?php echo $payment_gateway_webhook_array[$gateway_name]; ?>" class="form-control bg-light border-0" readonly />
+                                                    <?php else: ?>
+                                                    <input type="text" value="Not required — status is confirmed inside the app" class="form-control bg-light border-0" readonly />
+                                                    <?php endif; ?>
                                                 <button class="btn btn-outline-secondary border-0" type="button" onclick="navigator.clipboard.writeText('<?php echo $payment_gateway_webhook_array[$gateway_name]; ?>')"><i class="bi bi-clipboard"></i></button>
                                             </div>
                                         </div>
@@ -608,68 +685,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
         
     
     <script>
-    function initiatePlisioActivation(amount) {
-        const reference = "PLIS_ACT_" + Date.now();
-        const username = '<?php echo $get_logged_admin_details['email']; ?>';
-        const vendor_id = '<?php echo $get_logged_admin_details['id']; ?>';
-
-        Swal.fire({
-            title: 'Initialize Activation',
-            text: `You are about to pay ₦${amount.toLocaleString()} to activate the Plisio Crypto Gateway. Proceed?`,
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, Pay Now'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // We use a custom checkout call to handle service activation
-                fetch('../web/finance-ajax.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=create_checkout&is_vendor=1&reference=${reference}&amount=${amount}&username=${encodeURIComponent(username)}&vendor_id=${vendor_id}&target=plisio_activation`
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Redirect to gateway selector or just use PayHub as default for platform payments
-                        window.location.href = `Fund.php?amount=${amount}&ref=${reference}&purpose=plisio_activation`;
-                    } else {
-                        Swal.fire('Error', data.message || 'Failed to initialize payment', 'error');
-                    }
-                });
-            }
-        });
-    }
-
-    function initiatePayoutActivation(amount) {
-        const reference = "PAYOUT_ACT_" + Date.now();
-        const username = '<?php echo $get_logged_admin_details['email']; ?>';
-        const vendor_id = '<?php echo $get_logged_admin_details['id']; ?>';
-
-        Swal.fire({
-            title: 'Buy Withdrawal Module',
-            text: `You are about to pay ₦${amount.toLocaleString()} to activate the Withdrawal Module. Proceed?`,
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, Pay Now'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                fetch('../web/finance-ajax.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=create_checkout&is_vendor=1&reference=${reference}&amount=${amount}&username=${encodeURIComponent(username)}&vendor_id=${vendor_id}&target=payout_activation`
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        window.location.href = `Fund.php?amount=${amount}&ref=${reference}&purpose=payout_activation`;
-                    } else {
-                        Swal.fire('Error', data.message || 'Failed to initialize payment', 'error');
-                    }
-                });
-            }
-        });
-    }
-    </script>
+</script>
 
 
 <?php bc_adm_foot(array("area" => "admin")); ?>

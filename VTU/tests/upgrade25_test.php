@@ -80,7 +80,10 @@ foreach ($editions as $ed) {
     $crypto = src($b . '/web/CryptoHub.php');
     u25(strpos($crypto, 'bc_svc_active_provider') !== false, "$ed Crypto reads the active provider");
     u25(strpos($crypto, 'crypto_provider_mode') !== false, "$ed Crypto has a provider mode that hides the legacy rail");
-    u25(strpos($crypto, 'bc_referral_record_volume') !== false, "$ed completed crypto swaps feed referral volume");
+    // §28: swaps fail closed through the provider gate, so nothing completes and no
+    // referral volume can be recorded from this page. The referral engine still only
+    // counts COMPLETED crypto + intl_transfer volume (pinned in bc-fintech-services).
+    u25(strpos($crypto, 'bc_referral_record_volume') === false, "$ed refused crypto swaps record no referral volume");
 
     // ── Virtual card: Flutterwave ONLY ──
     $vc = src($b . '/func/bc-virtualcard-flutterwave.php');
@@ -140,6 +143,85 @@ foreach ($editions as $ed) {
     u25(strpos($tpl, '$lp_fx_live') !== false, "$ed landing keeps the gated live FX converter");
     u25(strpos($tpl, 'web/Register.php') !== false && strpos($tpl, 'web/Login.php') !== false, "$ed landing CTAs point at the real auth pages");
 }
+
+// ═══════════════ §28: commercialised APIs, portal, plisio removal, chat ═══════════════
+// Edition markers: SAAS tree says saas, NON-SAAS says non-saas (deliberately NOT parity files).
+u25(strpos(src($root . '/DGV7.0-SAAS/func/bc-edition.php'), "'saas'") !== false, 'SAAS edition marker');
+u25(strpos(src($root . '/DGV7.0-NON-SAAS/func/bc-edition.php'), "'non-saas'") !== false, 'NON-SAAS edition marker');
+
+foreach ($editions as $ed) {
+    $b = $root . '/' . $ed;
+
+    // Commercialised fintech API access layer: three providers, spadmin price, vendor grant.
+    $acc = src($b . '/func/bc-fintech-api-access.php');
+    foreach (array('flutterwave', 'klasha', 'platnova') as $slug) {
+        u25(strpos($acc, "'$slug'") !== false, "$ed API access covers $slug");
+    }
+    u25(strpos($acc, 'fintech_api_price_') !== false && strpos($acc, '50000') !== false, "$ed API access defaults to the 50000 price point");
+    u25(strpos($acc, 'fintech_api_access_') !== false, "$ed API access reads vendor grants");
+    u25(strpos($acc, 'bc_is_saas_edition') !== false, "$ed API access is edition-aware (NON-SAAS included by default)");
+
+    // Payment Gateway page: all three APIs purchasable/locked; spadmin prices them.
+    $pg = src($b . '/bc-admin/PaymentGateway.php');
+    u25(strpos($pg, 'buy-fintech-api') !== false, "$ed gateway page sells fintech API access");
+    u25(strpos($pg, "array('flutterwave', 'platnova')") !== false, "$ed gateway cards lock unpurchased APIs");
+    u25(strpos($pg, '"platnova"') !== false, "$ed gateway page lists Platnova");
+
+    // Vendor portal: subscription + domain-change request flow exists in bc-admin.
+    $portal = src($b . '/bc-admin/VendorPortal.php');
+    u25(strpos($portal, 'sas_vendor_domain_requests') !== false, "$ed portal files domain change requests");
+    u25(strpos($portal, 'submit_domain_request') !== false, "$ed portal submits domain requests");
+
+    // Admin shell: Portal topbar action; dashboard no longer carries dead REFRESH/SYNC.
+    $adm = src($b . '/func/bc-plate-admin.php');
+    u25(strpos($adm, 'VendorPortal.php') !== false, "$ed admin topbar links the vendor portal");
+    $adash = src($b . '/bc-admin/Dashboard.php');
+    u25(strpos($adash, '"REFRESH"') === false && strpos($adash, '"SYNC"') === false, "$ed admin dashboard drops REFRESH/SYNC");
+    u25(strpos($adash, 'ad2-hero__actions') !== false, "$ed admin dashboard carries the v3 hero actions");
+
+    // Brand colour cache now invalidates on save.
+    $cfg = src($b . '/func/bc-config.php');
+    u25(strpos($cfg, 'brand_style_cache_ver') !== false, "$ed brand colour cache is version-checked");
+    u25(strpos(src($b . '/bc-admin/AccountSettings.php'), 'brand_style_cache_ver') !== false, "$ed branding save busts the colour cache");
+
+    // Readable brand-on-brand text: foreground tokens computed from luminance.
+    $app = src($b . '/func/bc-plate-app.php');
+    u25(strpos($app, '--brand-fg') !== false && strpos($app, '--brand-ink') !== false, "$ed shell computes brand foreground/ink tokens");
+    u25(strpos($app, "'service' => 'referral'") !== false, "$ed Refer & Earn honours the referral service toggle");
+
+    // Chat widget redesign: avatar, quick replies configurable from bc-admin.
+    $chat = src($b . '/func/bc-support-chat-widget.php');
+    u25(strpos($chat, 'bcChat-avatar') !== false && strpos($chat, 'bcChat-quick') !== false, "$ed chat widget has avatar + quick replies");
+    u25(strpos($chat, 'bcChat-ico-close') !== false, "$ed chat launcher swaps to a close icon");
+    u25(strpos(src($b . '/bc-admin/ChatSettings.php'), 'chat_quick_replies') !== false, "$ed bc-admin configures chat quick replies");
+    u25(strpos(src($b . '/func/bc-support-chat-schema.php'), 'chat_quick_replies') !== false, "$ed chat settings persist quick replies");
+
+    // Marketplace: eSIM filter chip + SAAS-only custom gateway listing.
+    $mkt = src($b . '/bc-admin/MarketPlace.php');
+    u25(strpos($mkt, '"esim" => "eSIM"') !== false, "$ed marketplace filters include eSIM");
+    u25(strpos($mkt, 'bc_is_saas_edition') !== false && strpos($mkt, 'Custom gateway API') !== false, "$ed marketplace custom-gateway listing is SAAS-gated");
+
+    // Plisio total removal on customer paths; retirement spine preserved.
+    $chub = src($b . '/web/CryptoHub.php');
+    u25(strpos($chub, 'createPlisioInvoice') === false && strpos($chub, 'plisioCashOut') === false && strpos($chub, 'getPlisio') === false, "$ed crypto hub calls no retired provider");
+    $api = src($b . '/web/api/crypto.php');
+    $apiActionAt = strpos($api, "\$action = \$input['action']");
+    $apiGuardAt  = strpos($api, "bc_gateway_is_retired('plisio')");
+    u25($apiActionAt !== false && $apiGuardAt !== false && $apiActionAt < $apiGuardAt, "$ed crypto API defines the action before the retired guard (guard is live)");
+    u25(strpos($api, 'createPlisioInvoice') === false, "$ed crypto API creates no retired-provider invoices");
+    $hook = src($b . '/users-plisio.php');
+    u25(strpos($hook, '410') !== false, "$ed retired webhook still answers 410 for reconciliation");
+    u25(strpos(src($b . '/func/bc-crypto-func.php'), 'RECONCILIATION') !== false || strpos(src($b . '/func/bc-crypto-func.php'), 'reconciled') !== false, "$ed legacy crypto helpers are reconciliation-only");
+}
+
+// Super-admin surface (SAAS only): fintech API prices, no crypto console.
+$spg = src($root . '/DGV7.0-SAAS/bc-spadmin/PaymentGateway.php');
+u25(strpos($spg, 'fintech_api_price_$fintech_slug') !== false && strpos($spg, "'flutterwave', 'klasha', 'platnova'") !== false, 'spadmin prices all three fintech APIs');
+u25(strpos($spg, 'Fintech API Access Prices') !== false, 'spadmin shows fintech API price controls');
+u25(!file_exists($root . '/DGV7.0-SAAS/bc-spadmin/CryptoHub.php'), 'spadmin crypto console is deleted');
+u25(strpos(src($root . '/DGV7.0-SAAS/bc-spadmin/SiteMap.php'), "CryptoHub.php'") === false, 'spadmin sitemap drops the crypto console link');
+$spUsers = src($root . '/DGV7.0-SAAS/bc-spadmin/Users.php');
+u25(strpos($spUsers, 'data-bs-toggle="dropdown"') !== false, 'spadmin users keep the Manage dropdown markup');
 
 // Template 6 remains untouched by §25 (CI-pinned byte-identical across editions).
 u25(file_get_contents($root . '/DGV7.0-SAAS/index-bc-style-template-6.php') === file_get_contents($root . '/DGV7.0-NON-SAAS/index-bc-style-template-6.php'),

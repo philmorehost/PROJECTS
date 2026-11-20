@@ -44,6 +44,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save-chat-set
     bc_chat_setting_save($vid, 'chat_ai_model', $model);
     if ($welcome !== '') bc_chat_setting_save($vid, 'chat_welcome', $welcome);
     if ($handoff !== '') bc_chat_setting_save($vid, 'chat_handoff', $handoff);
+    $quick_raw = trim((string)($_POST['chat_quick_replies'] ?? ''));
+    $quick_lines = array_slice(array_values(array_filter(array_map(function ($l) {
+        return substr(trim(strip_tags($l)), 0, 40);
+    }, preg_split('/\r\n|\r|\n/', $quick_raw)))), 0, 5);
+    bc_chat_setting_save($vid, 'chat_quick_replies', implode("\n", $quick_lines));
 
     // Key: blank keeps, checkbox clears, anything else replaces.
     if (isset($_POST['chat_ai_key_clear'])) {
@@ -179,6 +184,10 @@ bc_adm_head("Chat Settings | " . ($get_all_super_admin_site_details["site_title"
                             <label class="form-label small fw-bold" for="chat_handoff">Handoff message</label>
                             <textarea class="form-control" id="chat_handoff" name="chat_handoff" rows="2"><?php echo htmlspecialchars((string)$settings['chat_handoff']); ?></textarea>
                             <div class="form-text">Shown to the customer when a person takes over.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold" for="chat_quick_replies">Quick replies <span class="text-muted fw-normal">(shown as tappable chips when a chat starts — one per line, max 5)</span></label>
+                            <textarea class="form-control" id="chat_quick_replies" name="chat_quick_replies" rows="3" placeholder="Check my wallet balance&#10;A payment failed&#10;Track my order"><?php echo htmlspecialchars((string)($settings['chat_quick_replies'] ?? '')); ?></textarea>
                         </div>
 
                         <button class="btn btn-primary" type="submit" name="save-chat-settings" value="1">Save settings</button>
