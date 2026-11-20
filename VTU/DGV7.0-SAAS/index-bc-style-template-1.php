@@ -289,6 +289,8 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
       <a href="#who">Freelancers <span class="new-tag">NEW</span></a>
       <a href="#manage">Business</a>
       <a href="#spend">VTU Services</a>
+      <a href="Services.php">All Services</a>
+      <a href="ReferAndEarn.php">Refer &amp; Earn</a>
       <a href="#faq">Company</a>
     </nav>
     <div class="nav-actions">
@@ -367,7 +369,7 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
 <!-- FLOATING SUBNAV -->
 <div class="floating-subnav-wrap">
   <nav class="floating-subnav">
-    <a href="#who">Who</a><a href="#receive">Receive</a><a href="#manage">Manage</a><a href="#currencies">Currencies</a><a href="#spend">Spend</a><a href="#free">Free</a><a href="#soon">Soon</a><a href="#faq">FAQ</a>
+    <a href="#who">Who</a><a href="#receive">Receive</a><a href="#manage">Manage</a><a href="#currencies">Currencies</a><a href="#spend">Spend</a><a href="Services.php">Services</a><a href="ReferAndEarn.php">Refer &amp; Earn</a><a href="#free">Free</a><a href="#soon">Soon</a><a href="#faq">FAQ</a>
     <a href="web/Register.php" class="btn-red" style="padding:9px 18px;font-size:13px;">Start free</a>
   </nav>
 </div>

@@ -439,7 +439,8 @@ if (!function_exists('bc_plate_stat')) {
             <span><?php echo htmlspecialchars($site_title); ?></span>
         </a>
         <nav class="pc-nav" aria-label="Main">
-            <a href="#services">Services</a>
+            <a href="Services.php">Services</a>
+            <a href="ReferAndEarn.php">Refer &amp; Earn</a>
             <a href="#send">Send money</a>
             <a href="#cards">Cards</a>
             <a href="#bills">Bills</a>

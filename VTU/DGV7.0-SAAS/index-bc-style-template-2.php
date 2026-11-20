@@ -554,7 +554,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
                     <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>">
                 </a>
                 <nav id="siteNav">
-                    <a href="#services">Services</a>
+                    <a href="Services.php">Services</a>
+                    <a href="ReferAndEarn.php">Refer &amp; Earn</a>
                     <a href="#about">About</a>
                     <a href="#faq">FAQ</a>
                     <a href="/web/Login.php" class="nav-cta">Get Started</a>

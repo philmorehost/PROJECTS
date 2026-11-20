@@ -82,7 +82,8 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
         <div class="col-lg-4">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Waiting for a person (<?php echo count($queue['pending']); ?>)</h5>
+                    <h5 class="card-title">Waiting for a person (<span id="bcPendingCount"><?php echo count($queue['pending']); ?></span>)</h5>
+                    <div id="bcPendingList">
                     <?php if (!$queue['pending']): ?>
                         <p class="text-muted small mb-0">Nothing is waiting. The assistant is handling new questions.</p>
                     <?php else: foreach ($queue['pending'] as $t): ?>
@@ -98,12 +99,14 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                             <div class="text-muted small"><?php echo htmlspecialchars((string)($t['last_message_at'] ?: 'Just now')); ?></div>
                         </a>
                     <?php endforeach; endif; ?>
+                    </div>
                 </div>
             </div>
 
             <div class="card mt-3">
                 <div class="card-body">
-                    <h5 class="card-title">In progress (<?php echo count($queue['active']); ?>)</h5>
+                    <h5 class="card-title">In progress (<span id="bcActiveCount"><?php echo count($queue['active']); ?></span>)</h5>
+                    <div id="bcActiveList">
                     <?php if (!$queue['active']): ?>
                         <p class="text-muted small mb-0">No conversations are open with an agent.</p>
                     <?php else: foreach ($queue['active'] as $t): ?>
@@ -114,6 +117,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                             <span class="text-muted small"><?php echo htmlspecialchars((string)($t['last_message_at'] ?: '')); ?></span>
                         </a>
                     <?php endforeach; endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -160,7 +164,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                             </div>
                         </div>
 
-                        <div class="border rounded p-3 mb-3" style="max-height:420px; overflow-y:auto; background:#f8f9fa;">
+                        <div class="border rounded p-3 mb-3" id="bcLiveMsgs" data-thread="<?php echo $view ? (int)$view['id'] : 0; ?>" data-last="<?php echo $view_msgs ? (int)end($view_msgs)['id'] : 0; ?>" style="max-height:420px; overflow-y:auto; background:#f8f9fa;">
                             <?php if (!$view_msgs): ?>
                                 <p class="text-muted small mb-0">No messages yet.</p>
                             <?php else: foreach ($view_msgs as $m): ?>
@@ -175,7 +179,7 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
                         </div>
 
                         <?php if ((string)$view['status'] !== 'closed'): ?>
-                            <form method="post">
+                            <form method="post" id="bcReplyForm">
                                 <input type="hidden" name="thread_id" value="<?php echo (int)$view['id']; ?>">
                                 <input type="hidden" name="action" value="reply">
                                 <label class="form-label small" for="bc-agent-reply">Reply as <?php echo htmlspecialchars($agent_name); ?></label>
@@ -196,5 +200,133 @@ bc_adm_head("Support Chat | " . ($get_all_super_admin_site_details["site_title"]
     
 
 
+
+
+<script>
+// §41 live agent chat: poll the queue + open thread, send replies without a
+// page reload. The classic POST forms above remain as the no-JS fallback.
+(function () {
+    var pane = document.getElementById('bcLiveMsgs');
+    var threadId = pane ? parseInt(pane.getAttribute('data-thread') || '0', 10) : 0;
+    var lastId = pane ? parseInt(pane.getAttribute('data-last') || '0', 10) : 0;
+    var pendingList = document.getElementById('bcPendingList');
+    var activeList = document.getElementById('bcActiveList');
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function post(payload) {
+        return fetch('ajax-support-chat.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); });
+    }
+    function paintMessage(m) {
+        var wrap = document.createElement('div');
+        wrap.className = 'mb-2';
+        wrap.setAttribute('data-mid', m.id);
+        var meta = document.createElement('div');
+        meta.className = 'small text-muted';
+        meta.innerHTML = '<strong></strong><span class="ms-1"></span>';
+        meta.querySelector('strong').textContent = m.author_name || m.author_type;
+        meta.querySelector('span').textContent = m.created_at || '';
+        var body = document.createElement('div');
+        body.className = 'small';
+        body.textContent = m.body;
+        wrap.appendChild(meta); wrap.appendChild(body);
+        return wrap;
+    }
+    function nearBottom() {
+        return pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120;
+    }
+    function appendMessages(messages, stick) {
+        if (!messages || !messages.length) return;
+        var wasNear = nearBottom();
+        messages.forEach(function (m) {
+            if (pane.querySelector('[data-mid="' + m.id + '"]')) { lastId = Math.max(lastId, m.id); return; }
+            pane.appendChild(paintMessage(m));
+            lastId = Math.max(lastId, m.id);
+        });
+        if (stick || wasNear) pane.scrollTop = pane.scrollHeight;
+    }
+    function paintQueue(el, rows, emptyText) {
+        if (!el) return;
+        el.innerHTML = '';
+        if (!rows.length) {
+            var p = document.createElement('p');
+            p.className = 'text-muted small mb-0';
+            p.textContent = emptyText;
+            el.appendChild(p);
+            return;
+        }
+        rows.forEach(function (t) {
+            var a = document.createElement('a');
+            a.className = 'd-block text-decoration-none border rounded p-2 mb-2' + (t.id === threadId ? ' border-primary' : '');
+            a.href = 'SupportChat.php?thread=' + t.id;
+            var top = document.createElement('div');
+            top.className = 'd-flex justify-content-between';
+            var name = document.createElement('strong');
+            name.className = 'small';
+            name.textContent = t.username || 'Customer';
+            top.appendChild(name);
+            if (t.ticket_no) {
+                var b = document.createElement('span');
+                b.className = 'badge bg-dark ms-1';
+                b.textContent = t.ticket_no;
+                top.appendChild(b);
+            }
+            if (t.unread_for_agent > 0) {
+                var u = document.createElement('span');
+                u.className = 'badge bg-danger';
+                u.textContent = t.unread_for_agent;
+                top.appendChild(u);
+            }
+            var when = document.createElement('div');
+            when.className = 'text-muted small';
+            when.textContent = t.last_message_at || '';
+            a.appendChild(top); a.appendChild(when);
+            el.appendChild(a);
+        });
+    }
+    function poll() {
+        post({ action: 'queue' }).then(function (res) {
+            if (!res || !res.ok) return;
+            var pc = document.getElementById('bcPendingCount');
+            var ac = document.getElementById('bcActiveCount');
+            if (pc) pc.textContent = res.pending.length;
+            if (ac) ac.textContent = res.active.length;
+            paintQueue(pendingList, res.pending, 'Nothing is waiting. The assistant is handling new questions.');
+            paintQueue(activeList, res.active, 'No conversations are open with an agent.');
+        }).catch(function () {});
+        if (threadId > 0) {
+            post({ action: 'thread', thread_id: threadId, after_id: lastId }).then(function (res) {
+                if (res && res.ok) appendMessages(res.messages, false);
+            }).catch(function () {});
+        }
+    }
+
+    var form = document.getElementById('bcReplyForm');
+    if (form && threadId > 0) {
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var box = document.getElementById('bc-agent-reply');
+            var body = box.value.trim();
+            if (!body) return;
+            post({ action: 'reply', thread_id: threadId, body: body }).then(function (res) {
+                if (res && res.ok) {
+                    box.value = '';
+                    appendMessages(res.messages, true);
+                    poll();
+                } else {
+                    form.submit();
+                }
+            }).catch(function () { form.submit(); });
+        });
+    }
+
+    if (pane) pane.scrollTop = pane.scrollHeight;
+    setInterval(poll, 4000);
+    poll();
+})();
+</script>
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
