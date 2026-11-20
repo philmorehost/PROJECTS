@@ -242,6 +242,33 @@ if (!function_exists('bc_referral_categories')) {
     }
 }
 
+if (!function_exists('bc_referral_settings')) {
+    /**
+     * §34: vendor-configurable referral program terms, set from bc-admin →
+     * Loyalty Settings (Referral Program card) and stored in sas_settings next
+     * to the coin conversion settings. The coin sign-up bonus stays where it
+     * always lived: sas_loyalty_bonus_settings.first_purchase_bonus. Defaults
+     * preserve the historical program exactly ($10 at $100, 100 coins).
+     */
+    function bc_referral_settings($vendor_id) {
+        $out = array('reward_usd' => 10.0, 'qualifying_usd' => 100.0, 'first_purchase_coins' => 100);
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return $out;
+        $vendor_id = (int)$vendor_id;
+        if (function_exists('getVendorOption')) {
+            $r = (float)getVendorOption($vendor_id, 'referral_reward_usd', '');
+            if ($r > 0) $out['reward_usd'] = $r;
+            $q = (float)getVendorOption($vendor_id, 'referral_qualifying_usd', '');
+            if ($q > 0) $out['qualifying_usd'] = $q;
+        }
+        $qq = @mysqli_query($connection_server, "SELECT first_purchase_bonus FROM sas_loyalty_bonus_settings WHERE vendor_id='$vendor_id' LIMIT 1");
+        if ($qq && ($row = mysqli_fetch_assoc($qq)) && isset($row['first_purchase_bonus'])) {
+            $out['first_purchase_coins'] = (int)$row['first_purchase_bonus'];
+        }
+        return $out;
+    }
+}
+
 if (!function_exists('bc_referral_record_volume')) {
     /**
      * Add qualifying USD volume for a referee and pay out when the $100 mark is
@@ -255,6 +282,7 @@ if (!function_exists('bc_referral_record_volume')) {
         $usd_amount = (float)$usd_amount;
         if ($usd_amount <= 0) return 'invalid_amount';
         bc_referral_ensure_schema();
+        $ref_settings = bc_referral_settings($vendor_id);
         $vendor_id = (int)$vendor_id; $referee_id = (int)$referee_id;
 
         $q = mysqli_query($connection_server, "SELECT id, referrer FROM sas_users WHERE vendor_id='$vendor_id' AND id='$referee_id' LIMIT 1");
@@ -274,16 +302,16 @@ if (!function_exists('bc_referral_record_volume')) {
         $progress = $q3 ? mysqli_fetch_assoc($q3) : null;
         if (!$progress) return 'unavailable';
         if ((int)$progress['rewarded'] === 1) return 'already_rewarded';
-        if ((float)$progress['qualifying_usd'] < 100.00) return 'tracking';
+        if ((float)$progress['qualifying_usd'] < (float)$ref_settings['qualifying_usd']) return 'tracking';
 
-        // Threshold crossed — pay $10 to BOTH sides, converted at the live rate.
+        // Threshold crossed — pay the configured reward to BOTH sides, converted at the live rate.
         $rate = function_exists('getLiveExchangeRate') ? (float)getLiveExchangeRate('USD', 'NGN', $vendor_id) : 0.0;
         if ($rate <= 0 || !function_exists('bc_fintech_ledger_post')) {
             mysqli_query($connection_server, "UPDATE sas_referral_progress SET reward_status='pending_rate'
                 WHERE vendor_id='$vendor_id' AND referee_id='$referee_id' AND rewarded=0");
             return 'pending_rate';
         }
-        $ngn = round(10.00 * $rate, 2);
+        $ngn = round((float)$ref_settings['reward_usd'] * $rate, 2);
         $names = [];
         foreach ([$referrer_id, $referee_id] as $uid) {
             $qu = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE vendor_id='$vendor_id' AND id='$uid' LIMIT 1");
@@ -292,8 +320,8 @@ if (!function_exists('bc_referral_record_volume')) {
         }
         if (count($names) !== 2) return 'unavailable';
         $ref = 'REF10-' . $referee_id;
-        $paid_r = bc_fintech_ledger_post($vendor_id, $names[$referrer_id], 'NGN', 'credit', $ngn, $ref . '-R', ['type' => 'referral_reward', 'memo' => 'Referral reward $10 (referee reached $100 qualifying volume)']);
-        $paid_e = bc_fintech_ledger_post($vendor_id, $names[$referee_id], 'NGN', 'credit', $ngn, $ref . '-E', ['type' => 'referral_reward', 'memo' => 'Welcome referral reward $10']);
+        $paid_r = bc_fintech_ledger_post($vendor_id, $names[$referrer_id], 'NGN', 'credit', $ngn, $ref . '-R', ['type' => 'referral_reward', 'memo' => 'Referral reward $' . number_format((float)$ref_settings['reward_usd'], 2) . ' (referee reached $' . number_format((float)$ref_settings['qualifying_usd'], 2) . ' qualifying volume)']);
+        $paid_e = bc_fintech_ledger_post($vendor_id, $names[$referee_id], 'NGN', 'credit', $ngn, $ref . '-E', ['type' => 'referral_reward', 'memo' => 'Welcome referral reward $' . number_format((float)$ref_settings['reward_usd'], 2)]);
         if (empty($paid_r['ok']) || empty($paid_e['ok'])) {
             mysqli_query($connection_server, "UPDATE sas_referral_progress SET reward_status='pending_payout'
                 WHERE vendor_id='$vendor_id' AND referee_id='$referee_id' AND rewarded=0");
@@ -320,7 +348,7 @@ if (!function_exists('bc_referral_progress_for_user')) {
             WHERE p.vendor_id='$vendor_id' AND p.referrer_id='$user_id' ORDER BY p.id DESC LIMIT 50");
         if ($q) while ($r = mysqli_fetch_assoc($q)) {
             $out['rows'][] = $r;
-            if ((int)$r['rewarded'] === 1) { $out['qualified']++; $out['earned_usd'] += 10.00; }
+            if ((int)$r['rewarded'] === 1) { $out['qualified']++; $out['earned_usd'] += (float)bc_referral_settings($vendor_id)['reward_usd']; }
         }
         return $out;
     }

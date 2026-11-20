@@ -1235,6 +1235,77 @@ if (!function_exists('bc_adm_foot')) {
     }
 })();
 </script>
+<style>
+.bc-btn-locked{opacity:.55!important;pointer-events:none!important}
+</style>
+<script>
+/* §34: buy/payment submit lock. The instant a form is submitted, every
+   submit control in it locks (disabled + spinner) so a double click, a
+   double tap or a second Enter can never fire the same purchase/payment
+   twice. GET (search/filter) forms are ignored, and a form can opt out
+   with data-bc-nolock. AJAX flows never navigate away, so the lock
+   auto-releases after 20s (and on pageshow) to allow a retry. */
+(function () {
+    'use strict';
+    function unlockForm(form) {
+        if (!form) return;
+        try { delete form.dataset.bcLocked; } catch (e) { form.removeAttribute('data-bc-locked'); }
+        form.querySelectorAll('[data-bc-locked-btn]').forEach(function (b) {
+            b.disabled = false;
+            b.classList.remove('bc-btn-locked');
+            if (b.tagName === 'BUTTON' && b.hasAttribute('data-bc-orig-html')) {
+                b.innerHTML = b.getAttribute('data-bc-orig-html');
+                b.removeAttribute('data-bc-orig-html');
+            }
+            b.removeAttribute('data-bc-locked-btn');
+        });
+        var mirror = form.querySelector('input[data-bc-submitter-mirror]');
+        if (mirror) mirror.parentNode.removeChild(mirror);
+    }
+    window.bcUnlockForm = unlockForm;
+    document.addEventListener('click', function (e) {
+        var t = e.target;
+        var btn = t && t.closest ? t.closest('button[type="submit"], input[type="submit"], button:not([type])') : null;
+        if (btn && btn.form && btn.form.dataset.bcLocked) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+        if (((form.getAttribute('method') || 'get').toLowerCase()) === 'get') return;
+        if (form.hasAttribute('data-bc-nolock')) return;
+        if (form.dataset.bcLocked) { e.preventDefault(); e.stopPropagation(); return; }
+        form.dataset.bcLocked = '1';
+        /* A disabled submitter can drop its name/value from the payload in
+           some browsers, so mirror it into a hidden input BEFORE disabling. */
+        var sub = e.submitter || null;
+        if (sub && sub.name && !sub.disabled) {
+            var m = document.createElement('input');
+            m.type = 'hidden';
+            m.name = sub.name;
+            m.value = sub.value || '';
+            m.setAttribute('data-bc-submitter-mirror', '1');
+            form.appendChild(m);
+        }
+        form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])').forEach(function (b) {
+            if (b.disabled) return;
+            b.setAttribute('data-bc-locked-btn', '1');
+            if (b.tagName === 'BUTTON') b.setAttribute('data-bc-orig-html', b.innerHTML);
+            b.disabled = true;
+            b.classList.add('bc-btn-locked');
+            if (b.tagName === 'BUTTON') {
+                b.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing&hellip;';
+            }
+        });
+        setTimeout(function () { unlockForm(form); }, 20000);
+    }, true);
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-bc-locked]').forEach(unlockForm);
+    });
+})();
+</script>
 </body>
 </html>
         <?php

@@ -200,6 +200,8 @@ echo json_encode([
         "referral_link"         => $referral_link,
         "share_message"         => "Join me on " . ($get_all_site_details["site_title"] ?? "") . " and get started. Use my referral code: " . $username,
         "referral_bonus"        => $referral_bonus,
+        "referral_reward_usd"     => function_exists('bc_referral_settings') ? (float) bc_referral_settings((int) $vendor_id)['reward_usd'] : 10.0,
+        "referral_qualifying_usd" => function_exists('bc_referral_settings') ? (float) bc_referral_settings((int) $vendor_id)['qualifying_usd'] : 100.0,
         "coins_enabled"         => $coins_enabled,
         "coins_balance"         => $coins_balance,
         "coins_from_referrals"  => $coins_from_referrals,

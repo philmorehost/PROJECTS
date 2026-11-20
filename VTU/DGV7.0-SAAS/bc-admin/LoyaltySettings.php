@@ -61,11 +61,19 @@ if (isset($_POST["update-loyalty-settings"])) {
     $conversion_rate = mysqli_real_escape_string($connection_server, $_POST["conversion_rate"]);
     $min_conversion_threshold = mysqli_real_escape_string($connection_server, $_POST["min_conversion_threshold"]);
     $coins_email_threshold = (int)mysqli_real_escape_string($connection_server, $_POST["coins_email_threshold"] ?? 0);
+    // §34: referral programme terms — reward paid to BOTH sides and the
+    // qualifying volume that unlocks it. Stored in sas_settings so the
+    // referral engine, the web Refer & Earn page and the app API all read
+    // exactly what the admin saved here.
+    $referral_reward_usd = max(0.0, (float)($_POST["referral_reward_usd"] ?? 10));
+    $referral_qualifying_usd = max(0.0, (float)($_POST["referral_qualifying_usd"] ?? 100));
 
     $settings_to_update = [
         'points_conversion_rate' => $conversion_rate,
         'min_points_conversion' => $min_conversion_threshold,
         'coins_email_threshold' => $coins_email_threshold,
+        'referral_reward_usd' => $referral_reward_usd,
+        'referral_qualifying_usd' => $referral_qualifying_usd,
     ];
 
     foreach ($settings_to_update as $name => $value) {
@@ -88,7 +96,7 @@ $loyalty_settings_row = mysqli_stmt_get_result($stmt);
 $loyalty_settings = mysqli_fetch_assoc($loyalty_settings_row);
 
 // Fetch conversion rate and minimum threshold from sas_settings
-$stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_settings WHERE vendor_id = ? AND setting_name IN ('points_conversion_rate', 'min_points_conversion', 'coins_email_threshold')");
+$stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_settings WHERE vendor_id = ? AND setting_name IN ('points_conversion_rate', 'min_points_conversion', 'coins_email_threshold', 'referral_reward_usd', 'referral_qualifying_usd')");
 mysqli_stmt_bind_param($stmt, "i", $vendor_id);
 mysqli_stmt_execute($stmt);
 $settings_query = mysqli_stmt_get_result($stmt);
@@ -99,6 +107,8 @@ while($row = mysqli_fetch_assoc($settings_query)){
 $points_conversion_rate = $settings['points_conversion_rate'] ?? 500;
 $min_points_conversion = $settings['min_points_conversion'] ?? 100;
 $coins_email_threshold = $settings['coins_email_threshold'] ?? 0;
+$referral_reward_usd = isset($settings['referral_reward_usd']) && (float)$settings['referral_reward_usd'] > 0 ? (float)$settings['referral_reward_usd'] : 10;
+$referral_qualifying_usd = isset($settings['referral_qualifying_usd']) && (float)$settings['referral_qualifying_usd'] > 0 ? (float)$settings['referral_qualifying_usd'] : 100;
 
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
@@ -136,7 +146,7 @@ bc_adm_head("Loyalty Settings | " . ($get_all_super_admin_site_details["site_tit
                 <div class="card shadow-sm border-0 rounded-4">
                     <div class="card-header bg-white py-3 border-0 d-flex align-items-center">
                         <div class="bg-info bg-opacity-10 p-2 rounded-3 me-3"><i class="bi bi-arrow-repeat text-info"></i></div>
-                        <h5 class="fw-bold mb-0">Coin Conversion & Referrals</h5>
+                        <h5 class="fw-bold mb-0">Referral Program, Coin Conversion & Withdrawals</h5>
                     </div>
                     <div class="card-body p-4">
                         <div class="row g-4">
@@ -151,12 +161,28 @@ bc_adm_head("Loyalty Settings | " . ($get_all_super_admin_site_details["site_tit
                             <div class="col-md-6">
                                 <label for="min_conversion_threshold" class="form-label small fw-bold text-muted text-uppercase">Min. Threshold</label>
                                 <input type="number" class="form-control form-control-lg rounded-3" id="min_conversion_threshold" name="min_conversion_threshold" value="<?php echo $min_points_conversion; ?>" required>
-                                <p class="small text-muted mt-2">Minimum points allowed for withdrawal</p>
+                                <p class="small text-muted mt-2">Minimum points allowed for withdrawal (coin conversion threshold). Wallet withdrawal min/max limits are set under Account Settings &rarr; Withdrawal Limits.</p>
                             </div>
                             <div class="col-md-6">
                                 <label for="coins_email_threshold" class="form-label small fw-bold text-muted text-uppercase">Email Alert Threshold</label>
                                 <input type="number" class="form-control form-control-lg rounded-3" id="coins_email_threshold" name="coins_email_threshold" value="<?php echo $coins_email_threshold; ?>" min="0">
                                 <p class="small text-muted mt-2">When a user's coins reach this amount, they automatically receive an email guide on converting to wallet funds. Set 0 to disable.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="referral_reward_usd" class="form-label small fw-bold text-muted text-uppercase">Referral Reward (USD)</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text bg-light small">$</span>
+                                    <input type="number" step="0.01" min="0" class="form-control rounded-3" id="referral_reward_usd" name="referral_reward_usd" value="<?php echo htmlspecialchars((string)$referral_reward_usd); ?>" required>
+                                </div>
+                                <p class="small text-muted mt-2">Paid to BOTH the referrer and the referred user (converted to &#8358; at the live exchange rate) once the referred user reaches the qualifying volume.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="referral_qualifying_usd" class="form-label small fw-bold text-muted text-uppercase">Qualifying Volume (USD)</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text bg-light small">$</span>
+                                    <input type="number" step="0.01" min="0" class="form-control rounded-3" id="referral_qualifying_usd" name="referral_qualifying_usd" value="<?php echo htmlspecialchars((string)$referral_qualifying_usd); ?>" required>
+                                </div>
+                                <p class="small text-muted mt-2">Cumulative Crypto &amp; International Transfer volume a referred user must transact before the referral reward pays out. Other products never count.</p>
                             </div>
                             <div class="col-12">
                                 <hr class="my-2 opacity-25">

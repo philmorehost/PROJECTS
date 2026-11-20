@@ -60,7 +60,9 @@ foreach ($editions as $ed) {
     u25(strpos($svc, "'pos_request'") !== false, "$ed Flutterwave catalogue includes POS requests");
     u25(strpos($svc, "'btc_swap' => false") !== false, "$ed Klasha/Flutterwave BTC swap checked: not offered, pairs hidden");
     u25(strpos($svc, "bc_referral_record_volume") !== false && strpos($svc, "'crypto', 'intl_transfer'") !== false || strpos($svc, "return ['crypto', 'intl_transfer'];") !== false, "$ed referral volume counts Crypto & International Transfer only");
-    u25(strpos($svc, 'qualifying_usd') !== false && strpos($svc, '100.00') !== false, "$ed referral threshold is \$100");
+    // §34: the threshold/reward are vendor settings now; the historical $100/$10
+    // survive as the defaults in bc_referral_settings().
+    u25(strpos($svc, 'qualifying_usd') !== false && strpos($svc, "'qualifying_usd' => 100.0") !== false && strpos($svc, "'reward_usd' => 10.0") !== false, "$ed referral threshold defaults to \$100 / \$10");
     u25(strpos($svc, 'sas_creator_applications') !== false, "$ed creator/influencer applications are stored");
 
     // ── New pages ──
@@ -70,7 +72,8 @@ foreach ($editions as $ed) {
         u25(strpos($page, 'bc-fintech-services.php') !== false, "$ed $pg loads the provider layer");
     }
     $ref = src($b . '/web/Referral.php');
-    u25(strpos($ref, 'You get $10. Your friend gets $10.') !== false, "$ed Referral page shows the \$10/\$10 diagram copy");
+    // §34: the diagram renders the admin-configured reward for both sides.
+    u25(strpos($ref, 'You get $<?php echo $ref_reward_fmt; ?>. Your friend gets $<?php echo $ref_reward_fmt; ?>.') !== false, "$ed Referral page shows the configured reward diagram copy");
     u25(strpos($ref, 'apply_creator') !== false, "$ed Referral page has the creator application form");
     $intl = src($b . '/web/IntlTransfer.php');
     u25(strpos($intl, 'Payout to China in 3 steps') !== false, "$ed IntlTransfer visualises the 3-step China workflow");
