@@ -43,7 +43,8 @@ if (lm_app_handle_post() && $pdo instanceof PDO) {
                     trim((string) ($_POST['domain'] ?? '')),
                     trim((string) ($_POST['customer_email'] ?? '')),
                     (string) ($_POST['status'] ?? 'active'),
-                    $maxDomainChanges
+                    $maxDomainChanges,
+                    (string) ($_POST['license_type'] ?? 'standard')
                 );
                 $pdo->prepare($definition['sql'])->execute($params);
             } else {
@@ -69,6 +70,18 @@ if (lm_app_handle_post() && $pdo instanceof PDO) {
                 (string) ($_POST['license_type'] ?? 'standard'),
                 $id,
             ));
+            // Keep the tier pin in step with the licence type ('extended' =
+            // SAAS, 'standard' = NON-SAAS); a stale pin is what locked SAAS
+            // installs out of updates with a tier-mismatch 403.
+            if (function_exists('hasTableColumn') && hasTableColumn($pdo, 'licenses', 'tier_id')) {
+                $tierCode = ((string) ($_POST['license_type'] ?? 'standard') === 'extended') ? 'SAAS' : 'NON-SAAS';
+                $tierStmt = $pdo->prepare('SELECT id FROM script_tiers WHERE UPPER(tier_code) = ? LIMIT 1');
+                $tierStmt->execute(array($tierCode));
+                $tierId = $tierStmt->fetchColumn();
+                if ($tierId) {
+                    $pdo->prepare('UPDATE licenses SET tier_id = ? WHERE id = ?')->execute(array((int) $tierId, $id));
+                }
+            }
             $notice = 'Licence #' . $id . ' updated.';
         } elseif ($action === 'toggle') {
             $id = (int) ($_POST['id'] ?? 0);

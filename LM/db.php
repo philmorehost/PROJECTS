@@ -338,33 +338,56 @@ function hasTableColumn(PDO $pdo, string $table, string $column): bool {
 }
 
 function getLicenseInsertDefinition(PDO $pdo): array {
+    // Build the INSERT from the columns this database actually has. tier_id is
+    // a first-class column now: before §40 every variant silently dropped it
+    // (and dropped the tier argument callers passed), so each new licence was
+    // born tier-less with license_type 'standard' - which the update checker
+    // then read as NON-SAAS and permanently healed onto the record. A SAAS
+    // install holding such a key got "License tier mismatch" 403s forever,
+    // while older installs (records created with a tier) never noticed.
     $hasMax = hasTableColumn($pdo, 'licenses', 'max_domain_changes');
     $hasCount = hasTableColumn($pdo, 'licenses', 'domain_change_count');
     $hasType = hasTableColumn($pdo, 'licenses', 'license_type');
+    $hasTier = hasTableColumn($pdo, 'licenses', 'tier_id');
 
-    if ($hasMax && $hasCount && $hasType) {
-        return [
-            'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count, license_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
-                return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0, $license_type];
-            }
-        ];
-    }
+    $cols = array('license_key', 'domain', 'customer_email', 'status');
+    if ($hasMax) $cols[] = 'max_domain_changes';
+    if ($hasCount) $cols[] = 'domain_change_count';
+    if ($hasType) $cols[] = 'license_type';
+    if ($hasTier) $cols[] = 'tier_id';
 
-    if ($hasMax && $hasCount) {
-        return [
-            'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status, max_domain_changes, domain_change_count) VALUES (?, ?, ?, ?, ?, ?)",
-            'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes, $license_type = 'standard') {
-                return [$license_key, $domain, $customer_email, $status, $max_domain_changes, 0];
-            }
-        ];
-    }
+    $sql = 'INSERT INTO licenses (' . implode(', ', $cols) . ') VALUES ('
+        . implode(', ', array_fill(0, count($cols), '?')) . ')';
 
     return [
-        'sql' => "INSERT INTO licenses (license_key, domain, customer_email, status) VALUES (?, ?, ?, ?)",
-        'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard') {
-            return [$license_key, $domain, $customer_email, $status];
-        }
+        'sql' => $sql,
+        'params' => function ($license_key, $domain, $customer_email, $status, $max_domain_changes = null, $license_type = 'standard', $tier_id = null) use ($pdo, $hasMax, $hasCount, $hasType, $hasTier) {
+            $vals = array($license_key, $domain, $customer_email, $status);
+            if ($hasMax) $vals[] = $max_domain_changes;
+            if ($hasCount) $vals[] = 0;
+            if ($hasType) $vals[] = $license_type;
+            if ($hasTier) {
+                $tid = $tier_id !== null ? (int) $tier_id : 0;
+                if ($tid <= 0) {
+                    // No explicit tier: derive it from the licence type the
+                    // buyer/admin chose ('extended' = SAAS, 'standard' =
+                    // NON-SAAS - the mapping the update checker documents).
+                    $code = ($license_type === 'extended') ? 'SAAS'
+                        : (($license_type === 'standard') ? 'NON-SAAS' : '');
+                    if ($code !== '') {
+                        try {
+                            $q = $pdo->prepare("SELECT id FROM script_tiers WHERE UPPER(tier_code) = ? LIMIT 1");
+                            $q->execute(array($code));
+                            $tid = (int) ($q->fetchColumn() ?: 0);
+                        } catch (PDOException $e) {
+                            $tid = 0;
+                        }
+                    }
+                }
+                $vals[] = $tid > 0 ? $tid : null;
+            }
+            return $vals;
+        },
     ];
 }
 ?>

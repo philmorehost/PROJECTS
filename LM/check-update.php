@@ -181,8 +181,19 @@ try {
             $found_tier_id = $tier_stmt->fetchColumn();
             if ($found_tier_id) {
                 $tier_id = (int) $found_tier_id;
-                $pdo->prepare("UPDATE licenses SET tier_id = ? WHERE id = ? AND tier_id IS NULL")
-                    ->execute([$tier_id, $license['id']]);
+                // Heal the record ONLY when the guess does not contradict the
+                // edition the client declares. The pre-§40 code healed even on
+                // conflict, cementing a guessed NON-SAAS pin onto SAAS installs
+                // (every licence was born tier-less - see db.php) and locking
+                // them out of updates permanently. On conflict the record
+                // stays unpinned so it can be corrected (Fix License Tiers)
+                // and re-evaluated on the next check.
+                if ($client_edition === '' || $client_edition === $tier_code) {
+                    $pdo->prepare("UPDATE licenses SET tier_id = ? WHERE id = ? AND tier_id IS NULL")
+                        ->execute([$tier_id, $license['id']]);
+                } else {
+                    check_update_log("WARNING: not healing tier for license '{$license_key}': guessed '{$tier_code}' conflicts with client-declared '{$client_edition}'. Pin the correct tier (Fix License Tiers).");
+                }
             }
         } catch (PDOException $e) {
             check_update_log("WARNING: could not resolve/heal tier for license '{$license_key}': " . $e->getMessage());
