@@ -1579,3 +1579,44 @@ if (!function_exists('bc_kyc_ai_check_satisfied')) {
 
 // ─────────────────────────────────────────────────────────────
 
+// ───────────────────────── shared migration gate (§45) ─────────────────────────
+// bc-config.php (web), bc-admin-config.php and bc-spadmin-config.php share ONE
+// session + database marker for "schema migrations are done". They used to each
+// demand a different session value ('6.9.11-ai' vs '6.9.1' vs '2026.10.25-2'),
+// so crossing between the web console and the back offices re-ran the
+// 500+-statement migration file on every switch — a major page-load cost.
+// bc-tables.php keeps its own BC_TABLES_VERSION gate for real schema changes;
+// this layer only decides whether including it can be skipped entirely.
+if (!function_exists('bc_migration_versions')) {
+    function bc_migration_versions() {
+        return array('6.9.11-ai', '6.9.11-ai-login-otp-1');
+    }
+}
+if (!function_exists('bc_migrations_current')) {
+    /** True when this deployment's migrations already ran (session or DB stamp). */
+    function bc_migrations_current() {
+        $versions = bc_migration_versions();
+        if (isset($_SESSION['migrations_completed_version']) && in_array((string)$_SESSION['migrations_completed_version'], $versions, true)) {
+            return true;
+        }
+        global $connection_server;
+        if ($connection_server instanceof mysqli) {
+            $q = @mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='system_migration_version' LIMIT 1");
+            $v = ($q && ($r = mysqli_fetch_assoc($q))) ? (string)$r['option_value'] : '';
+            if (in_array($v, $versions, true)) {
+                $_SESSION['migrations_completed_version'] = '6.9.11-ai';
+                return true;
+            }
+        }
+        return false;
+    }
+}
+if (!function_exists('bc_migrations_mark_done')) {
+    function bc_migrations_mark_done() {
+        $_SESSION['migrations_completed_version'] = '6.9.11-ai';
+        global $connection_server;
+        if ($connection_server instanceof mysqli) {
+            @mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('system_migration_version', '6.9.11-ai') ON DUPLICATE KEY UPDATE option_value='6.9.11-ai'");
+        }
+    }
+}

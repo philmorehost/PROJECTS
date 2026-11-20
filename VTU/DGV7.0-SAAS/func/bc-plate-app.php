@@ -1608,7 +1608,7 @@ if (!function_exists('bc_app_foot')) {
     <a href="<?php echo htmlspecialchars(bc_app_url('SiteMap.php')); ?>">Platform Guide</a>
 </footer>
 <?php endif; ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js" defer></script>
 <script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/bc-custom-all.js"></script>
 <?php bc_app_flash(); ?>
 <script>

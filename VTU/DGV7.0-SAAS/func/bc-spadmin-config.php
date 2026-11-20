@@ -47,6 +47,7 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
             // unset(), not = false: bc_verify_integrity() memoises on a truthy flag,
             // and assigning false used to leave the stale verdict in place.
             unset($GLOBALS['bc_integrity_checked']);
+            foreach (array_keys($_SESSION ?? array()) as $bc_sk) { if (strpos((string)$bc_sk, 'bc_integrity_ok_') === 0) unset($_SESSION[$bc_sk]); }
             if (bc_verify_integrity()) {
                 // Validated: now persist to the database. That copy (plus the file
                 // bc_write_activation() just wrote) is what stops the site asking for
@@ -296,12 +297,14 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 	if($connection_server){
     // Branch DG6.7 Optimization: Only run migrations if not already done in current session
     // This significantly improves site-wide page load speeds by skipping redundant DB structural checks.
-    if (!isset($_SESSION['migrations_completed_version']) || $_SESSION['migrations_completed_version'] !== '2026.10.25-2') {
+    // §45: one migration marker shared with the web + vendor-admin bootstraps
+    // (bc_migrations_current in func/bc-security.php).
+    if (!bc_migrations_current()) {
         include_once(__DIR__ . "/bc-tables.php");
         include_once(__DIR__ . "/bc-email-templates.php");
-        $_SESSION['migrations_completed_version'] = '2026.10.25-2';
+        bc_migrations_mark_done();
     }
-	$checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");
+	$checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT id FROM sas_super_admin LIMIT 1");
 	if($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1){
 	//Select Super Admin Table
 	$select_super_admin_table = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");

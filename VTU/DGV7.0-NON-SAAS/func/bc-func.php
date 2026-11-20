@@ -5121,12 +5121,16 @@ function get_user_vtu_details($username) {
 // Anti-BruteForce Functions
 function getBruteForceSettings($vendor_id) {
     global $connection_server;
+    // §45: memoized per request — isIPBlocked/isAccountLocked/login flows call
+    // this several times on every page load.
+    static $bf_settings_cache = array();
+    if (isset($bf_settings_cache[$vendor_id])) return $bf_settings_cache[$vendor_id];
     $stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_bruteforce_settings WHERE vendor_id = ?");
     mysqli_stmt_bind_param($stmt, "i", $vendor_id);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     if ($row = mysqli_fetch_assoc($res)) {
-        return $row;
+        return $bf_settings_cache[$vendor_id] = $row;
     }
     // Return defaults if not set
     return [
@@ -5529,6 +5533,12 @@ function bc_release_all_expired_bruteforce_blocks($db = null) {
 function bc_release_expired_blocks($username, $ip, $vendor_id) {
     global $connection_server;
     if ($vendor_id <= 0 || !$connection_server) return;
+    // §45: expired-block rows do not block anyone while they linger (the block
+    // checks compare block_until > NOW()), so sweeping at most once per 5
+    // minutes per actor is plenty — this was up to 3 DELETE sweeps per page.
+    $bc_rel_key = 'bc_rel_' . md5($vendor_id . '|' . $username . '|' . $ip);
+    if (isset($_SESSION[$bc_rel_key]) && (time() - (int)$_SESSION[$bc_rel_key]) < 300) return;
+    $_SESSION[$bc_rel_key] = time();
 
     if ($username !== '') {
         $esc_user = mysqli_real_escape_string($connection_server, (string)$username);
@@ -5568,6 +5578,8 @@ function verifyGoogleToken($id_token) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);

@@ -112,13 +112,20 @@ function bc_license_db_backfill($code, $domain) {
     $done = true;
     global $connection_server;
     if (!isset($connection_server) || !$connection_server) return;
-    $existing = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='license_key' LIMIT 1");
-    $row = $existing ? mysqli_fetch_assoc($existing) : null;
-    if (!$row || $row['option_value'] !== $code) {
+    // §45: write only what actually differs. This used to issue five write
+    // queries on every page load (it was called on the cached-valid path too).
+    $existing = array();
+    $eq = mysqli_query($connection_server, "SELECT option_name, option_value FROM sas_super_admin_options WHERE option_name IN ('license_key','license_domain','license_status')");
+    if ($eq) while ($r = mysqli_fetch_assoc($eq)) $existing[$r['option_name']] = $r['option_value'];
+    if (($existing['license_key'] ?? null) !== $code) {
         bc_store_license_option($connection_server, 'license_key', $code);
     }
-    bc_store_license_option($connection_server, 'license_domain', $domain);
-    bc_store_license_option($connection_server, 'license_status', 'valid');
+    if (($existing['license_domain'] ?? null) !== $domain) {
+        bc_store_license_option($connection_server, 'license_domain', $domain);
+    }
+    if (($existing['license_status'] ?? null) !== 'valid') {
+        bc_store_license_option($connection_server, 'license_status', 'valid');
+    }
     bc_store_license_option($connection_server, 'license_last_check', date('Y-m-d H:i:s'));
     mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='license_invalid_since'");
 }
@@ -226,6 +233,17 @@ function bc_verify_integrity() {
     $domain = preg_replace('/^www\./i', '', $domain);
     $host_domain = preg_replace('/^www\./i', '', (string)$host_domain);
 
+    // §45: per-session fast path (1h). The file cache below is wiped by every
+    // redeploy and cannot be rewritten at all when func/ is not writable; in
+    // that state every page load used to re-contact the license server and
+    // re-run the backfill writes. A verdict in the session ends that: after
+    // the first check, page loads do no license network or write work.
+    $bc_integrity_sess_key = 'bc_integrity_ok_' . md5($code . '|' . $domain);
+    if (!empty($_SESSION[$bc_integrity_sess_key]) && (time() - (int)$_SESSION[$bc_integrity_sess_key]) < 3600) {
+        $GLOBALS['bc_integrity_fail'] = false;
+        return true;
+    }
+
     $cache_dir = __DIR__ . '/cache';
     if (!is_dir($cache_dir)) {
         @mkdir($cache_dir, 0755, true);
@@ -252,7 +270,7 @@ function bc_verify_integrity() {
             if (($now - $cache['last_check']) < 172800) {
                 if ($cache['status'] == 1) {
                     $GLOBALS['bc_integrity_fail'] = false;
-                    bc_license_db_backfill($code, $domain);
+                    $_SESSION[$bc_integrity_sess_key] = $now;
                     return true;
                 } else {
                     $GLOBALS['bc_integrity_fail'] = true;
@@ -275,8 +293,8 @@ function bc_verify_integrity() {
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_data));
     // Short timeouts: a slow/unreachable license server should never stall a page load
     // for many seconds. On failure the offline grace below still passes a valid license.
-    curl_setopt($ch, CURLOPT_TIMEOUT, 4);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     
     $response = curl_exec($ch);
@@ -299,6 +317,7 @@ function bc_verify_integrity() {
             if ($status === 1 || (isset($res_decoded['message']) && stripos($res_decoded['message'], 'Limit exceeded') !== false)) {
                 $GLOBALS['bc_integrity_fail'] = false;
                 bc_license_db_backfill($code, $domain);
+                $_SESSION[$bc_integrity_sess_key] = $now;
                 return true;
             } else {
                 // Report the exact values sent. "Invalid license key or domain" is ambiguous on
@@ -321,6 +340,7 @@ function bc_verify_integrity() {
                 if (stripos($api_message, 'suspend') === false && bc_license_grace_active()) {
                     $GLOBALS['bc_integrity_fail'] = false;
                     $GLOBALS['bc_integrity_grace'] = true;
+                    $_SESSION[$bc_integrity_sess_key] = $now;
                     return true;
                 }
                 $GLOBALS['bc_integrity_fail'] = true;
@@ -337,6 +357,7 @@ function bc_verify_integrity() {
     // Let's fall back to offline activation mode if we have a license key of length >= 10
     if (!empty($code) && strlen($code) >= 10) {
         $GLOBALS['bc_integrity_fail'] = false;
+        $_SESSION[$bc_integrity_sess_key] = $now;
         return true;
     }
 
