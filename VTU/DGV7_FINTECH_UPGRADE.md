@@ -1463,3 +1463,14 @@ Test counts after this change: gate **1065**, policy **70**, plate_app
 **154**, plate_admin **708**, plate_migration **1090**,
 backoffice_regression **184**, lm_edition **30**, htaccess **224**,
 upgrade25 **193**, provider_live **71** (local no-OpenSSL branch).
+
+## §27 — Dashboard "All Services" grid redesign (2026-11-20)
+
+`web/Dashboard.php` (both editions): the All Services card's vertical
+list-group is replaced by a responsive tile grid — one tile per hub
+(coloured icon, name, one-line hint), reusing the page's existing
+`.svc-tile` styles, hardened with a minimum height, focus ring and a
+compact small-screen variant. Breakpoints (Bootstrap `row-cols`):
+2-up on phones, 3-up from `sm`, 4-up from `lg`; tiles stretch so rows
+stay even. The seven hub links are unchanged (still pinned by
+upgrade25, which now also asserts the grid markup, 193 → 195).

@@ -89,15 +89,29 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 	.db-feature:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
 	.db-feature .chev { margin-left: auto; color: var(--muted); }
 
+	/* All Services grid tiles: one tile per hub, icon over label over a short
+	   hint. The grid itself is Bootstrap row-cols (2-up on phones, 3-up from
+	   sm, 4-up from lg); tiles stretch to the tallest in their row so every
+	   row stays even on any device. */
 	.svc-tile {
 		display: flex; flex-direction: column; align-items: center; text-align: center;
-		height: 100%; padding: 1.05rem .4rem .9rem; border-radius: var(--radius);
+		height: 100%; min-height: 138px; padding: 1.15rem .65rem 1rem; border-radius: var(--radius);
 		background: var(--surface); border: 1px solid var(--line); transition: all .2s;
 	}
+	a.svc-tile, a.svc-tile:hover, a.svc-tile:focus { text-decoration: none; }
 	.svc-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
-	.svc-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.3rem; margin-bottom: .55rem; }
+	.svc-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+	.svc-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.3rem; margin-bottom: .55rem; flex: none; }
 	.svc-name { font-size: .84rem; font-weight: 700; color: var(--ink); line-height: 1.25; }
 	.svc-sub { font-size: .68rem; color: var(--muted); margin-top: 2px; }
+	.svc-tile .svc-name, .svc-tile .svc-sub { display: block; }
+	.svc-tile .svc-sub { line-height: 1.35; }
+	@media (max-width: 575px) {
+		.svc-tile { min-height: 128px; padding: .95rem .4rem .85rem; }
+		.svc-tile .svc-ic { width: 42px; height: 42px; border-radius: 12px; font-size: 1.15rem; }
+		.svc-tile .svc-name { font-size: .8rem; }
+		.svc-tile .svc-sub { font-size: .64rem; }
+	}
 	.ic-blue { background: #eff6ff; color: #2563eb; } .ic-green { background: #ecfdf5; color: #059669; }
 	.ic-purple { background: #f5f3ff; color: #7c3aed; } .ic-orange { background: #fff7ed; color: #ea580c; }
 	.ic-pink { background: #fdf2f8; color: #db2777; } .ic-red { background: #fef2f2; color: #dc2626; }
@@ -285,14 +299,56 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
                 <div class="db-card">
                     <div class="db-card__title">All Services</div>
                     <p class="db-card__sub">Everything you can buy, pay and print — in one place.</p>
-                    <div class="list-group list-group-flush">
-                        <a href="Hub.php?g=pay-bills" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-lightning-charge text-primary"></i><span class="fw-bold flex-grow-1">Pay Bills</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="Hub.php?g=wallet-transfers" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-wallet2 text-primary"></i><span class="fw-bold flex-grow-1">Wallet &amp; Transfers</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="Hub.php?g=verify-print" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-briefcase text-primary"></i><span class="fw-bold flex-grow-1">Verify &amp; Print</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="PrintHub.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-printer text-primary"></i><span class="fw-bold flex-grow-1">PrintHub</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="Hub.php?g=tools-api" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-building text-primary"></i><span class="fw-bold flex-grow-1">Tools &amp; API</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="Hub.php?g=history-tools" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0 border-bottom"><i class="bi bi-clock-history text-primary"></i><span class="fw-bold flex-grow-1">History &amp; Tools</span><i class="bi bi-chevron-right text-muted"></i></a>
-                        <a href="Hub.php?g=settings-help" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-2 border-0"><i class="bi bi-gear text-primary"></i><span class="fw-bold flex-grow-1">Settings &amp; Help</span><i class="bi bi-chevron-right text-muted"></i></a>
+                    <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
+                        <div class="col">
+                            <a href="Hub.php?g=pay-bills" class="svc-tile">
+                                <span class="svc-ic ic-amber"><i class="bi bi-lightning-charge"></i></span>
+                                <span class="svc-name">Pay Bills</span>
+                                <span class="svc-sub">Data, airtime, cable, power &amp; more</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="Hub.php?g=wallet-transfers" class="svc-tile">
+                                <span class="svc-ic ic-blue"><i class="bi bi-wallet2"></i></span>
+                                <span class="svc-name">Wallet &amp; Transfers</span>
+                                <span class="svc-sub">Fund, send, cards &amp; crypto</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="Hub.php?g=verify-print" class="svc-tile">
+                                <span class="svc-ic ic-purple"><i class="bi bi-briefcase"></i></span>
+                                <span class="svc-name">Verify &amp; Print</span>
+                                <span class="svc-sub">NIN slips &amp; BVN checks</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="PrintHub.php" class="svc-tile">
+                                <span class="svc-ic ic-teal"><i class="bi bi-printer"></i></span>
+                                <span class="svc-name">PrintHub</span>
+                                <span class="svc-sub">Data cards &amp; printing</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="Hub.php?g=tools-api" class="svc-tile">
+                                <span class="svc-ic ic-indigo"><i class="bi bi-building"></i></span>
+                                <span class="svc-name">Tools &amp; API</span>
+                                <span class="svc-sub">Bulk SMS, referrals &amp; developer API</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="Hub.php?g=history-tools" class="svc-tile">
+                                <span class="svc-ic ic-cyan"><i class="bi bi-clock-history"></i></span>
+                                <span class="svc-name">History &amp; Tools</span>
+                                <span class="svc-sub">Transactions, points &amp; calculators</span>
+                            </a>
+                        </div>
+                        <div class="col">
+                            <a href="Hub.php?g=settings-help" class="svc-tile">
+                                <span class="svc-ic ic-slate"><i class="bi bi-gear"></i></span>
+                                <span class="svc-name">Settings &amp; Help</span>
+                                <span class="svc-sub">Account, guide &amp; support</span>
+                            </a>
+                        </div>
                     </div>
                 </div>
 
