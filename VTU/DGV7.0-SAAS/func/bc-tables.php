@@ -1829,31 +1829,7 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_p2p_messages` 
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
 
-// --- Virtual Card V2 (Chimoney Integration) ---
-
-// 1. Global Virtual Card Products
-mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_global_virtual_card_products` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `chimoney_product_id` VARCHAR(100) UNIQUE,
-    `name` VARCHAR(255),
-    `currency` VARCHAR(10) DEFAULT 'USD',
-    `description` TEXT,
-    `logo_url` TEXT,
-    `status` TINYINT(1) DEFAULT 1,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
-
-// 2. Vendor Virtual Card Installations & Profit Settings
-mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_vendor_virtual_card_products` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `vendor_id` INT,
-    `chimoney_product_id` VARCHAR(100),
-    `issuance_profit_usd` DECIMAL(10,2) DEFAULT 0.00,
-    `funding_profit_percent` DECIMAL(10,2) DEFAULT 0.00,
-    `status` TINYINT(1) DEFAULT 1,
-    `date_installed` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY `vendor_vc_product` (`vendor_id`, `chimoney_product_id`)
-)");
+// --- Virtual Card V2 (Flutterwave Integration) ---
 
 // 3. Modern Virtual Card Instances
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_virtual_cards_v2` (
@@ -1861,7 +1837,7 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_virtual_cards_
     `vendor_id` INT,
     `username` VARCHAR(100),
     `reference` VARCHAR(100) UNIQUE,
-    `chimoney_card_id` VARCHAR(255),
+    `provider_card_id` VARCHAR(255),
     `card_name` VARCHAR(255),
     `masked_pan` VARCHAR(25),
     `expiry_month` VARCHAR(5),
@@ -1871,12 +1847,24 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_virtual_cards_
     `status` ENUM('active', 'frozen', 'terminated') DEFAULT 'active',
     `is_frozen_auto` TINYINT(1) DEFAULT 0,
     `metadata` TEXT,
-    `provider` VARCHAR(50) DEFAULT 'chimoney',
+    `provider` VARCHAR(50) DEFAULT 'flutterwave',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX (`vendor_id`, `username`),
-    INDEX (`chimoney_card_id`)
+    INDEX (`provider_card_id`)
 )");
+
+// Section 39: the card-id column was named for a retired provider; rename it in
+// place on existing installs (data preserved). New installs already create it as
+// provider_card_id above, so this is a no-op for them.
+$vc2_cols_q = mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_virtual_cards_v2`");
+$vc2_existing = array();
+if ($vc2_cols_q) { while ($vc2_r = mysqli_fetch_assoc($vc2_cols_q)) $vc2_existing[] = $vc2_r['Field']; }
+if (in_array('chimoney_card_id', $vc2_existing) && !in_array('provider_card_id', $vc2_existing)) {
+    mysqli_query($connection_server, "ALTER TABLE `sas_virtual_cards_v2` CHANGE `chimoney_card_id` `provider_card_id` VARCHAR(255)");
+} elseif (in_array('chimoney_card_id', $vc2_existing) && in_array('provider_card_id', $vc2_existing)) {
+    mysqli_query($connection_server, "UPDATE `sas_virtual_cards_v2` SET `provider_card_id` = `chimoney_card_id` WHERE (`provider_card_id` IS NULL OR `provider_card_id` = '') AND `chimoney_card_id` IS NOT NULL");
+}
 
 // ── Android Push Notification: Device Token Registry ──────────────────────────
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_device_tokens (

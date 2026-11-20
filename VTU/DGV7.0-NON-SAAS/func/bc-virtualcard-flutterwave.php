@@ -2,7 +2,7 @@
 /**
  * DGV7 §25 — Virtual Dollar Card, Flutterwave ONLY.
  *
- * Every previously integrated virtual-card provider (Chimoney cards, BSICards)
+ * Every previously integrated third-party virtual-card provider
  * has been removed. Card issuance, funding, freeze and unfreeze all go through
  * the Flutterwave provider seam (bc-fintech-providers.php), so credentials come
  * from the gateway tables the vendor already maintains and every call fails
@@ -71,7 +71,7 @@ if (!function_exists('issueVirtualCardFlutterwave')) {
         $cvv_e = mysqli_real_escape_string($connection_server, $cvv);
         $amt = (float)$amount_usd;
         mysqli_query($connection_server, "INSERT INTO sas_virtual_cards_v2
-            (vendor_id, username, reference, chimoney_card_id, card_name, masked_pan, expiry_month, expiry_year, cvv, balance_usd, status, provider)
+            (vendor_id, username, reference, provider_card_id, card_name, masked_pan, expiry_month, expiry_year, cvv, balance_usd, status, provider)
             VALUES ('$vid', '$uname_e', '$ref_e', '$cid_e', '$name_e', '$pan_e', '$em_e', '$ey_e', '$cvv_e', '$amt', 'active', 'flutterwave')");
 
         return ['status' => 'success', 'message' => 'Card issued', 'reference' => $reference, 'card_id' => $card_id !== '' ? $card_id : $reference];
@@ -90,7 +90,7 @@ if (!function_exists('fundVirtualCardFlutterwave')) {
             return ['status' => 'error', 'message' => 'This is a legacy card from a retired provider and can no longer be funded. Please issue a new Flutterwave card.'];
         }
         $res = bc_vc_flw_call($vid, 'virtual_cards_fund', 'POST', [
-            'card_id' => (string)$card['chimoney_card_id'],
+            'card_id' => (string)$card['provider_card_id'],
             'reference' => (string)$card_ref,
             'currency' => 'USD',
             'amount' => (float)$amount_usd,
@@ -114,7 +114,7 @@ if (!function_exists('freezeVirtualCardFlutterwave')) {
             return ['status' => 'error', 'message' => 'Legacy cards from retired providers cannot be managed here.'];
         }
         $res = bc_vc_flw_call($vid, 'virtual_cards_status', 'PUT', [
-            'card_id' => (string)$card['chimoney_card_id'],
+            'card_id' => (string)$card['provider_card_id'],
             'reference' => (string)$card_ref,
             'status' => 'frozen',
         ]);
@@ -137,7 +137,7 @@ if (!function_exists('unfreezeVirtualCardFlutterwave')) {
             return ['status' => 'error', 'message' => 'Legacy cards from retired providers cannot be managed here.'];
         }
         $res = bc_vc_flw_call($vid, 'virtual_cards_status', 'PUT', [
-            'card_id' => (string)$card['chimoney_card_id'],
+            'card_id' => (string)$card['provider_card_id'],
             'reference' => (string)$card_ref,
             'status' => 'active',
         ]);

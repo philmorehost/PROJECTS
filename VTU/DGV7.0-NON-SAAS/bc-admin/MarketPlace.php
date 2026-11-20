@@ -26,7 +26,7 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
             
             // §28 marketplace category filter (chips below). Values map to api_type slugs.
         $market_cat = trim(strip_tags(strtolower($_GET["cat"] ?? "")));
-        $market_cat_allowed = array("airtime","shared-data","sme-data","cg-data","dd-data","betting","datacard","rechargecard","electric","cable","exam","bulk-sms","finance-hub","gift-card","chimoney","identity-verification","esim","virtual-card","intl-transfer","payment-gateway");
+        $market_cat_allowed = array("airtime","shared-data","sme-data","cg-data","dd-data","betting","datacard","rechargecard","electric","cable","exam","bulk-sms","finance-hub","gift-card","identity-verification","esim","virtual-card","intl-transfer","payment-gateway");
         if (!in_array($market_cat, $market_cat_allowed, true)) $market_cat = "";
         $cat_statement = ($market_cat !== "") ? " && api_type='".mysqli_real_escape_string($connection_server, $market_cat)."'" : "";
         $cat_parameter = ($market_cat !== "") ? "cat=".$market_cat."&&" : "";
@@ -94,7 +94,7 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
         if (function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : false) {
             if (!function_exists("bc_fintech_api_providers") && is_file(__DIR__ . "/../func/bc-fintech-api-access.php")) include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
             if (function_exists("bc_fintech_api_providers")) foreach (bc_fintech_api_providers() as $mkt_slug => $mkt_provider):
-                if (bc_fintech_api_has_access($get_logged_admin_details, $mkt_slug)) continue;
+                if (bc_fintech_api_access((int)($get_logged_admin_details["id"] ?? 0), $mkt_slug)) continue;
                 $mkt_price = (float)bc_fintech_api_price($mkt_slug);
         ?>
         <div class="card shadow-sm border-0 rounded-4 mb-4" style="background: linear-gradient(120deg, #0f172a, #1e293b); color:#fff;">

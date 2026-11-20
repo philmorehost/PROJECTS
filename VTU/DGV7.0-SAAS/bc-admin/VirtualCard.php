@@ -4,7 +4,7 @@ require_once("../func/bc-virtualcard-flutterwave.php");
 
 /**
  * DGV7 §25 — Virtual Card Manager (Flutterwave ONLY).
- * Chimoney and BSICards integrations were removed platform-wide. Card
+ * Retired third-party card integrations were removed platform-wide. Card
  * credentials are the vendor's Flutterwave gateway keys (Payment Gateway
  * page); issuance/funding/freeze run through func/bc-virtualcard-flutterwave.php
  * and fail closed until the Flutterwave card endpoints are configured.
@@ -69,7 +69,7 @@ bc_adm_head("Virtual Card Manager | " . ($get_all_super_admin_site_details["site
     <section class="section dashboard">
       <div class="alert alert-info border-0 rounded-4 shadow-sm">
         <strong><i class="bi bi-credit-card-2-front me-2"></i>Flutterwave is the only virtual-card provider.</strong>
-        Chimoney and BSICards have been removed. Card operations use your Flutterwave gateway keys —
+        Retired third-party providers have been removed. Card operations use your Flutterwave gateway keys —
         manage them under <a href="PaymentGateway.php" class="alert-link">Payment Gateway</a>. Legacy cards issued by retired
         providers are listed for reference and can no longer be funded or managed.
       </div>

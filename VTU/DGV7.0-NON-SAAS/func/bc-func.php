@@ -1331,11 +1331,11 @@ function transactionActionButton($api_id, $product_id, $transaction_ref, $transa
 			$product_transaction_action_button = '<a href="/web/ViewCard.php?ref=' . $transaction_ref . '" style="text-decoration: underline; color: green;" class="a-cursor">View Card</a>';
 		}
 
-		if (in_array($get_user_api_details["api_type"] ?? '', array("chimoney")) && strpos($transaction_type, "refund") === false) {
+		if (in_array($get_user_api_details["api_type"] ?? '', array("virtual-card")) && strpos($transaction_type, "refund") === false) {
 			$product_transaction_action_button = '<a href="/web/VirtualCard.php" style="text-decoration: underline; color: green;" class="a-cursor">View Virtual Card</a>';
 		}
 
-		if (!in_array($get_user_api_details["api_type"] ?? '', array("electric", "datacard", "rechargecard", "chimoney")) && strpos($transaction_type, "refund") === false) {
+		if (!in_array($get_user_api_details["api_type"] ?? '', array("electric", "datacard", "rechargecard", "virtual-card")) && strpos($transaction_type, "refund") === false) {
 			$product_transaction_action_button = '-';
 		}
 		$product_transaction_requery_button = '<a href="/web/Transactions.php?requery=' . $transaction_ref . '" style="text-decoration: underline; color: red;" class="a-cursor">Requery</a>';
@@ -1405,11 +1405,11 @@ function adminTransactionActionButton($api_id, $product_id, $transaction_ref, $t
 			$product_transaction_action_button = '<a href="/web/ViewCard.php?ref=' . $transaction_ref . '" style="text-decoration: underline; color: green;" class="a-cursor">View Card</a>';
 		}
 
-		if (in_array($get_user_api_details["api_type"] ?? '', array("chimoney")) && strpos($transaction_type, "refund") === false) {
+		if (in_array($get_user_api_details["api_type"] ?? '', array("virtual-card")) && strpos($transaction_type, "refund") === false) {
 			$product_transaction_action_button = '<a href="/web/VirtualCard.php" style="text-decoration: underline; color: green;" class="a-cursor">View Virtual Card</a>';
 		}
 
-		if (!in_array($get_user_api_details["api_type"] ?? '', array("electric", "datacard", "rechargecard", "chimoney")) && strpos($transaction_type, "refund") === false) {
+		if (!in_array($get_user_api_details["api_type"] ?? '', array("electric", "datacard", "rechargecard", "virtual-card")) && strpos($transaction_type, "refund") === false) {
 			$product_transaction_action_button = 'Successful';
 		}
 
