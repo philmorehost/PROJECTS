@@ -483,6 +483,14 @@ if ($connection_server) {
                 exit();
             }
         }
+        // §33: platform "logout all sessions" — a session stamped under an
+        // older epoch is destroyed (apps are revoked in sas_app_tokens).
+        if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
+            session_destroy();
+            header('Location: /web/Login.php');
+            exit();
+        }
+
 
 				// Check for KYC Expiry
 				if ($get_logged_user_details['kyc_status'] == 2 && !empty($get_logged_user_details['kyc_id_expiry'])) {
@@ -583,6 +591,22 @@ if ($connection_server) {
 						);
 						if (in_array($current_p, $kyc_enforced_pages)) {
 							$_SESSION["product_purchase_response"] = "Action Restricted: You must complete your KYC Verification (Video/Picture/ID) to perform transactions.";
+							header("Location: /web/KYCVerification.php");
+							exit();
+						}
+					}
+
+
+					// §33: whole-console KYC confinement. While forced KYC is on and
+					// this account is not approved (kyc_status 2), EVERY console page
+					// stays locked except the compliance flow itself. Accounts under
+					// review (1) remain locked while they wait for an admin decision.
+					$sec33_required_checks = function_exists('bc_kyc_enabled_checks') ? bc_kyc_enabled_checks($connection_server, $vendor_id) : [];
+					if ($master_force_kyc && !empty($sec33_required_checks) && (int)$get_logged_user_details["kyc_status"] !== 2) {
+						$sec33_uri = explode("?", trim($_SERVER["REQUEST_URI"] ?? ""))[0];
+						$sec33_allowed = array("/web/KYCVerification.php", "/web/AccountSettings.php", "/web/SecurityQuest.php", "/logout.php");
+						if (!in_array($sec33_uri, $sec33_allowed, true)) {
+							$_SESSION["product_purchase_response"] = "Action Restricted: please complete your identity verification (KYC) to unlock the console. Access returns after an admin approves your submission.";
 							header("Location: /web/KYCVerification.php");
 							exit();
 						}

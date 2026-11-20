@@ -105,6 +105,60 @@
         exit();
     }
     
+    // §33/§10: user account actions (activate / block / delete, API status,
+    // permanent delete, "login as user") are POST + CSRF + step-up only.
+    // Activations, API enablement, deletes and impersonation need Security
+    // PIN + authenticator/email code; blocking / API disable need the PIN.
+    $sec33_gate_ok = false;
+    if (isset($_POST['sec33_send_code'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'user_account_action', 'User Account Action')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
+        header("Location: /bc-admin/Users.php");
+        exit();
+    }
+    if (isset($_POST['sec33_user_action'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_mode = (string)$_POST['sec33_user_action'];
+        $sec33_status = (string)($_POST['sec33_status'] ?? '');
+        $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+        $sec33_pin_only = ($sec33_mode === 'status' && $sec33_status === '2') || ($sec33_mode === 'api' && $sec33_status === '2');
+        $sec33_input = $sec33_pin_only
+            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1]
+            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        $sec33_err = function_exists('bc_stepup_admin_verify')
+            ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'user_account_action')
+            : 'Verification is unavailable.';
+        if ($sec33_err !== '') {
+            $_SESSION["product_purchase_response"] = "Error: " . $sec33_err;
+            header("Location: /bc-admin/Users.php");
+            exit();
+        }
+        $sec33_gate_ok = true;
+        $GLOBALS['sec33_verified'] = true;
+        if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'user_' . $sec33_mode . '_action', 'user#' . (int)($_POST['account-user-id'] ?? 0), $sec33_mode . ' ' . $sec33_status);
+        if ($sec33_mode === 'status') {
+            $_GET['account-status'] = $sec33_status;
+            $_GET['account-user-id'] = $_POST['account-user-id'] ?? '';
+            $_GET['account-username'] = $_POST['account-username'] ?? '';
+        } elseif ($sec33_mode === 'api') {
+            $_GET['account-api-status'] = $sec33_status;
+            $_GET['account-user-id'] = $_POST['account-user-id'] ?? '';
+            $_GET['account-username'] = $_POST['account-username'] ?? '';
+        } elseif ($sec33_mode === 'log') {
+            $_GET['account-log'] = $_POST['account-user-id'] ?? '';
+        } elseif ($sec33_mode === 'permanent') {
+            $_POST['permanent-delete-user'] = '1';
+        }
+    }
+    if (!$sec33_gate_ok && (isset($_GET["account-status"]) || isset($_GET["account-api-status"]) || isset($_GET["account-log"]))) {
+        $_SESSION["product_purchase_response"] = "Error: that action now needs the secure confirmation form (PIN + authenticator code).";
+        header("Location: /bc-admin/Users.php");
+        exit();
+    }
+
     if(isset($_GET["account-status"])){
         $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["account-status"])));
         $account_user = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["account-username"])));
@@ -218,6 +272,12 @@
     }
 
     if(isset($_POST["permanent-delete-user"])){
+        // §33: permanent deletion only via the step-up gate above.
+        if (empty($GLOBALS['sec33_verified'])) {
+            $_SESSION["product_purchase_response"] = "Error: permanent deletion needs the secure confirmation form (PIN + authenticator code).";
+            header("Location: /bc-admin/Users.php");
+            exit();
+        }
         $account_user = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["account-username"])));
         $delete_user = mysqli_query($connection_server, "DELETE FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && username='$account_user' && status='3'");
 
@@ -688,7 +748,7 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             confirmButtonText: 'Yes, proceed'
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = `Users.php?account-status=${status}&account-username=${username}`;
+                sec33OpenUserModal('status', status, 0, username, action + ' Account?', `Are you sure you want to ${action.toLowerCase()} account for @${username}? PIN + authenticator code required (PIN only to block). Audited.`, 'Yes, proceed');
             }
         });
     }
@@ -703,7 +763,7 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             confirmButtonText: 'Yes, proceed'
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = `Users.php?account-api-status=${status}&account-username=${username}`;
+                sec33OpenUserModal('api', status, 0, username, action + ' API?', `Are you sure you want to ${action.toLowerCase()} API access for @${username}? PIN + authenticator code required (PIN only to disable). Audited.`, 'Yes, proceed');
             }
         });
     }
@@ -717,7 +777,7 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             confirmButtonText: 'Yes, login'
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = `Users.php?account-log=${id}`;
+                sec33OpenUserModal('log', '', id, username, 'Login as User?', `You are about to login to @${username}'s account. PIN + authenticator code required. Audited.`, 'Yes, login');
             }
         });
     }
@@ -757,6 +817,10 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             confirmButtonText: 'Yes, delete it permanently!'
         }).then((result) => {
             if (result.isConfirmed) {
+                sec33OpenUserModal('permanent', '', 0, username, 'Permanently delete?', "This will permanently delete the account for @" + username + ". This cannot be undone! PIN + authenticator code required. Audited.", 'Delete permanently');
+                return;
+            }
+            if (false) {
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = 'Users.php';
@@ -782,5 +846,39 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
     
 
 
+
+
+    <!-- §33: step-up confirmation for user account actions -->
+    <div class="modal fade" id="sec33UserModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form method="post" class="modal-content rounded-4 border-0">
+          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33UserTitle">Confirm action</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <div class="modal-body">
+            <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+            <input type="hidden" name="sec33_user_action" id="sec33UserMode" value="">
+            <input type="hidden" name="sec33_status" id="sec33UserStatus" value="">
+            <input type="hidden" name="account-user-id" id="sec33UserId" value="">
+            <input type="hidden" name="account-username" id="sec33UserName" value="">
+            <p class="text-muted small" id="sec33UserText"></p>
+            <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
+            <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE</label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
+            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+          </div>
+          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33UserBtn">Confirm</button></div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function sec33OpenUserModal(mode, status, id, username, title, text, btn) {
+        document.getElementById('sec33UserMode').value = mode;
+        document.getElementById('sec33UserStatus').value = status || '';
+        document.getElementById('sec33UserId').value = id || '';
+        document.getElementById('sec33UserName').value = username || '';
+        document.getElementById('sec33UserTitle').textContent = title;
+        document.getElementById('sec33UserText').textContent = text;
+        document.getElementById('sec33UserBtn').textContent = btn;
+        new bootstrap.Modal(document.getElementById('sec33UserModal')).show();
+    }
+    </script>
 
 <?php bc_adm_foot(array("area" => "admin")); ?>

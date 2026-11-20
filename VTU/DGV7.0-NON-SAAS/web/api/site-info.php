@@ -16,6 +16,9 @@ if ($get_vendor) {
 
     // Check which services are enabled
     $services = array();
+    // §33: effective registration state for the mobile App (hides sign-up when off).
+    $services['registration'] = (function_exists('bc_registration_enabled') && !bc_registration_enabled($vendor_id)) ? 0 : 1;
+    if (file_exists(__DIR__ . '/../../func/bc-stepup.php')) { include_once(__DIR__ . '/../../func/bc-stepup.php'); }
     $get_sc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vendor_id'");
     while($row = mysqli_fetch_assoc($get_sc)){
         $services[$row['service_name']] = (int)$row['status'];

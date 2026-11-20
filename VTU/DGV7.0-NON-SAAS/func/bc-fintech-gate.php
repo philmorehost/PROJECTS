@@ -455,6 +455,20 @@ if (!function_exists('bc_fintech_api_credential')) {
         $decision = bc_fintech_app_access($user);
         if (!$decision['allowed']) bc_fintech_send_app_denial($decision);
 
+        // §33: KYC confinement for the mobile App. While forced KYC is on and
+        // the account is not approved, every token-authenticated endpoint is
+        // locked except the compliance flow itself (KYC status/submission,
+        // profile so the user can see their status, and sign-out).
+        if (function_exists('bc_kyc_app_confinement_required') && bc_kyc_app_confinement_required($user)) {
+            $sec33_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+            if (!in_array($sec33_script, array('kyc.php', 'profile.php', 'logout.php'), true)) {
+                bc_fintech_send_app_denial(array(
+                    'http' => 403, 'code' => 'KYC_REQUIRED',
+                    'message' => 'Please complete your identity verification (KYC). Access returns after an admin approves your submission.',
+                ));
+            }
+        }
+
         $GLOBALS['bc_api_auth_mode'] = 'app_token';
         $GLOBALS['bc_api_auth_user'] = $user;
 

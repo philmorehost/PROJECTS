@@ -47,6 +47,7 @@
                             recordLoginAttempt($email, $ip, 1, 0);
 
 							$_SESSION["spadmin_session"] = strtolower($admin_detail["email"]);
+							if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
 							//Welcome Back Message
 							$json_response_array = array("desc" => "Welcome Back, ".ucwords($admin_detail["firstname"]));
 							$json_response_encode = json_encode($json_response_array,true);

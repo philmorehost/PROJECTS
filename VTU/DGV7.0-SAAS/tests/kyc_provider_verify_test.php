@@ -112,10 +112,13 @@ echo "== A. the decision (executed from the shipped helper) ==\n";
 $match = array('status' => 'success', 'firstname' => 'Ada', 'lastname' => 'Obi', 'provider' => 'dojah');
 
 // 1. The vendor only requires BVN, and the provider matched it to this account holder.
+// §33: nothing is approved automatically any more - a complete, provider-proved
+// submission joins the admin review queue (kyc_status 1) and waits for a person.
 $r = kyc_reset(array('bvn'), array(), $match);
 bc_assert('provider match + BVN-only vendor -> verified', $r['status'], 'verified');
-bc_assert('...and approved automatically', $r['auto_approved'], true);
-bc_assert('...with kyc_status 2', $r['kyc_status'], 2);
+bc_assert('...but NOT approved automatically (§33)', $r['auto_approved'], false);
+bc_assert('...it waits for admin review with kyc_status 1', $r['kyc_status'], 1);
+bc_assert_true('...and the user is told review comes next', strpos($r['message'], 'waiting for admin review') !== false);
 bc_assert('the verified number is stored', $GLOBALS['k_user']['bvn'], '12345678901');
 bc_assert('the number is marked provider-verified', (string)$GLOBALS['k_user']['kyc_api_verified'], '1');
 bc_assert('the provider is recorded', $GLOBALS['k_user']['kyc_provider'], 'dojah');
@@ -129,15 +132,18 @@ bc_assert_true('...and the reviewer is told what to look at', strpos($r['message
 bc_assert('...nothing is outstanding from the provider side', $r['still_needed'], array());
 bc_assert('the identity is still marked verified', (string)$GLOBALS['k_user']['kyc_api_verified'], '1');
 
-// 3. A vendor wanting BVN *and* NIN: one proved, one outstanding -> still manual.
+// 3. A vendor wanting BVN *and* NIN: one proved, one outstanding.
+// §33: an incomplete submission never enters the review queue at all.
 $r = kyc_reset(array('bvn', 'nin'), array(), $match);
 bc_assert('second API check outstanding -> not approved', $r['auto_approved'], false);
-bc_assert('...pending review', $r['kyc_status'], 1);
+bc_assert('...and not yet in the review queue', $r['kyc_status'], 0);
 bc_assert('...with NIN listed as still needed', $r['still_needed'], array('nin'));
 
-// 4. A stale rejection is cleared by a successful verification + approval.
+// 4. A stale rejection is cleared by a successful verification; the file
+// re-enters the review queue (§33) instead of being approved automatically.
 $r = kyc_reset(array('bvn'), array('kyc_status' => 3, 'kyc_reject_reason' => 'blurry'), $match);
-bc_assert('a re-verification approves again', $r['auto_approved'], true);
+bc_assert('a re-verification is not auto-approved (§33)', $r['auto_approved'], false);
+bc_assert('...it re-enters the review queue', $r['kyc_status'], 1);
 bc_assert('...and clears the old rejection reason', $GLOBALS['k_user']['kyc_reject_reason'], null);
 
 // 5. An already-verified account is never downgraded by a second verification.

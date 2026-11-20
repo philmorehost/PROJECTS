@@ -374,13 +374,14 @@ function tickProduct(element, networkName, productID, buttonID, fileExt) {
     }
     
     function updateUserAccountStatus(status, user){
+    	// §33: user account actions are POST + CSRF + step-up now (see Users.php sec33OpenUserModal).
     	var statusArray = ["1","2","3"];
     	var actionArray = {"1":"activate", "2":"block", "3":"delete"};
     	if(Number(status) && (statusArray.indexOf(status) !== -1)){
-    		if(confirm("Are you sure you want to "+actionArray[status]+" "+user+"'s account?")){
-    			window.location.href = "/bc-admin/Users.php?account-status="+status+"&account-username="+user;
+    		if(typeof sec33OpenUserModal === "function"){
+    			sec33OpenUserModal('status', String(status), 0, user, 'Confirm user action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account? This needs your Security PIN (plus an authenticator code to activate or delete) and is audited.", 'Confirm');
     		}else{
-    			alert("Action Cancelled");
+    			alert("Open the Users page to perform this action securely.");
     		}
     	}else{
     		alert("Invalid Account Status");
@@ -388,13 +389,14 @@ function tickProduct(element, networkName, productID, buttonID, fileExt) {
     }
 
     function updateUserAccountAPIStatus(status, user){
+    	// §33: see updateUserAccountStatus above.
     	var statusArray = ["1","2"];
     	var actionArray = {"1":"activate", "2":"block"};
     	if(Number(status) && (statusArray.indexOf(status) !== -1)){
-    		if(confirm("Are you sure you want to "+actionArray[status]+" "+user+"'s account API Gateway?")){
-    			window.location.href = "/bc-admin/Users.php?account-api-status="+status+"&account-username="+user;
+    		if(typeof sec33OpenUserModal === "function"){
+    			sec33OpenUserModal('api', String(status), 0, user, 'Confirm API action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account API Gateway? This needs your Security PIN (plus an authenticator code to activate) and is audited.", 'Confirm');
     		}else{
-    			alert("Action Cancelled");
+    			alert("Open the Users page to perform this action securely.");
     		}
     	}else{
     		alert("Invalid Account API Status");
@@ -404,10 +406,11 @@ function tickProduct(element, networkName, productID, buttonID, fileExt) {
     function loginUserAccount(idNumber, user){
         if(Number(idNumber) && (idNumber >= 1)){
             if(user.trim() !== ""){
-                if(confirm("Are you sure you want to Login "+user+"'s account?")){
-                    window.location.href = "/bc-admin/Users.php?account-log="+idNumber;
+                // §33: impersonation is POST + CSRF + step-up (see Users.php).
+                if(typeof sec33OpenUserModal === "function"){
+                    sec33OpenUserModal('log', '', idNumber, user, 'Login as User?', "You are about to login to "+user+"'s account. PIN + authenticator code required. Audited.", 'Yes, login');
                 }else{
-                    alert("Action Cancelled");
+                    alert("Open the Users page to perform this action securely.");
                 }
             }else{
                 alert("Error: User is missing");

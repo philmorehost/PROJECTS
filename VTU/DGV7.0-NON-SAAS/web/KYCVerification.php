@@ -131,22 +131,24 @@ if (isset($_POST['submit_media'])) {
         if (!empty($_POST['selfie_live']) && $selfie_filename !== '') {
             $updates[] = "liveliness_picture = '" . mysqli_real_escape_string($connection_server, $selfie_filename) . "'";
         }
-        $updates[] = "kyc_status = 1";           // back into the review queue
-        $updates[] = "kyc_submitted_at = NOW()"; // the submission clock, not the account's reg_date
         $updates[] = "kyc_reject_reason = NULL"; // a new submission clears the previous rejection
 
         mysqli_query($connection_server, "UPDATE sas_users SET " . implode(", ", $updates) . " WHERE id='$user_id' AND vendor_id='$vid'");
 
-        // Tell the user exactly what is still missing instead of a bare "submitted".
+        // §33: a submission only enters the admin review queue once EVERY
+        // required item has been provided. Partial uploads are saved, the
+        // account stays unverified, and the user is told what is missing.
         $q_after = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
         $after = $q_after ? (mysqli_fetch_assoc($q_after) ?: []) : [];
         $still = $enabled_checks ? bc_kyc_checks_pending($after, $enabled_checks) : [];
-        $msg = "Documents submitted and waiting for review.";
-        if (!empty($still)) {
-            $still_names = array_map('bc_kyc_check_label', $still);
-            $msg .= " Still needed: " . implode(', ', $still_names) . ".";
+        if (empty($still) && (int)($after['kyc_status'] ?? 0) !== 2) {
+            mysqli_query($connection_server, "UPDATE sas_users SET kyc_status = 1, kyc_submitted_at = NOW() WHERE id='$user_id' AND vendor_id='$vid'");
+            $msg = "Documents submitted and waiting for admin review. Every required item is now provided.";
+        } elseif ((int)($after['kyc_status'] ?? 0) === 2) {
+            $msg = "Documents updated. Your account remains verified.";
         } else {
-            $msg .= " Everything your provider requires is now with them.";
+            $still_names = array_map('bc_kyc_check_label', $still);
+            $msg = "Documents saved. Still needed before your submission can be reviewed: " . implode(', ', $still_names) . ".";
         }
         $_SESSION['product_purchase_response'] = $msg;
 
@@ -160,7 +162,7 @@ if (isset($_POST['submit_media'])) {
                 if ($user_reread) {
                     $analysis = bc_kyc_ai_analyze_all($user_reread, $enabled_checks);
                     $analysis['username'] = $user_reread['username'];
-                    $auto_apply = (int)($vendor_kyc_ai['kyc_ai_auto_approve'] ?? 1) === 1;
+                    $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
                     $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
                     if ($store_result['applied']) {
                         $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC automatically! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
@@ -211,7 +213,7 @@ if (isset($_POST['ai_analyze'])) {
     }
     $analysis = bc_kyc_ai_analyze_all($user_row, $enabled_checks);
     $analysis['username'] = $user_row['username'];
-    $auto_apply = (int)($vendor_kyc_ai['kyc_ai_auto_approve'] ?? 1) === 1;
+    $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
     $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
     if ($store_result['applied']) {
         $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";

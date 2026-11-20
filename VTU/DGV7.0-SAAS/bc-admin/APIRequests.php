@@ -1,6 +1,46 @@
 <?php session_start();
 include("../func/bc-admin-config.php");
 
+// §33/§10: API access decisions are POST + CSRF + step-up only — approvals need the
+// full Security PIN + authenticator/email code; rejections need the PIN.
+// Bare GET links can no longer perform them.
+$sec33_gate_ok = false;
+if (isset($_POST['sec33_send_code'])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'api_request_decision', 'API Access Decision')
+        : 'Verification is unavailable.';
+    $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
+    header("Location: APIRequests.php");
+    exit();
+}
+if (isset($_POST['sec33_action']) && isset($_POST['sec33_id'])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $sec33_action = (string)$_POST['sec33_action'];
+    $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+    if ($sec33_action === 'approve') {
+        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+    } else {
+        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+    }
+    $sec33_err = function_exists('bc_stepup_admin_verify')
+            ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'api_request_decision')
+            : 'Verification is unavailable.';
+    if ($sec33_err !== '') {
+        $_SESSION["product_purchase_response"] = "Error: " . $sec33_err;
+        header("Location: APIRequests.php");
+        exit();
+    }
+    $sec33_gate_ok = true;
+    if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'api_request_' . $sec33_action, 'request#' . (int)$_POST['sec33_id'], '');
+    $_GET[$sec33_action] = (string)(int)$_POST['sec33_id'];
+}
+if (!$sec33_gate_ok && (isset($_GET["approve"]) || isset($_GET["reject"]))) {
+    $_SESSION["product_purchase_response"] = "Error: that action now needs the secure confirmation form (PIN + authenticator code).";
+    header("Location: APIRequests.php");
+    exit();
+}
+
 if (isset($_GET["approve"])) {
 	$req_id = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["approve"])));
 	$get_req = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_api_requests WHERE id='$req_id' AND vendor_id='" . $get_logged_admin_details["id"] . "' AND status='pending'"));
@@ -79,8 +119,8 @@ bc_adm_head("API Access Requests | Admin", array("area" => "admin"));
 												<td class="text-center">
 													<?php if ($row['status'] == 'pending') { ?>
 														<div class="d-flex gap-2 justify-content-center">
-															<a href="?approve=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm rounded-pill px-3" onclick="return confirm('Approve this request? User will be upgraded to API level.')">Approve</a>
-															<a href="?reject=<?php echo $row['id']; ?>" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="return confirm('Reject this request?')">Reject</a>
+															<button type="button" class="btn btn-primary btn-sm rounded-pill px-3" onclick="sec33ApiAction('approve', <?php echo (int)$row['id']; ?>, 'Approve API access?', 'The user will be upgraded to API level. This needs your PIN + authenticator code and is audited.', 'Approve')">Approve</button>
+															<button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="sec33ApiAction('reject', <?php echo (int)$row['id']; ?>, 'Reject API request?', 'Reject this API access request? This needs your Security PIN and is audited.', 'Reject')">Reject</button>
 														</div>
 													<?php } else { ?>
 														<span class="text-muted small">-</span>
@@ -105,5 +145,35 @@ bc_adm_head("API Access Requests | Admin", array("area" => "admin"));
 	
 
 
+
+
+    <!-- §33: step-up confirmation -->
+    <div class="modal fade" id="sec33Modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form method="post" class="modal-content rounded-4 border-0">
+          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33Title">Confirm action</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <div class="modal-body">
+            <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+            <input type="hidden" name="sec33_action" id="sec33Action" value="">
+            <input type="hidden" name="sec33_id" id="sec33Id" value="">
+            <p class="text-muted small" id="sec33Text"></p>
+            <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
+            <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE <span class="fw-normal">(approvals)</span></label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
+            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+          </div>
+          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33Btn">Confirm</button></div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function sec33ApiAction(action, id, title, text, btn) {
+        document.getElementById('sec33Action').value = action;
+        document.getElementById('sec33Id').value = id;
+        document.getElementById('sec33Title').textContent = title;
+        document.getElementById('sec33Text').textContent = text;
+        document.getElementById('sec33Btn').textContent = btn;
+        new bootstrap.Modal(document.getElementById('sec33Modal')).show();
+    }
+    </script>
 
 <?php bc_adm_foot(array("area" => "admin")); ?>

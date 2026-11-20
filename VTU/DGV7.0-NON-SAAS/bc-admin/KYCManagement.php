@@ -36,6 +36,16 @@ if (count($vendor_kyc_checks) > 12) $vendor_kyc_checks = array_slice($vendor_kyc
 // could approve or reject a user without their knowledge. The reject path also wrote kyc_status 0
 // (Unverified) rather than 3 (Rejected) and stored no reason, which made a rejected submission
 // indistinguishable from an account that never submitted anything.
+if (isset($_POST['sec33_send_code'])) {
+    bc_validate_csrf();
+    $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        ? bc_stepup_send_email_otp((int)$vid, (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'kyc_decision', 'KYC Decision')
+        : 'Verification is unavailable.';
+    $_SESSION['product_purchase_response'] = $sec33_send_err === '' ? 'Verification code sent to your email.' : 'Error: ' . $sec33_send_err;
+    header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1));
+    exit();
+}
+
 if (isset($_POST['kyc_decision'])) {
     bc_validate_csrf();
     $uid      = (int)($_POST['uid'] ?? 0);
@@ -50,6 +60,24 @@ if (isset($_POST['kyc_decision'])) {
     } elseif ($decision['status'] === 3 && $reason === '') {
         $_SESSION['product_purchase_response'] = 'Error: a rejection needs a reason, so the user knows what to fix.';
     } else {
+        // §33/§8: compliance decisions are step-up gated — approvals need the
+        // full PIN + authenticator/email code; other decisions need the PIN.
+        $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+        $sec33_input = ((int)$decision['status'] === 2)
+            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
+            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+        $sec33_err = function_exists('bc_stepup_admin_verify')
+            ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'kyc_decision')
+            : 'Verification is unavailable.';
+        if ($sec33_err !== '') {
+            $_SESSION['product_purchase_response'] = 'Error: ' . $sec33_err;
+            header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1)
+                . "&page=" . max(1, (int)($_POST['return_page'] ?? 1))
+                . "&per_page=" . (int)($_POST['return_per_page'] ?? 25));
+            exit();
+        }
+        if (function_exists('bc_sec_audit')) bc_sec_audit((int)$vid, 'admin', (string)$get_logged_admin_details['email'], 'kyc_decision_' . (int)$decision['status'], 'user#' . $uid, (string)($decision['label'] ?? ''));
+
         $reason_esc = mysqli_real_escape_string($connection_server, $decision['reason']);
         mysqli_query($connection_server, "UPDATE sas_users SET
                 kyc_status='" . (int)$decision['status'] . "',
@@ -460,6 +488,10 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
                       <textarea name="reason" class="form-control" rows="2"
                         placeholder="Reason (required when rejecting) - the user is shown this."><?php echo htmlspecialchars($ru_status === 3 ? (string)$review_user['kyc_reject_reason'] : ''); ?></textarea>
                     </div>
+                    <div class="row g-2 mb-2">
+                      <div class="col-md-6"><input type="password" name="sec_pin" class="form-control" placeholder="Your Security PIN" autocomplete="off"></div>
+                      <div class="col-md-6"><input name="sec_factor" class="form-control" placeholder="Authenticator / email code (approve)"></div>
+                    </div>
                     <div class="d-flex flex-wrap gap-2">
                       <button type="submit" name="kyc_decision" value="approve" class="btn btn-success rounded-pill px-4"
                         onclick="return confirm('Approve this user\'s KYC?');">Approve</button>
@@ -469,8 +501,13 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
                     </div>
                   </form>
                   <p class="small text-muted mt-2 mb-0">
-                    Approving gives the user full access (kyc_status = Verified). Rejecting stores the reason so they can fix it and resubmit.
+                    Approving gives the user full access (kyc_status = Verified) and needs your Security PIN + authenticator code (or an emailed code). Rejecting needs the PIN and a reason the user can act on.
                   </p>
+                  <form method="post" action="KYCManagement.php" class="mt-2">
+                    <?php echo bc_csrf_field(); ?>
+                    <input type="hidden" name="return_status" value="<?php echo $status_filter; ?>">
+                    <button type="submit" name="sec33_send_code" class="btn btn-outline-secondary btn-sm rounded-pill">Email me a verification code</button>
+                  </form>
                 </div>
               </div>
             </div>
@@ -615,6 +652,8 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
                                                 <input type="hidden" name="return_status" value="<?php echo (int)$status_filter; ?>">
                                                 <input type="hidden" name="return_page" value="<?php echo (int)$page; ?>">
                                                 <input type="hidden" name="return_per_page" value="<?php echo (int)$per_page; ?>">
+                                                <input type="password" name="sec_pin" class="form-control form-control-sm d-inline-block" style="width:110px" placeholder="PIN" autocomplete="off">
+                                                <input name="sec_factor" class="form-control form-control-sm d-inline-block" style="width:130px" placeholder="Auth code">
                                                 <button type="submit" name="kyc_decision" value="approve" class="btn btn-success btn-sm rounded-pill px-3"
                                                         onclick="return confirm('Approve @<?php echo htmlspecialchars($user['username']); ?> without opening the file?');">Approve</button>
                                             </form>

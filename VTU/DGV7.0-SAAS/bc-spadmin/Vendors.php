@@ -1,6 +1,56 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
     
+    // §33/§9+§10: vendor account actions (activate / suspend / delete) and
+    // vendor impersonation ("login as vendor") are POST + CSRF + step-up
+    // only. Approvals and deletes need Security PIN + authenticator/email
+    // code; suspending needs the PIN. A bare GET link can no longer do any
+    // of this.
+    $sec33_gate_ok = false;
+    if (isset($_POST['sec33_send_code'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'vendor_account_action', 'Vendor Account Action')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
+        header("Location: /bc-spadmin/Vendors.php");
+        exit();
+    }
+    if (isset($_POST['sec33_vendor_action'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_mode = (string)$_POST['sec33_vendor_action'];
+        $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+        $sec33_status = (string)($_POST['account-status'] ?? '');
+        if ($sec33_mode === 'status' && $sec33_status === '2') {
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+        } else {
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        }
+        $sec33_err = function_exists('bc_stepup_spadmin_verify')
+            ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'vendor_account_action')
+            : 'Verification is unavailable.';
+        if ($sec33_err !== '') {
+            $_SESSION["product_purchase_response"] = "Error: " . $sec33_err;
+            header("Location: /bc-spadmin/Vendors.php");
+            exit();
+        }
+        $sec33_gate_ok = true;
+        if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'vendor_' . $sec33_mode . '_action', 'vendor#' . (int)($_POST['account-id'] ?? $_POST['account-log'] ?? 0), $sec33_mode === 'status' ? ('status ' . $sec33_status) : 'impersonation login');
+        if ($sec33_mode === 'status') {
+            $_GET['account-status'] = $_POST['account-status'] ?? '';
+            $_GET['account-id'] = $_POST['account-id'] ?? '';
+            $_GET['account-username'] = $_POST['account-username'] ?? '';
+        } else {
+            $_GET['account-log'] = $_POST['account-log'] ?? '';
+            $_GET['type'] = $_POST['type'] ?? '';
+        }
+    }
+    if (!$sec33_gate_ok && (isset($_GET["account-status"]) || isset($_GET["account-log"]))) {
+        $_SESSION["product_purchase_response"] = "Error: that action now needs the secure confirmation form (PIN + authenticator code).";
+        header("Location: /bc-spadmin/Vendors.php");
+        exit();
+    }
+
     if(isset($_GET["account-status"])){
         $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["account-status"])));
         $account_user = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["account-username"])));
@@ -85,7 +135,6 @@
                 if(mysqli_num_rows($get_logged_user_query) == 1){
                     $get_user_info = mysqli_fetch_array($get_logged_user_query);
                     $_SESSION["vendor_email"] = $get_user_info["email"];
-                    $_SESSION["vendor_pass"] = $get_user_info["password"];
                     $_SESSION["admin_to_vendor_redirect_hostname"] = $get_user_info["website_url"];
                 }else{
                     if(mysqli_num_rows($get_logged_user_query) < 1){
@@ -451,6 +500,44 @@ bc_adm_head('', array("area" => "spadmin"));
 
     
     
+
+    <!-- §33: step-up confirmation for vendor account actions -->
+    <div class="modal fade" id="sec33VendorModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form method="post" class="modal-content rounded-4 border-0">
+          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33VendorModalTitle">Confirm action</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <div class="modal-body">
+            <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+            <input type="hidden" name="sec33_vendor_action" id="sec33Mode" value="status">
+            <input type="hidden" name="account-status" id="sec33Status" value="">
+            <input type="hidden" name="account-id" id="sec33Id" value="">
+            <input type="hidden" name="account-username" id="sec33User" value="">
+            <input type="hidden" name="account-log" id="sec33Log" value="">
+            <input type="hidden" name="type" id="sec33Type" value="">
+            <p class="text-muted small" id="sec33VendorModalText"></p>
+            <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
+            <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE <span class="fw-normal">(not needed to suspend)</span></label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
+            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+          </div>
+          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33VendorModalBtn">Confirm</button></div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function sec33OpenVendorModal(mode, status, id, email, title, text, btn, type) {
+        document.getElementById('sec33Mode').value = mode;
+        document.getElementById('sec33Status').value = status || '';
+        document.getElementById('sec33Id').value = id || '';
+        document.getElementById('sec33User').value = email || '';
+        document.getElementById('sec33Log').value = mode === 'log' ? (id || '') : '';
+        document.getElementById('sec33Type').value = type || '';
+        document.getElementById('sec33VendorModalTitle').textContent = title;
+        document.getElementById('sec33VendorModalText').textContent = text;
+        document.getElementById('sec33VendorModalBtn').textContent = btn;
+        new bootstrap.Modal(document.getElementById('sec33VendorModal')).show();
+    }
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
     function loginVendorAccount(id, email) {
@@ -464,7 +551,7 @@ bc_adm_head('', array("area" => "spadmin"));
             cancelButtonColor: '#6c757d'
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = `Vendors.php?account-log=${id}`;
+                sec33OpenVendorModal('log', '', id, email, 'Login as vendor?', `You will be logged into ${email}'s dashboard. This needs your PIN + authenticator code and is audited.`, 'Login as vendor');
             }
         });
     }
@@ -487,7 +574,7 @@ bc_adm_head('', array("area" => "spadmin"));
             cancelButtonColor: '#6c757d'
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = `Vendors.php?account-status=${status}&account-id=${id}&account-username=${email}`;
+                sec33OpenVendorModal('status', status, id, email, config.title, config.text + ' This needs your Security PIN (plus an authenticator code to activate or delete) and is audited.', config.btn);
             }
         });
     }

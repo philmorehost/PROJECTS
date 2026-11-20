@@ -485,7 +485,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 								<p class="text-white-50 mb-4">Login or Create an account to view your unique API credentials.</p>
 								<div class="d-flex gap-3 justify-content-center">
 									<a href="Login.php" class="btn btn-outline-light rounded-pill px-5">Login</a>
-									<a href="Register.php" class="btn btn-primary rounded-pill px-5">Register</a>
+									<?php if (!function_exists('bc_registration_enabled') || bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))): ?><a href="Register.php" class="btn btn-primary rounded-pill px-5">Register</a><?php endif; ?>
 								</div>
 							</div>
 						<?php } ?>

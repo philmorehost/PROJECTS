@@ -414,6 +414,7 @@ if (isset($_POST["update-verification"])) {
                                 $update_fields = "bvn='$bvn_nin'";
                             }
                             mysqli_query($connection_server, "UPDATE sas_vendors SET $update_fields WHERE id='$vid'");
+                            if (function_exists('bc_vendor_kyc_refresh_status')) bc_vendor_kyc_refresh_status($vid);
                             $json_response_array = array("desc" => "Admin BVN Verification Information Updated Successfully");
                             $json_response_encode = json_encode($json_response_array, true);
                         } else {
@@ -427,6 +428,7 @@ if (isset($_POST["update-verification"])) {
                                 $ba_part = (!empty($bank_code) && !empty($account_number)) ? ", bank_code='$bank_code', account_number='$account_number'" : "";
                                 mysqli_query($connection_server, "UPDATE sas_vendors SET nin='$bvn_nin'$ba_part WHERE id='$vid'");
                             }
+                            if (function_exists('bc_vendor_kyc_refresh_status')) bc_vendor_kyc_refresh_status($vid);
                             $json_response_array = array("desc" => "Admin NIN Verification Information Updated Successfully");
                             $json_response_encode = json_encode($json_response_array, true);
                         }
@@ -474,6 +476,58 @@ if (isset($_POST["update-verification"])) {
 }
 
 // §29: admin Google Authenticator (TOTP) enrolment.
+// §33: enhanced vendor KYC — document submission for platform review.
+if (isset($_POST["upload-vendor-kyc-doc"])) {
+    if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema();
+    $vid = (int)$get_logged_admin_details["id"];
+    $upload_dir = $_SERVER['DOCUMENT_ROOT'] . "/uploads/kyc-vendor/";
+    if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
+    $htaccess_file = $upload_dir . '.htaccess';
+    if (is_dir($upload_dir) && !file_exists($htaccess_file)) {
+        @file_put_contents($htaccess_file, "<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
+    }
+    $kinds = [
+        'govt_id'          => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
+        'selfie'           => [['jpg', 'jpeg', 'png', 'webp'], 8],
+        'proof_of_address' => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
+        'liveliness_video' => [['mp4', 'mov', 'webm', 'mkv'], 25],
+    ];
+    $saved = [];
+    foreach ($kinds as $input_name => $spec) {
+        list($exts, $max_mb) = $spec;
+        if (empty($_FILES[$input_name]['name'])) continue;
+        if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
+        $tmp = $_FILES[$input_name]['tmp_name'];
+        if (!is_uploaded_file($tmp)) continue;
+        if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
+        $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $exts, true)) continue;
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) && @getimagesize($tmp) === false) continue;
+        $filename = 'vkyc_' . $vid . '_' . $input_name . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+        if (move_uploaded_file($tmp, $upload_dir . $filename)) {
+            $fn_esc = mysqli_real_escape_string($connection_server, $filename);
+            mysqli_query($connection_server, "INSERT INTO sas_vendor_kyc_documents (vendor_id, doc_type, file_name, status) VALUES ('$vid', '$input_name', '$fn_esc', 'pending')");
+            $saved[] = $input_name;
+        }
+    }
+    if ($saved) {
+        $new_status = function_exists('bc_vendor_kyc_refresh_status') ? bc_vendor_kyc_refresh_status($vid) : 0;
+        if ($new_status === 1) {
+            $_SESSION["product_purchase_response"] = "KYC documents submitted. Every required item is provided — your compliance file is now waiting for super-admin review.";
+        } else {
+            $fresh = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vid' LIMIT 1")) ?: [];
+            $pending = function_exists('bc_vendor_kyc_pending') ? bc_vendor_kyc_pending($fresh) : [];
+            $labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address'];
+            $names = array_map(function ($c) use ($labels) { return $labels[$c] ?? $c; }, $pending);
+            $_SESSION["product_purchase_response"] = "Documents saved. Still needed before review: " . implode(', ', $names) . ".";
+        }
+    } else {
+        $_SESSION["product_purchase_response"] = "Error: no valid document received. Check the file type and size limit.";
+    }
+    header("Location: AccountSettings.php#tab-kyc");
+    exit;
+}
+
 if (isset($_POST["totp-begin"])) {
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
     $ok = function_exists('bc_totp_begin_enrolment') && bc_totp_begin_enrolment('sas_vendors', (int)$get_logged_admin_details['id']) !== '';
@@ -1277,14 +1331,14 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
         <div class="col-lg-3">
             <div class="card shadow-sm border-0 rounded-4 sticky-top" style="top: 100px; z-index: 10;">
                 <div class="card-body p-3">
-                    <div class="nav flex-row flex-lg-column nav-pills overflow-auto" id="v-pills-tab" role="tablist" aria-orientation="vertical" style="flex-wrap: nowrap;">
-                        <button class="nav-link active text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding & Assets</button>
-                        <button class="nav-link text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-profile"><i class="bi bi-person-badge me-2"></i> Profile Info</button>
-                        <button class="nav-link text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-kyc"><i class="bi bi-shield-check me-2"></i> Vendor KYC</button>
-                        <button class="nav-link text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-award me-2"></i> License Info</button>
-                        <button class="nav-link text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-finance"><i class="bi bi-bank me-2"></i> Financial Settings</button>
-                        <button class="nav-link text-start mb-lg-2 rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-lock me-2"></i> Security & Keys</button>
-                        <button class="nav-link text-start rounded-3 py-3 flex-fill text-nowrap" data-bs-toggle="pill" data-bs-target="#tab-developer"><i class="bi bi-code-slash me-2"></i> Developer Tools</button>
+                    <div class="nav nav-pills pk-settings-nav" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding & Assets</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-profile"><i class="bi bi-person-badge me-2"></i> Profile Info</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-kyc"><i class="bi bi-shield-check me-2"></i> Vendor KYC</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-award me-2"></i> License Info</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-finance"><i class="bi bi-bank me-2"></i> Financial Settings</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-lock me-2"></i> Security & Keys</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-developer"><i class="bi bi-code-slash me-2"></i> Developer Tools</button>
                     </div>
                 </div>
             </div>
@@ -1524,6 +1578,9 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                             <?php elseif ($sec29_state === 'pending'): ?>
                                 <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
                                 <p class="small text-muted">Add this secret to Google Authenticator, then enter the 6-digit code:</p>
+                                <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
+                                <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+                                <script>(function(){{try{{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){{if(el)el.style.display='none';return;}}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_admin_details['email'], 'VTU Admin') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}}catch(e){{var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}}}})();</script>
                                 <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
                                 <p class="small text-muted text-break">Or paste: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_admin_details['email'], 'VTU Admin') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
                                 <form method="post" class="row g-2 align-items-end">
@@ -1600,6 +1657,78 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 </div>
                                 <button name="update-verification" class="btn btn-primary px-5 rounded-pill fw-bold">Submit KYC</button>
                             </form>
+                            <?php
+                            // §33: enhanced vendor compliance (documents + platform review).
+                            if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema();
+                            $vkyc_status = (int)($get_logged_admin_details['kyc_status'] ?? 0);
+                            $vkyc_labels = [0 => 'Unverified', 1 => 'Under review', 2 => 'Verified', 3 => 'Rejected'];
+                            $vkyc_badges = [0 => 'secondary', 1 => 'warning', 2 => 'success', 3 => 'danger'];
+                            $vkyc_required = function_exists('bc_vendor_kyc_required_checks') ? bc_vendor_kyc_required_checks() : [];
+                            $vkyc_pending = function_exists('bc_vendor_kyc_pending') ? bc_vendor_kyc_pending($get_logged_admin_details, $vkyc_required) : [];
+                            $vkyc_check_labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo (selfie)', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address'];
+                            $vkyc_docs = [];
+                            $vkyc_dq = mysqli_query($connection_server, "SELECT * FROM sas_vendor_kyc_documents WHERE vendor_id='" . (int)$get_logged_admin_details['id'] . "' ORDER BY submitted_at DESC");
+                            while ($vkyc_dq && ($vkyc_dr = mysqli_fetch_assoc($vkyc_dq))) $vkyc_docs[] = $vkyc_dr;
+                            ?>
+                            <hr class="my-4">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                                <h6 class="fw-bold mb-0">Compliance Documents (Enhanced KYC)</h6>
+                                <span class="badge bg-<?php echo $vkyc_badges[$vkyc_status] ?? 'secondary'; ?> px-3 py-2"><?php echo $vkyc_labels[$vkyc_status] ?? 'Unknown'; ?></span>
+                            </div>
+                            <?php if ($vkyc_status === 3 && !empty($get_logged_admin_details['kyc_reject_reason'])): ?>
+                            <div class="alert alert-danger rounded-4 small">Your last submission was rejected: <strong><?php echo htmlspecialchars((string)$get_logged_admin_details['kyc_reject_reason'], ENT_QUOTES, 'UTF-8'); ?></strong>. Please correct it and resubmit.</div>
+                            <?php elseif ($vkyc_status === 1): ?>
+                            <div class="alert alert-warning rounded-4 small mb-3">Your compliance file is complete and <strong>waiting for super-admin review</strong>. Dashboard access unlocks automatically once it is approved.</div>
+                            <?php elseif ($vkyc_status === 2): ?>
+                            <div class="alert alert-success rounded-4 small mb-3">Your compliance verification is approved.</div>
+                            <?php endif; ?>
+                            <?php if ($vkyc_required): ?>
+                            <ul class="list-group rounded-4 mb-4">
+                                <?php foreach ($vkyc_required as $vkyc_check): $vkyc_done = !in_array($vkyc_check, $vkyc_pending, true); ?>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><?php echo htmlspecialchars($vkyc_check_labels[$vkyc_check] ?? ucwords(str_replace('_', ' ', $vkyc_check)), ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php if ($vkyc_done): ?><span class="badge bg-success">Provided</span><?php else: ?><span class="badge bg-danger">Required</span><?php endif; ?>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php endif; ?>
+                            <form method="post" enctype="multipart/form-data">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)</label>
+                                        <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Live Photo / Selfie (image, max 8 MB)</label>
+                                        <input type="file" name="selfie" accept="image/*" capture="user" class="form-control rounded-3">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)</label>
+                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Liveliness Video (max 25 MB)</label>
+                                        <input type="file" name="liveliness_video" accept="video/*" capture="user" class="form-control rounded-3">
+                                    </div>
+                                </div>
+                                <button name="upload-vendor-kyc-doc" class="btn btn-outline-primary px-5 rounded-pill fw-bold mt-3">Upload Documents</button>
+                            </form>
+                            <?php if ($vkyc_docs): ?>
+                            <div class="table-responsive mt-4">
+                                <table class="table table-sm align-middle">
+                                    <thead><tr><th>Document</th><th>Submitted</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                    <?php foreach ($vkyc_docs as $vkyc_doc): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($vkyc_check_labels[$vkyc_doc['doc_type']] ?? $vkyc_doc['doc_type'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                            <td><?php echo htmlspecialchars((string)$vkyc_doc['submitted_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                            <td><span class="badge bg-<?php echo $vkyc_doc['status'] === 'approved' ? 'success' : ($vkyc_doc['status'] === 'rejected' ? 'danger' : 'warning'); ?>"><?php echo htmlspecialchars(ucfirst((string)$vkyc_doc['status']), ENT_QUOTES, 'UTF-8'); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <?php endif; ?>
                             <?php if ($admin_identity_provider === 'monnify'): ?>
                             <script>
                             (function(){

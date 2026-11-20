@@ -45,6 +45,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
         if ($impersonated_user) {
             session_regenerate_id(true);
             $_SESSION["user_session"] = strtolower($impersonated_user['username']);
+            if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
             $_SESSION["admin_impersonation"] = true;
             $_SESSION["admin_impersonation_vendor"] = (int)$impersonated_user['vendor_id'];
             recordLoginAttempt($impersonated_user['username'], $_SERVER['REMOTE_ADDR'] ?? '', 1, (int)$impersonated_user['vendor_id']);
@@ -107,6 +108,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                 unset($_SESSION['login_otp_pending']);
                 session_regenerate_id(true);
                 $_SESSION["user_session"] = strtolower($pending_row["username"]);
+                if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                 recordLoginAttempt($pending_row["username"], $_SERVER['REMOTE_ADDR'] ?? '', 1, $pending_vendor_id);
 
                 // Same "new sign-in" notice the password-only path sends.
@@ -163,6 +165,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                         exit();
                     }
                     $_SESSION["user_session"] = strtolower($user_detail["username"]);
+                    if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                     // Update google_id if not set
                     if (empty($user_detail['google_id'])) {
                         mysqli_query($connection_server, "UPDATE sas_users SET google_id='$google_id' WHERE id='".$user_detail['id']."'");
@@ -254,7 +257,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                             }
 
     						$_SESSION["user_session"] = strtolower($user_detail["username"]);
-
+    						if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
 							// Email Beginning
 							$log_template_encoded_text_array = array("{firstname}" => $user_detail["firstname"], "{lastname}" => $user_detail["lastname"], "{username}" => $user_detail["username"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);
 							$raw_log_template_subject = getUserEmailTemplate('user-log','subject');
@@ -425,7 +428,7 @@ bc_plate_auth_top(array(
                 </div>
 
                 <p class="pk-auth__note">
-                    New here? <a class="pk-auth__link" href="Register.php">Create an account</a>
+                    <?php if (!function_exists('bc_registration_enabled') || bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))): ?>New here? <a class="pk-auth__link" href="Register.php">Create an account</a><?php endif; ?>
                 </p>
             </form>
         <?php endif; ?>
@@ -587,7 +590,7 @@ function togglePasswordVisibility(fieldId, toggleElement) {
 <?php
 bc_plate_auth_end(array(
     'links' => array(
-        array('href' => 'Register.php', 'label' => 'Create account'),
+        ...( (!function_exists('bc_registration_enabled') || bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))) ? array(array('href' => 'Register.php', 'label' => 'Create account')) : array() ),
         array('href' => 'PasswordRecovery.php', 'label' => 'Forgot password'),
     ),
 ));

@@ -800,18 +800,18 @@ if (!function_exists('bc_kyc_provider_verify')) {
         }
 
         if (empty($pending) && $manual_required === []) {
-            // Everything this vendor requires is something the provider just proved.
+            // §33: nothing is approved automatically any more. Every required
+            // item has been provided and provider-proved, so the account joins
+            // the admin review queue and waits for a human decision.
             mysqli_query($connection_server, "UPDATE sas_users SET
-                    kyc_status='2',
-                    kyc_approved_date=NOW(),
-                    kyc_reviewed_at=NOW(),
+                    kyc_status='1',
                     kyc_reject_reason=NULL,
                     kyc_refresh_required='0',
                     kyc_submitted_at=COALESCE(kyc_submitted_at, NOW())
                 WHERE id='$user_id' AND vendor_id='$vendor_id'");
-            $out['auto_approved'] = true;
-            $out['kyc_status'] = 2;
-            $out['message'] = 'Identity verified with ' . $who . ' - KYC approved automatically.';
+            $out['auto_approved'] = false;
+            $out['kyc_status'] = 1;
+            $out['message'] = 'Identity verified with ' . $who . '. All required items are complete - your submission is now waiting for admin review.';
             return $out;
         }
 
@@ -826,13 +826,21 @@ if (!function_exists('bc_kyc_provider_verify')) {
         }
 
         $waiting = $manual_required !== [] ? $manual_required : $pending;
-        mysqli_query($connection_server, "UPDATE sas_users SET
-                kyc_status='1',
-                kyc_submitted_at=COALESCE(kyc_submitted_at, NOW())
-            WHERE id='$user_id' AND vendor_id='$vendor_id'");
-        $out['kyc_status'] = 1;
-        $out['message'] = 'Identity verified with ' . $who . '. Awaiting review for: '
-            . implode(', ', array_map('bc_kyc_check_label', $waiting)) . '.';
+        if (empty($pending)) {
+            // Complete: everything required has been provided; a person reviews it.
+            mysqli_query($connection_server, "UPDATE sas_users SET
+                    kyc_status='1',
+                    kyc_submitted_at=COALESCE(kyc_submitted_at, NOW())
+                WHERE id='$user_id' AND vendor_id='$vendor_id'");
+            $out['kyc_status'] = 1;
+            $out['message'] = 'Identity verified with ' . $who . '. Awaiting review for: '
+                . implode(', ', array_map('bc_kyc_check_label', $waiting)) . '.';
+        } else {
+            // §33: incomplete submissions never enter the review queue.
+            $out['kyc_status'] = $current;
+            $out['message'] = 'Identity verified with ' . $who . '. Still needed before review: '
+                . implode(', ', array_map('bc_kyc_check_label', $pending)) . '.';
+        }
         return $out;
     }
 }
@@ -876,6 +884,27 @@ if (!function_exists('bc_kyc_effective_statuses')) {
             $out[(string)$r['verification_name']] = ((int)$r['enabled'] === 1) ? 1 : 0;
         }
         return $out;
+    }
+}
+
+
+if (!function_exists('bc_kyc_app_confinement_required')) {
+    /**
+     * §33: must this account be confined to the compliance flow in the App?
+     * True while forced KYC is on, the vendor requires at least one check,
+     * and the account is not approved (kyc_status 2). Under-review accounts
+     * stay confined while they wait for an admin decision.
+     */
+    function bc_kyc_app_confinement_required($user)
+    {
+        global $connection_server;
+        if (!is_array($user) || !($connection_server instanceof mysqli)) return false;
+        if ((int)($user['kyc_status'] ?? 0) === 2) return false;
+        $vendor_id = (int)($user['vendor_id'] ?? 0);
+        if ($vendor_id <= 0) return false;
+        if (!function_exists('isKYCEnforced') || !isKYCEnforced($vendor_id)) return false;
+        $checks = function_exists('bc_kyc_enabled_checks') ? bc_kyc_enabled_checks($connection_server, $vendor_id) : [];
+        return !empty($checks);
     }
 }
 

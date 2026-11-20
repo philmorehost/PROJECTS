@@ -429,6 +429,9 @@
 
     if(isset($_POST["update-security"])){ 
         $force_pin = isset($_POST["force_vendor_pin"]) ? '1' : '0';
+        // §33: platform-wide Google Authenticator mandate for vendor admins.
+        $force_totp = isset($_POST["force_vendor_totp"]) ? '1' : '0';
+        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_vendor_totp', '$force_totp') ON DUPLICATE KEY UPDATE option_value='$force_totp'");
         $force_email = isset($_POST["force_spadmin_trans_email"]) ? '1' : '0';
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_vendor_pin', '$force_pin') ON DUPLICATE KEY UPDATE option_value='$force_pin'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('spadmin_trans_email_enabled', '$force_email') ON DUPLICATE KEY UPDATE option_value='$force_email'");
@@ -949,16 +952,16 @@ bc_adm_head('', array("area" => "spadmin"));
         <div class="col-lg-3">
             <div class="card shadow-sm border-0 rounded-4 sticky-top" style="top: 100px; z-index: 10;">
                 <div class="card-body p-3">
-                    <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-                        <button class="nav-link active text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding</button>
-                        <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-profile"><i class="bi bi-person-badge me-2"></i> Profile Info</button>
-                        <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-finance"><i class="bi bi-bank me-2"></i> Bank & Payments</button>
-                        <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-shield-lock me-2"></i> Security</button>
-                        <button class="nav-link text-start mb-2 rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-site"><i class="bi bi-globe me-2"></i> Site Details</button>
-                        <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-system"><i class="bi bi-cpu me-2"></i> System Tools</button>
-                        <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-cpanel"><i class="bi bi-hdd-network me-2"></i> cPanel API</button>
-                        <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-printhub"><i class="bi bi-printer me-2"></i> Print Hub / API</button>
-                        <button class="nav-link text-start rounded-3 py-3" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-key-fill me-2"></i> License Info</button>
+                    <div class="nav nav-pills pk-settings-nav" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-profile"><i class="bi bi-person-badge me-2"></i> Profile Info</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-finance"><i class="bi bi-bank me-2"></i> Bank & Payments</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-shield-lock me-2"></i> Security</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-site"><i class="bi bi-globe me-2"></i> Site Details</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-system"><i class="bi bi-cpu me-2"></i> System Tools</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-cpanel"><i class="bi bi-hdd-network me-2"></i> cPanel API</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-printhub"><i class="bi bi-printer me-2"></i> Print Hub / API</button>
+                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-key-fill me-2"></i> License Info</button>
                     </div>
                 </div>
             </div>
@@ -1179,6 +1182,9 @@ bc_adm_head('', array("area" => "spadmin"));
                                 $opt_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_pin'");
                                 $force_vendor_pin = mysqli_fetch_assoc($opt_q)['option_value'] ?? '0';
 
+                                $opt_totp = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_totp'");
+                                $force_vendor_totp = ($opt_totp ? (mysqli_fetch_assoc($opt_totp)['option_value'] ?? '0') : '0');
+
                                 $opt_email = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='spadmin_trans_email_enabled'");
                                 $spadmin_trans_email = mysqli_fetch_assoc($opt_email)['option_value'] ?? '1';
 
@@ -1195,6 +1201,13 @@ bc_adm_head('', array("area" => "spadmin"));
                                             <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, all Vendors (bc-admin) MUST configure and use a Security PIN for sensitive dashboard operations.</p>
                                         </div>
                                         <input type="checkbox" name="force_vendor_pin" class="form-check-input ms-0" id="forcePin" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_vendor_pin == '1') ? 'checked' : ''; ?>>
+                                    </div>
+                                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0 mb-3">
+                                        <div>
+                                            <label class="form-check-label fw-bold h6 mb-1 text-dark-primary" for="forceTotp">Force Google Authenticator for Vendors</label>
+                                            <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every Vendor (bc-admin) is confined to Account Settings until they enrol Google Authenticator. Their approvals and wallet crediting then require PIN + authenticator code.</p>
+                                        </div>
+                                        <input type="checkbox" name="force_vendor_totp" class="form-check-input ms-0" id="forceTotp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_vendor_totp == '1') ? 'checked' : ''; ?>>
                                     </div>
                                     <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0">
                                         <div>
@@ -1255,8 +1268,11 @@ bc_adm_head('', array("area" => "spadmin"));
                                             </form>
                                         <?php elseif ($sec30_state === 'pending'): ?>
                                             <?php $sec30_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec30_row['totp_secret']) : ''; ?>
-                                            <p class="small text-muted">Add this secret to Google Authenticator, then enter the 6-digit code:</p>
+                                            <p class="small text-muted">Scan this QR code with Google Authenticator (fastest), or type the secret below, then enter the 6-digit code:</p>
+                                            <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
                                             <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec30_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
+                                            <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+                                            <script>(function(){try{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){if(el)el.style.display='none';return;}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec30_secret, (string)$get_logged_spadmin_details['email'], 'VTU Platform') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}catch(e){var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}})();</script>
                                             <p class="small text-muted text-break">Or paste: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec30_secret, (string)$get_logged_spadmin_details['email'], 'VTU Platform') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
                                             <form method="post" class="row g-2 align-items-end">
                                                 <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>

@@ -278,7 +278,7 @@ bc_app_head("Service Pricing | " . ($get_all_site_details["site_title"] ?? 'Plat
                     <?php if($is_logged_in): ?>
                         <a href="Dashboard.php" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow">Go to Dashboard</a>
                     <?php else: ?>
-                        <a href="Register.php" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow">Create Free Account</a>
+                        <?php if (!function_exists('bc_registration_enabled') || bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))): ?><a href="Register.php" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow">Create Free Account</a><?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
