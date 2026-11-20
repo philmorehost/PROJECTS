@@ -1062,7 +1062,7 @@ if (!function_exists('bc_adm_foot')) {
 </footer>
 <?php endif; ?>
 <?php bc_adm_assets($area, $opts); ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js" defer></script>
 <?php bc_adm_flash(); ?>
 <script>
 (function () {

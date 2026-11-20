@@ -32,10 +32,13 @@ include_once(__DIR__ . "/bc-security.php"); // DGV6.90 AI Edition — Security u
 if ($connection_server) {
     // Branch DG6.7 Optimization: Only run migrations if not already done in current session
     // This significantly improves site-wide page load speeds by skipping redundant DB structural checks.
-    if (!isset($_SESSION['migrations_completed_version']) || $_SESSION['migrations_completed_version'] !== '6.9.1') {
+    // §45: one migration marker shared with the web + super-admin bootstraps
+    // (bc_migrations_current in func/bc-security.php) — per-area session values
+    // made every area switch re-run the 500+-statement migration file.
+    if (!bc_migrations_current()) {
         include_once(__DIR__ . "/bc-tables.php");
         include_once(__DIR__ . "/bc-email-templates.php");
-        $_SESSION['migrations_completed_version'] = '6.9.1';
+        bc_migrations_mark_done();
     }
 
     $get_all_super_admin_site_details_query = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_site_details LIMIT 1");
@@ -48,7 +51,7 @@ if ($connection_server) {
         $get_all_super_admin_site_details = array('site_title' => 'Admin Panel', 'site_desc' => 'Admin Panel');
     }
 
-    $checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT * FROM sas_super_admin");
+    $checkmate_super_admin_table_exists = mysqli_query($connection_server, "SELECT id FROM sas_super_admin LIMIT 1");
     if ($checkmate_super_admin_table_exists && mysqli_num_rows($checkmate_super_admin_table_exists) >= 1) {
         //Admin To Vendor Login Method
         // One-time token only. The old ?logVendorAdmin=base64(email:base64(password)) handed the
