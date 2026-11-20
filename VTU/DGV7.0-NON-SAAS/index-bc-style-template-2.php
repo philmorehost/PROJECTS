@@ -319,6 +319,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             </div>
             <ul class="nav-links">
                 <li><a href="/">Home</a></li>
+                <li><a href="/Services.php">Services</a></li>
+                <li><a href="/ReferAndEarn.php">Refer &amp; Earn</a></li>
                 <li><a href="/web/Pricing.php">Pricing</a></li>
                 <li><a href="/web/APIDocs.php">Developer API</a></li>
                 <li><a href="/web/Login.php" class="nav-cta">Login</a></li>
