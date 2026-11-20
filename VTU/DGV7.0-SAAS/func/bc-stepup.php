@@ -740,6 +740,109 @@ if (!function_exists('bc_totp_disable')) {
     }
 }
 
+
+// ───────────── Google Auth gate for Account Settings saves (§44) ─────────────
+// Saving back-office Account Settings changes requires a live Google
+// Authenticator (TOTP) unlock: enrol once, then enter a fresh code to open
+// a 10-minute settings window ("sudo mode"). A hijacked session alone
+// cannot change payout, mail, security or site settings — only the account
+// owner holding the authenticator can open the window.
+
+if (!function_exists('bc_gauth_enrolled')) {
+    function bc_gauth_enrolled($row) {
+        return is_array($row) && (string)($row['two_factor_type'] ?? 'none') === 'totp' && !empty($row['totp_secret']);
+    }
+}
+
+if (!function_exists('bc_gauth_unlocked_until')) {
+    /** Epoch until which $scope's settings window is open (0 = locked). */
+    function bc_gauth_unlocked_until($scope) {
+        $until = (int)($_SESSION['bc_gauth_unlock'][(string)$scope] ?? 0);
+        return $until > time() ? $until : 0;
+    }
+}
+
+if (!function_exists('bc_gauth_verify_unlock')) {
+    /** Verify a fresh authenticator code and open the settings window. */
+    function bc_gauth_verify_unlock($scope, $table, $actor_row, $code) {
+        global $connection_server;
+        if (!bc_gauth_enrolled($actor_row)) {
+            return 'Google Authenticator is not enrolled yet. Enrol it on this page first — settings stay locked until then.';
+        }
+        $secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$actor_row['totp_secret']) : '';
+        $step = $secret !== '' ? bc_totp_verify($secret, (string)$code, (int)($actor_row['totp_last_step'] ?? 0)) : false;
+        if ($step === false) {
+            if (function_exists('bc_log_security_event')) bc_log_security_event('GAUTH_SETTINGS_UNLOCK_FAILED', (string)$scope, (string)($actor_row['email'] ?? ''), 'Wrong authenticator code');
+            return 'The authenticator code is incorrect or has already been used.';
+        }
+        if ($connection_server instanceof mysqli) {
+            bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=?", array((int)$step, (int)$actor_row['id']));
+        }
+        $_SESSION['bc_gauth_unlock'][(string)$scope] = time() + 600;
+        if (function_exists('bc_log_security_event')) bc_log_security_event('GAUTH_SETTINGS_UNLOCKED', (string)$scope, (string)($actor_row['email'] ?? ''), 'Settings unlocked for 10 minutes');
+        return '';
+    }
+}
+
+if (!function_exists('bc_gauth_settings_gate')) {
+    /**
+     * Page gate for the bc-admin / bc-spadmin Account Settings pages. Handles
+     * the gauth-unlock / gauth-lock POSTs itself, then blocks EVERY other POST
+     * while the window is closed — except $exempt POST keys (authenticator
+     * enrolment, password change, demo session unlocks), which must stay
+     * reachable or a locked-out owner could never recover. Blocks answer with
+     * POST-redirect-GET, so a blocked save never reaches a handler.
+     */
+    function bc_gauth_settings_gate($scope, $table, $actor_row, $exempt) {
+        $self = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if (isset($_POST['gauth-unlock'])) {
+            if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+            $err = bc_gauth_verify_unlock($scope, $table, $actor_row, (string)($_POST['gauth_code'] ?? ''));
+            $_SESSION['product_purchase_response'] = $err === '' ? 'Settings unlocked for 10 minutes. You can now save changes.' : 'Error: ' . $err;
+            header('Location: ' . $self);
+            exit();
+        }
+        if (isset($_POST['gauth-lock'])) {
+            unset($_SESSION['bc_gauth_unlock'][(string)$scope]);
+            $_SESSION['product_purchase_response'] = 'Settings locked. Enter a Google Authenticator code to save changes again.';
+            header('Location: ' . $self);
+            exit();
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') return;
+        foreach ((array)$exempt as $key) {
+            if (isset($_POST[$key])) return;
+        }
+        if (bc_gauth_unlocked_until($scope) > 0) return;
+        $_SESSION['product_purchase_response'] = bc_gauth_enrolled($actor_row)
+            ? 'Error: Settings are locked. Enter a Google Authenticator code (above) to unlock saving for 10 minutes.'
+            : 'Error: Settings are locked. Enrol Google Authenticator on this page first — only the account owner with the authenticator can save settings changes.';
+        header('Location: ' . $self);
+        exit();
+    }
+}
+
+if (!function_exists('bc_gauth_settings_banner')) {
+    /** Lock-state banner + unlock form; echo above the settings forms. */
+    function bc_gauth_settings_banner($scope, $actor_row) {
+        $csrf = function_exists('bc_csrf_field') ? bc_csrf_field() : '';
+        if (!bc_gauth_enrolled($actor_row)) {
+            return '<div class="alert alert-warning rounded-4 mb-4"><i class="bi bi-shield-lock-fill me-2"></i><strong>Settings are locked.</strong> '
+                . 'Saving changes on this page requires Google Authenticator. Enrol it in the Authenticator section below — until then, no settings on this page can be saved.</div>';
+        }
+        $until = bc_gauth_unlocked_until($scope);
+        if ($until > 0) {
+            $mins = max(1, (int)ceil(($until - time()) / 60));
+            return '<div class="alert alert-success rounded-4 mb-4 d-flex flex-wrap align-items-center gap-2"><span><i class="bi bi-unlock-fill me-2"></i><strong>Settings unlocked</strong> — you can save changes for about ' . $mins . ' more minute' . ($mins === 1 ? '' : 's') . '.</span>'
+                . '<form method="post" class="ms-auto m-0">' . $csrf . '<button type="submit" name="gauth-lock" value="1" class="btn btn-sm btn-outline-dark">Lock now</button></form></div>';
+        }
+        return '<div class="alert alert-warning rounded-4 mb-4"><i class="bi bi-shield-lock-fill me-2"></i><strong>Settings are locked.</strong> '
+            . 'Enter a Google Authenticator code to unlock saving for 10 minutes. This keeps a hijacked session from changing settings without the account owner.'
+            . '<form method="post" class="d-flex flex-wrap gap-2 mt-3 align-items-center">' . $csrf
+            . '<input type="text" name="gauth_code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" class="form-control" style="max-width:180px;" placeholder="6-digit code" required>'
+            . '<button type="submit" name="gauth-unlock" value="1" class="btn btn-dark">Unlock settings</button></form></div>';
+    }
+}
+
 // ───────────────────────────── API-key lifecycle ─────────────────────────────
 
 if (!function_exists('bc_api_key_generate')) {

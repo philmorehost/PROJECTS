@@ -11,6 +11,10 @@
               </div>';
     }
 
+    // §44: saving settings on this page requires a Google Authenticator unlock
+    // (10-minute window — see bc_gauth_settings_gate in func/bc-stepup.php).
+    if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('spadmin_settings', 'sas_super_admin', $get_logged_spadmin_details, array('totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'gauth-unlock', 'gauth-lock'));
+
     if (isset($_GET['refresh_license'])) {
         header('Content-Type: application/json');
         $license_key = getSuperAdminOption('license_key', '');
@@ -949,7 +953,8 @@ bc_adm_head('', array("area" => "spadmin"));
 <link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
 <link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "spadmin")); ?>
-<?php bc_adm_topbar(array("area" => "spadmin", "title" => "ADMIN ACCOUNT SETTINGS", "crumb" => "Home / Account Settings")); ?><!-- End Page Title -->
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "ADMIN ACCOUNT SETTINGS", "crumb" => "Home / Account Settings")); ?>
+<?php echo function_exists('bc_gauth_settings_banner') ? bc_gauth_settings_banner('spadmin_settings', $get_logged_spadmin_details) : ''; ?><!-- End Page Title -->
 
     <section class="section dashboard pk-settings">
       <div class="row g-4">

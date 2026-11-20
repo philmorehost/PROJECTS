@@ -16,6 +16,10 @@ if (isset($_GET['demo_blocked']) && bc_is_demo_mode($connection_server)) {
 $mail_queue_batch_size = (int)getSuperAdminOption('mail_queue_batch_size', 5);
 $mail_queue_cron_secret = bc_get_or_create_cron_secret($connection_server);
 
+// §44: saving settings on this page requires a Google Authenticator unlock
+// (10-minute window — see bc_gauth_settings_gate in func/bc-stepup.php).
+if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('bc_admin_settings', 'sas_vendors', $get_logged_admin_details, array('totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'demo-unlock-session', 'demo-relock-session', 'gauth-unlock', 'gauth-lock'));
+
 // Demo Mode: unlock / relock settings editing for this session with the Super Admin
 // Demo security lock key (see func/bc-demo-mode.php). In Demo Mode the page stays
 // fully viewable but is read-only until the key is entered, letting the site owner
@@ -1348,6 +1352,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
 
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "VENDOR ACCOUNT SETTINGS", "crumb" => "Home / Account Settings")); ?>
+<?php echo function_exists('bc_gauth_settings_banner') ? bc_gauth_settings_banner('bc_admin_settings', $get_logged_admin_details) : ''; ?>
 
     <?php if (bc_is_demo_mode($connection_server)): $demo_edit_open = bc_demo_edit_unlocked(); ?>
     <div class="px-3 pt-3">
