@@ -358,6 +358,12 @@ if (!function_exists('bc_fintech_web_access_blocked')) {
      */
     function bc_fintech_web_access_blocked($user, $vendor_id, $request_uri = null) {
         if (!is_array($user) || empty($user['username'])) return null;
+        // Only a burned, short-lived app handoff can enable embedded service pages.
+        $portal = $_SESSION['bc_mobile_portal'] ?? null;
+        if (is_array($portal) && (int)($portal['vendor_id'] ?? 0) === (int)$vendor_id
+            && (int)($portal['user_id'] ?? 0) === (int)($user['id'] ?? -1)
+            && (int)($portal['expires'] ?? 0) > time()) return null;
+
         if (!empty($_SESSION['admin_session'])) return null;
         if (bc_fintech_account_type($user) !== 'personal') return null;
 

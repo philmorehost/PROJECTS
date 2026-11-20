@@ -4,9 +4,16 @@ class AppNetworkService {
     static let shared = AppNetworkService()
 
     private var baseURL: String {
-        // In a real app, this would be in Info.plist. For this script, we use a default.
+        // Optional build-time tenant configuration; never accept an arbitrary in-app URL.
+        if let configured = Bundle.main.object(forInfoDictionaryKey: "PlatformBaseURL") as? String,
+           let url = URL(string: configured), url.scheme == "https", url.host != nil,
+           url.user == nil, url.password == nil, url.query == nil, url.fragment == nil {
+            return configured.hasSuffix("/") ? configured : configured + "/"
+        }
         return "https://jikabiz.com/"
     }
+
+    var mobileOrigin: String { baseURL }
 
     var apiKey: String? {
         get { UserDefaults.standard.string(forKey: "user_api_key") }

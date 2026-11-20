@@ -1,150 +1,168 @@
 package com.datagifting.app.ui.dashboard
 
+import android.app.AlertDialog
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
-import android.widget.TextView
+import android.view.ViewGroup
+import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.datagifting.app.R
+import com.datagifting.app.api.RetrofitClient
 import com.datagifting.app.data.model.ApiResult
-import com.datagifting.app.data.model.Transaction
-import com.datagifting.app.databinding.FragmentHomeBinding
 import com.datagifting.app.ui.transactions.ReceiptHelper
+import com.datagifting.app.util.Constants
 import com.datagifting.app.util.PreferenceManager
 import com.datagifting.app.util.safeNavigate
 import com.datagifting.app.util.toNaira
 import com.datagifting.app.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
-class HomeFragment : Fragment(R.layout.fragment_home) {
-
-    private var _binding: FragmentHomeBinding? = null
-    private val binding get() = _binding!!
-    private val viewModel: MainViewModel by activityViewModels()
+/** Reference-inspired home. All amounts are real; existing purchase/receipt flows stay intact. */
+class HomeFragment : Fragment() {
+    private val model: MainViewModel by activityViewModels()
+    private lateinit var refresh: SwipeRefreshLayout
+    private lateinit var root: LinearLayout
+    private lateinit var balanceLabel: TextView
+    private lateinit var greeting: TextView
+    private lateinit var currencyButton: TextView
+    private lateinit var trend: MobileBalanceTrend
+    private lateinit var history: LinearLayout
     private lateinit var prefs: PreferenceManager
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        _binding = FragmentHomeBinding.bind(view)
+    private var visible = true
+    private var selected = "NGN"
+    private var wallets = listOf<Pair<String, String>>()
+    private var directory = listOf<Map<String, String>>()
+    private var balanceAvailable = false
+    private val orange = Color.rgb(255, 120, 57)
+    private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
+    private fun rounded(color: Int, radius: Int = 24) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
+    private fun text(value: String, size: Float = 15f, color: Int = Color.WHITE) = TextView(requireContext()).apply {
+        text = value; textSize = size; setTextColor(color); setPadding(dp(8), dp(8), dp(8), dp(8))
+    }
+    private fun action(label: String, glyph: String, callback: () -> Unit) = LinearLayout(requireContext()).apply {
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; minimumHeight = dp(80)
+        val icon = text(glyph, 26f).apply { gravity = Gravity.CENTER; background = rounded(0x30000000, 32); contentDescription = label }
+        addView(icon, LinearLayout.LayoutParams(dp(54), dp(54)))
+        addView(text(label, 12f)); isClickable = true; isFocusable = true; setOnClickListener { callback() }
+    }
+    override fun onCreateView(inflater: android.view.LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         prefs = PreferenceManager(requireContext())
-
-        setupUI()
-        setupServiceButtons()
-        observeData()
-        viewModel.loadProfile()
-        viewModel.loadServices()
-        viewModel.loadTransactions(limit = 5)
-
-        binding.swipeRefreshHome.setOnRefreshListener {
-            viewModel.loadProfile()
-            viewModel.loadServices()
-            viewModel.loadTransactions(limit = 5)
+        refresh = SwipeRefreshLayout(requireContext())
+        val scroll = ScrollView(requireContext()).apply { isFillViewport = true; setBackgroundColor(Color.rgb(10,10,10)) }
+        root = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(30)) }
+        scroll.addView(root); refresh.addView(scroll)
+        val hero = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(20), dp(18), dp(20))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(orange, Color.rgb(197,29,8))).apply { cornerRadius = dp(32).toFloat() }
         }
-        binding.swipeRefreshHome.setColorSchemeResources(R.color.primary)
-    }
-
-    private fun setupUI() {
-        val firstname = prefs.getString(com.datagifting.app.util.Constants.KEY_FIRSTNAME)
-        binding.tvGreeting.text = "Hello, $firstname 👋"
-        val balance = prefs.getDouble(com.datagifting.app.util.Constants.KEY_BALANCE)
-        binding.tvBalance.text = balance.toNaira()
-
-        binding.btnAddMoney.setOnClickListener { findNavController().safeNavigate(R.id.action_home_to_fund) }
-        binding.btnWithdraw.setOnClickListener { findNavController().safeNavigate(R.id.action_home_to_withdraw) }
-        binding.btnShareBalance.setOnClickListener { findNavController().safeNavigate(R.id.action_home_to_share) }
-        binding.btnSeeAll.setOnClickListener { findNavController().safeNavigate(R.id.action_home_to_transactions) }
-
-        var balanceVisible = true
-        binding.btnToggleBalance.setOnClickListener {
-            balanceVisible = !balanceVisible
-            binding.tvBalance.text = if (balanceVisible)
-                prefs.getDouble(com.datagifting.app.util.Constants.KEY_BALANCE).toNaira()
-            else "₦ ••••••"
+        greeting = text("Hello, ${prefs.getString(Constants.KEY_FIRSTNAME)}", 18f)
+        val header = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
+        header.addView(greeting, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(text("◎", 25f).apply { contentDescription = "Account and notifications"; setOnClickListener { findNavController().safeNavigate(R.id.nav_profile) } })
+        hero.addView(header)
+        val titleRow = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
+        titleRow.addView(text("Wallet balance  ◉", 13f).apply { isFocusable=true; contentDescription="Show or hide wallet balance"; setOnClickListener { visible = !visible; renderBalance() } }, LinearLayout.LayoutParams(0,-2,1f))
+        currencyButton = text("NGN ⌄", 14f).apply { background = rounded(0x20FFFFFF); setOnClickListener { chooseWallet() } }
+        titleRow.addView(currencyButton); hero.addView(titleRow)
+        balanceLabel = text("Loading…", 38f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(dp(8), dp(28), dp(8), dp(25)) }
+        hero.addView(balanceLabel)
+        trend=MobileBalanceTrend(requireContext())
+        hero.addView(trend,LinearLayout.LayoutParams(-1,dp(66)))
+        hero.addView(text("Your money. Your next move.", 12f, Color.rgb(255,220,204)))
+        val actions = LinearLayout(requireContext())
+        listOf(action("Send", "↗") { services("Send") }, action("Receive", "↙") { openService("invoice") },
+            action("Top up", "+") { findNavController().safeNavigate(R.id.nav_fund_wallet) }, action("More", "⋮") { services(null) })
+            .forEach { actions.addView(it, LinearLayout.LayoutParams(0,-2,1f)) }
+        hero.addView(actions); root.addView(hero)
+        val shortcuts = LinearLayout(requireContext()).apply { setPadding(0,dp(18),0,dp(18)) }
+        listOf(Triple("Crypto", "₿", "crypto"), Triple("Virtual card", "▱", "cards"), Triple("Gift card", "♧", "giftcards"), Triple("VTU", "▤", "vtu")).forEach { (title, icon, slug) ->
+            val tile=action(title,icon) { if(slug=="vtu") services("VTU") else openService(slug) }.apply { background=rounded(Color.rgb(35,35,35),18) }
+            shortcuts.addView(tile, LinearLayout.LayoutParams(0,dp(108),1f).apply { setMargins(dp(3),0,dp(3),0) })
         }
+        root.addView(shortcuts)
+        history = LinearLayout(requireContext()).apply { orientation=LinearLayout.VERTICAL; background=rounded(Color.WHITE,28); setPadding(dp(12),dp(14),dp(12),dp(14)) }
+        history.addView(text("Transaction history  →",20f,Color.BLACK).apply { setTypeface(typeface,1); setOnClickListener { findNavController().safeNavigate(R.id.nav_transactions) } })
+        root.addView(history)
+        root.addView(text("Rewards · KYC · Security · Support",13f,Color.LTGRAY).apply { gravity=Gravity.CENTER; minimumHeight=dp(48); setOnClickListener { services(null) } })
+        return refresh
     }
-
-    private fun setupServiceButtons() {
-        val nav = findNavController()
-        binding.btnAirtime.setOnClickListener { nav.safeNavigate(R.id.action_home_to_airtime) }
-        binding.btnData.setOnClickListener { nav.safeNavigate(R.id.action_home_to_data) }
-        binding.btnElectric.setOnClickListener { nav.safeNavigate(R.id.action_home_to_electric) }
-        binding.btnCable.setOnClickListener { nav.safeNavigate(R.id.action_home_to_cable) }
-        binding.btnExam.setOnClickListener { nav.safeNavigate(R.id.action_home_to_exam) }
-        binding.btnSms.setOnClickListener { nav.safeNavigate(R.id.action_home_to_sms) }
-        binding.btnGiftcard.setOnClickListener { nav.safeNavigate(R.id.action_home_to_giftcard) }
-        binding.btnVcard.setOnClickListener { nav.safeNavigate(R.id.action_home_to_vcard) }
-        binding.btnCrypto.setOnClickListener { nav.safeNavigate(R.id.action_home_to_crypto) }
-        binding.btnBetting.setOnClickListener { nav.safeNavigate(R.id.action_home_to_betting) }
-        binding.btnPrint.setOnClickListener { nav.safeNavigate(R.id.action_home_to_print) }
-        binding.btnNin.setOnClickListener { nav.safeNavigate(R.id.action_home_to_nin) }
-        binding.btnBvn.setOnClickListener { nav.safeNavigate(R.id.action_home_to_bvn) }
-        binding.btnWithdrawShortcut.setOnClickListener { nav.safeNavigate(R.id.action_home_to_withdraw) }
-        binding.btnHistory.setOnClickListener { nav.safeNavigate(R.id.action_home_to_transactions) }
-    }
-
-    private fun applyServiceVisibility(enabled: Set<String>) {
-        if (enabled.isEmpty()) return  // server hasn't populated controls yet — show everything
-        fun vis(key: String) = if (key in enabled) View.VISIBLE else View.GONE
-        binding.btnAirtime.visibility = vis("airtime")
-        binding.btnData.visibility = vis("data")
-        binding.btnElectric.visibility = vis("electric")
-        binding.btnCable.visibility = vis("cable")
-        binding.btnExam.visibility = vis("exam")
-        binding.btnSms.visibility = vis("bulk_sms")
-        binding.btnGiftcard.visibility = vis("gift_card")
-        binding.btnVcard.visibility = vis("virtual_card")
-        binding.btnCrypto.visibility = vis("crypto_hub")
-        binding.btnBetting.visibility = vis("betting")
-        binding.btnPrint.visibility = vis("data_card")
-        binding.btnNin.visibility = vis("nin_card")
-        binding.btnBvn.visibility = vis("bvn_verify")
-    }
-
-    private fun observeData() {
-        viewModel.enabledServices.observe(viewLifecycleOwner) { applyServiceVisibility(it) }
-
-        viewModel.profile.observe(viewLifecycleOwner) { result ->
-            if (result is ApiResult.Success) {
-                val user = result.data
-                binding.tvGreeting.text = "Hello, ${user.firstname} 👋"
-                binding.tvBalance.text = user.balance.toNaira()
-                binding.tvUsername.text = "@${user.username}"
-                prefs.saveDouble(com.datagifting.app.util.Constants.KEY_BALANCE, user.balance)
-                binding.swipeRefreshHome.isRefreshing = false
-            } else if (result is ApiResult.Error) {
-                binding.swipeRefreshHome.isRefreshing = false
-            }
-        }
-        viewModel.transactions.observe(viewLifecycleOwner) { result ->
-            if (result is ApiResult.Success) {
-                val recent = result.data.take(5)
-                binding.tvNoTransactions.visibility = if (recent.isEmpty()) View.VISIBLE else View.GONE
-                binding.containerRecentTx.removeAllViews()
-                recent.forEach { tx ->
-                    val row = layoutInflater.inflate(R.layout.item_transaction_row, binding.containerRecentTx, false)
-                    row.findViewById<TextView>(R.id.tv_tx_desc).text = tx.description
-                    row.findViewById<TextView>(R.id.tv_tx_amount).text = tx.amount.toNaira()
-                    row.findViewById<TextView>(R.id.tv_tx_date).text = tx.date
-                    val amountView = row.findViewById<TextView>(R.id.tv_tx_amount)
-                    val isDebit = tx.description.contains("debit", ignoreCase = true) ||
-                            tx.type.contains("airtime", ignoreCase = true) ||
-                            tx.type.contains("data", ignoreCase = true)
-                    amountView.setTextColor(
-                        requireContext().getColor(if (isDebit) R.color.debit else R.color.credit)
-                    )
-                    // Color the status dot
-                    row.findViewById<View>(R.id.view_status_dot).setBackgroundColor(
-                        when (tx.status) { 1 -> android.graphics.Color.parseColor("#2E7D32"); 2 -> android.graphics.Color.parseColor("#F9A825"); else -> android.graphics.Color.parseColor("#C62828") }
-                    )
-                    binding.containerRecentTx.addView(row)
-                    row.setOnClickListener { ReceiptHelper.showReceiptDialog(requireContext(), layoutInflater, tx) }
+    override fun onViewCreated(view: View, state: Bundle?) {
+        model.profile.observe(viewLifecycleOwner) { result -> if(result is ApiResult.Success) greeting.text="Hello, ${result.data.firstname}" }
+        model.transactions.observe(viewLifecycleOwner) { result ->
+            if(result is ApiResult.Success) {
+                trend.values=result.data.filter { it.status==1 }.reversed().map { it.balanceAfter }; trend.invalidate()
+                while(history.childCount>1)history.removeViewAt(1)
+                if(result.data.isEmpty())history.addView(text("No transactions yet",14f,Color.GRAY))
+                result.data.take(5).forEach { tx ->
+                    val row=LinearLayout(requireContext()).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(4),dp(8),dp(4),dp(8)); isFocusable=true }
+                    row.addView(text(tx.description,14f,Color.BLACK))
+                    val status=when(tx.status) {1->"Completed";2->"Pending";else->"Failed"}
+                    row.addView(text("${tx.amount.toNaira()} · $status · ${tx.date}",12f,Color.DKGRAY))
+                    row.setOnClickListener { ReceiptHelper.showReceiptDialog(requireContext(),layoutInflater,tx) }
+                    history.addView(row)
                 }
             }
         }
+        refresh.setOnRefreshListener { load() }; load()
     }
+    private fun load() {
+        model.loadProfile(); model.loadServices(); model.loadTransactions(limit=5)
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val response=RetrofitClient.getService().mobileHome(mapOf("api_key" to prefs.getApiKey()))
+                val body=response.body()
+                if(response.isSuccessful && body?.get("status")=="success") {
+                    @Suppress("UNCHECKED_CAST") val items=body["wallets"] as? List<Map<String, Any>> ?: emptyList()
+                    wallets=items.mapNotNull { w -> val code=w["code"] as? String; val amount=w["balance"]?.toString(); if(code!=null && amount!=null) code to amount else null }
+                    @Suppress("UNCHECKED_CAST") val services=body["services"] as? List<Map<String,String>> ?: emptyList()
+                    directory=services; balanceAvailable=wallets.isNotEmpty()
+                    if(wallets.none { it.first==selected })selected=wallets.firstOrNull()?.first ?: "NGN"
+                } else { balanceAvailable=false; directory=emptyList() }
+            } catch(_: Exception) { balanceAvailable=false }
+            if(view!=null) { renderBalance(); refresh.isRefreshing=false }
+        }
+    }
+    private fun renderBalance() {
+        currencyButton.text="$selected ⌄"
+        trend.visibility=if(visible && selected=="NGN") View.VISIBLE else View.GONE
+        balanceLabel.text=when { !visible -> "••••••"; !balanceAvailable -> "Unavailable"; else -> {
+            val amount=wallets.firstOrNull { it.first==selected }?.second?.toBigDecimalOrNull()
+            if(amount==null) "Unavailable" else "$selected ${java.text.DecimalFormat("#,##0.00").format(amount)}"
+        } }
+    }
+    private fun chooseWallet() {
+        if(wallets.isEmpty()) { Toast.makeText(requireContext(),"Wallets are unavailable. Pull to refresh.",Toast.LENGTH_LONG).show(); return }
+        AlertDialog.Builder(requireContext()).setTitle("Choose an existing wallet").setItems((wallets.map { it.first } + "Live currency conversion").toTypedArray()) { _,i -> if(i==wallets.size) openService("fx") else { selected=wallets[i].first; renderBalance() } }.show()
+    }
+    private fun services(group: String?) {
+        val items=directory.filter { group==null || it["group"]==group }
+        if(items.isEmpty()) { Toast.makeText(requireContext(),"No available services. Pull to refresh.",Toast.LENGTH_LONG).show(); return }
+        AlertDialog.Builder(requireContext()).setTitle(group ?: "All services").setItems(items.map { "${it["group"]} · ${it["title"]}" }.toTypedArray()) { _,i -> openService(items[i]["id"] ?: "") }.show()
+    }
+    private fun openService(slug: String) {
+        if(directory.none { it["id"]==slug }) { Toast.makeText(requireContext(),"This service is not available on your platform yet.",Toast.LENGTH_LONG).show(); return }
+        MobileServiceNavigator.launch(this,slug)
+    }
+}
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
+/** Draw only recorded balance snapshots; never invent sample earnings or trends. */
+private class MobileBalanceTrend(context: android.content.Context): View(context) {
+    var values: List<Double> = emptyList()
+    private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color=Color.WHITE; strokeWidth=3f; style=android.graphics.Paint.Style.STROKE; strokeCap=android.graphics.Paint.Cap.ROUND }
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        super.onDraw(canvas)
+        if(values.size<2)return
+        val low=values.minOrNull() ?: return; val high=values.maxOrNull() ?: return
+        val range=(high-low).coerceAtLeast(1.0); val path=android.graphics.Path()
+        values.forEachIndexed { i,v -> val x=width.toFloat()*i/(values.size-1); val y=(height-8)*(1-(v-low)/range).toFloat()+4; if(i==0)path.moveTo(x,y) else path.lineTo(x,y) }
+        canvas.drawPath(path,paint)
     }
 }

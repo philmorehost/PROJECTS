@@ -69,6 +69,8 @@ function weekly_truncate(string $s, int $len): string {
 
 /** Send an HTML report to the admin. Uses the platform mailer when available. */
 function weekly_send_report_email(string $to, string $subject, string $html): bool {
+    require_once __DIR__ . '/../func/email-design.php';
+    $html = mailDesignTemplate($subject, $html, array(), false);
     $headers = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\n";
     if (function_exists('customBCMailSender')) {
         return (bool)@customBCMailSender('', $to, $subject, $html, $headers, true);
