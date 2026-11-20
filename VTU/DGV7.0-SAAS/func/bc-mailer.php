@@ -107,6 +107,8 @@ function bc_resolve_from_name($from, $headers)
 
 function customBCMailSender($from,$to,$subject,$message,$headers, $background = true){
     global $connection_server;
+    require_once __DIR__ . '/email-design.php';
+    $message = mailDesignTemplate($subject, $message, array(), true);
 
     // Branch DG6.7 Optimization: Optionally skip blocking SMTP for login notifications
     // if requested, or if the server is known to be slow.
@@ -234,6 +236,8 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 
 function sendEmailWithAttachments($to, $subject, $message, $from_name, $from_email, $attachments = array()) {
     global $connection_server;
+    require_once __DIR__ . '/email-design.php';
+    $message = mailDesignTemplate($subject, $message, array(), true);
     $sent = false;
     try {
         if (!bc_mailer_library_available()) {

@@ -4,6 +4,9 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface VtuApiService {
+    @POST("web/api/mobile-home.php")
+    suspend fun mobileHome(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
 
     // ── Auth ──────────────────────────────────────────────────────────────
     @POST("web/api/login.php")

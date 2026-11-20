@@ -73,6 +73,7 @@
             </intent-filter>
         </service>
 
+        <activity android:name=".ui.dashboard.ServicePortalActivity" android:exported="false" />
     </application>
 
 </manifest>

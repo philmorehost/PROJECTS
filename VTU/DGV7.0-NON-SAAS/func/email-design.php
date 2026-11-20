@@ -42,11 +42,9 @@ function bc_email_shade($hex, $factor) {
  */
 function bc_email_brand() {
     global $connection_server;
-    static $brand = null;
-    if ($brand !== null) return $brand;
     $host = (string)($_SERVER['HTTP_HOST'] ?? '');
-    $vendor_id = 0;
-    if ($connection_server instanceof mysqli && function_exists('resolveVendorID')) {
+    $vendor_id = (int)($GLOBALS['get_logged_user_details']['vendor_id'] ?? $GLOBALS['get_logged_admin_details']['id'] ?? $GLOBALS['vendor_id'] ?? 0);
+    if ($vendor_id <= 0 && $connection_server instanceof mysqli && function_exists('resolveVendorID')) {
         $vendor_id = (int)resolveVendorID();
     }
     if ($vendor_id <= 0 && $connection_server instanceof mysqli && $host !== '') {
@@ -65,8 +63,12 @@ function bc_email_brand() {
             $color = (string)($sr['primary_color'] ?? '');
             $apk = trim((string)($sr['apk_download_url'] ?? ''));
         }
-        $vq2 = mysqli_query($connection_server, "SELECT email FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-        if ($vq2 && ($vr2 = mysqli_fetch_assoc($vq2))) $support = (string)$vr2['email'];
+        $vq2 = mysqli_query($connection_server, "SELECT email, website_url FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+        if ($vq2 && ($vr2 = mysqli_fetch_assoc($vq2))) {
+            $support = (string)$vr2['email'];
+            $vendor_host = strtolower(trim((string)($vr2['website_url'] ?? '')));
+            if (preg_match('/^[a-z0-9.-]+$/D', $vendor_host)) $host = $vendor_host;
+        }
     }
     if ($site_name === '' && $connection_server instanceof mysqli) {
         $pq = mysqli_query($connection_server, "SELECT site_title FROM sas_super_admin_site_details LIMIT 1");
@@ -121,10 +123,10 @@ function bc_otp_email($code, $purpose, $firstname = '', $expiry = '10 minutes') 
 function mailDesignTemplate($title, $message, $details_array, $show_app = true) {
     global $connection_server;
 
-    // If the message is already a full HTML document (e.g. from GrapesJS), reduce it to
-    // its body content so it is sent as an email-safe fragment (see helper above).
-    if (strpos($message, '<html') !== false || strpos($message, '<body') !== false) {
-        return bc_extractEmailBodyContent($message);
+    // All outgoing messages use one shell, including saved full-document designs.
+    if (strpos(ltrim((string)$message), '<!-- bc-email-shell:v2 -->') === 0) return $message;
+    if (preg_match('/<(?:html|body)\b/i', (string)$message)) {
+        $message = bc_extractEmailBodyContent($message);
     }
 
     $mail_title = !empty(trim(strip_tags($title))) ? trim(strip_tags($title)) : 'Notification';
@@ -203,7 +205,7 @@ function mailDesignTemplate($title, $message, $details_array, $show_app = true) 
         ? '<img src="' . htmlspecialchars($brand['logo_url'], ENT_QUOTES, 'UTF-8') . '" alt="' . $site_name_e . '" style="max-height:44px;width:auto;background-color:#ffffff;border-radius:10px;padding:6px 10px;">'
         : '<span style="display:inline-block;background-color:#ffffff;color:' . $dark_color . ';font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:20px;border-radius:10px;padding:8px 14px;">' . $site_name_e . '</span>';
 
-    $html = '<div style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">' . $preheader . '</div>'
+    $html = '<!-- bc-email-shell:v2 --><div style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">' . $preheader . '</div>'
     . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;table-layout:fixed;background-color:#edf1f6;">'
     . '<tr><td align="center" style="padding:28px 12px 36px 12px;">'
     . '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color:#ffffff;margin:0 auto;width:100%;max-width:600px;border-spacing:0;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.10);">'

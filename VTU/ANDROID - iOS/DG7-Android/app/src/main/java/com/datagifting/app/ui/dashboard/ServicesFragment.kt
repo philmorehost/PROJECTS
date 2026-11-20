@@ -1,57 +1,45 @@
 package com.datagifting.app.ui.dashboard
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.widget.LinearLayout
-import androidx.cardview.widget.CardView
+import android.view.ViewGroup
+import android.widget.*
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import androidx.navigation.fragment.findNavController
-import com.datagifting.app.R
-import com.datagifting.app.util.safeNavigate
-import com.datagifting.app.viewmodel.MainViewModel
+import androidx.lifecycle.lifecycleScope
+import com.datagifting.app.api.RetrofitClient
+import com.datagifting.app.util.PreferenceManager
+import kotlinx.coroutines.launch
 
-class ServicesFragment : Fragment(R.layout.fragment_services) {
-
-    private val viewModel: MainViewModel by activityViewModels()
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val nav = findNavController()
-        view.findViewById<LinearLayout>(R.id.btn_svc_airtime)?.setOnClickListener { nav.safeNavigate(R.id.nav_airtime) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_data)?.setOnClickListener { nav.safeNavigate(R.id.nav_data) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_cable)?.setOnClickListener { nav.safeNavigate(R.id.nav_cable) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_electric)?.setOnClickListener { nav.safeNavigate(R.id.nav_electric) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_exam)?.setOnClickListener { nav.safeNavigate(R.id.nav_exam) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_sms)?.setOnClickListener { nav.safeNavigate(R.id.nav_sms) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_giftcard)?.setOnClickListener { nav.safeNavigate(R.id.nav_giftcard) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_vcard)?.setOnClickListener { nav.safeNavigate(R.id.nav_vcard) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_crypto)?.setOnClickListener { nav.safeNavigate(R.id.nav_crypto) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_share)?.setOnClickListener { nav.safeNavigate(R.id.nav_share_fund) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_withdraw)?.setOnClickListener { nav.safeNavigate(R.id.nav_withdraw) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_fund)?.setOnClickListener { nav.safeNavigate(R.id.nav_fund_wallet) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_betting)?.setOnClickListener { nav.safeNavigate(R.id.nav_betting) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_nin)?.setOnClickListener { nav.safeNavigate(R.id.nav_nin_card) }
-        view.findViewById<LinearLayout>(R.id.btn_svc_bvn)?.setOnClickListener { nav.safeNavigate(R.id.nav_bvn_verify) }
-
-        viewModel.enabledServices.observe(viewLifecycleOwner) { applyServiceVisibility(view, it) }
+/** Tenant-controlled service groups, including new services without app hard-coded URLs. */
+class ServicesFragment: Fragment() {
+    private lateinit var list: LinearLayout
+    override fun onCreateView(inflater: android.view.LayoutInflater, container: ViewGroup?, state: Bundle?): View {
+        val scroll=ScrollView(requireContext())
+        list=LinearLayout(requireContext()).apply { orientation=LinearLayout.VERTICAL; setPadding(24,24,24,24) }
+        scroll.addView(list); return scroll
     }
-
-    private fun applyServiceVisibility(view: View, enabled: Set<String>) {
-        if (enabled.isEmpty()) return  // server hasn't populated controls yet — show everything
-        fun vis(key: String) = if (key in enabled) View.VISIBLE else View.GONE
-        view.findViewById<LinearLayout>(R.id.btn_svc_airtime)?.visibility = vis("airtime")
-        view.findViewById<LinearLayout>(R.id.btn_svc_data)?.visibility = vis("data")
-        view.findViewById<LinearLayout>(R.id.btn_svc_cable)?.visibility = vis("cable")
-        view.findViewById<LinearLayout>(R.id.btn_svc_electric)?.visibility = vis("electric")
-        view.findViewById<LinearLayout>(R.id.btn_svc_exam)?.visibility = vis("exam")
-        view.findViewById<LinearLayout>(R.id.btn_svc_sms)?.visibility = vis("bulk_sms")
-        view.findViewById<LinearLayout>(R.id.btn_svc_betting)?.visibility = vis("betting")
-        view.findViewById<LinearLayout>(R.id.btn_svc_giftcard)?.visibility = vis("gift_card")
-        view.findViewById<LinearLayout>(R.id.btn_svc_vcard)?.visibility = vis("virtual_card")
-        view.findViewById<LinearLayout>(R.id.btn_svc_crypto)?.visibility = vis("crypto_hub")
-        view.findViewById<LinearLayout>(R.id.btn_svc_nin)?.visibility = vis("nin_card")
-        view.findViewById<LinearLayout>(R.id.btn_svc_bvn)?.visibility = vis("bvn_verify")
+    override fun onViewCreated(view: View, state: Bundle?) { load() }
+    private fun load() {
+        list.removeAllViews(); list.addView(TextView(requireContext()).apply { text="Loading available services…" })
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val response=RetrofitClient.getService().mobileHome(mapOf("api_key" to PreferenceManager(requireContext()).getApiKey()))
+                val body=response.body()
+                if(!response.isSuccessful || body?.get("status")!="success")throw IllegalStateException()
+                @Suppress("UNCHECKED_CAST") val items=body["services"] as? List<Map<String,String>> ?: emptyList()
+                if(view==null)return@launch
+                list.removeAllViews()
+                items.groupBy { it["group"] ?: "Services" }.forEach { (group,services) ->
+                    list.addView(TextView(requireContext()).apply { text=group; textSize=22f; setPadding(8,28,8,16) })
+                    services.forEach { service -> list.addView(Button(requireContext()).apply {
+                        text=service["title"] ?: "Service"; setOnClickListener { MobileServiceNavigator.launch(this@ServicesFragment,service["id"] ?: "") }
+                    }) }
+                }
+                if(items.isEmpty())list.addView(TextView(requireContext()).apply { text="No services are enabled for this account." })
+            } catch(_: Exception) {
+                if(view!=null) { list.removeAllViews(); list.addView(TextView(requireContext()).apply { text="Services are temporarily unavailable." }); list.addView(Button(requireContext()).apply { text="Retry"; setOnClickListener { load() } }) }
+            }
+        }
     }
 }
-

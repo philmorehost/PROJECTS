@@ -35,7 +35,8 @@ $all_possible_services = [
     'data', 'airtime', 'cable', 'electric', 'betting', 'exam', 'bulk_sms',
     'data_card', 'print_data', 'print_airtime', 'print_cable', 'print_electric',
     'print_exam', 'print_betting', 'recharge_card', 'bank_transfer', 'payout',
-    'virtual_card', 'gift_card', 'crypto_hub', 'nin_card', 'bvn_verify'
+    'virtual_card', 'gift_card', 'crypto_hub', 'nin_card', 'bvn_verify',
+    'intl_transfer', 'tuition', 'esim', 'pos_request', 'referral', 'vtu_coins'
 ];
 $services = [];
 foreach ($all_possible_services as $s_name) {
