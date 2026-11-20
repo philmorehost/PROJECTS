@@ -4,11 +4,10 @@ include("../func/bc-admin-config.php");
 $crypto_array = array("ngn", "usd", "gbp", "cad", "eur", "btc", "eth", "doge", "usdt", "usdc", "sol", "ada", "trx");
 $telecoms_array = array("mtn", "airtel", "glo", "9mobile");
 $cable_array = array("startimes", "dstv", "gotv", "showmax");
-$card_array = array("chimoney");
 $exam_array = array("waec", "neco", "nabteb", "jamb");
 $electric_array = array("ekedc", "eedc", "ikedc", "jedc", "kedco", "ibedc", "phed", "aedc", "yedc", "bedc", "kaedco", "aba");
 $betting_array = array("msport", "naijabet", "nairabet", "bet9ja-agent", "betland", "betlion", "supabet", "bet9ja", "bangbet", "betking", "1xbet", "betway", "merrybet", "mlotto", "western-lotto", "hallabet", "green-lotto");
-$products_array = array_merge($crypto_array, $telecoms_array, $cable_array, $card_array, $exam_array, $electric_array, $betting_array);
+$products_array = array_merge($crypto_array, $telecoms_array, $cable_array, $exam_array, $electric_array, $betting_array);
 
 // Auto-Installation: Ensure every known product is initialized to 'Enabled' for this vendor.
 // Checked per-product (not just "vendor has zero rows") so products added after the vendor's
@@ -131,7 +130,6 @@ bc_adm_head("Product Function | " . ($get_all_super_admin_site_details["site_tit
             $categories = [
                 ['name' => 'Telecoms', 'id' => 'telecoms', 'products' => $telecoms_array, 'icon' => 'bi-reception-4', 'type' => 'telecoms', 'ext' => 'png', 'filter' => 'none'],
                 ['name' => 'Cable TV', 'id' => 'cable', 'products' => $cable_array, 'icon' => 'bi-tv', 'type' => 'cable', 'ext' => 'jpg', 'filter' => 'none'],
-                ['name' => 'Virtual Cards', 'id' => 'card', 'products' => $card_array, 'icon' => 'bi-credit-card-2-front', 'type' => 'card', 'ext' => 'png', 'filter' => 'none'],
                 ['name' => 'Exam PINs', 'id' => 'exam', 'products' => $exam_array, 'icon' => 'bi-mortarboard', 'type' => 'exam', 'ext' => 'jpg', 'filter' => 'none'],
                 ['name' => 'Electricity', 'id' => 'electric', 'products' => $electric_array, 'icon' => 'bi-lightning-charge', 'type' => 'electric', 'ext' => 'jpg', 'filter' => 'none'],
                 ['name' => 'Betting', 'id' => 'betting', 'products' => $betting_array, 'icon' => 'bi-controller', 'type' => 'betting', 'ext' => 'jpg', 'filter' => 'none']

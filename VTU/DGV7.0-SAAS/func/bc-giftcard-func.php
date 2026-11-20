@@ -168,22 +168,7 @@ function getLiveExchangeRate($from_currency, $to_currency = 'NGN', $vendor_id = 
     // 2. Fetch from API (Multi-provider strategy)
     $api_rate = 0;
 
-    // Provider A: Chimoney (Preferred if available)
-    require_once(__DIR__ . "/api-gateway/chimoney.php");
-    $chimoney_api = getChimoneyDetails($vendor_id);
-    if ($chimoney_api) {
-        $bridge = new ChimoneyBridge($chimoney_api['api_key']);
-        $c_res = $bridge->getExchangeRates();
-        if ($c_res['status'] === 'success' && isset($c_res['data']['data'][$from])) {
-            // Chimoney rates are usually relative to USD. If from is USD, use NGN.
-            // Adjust based on Chimoney's response structure
-            if ($from === 'USD' && isset($c_res['data']['data']['NGN'])) {
-                $api_rate = (float)$c_res['data']['data']['NGN'];
-            }
-        }
-    }
-
-    // Provider A2: the vendor's own ExchangeRate-API key (bc-admin -> Service
+    // Provider A: the vendor's own ExchangeRate-API key (bc-admin -> Service
     // Control -> Currency Conversion API). This is what "the API is configured"
     // means for live conversion: with a key saved, rates come from the keyed
     // v6 endpoint instead of the shared free one below.

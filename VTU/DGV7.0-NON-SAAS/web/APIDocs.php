@@ -1187,7 +1187,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 				<!-- Virtual Cards -->
 				<div id="virtual-card" class="card card-api">
 					<div class="card-body">
-						<h3 class="fw-bold section-title">Virtual Card API (Chimoney)</h3>
+						<h3 class="fw-bold section-title">Virtual Card API</h3>
 						<p>Issue and fund premium USD Virtual Cards for global payments.</p>
 
 						<div class="endpoint-box">

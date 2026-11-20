@@ -125,17 +125,9 @@ if (in_array('gift_card', $services)) {
 }
 
 if (in_array('virtual_card', $services)) {
-    $v_products = [];
-    $q_v = mysqli_query($connection_server, "SELECT g.* FROM sas_global_virtual_card_products g JOIN sas_vendor_virtual_card_products v ON g.chimoney_product_id = v.chimoney_product_id WHERE v.vendor_id='$vendor_id' AND v.status=1");
-    while ($p = mysqli_fetch_assoc($q_v)) {
-        $v_products[] = [
-            "id" => $p['chimoney_product_id'],
-            "name" => $p['name'],
-            "logo" => $p['logo_url'],
-            "currency" => $p['currency']
-        ];
-    }
-    $response_data['plans']['virtual_card'] = $v_products;
+    // Section 39: virtual cards are issued on demand through the Flutterwave
+    // gateway; there is no third-party product catalogue to list any more.
+    $response_data['plans']['virtual_card'] = [];
 }
 
 echo json_encode($response_data);

@@ -108,7 +108,7 @@ if ($action === 'withdraw_card') {
         $amt_usd = $card['balance_usd'];
         $amt_ngn = $amt_usd * $usd_rate;
 
-        // In real world, we would call Chimoney to terminate/withdraw, but for this "Vanilla" implementation,
+        // In a full implementation the card provider would be called to terminate/withdraw, but here
         // we'll simulate returning funds to NGN wallet as requested.
         mysqli_query($connection_server, "UPDATE sas_virtual_cards_v2 SET balance_usd = 0, status='terminated' WHERE id='".$card['id']."'");
         chargeOtherUser($uname, "credit", "virtual_card", "Card Liquidation", "WDR".time(), $card_ref, $amt_ngn, $amt_ngn, "Virtual Card Withdrawal: $$amt_usd returned to wallet", "WEB", $_SERVER['HTTP_HOST'], 1);

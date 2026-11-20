@@ -593,7 +593,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         $virtual_card_api_product_name_array = array();
         $virtual_card_product_id_array = array();
 
-        $select_virtual_card_apis_id = mysqli_query($connection_server, "SELECT * FROM sas_apis WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND api_type = 'chimoney'");
+        $select_virtual_card_apis_id = mysqli_query($connection_server, "SELECT * FROM sas_apis WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND api_type = 'virtual-card'");
         if (mysqli_num_rows($select_virtual_card_apis_id) >= 1) {
             while ($each_api_id_detail = mysqli_fetch_assoc($select_virtual_card_apis_id)) {
                 array_push($virtual_card_api_id_array, $each_api_id_detail["id"]);

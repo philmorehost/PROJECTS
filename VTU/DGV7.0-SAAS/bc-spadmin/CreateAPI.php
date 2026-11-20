@@ -1,7 +1,7 @@
 <?php session_start();
     include("../func/bc-spadmin-config.php");
     
-    $product_type_array = array("airtime", "shared-data", "sme-data", "cg-data", "dd-data", "betting", "datacard", "rechargecard", "electric", "cable", "exam", "bulk-sms", "finance-hub", "gift-card", "chimoney", "identity-verification", "esim", "virtual-card", "intl-transfer", "payment-gateway");
+    $product_type_array = array("airtime", "shared-data", "sme-data", "cg-data", "dd-data", "betting", "datacard", "rechargecard", "electric", "cable", "exam", "bulk-sms", "finance-hub", "gift-card", "identity-verification", "esim", "virtual-card", "intl-transfer", "payment-gateway");
     $api_status_array = array(1 => "Public", 2 => "Private");
 
     if(isset($_POST["create-api"])){

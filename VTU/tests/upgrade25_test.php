@@ -100,8 +100,7 @@ foreach ($editions as $ed) {
     }
     u25(!file_exists($b . '/func/api-gateway/bsicards.php'), "$ed BSICards gateway file removed");
     u25(!file_exists($b . '/includes/BSICardsBridge.php'), "$ed BSICards bridge removed");
-    $chimoney = src($b . '/func/api-gateway/chimoney.php');
-    u25(strpos($chimoney, 'function issueVirtualCard(') === false && strpos($chimoney, 'function getChimoneyDetails(') !== false, "$ed Chimoney keeps only the FX lookup; card functions removed");
+    u25(!file_exists($b . '/func/api-gateway/chimoney.php') && !file_exists($b . '/includes/ChimoneyBridge.php'), "$ed Chimoney gateway + bridge removed (§39)");
 
     // ── Support: free, AI-first, ticketed, counted ──
     $support = src($b . '/web/AI-Assistant.php');
