@@ -183,6 +183,86 @@ if (!function_exists('lm_tier_storage_dir')) {
     }
 }
 
+if (!function_exists('lm_store_package_file')) {
+    /** Store via a verified staging file; never truncate an existing release. */
+    function lm_store_package_file($source, $destDir, $destFile)
+    {
+        $fail = function ($message) {
+            return array('ok' => false, 'error' => $message);
+        };
+        clearstatcache();
+        if (!is_file($source) || !is_readable($source)) {
+            return $fail('The packaged file is missing or unreadable: ' . $source . '. Pull again.');
+        }
+        if (!is_dir($destDir)) {
+            error_clear_last();
+            lm_ensure_dir($destDir, 0755);
+            $error = error_get_last();
+            if (!is_dir($destDir)) {
+                return $fail('The update folder ' . $destDir . ' could not be created. '
+                    . 'Ask your host to check the configured updates storage path, parent ownership and PHP open_basedir restrictions. '
+                    . ($error['message'] ?? ''));
+            }
+        }
+        if (!is_writable($destDir)) {
+            $owner = @fileowner($destDir);
+            $perms = @fileperms($destDir);
+            return $fail('PHP cannot write to ' . $destDir . ' (owner UID: '
+                . ($owner === false ? 'unknown' : $owner) . ', permissions: '
+                . ($perms === false ? 'unknown' : substr(sprintf('%o', $perms), -4))
+                . '). Ask your host to give the web and cron PHP users write access to this folder. '
+                . 'Do not make the update store world-writable or delete published packages.');
+        }
+        $size = @filesize($source);
+        if ($size === false || $size === 0) {
+            return $fail('The packaged file is empty or its size cannot be read. Pull again.');
+        }
+        $free = @disk_free_space($destDir);
+        if ($free !== false && $free < $size) {
+            return $fail('Not enough disk space in ' . $destDir . ': package needs '
+                . lm_format_bytes($size) . ', available ' . lm_format_bytes($free)
+                . '. Free disk space using release retention or ask your host to increase the quota.');
+        }
+        // Stage on the destination filesystem so the final rename is atomic.
+        // tempnam can fall back to the system temp directory: reject that case.
+        error_clear_last();
+        $stage = @tempnam($destDir, '.lm-package-');
+        $error = error_get_last();
+        if ($stage === false || realpath(dirname($stage)) !== realpath($destDir)) {
+            if ($stage !== false) { @unlink($stage); }
+            return $fail('Cannot create a staging file in ' . $destDir . '. '
+                . ($error['message'] ?? 'Check folder ownership, PHP path restrictions and hosting disk quota.'));
+        }
+        error_clear_last();
+        $in = @fopen($source, 'rb');
+        $out = $in ? @fopen($stage, 'wb') : false;
+        $copied = ($in && $out) ? @stream_copy_to_stream($in, $out) : false;
+        $flushed = $out ? @fflush($out) : false;
+        $error = error_get_last();
+        if ($in) { fclose($in); }
+        if ($out) { $flushed = fclose($out) && $flushed; }
+        clearstatcache(true, $stage);
+        if ($copied !== $size || !$flushed || @filesize($stage) !== $size) {
+            @unlink($stage);
+            return $fail('Could not copy the package into ' . $destDir . ': '
+                . ($error['message'] ?? 'incomplete write')
+                . '. Check hosting disk quota and free space. The previous release has not been changed.');
+        }
+        @chmod($stage, 0644);
+        error_clear_last();
+        $installed = @rename($stage, $destFile);
+        $error = error_get_last();
+        if (!$installed) {
+            @unlink($stage);
+            return $fail('Could not install the package at ' . $destFile . ': '
+                . ($error['message'] ?? 'rename failed')
+                . '. Check destination ownership and PHP path restrictions. The previous release has not been changed.');
+        }
+        @unlink($source);
+        return array('ok' => true, 'error' => '');
+    }
+}
+
 /* -------------------------------------------------------------------------
  * Versions
  * ---------------------------------------------------------------------- */
