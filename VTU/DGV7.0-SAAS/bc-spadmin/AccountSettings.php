@@ -946,7 +946,7 @@ bc_adm_head('', array("area" => "spadmin"));
 <?php bc_adm_sidebar(array("area" => "spadmin")); ?>
 <?php bc_adm_topbar(array("area" => "spadmin", "title" => "ADMIN ACCOUNT SETTINGS", "crumb" => "Home / Account Settings")); ?><!-- End Page Title -->
 
-    <section class="section dashboard">
+    <section class="section dashboard pk-settings">
       <div class="row g-4">
         <!-- Sidebar Navigation for Settings -->
         <div class="col-lg-3">

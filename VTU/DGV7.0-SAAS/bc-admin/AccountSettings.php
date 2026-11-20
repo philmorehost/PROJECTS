@@ -1405,7 +1405,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
     <?php endif; ?>
 
 
-    <section class="section dashboard">
+    <section class="section dashboard pk-settings">
       <div class="row g-4">
         <!-- Sidebar Navigation for Settings -->
         <div class="col-lg-3">

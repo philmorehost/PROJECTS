@@ -565,6 +565,24 @@ if (!function_exists('bc_app_css')) {
         /* Grid */
         .pk-app__wrap .row { display: flex; flex-wrap: wrap; gap: 14px; }
         .pk-app__wrap .row > * { min-width: 0; }
+        /* \u00a737: grid columns the pages use that the compat layer never
+           defined \u2014 they fell back to content-sized flex items, so the
+           settings rail/content split squeezed or wrapped unpredictably
+           (worst on mobile). Placed BEFORE .col-6/.col-md-* so elements
+           combining classes (col-6 col-lg-3 stat cards) keep the winner
+           they have today. */
+        .pk-app__wrap .col-md-2 { flex: 1 1 130px; }
+        .pk-app__wrap .col-md-9 { flex: 1 1 620px; }
+        .pk-app__wrap .col-lg-1 { flex: 1 1 90px; }
+        .pk-app__wrap .col-lg-2 { flex: 1 1 150px; }
+        .pk-app__wrap .col-lg-3 { flex: 1 1 230px; }
+        .pk-app__wrap .col-lg-5 { flex: 1 1 340px; }
+        .pk-app__wrap .col-lg-6 { flex: 1 1 400px; }
+        .pk-app__wrap .col-lg-7 { flex: 1 1 470px; }
+        .pk-app__wrap .col-lg-9 { flex: 1 1 620px; }
+        .pk-app__wrap .col-lg-10 { flex: 1 1 760px; }
+        .pk-app__wrap .col-lg-11 { flex: 1 1 840px; }
+        .pk-app__wrap .col-lg-12 { flex: 1 1 100%; }
         .pk-app__wrap .col { flex: 1 1 0; }
         .pk-app__wrap .col-6 { flex: 0 0 calc(50% - 7px); max-width: calc(50% - 7px); }
         .pk-app__wrap .col-12, .pk-app__wrap .col-md-12 { flex: 1 1 100%; }
@@ -920,6 +938,14 @@ if (!function_exists('bc_app_css')) {
             color: var(--muted); background: var(--wash); border: 1px solid var(--line); text-decoration: none;
         }
         .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+        /* \u00a737: .nav itself never got display:flex, so tab/pill lists
+           (the settings SEO sub-tabs) rendered as stacked block lists
+           instead of a tab strip. Tabs now form a single scrollable row. */
+        .pk-app__wrap .nav { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+        .pk-app__wrap .nav-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .pk-app__wrap .nav-tabs::-webkit-scrollbar { display: none; }
+        .pk-app__wrap .nav-tabs .nav-item { flex: 0 0 auto; }
+        .pk-app__wrap .nav-tabs .nav-link { white-space: nowrap; }
         .pk-app__wrap .nav-tabs { border-bottom: 1px solid var(--line); gap: 4px; }
         .pk-app__wrap .nav-tabs .nav-link { border: none; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 600; padding: 10px 14px; text-decoration: none; }
         .pk-app__wrap .nav-tabs .nav-link.active { color: var(--brand); border-bottom-color: var(--brand); }

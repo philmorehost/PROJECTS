@@ -518,6 +518,19 @@ if (!function_exists('bc_adm_css')) {
             .pk-settings-nav .nav-link { white-space: nowrap; flex: 0 0 auto; width: auto; }
             .pk-settings-nav .nav-link::after { display: none; }
         }
+        .pk-app__wrap .sticky-top { position: sticky; top: 0; }
+        /* \u00a737 settings layout: an exact rail/content split on desktop,
+           full-width stacked panes on mobile, and the rail card must not
+           stay pinned over the settings on small screens. */
+        .pk-app__wrap .pk-settings-nav { flex-wrap: nowrap; }
+        @media (min-width: 992px) {
+            .pk-app__wrap .pk-settings .col-lg-3 { flex: 0 0 calc(25% - 15px); max-width: calc(25% - 15px); }
+            .pk-app__wrap .pk-settings .col-lg-9 { flex: 0 0 calc(75% - 5px); max-width: calc(75% - 5px); }
+        }
+        @media (max-width: 991.98px) {
+            .pk-app__wrap .pk-settings .col-lg-3, .pk-app__wrap .pk-settings .col-lg-9 { flex: 1 1 100%; max-width: 100%; }
+            .pk-app__wrap .pk-settings .card:has(.pk-settings-nav) { position: static !important; }
+        }
         /* Topbar actions are real buttons (icon + label), never bare underlined
            links: solid brand fill, readable on-brand foreground, pill shape. */
         .pk-app__action {
