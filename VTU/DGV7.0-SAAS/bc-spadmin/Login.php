@@ -11,6 +11,53 @@
         exit();
 	}
 
+
+    // Section 38: Google sign-in for the Super Admin. Uses the platform Google Client
+    // ID (Super Admin - Account Settings - Security). Google proves the mailbox, so
+    // no master password is needed; brute-force lockouts still apply.
+    if(isset($_POST["google_token"])){
+        $bc_g_client_id = trim((string)getSuperAdminOption('spadmin_google_client_id', ''));
+        $bc_g_payload = ($bc_g_client_id !== "" && function_exists('verifyGoogleToken')) ? verifyGoogleToken(trim((string)$_POST["google_token"])) : null;
+        $bc_g_fail = "";
+        if ($bc_g_client_id === "") {
+            $bc_g_fail = "Google sign-in is not configured for the Super Admin.";
+        } elseif (!bc_google_payload_valid($bc_g_payload, $bc_g_client_id)) {
+            $bc_g_fail = "Google Authentication Failed.";
+        } else {
+            $bc_g_email = mysqli_real_escape_string($connection_server, strtolower($bc_g_payload['email']));
+            $bc_g_sub = mysqli_real_escape_string($connection_server, (string)$bc_g_payload['sub']);
+            $bc_g_ip = $_SERVER['REMOTE_ADDR'];
+            if ($msg = isIPBlocked($bc_g_ip, 0)) {
+                $bc_g_fail = "Access Denied: $msg";
+            } elseif ($msg = isAccountLocked($bc_g_payload['email'], 0)) {
+                $bc_g_fail = "Account Locked: $msg";
+            } else {
+                $bc_g_q = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$bc_g_email' OR google_id='$bc_g_sub' LIMIT 1");
+                $bc_g_admin = $bc_g_q ? mysqli_fetch_assoc($bc_g_q) : null;
+                if (!$bc_g_admin) {
+                    recordLoginAttempt($bc_g_payload['email'], $bc_g_ip, 0, 0);
+                    $bc_g_fail = "No Super Admin account found with this Google email.";
+                } elseif ($bc_g_admin["status"] != 1) {
+                    recordLoginAttempt($bc_g_payload['email'], $bc_g_ip, 0, 0);
+                    $bc_g_fail = "Account Locked, Contact Admin";
+                } else {
+                    if (empty($bc_g_admin['google_id'])) {
+                        mysqli_query($connection_server, "UPDATE sas_super_admin SET google_id='$bc_g_sub' WHERE id='".(int)$bc_g_admin["id"]."'");
+                    }
+                    recordLoginAttempt($bc_g_admin["email"], $bc_g_ip, 1, 0);
+                    $_SESSION["spadmin_session"] = strtolower($bc_g_admin["email"]);
+                    if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // session epoch
+                    $_SESSION["product_purchase_response"] = "Welcome Back, ".ucwords($bc_g_admin["firstname"]);
+                    header("Location: ".$_SERVER["REQUEST_URI"]);
+                    exit();
+                }
+            }
+        }
+        $_SESSION["product_purchase_response"] = $bc_g_fail;
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
     if(isset($_POST["login"])){
     	$email = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["email"]))));
     	$pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["pass"])));
@@ -108,6 +155,14 @@ bc_plate_auth_top(array(
     'sub'   => 'Authenticated access only. Master control panel for the entire platform.',
 ));
 ?>
+                    <?php if (!empty(getSuperAdminOption('spadmin_google_client_id', ''))): ?>
+                    <script src="https://accounts.google.com/gsi/client" async defer></script>
+                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)getSuperAdminOption('spadmin_google_client_id', ''), ENT_QUOTES, 'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
+                    <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" style="margin-bottom:14px;"></div>
+                    <form id="google-login-form" method="post" action="" style="display:none;"><input type="hidden" name="google_token" id="google_token"></form>
+                    <script>function bcGoogleLogin(r){document.getElementById('google_token').value=r.credential;document.getElementById('google-login-form').submit();}</script>
+                    <p class="pk-auth__note" style="margin:0 0 16px;">&mdash; or continue with your password &mdash;</p>
+                    <?php endif; ?>
                     <form method="post" action="">
                         <div class="pk-auth__field">
                             <label class="pk-auth__label" for="email">Super Email</label>

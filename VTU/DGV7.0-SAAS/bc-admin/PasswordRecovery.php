@@ -16,6 +16,12 @@
         }
     }
     
+    // Section 38: this vendor's Google Client ID (Account Settings - Security), used by
+    // the Google sign-in / Google-verified reset options on the admin auth pages.
+    $bc_google_client_id = '';
+    $bc_google_vendor_q = mysqli_query($connection_server, "SELECT google_client_id FROM sas_vendors WHERE id='" . (int)$reset_vendor_id . "' LIMIT 1");
+    if ($bc_google_vendor_q) { $bc_google_vendor_row = mysqli_fetch_assoc($bc_google_vendor_q); $bc_google_client_id = trim((string)($bc_google_vendor_row['google_client_id'] ?? '')); }
+
     if(isset($_POST["send-code"])){
         if ($reset_blocked_msg) {
             $_SESSION["product_purchase_response"] = $reset_blocked_msg;
@@ -71,6 +77,41 @@
         exit();
     }
 
+
+    // Section 38: Google-verified reset. Google proves control of the admin mailbox,
+    // so the emailed code is waived and the admin goes straight to setting a new password.
+    if(isset($_POST["google_token"])){
+        if ($reset_blocked_msg) {
+            $_SESSION["product_purchase_response"] = $reset_blocked_msg;
+            header("Location: ".$_SERVER["REQUEST_URI"]);
+            exit();
+        }
+        $bc_g_payload = ($bc_google_client_id !== "" && function_exists('verifyGoogleToken')) ? verifyGoogleToken(trim((string)$_POST["google_token"])) : null;
+        if ($bc_google_client_id === "") {
+            $_SESSION["product_purchase_response"] = "Google sign-in is not configured for this admin account.";
+        } elseif (!bc_google_payload_valid($bc_g_payload, $bc_google_client_id)) {
+            $_SESSION["product_purchase_response"] = "Google Authentication Failed.";
+        } else {
+            $bc_g_email = mysqli_real_escape_string($connection_server, strtolower($bc_g_payload['email']));
+            $bc_g_sub = mysqli_real_escape_string($connection_server, (string)$bc_g_payload['sub']);
+            $bc_g_q = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='".(int)$reset_vendor_id."' && (email='$bc_g_email' OR google_id='$bc_g_sub') LIMIT 1");
+            $bc_g_admin = $bc_g_q ? mysqli_fetch_assoc($bc_g_q) : null;
+            if ($bc_g_admin) {
+                if (empty($bc_g_admin['google_id'])) {
+                    mysqli_query($connection_server, "UPDATE sas_vendors SET google_id='$bc_g_sub' WHERE id='".(int)$bc_g_admin["id"]."'");
+                }
+                $_SESSION["admin-recovery-username"] = $bc_g_admin["email"];
+                $_SESSION["admin-recovery-google"] = 1;
+                $_SESSION["product_purchase_response"] = "Google identity verified. Set your new password below.";
+            } else {
+                bc_handle_password_reset_attempt($bc_g_payload['email'], $reset_user_ip, 0, $reset_vendor_id, 'request');
+                $_SESSION["product_purchase_response"] = "No admin account found with this Google email.";
+            }
+        }
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
 	if(isset($_POST["verify-code"])){
         if ($reset_blocked_msg) {
             $_SESSION["product_purchase_response"] = $reset_blocked_msg;
@@ -79,12 +120,13 @@
         }
     	$pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["pass"])));
     	$confirm_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["confirm-pass"])));
-		$recovery_code = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["code"]))));
-    	if(!empty($pass) && !empty($confirm_pass) && !empty($recovery_code) && is_numeric($recovery_code) && (strlen($recovery_code) == "6")){
+		$recovery_code = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["code"] ?? ""))));
+		$bc_google_verified = !empty($_SESSION["admin-recovery-google"]);
+    	if(!empty($pass) && !empty($confirm_pass) && ($bc_google_verified || (!empty($recovery_code) && is_numeric($recovery_code) && (strlen($recovery_code) == "6")))){
             $vendor_id = resolveVendorID();
 		$get_user_details = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' && email='".$_SESSION["admin-recovery-username"]."'");
     		if(mysqli_num_rows($get_user_details) == 1){
-				if($_SESSION["admin-recovery-code"] == $recovery_code){
+				if($bc_google_verified || $_SESSION["admin-recovery-code"] == $recovery_code){
 					if($pass == $confirm_pass){
 						// Stored as password_hash() (bcrypt); the login path still accepts legacy raw-MD5 rows.
 						$new_vendor_pass_hash = mysqli_real_escape_string($connection_server, bc_hash_password($pass));
@@ -104,6 +146,7 @@
 						bc_handle_password_reset_attempt($_SESSION["admin-recovery-username"] ?? '', $reset_user_ip, 1, $reset_vendor_id, 'verify');
 						unset($_SESSION["admin-recovery-username"]);
 						unset($_SESSION["admin-recovery-code"]);
+						unset($_SESSION["admin-recovery-google"]);
 
 						//Password Changed Successfully
 						$json_response_array = array("desc" => "Password Changed Successfully");
@@ -172,6 +215,7 @@
 	if(isset($_POST["reset-recovery"])){
 		unset($_SESSION["admin-recovery-username"]);
 		unset($_SESSION["admin-recovery-code"]);
+		unset($_SESSION["admin-recovery-google"]);
 		header("Location: ".$_SERVER["REQUEST_URI"]);
         exit();
 	}
@@ -197,6 +241,14 @@ bc_plate_auth_top(array(
                     </p>
                     <?php endif; ?>
 
+                    <?php if (!empty($bc_google_client_id) && empty($_SESSION["admin-recovery-username"])): ?>
+                    <script src="https://accounts.google.com/gsi/client" async defer></script>
+                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)$bc_google_client_id, ENT_QUOTES, 'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
+                    <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" style="margin-bottom:14px;"></div>
+                    <form id="google-login-form" method="post" action="" style="display:none;"><input type="hidden" name="google_token" id="google_token"></form>
+                    <script>function bcGoogleLogin(r){document.getElementById('google_token').value=r.credential;document.getElementById('google-login-form').submit();}</script>
+                    <p class="pk-auth__note" style="margin:0 0 16px;">&mdash; or continue with your password &mdash;</p>
+                    <?php endif; ?>
                     <form method="post" action="" <?php echo $reset_blocked_msg ? 'style="display:none"' : ''; ?>>
                         <?php if(!isset($_SESSION["admin-recovery-username"]) || empty($_SESSION["admin-recovery-username"])){ ?>
                             <div class="pk-auth__field">
@@ -213,13 +265,17 @@ bc_plate_auth_top(array(
                         <?php if(isset($_SESSION["admin-recovery-username"]) && !empty($_SESSION["admin-recovery-username"])){ ?>
                             <div class="pk-auth__alert pk-auth__alert--ok">
                                 <span><?php echo bc_plate_auth_icon('check', 18); ?></span>
-                                <span>Verification code sent.</span>
+                                <span><?php echo !empty($_SESSION["admin-recovery-google"]) ? 'Google identity verified &mdash; set a new password below.' : 'Verification code sent.'; ?></span>
                             </div>
 
+                            <?php if (!empty($_SESSION["admin-recovery-google"])): ?>
+                            <input type="hidden" name="code" value="">
+                            <?php else: ?>
                             <div class="pk-auth__field">
                                 <label class="pk-auth__label" for="code">Verification Code</label>
                                 <input id="code" name="code" type="text" class="pk-auth__input" placeholder="6-digit code" pattern="[0-9]{6}" required>
                             </div>
+                            <?php endif; ?>
 
                             <div class="pk-auth__field">
                                 <label class="pk-auth__label" for="new-password">New Admin Password</label>

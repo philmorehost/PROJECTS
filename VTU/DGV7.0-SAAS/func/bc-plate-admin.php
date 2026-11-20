@@ -685,6 +685,10 @@ if (!function_exists('bc_adm_topbar')) {
         $user  = $site['user'];
         $name  = $user['name'] !== '' ? $user['name'] : 'Account';
         $dash = isset($opts['dashboard']) ? (string)$opts['dashboard'] : bc_adm_url('Dashboard.php', $area);
+        // Section 38: the Portal button is a SAAS-only concept - the standalone
+        // (NON-SAAS) install is a single business and has no portal to open.
+        if (!function_exists("bc_is_saas_edition") && is_file(__DIR__ . "/bc-edition.php")) include_once(__DIR__ . "/bc-edition.php");
+        $bc_top_saas = function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : true;
         ?><div class="pk-app__main">
 <header class="pk-app__top">
     <button class="pk-app__burger" type="button" id="pkAppBurger" aria-label="Open navigation" aria-expanded="false">
@@ -695,7 +699,7 @@ if (!function_exists('bc_adm_topbar')) {
         <?php if ($crumb !== ''): ?><p class="pk-app__crumb"><?php echo htmlspecialchars($crumb); ?></p><?php endif; ?>
     </div>
     <div class="pk-app__actions">
-        <?php if ($area === 'admin'): ?>
+        <?php if ($area === 'admin' && $bc_top_saas): ?>
             <a class="pk-app__action" href="<?php echo htmlspecialchars(bc_adm_url('VendorPortal.php', $area)); ?>"><?php echo bc_adm_icon('globe'); ?> Portal</a>
         <?php endif; ?>
         <?php if (!empty($opts['actions'])): ?>
