@@ -2,6 +2,48 @@
     include("../func/bc-spadmin-config.php");
     include_once("../func/whmp-func.php");
 
+    // §33/§9: vendor registration actions (verify payment / approve /
+    // decline) are POST + CSRF + step-up only. Approving a new vendor and
+    // confirming payment need Security PIN + authenticator/email code;
+    // declining needs the PIN. Bare GET links no longer perform them.
+    $sec33_gate_ok = false;
+    if (isset($_POST['sec33_send_code'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'vendor_registration_action', 'Vendor Registration Action')
+            : 'Verification is unavailable.';
+        $_SESSION["page_alert"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
+        header("Location: VendorRegistrations.php");
+        exit();
+    }
+    if (isset($_POST['vr_action']) && isset($_POST['vr_id'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec33_action = (string)$_POST['vr_action'];
+        $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+        if ($sec33_action === 'decline') {
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+        } else {
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        }
+        $sec33_err = function_exists('bc_stepup_spadmin_verify')
+            ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'vendor_registration_action')
+            : 'Verification is unavailable.';
+        if ($sec33_err !== '') {
+            $_SESSION["page_alert"] = "Error: " . $sec33_err;
+            header("Location: VendorRegistrations.php");
+            exit();
+        }
+        $sec33_gate_ok = true;
+        if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'vendor_registration_' . $sec33_action, 'pending#' . (int)$_POST['vr_id'], '');
+        $_GET['action'] = $sec33_action;
+        $_GET['id'] = (string)(int)$_POST['vr_id'];
+    }
+    if (!$sec33_gate_ok && isset($_GET['action']) && isset($_GET['id'])) {
+        $_SESSION["page_alert"] = "Error: that action now needs the secure confirmation form (PIN + authenticator code).";
+        header("Location: VendorRegistrations.php");
+        exit();
+    }
+
     // Handle actions
     if(isset($_GET['action']) && isset($_GET['id'])) {
         $action = $_GET['action'];
@@ -328,7 +370,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                         <td class="text-end pe-4">
                                             <div class="d-flex flex-column gap-1 align-items-end">
                                                 <?php if(($row['payment_method'] == 'bank_deposit' || $row['payment_method'] == 'paystack') && trim($row['payment_status']) != 'paid'): ?>
-                                                    <a href="?action=mark_paid&id=<?php echo $row['id']; ?>" class="btn btn-info btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="return confirm('Confirm receipt of manual payment?');">Verify Payment</a>
+                                                    <button type="button" class="btn btn-info btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="sec33VrAction('mark_paid', <?php echo (int)$row['id']; ?>, 'Verify payment?', 'Confirm receipt of manual payment for this vendor. This needs your PIN + authenticator code and is audited.', 'Verify Payment')">Verify Payment</button>
                                                 <?php endif; ?>
                                                 
                                                 <div class="btn-group btn-group-sm mt-1">
@@ -341,8 +383,8 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                 </div>
 
                                                 <div class="btn-group btn-group-sm mt-1">
-                                                    <a href="?action=approve&id=<?php echo $row['id']; ?>" class="btn btn-primary <?php if(trim($row['payment_status']) != 'paid') echo 'disabled'; ?> rounded-start-pill px-3 fw-bold" onclick="return confirm('Approve and activate vendor account?');">Approve</a>
-                                                    <a href="?action=decline&id=<?php echo $row['id']; ?>" class="btn btn-outline-danger rounded-end-pill px-3" onclick="return confirm('Reject and delete registration?');">Decline</a>
+                                                    <button type="button" class="btn btn-primary <?php if(trim($row['payment_status']) != 'paid') echo 'disabled'; ?> rounded-start-pill px-3 fw-bold" onclick="sec33VrAction('approve', <?php echo (int)$row['id']; ?>, 'Approve new vendor?', 'Approve and activate this vendor account? This needs your PIN + authenticator code and is audited.', 'Approve Vendor')">Approve</button>
+                                                    <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Reject and delete this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
                                                 </div>
                                             </div>
                                         </td>
@@ -398,5 +440,35 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
         });
     </script>
 
+
+
+    <!-- §33: step-up confirmation for vendor registration actions -->
+    <div class="modal fade" id="sec33VrModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form method="post" class="modal-content rounded-4 border-0">
+          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33VrTitle">Confirm action</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <div class="modal-body">
+            <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+            <input type="hidden" name="vr_action" id="sec33VrAction" value="">
+            <input type="hidden" name="vr_id" id="sec33VrId" value="">
+            <p class="text-muted small" id="sec33VrText"></p>
+            <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
+            <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE <span class="fw-normal">(approve &amp; verify-payment)</span></label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
+            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+          </div>
+          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33VrBtn">Confirm</button></div>
+        </form>
+      </div>
+    </div>
+    <script>
+    function sec33VrAction(action, id, title, text, btn) {
+        document.getElementById('sec33VrAction').value = action;
+        document.getElementById('sec33VrId').value = id;
+        document.getElementById('sec33VrTitle').textContent = title;
+        document.getElementById('sec33VrText').textContent = text;
+        document.getElementById('sec33VrBtn').textContent = btn;
+        new bootstrap.Modal(document.getElementById('sec33VrModal')).show();
+    }
+    </script>
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>

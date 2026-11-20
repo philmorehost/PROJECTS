@@ -321,6 +321,12 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 			$get_logged_spadmin_query = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$email'");
 			if(mysqli_num_rows($get_logged_spadmin_query) == 1){
 				$get_logged_spadmin_details = mysqli_fetch_array($get_logged_spadmin_query);
+				// §33: platform "logout all sessions" epoch check.
+				if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
+					session_destroy();
+					header("Location: /bc-spadmin/Login.php");
+					exit();
+				}
 				if($get_logged_spadmin_details["status"] == 1 && $get_logged_spadmin_details["is_blocked"] == 0){
 					if(in_array(explode("?",trim($_SERVER["REQUEST_URI"]))[0], array("/bc-spadmin/Login.php", "/bc-spadmin/PasswordRecovery.php", "/web/LockoutResolution.php"))){
 						header("Location: /bc-spadmin/Dashboard.php");

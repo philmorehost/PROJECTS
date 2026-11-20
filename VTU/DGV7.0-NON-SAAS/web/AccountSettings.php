@@ -410,6 +410,9 @@ bc_app_head("Account Settings | " . ($get_all_site_details["site_title"]));
                 <?php elseif ($sec29_state === 'pending'): ?>
                     <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
                     <p class="small text-muted">Add this secret to Google Authenticator (or any TOTP app), then enter the 6-digit code it shows:</p>
+                    <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
+                    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+                    <script>(function(){{try{{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){{if(el)el.style.display='none';return;}}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}}catch(e){{var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}}}})();</script>
                     <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
                     <p class="small text-muted text-break mb-3">Or paste this link into the app: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
                     <form method="post" action="">

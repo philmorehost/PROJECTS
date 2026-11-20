@@ -16,6 +16,16 @@ $kyc_doc_columns = [
 // ── Global reviewer decision ─────────────────────────────────────────────────────────────────────
 // This page used to act on GET (a link anywhere on the internet could approve a user) and every
 // non-approve action wrote status 0 instead of 3 with no reason stored.
+if (isset($_POST['sec33_send_code'])) {
+    bc_validate_csrf();
+    $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'kyc_decision', 'KYC Decision')
+        : 'Verification is unavailable.';
+    $_SESSION['product_purchase_response'] = $sec33_send_err === '' ? 'Verification code sent to your email.' : 'Error: ' . $sec33_send_err;
+    header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1));
+    exit();
+}
+
 if (isset($_POST['kyc_decision'])) {
     bc_validate_csrf();
     $uid      = (int)($_POST['uid'] ?? 0);
@@ -30,6 +40,22 @@ if (isset($_POST['kyc_decision'])) {
     } elseif ($decision['status'] === 3 && $reason === '') {
         $_SESSION['product_purchase_response'] = 'Error: a rejection needs a reason, so the user knows what to fix.';
     } else {
+        // §33/§8: compliance decisions are step-up gated — approvals need the
+        // full PIN + authenticator/email code; other decisions need the PIN.
+        $sec33_factor = (string)($_POST['sec_factor'] ?? '');
+        $sec33_input = ((int)$decision['status'] === 2)
+            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
+            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+        $sec33_err = function_exists('bc_stepup_spadmin_verify')
+            ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'kyc_decision')
+            : 'Verification is unavailable.';
+        if ($sec33_err !== '') {
+            $_SESSION['product_purchase_response'] = 'Error: ' . $sec33_err;
+            header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1));
+            exit();
+        }
+        if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'kyc_decision_' . (int)$decision['status'], 'user#' . $uid, (string)($decision['label'] ?? ''));
+
         $reason_esc = mysqli_real_escape_string($connection_server, $decision['reason']);
         mysqli_query($connection_server, "UPDATE sas_users SET
                 kyc_status='" . (int)$decision['status'] . "',
@@ -258,6 +284,11 @@ bc_adm_head("Global KYC Management | Super Admin", array("area" => "spadmin"));
                     <input type="hidden" name="return_status" value="<?php echo $status_filter; ?>">
                     <textarea name="reason" class="form-control mb-2" rows="2"
                       placeholder="Reason (required when rejecting)"><?php echo htmlspecialchars($ru_status === 3 ? (string)$review_user['kyc_reject_reason'] : ''); ?></textarea>
+                    <div class="row g-2 mb-2">
+                      <div class="col-md-6"><input type="password" name="sec_pin" class="form-control" placeholder="Your Security PIN" autocomplete="off"></div>
+                      <div class="col-md-6"><input name="sec_factor" class="form-control" placeholder="Authenticator / email code (approve)"></div>
+                    </div>
+                    <button type="submit" name="sec33_send_code" class="btn btn-outline-secondary btn-sm rounded-pill mb-2" formnovalidate>Email me a verification code</button>
                     <div class="d-flex flex-wrap gap-2">
                       <button type="submit" name="kyc_decision" value="approve" class="btn btn-success rounded-pill px-4">Approve</button>
                       <button type="submit" name="kyc_decision" value="reject" class="btn btn-danger rounded-pill px-4">Reject</button>

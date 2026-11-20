@@ -70,6 +70,7 @@ $services = [
     'withdraw' => 'Wallet to Bank (W2B)',
     'share_fund' => 'Share Funds (User-to-User Transfer)',
     'password_reset' => 'Password Reset',
+    'registration' => 'User Registration - Platform-wide (Website & Mobile App)',
     'virtual_card' => 'Virtual Card System',
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',

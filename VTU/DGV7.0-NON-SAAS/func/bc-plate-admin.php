@@ -320,6 +320,10 @@ if (!function_exists('bc_adm_menu')) {
                         array('label' => 'Add API',          'href' => 'CreateAPI.php',   'match' => array('CreateAPI.php')),
                         array('label' => 'View MarketPlace', 'href' => 'MarketPlace.php', 'match' => array('MarketPlace.php')),
                     )),
+                    array('label' => 'Compliance', 'icon' => 'shield-check', 'match' => array('KYCManagement.php','VendorKYC.php'), 'children' => array(
+                        array('label' => 'User KYC Review',   'href' => 'KYCManagement.php', 'match' => array('KYCManagement.php')),
+                        array('label' => 'Vendor KYC Review', 'href' => 'VendorKYC.php',     'match' => array('VendorKYC.php')),
+                    )),
                     array('label' => 'Manage Users', 'icon' => 'people', 'match' => array('Users.php'), 'children' => array(
                         array('label' => 'All Users', 'href' => 'Users.php', 'match' => array('Users.php')),
                     )),
@@ -336,6 +340,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Email Templates', 'href' => 'EmailTemplates.php',     'icon' => 'envelope',     'match' => array('EmailTemplates.php')),
                     array('label' => 'Reports',         'href' => 'SubscriptionReports.php','icon' => 'bar-chart',   'match' => array('SubscriptionReports.php')),
                     array('label' => 'Account Settings', 'href' => 'AccountSettings.php',   'icon' => 'gear',         'match' => array('AccountSettings.php')),
+                    array('label' => 'Session Security', 'href' => 'BruteForceSecurity.php','icon' => 'shield-exclamation','match' => array('BruteForceSecurity.php')),
                     array('label' => 'Cron Jobs',       'href' => 'CronJobs.php',           'icon' => 'clock-history','match' => array('CronJobs.php')),
                     array('label' => 'Update System',   'href' => 'UpdateSystem.php',       'icon' => 'cloud-arrow-up','match' => array('UpdateSystem.php')),
                 )),
@@ -493,6 +498,26 @@ if (!function_exists('bc_adm_css')) {
     function bc_adm_css($brand, $area) {
         ?><style>
         .pk-app__glabel { letter-spacing: .01em; }
+        /* \u00a733 settings tabs: the retired bundle used to hide inactive panes;
+           without these rules every pane stacked and the tab rail looked
+           distorted. Show the active pane only, and give settings pages a
+           proper vertical rail that becomes a scroll strip on small screens. */
+        .pk-app__wrap .tab-content > .tab-pane { display: none; }
+        .pk-app__wrap .tab-content > .tab-pane.active { display: block; }
+        .pk-app__wrap .tab-content > .tab-pane.fade { transition: opacity .15s ease; }
+        .pk-app__wrap .tab-content > .tab-pane.fade:not(.show) { opacity: 0; }
+        .pk-app__wrap .nav-pills .nav-link { border: 1px solid transparent; color: var(--ink); background: transparent; border-radius: 12px; font-weight: 600; text-align: left; padding: 12px 14px; width: 100%; cursor: pointer; }
+        .pk-app__wrap .nav-pills .nav-link:hover { background: var(--wash); }
+        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); color: #fff; }
+        .pk-settings-nav { display: flex; flex-direction: column; gap: 6px; flex-wrap: nowrap; }
+        .pk-settings-nav .nav-link { display: flex; align-items: center; white-space: normal; }
+        .pk-settings-nav .nav-link i { font-size: 1rem; }
+        .pk-settings-nav .nav-link::after { content: "\F285"; font-family: "bootstrap-icons"; margin-left: auto; font-size: .8rem; opacity: .55; }
+        @media (max-width: 991.98px) {
+            .pk-settings-nav { flex-direction: row; overflow-x: auto; padding-bottom: 8px; }
+            .pk-settings-nav .nav-link { white-space: nowrap; flex: 0 0 auto; width: auto; }
+            .pk-settings-nav .nav-link::after { display: none; }
+        }
         /* Topbar actions are real buttons (icon + label), never bare underlined
            links: solid brand fill, readable on-brand foreground, pill shape. */
         .pk-app__action {

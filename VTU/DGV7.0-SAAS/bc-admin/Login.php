@@ -48,6 +48,7 @@
         unset($_SESSION['bc_admin_login_otp']);
         recordLoginAttempt($admin_detail["email"], $_SERVER['REMOTE_ADDR'], 1, (int)$admin_detail["id"]);
         $_SESSION["admin_session"] = strtolower($admin_detail["email"]);
+        if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
         // Email Beginning
         $log_template_encoded_text_array = array("{firstname}" => $admin_detail["firstname"], "{lastname}" => $admin_detail["lastname"], "{email}" => $admin_detail["email"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);
         $raw_log_template_subject = getSuperAdminEmailTemplate('vendor-log','subject');
@@ -130,6 +131,7 @@
                             }
 
 							$_SESSION["admin_session"] = strtolower($admin_detail["email"]);
+							if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
 							// Email Beginning
 							$log_template_encoded_text_array = array("{firstname}" => $admin_detail["firstname"], "{lastname}" => $admin_detail["lastname"], "{email}" => $admin_detail["email"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);
 							$raw_log_template_subject = getSuperAdminEmailTemplate('vendor-log','subject');

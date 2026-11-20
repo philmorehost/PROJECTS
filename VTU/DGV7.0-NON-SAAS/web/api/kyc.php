@@ -159,8 +159,6 @@ if ($action === 'upload_document') {
         if (in_array('selfie', $uploaded, true))           $updates[] = "kyc_picture_ok=1";
         if (in_array('liveliness_video', $uploaded, true)) $updates[] = "kyc_video_ok=1";
         if (in_array('proof_of_address', $uploaded, true)) $updates[] = "kyc_address_ok=1";
-        $updates[] = "kyc_status=1";           // Pending review
-        $updates[] = "kyc_submitted_at=NOW()"; // submission clock, not the account's reg_date
         $updates[] = "kyc_reject_reason=NULL"; // a new submission clears the old rejection
         mysqli_query($connection_server,
             "UPDATE sas_users SET " . implode(", ", $updates) . " WHERE id='$user_id'");
@@ -169,9 +167,18 @@ if ($action === 'upload_document') {
         $after = $q_after ? (mysqli_fetch_assoc($q_after) ?: []) : [];
         $still = $enabled_checks ? bc_kyc_checks_pending($after, $enabled_checks) : [];
 
+        // §33: enter the admin review queue only when EVERY required item
+        // has been provided; partial uploads are saved but stay unverified.
+        $in_review = false;
+        if (empty($still) && (int)($after['kyc_status'] ?? 0) !== 2) {
+            mysqli_query($connection_server, "UPDATE sas_users SET kyc_status=1, kyc_submitted_at=NOW() WHERE id='$user_id'");
+            $in_review = true;
+        }
+
         echo json_encode([
             "status" => "success",
-            "desc"   => "Documents submitted for review",
+            "desc"   => $in_review ? "Documents submitted and waiting for admin review" : "Documents saved",
+            "in_review" => $in_review,
             "still_needed" => array_map('bc_kyc_check_label', $still),
         ]);
     } else {
@@ -208,7 +215,7 @@ if ($action === 'ai_analyze_documents') {
     $billing = bc_kyc_ai_billing_cost($analysis['total_tokens'] ?? 0, $vendor_row);
     $billing['billed'] = false; // NON-SAAS pays directly, no billing
     $analysis['billing'] = $billing;
-    $auto_apply = (int)($vendor_row['kyc_ai_auto_approve'] ?? 1) === 1;
+    $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
     $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, $auto_apply);
     echo json_encode([
         "status"        => "success",

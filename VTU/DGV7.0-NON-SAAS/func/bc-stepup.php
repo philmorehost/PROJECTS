@@ -392,6 +392,9 @@ if (!function_exists('bc_stepup_user_verify')) {
         if (!$pin_ok) {
             return 'Invalid Transaction PIN';
         }
+        if (!empty($input['pin_check_only'])) {
+            return '';
+        }
         return bc_stepup_actor_second_factor('sas_users', $user_row, (string)$user_row['username'], $input, $context);
     }
 }
@@ -427,6 +430,9 @@ if (!function_exists('bc_stepup_admin_verify')) {
             }
             if (function_exists('bc_log_security_event')) bc_log_security_event('ADMIN_PIN_FAILED', $context, $identity, 'Wrong PIN');
             return 'Invalid Security PIN';
+        }
+        if (!empty($input['pin_check_only'])) {
+            return '';
         }
         return bc_stepup_actor_second_factor('sas_vendors', $vendor_row, $identity, $input, $context);
     }
@@ -468,6 +474,233 @@ if (!function_exists('bc_stepup_spadmin_verify')) {
             return '';
         }
         return bc_stepup_actor_second_factor('sas_super_admin', $spadmin_row, $identity, $input, $context);
+    }
+}
+
+// ───────────────────── platform session epoch (§33) ─────────────────────
+// "Logout all sessions" bumps a platform-wide epoch. Every PHP session
+// carries the epoch it was created under (stamped at login) and the area
+// configs destroy it on mismatch; app sessions are revoked in
+// sas_app_tokens by the same bump, so one click signs out the website,
+// both admin panels and the mobile apps at once.
+
+if (!function_exists('bc_auth_epoch')) {
+    /** Current platform session epoch (1 until the first bump). */
+    function bc_auth_epoch() {
+        if (isset($GLOBALS['bc_auth_epoch_cache'])) {
+            return (int)$GLOBALS['bc_auth_epoch_cache'];
+        }
+        $epoch = 1;
+        global $connection_server;
+        if ($connection_server instanceof mysqli) {
+            $q = @mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='auth_epoch' LIMIT 1");
+            if ($q && ($r = mysqli_fetch_assoc($q))) {
+                $epoch = max(1, (int)$r['option_value']);
+            }
+        }
+        $GLOBALS['bc_auth_epoch_cache'] = $epoch;
+        return $epoch;
+    }
+}
+
+if (!function_exists('bc_auth_epoch_bump')) {
+    /**
+     * Invalidate EVERY session platform-wide. Returns the new epoch, 0 on
+     * failure. The acting admin re-stamps their own session afterwards
+     * (bc_auth_epoch_stamp) so only they stay signed in.
+     */
+    function bc_auth_epoch_bump() {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) {
+            return 0;
+        }
+        $ok = @mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('auth_epoch', '2') ON DUPLICATE KEY UPDATE option_value = CAST(option_value AS UNSIGNED) + 1");
+        if (!$ok) {
+            return 0;
+        }
+        @mysqli_query($connection_server, "UPDATE sas_app_tokens SET revoked_at = NOW(), revoke_reason = 'platform_logout_all' WHERE revoked_at IS NULL");
+        unset($GLOBALS['bc_auth_epoch_cache']);
+        return bc_auth_epoch();
+    }
+}
+
+if (!function_exists('bc_auth_epoch_stamp')) {
+    /** Mark the current PHP session as created under the current epoch (call at login). */
+    function bc_auth_epoch_stamp() {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['bc_auth_epoch'] = bc_auth_epoch();
+        }
+    }
+}
+
+if (!function_exists('bc_auth_epoch_session_ok')) {
+    /**
+     * May the current PHP session continue? Sessions stamped before a bump
+     * die; unstamped sessions are stamped lazily only while no bump has ever
+     * happened (epoch 1), so a dormant pre-bump session cannot slip through.
+     */
+    function bc_auth_epoch_session_ok() {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return true;
+        }
+        $epoch = bc_auth_epoch();
+        if (isset($_SESSION['bc_auth_epoch'])) {
+            return (int)$_SESSION['bc_auth_epoch'] === $epoch;
+        }
+        if ($epoch <= 1) {
+            $_SESSION['bc_auth_epoch'] = $epoch;
+            return true;
+        }
+        return false;
+    }
+}
+
+// ───────────────────── registration switch (§33) ─────────────────────
+// Master + vendor Service Control rows named 'registration'.
+// Default ON: only an explicit status=0 row turns registration off.
+
+if (!function_exists('bc_registration_enabled')) {
+    /**
+     * @param int $vendor_id 0 = platform ceiling only (SAAS).
+     */
+    function bc_registration_enabled($vendor_id = 0) {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) {
+            return true;
+        }
+        $vendor_id = (int)$vendor_id;
+        static $cache = [];
+        if (isset($cache[$vendor_id])) {
+            return $cache[$vendor_id];
+        }
+        $enabled = true;
+        // Platform ceiling (SAAS only; table does not exist on NON-SAAS).
+        $t = @mysqli_query($connection_server, "SHOW TABLES LIKE 'sas_global_service_control'");
+        if ($t && mysqli_num_rows($t) > 0) {
+            $q = @mysqli_query($connection_server, "SELECT status FROM sas_global_service_control WHERE service_name='registration' LIMIT 1");
+            if ($q && ($r = mysqli_fetch_assoc($q)) && (int)$r['status'] === 0) {
+                $enabled = false;
+            }
+        }
+        if ($enabled && $vendor_id > 0) {
+            $q = @mysqli_query($connection_server, "SELECT status FROM sas_service_control WHERE vendor_id='" . $vendor_id . "' AND service_name='registration' LIMIT 1");
+            if ($q && ($r = mysqli_fetch_assoc($q)) && (int)$r['status'] === 0) {
+                $enabled = false;
+            }
+        }
+        $cache[$vendor_id] = $enabled;
+        return $enabled;
+    }
+}
+
+// ───────────────────── vendor compliance KYC (§33) ─────────────────────
+// The enhanced (document-based) KYC for VENDORS, mirroring the user system:
+// BVN/NIN on sas_vendors plus uploaded evidence in sas_vendor_kyc_documents.
+// Nothing self-approves: a complete submission moves the vendor to
+// kyc_status 1 (under review) and only a super-admin decision (bc-spadmin,
+// step-up gated) sets 2 (verified) or 3 (rejected).
+
+if (!function_exists('bc_vendor_kyc_ensure_schema')) {
+    function bc_vendor_kyc_ensure_schema() {
+        global $connection_server;
+        static $done = false;
+        if ($done || !($connection_server instanceof mysqli)) return;
+        $done = true;
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_vendor_kyc_documents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vendor_id INT NOT NULL,
+            doc_type VARCHAR(40) NOT NULL,
+            file_name VARCHAR(255) NOT NULL,
+            status VARCHAR(12) NOT NULL DEFAULT 'pending',
+            submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at DATETIME NULL,
+            reviewed_by INT DEFAULT 0,
+            review_note VARCHAR(255) NULL,
+            KEY vendor_doc (vendor_id, doc_type)
+        )");
+        $cols = [];
+        $q = @mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors");
+        while ($q && ($r = mysqli_fetch_assoc($q))) $cols[] = (string)$r['Field'];
+        if ($cols && !in_array('kyc_status', $cols, true)) {
+            @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN kyc_status INT DEFAULT 0");
+        }
+        if ($cols && !in_array('kyc_reject_reason', $cols, true)) {
+            @mysqli_query($connection_server, "ALTER TABLE sas_vendors ADD COLUMN kyc_reject_reason VARCHAR(255) NULL");
+        }
+    }
+}
+
+if (!function_exists('bc_vendor_kyc_required_checks')) {
+    /** @return string[] check names the platform requires from vendors. */
+    function bc_vendor_kyc_required_checks() {
+        global $connection_server;
+        bc_vendor_kyc_ensure_schema();
+        $out = [];
+        if (!($connection_server instanceof mysqli)) return $out;
+        $q = @mysqli_query($connection_server, "SELECT verification_name FROM sas_super_admin_kyc_verifications WHERE status='1'");
+        while ($q && ($r = mysqli_fetch_assoc($q))) {
+            $name = (string)$r['verification_name'];
+            if ($name !== '') $out[] = $name;
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('bc_vendor_kyc_pending')) {
+    /**
+     * Required vendor checks not yet provided. BVN/NIN live on sas_vendors;
+     * document checks need a pending/approved upload.
+     * @return string[]
+     */
+    function bc_vendor_kyc_pending($vendor_row, $required = null) {
+        global $connection_server;
+        bc_vendor_kyc_ensure_schema();
+        if ($required === null) $required = bc_vendor_kyc_required_checks();
+        $vendor_id = (int)($vendor_row['id'] ?? 0);
+        $docs = [];
+        if ($vendor_id > 0 && ($connection_server instanceof mysqli)) {
+            $q = @mysqli_query($connection_server, "SELECT DISTINCT doc_type FROM sas_vendor_kyc_documents WHERE vendor_id='$vendor_id' AND status IN ('pending','approved')");
+            while ($q && ($r = mysqli_fetch_assoc($q))) $docs[(string)$r['doc_type']] = true;
+        }
+        $pending = [];
+        foreach ((array)$required as $check) {
+            switch ($check) {
+                case 'bvn': if (empty($vendor_row['bvn'])) $pending[] = $check; break;
+                case 'nin': if (empty($vendor_row['nin'])) $pending[] = $check; break;
+                case 'govt_id': if (empty($docs['govt_id'])) $pending[] = $check; break;
+                case 'liveliness_picture': if (empty($docs['selfie']) && empty($docs['liveliness_picture'])) $pending[] = $check; break;
+                case 'liveliness_video': if (empty($docs['liveliness_video'])) $pending[] = $check; break;
+                case 'proof_of_address': if (empty($docs['proof_of_address'])) $pending[] = $check; break;
+                default: $pending[] = $check;
+            }
+        }
+        return $pending;
+    }
+}
+
+if (!function_exists('bc_vendor_kyc_refresh_status')) {
+    /**
+     * Move a vendor into the review queue (kyc_status 1) once every required
+     * item has been provided. Never approves (2) and never demotes an
+     * already-verified vendor. Returns the resulting status.
+     */
+    function bc_vendor_kyc_refresh_status($vendor_id) {
+        global $connection_server;
+        bc_vendor_kyc_ensure_schema();
+        $vendor_id = (int)$vendor_id;
+        if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return 0;
+        $q = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+        $row = $q ? mysqli_fetch_assoc($q) : null;
+        if (!$row) return 0;
+        $status = (int)($row['kyc_status'] ?? 0);
+        if ($status === 2) return 2;
+        $required = bc_vendor_kyc_required_checks();
+        if (!$required) return $status;
+        if (bc_vendor_kyc_pending($row, $required) === [] && $status !== 1) {
+            @mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status=1, kyc_reject_reason=NULL WHERE id='$vendor_id'");
+            return 1;
+        }
+        return $status;
     }
 }
 

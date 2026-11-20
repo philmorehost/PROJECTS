@@ -1,5 +1,10 @@
 <?php session_start();
     include("../func/bc-config.php");
+    // §33: registration disabled in Service Control -> sign-in page.
+    if (function_exists('bc_registration_enabled') && !bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))) {
+        header("Location: /web/Login.php");
+        exit();
+    }
 require_once(__DIR__ . "/../func/bc-plate-auth.php");
     if(isset($get_logged_user_details["username"]) && !empty($get_logged_user_details["username"]) && ($get_logged_user_details["status"] == 1)){
     	header("Location: /web/Dashboard.php");
@@ -64,7 +69,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
                                     // Log the user in immediately
                                     $_SESSION["user_session"] = $user;
-
+                                    if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                                     //Congratulations, Account Has Been Created Successfully.
                                     $json_response_array = array("desc" => "Congratulations, Account Has Been Created Successfully.");
                                     $json_response_encode = json_encode($json_response_array,true);

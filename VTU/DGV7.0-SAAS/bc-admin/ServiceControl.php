@@ -40,6 +40,7 @@ $services = [
     'withdraw' => 'Wallet to Bank',
     'share_fund' => 'Share Funds (User-to-User Transfer)',
     'password_reset' => 'Password Reset',
+    'registration' => 'User Registration (Website & Mobile App)',
     'virtual_card' => 'Virtual Card System',
     'gift_card' => 'Gift Cards',
     'crypto_hub' => 'Crypto Service',

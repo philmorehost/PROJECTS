@@ -1,6 +1,43 @@
 <?php session_start();
 include("../func/bc-admin-config.php");
 
+if (isset($_POST["sec33_send_code"])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'logout_all_sessions', 'Logout All Sessions')
+        : 'Verification is unavailable.';
+    $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
+    header("Location: BruteForceSecurity.php");
+    exit();
+}
+
+if (isset($_POST["logout-all-sessions"])) {
+    // §33: site-wide session revocation — CSRF + step-up (PIN + authenticator/email OTP).
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $sec33_input = array(
+        'pin'       => (string)($_POST['sec33_pin'] ?? ''),
+        'otp_code'  => (string)($_POST['sec33_factor'] ?? ''),
+        'totp_code' => (string)($_POST['sec33_factor'] ?? ''),
+    );
+    $sec33_err = function_exists('bc_stepup_admin_verify')
+        ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'logout_all_sessions')
+        : 'Verification is unavailable.';
+    if ($sec33_err === '') {
+        $sec33_epoch = function_exists('bc_auth_epoch_bump') ? bc_auth_epoch_bump() : 0;
+        if ($sec33_epoch > 0) {
+            if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // acting admin stays signed in
+            if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'logout_all_sessions', 'auth_epoch', (string)$sec33_epoch);
+            $_SESSION["product_purchase_response"] = "All sessions have been logged out (website, admin panels and mobile apps).";
+        } else {
+            $_SESSION["product_purchase_response"] = "Could not revoke sessions (storage error).";
+        }
+    } else {
+        $_SESSION["product_purchase_response"] = "Session revocation rejected: " . $sec33_err;
+    }
+    header("Location: BruteForceSecurity.php");
+    exit();
+}
+
 if (isset($_POST["update-settings"])) {
     $vendor_id = $get_logged_admin_details["id"];
     $is_enabled = isset($_POST["is_enabled"]) ? 1 : 0;
@@ -129,6 +166,25 @@ bc_adm_head("Brute Force Security | " . ($get_all_super_admin_site_details["site
 <?php bc_adm_topbar(array("area" => "admin", "title" => "BRUTE FORCE SECURITY", "crumb" => "Home / Brute Force")); ?>
 
     <section class="section dashboard">
+      <div class="row g-4">
+      <!-- §33: Logout all sessions (platform-wide) -->
+      <div class="col-12">
+        <div class="card border-danger border-opacity-50 rounded-4">
+          <div class="card-header bg-white py-3 border-0 d-flex align-items-center gap-2"><i class="bi bi-eject text-danger"></i><h5 class="fw-bold mb-0">Session Control</h5></div>
+          <div class="card-body p-4">
+            <p class="text-muted">Sign out <strong>every</strong> customer, vendor and platform session — the website, both admin panels and the mobile apps (app tokens are revoked instantly). Use this after a security incident. You will stay signed in on this device only; everyone else must sign in again.</p>
+            <form method="post" onsubmit="return (event.submitter && event.submitter.name === 'logout-all-sessions') ? confirm('This logs out ALL users everywhere including the mobile apps. Continue?') : true;">
+              <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+              <div class="row g-3 align-items-end">
+                <div class="col-md-4"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec33_pin" class="form-control rounded-3" required></div>
+                <div class="col-md-4"><label class="form-label small fw-bold text-muted">AUTHENTICATOR CODE OR EMAIL OTP</label><input name="sec33_factor" class="form-control rounded-3" required placeholder="6-digit code"></div>
+                <div class="col-md-4"><button name="logout-all-sessions" class="btn btn-danger rounded-pill px-4 fw-bold w-100"><i class="bi bi-eject"></i> Logout ALL Sessions</button><button name="sec33_send_code" class="btn btn-outline-secondary rounded-pill px-4 fw-bold w-100 mt-2" formnovalidate>Email me a code instead</button></div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+</div>
         <div class="row g-4">
             <div class="col-lg-6">
                 <div class="card shadow-sm border-0 rounded-4 h-100">

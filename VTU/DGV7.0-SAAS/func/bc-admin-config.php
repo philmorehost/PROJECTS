@@ -109,6 +109,33 @@ if ($connection_server) {
                             exit();
                         }
                     }
+                    // §33: SAAS platform may force Google Authenticator on every
+                    // vendor. Until the vendor enrols, confine the session to
+                    // Account Settings (same pattern as a forced password change).
+                    if (!isset($_SESSION["spadmin_vendor_auth"])) {
+                        if (!function_exists('bc_is_saas_edition') && file_exists(__DIR__ . '/bc-edition.php')) {
+                            include_once(__DIR__ . '/bc-edition.php');
+                        }
+                        if (function_exists('bc_is_saas_edition') && bc_is_saas_edition()) {
+                            $sec33_totp_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_totp' LIMIT 1");
+                            $sec33_force_totp = $sec33_totp_q ? (string)(mysqli_fetch_assoc($sec33_totp_q)['option_value'] ?? '0') : '0';
+                            if ($sec33_force_totp === '1' && (string)($get_logged_admin_details['two_factor_type'] ?? 'none') !== 'totp') {
+                                $sec33_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+                                if ($sec33_script !== 'AccountSettings.php') {
+                                    header('Location: /bc-admin/AccountSettings.php?force_totp=1');
+                                    exit();
+                                }
+                            }
+                        }
+                    }
+                    // §33: platform "logout all sessions" epoch check.
+                    if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
+                        session_destroy();
+                        header("Location: /bc-admin/Login.php");
+                        exit();
+                    }
+
+
                     // Repair missing and legacy short portal hashes. Existing 32-character MD5
                     // values are intentionally rotated: portal links are bearer credentials and
                     // only high-entropy random tokens are safe to expose.

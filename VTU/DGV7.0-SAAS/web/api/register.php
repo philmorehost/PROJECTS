@@ -34,6 +34,13 @@ if (!$get_vendor) {
     exit;
 }
 
+// §33: registration switch (Service Control) applies to the App/API too.
+if (file_exists(__DIR__ . '/../../func/bc-stepup.php')) { include_once(__DIR__ . '/../../func/bc-stepup.php'); }
+if (function_exists('bc_registration_enabled') && !bc_registration_enabled($vendor_id)) {
+    echo json_encode(["status" => "error", "code" => "registration_disabled", "message" => "Registration is currently closed."]);
+    exit;
+}
+
 // Validation (form fields only — a verify request is validated against the saved payload)
 if (!$is_otp_verification) {
     if (strlen($user) < 6) {
