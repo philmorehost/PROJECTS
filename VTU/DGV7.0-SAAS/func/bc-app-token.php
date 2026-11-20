@@ -23,7 +23,7 @@
 
 /** Byte-length of the random token before encoding. */
 if (!defined('BC_APP_TOKEN_BYTES')) define('BC_APP_TOKEN_BYTES', 32);
-/** Default session lifetime; short enough that a lost phone expires on its own. */
+/** Legacy default session lifetime (kept for reference; issuance uses the §29 daily TTL). */
 if (!defined('BC_APP_TOKEN_TTL')) define('BC_APP_TOKEN_TTL', 30 * 24 * 60 * 60);
 
 /** Hash used for storage + lookup. Keeping it in one place prevents a lookup mismatch. */
@@ -95,7 +95,11 @@ function bc_app_token_issue($user, $vendor_id, $platform = 'android', $label = n
 
     $token = rtrim(strtr(base64_encode(random_bytes(BC_APP_TOKEN_BYTES)), '+/', '-_'), '=');
     $hash  = bc_app_token_hash($token);
-    $expires_at = date('Y-m-d H:i:s', time() + BC_APP_TOKEN_TTL);
+    // §29: app sessions are daily. The app exchanges its token for a fresh one
+    // (bc_app_token_exchange / web/api/refresh-token.php) instead of holding a
+    // month-long credential, so a stolen token is worthless within a day.
+    $ttl = defined('BC_APP_TOKEN_TTL_PERSONAL') ? BC_APP_TOKEN_TTL_PERSONAL : 86400;
+    $expires_at = date('Y-m-d H:i:s', time() + $ttl);
 
     $username = mysqli_real_escape_string($connection_server, (string)$row['username']);
     $hash_sql = mysqli_real_escape_string($connection_server, $hash);
@@ -194,6 +198,26 @@ function bc_app_session_user_any_vendor($token) {
     if ($vendor_id <= 0) return null;
 
     return bc_app_session_user($token, $vendor_id);
+}
+
+/**
+ * Daily rotation exchange: validates the presented token, revokes it and
+ * issues a fresh 24-hour token for the same account. Returns the same shape
+ * as bc_app_token_issue() plus 'user', or null when refused.
+ */
+function bc_app_token_exchange($token, $vendor_id) {
+    $user = (int)$vendor_id > 0
+        ? bc_app_session_user($token, (int)$vendor_id)
+        : bc_app_session_user_any_vendor($token);
+    if (!$user) return null;
+    $vid = (int)($user['vendor_id'] ?? $vendor_id);
+    if (!empty($user['_app_token_id'])) {
+        bc_app_token_revoke((int)$user['_app_token_id'], $vid, 'daily_rotation');
+    }
+    $issued = bc_app_token_issue($user, $vid, 'android', null);
+    if (!$issued) return null;
+    $issued['user'] = $user;
+    return $issued;
 }
 
 /** Revokes one session (device logout). Returns true when a live row was closed. */

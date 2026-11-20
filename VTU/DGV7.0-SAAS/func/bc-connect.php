@@ -125,6 +125,8 @@
     // /web/api/* only includes bc-connect.php, so the helpers must live here rather than only
     // in bc-config.php; otherwise the money-moving endpoints could not rate-limit or issue OTPs.
     include_once(__DIR__ . "/bc-security.php");
+    // §29: step-up auth (TOTP + email OTP + PIN), API-key lifecycle, audit log.
+    include_once(__DIR__ . "/bc-stepup.php");
     include_once(__DIR__ . "/bc-gateway.php");
     include_once(__DIR__ . "/bc-remote-vendor.php");
     include_once(__DIR__ . "/bc-bulk-queue.php");

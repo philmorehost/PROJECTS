@@ -45,10 +45,11 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                         if(!filter_var($user, FILTER_VALIDATE_EMAIL)){
                             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
                                 if(is_numeric($phone) && (strlen($phone) == 11)){
-                                    $md5_pass = md5($pass);
+                                    // §29: bcrypt at rest (login still accepts legacy MD5).
+                                    $md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
                                     $api_key = bin2hex(random_bytes(25));
                                     $last_login = date('Y-m-d H:i:s.u');
-                                    mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')");
+                                    mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '2', '1')");
                                     
                                     // Email Beginning
                                     $reg_template_encoded_text_array = array("{firstname}" => $first, "{lastname}" => $last, "{username}" => $user, "{address}" => $address, "{email}" => $email, "{phone}" => $phone);

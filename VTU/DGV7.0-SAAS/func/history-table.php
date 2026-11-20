@@ -67,11 +67,28 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
                     '<div class="mt-1"><span class="badge bg-info bg-opacity-10 text-info border-info border" style="font-size:9px; cursor:help;" title="' . htmlspecialchars(bc_get_ai_failure_explanation($row['description'] ?? '')) . '"><i class="bi bi-robot me-1"></i>SMART ASSIST</span></div>' 
                     : '') . '
               </td>';
+                // §29: approvals are POST forms (CSRF token + PIN + 2FA code),
+                // never GET links — a GET approval can be fired by an <img>
+                // tag on any page a logged-in admin happens to open.
+                $bc_order_csrf = function_exists('bc_csrf_field') ? bc_csrf_field() : '';
+                $bc_mk_order_form = function ($page, $buttons) use ($bc_order_csrf, $ref) {
+                    $h = '<form method="post" action="' . $page . '" class="d-flex gap-1 align-items-center justify-content-center flex-wrap" onclick="event.stopPropagation();">'
+                        . $bc_order_csrf
+                        . '<input type="hidden" name="order-ref" value="' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '">'
+                        . '<input type="password" name="pin" maxlength="4" inputmode="numeric" placeholder="PIN" title="Security PIN" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+                        . '<input type="text" name="otp_code" maxlength="6" inputmode="numeric" placeholder="2FA" title="Authenticator or email code" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+                        . '<input type="hidden" name="totp_code" value="">';
+                    foreach ($buttons as $b) {
+                        $h .= '<button type="submit" name="order-status" value="' . $b[0] . '" class="' . $b[2] . '" style="font-size:11px;">' . $b[1] . '</button>';
+                    }
+                    return $h . '</form>';
+                };
         if ($show_actions) {
             echo '<td class="text-center" onclick="event.stopPropagation();">';
             if ($row['status'] == 2) {
                 echo '<div class="d-flex gap-1 justify-content-center">';
                 if ($is_admin) {
+
                     // Use inline_approve_page for Transactions.php-sourced wallet-funding entries
                     $approve_page = isset($inline_approve_page) ? $inline_approve_page : null;
                     if ($approve_page && (
@@ -80,8 +97,7 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
                         stripos($row['type_alternative'] ?? '', 'Wallet Funding') !== false ||
                         stripos($row['type_alternative'] ?? '', 'Wallet Credit') !== false
                     )) {
-                        echo '<a href="' . $approve_page . '?order-ref=' . $ref . '&order-status=approve" class="btn btn-primary btn-sm py-1 px-2" style="font-size:11px;">Approve</a>';
-                        echo '<a href="' . $approve_page . '?order-ref=' . $ref . '&order-status=cancel" class="btn btn-danger btn-sm py-1 px-2" style="font-size:11px;">Cancel</a>';
+                        echo $bc_mk_order_form($approve_page, array(array('approve', 'Approve', 'btn btn-primary btn-sm py-1 px-2'), array('cancel', 'Cancel', 'btn btn-danger btn-sm py-1 px-2')));
                     } else if (isset($is_payment_order) && $is_payment_order) {
                         $is_provider_transaction = isset($inline_approve_page)
                             && $inline_approve_page === 'Transactions.php'
@@ -91,13 +107,10 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
                             echo '<form method="post" action="Transactions.php" class="d-inline" onclick="event.stopPropagation();"><input type="hidden" name="bulk_action" value="recover_success"><input type="hidden" name="transaction_ref" value="' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($_SESSION['bc_admin_transactions_csrf'] ?? '', ENT_QUOTES, 'UTF-8') . '"><button type="submit" class="btn btn-success btn-sm py-1 px-2" style="font-size:11px;" onclick="return confirm(&quot;Confirm that the provider delivered this transaction?&quot;)">Confirm Delivered</button></form>';
                             echo '<form method="post" action="Transactions.php" class="d-inline" onclick="event.stopPropagation();"><input type="hidden" name="bulk_action" value="cancel_provider_pending"><input type="hidden" name="transaction_ref" value="' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($_SESSION['bc_admin_transactions_csrf'] ?? '', ENT_QUOTES, 'UTF-8') . '"><button type="submit" class="btn btn-outline-danger btn-sm py-1 px-2" style="font-size:11px;" title="Cancel and refund after reviewing the provider response" onclick="return confirm(&quot;Confirm the provider failed this transaction? The customer will be refunded immediately.&quot;)">Cancel &amp; Refund</button></form>';
                         } else {
-                            echo '<a href="PaymentOrders.php?order-ref=' . $ref . '&order-status=2" class="btn btn-primary btn-sm py-1 px-2" style="font-size:11px;">Approve</a>';
-                            echo '<a href="PaymentOrders.php?order-ref=' . $ref . '&order-status=1" class="btn btn-danger btn-sm py-1 px-2" style="font-size:11px;">Reject</a>';
+                            echo $bc_mk_order_form('PaymentOrders.php', array(array('2', 'Approve', 'btn btn-primary btn-sm py-1 px-2'), array('1', 'Reject', 'btn btn-danger btn-sm py-1 px-2')));
                         }
                     } else if (isset($is_fund_transfer) && $is_fund_transfer) {
-                        echo '<a href="FundTransferRequests.php?order-ref=' . $ref . '&order-status=2" class="btn btn-primary btn-sm py-1 px-2" style="font-size:11px;">Approve</a>';
-                        echo '<a href="FundTransferRequests.php?order-ref=' . $ref . '&order-status=1" class="btn btn-danger btn-sm py-1 px-2" style="font-size:11px;">Reject</a>';
-                        echo '<a href="FundTransferRequests.php?order-ref=' . $ref . '&order-status=3" class="btn btn-dark btn-sm py-1 px-2" style="font-size:11px;">Cancel</a>';
+                        echo $bc_mk_order_form('FundTransferRequests.php', array(array('2', 'Approve', 'btn btn-primary btn-sm py-1 px-2'), array('1', 'Reject', 'btn btn-danger btn-sm py-1 px-2'), array('3', 'Cancel', 'btn btn-dark btn-sm py-1 px-2')));
                     }
                 } else {
                     // User Actions

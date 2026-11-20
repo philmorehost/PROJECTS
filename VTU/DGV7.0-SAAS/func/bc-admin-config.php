@@ -99,6 +99,16 @@ if ($connection_server) {
                 $get_logged_admin_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
                 if (mysqli_num_rows($get_logged_admin_query) == 1) {
                     $get_logged_admin_details = mysqli_fetch_array($get_logged_admin_query);
+
+                    // §29: a forced password change confines the admin session to
+                    // Account Settings until a new password is set.
+                    if (function_exists('bc_password_change_required') && bc_password_change_required($get_logged_admin_details)) {
+                        $sec29_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+                        if ($sec29_script !== 'AccountSettings.php') {
+                            header('Location: /bc-admin/AccountSettings.php?force_password=1');
+                            exit();
+                        }
+                    }
                     // Repair missing and legacy short portal hashes. Existing 32-character MD5
                     // values are intentionally rotated: portal links are bearer credentials and
                     // only high-entropy random tokens are safe to expose.

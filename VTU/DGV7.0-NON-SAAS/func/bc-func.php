@@ -1338,10 +1338,16 @@ function adminTransactionActionButton($api_id, $product_id, $transaction_ref, $t
 	global $connection_server, $get_logged_admin_details;
 
 	if ($is_payment_order && $transaction_status == 2) {
-		$p_actions = '<div class="d-flex gap-2">';
-		$p_actions .= '<a href="PaymentOrders.php?order-ref=' . $transaction_ref . '&order-status=2" class="btn btn-primary btn-sm">Approve</a>';
-		$p_actions .= '<a href="PaymentOrders.php?order-ref=' . $transaction_ref . '&order-status=1" class="btn btn-danger btn-sm">Reject</a>';
-		$p_actions .= '</div>';
+		// §29: POST + CSRF + PIN + 2FA form (no GET approvals).
+		$p_actions = '<form method="post" action="PaymentOrders.php" class="d-flex gap-1 align-items-center flex-wrap" onclick="event.stopPropagation();">'
+			. (function_exists('bc_csrf_field') ? bc_csrf_field() : '')
+			. '<input type="hidden" name="order-ref" value="' . htmlspecialchars((string)$transaction_ref, ENT_QUOTES, 'UTF-8') . '">'
+			. '<input type="password" name="pin" maxlength="4" inputmode="numeric" placeholder="PIN" title="Security PIN" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+			. '<input type="text" name="otp_code" maxlength="6" inputmode="numeric" placeholder="2FA" title="Authenticator or email code" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+			. '<input type="hidden" name="totp_code" value="">'
+			. '<button type="submit" name="order-status" value="2" class="btn btn-primary btn-sm">Approve</button>'
+			. '<button type="submit" name="order-status" value="1" class="btn btn-danger btn-sm">Reject</button>'
+			. '</form>';
 		return $p_actions;
 	}
 

@@ -1512,3 +1512,77 @@ Brief-driven round covering sixteen operator asks across both editions.
 - Crypto trading on the new rails stays fail-closed until the Klasha wallet/swap flow is wired end-to-end (quote → beneficiary → ledger); balances and history are unaffected.
 
 Test counts after §28: gate 1065 · upgrade25 260/0 · provider_live 71 · policy 70 · plate_app 154 · plate_admin 711 · plate_migration 1084 · backoffice 184/0 · lm 30/0 · htaccess 224. Two pre-§28 pins (legacy swap handlers, referral volume from swaps) were updated to the fail-closed contract with in-test rationale.
+
+## §29 — Security-incident hardening: step-up approvals, TOTP, API-key lifecycle, forced password change (2026-11-20)
+
+### The incident
+A personal account was drained ₦1,000 at a time, each withdrawal "approved" from
+bc-admin. Root causes found in code:
+
+- `bc-admin/Withdrawals.php` approved on the admin session alone: no CSRF token,
+  no admin PIN/second factor, no pending-status precondition (an approval could
+  be replayed), no separation of duties, no audit event. Approving cleared the
+  single-pending-withdrawal slot, so the next ₦1,000 request could be filed
+  immediately — the repeat cycle.
+- `bc-admin/PaymentOrders.php`, `bc-admin/FundTransferRequests.php` and
+  `bc-admin/Transactions.php` moved money from **GET links**
+  (`?order-ref=…&order-status=2`) — fireable by an `<img>` tag on any page a
+  logged-in admin opens. Fund transfers could even be approved from the
+  already-rejected state (credit after refund).
+- The static `sas_users.api_key` never expired, was stored in plain text, and
+  was returned by `web/api/profile.php` and the login payloads; with a 4-digit
+  PIN it was sufficient for `web/api/withdrawal.php`.
+- Admin/user login OTP was opt-in (default off); user passwords were bare MD5.
+
+### What shipped (both editions)
+- **New `func/bc-stepup.php`** (loaded via `func/bc-connect.php`): RFC 6238 TOTP
+  with replay protection (`totp_last_step`), secrets sealed with AES-256-GCM
+  keyed from the DB password (plaintext fallback only where the host lacks
+  OpenSSL), `bc_stepup_user_verify()` / `bc_stepup_admin_verify()` (PIN —
+  throttled 5 wrong per 5 min on the shared rate-limit store — plus TOTP when
+  enrolled, else an emailed OTP), `bc_sec_audit()` writing every sensitive
+  action to `sas_security_audit_log`, `bc_q()` prepared-statement helper, the
+  API-key lifecycle, and the force-password-change primitives.
+- **Approvals**: Withdrawals, PaymentOrders, FundTransferRequests, Transactions
+  (wallet-funding approve/cancel + VTU reverse/restore) and CryptoHub now
+  require POST + CSRF + admin PIN + second factor, act only on rows still
+  pending (Withdrawals additionally claims the row atomically, status 2→6, and
+  refuses self-approval), and audit every credit. The shared history table and
+  `adminTransactionActionButton()` render POST step-up forms instead of GET
+  links; every approval page has an "Email me a code" button.
+- **User money movement**: `web/SendFund.php` requires the authenticator code
+  when TOTP is enrolled; static-key calls to `web/api/withdrawal.php` must
+  answer an emailed `otp_required` challenge (app sessions are unaffected).
+- **API keys**: never returned by profile/login responses any more (state and
+  days-left instead). Business keys live 60 days; `bc_api_keys_run_rotation()`
+  (via `func/api-key-rotation-cron.php`, CLI or `cron_secret`-gated) stamps a
+  first window for legacy keys, regenerates expired Business keys and emails
+  the owner (never the key), rotates Personal keys daily/invisibly, and the
+  fintech bridge rejects expired keys with `401 API_KEY_EXPIRED` without
+  changing its pinned passthrough semantics. Personal app credentials are the
+  hash-only app tokens: 24-hour TTL with a daily exchange at
+  `web/api/refresh-token.php`.
+- **Force password change**: bc-admin → Users can flag one user, a bulk
+  selection, or every user (the last behind full step-up). Flagged users are
+  confined to Account Settings by `func/bc-config.php`, flagged admins by
+  `func/bc-admin-config.php`; API logins report `force_password_change`; app
+  sessions are revoked when the flag is set.
+- **Passwords**: logins (web + API) verify bcrypt and legacy MD5 and
+  transparently upgrade MD5→bcrypt; registration, recovery and settings write
+  bcrypt. TOTP enrolment lives in `web/AccountSettings.php` and
+  `bc-admin/AccountSettings.php`.
+
+### Held / follow-ups
+- SQL-injection hardening: `bc_q()` prepared statements now cover the new and
+  retrofitted money/auth paths; the long tail of legacy escaped-interpolation
+  queries is migrated incrementally, money paths first.
+- Live crypto trading stays fail-closed until the Klasha wallet/swap flow is
+  wired end-to-end (§28). Site-owner actions unchanged: rotate the DB password
+  in git history (PR #144), rotate the SMTP password in tracked `LM/settings.json`
+  and gitignore it, re-pin the SAAS license via LM `admin/fix_license_tiers.php`.
+
+Test counts after §29: gate 1065 · upgrade25 260/0 · provider_live 71 · policy 70 ·
+plate_app 154 · plate_admin 711 · plate_migration 1084 (AccountSettings bodies
+re-baselined for the security UI) · backoffice 184/0 · lm 30/0 · htaccess 224 ·
+**security29 117** (new: RFC 6238 vectors, replay/window, sealing, key-lifecycle
+math, force-flag semantics, and static no-GET-approval / no-key-leak guards).

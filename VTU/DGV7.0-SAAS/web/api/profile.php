@@ -71,7 +71,10 @@ if (mysqli_num_rows($check_user) == 1) {
             "email" => $user['email'],
             "phone" => $user['phone_number'],
             "api_status" => $user['api_status'],
-            "api_key" => $user['api_key'],
+            // §29: never return the developer key. Only its lifecycle state.
+            "api_key" => "",
+            "api_key_state" => function_exists('bc_api_key_status') ? bc_api_key_status($user)['state'] : 'active',
+            "api_key_days_left" => function_exists('bc_api_key_status') ? bc_api_key_status($user)['days_left'] : null,
             "kyc_verified" => $is_kyc_compliant ? "Yes" : "No",
             "kyc_status" => (int)$user['kyc_status'],
             "kyc_status_name" => $kyc_names[$user['kyc_status']] ?? "Unknown",

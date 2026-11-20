@@ -4,8 +4,30 @@ include("../func/bc-crypto-func.php");
 
 $vid = $get_logged_admin_details['id'];
 
+// §29: emailed step-up code sender for approvals.
+if (isset($_POST['send_stepup_code'])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $send_err = function_exists('bc_stepup_send_email_otp')
+        ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'crypto_withdrawal_approve', 'Crypto Withdrawal Approval')
+        : 'Verification is unavailable.';
+    $_SESSION['product_purchase_response'] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
+    header("Location: CryptoHub.php");
+    exit();
+}
+
 // Handle withdrawal approval/rejection
 if (isset($_POST['action'])) {
+    // §29: CSRF on every action; approvals additionally need admin step-up
+    // (security PIN + authenticator/email code) and leave an audit record.
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    if (($_POST['action'] ?? '') === 'approve_withdrawal' && function_exists('bc_stepup_admin_verify')) {
+        $stepup_err = bc_stepup_admin_verify($get_logged_admin_details, $_POST, 'crypto_withdrawal_approve');
+        if ($stepup_err !== '') {
+            $_SESSION['product_purchase_response'] = "Error: $stepup_err";
+            header("Location: CryptoHub.php");
+            exit();
+        }
+    }
     $ref = mysqli_real_escape_string($connection_server, $_POST['reference']);
     if ($_POST['action'] == 'approve_withdrawal') {
         $q = mysqli_query($connection_server, "SELECT * FROM sas_crypto_withdrawals WHERE reference='$ref' AND vendor_id='$vid' AND status='pending' LIMIT 1");
@@ -50,6 +72,7 @@ if (isset($_POST['action'])) {
                 if (($res['status'] ?? '') == 'success') {
                     mysqli_query($connection_server, "UPDATE sas_crypto_withdrawals SET status='completed' WHERE reference='$ref'");
                     logCryptoTransaction($vid, $r['username'], 'withdrawal_ngn', $currency, $amount, 1, $res['data']['reference'] ?? ($res['reference'] ?? 'PO_'.time()), '', $acc_no, ['ngn_value' => $ngn_amount]);
+                    if (function_exists('bc_sec_audit')) bc_sec_audit((int)$vid, 'admin', (string)$get_logged_admin_details['email'], 'crypto_withdrawal_approve', $ref, 'NGN payout for ' . $r['username']);
                     $_SESSION['product_purchase_response'] = "NGN Withdrawal approved and processed via PayHub.";
                 } else {
                     $_SESSION['product_purchase_response'] = "PayHub Error: " . ($res['message'] ?? 'Unknown');
@@ -69,6 +92,7 @@ if (isset($_POST['action'])) {
             // Refund balance
             updateUserCryptoBalance($vid, $r['username'], $r['currency_code'], $r['crypto_amount'], 'credit');
             mysqli_query($connection_server, "UPDATE sas_crypto_withdrawals SET status='rejected', reject_reason='$reason' WHERE reference='$ref'");
+            if (function_exists('bc_sec_audit')) bc_sec_audit((int)$vid, 'admin', (string)$get_logged_admin_details['email'], 'crypto_withdrawal_reject', $ref, 'Rejected: ' . $reason);
             $_SESSION['product_purchase_response'] = "Withdrawal rejected and funds refunded. Reason: $reason";
         }
     }
@@ -133,10 +157,15 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
             <!-- Pending Withdrawals -->
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 rounded-4 mb-4">
-                    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <h6 class="fw-bold mb-0">Pending Crypto Withdrawals</h6>
                         <span class="badge bg-warning bg-opacity-10 text-warning px-3 rounded-pill">Requires Action</span>
+                        <form method="post" class="m-0">
+                            <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                            <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary btn-sm rounded-pill">Email me an approval code</button>
+                        </form>
                     </div>
+                    <p class="small text-muted px-4 pt-2 mb-0">Approvals need your Security PIN + authenticator/email code (fields sit beside each Approve button).</p>
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover small mb-0">
@@ -175,7 +204,13 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
                                         </td>
                                         <td class="pe-4">
                                             <form method="post" class="d-flex flex-column gap-1">
+                                                <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                                                 <input type="hidden" name="reference" value="<?php echo $row['reference']; ?>">
+                                                <div class="d-flex gap-1">
+                                                    <input type="password" name="pin" class="form-control form-control-sm" maxlength="4" inputmode="numeric" placeholder="PIN" style="font-size:0.65rem; max-width:70px;">
+                                                    <input type="text" name="otp_code" class="form-control form-control-sm" maxlength="6" inputmode="numeric" placeholder="2FA code" style="font-size:0.65rem; max-width:90px;">
+                                                    <input type="hidden" name="totp_code" value="">
+                                                </div>
                                                 <div class="d-flex gap-1">
                                                     <button type="submit" name="action" value="approve_withdrawal" class="btn btn-success btn-sm rounded-pill px-3" style="font-size:0.7rem;">Approve</button>
                                                     <button type="submit" name="action" value="reject_withdrawal" class="btn btn-outline-danger btn-sm rounded-pill px-3" style="font-size:0.7rem;" onclick="return confirmRejection(this)">Reject</button>

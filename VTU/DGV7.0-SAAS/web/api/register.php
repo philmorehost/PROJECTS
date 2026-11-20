@@ -62,7 +62,8 @@ $referral_id = function_exists('bc_resolve_referral_id')
     ? bc_resolve_referral_id($connection_server, $vendor_id, $referral)
     : "";
 
-$md5_pass = md5($pass);
+// §29: bcrypt at rest (field name kept for the pending payload shape).
+$md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
 $api_key = bin2hex(random_bytes(25));
 $last_login = date('Y-m-d H:i:s.u');
 
@@ -80,7 +81,7 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
             exit;
         }
         $pending = bc_reg_pending_create((int)$vendor_id, [
-            'username' => $user, 'pass_md5' => md5($pass), 'first' => $first, 'last' => $last,
+            'username' => $user, 'pass_md5' => (function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass)), 'first' => $first, 'last' => $last,
             'email' => $email, 'phone' => $phone, 'address' => $address,
             'referral_id' => $referral_id, 'api_key' => $api_key,
         ]);
@@ -130,8 +131,8 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     }
 }
 
-$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, last_login, api_status, status, email_verified)
-          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address', '$referral_id', '1', '$api_key', '$last_login', '1', '1', '" . ((($get_vendor["reg_otp_enabled"] ?? 1) == 1) ? '1' : '0') . "')";
+$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status, email_verified)
+          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address', '$referral_id', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '1', '1', '" . ((($get_vendor["reg_otp_enabled"] ?? 1) == 1) ? '1' : '0') . "')";
 
 if (mysqli_query($connection_server, $query)) {
     // Email Notification

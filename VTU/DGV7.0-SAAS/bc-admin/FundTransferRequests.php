@@ -1,9 +1,32 @@
 <?php session_start();
     include("../func/bc-admin-config.php");
+
+    // §29: full step-up is mandatory for every money-crediting action.
+    function sec29_require_stepup($admin, $ctx) {
+        if (!function_exists('bc_stepup_admin_verify')) {
+            return 'Verification is unavailable. Refresh and try again.';
+        }
+        return bc_stepup_admin_verify($admin, $_POST, $ctx);
+    }
+    if (isset($_POST["order-ref"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    }
+
     
-    if(isset($_GET["order-ref"])){
-    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-status"])));
-    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
+    // §29: emailed step-up code sender (shared by the approval forms).
+    if (isset($_POST['send_stepup_code'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'fund_transfer_approve', 'Fund Transfer Approval')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email. Enter it with your PIN in the action row." : "Error: $send_err";
+        header("Location: /bc-admin/FundTransferRequests.php");
+        exit();
+    }
+
+    if(isset($_POST["order-ref"])){
+    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"])));
+    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
     	$statusArray = array(1, 2, 3);
     	if(is_numeric($status)){
     		if(in_array($status, $statusArray)){
@@ -11,6 +34,9 @@
     			if(mysqli_num_rows($select_payment_order) == 1){
     				$get_payment_order = mysqli_fetch_array($select_payment_order);
     				if($status == 1){
+					if((string)$get_payment_order["status"] !== "2"){
+						$json_response_encode = json_encode(array("desc" => "This request is no longer pending."), true);
+					} else {
 						$purchase_method = "web";
 						$purchase_method = strtoupper($purchase_method);
 						$user = $get_payment_order["username"];
@@ -23,10 +49,15 @@
 						chargeOtherUser($user, $type, $user, "Refund", $reference_2, "", $amount, $discounted_amount, "Refund for Ref:<i>'$reference'</i>", $purchase_method, $_SERVER["HTTP_HOST"], "1");
 						$json_response_array = array("desc" => ucwords($get_payment_order["username"]." Order with N".toDecimal($get_payment_order["discounted_amount"],2)." rejected successfully"));
     					$json_response_encode = json_encode($json_response_array,true);
+					}
     				}
     				
     				if($status == 2){
-						if(in_array($get_payment_order["status"], array("2","3"))){
+						if((string)$get_payment_order["status"] === "2"){
+							$sec29_err = sec29_require_stepup($get_logged_admin_details, 'fund_transfer_approve');
+							if ($sec29_err !== '') {
+								$json_response_encode = json_encode(array("desc" => $sec29_err), true);
+							} else {
 							$purchase_method = "web";
 							$purchase_method = strtoupper($purchase_method);
 							$user = $get_payment_order["username"];
@@ -41,6 +72,7 @@
 							$credit_other_user = chargeOtherUser($recipient_user, $transType, $recipient_user, ucwords("fund received"), $reference_2, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], "1");
 							if(in_array($credit_other_user, array("success"))){
 								$update_payment_status = mysqli_query($connection_server, "UPDATE sas_fund_transfer_requests SET status='1' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$reference."'");
+								if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'fund_transfer_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $get_payment_order["recipient_username"] . ' from ' . $get_payment_order["username"]);
 								mysqli_query($connection_server, "UPDATE sas_transactions SET status='1' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$reference."'");
 								$json_response_array = array("desc" => ucwords($get_payment_order["recipient_username"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 								$json_response_encode = json_encode($json_response_array,true);
@@ -54,20 +86,22 @@
 								$json_response_encode = json_encode($json_response_array,true);
 							}		
 							
-						}else{
-							if(in_array($get_payment_order["status"], array("1"))){
-								//Order Amount Had Already Been Deposited To User Account
-								$json_response_array = array("desc" => "Order Amount Had Already Been Deposited To User Account");
-								$json_response_encode = json_encode($json_response_array,true);
 							}
+						}else{
+							$json_response_array = array("desc" => "This request is no longer pending and cannot be approved again.");
+							$json_response_encode = json_encode($json_response_array,true);
 						}
     				}
 
 					if($status == 3){
+					if((string)$get_payment_order["status"] !== "2"){
+						$json_response_encode = json_encode(array("desc" => "This request is no longer pending."), true);
+					} else {
 						$update_payment_status = mysqli_query($connection_server, "UPDATE sas_fund_transfer_requests SET status='3' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$reference."'");
     					mysqli_query($connection_server, "UPDATE sas_transactions SET status='3', description='Transfer Rejected (No Refund)' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$reference."'");
 						$json_response_array = array("desc" => ucwords($get_payment_order["username"]." Order with N".toDecimal($get_payment_order["discounted_amount"],2)." rejected successfully"));
 						$json_response_encode = json_encode($json_response_array,true);
+					}
 					}
     			}else{
     				if(mysqli_num_rows($select_payment_order) > 1){
@@ -175,6 +209,12 @@ bc_adm_head("Fund Transfer Requests | " . ($get_all_super_admin_site_details["si
 
             <div class="mt-4">
                 <span style="user-select: auto;" class="fw-bold h5 text-warning"><i class="bi bi-clock-history me-2"></i>PENDING REQUEST</span>
+                <span class="d-block mt-2"><form method="post" class="d-inline-block m-0">
+    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+    <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary btn-sm rounded-pill">Email me an approval code</button>
+</form>
+<span class="small text-muted d-block mt-1">Approve/Credit actions need your Security PIN + authenticator/email code.</span>
+</span>
                 <?php
                 $query_result = $get_user_pending_transaction_details;
                 $is_admin = true;

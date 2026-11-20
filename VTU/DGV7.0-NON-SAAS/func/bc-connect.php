@@ -55,6 +55,9 @@
 
     // Now include functions that may depend on $connection_server
     include_once(__DIR__ . "/bc-func.php");
+    // Security utilities (CSRF, rate limiting, OTP, PIN throttling) — /web/api/* only
+    // includes bc-connect.php, so the helpers must live here (mirrors the SAAS edition).
+    include_once(__DIR__ . "/bc-security.php");
     include_once(__DIR__ . "/bc-gateway.php");
     include_once(__DIR__ . "/bc-bulk-queue.php");
     include_once(__DIR__ . "/bc-mail-queue.php");
@@ -65,6 +68,8 @@
     include_once(__DIR__ . "/bc-fintech-schema.php");
     include_once(__DIR__ . "/bc-app-token.php");
     include_once(__DIR__ . "/bc-fintech-gate.php");
+    // §29: step-up auth (TOTP + email OTP + PIN), API-key lifecycle, audit log.
+    include_once(__DIR__ . "/bc-stepup.php");
     include_once(__DIR__ . "/bc-gateway-policy.php");
     include_once(__DIR__ . "/bc-fintech-accounts.php");
     // DGV7 phase 3 provider adapters. All are side-effect free: they define the

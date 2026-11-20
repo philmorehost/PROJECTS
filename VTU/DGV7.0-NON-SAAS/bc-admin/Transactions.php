@@ -3,9 +3,23 @@
 
     // Handle approve / cancel of pending wallet-funding transactions in sas_transactions
     // and the DGV7.0 manual reversal / restore of successful VTU transactions.
-    if (isset($_GET["order-ref"]) && isset($_GET["order-status"])) {
-        $t_ref    = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
-        $t_status = trim(strip_tags($_GET["order-status"]));
+    if (isset($_POST["order-ref"]) && isset($_POST["order-status"])) {
+        // §29: wallet-funding approvals and VTU reversals move money — POST,
+        // CSRF token and admin PIN + second-factor step-up are mandatory.
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $_tx_stepup_ctx = trim(strip_tags((string)($_POST["order-status"] ?? ''))) === 'cancel' ? 'wallet_funding_cancel' : 'wallet_funding_approve';
+        $sec29_tx_err = function_exists('bc_stepup_admin_verify')
+            ? bc_stepup_admin_verify($get_logged_admin_details, $_POST, $_tx_stepup_ctx)
+            : 'Verification is unavailable.';
+        if ($sec29_tx_err !== '') {
+            $_SESSION["product_purchase_response"] = $sec29_tx_err;
+            header("Location: Transactions.php");
+            exit();
+        }
+        if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'transaction_admin_action', trim(strip_tags((string)($_POST["order-ref"] ?? ''))), 'action=' . trim(strip_tags((string)($_POST["order-status"] ?? ''))));
+
+        $t_ref    = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
+        $t_status = trim(strip_tags($_POST["order-status"]));
 
         if (in_array($t_status, array("approve", "cancel", "mark-success", "reverse", "restore"))) {
             $select_tx = mysqli_query($connection_server,

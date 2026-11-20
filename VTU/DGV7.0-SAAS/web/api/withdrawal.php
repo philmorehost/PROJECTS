@@ -32,6 +32,24 @@ if ($select_vendor_table) {
 				exit;
 			}
 
+			// §29 step-up: a request carrying the static developer api_key (rather
+			// than a device app session) must also prove an emailed one-time code.
+			// The key alone — even with the PIN — no longer moves money.
+			if (($GLOBALS['bc_api_auth_mode'] ?? 'api_key') === 'api_key' && function_exists('bc_verify_otp')) {
+				$otp_code = (string)($get_api_post_info['otp_code'] ?? '');
+				if ($otp_code === '') {
+					if (function_exists('bc_stepup_send_email_otp')) {
+						bc_stepup_send_email_otp((int)$get_vendor_details["id"], (string)$get_logged_user_details['username'], (string)$get_logged_user_details['email'], 'api_withdrawal', 'Withdrawal');
+					}
+					echo json_encode(array("status" => "failed", "code" => "otp_required", "desc" => "A verification code was sent to your email. Retry this request with otp_code."), true);
+					exit;
+				}
+				if (!bc_verify_otp('stepup_api_withdrawal', (string)$get_logged_user_details['username'], (int)$get_vendor_details["id"], $otp_code)) {
+					echo json_encode(array("status" => "failed", "desc" => "Invalid or expired verification code"), true);
+					exit;
+				}
+			}
+
 			if (!isServiceEnabled('payout')) {
 				echo json_encode(array("status" => "failed", "desc" => "Payout service is currently offline. Please contact support."), true);
 				exit;
