@@ -45,6 +45,7 @@ foreach ($editions as $ed) {
     foreach (array('Hub.php?g=pay-bills', 'Hub.php?g=wallet-transfers', 'Hub.php?g=verify-print', 'PrintHub.php', 'Hub.php?g=tools-api', 'Hub.php?g=history-tools', 'Hub.php?g=settings-help') as $link) {
         u25(strpos($dash, $link) !== false, "$ed Dashboard All Services links $link");
     }
+    u25(strpos($dash, 'row row-cols-2 row-cols-sm-3 row-cols-lg-4') !== false && substr_count($dash, 'class="svc-tile"') >= 7 && strpos($dash, 'list-group-item') === false, "$ed Dashboard All Services renders as a responsive tile grid, not a list");
     u25(strpos($dash, '<span>Fund</span>') !== false && strpos($dash, '<span>Crypto</span>') !== false, "$ed Dashboard wallet actions render icon + text labels");
     u25(strpos($dash, 'All money in') !== false && strpos($dash, 'All money out') !== false, "$ed Dashboard redesigned Total Deposit / Total Spent cards");
     u25(strpos($dash, 'Send Money Abroad') !== false && strpos($dash, 'Pay Tuition Worldwide') !== false && strpos($dash, 'Travel eSIM') !== false, "$ed Dashboard features the new services");
