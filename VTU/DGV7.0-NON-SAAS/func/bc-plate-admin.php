@@ -868,6 +868,145 @@ if (!function_exists('bc_adm_foot')) {
         bc_adm_widgets($area);
         if (empty($opts['bare'])): ?></div>
 </main>
+<!-- §32 transaction receipt: history rows + post-purchase "View Receipt" call
+     showTransactionDetails(ref[, isAdmin]); it fetches a scoped JSON payload
+     (provider internals are staff-only) and offers PDF / image downloads. -->
+<div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="z-index:2000;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="bi bi-receipt me-2"></i>Transaction Receipt</h5>
+        <button type="button" class="btn-close" data-bc-receipt-close aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="bcReceiptBody"><div class="text-center text-muted py-4">Loading receipt&hellip;</div></div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-primary fw-bold" id="bcReceiptPdfBtn"><i class="bi bi-filetype-pdf me-1"></i>Download PDF</button>
+        <button type="button" class="btn btn-outline-secondary fw-bold" id="bcReceiptImgBtn"><i class="bi bi-image me-1"></i>Download Image</button>
+        <button type="button" class="btn btn-light fw-bold" data-bc-receipt-close>Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+    'use strict';
+    function esc(v) {
+        var d = document.createElement('div');
+        d.textContent = v == null ? '' : String(v);
+        return d.innerHTML;
+    }
+    function row(k, v) {
+        return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px dashed #e5e7eb;font-size:13px;">'
+            + '<span style="color:#6b7280;">' + esc(k) + '</span>'
+            + '<span style="font-weight:700;text-align:right;word-break:break-all;">' + esc(v) + '</span></div>';
+    }
+    function card(d) {
+        var color = d.status_code === 1 ? '#15803d' : (d.status_code === 2 ? '#b45309' : '#b91c1c');
+        var tint = d.status_code === 1 ? '#f0fdf4' : (d.status_code === 2 ? '#fffbeb' : '#fef2f2');
+        var h = '<div id="bcReceiptCard" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;padding:22px;font-family:Arial,Helvetica,sans-serif;color:#111827;max-width:430px;margin:0 auto;">'
+            + '<div style="text-align:center;padding-bottom:12px;border-bottom:2px solid #111827;">'
+            + '<div style="font-size:17px;font-weight:800;">' + esc(d.site) + '</div>'
+            + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.14em;margin-top:2px;">Transaction Receipt</div></div>'
+            + '<div style="text-align:center;margin:14px 0;"><span style="display:inline-block;padding:5px 16px;border-radius:999px;font-size:12px;font-weight:800;color:' + color + ';background:' + tint + ';border:1px solid ' + color + ';">' + esc(String(d.status_label).toUpperCase()) + '</span></div>'
+            + row('Service', d.service)
+            + (d.recipient ? row('Recipient', d.recipient) : '')
+            + row('Amount Paid', '\u20A6' + d.amount)
+            + (d.face_amount && d.face_amount !== d.amount ? row('Face Value', '\u20A6' + d.face_amount) : '')
+            + row('Reference', d.reference)
+            + row('Date', d.date)
+            + (d.balance_after != null ? row('Wallet Balance', '\u20A6' + d.balance_after) : '');
+        if (d.admin) {
+            if (d.username) h += row('Customer', d.username);
+            if (d.provider_site) h += row('Provider', d.provider_site);
+            if (d.provider_reference) h += row('Provider Ref', d.provider_reference);
+            if (d.description) h += '<div style="padding-top:10px;font-size:12px;color:#374151;">' + esc(d.description) + '</div>';
+        }
+        return h + '<div style="text-align:center;color:#9ca3af;font-size:11px;margin-top:14px;">Thank you for your business.</div></div>';
+    }
+    function openModal(el) {
+        if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getOrCreateInstance) {
+            window.bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+        el.classList.add('show');
+        el.style.display = 'flex';
+    }
+    function closeModal(el) {
+        el.classList.remove('show');
+        el.style.display = '';
+        if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance) {
+            var inst = window.bootstrap.Modal.getInstance(el);
+            if (inst) inst.hide();
+        }
+    }
+    var currentRef = '';
+    window.showTransactionDetails = function (ref, isAdmin) {
+        var body = document.getElementById('bcReceiptBody');
+        var modal = document.getElementById('bcReceiptModal');
+        if (!body || !modal || !ref) return;
+        currentRef = String(ref);
+        body.innerHTML = '<div class="text-center text-muted py-4">Loading receipt&hellip;</div>';
+        openModal(modal);
+        fetch('transaction-details.php?ref=' + encodeURIComponent(ref), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok) {
+                    body.innerHTML = '<div class="alert alert-warning mb-0">Receipt unavailable for this transaction.</div>';
+                    return;
+                }
+                body.innerHTML = card(d);
+            })
+            .catch(function () {
+                body.innerHTML = '<div class="alert alert-warning mb-0">Could not load the receipt. Please try again.</div>';
+            });
+    };
+    (function wire() {
+        var modal = document.getElementById('bcReceiptModal');
+        if (!modal) return;
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal || e.target.closest('[data-bc-receipt-close]')) closeModal(modal);
+        });
+        var pdfBtn = document.getElementById('bcReceiptPdfBtn');
+        var imgBtn = document.getElementById('bcReceiptImgBtn');
+        if (pdfBtn) pdfBtn.addEventListener('click', function () {
+            var c = document.getElementById('bcReceiptCard');
+            if (!c) return;
+            var w = window.open('', '_blank', 'width=680,height=860');
+            if (!w) { alert('Allow pop-ups to download the receipt as PDF.'); return; }
+            w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ' + esc(currentRef) + '</title></head><bo' + 'dy style="margin:24px;font-family:Arial,sans-serif;">' + c.outerHTML + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},200);};</scr' + 'ipt></bo' + 'dy></html>');
+            w.document.close();
+        });
+        if (imgBtn) imgBtn.addEventListener('click', function () {
+            var c = document.getElementById('bcReceiptCard');
+            if (!c) return;
+            try {
+                var clone = c.cloneNode(true);
+                clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+                var wdt = Math.max(c.offsetWidth, 430);
+                var hgt = c.offsetHeight;
+                var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + wdt + '" height="' + hgt + '"><foreignObject width="100%" height="100%">' + new XMLSerializer().serializeToString(clone) + '</foreignObject></svg>';
+                var img = new Image();
+                img.onload = function () {
+                    var scale = 2;
+                    var cv = document.createElement('canvas');
+                    cv.width = wdt * scale; cv.height = hgt * scale;
+                    var ctx = cv.getContext('2d');
+                    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+                    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+                    var a = document.createElement('a');
+                    a.download = 'receipt-' + (currentRef || 'transaction') + '.png';
+                    a.href = cv.toDataURL('image/png');
+                    a.click();
+                };
+                img.onerror = function () { alert('Image download is not supported in this browser. Please use Download PDF.'); };
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+            } catch (err) {
+                alert('Image download failed. Please use Download PDF.');
+            }
+        });
+    })();
+})();
+</script>
+
 </div>
 <?php endif; ?>
 <?php if (empty($opts['nonav'])): ?>
