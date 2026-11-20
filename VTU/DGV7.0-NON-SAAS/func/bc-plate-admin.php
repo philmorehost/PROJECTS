@@ -286,6 +286,11 @@ if (!function_exists('bc_adm_menu')) {
      */
     function bc_adm_menu($area = null) {
         $area = $area ?: bc_adm_area();
+        // Edition marker (per-tree file): the standalone tree has no
+        // RenewSubscription/SubscriptionHistory pages, so its Subscription
+        // Manager points at the portal snapshot instead of two 404s.
+        if (!function_exists("bc_is_saas_edition") && is_file(__DIR__ . "/bc-edition.php")) include_once(__DIR__ . "/bc-edition.php");
+        $bc_menu_is_saas = function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : true;
 
         if ($area === 'spadmin') {
             return array(
@@ -424,9 +429,11 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Virtual Card',             'href' => 'VirtualCard.php',      'match' => array('VirtualCard.php')),
                 )),
                 array('label' => 'Subscription Manager', 'icon' => 'gem',
-                      'match' => array('RenewSubscription.php','SubscriptionHistory.php'), 'children' => array(
+                      'match' => array('RenewSubscription.php','SubscriptionHistory.php','VendorPortal.php'), 'children' => $bc_menu_is_saas ? array(
                     array('label' => 'Renew Subscription',  'href' => 'RenewSubscription.php',  'match' => array('RenewSubscription.php')),
                     array('label' => 'Subscription History','href' => 'SubscriptionHistory.php','match' => array('SubscriptionHistory.php')),
+                ) : array(
+                    array('label' => 'View Subscription',   'href' => 'VendorPortal.php',       'match' => array('VendorPortal.php')),
                 )),
                 array('label' => 'Blog Manager', 'icon' => 'journal-text',
                       'match' => array('BlogPosts.php','BlogCategories.php'), 'children' => array(
@@ -486,6 +493,24 @@ if (!function_exists('bc_adm_css')) {
     function bc_adm_css($brand, $area) {
         ?><style>
         .pk-app__glabel { letter-spacing: .01em; }
+        /* Topbar actions are real buttons (icon + label), never bare underlined
+           links: solid brand fill, readable on-brand foreground, pill shape. */
+        .pk-app__action {
+            display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 16px;
+            border-radius: 999px; border: 1px solid transparent; font-family: inherit;
+            background: var(--brand); color: var(--brand-fg, #fff) !important;
+            font-size: .82rem; font-weight: 700; line-height: 1; text-decoration: none !important;
+            cursor: pointer; white-space: nowrap;
+            box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--brand) 70%, transparent);
+            transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+        }
+        .pk-app__action:hover { color: var(--brand-fg, #fff) !important; text-decoration: none !important; transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 22px -10px color-mix(in srgb, var(--brand) 70%, transparent); }
+        .pk-app__action:active { transform: translateY(0); }
+        .pk-app__action:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+        .pk-app__action i { font-size: .95rem; }
+        .pk-app__action--danger { background: var(--bad); color: #fff !important; box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--bad) 70%, transparent); }
+        .pk-app__action--danger:hover { color: #fff !important; box-shadow: 0 12px 22px -10px color-mix(in srgb, var(--bad) 70%, transparent); }
+        @media (max-width: 640px) { .pk-app__action { padding: 0 12px; height: 36px; font-size: .78rem; } }
         .pk-app__nav .pk-app__grouphead {
             font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
             color: var(--muted); padding: 18px 18px 6px;
