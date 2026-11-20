@@ -32,10 +32,29 @@ if ($select_vendor_table) {
 				exit;
 			}
 
-			// §29 step-up: a request carrying the static developer api_key (rather
-			// than a device app session) must also prove an emailed one-time code.
-			// The key alone — even with the PIN — no longer moves money.
-			if (($GLOBALS['bc_api_auth_mode'] ?? 'api_key') === 'api_key' && function_exists('bc_verify_otp')) {
+			// §29 step-up (every auth mode — developer key AND app session alike):
+			// the PIN alone no longer moves money from this API, matching the
+			// website. Customers with an authenticator app prove a TOTP code;
+			// everyone else answers an emailed one-time code. Apps drive the
+			// two-call flow from the machine-readable "code" field:
+			//   no code supplied -> "totp_required" (retry with totp_code) or
+			//                       "otp_required" (code emailed; retry with otp_code)
+			//   wrong code       -> "failed" with a generic desc.
+			$sec29_totp_enrolled = (($get_logged_user_details['two_factor_type'] ?? 'none') === 'totp') && !empty($get_logged_user_details['totp_secret']);
+			if ($sec29_totp_enrolled) {
+				$totp_code = (string)($get_api_post_info['totp_code'] ?? ($get_api_post_info['otp_code'] ?? ''));
+				if ($totp_code === '') {
+					echo json_encode(array("status" => "failed", "code" => "totp_required", "desc" => "Enter the 6-digit code from your authenticator app and retry this request with totp_code."), true);
+					exit;
+				}
+				$sec29_sf_err = function_exists('bc_stepup_actor_second_factor')
+					? bc_stepup_actor_second_factor('sas_users', $get_logged_user_details, (string)$get_logged_user_details['username'], array('totp_code' => $totp_code, 'otp_code' => $totp_code), 'api_withdrawal')
+					: 'Verification is unavailable.';
+				if ($sec29_sf_err !== '') {
+					echo json_encode(array("status" => "failed", "code" => "totp_invalid", "desc" => $sec29_sf_err), true);
+					exit;
+				}
+			} elseif (function_exists('bc_verify_otp')) {
 				$otp_code = (string)($get_api_post_info['otp_code'] ?? '');
 				if ($otp_code === '') {
 					if (function_exists('bc_stepup_send_email_otp')) {
@@ -45,7 +64,7 @@ if ($select_vendor_table) {
 					exit;
 				}
 				if (!bc_verify_otp('stepup_api_withdrawal', (string)$get_logged_user_details['username'], (int)$get_vendor_details["id"], $otp_code)) {
-					echo json_encode(array("status" => "failed", "desc" => "Invalid or expired verification code"), true);
+					echo json_encode(array("status" => "failed", "code" => "otp_invalid", "desc" => "Invalid or expired verification code"), true);
 					exit;
 				}
 			}

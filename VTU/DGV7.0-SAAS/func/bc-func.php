@@ -6744,6 +6744,7 @@ function bc_user_login_payload($user_detail, $vendor) {
             "kyc_status" => (int)$user_detail['kyc_status'],
             "security_pin_set" => !empty($user_detail['security_pin']),
             "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
+            "totp_enabled" => (($user_detail['two_factor_type'] ?? 'none') === 'totp') ? 1 : 0,
             "ai_status" => (int)($vendor['ai_status'] ?? 0),
         ],
     ];
