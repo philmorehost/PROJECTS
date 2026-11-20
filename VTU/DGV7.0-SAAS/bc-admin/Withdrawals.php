@@ -2,20 +2,83 @@
 include("../func/bc-admin-config.php");
 
 // Handle Actions
-if (isset($_POST['withdrawal_action'])) {
-    $action = $_POST['action_type'];
-    $ref = mysqli_real_escape_string($connection_server, $_POST['reference']);
+if (isset($_POST['withdrawal_action']) || isset($_POST['send_stepup_code'])) {
+    // §29: every money action on this page needs a CSRF token; approvals also
+    // need step-up (security PIN + authenticator/email code), a pending-status
+    // guard and an audit record. This page was the hole in the ₦1,000-repeat
+    // withdrawal incident: session-only, replayable, unlogged approvals.
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $action = $_POST['action_type'] ?? '';
+    $ref = mysqli_real_escape_string($connection_server, $_POST['reference'] ?? '');
     $reason = mysqli_real_escape_string($connection_server, $_POST['reason'] ?? '');
+    $admin_vid = (int)$get_logged_admin_details["id"];
 
-    // Fetch transaction details
-    $q_tx = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='".$get_logged_admin_details["id"]."' AND reference='$ref' LIMIT 1");
-    $tx = mysqli_fetch_assoc($q_tx);
+    if (isset($_POST['send_stepup_code'])) {
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp($admin_vid, (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'withdrawal_approve', 'Withdrawal Approval')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
+        header("Location: Withdrawals.php");
+        exit();
+    }
+
+    // Fetch transaction details (prepared: references are attacker-influenced)
+    $tx = function_exists('bc_q_row')
+        ? bc_q_row("SELECT * FROM sas_transactions WHERE vendor_id=? AND reference=? LIMIT 1", array($admin_vid, (string)($_POST['reference'] ?? '')))
+        : null;
+    if ($tx === null) {
+        $q_tx = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='".$get_logged_admin_details["id"]."' AND reference='$ref' LIMIT 1");
+        $tx = $q_tx ? mysqli_fetch_assoc($q_tx) : null;
+    }
 
     if (!$tx) {
         $_SESSION["product_purchase_response"] = "Error: Transaction not found";
     } else {
         $username = $tx['username'];
         $amount = (float)$tx['amount'];
+
+        // §29 guards: state machine + step-up + separation of duties.
+        $withdrawal_claimed = false;
+        $guard_error = '';
+        if ($action === 'approve' || $action === 'reject') {
+            if ((int)$tx['status'] !== 2) {
+                $guard_error = 'This withdrawal has already been processed.';
+            } elseif (function_exists('bc_stepup_admin_verify')) {
+                $guard_error = bc_stepup_admin_verify($get_logged_admin_details, $_POST, 'withdrawal_approve');
+            }
+            if ($guard_error === '' && $action === 'approve') {
+                // Separation of duties: never approve a payout to your own account.
+                $tx_user = function_exists('bc_q_row')
+                    ? bc_q_row("SELECT email FROM sas_users WHERE vendor_id=? AND username=? LIMIT 1", array($admin_vid, (string)$username))
+                    : null;
+                if ($tx_user && !empty($tx_user['email']) && strcasecmp((string)$tx_user['email'], (string)$get_logged_admin_details['email']) === 0) {
+                    $guard_error = 'You cannot approve a withdrawal from your own account. Another admin must approve it.';
+                    if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details['email'], 'withdrawal_self_approval_blocked', $ref, 'Self-approval attempt stopped');
+                }
+            }
+            if ($guard_error === '' && $action === 'approve') {
+                // Atomic claim: exactly one request may move 2 (pending) -> 6
+                // (processing). A replayed or double-submitted approval stops here.
+                mysqli_query($connection_server, "UPDATE sas_transactions SET status=6 WHERE reference='$ref' AND vendor_id='$admin_vid' AND status=2");
+                if (mysqli_affected_rows($connection_server) === 1) {
+                    $withdrawal_claimed = true;
+                } else {
+                    $guard_error = 'This withdrawal has already been processed.';
+                }
+            }
+        } elseif ($action === 'cancel') {
+            if ((int)$tx['status'] !== 2) $guard_error = 'Only a pending withdrawal can be cancelled.';
+        } elseif ($action === 'pending') {
+            if ((int)$tx['status'] !== 4) $guard_error = 'Only a cancelled withdrawal can be moved back to pending.';
+        } else {
+            $guard_error = 'Unknown action.';
+        }
+        if ($guard_error !== '') {
+            $_SESSION["product_purchase_response"] = "Error: $guard_error";
+            header("Location: Withdrawals.php");
+            exit();
+        }
+
         $total_debit = (float)$tx['discounted_amount'];
         $account_number = $tx['product_unique_id'];
         $bank_code_display = $tx['type_alternative']; // Standardly "Bank Transfer" or code
@@ -112,6 +175,7 @@ if (isset($_POST['withdrawal_action'])) {
                             $body = "Dear $username, your withdrawal request ($ref) of ₦" . number_format($amount, 2) . " has been approved and processed successfully to your bank account ($account_number).";
                             sendVendorEmail($u_email, $subject, $body);
 
+                            if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details['email'], 'withdrawal_approve', $ref, 'Approved ₦' . number_format($amount, 2) . ' to ' . $username);
                             $_SESSION["product_purchase_response"] = "Withdrawal Approved and Processed Successfully";
                         } else {
                             $err_msg = $res['message'] ?? ($res['json_result'] ? json_decode($res['json_result'], true)['message'] ?? 'API Provider Error' : 'API Provider Error');
@@ -154,6 +218,14 @@ if (isset($_POST['withdrawal_action'])) {
             alterTransaction($ref, "status", 2);
             alterTransaction($ref, "description", str_replace("Cancelled:", "Pending Review:", $tx['description']));
             $_SESSION["product_purchase_response"] = "Withdrawal moved back to Pending";
+        }
+    }
+    // §29: an approval that did not reach a terminal state releases its claim
+    // (6 -> 2) so the request returns to the pending queue untouched.
+    if (!empty($withdrawal_claimed)) {
+        $cur = function_exists('bc_q_row') ? bc_q_row("SELECT status FROM sas_transactions WHERE reference=? AND vendor_id=? LIMIT 1", array((string)($_POST['reference'] ?? ''), $admin_vid)) : null;
+        if ($cur && (int)$cur['status'] === 6) {
+            mysqli_query($connection_server, "UPDATE sas_transactions SET status=2 WHERE reference='$ref' AND vendor_id='$admin_vid' AND status=6");
         }
     }
     header("Location: Withdrawals.php");
@@ -228,6 +300,7 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
                                         <button class="btn btn-outline-danger btn-sm rounded-3" onclick="openReasonModal('cancel', '<?php echo $row['reference']; ?>')">Cancel</button>
                                         <?php } else if ($row['status'] == 4) { ?>
                                         <form method="post" action="" style="display:inline;">
+                                            <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                                             <input type="hidden" name="reference" value="<?php echo $row['reference']; ?>">
                                             <input type="hidden" name="action_type" value="pending">
                                             <button type="submit" name="withdrawal_action" class="btn btn-outline-primary btn-sm rounded-3">Set Pending</button>
@@ -293,6 +366,7 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content rounded-4 shadow border-0">
                 <form method="post" action="">
+                    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                     <div class="modal-header border-0">
                         <h5 class="modal-title fw-bold" id="modalTitle">Rejection Reason</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -301,6 +375,18 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
                         <input type="hidden" id="modalRef" name="reference">
                         <input type="hidden" id="modalAction" name="action_type">
                         <textarea name="reason" class="form-control rounded-3" rows="4" placeholder="Enter reason for the user..." required></textarea>
+                        <div class="row g-2 mt-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">SECURITY PIN</label>
+                                <input type="password" name="pin" class="form-control rounded-3 text-center" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE</label>
+                                <input type="text" name="otp_code" class="form-control rounded-3 text-center" maxlength="6" inputmode="numeric" placeholder="6-digit code">
+                                <input type="hidden" name="totp_code" value="">
+                            </div>
+                        </div>
+                        <p class="small text-muted mt-2 mb-0">Rejection refunds the user, so it needs your Security PIN plus a verification code. Use the "Send code" button in the Approve dialog if you have no authenticator app.</p>
                     </div>
                     <div class="modal-footer border-0">
                         <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Close</button>
@@ -311,12 +397,46 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
         </div>
     </div>
 
-    <!-- Hidden Approve Form -->
-    <form id="approveForm" method="post" action="" style="display:none;">
-        <input type="hidden" name="reference" id="approveRef">
-        <input type="hidden" name="action_type" value="approve">
-        <input type="hidden" name="withdrawal_action" value="1">
-    </form>
+    <!-- §29 Approve Modal: approval pays out real money, so it requires the
+         admin Security PIN plus a second factor (authenticator app code, or an
+         emailed code via the Send button). -->
+    <div class="modal fade" id="approveModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 shadow border-0">
+                <form method="post" action="">
+                    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title fw-bold">Approve Withdrawal</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">You are about to send <b id="approveAmountLabel">₦0</b> to the user's bank account. This cannot be undone from here.</p>
+                        <input type="hidden" name="reference" id="approveRef">
+                        <input type="hidden" name="action_type" value="approve">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">SECURITY PIN</label>
+                            <input type="password" name="pin" class="form-control rounded-3 text-center" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">AUTHENTICATOR CODE <span class="fw-normal">(if enabled)</span></label>
+                            <input type="text" name="totp_code" class="form-control rounded-3 text-center" maxlength="6" inputmode="numeric" placeholder="6-digit code">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label small fw-bold text-muted">OR EMAIL CODE</label>
+                            <div class="input-group">
+                                <input type="text" name="otp_code" class="form-control rounded-3 text-center" maxlength="6" inputmode="numeric" placeholder="6-digit code">
+                                <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary rounded-3 ms-2" formnovalidate>Send code</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" name="withdrawal_action" value="1" class="btn btn-success rounded-3 px-4 fw-bold">Approve &amp; Pay</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     
 
@@ -330,28 +450,9 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
         }
 
         function confirmApproval(ref, amount) {
-            Swal.fire({
-                title: 'Confirm Approval',
-                text: `Are you sure you want to approve and send ₦${amount} to this user?`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#28a745',
-                confirmButtonText: 'Yes, Approve'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Processing...',
-                        text: 'Please wait while we complete the transfer.',
-                        allowOutsideClick: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    document.getElementById('approveRef').value = ref;
-                    document.getElementById('approveForm').submit();
-                }
-            })
+            document.getElementById('approveRef').value = ref;
+            document.getElementById('approveAmountLabel').textContent = '₦' + amount;
+            new bootstrap.Modal(document.getElementById('approveModal')).show();
         }
     </script>
 

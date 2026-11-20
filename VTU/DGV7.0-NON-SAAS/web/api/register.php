@@ -54,12 +54,13 @@ $referral_id = function_exists('bc_resolve_referral_id')
     ? bc_resolve_referral_id($connection_server, $vendor_id, $referral)
     : "";
 
-$md5_pass = md5($pass);
+// §29: bcrypt at rest.
+$md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
 $api_key = substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50);
 $last_login = date('Y-m-d H:i:s.u');
 
-$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, last_login, api_status, status)
-          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address', '$referral_id', '1', '$api_key', '$last_login', '1', '1')";
+$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status)
+          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address', '$referral_id', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '1', '1')";
 
 if (mysqli_query($connection_server, $query)) {
     // Email Notification

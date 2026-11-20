@@ -228,6 +228,44 @@
         exit;
     }
 
+    // §29: force one user to change password at next sign-in (CSRF-protected;
+    // the module also revokes their app sessions and writes the audit event).
+    if(isset($_POST["force-user-password-change"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $force_uid = isset($_POST["account-user-id"]) ? (int) $_POST["account-user-id"] : 0;
+        $get_user_details = bc_admin_find_user($force_uid, $_POST["account-username"] ?? "");
+        if ($get_user_details && function_exists('bc_force_password_change') && bc_force_password_change((int)$get_logged_admin_details["id"], (int)$get_user_details["id"])) {
+            $_SESSION["product_purchase_response"] = ucwords($get_user_details["username"]." must change their password at next sign-in; their app sessions were revoked.");
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: Could not force a password change for that account.";
+        }
+        header("Location: /bc-admin/Users.php");
+        exit();
+    }
+
+    // §29: force EVERY user of this vendor to change password — high-impact,
+    // so it needs CSRF + admin PIN + authenticator/email step-up.
+    if(isset($_POST["force-all-password-change"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sec29_err = function_exists('bc_stepup_admin_verify') ? bc_stepup_admin_verify($get_logged_admin_details, $_POST, 'force_password_change_all') : 'Verification is unavailable.';
+        if ($sec29_err === '' && function_exists('bc_force_password_change') && bc_force_password_change((int)$get_logged_admin_details["id"], 0)) {
+            $_SESSION["product_purchase_response"] = "All users must now change their password at next sign-in; app sessions were revoked.";
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: " . ($sec29_err !== '' ? $sec29_err : "Could not force password changes.");
+        }
+        header("Location: /bc-admin/Users.php");
+        exit();
+    }
+
+    // §29: emailed step-up code for the force-all action.
+    if(isset($_POST["send_stepup_code"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp') ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'force_password_change_all', 'Force Password Change') : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
+        header("Location: /bc-admin/Users.php");
+        exit();
+    }
+
     if(isset($_POST["permanent-delete-user"])){
         $account_user_id = isset($_POST["account-user-id"]) ? (int) $_POST["account-user-id"] : 0;
         $account_user = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["account-username"] ?? "")));
@@ -253,11 +291,13 @@
     if(isset($_POST["bulk-user-action"])){
         $bulk_action = isset($_POST["bulk-user-action"]) ? trim(strip_tags($_POST["bulk-user-action"])) : "";
         // Closed set of actions; the request never names a column or a value directly.
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $bulk_actions = array(
             "activate"         => array("column" => "status", "value" => 1, "label" => "activated"),
             "block"            => array("column" => "status", "value" => 2, "label" => "blocked"),
             "delete"           => array("column" => "status", "value" => 3, "label" => "deleted"),
             "permanent-delete" => array("column" => "", "value" => "", "label" => "permanently deleted"),
+            "force-password-change" => array("column" => "", "value" => "", "label" => "flagged for a forced password change"),
         );
 
         // Only ids, deduplicated, and only this vendor's rows are ever touched.
@@ -290,6 +330,15 @@
             if ($bulk_selection) {
                 while ($bulk_row = mysqli_fetch_assoc($bulk_selection)) {
                     $bulk_row_id = (int) $bulk_row["id"];
+                    if ($bulk_action === "force-password-change") {
+                        // §29: flag + app-token revocation + audit per account.
+                        if (function_exists('bc_force_password_change') && bc_force_password_change($bulk_vendor_id, $bulk_row_id)) {
+                            $bulk_applied++;
+                        } else {
+                            $bulk_failed++;
+                        }
+                        continue;
+                    }
                     if ($bulk_action === "permanent-delete") {
                         // Same two-step rule as the single-row button: only an account already in
                         // the Deleted state can be removed for good.
@@ -620,10 +669,23 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
                         <option value="block">Block accounts</option>
                         <option value="delete">Delete accounts</option>
                         <option value="permanent-delete">Permanently delete</option>
+                        <option value="force-password-change">Force password change</option>
                     </select>
                     <button type="button" class="btn btn-sm btn-danger" onclick="applyBulkAction()">Apply to selected</button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearUserSelection()">Clear</button>
                 </div>
+            </div>
+                        <div class="px-4 py-2 border-bottom bg-warning bg-opacity-10">
+                <form method="post" class="d-flex align-items-center gap-2 flex-wrap m-0">
+                    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                    <span class="small fw-bold text-dark"><i class="bi bi-shield-lock me-1"></i>Security:</span>
+                    <span class="small text-muted">Force every user to change password (kills app sessions):</span>
+                    <input type="password" name="pin" maxlength="4" inputmode="numeric" placeholder="PIN" class="form-control form-control-sm" style="width:80px;">
+                    <input type="text" name="otp_code" maxlength="6" inputmode="numeric" placeholder="2FA code" class="form-control form-control-sm" style="width:110px;">
+                    <input type="hidden" name="totp_code" value="">
+                    <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-sm btn-outline-primary">Email me a code</button>
+                    <button type="submit" name="force-all-password-change" value="1" class="btn btn-sm btn-warning" onclick="return confirm('Force ALL users to change their password at next sign-in?')">Force for all users</button>
+                </form>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -755,6 +817,8 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
                 statusActions = `<button class="btn btn-sm btn-light border text-primary" onclick="updateUserAccountStatus('1','${jsStr(u.username)}','${jsStr(u.id)}')" title="Activate User"><i class="bi bi-check-circle"></i></button>
                                  <button class="btn btn-sm btn-light border text-danger" onclick="permanentlyDeleteUser('${jsStr(u.username)}','${jsStr(u.id)}')" title="Permanently Delete"><i class="bi bi-trash-fill"></i></button>`;
             }
+
+            statusActions += ` <button class="btn btn-sm btn-light border text-warning" onclick="forceUserPasswordChange('${jsStr(u.username)}','${jsStr(u.id)}')" title="Force Password Change"><i class="bi bi-key-fill"></i></button>`;
 
             const apiBadge = (u.api_status == '1')
                 ? `<span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1" style="cursor:pointer" onclick="updateUserAccountAPIStatus('2','${jsStr(u.username)}','${jsStr(u.id)}')">API Enabled <i class="bi bi-toggle-on ms-1"></i></span>`
@@ -906,7 +970,8 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             "activate": "Activate",
             "block": "Block",
             "delete": "Delete",
-            "permanent-delete": "Permanently delete"
+            "permanent-delete": "Permanently delete",
+            "force-password-change": "Force password change"
         };
         const isDestructive = (action === "permanent-delete");
 
@@ -926,6 +991,12 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             const form = document.createElement("form");
             form.method = "POST";
             form.action = "Users.php";
+
+            const csrfInput = document.createElement("input");
+            csrfInput.type = "hidden";
+            csrfInput.name = "_csrf_token";
+            csrfInput.value = BC_CSRF_TOKEN;
+            form.appendChild(csrfInput);
 
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
@@ -1004,6 +1075,30 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
             if (result.isConfirmed) {
                 window.location.href = `Users.php?account-log=${encodeURIComponent(id)}`;
             }
+        });
+    }
+
+    const BC_CSRF_TOKEN = '<?php echo function_exists("bc_generate_csrf_token") ? htmlspecialchars(bc_generate_csrf_token(), ENT_QUOTES, "UTF-8") : ""; ?>';
+    function forceUserPasswordChange(username, id) {
+        Swal.fire({
+            title: 'Force password change?',
+            text: "@" + username + " must set a new password at next sign-in and will be signed out of the app.",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, force it'
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'Users.php';
+            const fields = { '_csrf_token': BC_CSRF_TOKEN, 'force-user-password-change': '1', 'account-user-id': id, 'account-username': username };
+            Object.keys(fields).forEach(function (k) {
+                const i = document.createElement('input');
+                i.type = 'hidden'; i.name = k; i.value = fields[k];
+                form.appendChild(i);
+            });
+            document.body.appendChild(form);
+            form.submit();
         });
     }
 

@@ -1,23 +1,42 @@
 <?php session_start();
     include("../func/bc-admin-config.php");
+
+    // §29: full step-up is mandatory for every money-crediting action.
+    function sec29_require_stepup($admin, $ctx) {
+        if (!function_exists('bc_stepup_admin_verify')) {
+            return 'Verification is unavailable. Refresh and try again.';
+        }
+        return bc_stepup_admin_verify($admin, $_POST, $ctx);
+    }
+    if (isset($_POST["order-ref"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    }
+
     
     // App (mobile) payment requests: mobile-app manual bank deposits are stored in
     // sas_transactions with product_unique_id='manual_funding' (status 2 = pending),
     // not in sas_submitted_payments. Approve/reject them here too, using the string
     // actions approve/cancel so they never collide with the numeric statuses the
     // website payment-order handler below expects.
-    if(isset($_GET["order-ref"]) && in_array(trim(strip_tags($_GET["order-status"] ?? '')), array("approve", "cancel"))) {
-        $app_ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
-        $app_action = trim(strip_tags($_GET["order-status"]));
+    if(isset($_POST["order-ref"]) && in_array(trim(strip_tags($_POST["order-status"] ?? '')), array("approve", "cancel"))) {
+        $app_ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
+        $app_action = trim(strip_tags($_POST["order-status"]));
         $select_app_order = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$app_ref."' && product_unique_id='manual_funding' LIMIT 1");
         if (mysqli_num_rows($select_app_order) == 1) {
             $get_app_order = mysqli_fetch_array($select_app_order);
             if ($app_action === "approve") {
                 if ($get_app_order["status"] == "2") {
+                    $sec29_err = sec29_require_stepup($get_logged_admin_details, 'payment_order_approve');
+                    if ($sec29_err !== '') {
+                        $_SESSION["product_purchase_response"] = $sec29_err;
+                        header("Location: /bc-admin/PaymentOrders.php");
+                        exit();
+                    }
                     $app_reference_2 = substr(str_shuffle("12345678901234567890"), 0, 15);
                     $app_credit = chargeOtherUser($get_app_order["username"], "credit", "wallet_credit", "Wallet Credit", $app_reference_2, $app_ref, $get_app_order["amount"], $get_app_order["discounted_amount"], "Account credited by admin (approved app payment notification)", "APP", $_SERVER["HTTP_HOST"], "1");
                     if (in_array($app_credit, array("success"))) {
                         mysqli_query($connection_server, "UPDATE sas_transactions SET status='1' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$app_ref."'");
+                        if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$app_ref, 'Credited NGN ' . number_format((float)$get_app_order["discounted_amount"], 2) . ' to ' . $get_app_order["username"] . ' (app manual funding)');
                         $json_response_array = array("desc" => ucwords($get_app_order["username"]." credited with N".toDecimal($get_app_order["discounted_amount"], 2)." successfully"));
                     } else {
                         $json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
@@ -37,9 +56,20 @@
         exit();
     }
 
-    if(isset($_GET["order-ref"])){
-    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-status"])));
-    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["order-ref"])));
+    // §29: emailed step-up code sender (shared by the approval forms).
+    if (isset($_POST['send_stepup_code'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'payment_order_approve', 'Payment Approval')
+            : 'Verification is unavailable.';
+        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email. Enter it with your PIN in the action row." : "Error: $send_err";
+        header("Location: /bc-admin/PaymentOrders.php");
+        exit();
+    }
+
+    if(isset($_POST["order-ref"])){
+    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"])));
+    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
     	$statusArray = array(1, 2);
     	if(is_numeric($status)){
     		if(in_array($status, $statusArray)){
@@ -53,7 +83,15 @@
     				}
     				
     				if($status == 2){
-						if(in_array($get_payment_order["status"], array("2","3"))){
+						// §29: only a still-pending order may be approved, and only
+						// with the admin PIN + second-factor step-up.
+						if((string)$get_payment_order["status"] === "2"){
+							$sec29_err = sec29_require_stepup($get_logged_admin_details, 'payment_order_approve');
+							if ($sec29_err !== '') {
+								$json_response_encode = json_encode(array("desc" => $sec29_err), true);
+							}
+							else
+							{
 							$purchase_method = "web";
 							$purchase_method = strtoupper($purchase_method);
 							$user = $get_payment_order["username"];
@@ -67,6 +105,7 @@
 							$credit_other_user = chargeOtherUser($user, $transType, $user, ucwords("wallet ".$type), $reference_2, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], "1");
 							if(in_array($credit_other_user, array("success"))){
 								$update_payment_status = mysqli_query($connection_server, "UPDATE sas_submitted_payments SET status='1' WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='".$reference."'");
+								if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $get_payment_order["username"] . ' (web payment order)');
 								$json_response_array = array("desc" => ucwords($get_payment_order["username"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 								$json_response_encode = json_encode($json_response_array,true);
 							}
@@ -75,13 +114,12 @@
 								$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
 								$json_response_encode = json_encode($json_response_array,true);
 							}		
-							
-						}else{
-							if(in_array($get_payment_order["status"], array("1"))){
-								//Order Amount Had Already Been Deposited To User Account
-								$json_response_array = array("desc" => "Order Amount Had Already Been Deposited To User Account");
-								$json_response_encode = json_encode($json_response_array,true);
-							}
+								}
+						} else {
+							// §29: anything not still pending can no longer be
+							// (re-)approved — no credit, no state change.
+							$json_response_array = array("desc" => "This order is no longer pending and cannot be approved again.");
+							$json_response_encode = json_encode($json_response_array,true);
 						}
     				}
     			}else{
@@ -225,6 +263,12 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                         <div class="col-md-6">
                             <h5 class="fw-bold mb-0 text-primary">Payment Approval Portal</h5>
                             <p class="text-muted small mb-0">Approve website and mobile-app manual payments — pending items first</p>
+                            <form method="post" class="d-inline-block m-0">
+    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+    <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary btn-sm rounded-pill">Email me an approval code</button>
+</form>
+<span class="small text-muted d-block mt-1">Approve/Credit actions need your Security PIN + authenticator/email code.</span>
+
                         </div>
                         <div class="col-md-6">
                             <form method="get" action="PaymentOrders.php" class="d-flex gap-2 justify-content-md-end">

@@ -1801,10 +1801,16 @@ function adminTransactionActionButton($api_id, $product_id, $transaction_ref, $t
 	global $connection_server, $get_logged_admin_details;
 
 	if ($is_payment_order && $transaction_status == 2) {
-		$p_actions = '<div class="d-flex gap-2">';
-		$p_actions .= '<a href="PaymentOrders.php?order-ref=' . $transaction_ref . '&order-status=2" class="btn btn-primary btn-sm">Approve</a>';
-		$p_actions .= '<a href="PaymentOrders.php?order-ref=' . $transaction_ref . '&order-status=1" class="btn btn-danger btn-sm">Reject</a>';
-		$p_actions .= '</div>';
+		// §29: POST + CSRF + PIN + 2FA form (no GET approvals).
+		$p_actions = '<form method="post" action="PaymentOrders.php" class="d-flex gap-1 align-items-center flex-wrap" onclick="event.stopPropagation();">'
+			. (function_exists('bc_csrf_field') ? bc_csrf_field() : '')
+			. '<input type="hidden" name="order-ref" value="' . htmlspecialchars((string)$transaction_ref, ENT_QUOTES, 'UTF-8') . '">'
+			. '<input type="password" name="pin" maxlength="4" inputmode="numeric" placeholder="PIN" title="Security PIN" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+			. '<input type="text" name="otp_code" maxlength="6" inputmode="numeric" placeholder="2FA" title="Authenticator or email code" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+			. '<input type="hidden" name="totp_code" value="">'
+			. '<button type="submit" name="order-status" value="2" class="btn btn-primary btn-sm">Approve</button>'
+			. '<button type="submit" name="order-status" value="1" class="btn btn-danger btn-sm">Reject</button>'
+			. '</form>';
 		return $p_actions;
 	}
 
@@ -6713,7 +6719,7 @@ function bc_user_login_payload($user_detail, $vendor) {
         $new_key = bin2hex(random_bytes(25));
         $user_id = (int)($user_detail['id'] ?? 0);
         if ($connection_server && $user_id > 0) {
-            mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key' WHERE id='$user_id'");
+            mysqli_query($connection_server, "UPDATE sas_users SET api_key='$new_key', api_key_created_at=NOW(), api_key_expires_at=DATE_ADD(NOW(), INTERVAL 60 DAY) WHERE id='$user_id'");
             $user_detail['api_key'] = $new_key;
         }
     }
@@ -6724,7 +6730,11 @@ function bc_user_login_payload($user_detail, $vendor) {
             "username" => $user_detail['username'],
             "firstname" => $user_detail['firstname'],
             "lastname" => $user_detail['lastname'],
-            "api_key" => $user_detail['api_key'],
+            // §29: the developer api_key is never returned to the app. Personal
+            // accounts authenticate with the daily app_token issued alongside
+            // this payload; Business accounts are web-only and copy their key
+            // from the dashboard, where it is shown once per rotation.
+            "api_key" => "",
             "balance" => $user_detail['balance'],
             "account_level" => $user_detail['account_level'],
             "level_name" => accountLevel($user_detail['account_level']),
@@ -6733,6 +6743,7 @@ function bc_user_login_payload($user_detail, $vendor) {
             "kyc_verified" => ((int)$user_detail['kyc_status'] === 2) ? "Yes" : "No",
             "kyc_status" => (int)$user_detail['kyc_status'],
             "security_pin_set" => !empty($user_detail['security_pin']),
+            "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
             "ai_status" => (int)($vendor['ai_status'] ?? 0),
         ],
     ];

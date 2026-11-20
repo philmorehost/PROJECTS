@@ -63,6 +63,26 @@ if (isset($_POST["initiate-transfer"]) || isset($_POST["process-transfer"])) {
         exit();
     }
 
+    // §29: customers who enrolled an authenticator app must also prove it.
+    // (Email OTP above stays mandatory for everyone; TOTP is additive.)
+    if (function_exists('bc_stepup_actor_second_factor') && (($get_logged_user_details['two_factor_type'] ?? 'none') === 'totp')) {
+        $totp_err = bc_stepup_actor_second_factor('sas_users', $get_logged_user_details, (string)$get_logged_user_details['username'], $_POST, 'withdrawal');
+        if ($totp_err !== '') {
+            $error_data = [
+                "status" => "error",
+                "title" => "Verification Failed",
+                "message" => $totp_err
+            ];
+            if (isset($_POST['is_ajax'])) {
+                echo json_encode($error_data);
+                exit();
+            }
+            $_SESSION["transfer_result"] = $error_data;
+            header("Location: SendFund.php");
+            exit();
+        }
+    }
+
     include("func/bank-transfer.php");
     $json_response_decode = json_decode($json_response_encode, true);
     $status = $json_response_decode["status"] ?? "failed";
@@ -473,6 +493,14 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
                                 </div>
                                 <small class="text-muted mt-2 d-block"><i class="bi bi-info-circle me-1"></i> Check your registered email for the code.</small>
                             </div>
+                            <?php if (($get_logged_user_details['two_factor_type'] ?? 'none') === 'totp'): ?>
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-phone me-2"></i>Authenticator Code</label>
+                                <input type="text" name="totp_code" class="form-control form-control-lg modern-input text-center" maxlength="6" placeholder="6-digit code" inputmode="numeric" required />
+                                <small class="text-muted mt-2 d-block">Enter the code from your authenticator app.</small>
+                            </div>
+                            <?php endif; ?>
+
 
                             <div class="form-check form-switch mb-4">
                                 <input class="form-check-input" type="checkbox" name="save-beneficiary" id="save-beneficiary" checked>

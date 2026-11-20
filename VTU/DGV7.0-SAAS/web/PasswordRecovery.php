@@ -89,9 +89,10 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     		if(mysqli_num_rows($get_user_details) == 1){
 				if($_SESSION["user-recovery-code"] == $recovery_code){
 					if($pass == $confirm_pass){
-						$md5_pass = md5($pass);
+						// §29: bcrypt at rest; a completed recovery also satisfies a forced change.
+						$md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
 						$get_user_personal_details = mysqli_fetch_array($get_user_details);
-						$get_user_details = mysqli_query($connection_server, "UPDATE sas_users SET password='$md5_pass' WHERE vendor_id='".$get_user_personal_details["vendor_id"]."' && username='".$get_user_personal_details["username"]."'");
+						$get_user_details = mysqli_query($connection_server, "UPDATE sas_users SET password='$md5_pass', force_password_change=0 WHERE vendor_id='".$get_user_personal_details["vendor_id"]."' && username='".$get_user_personal_details["username"]."'");
 						// Email Beginning
 						$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"]);
 						$raw_log_template_subject = getUserEmailTemplate('user-pass-update','subject');

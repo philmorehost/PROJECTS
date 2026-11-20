@@ -474,6 +474,16 @@ if ($connection_server) {
 			if (mysqli_num_rows($get_logged_user_query) == 1) {
 				$get_logged_user_details = mysqli_fetch_array($get_logged_user_query);
 
+        // §29: a forced password change confines the web session to Account
+        // Settings until a new password is set.
+        if (function_exists('bc_password_change_required') && bc_password_change_required($get_logged_user_details)) {
+            $sec29_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+            if ($sec29_script !== 'AccountSettings.php') {
+                header('Location: /web/AccountSettings.php?force_password=1');
+                exit();
+            }
+        }
+
 				// Check for KYC Expiry
 				if ($get_logged_user_details['kyc_status'] == 2 && !empty($get_logged_user_details['kyc_id_expiry'])) {
 					if (strtotime($get_logged_user_details['kyc_id_expiry']) < time()) {

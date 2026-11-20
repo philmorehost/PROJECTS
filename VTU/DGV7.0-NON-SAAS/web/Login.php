@@ -92,8 +92,15 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
 		$get_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='$user'");
     		if(mysqli_num_rows($get_user_details) == 1){
-    			$md5_pass = md5($pass);
-			$check_user_password_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='$user' && password='$md5_pass'");
+    			// §29: accept bcrypt + legacy MD5, then upgrade the stored hash.
+    			$sec29_row = mysqli_fetch_assoc($get_user_details);
+    			$sec29_pass_ok = $sec29_row && (function_exists('bc_verify_password') ? bc_verify_password($pass, (string)$sec29_row['password']) : hash_equals((string)$sec29_row['password'], md5($pass)));
+    			if ($sec29_pass_ok && function_exists('bc_password_is_legacy') && function_exists('bc_hash_password') && bc_password_is_legacy((string)$sec29_row['password'])) {
+    				$sec29_rehash = mysqli_real_escape_string($connection_server, bc_hash_password($pass));
+    				mysqli_query($connection_server, "UPDATE sas_users SET password='$sec29_rehash' WHERE vendor_id='" . (int)$vendor_id . "' && username='" . mysqli_real_escape_string($connection_server, (string)$sec29_row['username']) . "'");
+    			}
+    			mysqli_data_seek($get_user_details, 0);
+			$check_user_password_details = $sec29_pass_ok ? $get_user_details : false;
     			if(mysqli_num_rows($check_user_password_details) == 1){
     				while($user_detail = mysqli_fetch_assoc($check_user_password_details)){
     					if($user_detail["status"] == 1){

@@ -97,6 +97,34 @@
     }
     
     
+    // §29: Google Authenticator (TOTP) enrolment + forced-change completion.
+    if (isset($_POST["totp-begin"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $ok = function_exists('bc_totp_begin_enrolment') && bc_totp_begin_enrolment('sas_users', (int)$get_logged_user_details['id']) !== '';
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator setup started: add the secret below to your authenticator app, then confirm with a code." : "Error: Could not start authenticator setup.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit();
+    }
+    if (isset($_POST["totp-confirm"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $fresh_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='" . (int)$get_logged_user_details['id'] . "' LIMIT 1");
+        $fresh = $fresh_q ? mysqli_fetch_array($fresh_q) : null;
+        $ok = $fresh && function_exists('bc_totp_confirm_enrolment') && bc_totp_confirm_enrolment('sas_users', $fresh, (string)($_POST["totp_code"] ?? ''));
+        if ($ok && function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_user_details['vendor_id'], 'user', $get_logged_user_details['username'], 'totp_enabled', $get_logged_user_details['username'], 'Authenticator app enabled');
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator app enabled. It is now required with your PIN for money movement." : "Error: That code did not match. Check the app and try again.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit();
+    }
+    if (isset($_POST["totp-disable"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $pin_ok = function_exists('verifyUserPIN') && verifyUserPIN((string)($_POST["pin"] ?? ''), $get_logged_user_details);
+        $ok = $pin_ok && function_exists('bc_totp_disable') && bc_totp_disable('sas_users', (int)$get_logged_user_details['id']);
+        if ($ok && function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_user_details['vendor_id'], 'user', $get_logged_user_details['username'], 'totp_disabled', $get_logged_user_details['username'], 'Authenticator app disabled');
+        $_SESSION["product_purchase_response"] = $ok ? "Authenticator app disabled." : "Error: Enter your current PIN to disable the authenticator.";
+        header("Location: " . $_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
     if(isset($_POST["change-password"])){
         $old_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["old-pass"])));
     	$new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new-pass"])));
@@ -109,10 +137,20 @@
                 $md5_new_pass = md5($new_pass);
                 $md5_con_new_pass = md5($con_new_pass);
                 
-                if($md5_old_pass == $get_logged_user_details["password"]){
+                // §29: stored hash may be bcrypt (new) or legacy MD5.
+                $sec29_old_ok = function_exists('bc_verify_password') ? bc_verify_password($old_pass, (string)$get_logged_user_details["password"]) : hash_equals((string)$get_logged_user_details["password"], $md5_old_pass);
+                if($sec29_old_ok){
                     if($md5_new_pass !== $get_logged_user_details["password"]){
                         if($md5_new_pass == $md5_con_new_pass){
-                            mysqli_query($connection_server, "UPDATE sas_users SET password='$md5_new_pass' WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' && username='".$get_logged_user_details["username"]."'");
+                            // §29: store bcrypt (login accepts legacy MD5 too), clear
+                            // any forced-change flag and audit the event.
+                            $sec29_hash = function_exists('bc_hash_password') ? bc_hash_password($new_pass) : $md5_new_pass;
+                            if (function_exists('bc_q')) {
+                                bc_q("UPDATE sas_users SET password=?, force_password_change=0 WHERE vendor_id=? AND username=?", array($sec29_hash, (int)$get_logged_user_details["vendor_id"], (string)$get_logged_user_details["username"]));
+                            } else {
+                                mysqli_query($connection_server, "UPDATE sas_users SET password='" . mysqli_real_escape_string($connection_server, $sec29_hash) . "', force_password_change=0 WHERE vendor_id='" . (int)$get_logged_user_details["vendor_id"] . "' && username='" . mysqli_real_escape_string($connection_server, (string)$get_logged_user_details["username"]) . "'");
+                            }
+                            if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_user_details["vendor_id"], 'user', (string)$get_logged_user_details["username"], 'password_changed', (string)$get_logged_user_details["username"], !empty($get_logged_user_details['force_password_change']) ? 'Forced password change completed' : 'Password changed in settings');
                             // Email Beginning
                             $log_template_encoded_text_array = array("{firstname}" => $get_logged_user_details["firstname"], "{lastname}" => $get_logged_user_details["lastname"]);
                             $raw_log_template_subject = getUserEmailTemplate('user-pass-update','subject');
@@ -346,6 +384,49 @@ bc_app_head("Account Settings | " . ($get_all_site_details["site_title"]));
                         SAVE SECURITY SETTINGS
                     </button>
                 </form>
+            </div>
+
+            <?php if (function_exists('bc_password_change_required') && bc_password_change_required($get_logged_user_details)): ?>
+            <div class="alert alert-danger rounded-4 mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Password change required.</strong> An administrator requires you to set a new password now. Use the Change Password form below before doing anything else.</div>
+            <?php endif; ?>
+
+            <div class="card shadow-sm border-0 p-4 rounded-4 mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-phone-lock me-2 text-primary"></i>Authenticator App (2FA)</h5>
+                <?php
+                $sec29_q = mysqli_query($connection_server, "SELECT two_factor_type, totp_secret FROM sas_users WHERE id='" . (int)$get_logged_user_details['id'] . "' LIMIT 1");
+                $sec29_row = $sec29_q ? mysqli_fetch_assoc($sec29_q) : array('two_factor_type' => 'none', 'totp_secret' => '');
+                $sec29_state = (string)($sec29_row['two_factor_type'] ?? 'none');
+                ?>
+                <?php if ($sec29_state === 'totp'): ?>
+                    <p class="small text-success fw-bold mb-3"><i class="bi bi-check-circle-fill me-1"></i>Enabled — a code is required with your PIN for transfers and withdrawals.</p>
+                    <form method="post" action="">
+                        <?php echo bc_csrf_field(); ?>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">PIN (REQUIRED TO DISABLE)</label>
+                            <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control bg-light" inputmode="numeric" required/>
+                        </div>
+                        <button name="totp-disable" type="submit" class="btn btn-outline-danger w-100 rounded-3 fw-bold" onclick="return confirm('Disable authenticator protection?')">DISABLE AUTHENTICATOR</button>
+                    </form>
+                <?php elseif ($sec29_state === 'pending'): ?>
+                    <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
+                    <p class="small text-muted">Add this secret to Google Authenticator (or any TOTP app), then enter the 6-digit code it shows:</p>
+                    <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
+                    <p class="small text-muted text-break mb-3">Or paste this link into the app: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
+                    <form method="post" action="">
+                        <?php echo bc_csrf_field(); ?>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">6-DIGIT CODE FROM THE APP</label>
+                            <input name="totp_code" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control bg-light" inputmode="numeric" required/>
+                        </div>
+                        <button name="totp-confirm" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">CONFIRM &amp; ENABLE</button>
+                    </form>
+                <?php else: ?>
+                    <p class="small text-muted">Protect transfers and withdrawals with a code from Google Authenticator, in addition to your PIN.</p>
+                    <form method="post" action="">
+                        <?php echo bc_csrf_field(); ?>
+                        <button name="totp-begin" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">SET UP AUTHENTICATOR</button>
+                    </form>
+                <?php endif; ?>
             </div>
 
             <div class="card shadow-sm border-0 p-4 rounded-4">

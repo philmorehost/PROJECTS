@@ -36,9 +36,17 @@ if ($msg = isAccountLocked($user, $vendor_id)) {
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$user' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user_detail = mysqli_fetch_assoc($check_user);
-    $md5_pass = md5($pass);
+    // §29: accept bcrypt and legacy MD5 (bc_verify_password handles both).
+    $sec29_pass_ok = function_exists('bc_verify_password')
+        ? bc_verify_password($pass, (string)$user_detail['password'])
+        : hash_equals((string)$user_detail['password'], md5($pass));
+    if ($sec29_pass_ok) {
+            // §29: transparent MD5 -> bcrypt upgrade on successful login.
+            if (function_exists('bc_password_is_legacy') && function_exists('bc_hash_password') && bc_password_is_legacy((string)$user_detail['password'])) {
+                $sec29_rehash = mysqli_real_escape_string($connection_server, bc_hash_password($pass));
+                mysqli_query($connection_server, "UPDATE sas_users SET password='$sec29_rehash' WHERE vendor_id='" . (int)$vendor_id . "' AND username='" . mysqli_real_escape_string($connection_server, (string)$user_detail['username']) . "'");
+            }
 
-    if ($user_detail['password'] === $md5_pass) {
         if ($user_detail["status"] == 1) {
             recordLoginAttempt($user, $ip, 1, $vendor_id);
 
@@ -67,7 +75,8 @@ if (mysqli_num_rows($check_user) == 1) {
                     "username" => $user_detail['username'],
                     "firstname" => $user_detail['firstname'],
                     "lastname" => $user_detail['lastname'],
-                    "api_key" => $user_detail['api_key'],
+                    // §29: the developer api_key is never returned to the app (daily app_token below).
+                    "api_key" => "",
                     "balance" => $user_detail['balance'],
                     "account_level" => $user_detail['account_level'],
                     "level_name" => accountLevel($user_detail['account_level']),
@@ -76,6 +85,7 @@ if (mysqli_num_rows($check_user) == 1) {
                     "kyc_verified" => $is_kyc_compliant ? "Yes" : "No",
                     "kyc_status" => (int)$user_detail['kyc_status'],
                     "security_pin_set" => $pin_set,
+                    "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
                     "ai_status" => (int)$get_vendor['ai_status']
                 ]
             ];

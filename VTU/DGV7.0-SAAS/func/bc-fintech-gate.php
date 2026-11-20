@@ -414,7 +414,28 @@ if (!function_exists('bc_fintech_api_credential')) {
         if (isset($_POST) && is_array($_POST)) $input = $_POST;
 
         $token = bc_app_token_from_request($input);
-        if ($token === '') return $provided_api_key;
+        if ($token === '') {
+            // §29: a developer key that has passed its validity window (60 days
+            // for Business accounts) is dead. The legacy passthrough itself is
+            // unchanged for live keys; enforcement is a lookup of the key's
+            // owner, and any failure to look up falls through to the endpoint,
+            // which fails closed on its own user query.
+            if ((int)$vendor_id > 0 && function_exists('bc_api_key_is_expired') && ($connection_server instanceof mysqli)) {
+                try {
+                    $key_owner = bc_q_row("SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1",
+                        array((int)$vendor_id, $provided_api_key));
+                    if ($key_owner && bc_api_key_is_expired($key_owner)) {
+                        bc_fintech_send_app_denial(array(
+                            'http' => 401, 'code' => 'API_KEY_EXPIRED',
+                            'message' => 'Your API key has expired. Sign in to copy your new key, then update your integration.',
+                        ));
+                    }
+                } catch (Throwable $e) {
+                    // Never let the expiry probe break authentication itself.
+                }
+            }
+            return $provided_api_key;
+        }
 
         // Endpoints that call this before resolveVendorID() pass 0; the token row itself is
         // vendor-scoped and unique, so the vendor is derived from the session rather than
