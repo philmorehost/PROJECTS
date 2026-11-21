@@ -2,6 +2,7 @@
 /** Server-side authority boundary for platform custody UI; never accept a posted actor/role. */
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
 require_once __DIR__.'/bc-crypto-bybit-identity.php';
+require_once __DIR__.'/bc-crypto-bybit-address-read.php';
 require_once __DIR__.'/bc-crypto-routes.php';
 function bc_crypto_custody_authorize($session_id,$input) {
     if (!is_int($session_id)||$session_id<=0) throw new RuntimeException('crypto_custody_access_denied');
@@ -18,7 +19,7 @@ function bc_crypto_custody_manage($session_id,$input) {
     $authority=bc_crypto_custody_authorize($session_id,$input);
     $env=bc_crypto_gov_environment($input['environment']??null);
     $action=$input['action']??null;
-    if (!in_array($action,['propose_route','review_route','revoke_route','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    if (!in_array($action,['propose_route','review_route','revoke_route','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
     $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
     if ($identity==='') {
         if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
@@ -48,23 +49,28 @@ function bc_crypto_custody_manage($session_id,$input) {
         $result['custody_account']=$identity;$result['route_candidate_updated']=true;
         return $result;
     }
-    if ($action==='verify_provider') {
+    if (in_array($action,['verify_provider','inspect_master_address'],true)) {
         $source=bc_crypto_gov_uint($input['source_vendor_id']??null,1000000000);
         if ($source===0) throw new InvalidArgumentException('crypto_custody_vendor_invalid');
         $vendor=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? LIMIT 1',[$source]);
         if (!$vendor||(int)$vendor['status']!==1||!empty($vendor['is_blocked'])) throw new RuntimeException('crypto_custody_vendor_inactive');
         if ((int)$account['revision']!==$revision) throw new RuntimeException('crypto_custody_edit_conflict');
+        if ($action==='inspect_master_address') bc_crypto_bybit_address_scope($input['coin']??null,$input['chain']??null);
         bc_crypto_custody_evidence_engines();
         bc_crypto_custody_evidence_key(getenv('BC_CRYPTO_CUSTODY_EVIDENCE_ACTIVE_KEY')?:'V1');
         // Persist a sanitized request audit BEFORE a provider read. No raw provider response is stored.
-        if (!bc_sec_audit(0,'spadmin',(string)$authority['id'],'crypto_identity_requested',$identity,'Read-only Bybit identity comparison requested.')) throw new RuntimeException('crypto_bybit_audit_unavailable');
-        $snapshot=bc_crypto_bybit_verify_identity($source,$env,$identity);
+        if (!bc_sec_audit(0,'spadmin',(string)$authority['id'],$action==='inspect_master_address'?'crypto_address_requested':'crypto_identity_requested',$identity,$action==='inspect_master_address'?'Read-only Bybit master address inventory requested; not customer allocation.':'Read-only Bybit identity comparison requested.')) throw new RuntimeException('crypto_bybit_audit_unavailable');
+        $snapshot=$action==='inspect_master_address'?bc_crypto_bybit_read_master_address($source,$env,$identity,$input['coin'],$input['chain']):bc_crypto_bybit_verify_identity($source,$env,$identity);
+        if ($action==='inspect_master_address') {
+            $current_vendor=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? LIMIT 1',[$source]);
+            if (!$current_vendor||(int)$current_vendor['status']!==1||!empty($current_vendor['is_blocked'])) throw new RuntimeException('crypto_custody_vendor_inactive');
+        }
         $current=bc_q_row('SELECT revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$identity]);
         if (!$current||(int)$current['revision']!==$revision) throw new RuntimeException('crypto_custody_edit_conflict');
         $snapshot['registry_revision']=$revision;
         $snapshot['verified_by_actor']=$authority['id'];
         $hash=bc_crypto_custody_evidence_store($authority,$identity,$env,bc_crypto_gov_json($snapshot),$revision);
-        return ['custody_account'=>$identity,'evidence_hash'=>$hash,'provider_identity_compared'=>true,'live_enabled'=>false];
+        return ['custody_account'=>$identity,'evidence_hash'=>$hash,'provider_identity_compared'=>$action==='verify_provider','master_address_inspected'=>$action==='inspect_master_address','live_enabled'=>false];
     }
     if ($action==='view_evidence') return ['custody_account'=>$identity,'text'=>bc_crypto_custody_evidence_view($authority,$identity,$env,bc_crypto_custody_digest($input['evidence_hash']??null),$revision),'live_enabled'=>false];
     $values=[];

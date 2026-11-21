@@ -1,5 +1,7 @@
 # CryptoHub: read-only provider account identity comparison
 
+> The separate master-address inventory action now reuses these identity checks around one new read endpoint. See `CRYPTO_BYBIT_ADDRESS_READ.md`; no customer allocation or activation is inferred. The identity-only action described below still makes only its existing single query.
+
 ## What this stage does
 
 The platform custody-review page now has an explicit POST action to inspect the selected vendor's **server-configured** personal Bybit read-only credentials using the existing signed `GET /v5/user/query-api`. Normal page loads perform no provider calls. No new provider operation is allowlisted, and the existing fixed origins, TLS verification, no redirects, 3s connect/8s total timeout and 2MiB response cap remain in use. There is no retry or money-moving request.
