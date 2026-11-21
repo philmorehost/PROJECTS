@@ -50,6 +50,11 @@ foreach (array('SAAS','NON-SAAS') as $ed) {
     ck_check(strpos($worker,"PHP_SAPI !== 'cli'")!==false && strpos($worker,'hash_equals')!==false,'Worker requires CLI or secret');
     $handler=file_get_contents($base.'/web/func/requery-transaction.php');
     ck_check(strpos($handler,'WHERE $requery_scope AND reference=')!==false,'Scoped reconciliation lookup');
+    foreach (array('func/history-table.php', 'bc-admin/NumberChecker.php') as $entry) {
+        $links = file_get_contents($base.'/'.$entry);
+        ck_check(strpos($links, '?requery=') === false, $ed.' '.$entry.' never links to blocked mutation GET');
+        ck_check(strpos($links, '?review_requery=') !== false, $ed.' '.$entry.' links to confirmation');
+    }
     $admin=file_get_contents($base.'/bc-admin/Transactions.php');
     ck_check(strpos($admin,'http_response_code(405)')!==false && strpos($admin,"'transaction_requery'")!==false && strpos($admin,"hash_equals((string)\$_SESSION['bc_admin_transactions_csrf']")!==false,'Admin GET denial and POST step-up/CSRF');
 }

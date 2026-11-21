@@ -116,7 +116,7 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
             } else if ($row['status'] == 3 && $is_admin && strpos($_SERVER['SCRIPT_NAME'], 'Transactions.php') !== false) {
                 echo '<div class="d-flex gap-1 justify-content-center">';
                 echo $bc_mk_order_form('Transactions.php', array(array('mark-success', 'Mark Success', 'btn btn-success btn-sm py-1 px-2')));
-                echo '<a href="Transactions.php?requery=' . $ref . '" class="btn btn-primary btn-sm py-1 px-2" style="font-size:11px;">Requery</a>';
+                echo '<a href="Transactions.php?review_requery=' . $ref . '" class="btn btn-primary btn-sm py-1 px-2" style="font-size:11px;">Requery</a>';
                 echo '</div>';
             } else {
                 echo '-';
