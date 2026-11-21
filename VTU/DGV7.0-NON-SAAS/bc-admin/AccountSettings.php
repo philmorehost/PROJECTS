@@ -2,6 +2,9 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include ("../func/bc-admin-config.php");
+require_once __DIR__.'/../func/bc-totp-setup.php';
+bc_totp_setup_handle('sas_vendors', $get_logged_admin_details);
+
 bc_enrollment_policy_save(false, $get_logged_admin_details);
 include_once(__DIR__ . "/../func/bc-integrity.php");
 
@@ -558,23 +561,6 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
     exit;
 }
 
-if (isset($_POST["totp-begin"])) {
-    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-    $ok = function_exists('bc_totp_begin_enrolment') && bc_totp_begin_enrolment('sas_vendors', (int)$get_logged_admin_details['id']) !== '';
-    $_SESSION["product_purchase_response"] = $ok ? "Authenticator setup started: add the secret shown below, then confirm with a code." : "Error: Could not start authenticator setup.";
-    header("Location: AccountSettings.php");
-    exit();
-}
-if (isset($_POST["totp-confirm"])) {
-    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-    $fresh_q = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . (int)$get_logged_admin_details['id'] . "' LIMIT 1");
-    $fresh = $fresh_q ? mysqli_fetch_array($fresh_q) : null;
-    $ok = $fresh && function_exists('bc_totp_confirm_enrolment') && bc_totp_confirm_enrolment('sas_vendors', $fresh, (string)($_POST["totp_code"] ?? ''));
-    if ($ok && function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'totp_enabled', (string)$get_logged_admin_details['email'], 'Admin authenticator app enabled');
-    $_SESSION["product_purchase_response"] = $ok ? "Authenticator app enabled. It is now required with your PIN for approvals." : "Error: That code did not match. Check the app and try again.";
-    header("Location: AccountSettings.php");
-    exit();
-}
 if (isset($_POST["totp-disable"])) {
     $mandate=bc_enrollment_policy((int)$get_logged_admin_details['id']);
     if ($mandate['vendor']) { http_response_code(403); exit('Your administrator requires Google Authenticator. It cannot be disabled.'); }
@@ -1633,26 +1619,9 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                     <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
                                     <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
                                 </form>
-                            <?php elseif ($sec29_state === 'pending'): ?>
-                                <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
-                                <p class="small text-muted">Add this secret to Google Authenticator, then enter the 6-digit code:</p>
-                                <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
-                                <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-                                <script>(function(){{try{{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){{if(el)el.style.display='none';return;}}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_admin_details['email'], 'VTU Admin') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}}catch(e){{var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}}}})();</script>
-                                <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
-                                <p class="small text-muted text-break">Or paste: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_admin_details['email'], 'VTU Admin') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
-                                <form method="post" class="row g-2 align-items-end">
-                                    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
-                                    <div class="col-md-4"><input name="totp_code" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control" placeholder="6-digit code" inputmode="numeric" required /></div>
-                                    <div class="col-md-4"><button name="totp-confirm" type="submit" class="btn btn-primary rounded-pill fw-bold">Confirm &amp; enable</button></div>
-                                </form>
                             <?php else: ?>
-                                <p class="small text-muted">Approvals already need your Security PIN. Add an authenticator app so a stolen PIN alone cannot approve money movement.</p>
-                                <form method="post">
-                                    <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
-                                    <button name="totp-begin" type="submit" class="btn btn-primary rounded-pill fw-bold">Set up authenticator</button>
-                                </form>
-                            <?php endif; ?>
+<?php bc_totp_setup_widget(); ?>
+<?php endif; ?>
 
                         </div>
                     </div>

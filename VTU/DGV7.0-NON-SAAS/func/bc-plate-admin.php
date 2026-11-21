@@ -393,7 +393,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Fund User',             'href' => 'ShareFund.php',            'match' => array('ShareFund.php')),
                 )),
                 array('label' => 'System Function', 'icon' => 'menu-button-wide',
-                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php','UpdateSystem.php'),
+                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php'),
                       'children' => array(
                     array('label' => 'Account Settings',     'href' => 'AccountSettings.php',     'match' => array('AccountSettings.php')),
                     array('label' => 'Fund Wallet',          'href' => 'Fund.php',                'match' => array('Fund.php')),
@@ -419,7 +419,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Chat Settings',        'href' => 'ChatSettings.php',        'match' => array('ChatSettings.php')),
                     array('label' => 'Brute Force Security',  'href' => 'BruteForceSecurity.php',  'match' => array('BruteForceSecurity.php')),
                     array('label' => 'Service Control Center','href' => 'ServiceControl.php',      'match' => array('ServiceControl.php')),
-                    array('label' => 'System Update',       'href' => 'UpdateSystem.php',       'match' => array('UpdateSystem.php')),
+                    ...($bc_menu_is_saas ? array() : array(array('label' => 'System Update', 'href' => 'UpdateSystem.php', 'match' => array('UpdateSystem.php')))),
                 )),
             )),
             array('label' => 'Service Operations', 'items' => array(
