@@ -39,7 +39,7 @@ if (($argv[1]??'')==='worker') {
 }
 $n=0;$workers=[];$files=[];
 function check_db($ok,$label) {global $n;if(!$ok)throw new RuntimeException($label);$n++;echo "ok $n - $label\n";}
-function reject_db($fn,$code) {try{$fn();}catch(Throwable $e){check_db($e->getMessage()===$code,'reject '.$code);return;}throw new RuntimeException('Unexpected success: '.$code);}
+function reject_db($fn,$code) {try{$fn();}catch(Throwable $e){check_db($e->getMessage()===$code,'reject '.$code.' (received '.$e->getMessage().')');return;}throw new RuntimeException('Unexpected success: '.$code);}
 function scalar_db($sql) {return array_values(bc_q_row($sql))[0];}
 function start_worker($action,$reference,$units='') {
     global $workers,$files,$name;
