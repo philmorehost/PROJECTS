@@ -5,12 +5,14 @@ on:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/tests/crypto_mysql_integration.php'
+      - 'VTU/tests/crypto_deposits*.php'
       - '.github/workflows/crypto-mysql.yml'
   pull_request:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/tests/crypto_mysql_integration.php'
+      - 'VTU/tests/crypto_deposits*.php'
       - '.github/workflows/crypto-mysql.yml'
   workflow_dispatch:
 permissions:
@@ -41,6 +43,8 @@ jobs:
           php-version: '8.3'
           extensions: mysqli
           coverage: none
+      - name: Pure deposit validation and state-machine checks
+        run: php -n VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections
         env:
           BC_CRYPTO_TEST_MYSQL: DISPOSABLE_ONLY
