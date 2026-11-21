@@ -32,4 +32,10 @@ mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_vendor_inac
 $GLOBALS['vendor_row']=['id'=>7,'status'=>1,'is_blocked'=>0];
 $GLOBALS['account_row']['revision']=5;
 mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_edit_conflict');
+$inspect=array_merge($verify,['action'=>'inspect_master_address','coin'=>'USDT','chain'=>'TRX']);
+mg_reject(fn()=>bc_crypto_custody_manage(11,$inspect),'crypto_custody_edit_conflict');
+$GLOBALS['account_row']['revision']=4;
+foreach([['coin'=>'BTC'],['chain'=>'ETH'],['chain'=>null],['coin'=>null]] as $change)mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($inspect,$change)),'crypto_address_network_unsupported');
+$GLOBALS['vendor_row']['is_blocked']=1;
+mg_reject(fn()=>bc_crypto_custody_manage(11,$inspect),'crypto_custody_vendor_inactive');
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";

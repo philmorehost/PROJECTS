@@ -21,11 +21,12 @@ function bc_bybit_signature($timestamp, $key, $secret, $query, $window = '5000')
     return hash_hmac('sha256', (string)$timestamp . $key . $window . $query, $secret);
 }
 function bc_bybit_request_spec($config, $operation, $params, $timestamp) {
-    $paths = ['key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info'];
+    $paths = ['key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info', 'master_deposit_address'=>'/v5/asset/deposit/query-address'];
     $hosts = ['testnet'=>'https://api-testnet.bybit.com', 'mainnet'=>'https://api.bybit.com'];
     if (!isset($paths[$operation]) || ($hosts[$config['environment'] ?? ''] ?? '') !== ($config['base_url'] ?? '')) throw new RuntimeException('bybit_operation_not_allowed');
-    if (!is_array($params) || array_diff(array_keys($params), $operation === 'coins' ? ['coin'] : [])) throw new RuntimeException('bybit_parameters_invalid');
+    if (!is_array($params) || array_diff(array_keys($params), $operation === 'coins' ? ['coin'] : ($operation === 'master_deposit_address' ? ['coin','chainType'] : []))) throw new RuntimeException('bybit_parameters_invalid');
     if (isset($params['coin']) && (!is_string($params['coin']) || !preg_match('/^[A-Z0-9]{1,24}$/D', $params['coin']))) throw new RuntimeException('bybit_coin_invalid');
+    if ($operation === 'master_deposit_address' && (!in_array($params['coin'] ?? null, ['TRX','USDT'], true) || ($params['chainType'] ?? null) !== 'TRX')) throw new RuntimeException('bybit_address_scope_invalid');
     if (!preg_match('/^[0-9]{13}$/D', (string)$timestamp)) throw new RuntimeException('bybit_timestamp_invalid');
     ksort($params);
     $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
