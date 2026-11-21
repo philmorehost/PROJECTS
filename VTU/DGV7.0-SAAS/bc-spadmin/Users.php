@@ -20,7 +20,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         if($status != 'all') $where[] = "u.status='$status'";
         if($vid > 0) $where[] = "u.vendor_id='$vid'";
         if($where) $sql .= " WHERE " . implode(" AND ", $where);
-        
+
         $result = mysqli_query($connection_server, $sql);
         $sn = 1;
         while($row = mysqli_fetch_assoc($result)){
@@ -54,34 +54,46 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     // §33/§10: user account actions (status / API status / permanent delete /
     // "login as user") are POST + CSRF + step-up only. Activations, API
     // enablement, deletes and impersonation need Security PIN +
-    // authenticator/email code; suspension / API disable need the PIN.
+    // authenticator/email code for every action, including API disable.
     $sec33_gate_ok = false;
+    if (isset($_POST['sec33_user_action']) || isset($_POST['sec33_send_code'])) {
+        $mode = (string)($_POST['sec33_user_action'] ?? '');
+        $status = (string)($_POST['sec33_status'] ?? '');
+        if (!in_array($mode, ['status', 'api', 'log', 'permanent'], true)
+            || ($mode === 'status' && !in_array($status, ['1', '2', '3'], true))
+            || ($mode === 'api' && !in_array($status, ['1', '2'], true))) {
+            http_response_code(400); exit('Invalid user action.');
+        }
+    }
     if (isset($_POST['sec33_send_code'])) {
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification is unavailable.'); }
+        bc_validate_csrf();
         $sec33_send_err = function_exists('bc_stepup_send_email_otp')
             ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'user_account_action', 'User Account Action')
             : 'Verification is unavailable.';
+        $_SESSION['sec33_user_draft'] = array_intersect_key($_POST, array_flip(['sec33_user_action', 'sec33_status', 'account-user-id', 'account-username', 'vid']));
         $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
         header("Location: Users.php");
         exit();
     }
     if (isset($_POST['sec33_user_action'])) {
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification is unavailable.'); }
+        bc_validate_csrf();
         $sec33_mode = (string)$_POST['sec33_user_action'];
         $sec33_status = (string)($_POST['sec33_status'] ?? '');
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
-        $sec33_pin_only = ($sec33_mode === 'status' && $sec33_status === '2') || ($sec33_mode === 'api' && $sec33_status === '2');
-        $sec33_input = $sec33_pin_only
-            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')]
-            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
         $sec33_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'user_account_action')
             : 'Verification is unavailable.';
         if ($sec33_err !== '') {
+            $_SESSION['sec33_user_draft'] = array_intersect_key($_POST, array_flip(['sec33_user_action', 'sec33_status', 'account-user-id', 'account-username', 'vid']));
             $_SESSION["product_purchase_response"] = "Error: " . $sec33_err;
             header("Location: Users.php");
             exit();
         }
+        unset($_GET['account-status'], $_GET['account-api-status'], $_GET['account-log'], $_GET['login-as']);
+        unset($_POST['permanent-delete-user']); // Only the verified permanent mode may set this.
         $sec33_gate_ok = true;
         $GLOBALS['sec33_verified'] = true;
         if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'user_' . $sec33_mode . '_action', 'user:' . (string)($_POST['account-username'] ?? ''), $sec33_mode . ' ' . $sec33_status);
@@ -114,6 +126,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
         if(mysqli_query($connection_server, "UPDATE sas_users SET $column='$status' WHERE vendor_id='$vid' && username='$account_user'")){
             $_SESSION["product_purchase_response"] = "User ".ucwords($account_user)." updated successfully";
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: user update failed. Please try again.";
         }
         header("Location: Users.php" . (isset($_GET['vid']) && is_numeric($_GET['vid']) ? "?vid=".(int)$_GET['vid'] : ""));
         exit();
@@ -128,8 +142,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         }
         $account_user = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["account-username"])));
         $vid = (int)$_POST["vid"];
-        if(mysqli_query($connection_server, "DELETE FROM sas_users WHERE vendor_id='$vid' && username='$account_user' && status='3'")){
+        if(mysqli_query($connection_server, "DELETE FROM sas_users WHERE vendor_id='$vid' && username='$account_user' && status='3'") && mysqli_affected_rows($connection_server) > 0){
             $_SESSION["product_purchase_response"] = "User permanently deleted";
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: user was not deleted. Archive the account first and try again.";
         }
         header("Location: Users.php?vid=".$vid);
         exit();
@@ -152,7 +168,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 header("Location: Users.php");
                 exit();
             }
-            
+
             // Generate a secure one-time login token. The previous link carried
             // md5(username + YYYYMMDD + "SUPER_ADMIN_SECRET"), which anyone who saw the source or a
             // single logged URL could recompute for any account, for the rest of the day. The token
@@ -193,7 +209,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
       <?php
           $vid_filter = isset($_GET["vid"]) ? (int)$_GET["vid"] : 0;
           $stats_vendor_stmt = ($vid_filter > 0) ? " WHERE vendor_id='$vid_filter'" : "";
-          $stats_q = mysqli_query($connection_server, "SELECT 
+          $stats_q = mysqli_query($connection_server, "SELECT
               COUNT(*) as total,
               COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END), 0) as active,
               COALESCE(SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END), 0) as blocked,
@@ -351,7 +367,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
         const urlParams = new URLSearchParams(window.location.search);
         const vid = urlParams.get('vid');
         if(vid) document.getElementById("user-vendor-filter").value = vid;
-        
+
         fetchUsers(1);
 
         let searchTimeout = null;
@@ -366,7 +382,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
         const status = document.getElementById("user-status-filter").value;
         const vid = document.getElementById("user-vendor-filter").value;
         const body = document.getElementById("user-table-body");
-        
+
         document.getElementById("export-vid").value = vid;
 
         body.innerHTML = `<tr><td colspan="6" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>`;
@@ -397,7 +413,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
         users.forEach((u, i) => {
             const sn = ((currentPage - 1) * 10) + (i + 1);
             const statusBadge = (u.status == '1') ? '<span class="badge bg-success">Active</span>' : (u.status == '2' ? '<span class="badge bg-warning">Blocked</span>' : '<span class="badge bg-danger">Deleted</span>');
-            
+
             html += `
                 <tr>
                     <td class="ps-4 fw-bold">${sn}</td>
@@ -422,7 +438,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
                             <button class="btn btn-sm btn-light border dropdown-toggle" data-bs-toggle="dropdown">Manage</button>
                             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                                 <li><a class="dropdown-item py-2" href="UserEdit.php?userID=${u.id}"><i class="bi bi-pencil me-2 text-primary"></i> Edit Profile</a></li>
-                                <li><button class="dropdown-item py-2" onclick="sec33OpenUserModal('log', '', '${u.id}', '${u.username}', '${u.vid}', 'Login as User?', 'Login as @${u.username}? PIN + authenticator code required. Audited.', 'Yes, login')"><i class="bi bi-box-arrow-in-right me-2 text-info"></i> Login as User</button></li>
+                                <li><button class="dropdown-item py-2" onclick="sec33OpenUserModal('log', '', '${u.id}', '${u.username}', '${u.vid}', 'Login as User?', 'Login as @${u.username}? Security PIN + verification code required. Audited.', 'Yes, login')"><i class="bi bi-box-arrow-in-right me-2 text-info"></i> Login as User</button></li>
                                 <li><a class="dropdown-item py-2" href="UserTransactions.php?searchq=${u.username}&vid=${u.vid}"><i class="bi bi-list-ul me-2 text-dark"></i> View Transactions</a></li>
                                 <li><a class="dropdown-item py-2" href="ShareFund.php?target=user&username=${u.username}&vid=${u.vid}"><i class="bi bi-plus-circle me-2 text-success"></i> Fund Wallet</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -444,7 +460,7 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
         let html = '';
         if (p.current_page > 1) html += `<button class="btn btn-outline-primary btn-sm" onclick="fetchUsers(${p.current_page - 1})">Prev</button>`;
         for (let i = 1; i <= p.total_pages; i++) {
-            if(i > 5 && i < p.total_pages) continue; 
+            if(i > 5 && i < p.total_pages) continue;
             html += `<button class="btn btn-sm ${i === p.current_page ? 'btn-primary' : 'btn-outline-primary'}" onclick="fetchUsers(${i})">${i}</button>`;
         }
         if (p.current_page < p.total_pages) html += `<button class="btn btn-outline-primary btn-sm" onclick="fetchUsers(${p.current_page + 1})">Next</button>`;
@@ -459,47 +475,28 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
     }
 
     function updateStatus(status, user, vid) {
-        Swal.fire({
-            title: 'Change Account Status?',
-            text: `Are you sure you want to update status for @${user}?`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, update'
-        }).then((result) => {
-            if (result.isConfirmed) sec33OpenUserModal('status', status, '', user, vid, 'Change Account Status?', `Update status for @${user}? PIN + authenticator code required (PIN only to suspend). Audited.`, 'Yes, update');
-        });
+        sec33OpenUserModal('status', status, '', user, vid, 'Change Account Status?', `Update status for @${user}? Security PIN + verification code required. Audited.`, 'Yes, update');
     }
 
     function updateAPI(user, vid, enabled) {
         const status = enabled ? 1 : 2;
-        sec33OpenUserModal('api', String(status), '', user, vid, (enabled ? 'Enable' : 'Disable') + ' API?', `Change API access for @${user}? PIN + authenticator code required (PIN only to disable). Audited.`, 'Confirm');
+        sec33OpenUserModal('api', String(status), '', user, vid, (enabled ? 'Enable' : 'Disable') + ' API?', `Change API access for @${user}? Security PIN + verification code required. Audited.`, 'Confirm');
     }
 
     function permanentlyDelete(user, vid) {
-        Swal.fire({
-            title: 'PERMANENT DELETE?',
-            text: `This will erase @${user} from the database forever!`,
-            icon: 'error',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'YES, DELETE FOREVER'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                sec33OpenUserModal('permanent', '', '', user, vid, 'PERMANENT DELETE?', `This will erase @${user} from the database forever! PIN + authenticator code required. Audited.`, 'YES, DELETE FOREVER');
-            }
-        });
+        sec33OpenUserModal('permanent', '', '', user, vid, 'PERMANENT DELETE?', `This will erase @${user} from the database forever! Security PIN + verification code required. Audited.`, 'YES, DELETE FOREVER');
     }
     </script>
 
-    
+
 
 
 
     <!-- §33: step-up confirmation for user account actions -->
-    <div class="modal fade" id="sec33UserModal" tabindex="-1" aria-hidden="true">
+    <dialog id="sec33UserModal" aria-labelledby="sec33UserTitle" style="border:0;border-radius:1rem;padding:0;width:min(94vw,520px);max-height:90vh;overflow:auto">
       <div class="modal-dialog modal-dialog-centered">
         <form method="post" class="modal-content rounded-4 border-0">
-          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33UserTitle">Confirm action</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33UserTitle">Confirm action</h5><button type="button" class="btn-close" onclick="document.getElementById('sec33UserModal').close()" aria-label="Close"></button></div>
           <div class="modal-body">
             <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
             <input type="hidden" name="sec33_user_action" id="sec33UserMode" value="">
@@ -509,13 +506,15 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
             <input type="hidden" name="vid" id="sec33Vid" value="">
             <p class="text-muted small" id="sec33UserText"></p>
             <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
-            <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE</label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
-            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+            <div class="mb-1"><label class="form-label small fw-bold text-muted"><?php echo !empty($get_logged_spadmin_details['totp_secret']) && ($get_logged_spadmin_details['two_factor_type'] ?? '') === 'totp' ? 'GOOGLE AUTHENTICATOR CODE' : 'EMAIL OTP'; ?></label><input name="sec_factor" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" class="form-control rounded-3" placeholder="6-digit code"></div>
+            <?php if (($get_logged_spadmin_details['two_factor_type'] ?? '') !== 'totp' || empty($get_logged_spadmin_details['totp_secret'])): ?>
+            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code</button>
+            <?php else: ?><p class="small text-muted">Use a fresh code from Google Authenticator. Email cannot bypass your enrolled authenticator.</p><?php endif; ?>
           </div>
-          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33UserBtn">Confirm</button></div>
+          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" onclick="document.getElementById('sec33UserModal').close()">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33UserBtn">Confirm</button></div>
         </form>
       </div>
-    </div>
+    </dialog>
     <script>
     function sec33OpenUserModal(mode, status, id, username, vid, title, text, btn) {
         document.getElementById('sec33UserMode').value = mode;
@@ -526,7 +525,18 @@ bc_adm_head("Users Management | Super Admin", array("area" => "spadmin"));
         document.getElementById('sec33UserTitle').textContent = title;
         document.getElementById('sec33UserText').textContent = text;
         document.getElementById('sec33UserBtn').textContent = btn;
-        new bootstrap.Modal(document.getElementById('sec33UserModal')).show();
+        const dialog = document.getElementById('sec33UserModal');
+        dialog.querySelector('[name=sec_pin]').value = '';
+        dialog.querySelector('[name=sec_factor]').value = '';
+        if (!dialog.open) dialog.showModal();
+    }
+
+    <?php $sec33_draft = $_SESSION['sec33_user_draft'] ?? null; unset($_SESSION['sec33_user_draft']); ?>
+    const sec33Draft = <?php echo json_encode($sec33_draft, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    if (sec33Draft) {
+        sec33OpenUserModal(sec33Draft.sec33_user_action, sec33Draft.sec33_status,
+            sec33Draft['account-user-id'], sec33Draft['account-username'], sec33Draft.vid,
+            'Verify user action', 'Confirm ' + sec33Draft.sec33_user_action + ' for @' + sec33Draft['account-username'] + '. Enter your Security PIN and verification code.', 'Confirm');
     }
     </script>
 
