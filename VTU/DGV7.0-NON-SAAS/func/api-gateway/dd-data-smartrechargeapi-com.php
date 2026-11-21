@@ -4,7 +4,7 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
  if(in_array($product_name, $data_service_providers)){
 
   if(!empty($quantity)){
-   $curl_url = "https://".$api_detail["api_base_url"]."/api/v2/directdata/?api_key=".$api_detail["api_key"]."&product_code=".$quantity."&phone=".$phone_no;
+   $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/v2/directdata/?api_key=").$api_detail["api_key"]."&product_code=".$quantity."&phone=".$phone_no;
    $curl_request = curl_init($curl_url);
    curl_setopt($curl_request, CURLOPT_HTTPGET, true);
    curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

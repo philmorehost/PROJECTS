@@ -44,6 +44,8 @@ function run_handler($service, $method, $allowPin, $userStatus, $ai = false) {
     $path = dirname(__DIR__) . '/web/func/' . $service . '.php';
     $source = file_get_contents($path);
     $source = str_replace('mysqli_real_escape_string(', 'vtu_test_escape(', $source);
+    // eval must preserve the handler's own relative include directory.
+    $source = str_replace('__DIR__', var_export(dirname($path), true), $source);
     ob_start();
     try { eval('?>' . $source); } finally { ob_end_clean(); }
     return [json_decode($json_response_encode, true), $GLOBALS['pin_calls'], $GLOBALS['pin_input']];

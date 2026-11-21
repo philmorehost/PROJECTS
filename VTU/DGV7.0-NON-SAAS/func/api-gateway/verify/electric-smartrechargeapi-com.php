@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../bc-vtu-runtime.php';
     $web_electric_size_array = array("ekedc"=>$epp."_".$type."_custom","eedc"=>$epp."_".$type."_custom","ikedc"=>$epp."_".$type."_custom","jedc"=>$epp."_".$type."_custom","kedco"=>$epp."_".$type."_custom","ibedc"=>$epp."_".$type."_custom","phed"=>$epp."_".$type."_custom","aedc"=>$epp."_".$type."_custom", "bedc"=>$epp."_".$type."_custom", "kaedco"=>$epp."_".$type."_custom", "aba"=>$epp."_".$type."_custom", "yedc"=>$epp."_".$type."_custom");
     if(in_array($epp, array_keys($web_electric_size_array))){
-        $curl_url = "https://".$api_detail["api_base_url"]."/api/v2/electric/?api_key=".$api_detail["api_key"]."&meter_number=".$meter_number."&product_code=".$web_electric_size_array[$epp]."&task=verify";
+        $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/v2/electric/?api_key=").$api_detail["api_key"]."&meter_number=".$meter_number."&product_code=".$web_electric_size_array[$epp]."&task=verify";
         $curl_request = curl_init($curl_url);
 // cURL waits forever by default: one unresponsive provider would hold this PHP worker and the
 // customer's request open indefinitely. Bound the connect and the whole call.

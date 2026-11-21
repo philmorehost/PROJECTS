@@ -18,7 +18,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   }
  }
  if (in_array($quantity, array_keys($web_data_size_array))) {
-  $curl_url = "https://" . $api_detail["api_base_url"] . "/api/v2/datashare/?api_key=" . $api_detail["api_key"] . "&product_code=" . $web_data_size_array[$quantity] . "&phone=" . $phone_no;
+  $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/v2/datashare/?api_key=") . $api_detail["api_key"] . "&product_code=" . $web_data_size_array[$quantity] . "&phone=" . $phone_no;
   $curl_request = curl_init($curl_url);
   curl_setopt($curl_request, CURLOPT_HTTPGET, true);
   curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

@@ -17,6 +17,7 @@ foreach(['airtime','data','cable','electric','exam','sms','card','betting','requ
 }
 foreach(['https://user:secret@tenant.example','https://tenant.example/?api_key=secret','https://tenant.example/#fragment','ftp://tenant.example','https://tenant.example:8080','https://tenant.example/../private'] as $bad)rt_check(bc_vtu_local_url($bad,'data')==='','unsafe/ambiguous local URL refused');
 rt_check(bc_vtu_gateway_candidate('../private','host.example')==='invalid-provider.php','service cannot select arbitrary files');
+rt_check(bc_vtu_provider_url('https://hdkdata.com/api/data/', '/api/data/')==='https://hdkdata.com/api/data/', 'provider URL neither duplicates scheme nor appends a duplicate API path');
 $GLOBALS['calls']=0;$GLOBALS['options']=[];
 rt_check(bc_vtu_curl_exec(new stdClass())==='{"status":"success"}' && $GLOBALS['calls']===1,'transport performs exactly one request and preserves response');
 rt_check($GLOBALS['options'][CURLOPT_CONNECTTIMEOUT]===8 && $GLOBALS['options'][CURLOPT_TIMEOUT]===30,'external transport has bounded connect/total time');

@@ -24,6 +24,10 @@ function bc_vtu_local_url($base,$endpoint) {
     if (strpos($path,'..')!==false || preg_match('/[^a-zA-Z0-9_\/-]/',$path)) return '';
     return 'https://'.$p['host'].$path.'/web/api/'.$endpoint.'.php';
 }
+function bc_vtu_provider_url($base,$path) {
+    $p=bc_vtu_base_parts($base);
+    return $p ? 'https://'.$p['host'].'/'.ltrim($path,'/') : '';
+}
 function bc_vtu_curl_exec($handle,$local=false) {
     // Override old duplicate 60-second settings at the last possible point.
     // A slow/uncertain response must still follow existing pending/requery rules.
@@ -46,7 +50,7 @@ function bc_vtu_forward_hop() {
     return preg_match('/^[0-3]$/D',$hop)?(int)$hop+1:4;
 }
 function bc_vtu_guard_hop() {
-    if (bc_vtu_forward_hop()<=4 && preg_match('/^[0-3]$/D',(string)($_SERVER['HTTP_X_BC_VTU_HOP']??'0'))) return;
+    if (preg_match('/^[0-3]$/D',(string)($_SERVER['HTTP_X_BC_VTU_HOP']??'0'))) return;
     if (!headers_sent()) header('Content-Type: application/json');
     echo json_encode(['status'=>'failed','code'=>'VTU_ROUTING_LOOP','desc'=>'API routing loop detected. Contact the service administrator.']);
     exit;

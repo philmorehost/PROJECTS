@@ -26,7 +26,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
         $clean_base_url = rtrim($clean_base_url, "/");
         $hdk_base = bc_vtu_base_parts($api_detail["api_base_url"]);
         if ($hdk_base) $clean_base_url = $hdk_base["host"];
-        $curl_url = "https://" . $clean_base_url . "/api/data/";
+        $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/data/");
         $curl_request = curl_init($curl_url);
         curl_setopt($curl_request, CURLOPT_POST, true);
         curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

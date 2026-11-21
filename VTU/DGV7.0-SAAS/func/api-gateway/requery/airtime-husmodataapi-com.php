@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../bc-vtu-runtime.php';
 if (!empty($requery_reference)) {
-    $curl_url = "https://" . $api_detail["api_base_url"] . "/api/data/" . getTransaction($requery_reference, "api_reference");
+    $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/data/") . getTransaction($requery_reference, "api_reference");
     $curl_request = curl_init($curl_url);
     curl_setopt($curl_request, CURLOPT_HTTPGET, true);
     curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

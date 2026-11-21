@@ -17,7 +17,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   }
  }
  if (in_array($quantity, array_keys($web_cable_size_array))) {
-  $curl_url = "https://" . $api_detail["api_base_url"] . "/api/v2/tv/?api_key=" . $api_detail["api_key"] . "&smartcard_number=" . $iuc_no . "&product_code=" . $api_product_code;
+  $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/v2/tv/?api_key=") . $api_detail["api_key"] . "&smartcard_number=" . $iuc_no . "&product_code=" . $api_product_code;
   $curl_request = curl_init($curl_url);
   curl_setopt($curl_request, CURLOPT_HTTPGET, true);
   curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

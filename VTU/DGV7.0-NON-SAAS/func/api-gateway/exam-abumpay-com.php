@@ -19,7 +19,7 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
 	}
 
 	if(in_array($quantity, array_keys($web_exam_size_array))){
-	$curl_url = "https://".$api_detail["api_base_url"]."/api/education";
+    $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/education");
 	$curl_request = curl_init($curl_url);
 	curl_setopt($curl_request, CURLOPT_POST, true);
 	curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

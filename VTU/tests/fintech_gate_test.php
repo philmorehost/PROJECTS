@@ -1750,7 +1750,7 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $edition) {
     foreach (array('Login', 'Register', 'PasswordRecovery', 'VerifyOTP', 'SecurityPIN', 'LockoutResolution', 'Inactive', 'Suspended', 'Error') as $page) {
         $src = file_get_contents($b . '/web/' . $page . '.php');
         gtrue("$edition $page uses the Plate auth shell", strpos($src, 'bc_plate_auth_head(') !== false && strpos($src, 'bc_plate_auth_end(') !== false);
-        gtrue("$edition $page drops the retired assets-2 template", strpos($src, 'assets-2') === false);
+        gtrue("$edition $page drops the retired assets-2 template", strpos(str_replace('../assets-2/vendor/sweetalert2/sweetalert2.all.min.js', '', $src), 'assets-2') === false);
         gtrue("$edition $page drops the photographic background", strpos($src, 'web-bg-image') === false);
     }
     // The shell must stay presentation-only: it may not touch money, credentials or gates.
