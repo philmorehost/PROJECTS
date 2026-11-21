@@ -359,7 +359,7 @@ foreach (array($saas, $nons) as $ed) {
         basename($ed) . ' ServiceControl saves the FX API key');
     rchk(strpos(rsrc($ed . '/func/bc-giftcard-func.php'), 'v6.exchangerate-api.com/v6/') !== false,
         basename($ed) . ' getLiveExchangeRate uses the keyed FX provider');
-    $tpl = rsrc($ed . '/index-bc-style-template-1.php');
+    $tpl = rsrc($ed . '/index-freelancers-template.php');
     rchk(strpos($tpl, 'MzeeVTU') === false, basename($ed) . ' landing has no hardcoded client brand');
     rchk(strpos($tpl, '$site_name_e') !== false, basename($ed) . ' landing brands itself from the saved site name');
     rchk(strpos($tpl, "isServiceEnabled(\$service, \$lp_vid)") !== false || strpos($tpl, 'isServiceEnabled($service, $lp_vid)') !== false,

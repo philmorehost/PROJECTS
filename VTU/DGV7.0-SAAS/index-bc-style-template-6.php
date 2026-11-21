@@ -799,6 +799,7 @@ if (!function_exists('bc_plate_stat')) {
             <p>Rates and fees are shown before you confirm.</p>
         </div>
     </div>
+<?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
 </footer>
 
 <script>

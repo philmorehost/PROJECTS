@@ -393,6 +393,7 @@ footer b{color:var(--ink)}
         $items = array(
             'home' => array('/', 'Home'),
             'services' => array('/Services.php', 'Services'),
+            'freelancers' => array('/Freelancers.php', 'Freelancers'),
             'refer' => array('/ReferAndEarn.php', 'Refer & Earn'),
             'login' => array('/web/Login.php', 'Log in'),
         );
@@ -427,6 +428,7 @@ footer b{color:var(--ink)}
         <a href="/Terms.php">Terms of Service</a>
         <a href="/web/DeleteAccount.php">Delete my account</a>
     </div>
+<?php require_once __DIR__ . '/bc-public-pages.php'; bc_public_directory_html(); ?>
 </div>
 <p style="margin-top:26px">© <?php echo date('Y'); ?> <?php echo bc_landing_e($ctx['site_name']); ?>. Virtual assets and international transfers carry risk — only transact what you understand and can afford.</p>
 </div></footer>

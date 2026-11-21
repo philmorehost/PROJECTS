@@ -50,44 +50,22 @@ if (session_status() === PHP_SESSION_NONE) { @bc_secure_session_start(); }
 $app_redirect = ['mode' => 'off', 'link' => ''];
 if ($vendor_account_details) {
     $app_redirect = bc_get_app_redirect_info($vendor_account_details["id"]);
-    if ($app_redirect['mode'] === 'force' && !isset($_SESSION['admin_session']) && !isset($_SESSION['user_session'])) {
+    if (!defined('BC_PUBLIC_FREELANCERS') && $app_redirect['mode'] === 'force' && !isset($_SESSION['admin_session']) && !isset($_SESSION['user_session'])) {
         header("Location: " . $app_redirect['link']);
         exit;
     }
 }
 
-// Default CSS template
-$css_style_template_location = "index-bc-style-template-1.php";
-
-// If a vendor is found, check for a custom style template
-if ($vendor_account_details) {
-    $stmt_template = mysqli_prepare($connection_server, "SELECT template_name FROM sas_vendor_style_templates WHERE vendor_id = ?");
-    if ($stmt_template) {
-        mysqli_stmt_bind_param($stmt_template, "i", $vendor_account_details["id"]);
-        
-        if (mysqli_stmt_execute($stmt_template)) {
-            $result_template = mysqli_stmt_get_result($stmt_template);
-            if ($get_vendor_style_template = mysqli_fetch_assoc($result_template)) {
-                $style_template_name = explode(".", trim($get_vendor_style_template["template_name"]))[0];
-                if (!empty($style_template_name)) {
-                    $style_template_location = "index-" . $style_template_name . ".php";
-                    if (file_exists($style_template_location)) {
-                        $css_style_template_location = $style_template_location;
-                    }
-                }
-            }
-        }
-        
-        mysqli_stmt_close($stmt_template);
-    }
-}
+// The home design is shared; preserve the previous freelancer content separately.
+$css_style_template_location = defined('BC_PUBLIC_FREELANCERS') && BC_PUBLIC_FREELANCERS
+    ? 'index-freelancers-template.php' : 'index-bc-style-template-home.php';
 
 // Pass both vendor data and any error message to the template
 include(__DIR__ . "/" . $css_style_template_location);
 
 // Soft "Prompt" mode: show a dismissible interstitial offering the app, remembered via
 // cookie for 30 days. Only for anonymous visitors when the vendor selected "prompt".
-if ($app_redirect['mode'] === 'prompt' && !empty($app_redirect['link']) && !isset($_SESSION['admin_session']) && !isset($_SESSION['user_session'])) {
+if (!defined('BC_PUBLIC_FREELANCERS') && $app_redirect['mode'] === 'prompt' && !empty($app_redirect['link']) && !isset($_SESSION['admin_session']) && !isset($_SESSION['user_session'])) {
     $app_link_attr = htmlspecialchars($app_redirect['link'], ENT_QUOTES);
     echo '<!-- App Prompt (soft redirect mode) -->
 <div id="appPromptOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:2147483647;align-items:center;justify-content:center;padding:16px;">

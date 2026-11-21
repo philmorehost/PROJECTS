@@ -28,7 +28,7 @@ foreach ($roots as $name => $root) {
     $landing = file_get_contents($root . '/func/bc-landing-pages.php');
     chk(strpos($landing, 'function bc_landing_legal_sections') !== false, "$name: legal sections defined once in landing module");
     chk(strpos($landing, 'function bc_landing_render_legal') !== false, "$name: legal renderer exists");
-    chk(strpos($landing, 'href="Privacy.php"') !== false && strpos($landing, 'href="Terms.php"') !== false, "$name: landing footer links Privacy + Terms");
+    chk(strpos($landing, 'href="/Privacy.php"') !== false && strpos($landing, 'href="/Terms.php"') !== false, "$name: landing footer links Privacy + Terms");
     chk(strpos($landing, 'web/DeleteAccount.php') !== false, "$name: landing footer links Delete my account");
     foreach (['Privacy.php' => 'privacy', 'Terms.php' => 'terms'] as $page => $kind) {
         chk(is_file($root . '/' . $page), "$name: $page exists");
@@ -38,7 +38,7 @@ foreach ($roots as $name => $root) {
     chk(strpos($landing, "'1. Overview'") !== false && strpos($landing, "'2. Information we collect'") !== false, "$name: privacy section set present (10 sections)");
     chk(strpos($landing, "'1. Acceptance of these terms'") !== false && strpos($landing, "'8. Suspension, closure and account deletion'") !== false, "$name: terms section set present (10 sections)");
     chk(strpos($landing, "if (\$kind === 'terms')") !== false, "$name: legal sections switch on kind (privacy/terms)");
-    $t1 = file_get_contents($root . '/index-bc-style-template-1.php');
+    $t1 = file_get_contents($root . '/index-freelancers-template.php');
     chk(strpos($t1, '<a href="Privacy.php">Privacy</a>') !== false && strpos($t1, '<a href="Terms.php">Terms</a>') !== false, "$name template 1: footer Privacy/Terms links live (no dead #)");
     foreach ([2, 3] as $t) {
         $tpl = file_get_contents($root . "/index-bc-style-template-$t.php");
