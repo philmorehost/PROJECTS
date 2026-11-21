@@ -50,6 +50,10 @@ $connection_server->query("CREATE TRIGGER fail_deposit_audit BEFORE INSERT ON sa
 $failure=$deposit;$failure['record_id']='audit-failure-001';
 try{bc_crypto_deposit_observe($context,$failure);throw new LogicException('Deposit audit succeeded');}catch(mysqli_sql_exception $e){check_db($e->getSqlState()==='45000','server rejects deposit audit insert');}
 check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposits')===$before,'audit failure rolls back new deposit record');
+$previous=bc_q_row('SELECT * FROM sas_crypto_v2_deposits WHERE id=?',[$row['id']]);
+$failure=$deposit;$failure['confirmations']='41';
+try{bc_crypto_deposit_observe($context,$failure);throw new LogicException('Existing deposit audit succeeded');}catch(mysqli_sql_exception $e){check_db($e->getSqlState()==='45000','server rejects existing deposit update audit');}
+check_db(bc_q_row('SELECT * FROM sas_crypto_v2_deposits WHERE id=?',[$row['id']])===$previous,'audit failure rolls back existing state, revision and confirmation high-water mark');
 $connection_server->query('DROP TRIGGER fail_deposit_audit');
 // Competing independent processes share one external record identity.
 $concurrent=$deposit;$concurrent['record_id']='deposit-concurrent-001';
@@ -57,6 +61,22 @@ $a=start_worker('deposit',json_encode($context),json_encode($concurrent));$b=sta
 $ra=finish_worker($a);$rb=finish_worker($b);
 check_db(isset($ra['result'],$rb['result']) && $ra['result']['duplicate']!==$rb['result']['duplicate'],'concurrent observation import returns one duplicate');
 check_db((int)scalar_db("SELECT COUNT(*) FROM sas_crypto_v2_deposits WHERE provider_record_id='deposit-concurrent-001'")===1,'concurrent external record stored once');
+// Approved route ownership is immutable for an already observed external record.
+$reassign=$deposit;$reassign['record_id']='route-reassign-001';
+$original=bc_crypto_deposit_observe($context,$reassign);
+check_db($original['state']==='review_ready','attributed record before route reassignment');
+bc_q('UPDATE sas_crypto_v2_deposit_routes SET user_id=12');
+$r=bc_crypto_deposit_observe($context,$reassign);
+check_db($r['reason']==='attribution_changed' && (int)scalar_db("SELECT user_id FROM sas_crypto_v2_deposits WHERE provider_record_id='route-reassign-001'")===11,'route reassignment cannot move existing deposit to another user');
+bc_q('UPDATE sas_crypto_v2_deposit_routes SET user_id=11');
+$restricted=$deposit;$restricted['record_id']='restricted-customer-001';
+bc_q('UPDATE sas_users SET is_blocked=1 WHERE id=11');
+check_db(bc_crypto_deposit_observe($context,$restricted)['reason']==='customer_restricted','blocked customer is quarantined');
+bc_q('UPDATE sas_users SET is_blocked=0 WHERE id=11');
+$limit=$deposit;$limit['record_id']='over-limit-001';$limit['amount']='101';
+check_db(bc_crypto_deposit_observe($context,$limit)['reason']==='deposit_policy_limit','large observation is recorded but quarantined under local bounds');
+$unknown=$deposit;$unknown['record_id']='unknown-risk-001';$unknown['risk']='unknown';
+check_db(bc_crypto_deposit_observe($context,$unknown)['reason']==='risk_not_cleared','unverified risk cannot reach review-ready');
 // Identical repeat MUST recheck current policy, not preserve a stale green label through a stop.
 bc_q("UPDATE sas_crypto_v2_governance SET document='{\"stopped\":true}' WHERE vendor_id=0 AND policy_key='control'");
 $r=bc_crypto_deposit_observe($context,$concurrent);
