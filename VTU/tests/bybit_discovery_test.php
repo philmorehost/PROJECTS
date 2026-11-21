@@ -1,4 +1,5 @@
 <?php
+set_exception_handler(function(Throwable $e) {fwrite(STDERR,'::error::'.str_replace(["\r","\n"],' ',$e->getMessage().' at '.basename($e->getFile()).':'.$e->getLine())."\n");exit(1);});
 require dirname(__DIR__).'/DGV7.0-SAAS/func/bc-bybit.php';
 $n=0;
 function bybit_check($ok,$label){global $n;if(!$ok)throw new RuntimeException($label);$n++;}
