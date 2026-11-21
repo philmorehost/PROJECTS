@@ -49,3 +49,16 @@ check_db(!bc_q_row('SELECT * FROM sas_crypto_v2_poll_leases WHERE stream_id=?',[
 $connection_server->begin_transaction();reject_db(fn()=>bc_crypto_poll_claim($pa,$ci,1),'crypto_transaction_unavailable');$connection_server->rollback();
 reject_db(fn()=>bc_crypto_poll_manage($pa,'testnet',str_repeat('f',64),4,'fetch_poll',['stream_id'=>$ci,'stream_revision'=>'1']),'crypto_poll_scope_mismatch');
 check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===$opsBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposits')===$depBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes')===$routesBefore&&bc_q_row("SELECT GROUP_CONCAT(CONCAT(bucket,':',units) ORDER BY bucket) AS b FROM sas_crypto_v2_accounts")===$balanceBefore,'operator and lease paths leave observations/routes/journal/balances/holds unchanged');
+
+// Operator-facing retry admission is atomic with claim and produces no provider read on refusal.
+$c=poll_create_fixture();$ci=$c['stream_id'];$t=bc_crypto_poll_claim($pa,$ci,1,true);bc_crypto_poll_release_failed($pa,$ci,1,$t);
+$claims=scalar_db("SELECT COUNT(*) FROM sas_crypto_v2_poll_lease_events WHERE action='claimed'");
+reject_db(fn()=>bc_crypto_poll_claim($pa,$ci,1,true),'crypto_poll_retry_backoff');
+check_db(scalar_db("SELECT COUNT(*) FROM sas_crypto_v2_poll_lease_events WHERE action='claimed'")===$claims,'backoff refusal commits no new claim');
+bc_q('UPDATE sas_crypto_v2_poll_lease_events SET occurred_at_epoch=? WHERE stream_id=?',[time()-1000,$ci]);
+$t=bc_crypto_poll_claim($pa,$ci,1,true);bc_crypto_poll_release_failed($pa,$ci,1,$t);
+bc_q('UPDATE sas_crypto_v2_poll_lease_events SET occurred_at_epoch=? WHERE stream_id=?',[time()-1000,$ci]);
+$t=bc_crypto_poll_claim($pa,$ci,1,true);bc_crypto_poll_release_failed($pa,$ci,1,$t);
+bc_q('UPDATE sas_crypto_v2_poll_lease_events SET occurred_at_epoch=? WHERE stream_id=?',[time()-1000,$ci]);
+reject_db(fn()=>bc_crypto_poll_claim($pa,$ci,1,true),'crypto_poll_retry_escalation_required');
+check_db(bc_crypto_poll_stop($pa,$ci,1)['state']==='stopped','escalated stream can still be stopped without clearing history');
