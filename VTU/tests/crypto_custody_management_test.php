@@ -6,7 +6,7 @@ function mg_check($ok,$label){global $n;if(!$ok)throw new RuntimeException($labe
 function mg_reject($fn,$code){try{$fn();}catch(Throwable $e){mg_check($e->getMessage()===$code,$code.' got '.$e->getMessage());return;}throw new RuntimeException('Unexpected success '.$code);}
 function bc_validate_csrf(){global $csrf,$calls;$calls[]='csrf';if(!$csrf)throw new RuntimeException('test_csrf_denied');}
 function bc_is_rate_limited($action,$key,$max,$window){global $limited,$calls;$calls[]=['rate',$action,$key,$max,$window];return $limited;}
-function bc_q_row($sql,$params=[]){global $fresh,$calls;$calls[]=['lookup',$sql,$params];if(strpos($sql,'sas_crypto_v2_custody_accounts')!==false)return $GLOBALS['account_row']??null;if(strpos($sql,'sas_vendors')!==false)return $GLOBALS['vendor_row']??null;return $fresh;}
+function bc_q_row($sql,$params=[]){global $fresh,$calls;$calls[]=['lookup',$sql,$params];if(strpos($sql,'sas_crypto_v2_custody_accounts')!==false)return $GLOBALS['account_row']??null;if(strpos($sql,'sas_crypto_v2_poll_streams')!==false)return $GLOBALS['poll_row']??null;if(strpos($sql,'sas_vendors')!==false)return $GLOBALS['vendor_row']??null;return $fresh;}
 function bc_gauth_enrolled($row){return ($row['two_factor_type']??'')==='totp'&&!empty($row['totp_secret']);}
 function bc_stepup_spadmin_verify($row,$input,$context){global $stepup,$calls;$calls[]=['stepup',$row['id'],$context];return $stepup;}
 $valid=['id'=>11,'status'=>1,'is_blocked'=>0,'force_password_change'=>0,'two_factor_type'=>'totp','totp_secret'=>'synthetic'];
@@ -45,4 +45,11 @@ mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($page,['coin'=>'BTC'])),
 mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($page,['cursor'=>null])),'bybit_deposit_cursor_invalid');
 $GLOBALS['account_row']['revision']=5;mg_reject(fn()=>bc_crypto_custody_manage(11,$page),'crypto_custody_edit_conflict');
 $GLOBALS['account_row']['revision']=4;$GLOBALS['vendor_row']['is_blocked']=1;mg_reject(fn()=>bc_crypto_custody_manage(11,$page),'crypto_custody_vendor_inactive');
+$GLOBALS['vendor_row']['is_blocked']=0;
+$poll=array_merge($verify,['action'=>'fetch_poll','stream_id'=>str_repeat('b',32),'stream_revision'=>'1']);
+foreach(['cursor','evidence','lease_token','coin','source_vendor_id'] as $field){$try=$poll;unset($try['source_vendor_id']);$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
+$try=$poll;unset($try['source_vendor_id']);mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_scope_mismatch');
+$GLOBALS['poll_row']=['custody_account'=>str_repeat('c',64),'environment'=>'testnet'];mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_scope_mismatch');
+$GLOBALS['poll_row']=['custody_account'=>str_repeat('a',64),'environment'=>'mainnet'];mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_scope_mismatch');
+$GLOBALS['account_row']['revision']=5;mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_custody_edit_conflict');
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";
