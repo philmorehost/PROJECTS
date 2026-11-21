@@ -1,5 +1,6 @@
 <?php
 /** Shared VTU routing/transport. No retries, TLS bypass, authentication bypass or settlement decisions. */
+if (!function_exists('bc_vtu_base_parts')) {
 function bc_vtu_base_parts($base) {
     $base=trim((string)$base);
     if (!preg_match('~^https?://~i',$base)) $base='https://'.$base;
@@ -38,7 +39,9 @@ function bc_vtu_curl_exec($handle,$local=false) {
     curl_setopt($handle,CURLOPT_FOLLOWLOCATION,false);
     $result=curl_exec($handle);
     $info=curl_getinfo($handle);$errno=curl_errno($handle);
-    $metrics=['errno'=>$errno,'http'=>(int)($info['http_code']??0),'dns_ms'=>(int)round(1000*($info['namelookup_time']??0)),'connect_ms'=>(int)round(1000*($info['connect_time']??0)),'total_ms'=>(int)round(1000*($info['total_time']??0))];
+    $caller=debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS,1);
+    $adapter=basename($caller[0]['file']??'unknown');
+    $metrics=['adapter'=>$adapter,'errno'=>$errno,'http'=>(int)($info['http_code']??0),'dns_ms'=>(int)round(1000*($info['namelookup_time']??0)),'connect_ms'=>(int)round(1000*($info['connect_time']??0)),'total_ms'=>(int)round(1000*($info['total_time']??0))];
     $GLOBALS['bc_vtu_last_transport']=$metrics;
     // Never log URL/query/body/headers/API key/phone. These metrics distinguish transport and application failures.
     if ($errno || $metrics['http']>=400 || $metrics['total_ms']>=2000) error_log('[VTU_TRANSPORT] '.json_encode($metrics));
@@ -54,4 +57,6 @@ function bc_vtu_guard_hop() {
     if (!headers_sent()) header('Content-Type: application/json');
     echo json_encode(['status'=>'failed','code'=>'VTU_ROUTING_LOOP','desc'=>'API routing loop detected. Contact the service administrator.']);
     exit;
+}
+
 }

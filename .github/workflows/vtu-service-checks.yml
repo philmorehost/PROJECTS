@@ -12,6 +12,7 @@ on:
       - 'VTU/**/func/bc-plate-auth.php'
       - 'VTU/**/web/Login.php'
       - 'VTU/tests/vtu_runtime_test.php'
+      - 'VTU/tests/vtu_adapter_contract_test.php'
       - 'VTU/tests/incident_wallet_test.php'
       - '.github/workflows/vtu-service-checks.yml'
   pull_request:
@@ -25,6 +26,7 @@ on:
       - 'VTU/**/func/bc-plate-auth.php'
       - 'VTU/**/web/Login.php'
       - 'VTU/tests/vtu_runtime_test.php'
+      - 'VTU/tests/vtu_adapter_contract_test.php'
       - 'VTU/tests/incident_wallet_test.php'
       - '.github/workflows/vtu-service-checks.yml'
 
@@ -59,4 +61,5 @@ jobs:
       - name: Exercise routing, bounded transport and wallet safeguards without real requests
         run: |
           php -n VTU/tests/vtu_runtime_test.php
+          php -n VTU/tests/vtu_adapter_contract_test.php
           php -n VTU/tests/incident_wallet_test.php

@@ -153,7 +153,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                                 }
                                                             } else {
                                                                 //Unable to proceed with charges
-                                                                $json_response_array = array("status" => "failed", "desc" => "Unable to proceed with charges");
+                                                                $json_response_array = array("status" => "failed", "desc" => ($GLOBALS['bc_charge_failure_reason'] ?? "Unable to proceed with charges"));
                                                                 $json_response_encode = json_encode($json_response_array, true);
                                                             }
                                                         } else {
