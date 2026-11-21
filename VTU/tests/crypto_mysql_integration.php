@@ -3,6 +3,10 @@
 if (PHP_SAPI !== 'cli' || getenv('BC_CRYPTO_TEST_MYSQL') !== 'DISPOSABLE_ONLY') {
     fwrite(STDERR, "Refusing: set BC_CRYPTO_TEST_MYSQL=DISPOSABLE_ONLY on an isolated test server.\n"); exit(2);
 }
+set_exception_handler(function(Throwable $e) {
+    // GitHub annotation keeps failures inspectable without downloading external log archives.
+    fwrite(STDERR, '::error::'.str_replace(["\r","\n"], ' ', $e->getMessage())."\n"); exit(1);
+});
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $edition=getenv('BC_CRYPTO_TEST_EDITION') ?: 'SAAS';
 if (!in_array($edition,['SAAS','NON-SAAS'],true)) throw new RuntimeException('Invalid edition');
