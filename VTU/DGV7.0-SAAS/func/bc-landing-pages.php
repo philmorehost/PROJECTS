@@ -86,7 +86,7 @@ if (!function_exists('bc_landing_services')) {
     function bc_landing_services() {
         return array(
             'airtime' => array(
-                'name' => 'Airtime Top-Up', 'icon' => '📱', 'app' => 'web/Airtime.php', 'tint' => '#b8f1cc',
+                'name' => 'Airtime Top-Up', 'icon' => '📱', 'app' => '/web/Airtime.php', 'tint' => '#b8f1cc',
                 'tagline' => 'Every network. Every amount. In seconds.',
                 'hero' => 'Recharge MTN, Airtel, Glo and 9mobile lines instantly — for yourself, your family, or a whole contact list at once. No queues, no scratch cards, no failed-trip to the kiosk.',
                 'features' => array(
@@ -105,7 +105,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'data' => array(
-                'name' => 'Data Bundles', 'icon' => '📶', 'app' => 'web/Data.php', 'tint' => '#d9d6fe',
+                'name' => 'Data Bundles', 'icon' => '📶', 'app' => '/web/Data.php', 'tint' => '#d9d6fe',
                 'tagline' => 'SME, corporate gifting & direct data at honest prices.',
                 'hero' => 'From 1GB daily plans to heavy corporate-gifting bundles, buy data that delivers fast and lasts as promised — with plan validity and size shown before you pay.',
                 'features' => array(
@@ -124,7 +124,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'cable-tv' => array(
-                'name' => 'Cable TV', 'icon' => '📺', 'app' => 'web/Cable.php', 'tint' => '#fde68a',
+                'name' => 'Cable TV', 'icon' => '📺', 'app' => '/web/Cable.php', 'tint' => '#fde68a',
                 'tagline' => 'DStv, GOtv, StarTimes & Showmax — renewed before the match starts.',
                 'hero' => 'Verify your smartcard or IUC number, see the account name and due amount, and renew in under a minute. No decoder downtime, no agent commutes.',
                 'features' => array(
@@ -142,7 +142,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'electricity' => array(
-                'name' => 'Electricity Bills', 'icon' => '💡', 'app' => 'web/Electric.php', 'tint' => '#fde68a',
+                'name' => 'Electricity Bills', 'icon' => '💡', 'app' => '/web/Electric.php', 'tint' => '#fde68a',
                 'tagline' => 'Prepaid tokens & postpaid bills for every DisCo.',
                 'hero' => 'Buy prepaid meter tokens or settle postpaid bills for EKEDC, IKEDC, AEDC, PHED and every other distribution company — with the meter name verified before payment.',
                 'features' => array(
@@ -160,7 +160,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'exam-pins' => array(
-                'name' => 'Exam PINs', 'icon' => '🎓', 'app' => 'web/Exam.php', 'tint' => '#fbcfe8',
+                'name' => 'Exam PINs', 'icon' => '🎓', 'app' => '/web/Exam.php', 'tint' => '#fbcfe8',
                 'tagline' => 'WAEC, NECO, NABTEB & JAMB e-PINs, delivered instantly.',
                 'hero' => 'Buy result-checker and registration e-PINs without leaving home. PINs are delivered on screen and to your email, ready to use immediately.',
                 'features' => array(
@@ -178,7 +178,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'betting' => array(
-                'name' => 'Betting Wallet Funding', 'icon' => '🎯', 'app' => 'web/Betting.php', 'tint' => '#b8f1cc',
+                'name' => 'Betting Wallet Funding', 'icon' => '🎯', 'app' => '/web/Betting.php', 'tint' => '#b8f1cc',
                 'tagline' => 'Fund Bet9ja, BetKing, 1xBet & 15+ bookmakers instantly.',
                 'hero' => 'Top up your betting wallet the moment the odds move. We verify your customer ID with the bookmaker before taking a kobo.',
                 'features' => array(
@@ -196,7 +196,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'gift-cards' => array(
-                'name' => 'Gift Cards', 'icon' => '🎁', 'app' => 'web/GiftCard.php', 'tint' => '#fbcfe8',
+                'name' => 'Gift Cards', 'icon' => '🎁', 'app' => '/web/GiftCard.php', 'tint' => '#fbcfe8',
                 'tagline' => 'Thousands of global brands, delivered by email.',
                 'hero' => 'Buy Amazon, Apple, Steam, Netflix, Spotify and thousands more gift cards across dozens of countries — priced in naira, delivered in minutes.',
                 'features' => array(
@@ -214,7 +214,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'crypto' => array(
-                'name' => 'Crypto Hub', 'icon' => '🪙', 'app' => 'web/CryptoHub.php', 'tint' => '#d9d6fe',
+                'name' => 'Crypto Hub', 'icon' => '🪙', 'app' => '/web/CryptoHub.php', 'tint' => '#d9d6fe',
                 'tagline' => 'Buy, sell & swap crypto at live rates — settled to your wallet.',
                 'hero' => 'Trade BTC, ETH, USDT, USDC, SOL and more with live pricing, clear fees, and naira settlement straight to your wallet. No exchange account gymnastics.',
                 'features' => array(
@@ -232,7 +232,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'international-transfer' => array(
-                'name' => 'International Transfer', 'icon' => '🌍', 'app' => 'web/IntlTransfer.php', 'tint' => '#b8f1cc',
+                'name' => 'International Transfer', 'icon' => '🌍', 'app' => '/web/IntlTransfer.php', 'tint' => '#b8f1cc',
                 'tagline' => 'Send money abroad — including direct settlement to China.',
                 'hero' => 'Pay suppliers, family and partners overseas at live FX rates, with wire payouts, multi-currency options and direct settlement routes to China for traders.',
                 'features' => array(
@@ -250,7 +250,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'virtual-cards' => array(
-                'name' => 'Virtual Dollar Cards', 'icon' => '💳', 'app' => 'web/VirtualCard.php', 'tint' => '#fde68a',
+                'name' => 'Virtual Dollar Cards', 'icon' => '💳', 'app' => '/web/VirtualCard.php', 'tint' => '#fde68a',
                 'tagline' => 'A USD card for global payments, issued in minutes.',
                 'hero' => 'Create a virtual dollar card for subscriptions, ads, and international checkout — fund it from your wallet, freeze it anytime, and track every spend.',
                 'features' => array(
@@ -268,7 +268,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'esim' => array(
-                'name' => 'Travel eSIM', 'icon' => '✈️', 'app' => 'web/ESIM.php', 'tint' => '#d9d6fe',
+                'name' => 'Travel eSIM', 'icon' => '✈️', 'app' => '/web/ESIM.php', 'tint' => '#d9d6fe',
                 'tagline' => 'Land connected in 190+ countries.',
                 'hero' => 'Buy a data plan before you fly, scan the QR code, and land with working internet — no airport SIM queues, no roaming shock.',
                 'features' => array(
@@ -286,7 +286,7 @@ if (!function_exists('bc_landing_services')) {
                 ),
             ),
             'bulk-sms' => array(
-                'name' => 'Bulk SMS', 'icon' => '✉️', 'app' => 'web/BulkSMS.php', 'tint' => '#fbcfe8',
+                'name' => 'Bulk SMS', 'icon' => '✉️', 'app' => '/web/BulkSMS.php', 'tint' => '#fbcfe8',
                 'tagline' => 'Reach every customer phone in one campaign.',
                 'hero' => 'Send branded SMS to thousands of customers at once — school fees reminders, church broadcasts, promo alerts — with delivery reports per message.',
                 'features' => array(
@@ -392,16 +392,16 @@ footer b{color:var(--ink)}
     function bc_landing_nav($ctx, $active = '') {
         $items = array(
             'home' => array('/', 'Home'),
-            'services' => array('Services.php', 'Services'),
-            'refer' => array('ReferAndEarn.php', 'Refer & Earn'),
-            'login' => array('web/Login.php', 'Log in'),
+            'services' => array('/Services.php', 'Services'),
+            'refer' => array('/ReferAndEarn.php', 'Refer & Earn'),
+            'login' => array('/web/Login.php', 'Log in'),
         );
         ?>
 <div class="nav"><nav class="nav-in">
     <?php foreach ($items as $key => $it): ?>
         <a href="<?php echo bc_landing_e($it[0]); ?>"<?php echo $active === $key ? ' class="on"' : ''; ?>><?php echo bc_landing_e($it[1]); ?></a>
     <?php endforeach; ?>
-    <a class="cta" href="web/Register.php">Start free</a>
+    <a class="cta" href="/web/Register.php">Start free</a>
 </nav></div>
 <?php
     }
@@ -411,21 +411,21 @@ footer b{color:var(--ink)}
 <footer><div class="wrap"><div class="cols">
     <div><b><?php echo bc_landing_e($ctx['site_name']); ?></b><br>Everyday bills, global money — one wallet.</div>
     <div><b>Services</b>
-        <a href="Services.php">All services</a>
-        <?php foreach (array_slice(bc_landing_services(), 0, 5, true) as $slug => $s): ?><a href="services/<?php echo bc_landing_e($slug); ?>.php"><?php echo bc_landing_e($s['name']); ?></a><?php endforeach; ?>
+        <a href="/Services.php">All services</a>
+        <?php foreach (array_slice(bc_landing_services(), 0, 5, true) as $slug => $s): ?><a href="/services/<?php echo bc_landing_e($slug); ?>.php"><?php echo bc_landing_e($s['name']); ?></a><?php endforeach; ?>
     </div>
     <div><b>Earn</b>
-        <a href="ReferAndEarn.php">Refer &amp; Earn</a>
-        <a href="web/Referral.php">My referral dashboard</a>
-        <a href="web/CoinConversion.php">Convert coins</a>
+        <a href="/ReferAndEarn.php">Refer &amp; Earn</a>
+        <a href="/ReferAndEarn.php">My referral dashboard</a>
+        <a href="/services/CoinConversion.php">Convert coins</a>
     </div>
     <div><b>Account</b>
-        <a href="web/Register.php">Create account</a>
-        <a href="web/Login.php">Log in</a>
-        <a href="blog.php">Blog</a>
-        <a href="Privacy.php">Privacy Policy</a>
-        <a href="Terms.php">Terms of Service</a>
-        <a href="web/DeleteAccount.php">Delete my account</a>
+        <a href="/web/Register.php">Create account</a>
+        <a href="/web/Login.php">Log in</a>
+        <a href="/blog.php">Blog</a>
+        <a href="/Privacy.php">Privacy Policy</a>
+        <a href="/Terms.php">Terms of Service</a>
+        <a href="/web/DeleteAccount.php">Delete my account</a>
     </div>
 </div>
 <p style="margin-top:26px">© <?php echo date('Y'); ?> <?php echo bc_landing_e($ctx['site_name']); ?>. Virtual assets and international transfers carry risk — only transact what you understand and can afford.</p>
@@ -447,11 +447,11 @@ if (!function_exists('bc_landing_render_referral')) {
 <div class="wrap"><div class="hero"><span class="kick">Grow together</span>
 <h1>Real friends.<br><span class="hl">Real progress.</span></h1>
 <p>Earn <strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong> when a friend you refer completes <strong>$100</strong> in verified Crypto or International Transfers. Referral coins stay locked until the conditions are met.</p>
-<div class="hero-cta"><a class="btn btn-brand" href="web/Referral.php">See my referral growth</a><a class="btn btn-dark" href="#how">How it works</a></div>
+<div class="hero-cta"><a class="btn btn-brand" href="/ReferAndEarn.php">See my referral growth</a><a class="btn btn-dark" href="#how">How it works</a></div>
 <div class="stats"><div class="stat"><b><?php echo number_format($coins); ?> coins</b><span>current reward per qualified friend</span></div><div class="stat"><b>$100</b><span>minimum verified transaction volume</span></div><div class="stat"><b>0 spendable</b><span>until your friend qualifies</span></div><div class="stat"><b>One reward</b><span>per genuine referred friend</span></div></div></div>
 <div class="cards3" id="how"><div class="step" style="background:#b8f1cc"><div class="n">01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></div><div class="step" style="background:#d9d6fe"><div class="n">02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed and amount remaining toward $100. Pending requests and quotes do not count.</p></div><div class="step" style="background:#fde68a"><div class="n">03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, the referrer's coins unlock for conversion. No separate cash reward is paid to either wallet.</p></div></div>
 <section class="blk"><h2>Understand your reward</h2><div class="feat"><div class="f"><b>Only settled activity</b><p>Completed Crypto trades and International Transfers count after provider confirmation. Deposits, funding, internal transfers, fees, failed transactions, requests and quotes do not count.</p></div><div class="f"><b>Locked means locked</b><p>Pending referral coins cannot be spent, converted or withdrawn. A reversal that brings qualifying volume below $100 revokes the reward.</p></div><div class="f"><b>Coins to wallet funds</b><p>The current conversion rate is <?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins per ₦1. Conversion requests require at least <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins and admin approval. Bank withdrawals remain subject to wallet limits.</p></div><div class="f"><b>Genuine referrals only</b><p>Self-referrals do not qualify. Active accounts, distinct contact details, verified emails and settlement review are required. Rewards cannot be earned repeatedly by reversing and repeating a transaction.</p></div></div></section>
-<div class="cta-band"><h2>Your next milestone starts with a friend.</h2><p>See who joined, what remains and which rewards are unlocked.</p><a class="btn btn-dark" href="web/Referral.php">Open referral dashboard</a></div></div>
+<div class="cta-band"><h2>Your next milestone starts with a friend.</h2><p>See who joined, what remains and which rewards are unlocked.</p><a class="btn btn-dark" href="/ReferAndEarn.php">Open referral dashboard</a></div></div>
 <?php bc_landing_foot($ctx);
     }
 }
@@ -469,7 +469,7 @@ if (!function_exists('bc_landing_render_services_index')) {
     </div>
     <div class="grid-svc">
         <?php foreach (bc_landing_services() as $slug => $s): ?>
-        <a class="svc" href="services/<?php echo bc_landing_e($slug); ?>.php">
+        <a class="svc" href="/services/<?php echo bc_landing_e($slug); ?>.php">
             <div class="ic"><?php echo $s['icon']; ?></div>
             <h3><?php echo bc_landing_e($s['name']); ?></h3>
             <p><?php echo bc_landing_e($s['tagline']); ?></p>
@@ -480,7 +480,7 @@ if (!function_exists('bc_landing_render_services_index')) {
     <div class="cta-band">
         <h2>One wallet. Every service.</h2>
         <p style="opacity:.9">Fund once and spend across bills, crypto, transfers and cards — earning coins as you go.</p>
-        <a class="btn btn-dark" href="web/Register.php">Create free account</a>
+        <a class="btn btn-dark" href="/web/Register.php">Create free account</a>
     </div>
 </div>
 <?php
@@ -503,7 +503,7 @@ if (!function_exists('bc_landing_render_service')) {
         <p><?php echo bc_landing_e($s['hero']); ?></p>
         <div class="hero-cta">
             <a class="btn btn-dark" href="<?php echo bc_landing_e($s['app']); ?>">Use <?php echo bc_landing_e($s['name']); ?></a>
-            <a class="btn btn-brand" href="Services.php">All services</a>
+            <a class="btn btn-brand" href="/Services.php">All services</a>
         </div>
     </div>
 
@@ -538,7 +538,7 @@ if (!function_exists('bc_landing_render_service')) {
         <h2>Keep exploring</h2>
         <div class="grid-svc">
             <?php $shown = 0; foreach ($all as $oslug => $os): if ($oslug === $slug || $shown >= 3) continue; $shown++; ?>
-            <a class="svc" href="<?php echo bc_landing_e($oslug); ?>.php">
+            <a class="svc" href="/services/<?php echo bc_landing_e($oslug); ?>.php">
                 <div class="ic"><?php echo $os['icon']; ?></div>
                 <h3><?php echo bc_landing_e($os['name']); ?></h3>
                 <p><?php echo bc_landing_e($os['tagline']); ?></p>
@@ -551,7 +551,7 @@ if (!function_exists('bc_landing_render_service')) {
     <div class="cta-band">
         <h2>Try <?php echo bc_landing_e($s['name']); ?> now</h2>
         <p style="opacity:.9">Free account, instant wallet, coins on every purchase.</p>
-        <a class="btn btn-dark" href="web/Register.php">Create free account</a>
+        <a class="btn btn-dark" href="/web/Register.php">Create free account</a>
     </div>
 </div>
 <?php
@@ -630,8 +630,8 @@ if (!function_exists('bc_landing_legal_sections')) {
         <h1><?php echo bc_landing_e($title); ?></h1>
         <p>Last updated <?php echo date('F d, Y'); ?>. Written in plain language — the short version is: we collect what we need to run your account, we never sell it, and you can ask us to delete it.</p>
         <div class="hero-cta">
-            <a class="btn btn-dark" href="<?php echo $is_terms ? 'Privacy.php' : 'Terms.php'; ?>">Read the <?php echo $is_terms ? 'Privacy Policy' : 'Terms of Service'; ?></a>
-            <a class="btn btn-brand" href="web/DeleteAccount.php">Delete my account</a>
+            <a class="btn btn-dark" href="<?php echo $is_terms ? '/Privacy.php' : '/Terms.php'; ?>">Read the <?php echo $is_terms ? 'Privacy Policy' : 'Terms of Service'; ?></a>
+            <a class="btn btn-brand" href="/web/DeleteAccount.php">Delete my account</a>
         </div>
     </div>
     <section class="blk" style="padding-top:16px">
@@ -645,7 +645,7 @@ if (!function_exists('bc_landing_legal_sections')) {
     <div class="cta-band">
         <h2>Questions about your data?</h2>
         <p style="opacity:.9">Message us any time through support, or manage your account below.</p>
-        <a class="btn btn-dark" href="web/DeleteAccount.php">Request account deletion</a>
+        <a class="btn btn-dark" href="/web/DeleteAccount.php">Request account deletion</a>
     </div>
 </div>
 <?php
