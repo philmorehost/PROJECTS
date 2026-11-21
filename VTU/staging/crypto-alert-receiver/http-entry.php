@@ -17,8 +17,7 @@ try {
         $connection=mysqli_init();$connection->options(MYSQLI_OPT_CONNECT_TIMEOUT,3);
         // cPanel local MySQL only. Remote DB requires a separately reviewed verified-TLS adapter.
         $connection->real_connect('localhost',$db['user'],$db['password'],$db['name']);
-        $connection->query('SET SESSION innodb_lock_wait_timeout=3');
-        $connection->query('SET SESSION max_execution_time=3000');
+        bc_alert_http_database_limits($connection);
         return $connection;
     };
     $receipt=bc_alert_http_accept($_SERVER,$headers,$config,static function($limit){$f=fopen('php://input','rb');if($f===false)throw new RuntimeException('receiver_input_unavailable');try{return stream_get_contents($f,$limit);}finally{fclose($f);}},$connect,time());

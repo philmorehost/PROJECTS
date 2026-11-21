@@ -1,0 +1,44 @@
+name: Staging receiver database compatibility
+on:
+  push:
+    paths:
+      - 'VTU/staging/crypto-alert-receiver/**'
+      - 'VTU/tests/crypto_receiver_database_integration.php'
+      - 'VTU/tests/crypto_poll_receiver_http_test.php'
+      - '.github/workflows/crypto-receiver-database.yml'
+  pull_request:
+    paths:
+      - 'VTU/staging/crypto-alert-receiver/**'
+      - 'VTU/tests/crypto_receiver_database_integration.php'
+      - 'VTU/tests/crypto_poll_receiver_http_test.php'
+      - '.github/workflows/crypto-receiver-database.yml'
+jobs:
+  receiver:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: ['mysql:8.0', 'mariadb:10.11']
+        php: ['8.3', '8.5']
+    services:
+      database:
+        image: ${{ matrix.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-ci-only
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="sh -c 'command -v mariadb-admin >/dev/null && mariadb-admin ping -h localhost -pdisposable-ci-only || mysqladmin ping -h localhost -pdisposable-ci-only'"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli
+          coverage: none
+      - run: php VTU/tests/crypto_poll_receiver_http_test.php
+      - run: php VTU/tests/crypto_receiver_database_integration.php
+        env:
+          BC_RECEIVER_TEST_DATABASE: DISPOSABLE_ONLY
