@@ -29,10 +29,62 @@ function bc_public_directory() {
         array('Create account', '/web/Register.php'), array('Log in', '/web/Login.php'), array('Delete account', '/web/DeleteAccount.php'),
     ), array_map(function ($p) { return array($p[0], $p[1]); }, array_values(bc_public_catalog())));
 }
+function bc_public_directory_groups() {
+    // Labels remain sourced from the canonical directory; each URL appears once.
+    $routes = array(
+        'Discover' => array('/', '/Services.php', '/Freelancers.php', '/MultiCurrencyWallet.php', '/Savings.php', '/DownloadApp.php'),
+        'Money & cards' => array('/services/international-transfer.php', '/services/virtual-cards.php', '/services/crypto.php', '/services/gift-cards.php', '/services/esim.php', '/Tuition.php'),
+        'Bills & utilities' => array('/BillsAndAirtime.php', '/services/airtime.php', '/services/data.php', '/services/cable-tv.php', '/services/electricity.php', '/services/exam-pins.php', '/services/betting.php', '/services/bulk-sms.php'),
+        'For business' => array('/Business.php', '/PaymentLinks.php', '/Invoices.php', '/Payouts.php', '/POSTerminals.php'),
+        'Company & rewards' => array('/AboutUs.php', '/Careers.php', '/blog.php', '/Contact.php', '/ReferAndEarn.php', '/services/CoinConversion.php'),
+        'Account & legal' => array('/web/Register.php', '/web/Login.php', '/Privacy.php', '/Terms.php', '/CookiePolicy.php', '/web/DeleteAccount.php'),
+    );
+    $links = array();
+    foreach (bc_public_directory() as $link) $links[$link[1]] = $link;
+    $groups = array();
+    foreach ($routes as $title => $urls) {
+        $groups[$title] = array();
+        foreach ($urls as $url) {
+            if (isset($links[$url])) { $groups[$title][] = $links[$url]; unset($links[$url]); }
+        }
+    }
+    // Future catalogue additions remain visible rather than being silently dropped.
+    if ($links) $groups['More to explore'] = array_values($links);
+    return $groups;
+}
 function bc_public_directory_html() {
-    echo '<div class="public-directory" style="flex:1 1 100%;margin-top:24px"><h3 style="font-size:16px">Explore more</h3><div style="display:flex;flex-wrap:wrap;gap:12px 22px">';
-    foreach (bc_public_directory() as $link) echo '<a style="font-size:14px;color:inherit" href="'.htmlspecialchars($link[1], ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($link[0], ENT_QUOTES, 'UTF-8').'</a>';
-    echo '</div></div>';
+    static $styles_printed = false;
+    if (!$styles_printed) {
+        $styles_printed = true;
+        ?>
+<style>
+.public-directory{display:block;position:static;box-sizing:border-box;flex:1 1 100%;width:100%;max-width:1240px;min-width:0;margin:32px auto 0;padding:28px 24px;border-top:1px solid currentColor;border-top-color:color-mix(in srgb,currentColor 20%,transparent);font-family:inherit;color:inherit;text-align:left}
+.public-directory *{box-sizing:border-box}
+.public-directory .public-directory__intro{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px 24px;margin:0 0 24px}
+.public-directory .public-directory__title{margin:0!important;padding:0;font-family:inherit;font-size:22px!important;font-weight:750;line-height:1.3;letter-spacing:-.02em;color:inherit;text-transform:none}
+.public-directory .public-directory__description{margin:0!important;font-size:13px;line-height:1.6;color:inherit}
+.public-directory .public-directory__grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px 20px;align-items:start}
+.public-directory .public-directory__group{min-width:0;margin:0;padding:0;text-align:left}
+.public-directory .public-directory__heading{margin:0 0 10px!important;font-family:inherit;font-size:13px!important;font-weight:750;line-height:1.5;letter-spacing:.025em;color:inherit;text-transform:none}
+.public-directory .public-directory__list{display:flex;flex-direction:column;gap:2px;list-style:none!important;margin:0!important;padding:0!important}
+.public-directory .public-directory__list li{display:block;margin:0!important;padding:0!important;list-style:none!important;color:inherit}
+.public-directory .public-directory__link{display:flex!important;align-items:center;min-height:40px;max-width:100%;margin:0!important;padding:8px 10px!important;border:0;border-radius:8px;font-family:inherit;font-size:13px!important;font-weight:400;line-height:1.5;color:inherit!important;text-decoration:none!important;overflow-wrap:anywhere;transition:background-color .15s ease}
+.public-directory .public-directory__link:hover{background:color-mix(in srgb,currentColor 9%,transparent);text-decoration:underline!important;text-underline-offset:3px}
+.public-directory .public-directory__link:focus-visible{outline:2px solid currentColor;outline-offset:2px;text-decoration:underline!important;text-underline-offset:3px}
+@media(max-width:1100px){.public-directory .public-directory__grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 24px}}
+@media(max-width:600px){.public-directory{padding:24px 0}.public-directory .public-directory__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 16px}.public-directory .public-directory__intro{display:block}.public-directory .public-directory__description{margin-top:8px!important}.public-directory .public-directory__link{min-height:44px;padding:9px 4px!important}}
+@media(max-width:340px){.public-directory .public-directory__grid{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.public-directory .public-directory__link{transition:none}}
+</style>
+<?php
+    }
+    echo '<nav class="public-directory" aria-label="Explore more"><div class="public-directory__intro"><h2 class="public-directory__title">Explore more</h2><p class="public-directory__description">Find the right service, resources and support.</p></div><div class="public-directory__grid">';
+    foreach (bc_public_directory_groups() as $title => $links) {
+        echo '<div class="public-directory__group"><h3 class="public-directory__heading">'.htmlspecialchars($title, ENT_QUOTES, 'UTF-8').'</h3><ul class="public-directory__list">';
+        foreach ($links as $link) echo '<li><a class="public-directory__link" href="'.htmlspecialchars($link[1], ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($link[0], ENT_QUOTES, 'UTF-8').'</a></li>';
+        echo '</ul></div>';
+    }
+    echo '</div></nav>';
 }
 /** No javascript:, protocol-relative or attacker-controlled host redirects. */
 function bc_public_safe_url($url) {
