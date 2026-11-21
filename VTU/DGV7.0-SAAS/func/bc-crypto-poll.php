@@ -2,6 +2,7 @@
 /** Internal checkpoint protocol, not authentication. No public route, scheduler, import or credit. */
 require_once __DIR__.'/bc-crypto-bybit-deposit-read.php';
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
+require_once __DIR__.'/bc-crypto-poll-overlap.php';
 function bc_crypto_poll_id($id) {
     if (!is_string($id)||!preg_match('/^[a-f0-9]{32}$/D',$id)) throw new RuntimeException('crypto_poll_id_invalid');
     return $id;
@@ -15,7 +16,7 @@ function bc_crypto_poll_config($vendor,$env) {
 }
 function bc_crypto_poll_engines() {
     bc_crypto_custody_evidence_engines();
-    foreach(['sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
+    foreach(['sas_crypto_v2_poll_identities','sas_crypto_v2_poll_sightings','sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
         $r=bc_q_row('SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$table]);
         if (!$r||strtoupper($r['engine']??'')!=='INNODB') throw new RuntimeException('crypto_poll_transactional_schema_required');
     }
@@ -136,6 +137,7 @@ function bc_crypto_poll_commit($authority,$id,$revision,$evidence,$lease_token=n
         $sealed=bc_crypto_custody_evidence_seal($row['custody_account'],$row['environment'],bc_crypto_gov_json($evidence));
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_custody_evidence(custody_account,evidence_hash,environment,sealed_document,stored_by) VALUES(?,?,?,?,?)',[$row['custody_account'],$sealed['hash'],$row['environment'],$sealed['sealed'],$actor]);
         bc_crypto_custody_must("INSERT INTO sas_crypto_v2_custody_evidence_events(custody_account,evidence_hash,actor_id,revision,action,occurred_at_epoch) VALUES(?,?,?,0,'stored',?)",[$row['custody_account'],$sealed['hash'],$actor,time()]);
+        bc_crypto_poll_overlap_store($row,$revision+1,$evidence['page']['records'],$sealed['hash']);
         $state=bc_crypto_custody_evidence_seal($row['custody_account'],$row['environment'],bc_crypto_gov_json($next['document']));
         bc_crypto_custody_must('UPDATE sas_crypto_v2_poll_streams SET sealed_state=?,state_hash=?,state=?,page_count=page_count+1,revision=revision+1 WHERE stream_id=?',[$state['sealed'],$state['hash'],$next['state'],$id]);
         bc_crypto_poll_event($id,$revision+1,$actor,'page_committed',$sealed['hash']);
