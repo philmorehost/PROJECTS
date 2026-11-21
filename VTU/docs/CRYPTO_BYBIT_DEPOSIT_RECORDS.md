@@ -2,7 +2,7 @@
 
 ## Increment and limits
 
-`func/bc-crypto-bybit-deposit-records.php` is a pure decoded-result parser in both editions. It is **not wired to a controller, provider transport, scheduler, checkpoint store or observation importer**. It adds no provider operation to the HTTP allowlist, no schema, no customer funding display and no account/balance/hold/withdrawal changes. No provider calls are made by this parser or its tests.
+`func/bc-crypto-bybit-deposit-records.php` is a pure decoded-result parser in both editions. The separate protected inspection reader now calls this parser; see `CRYPTO_BYBIT_DEPOSIT_READ.md`. The parser itself has no I/O and is **not a scheduler, checkpoint store or observation importer**. It adds no provider operation to the HTTP allowlist, no schema, no customer funding display and no account/balance/hold/withdrawal changes. No provider calls are made by this parser or its tests.
 
 This is preparation for authenticated polling, not a live poller. All output states provider authentication, customer attribution, chain finality, amount semantics and settlement are unverified/disabled. Page output additionally sets `cursor_advance_authorized=false` and `import_enabled=false`. There is no risk-clear output. Even provider success, high confirmations and approved travel/tax fields leave local risk unknown, so those flags cannot open the existing deposit intake's review-ready state.
 
@@ -51,7 +51,7 @@ Official sources inspected at revision `621656acf9096557c9ff352e5fe791d1e2cd5c85
 - https://github.com/bybit-exchange/docs/blob/621656acf9096557c9ff352e5fe791d1e2cd5c85/docs/v5/asset/deposit/deposit-record.mdx
 - https://github.com/bybit-exchange/docs/blob/621656acf9096557c9ff352e5fe791d1e2cd5c85/docs/v5/enum.mdx (depositStatus)
 
-The record reference documents internal id as unique/filterable, main/sub UID keys querying their respective records, 1–50 page limit, cursor pagination, second-granularity query logic and a window strictly less than 30 days. These API details do not prove provider permissions, custody eligibility, customer allocation or complete/eventually consistent history. No deposit-record endpoint is newly called/allowlisted in this increment.
+The record reference documents internal id as unique/filterable, main/sub UID keys querying their respective records, 1–50 page limit, cursor pagination, second-granularity query logic and a window strictly less than 30 days. These API details do not prove provider permissions, custody eligibility, customer allocation or complete/eventually consistent history. The parser itself calls/allows no endpoint; the later inspection action separately allowlists a bounded deposit-record read (see companion document).
 
 111 offline contracts cover all listed statuses, strict types, blocked-vs-unknown risk, missing fields, exact huge amounts, fee ambiguity, immutable record/transfer identity, TRON/memo validation, malformed pages, duplicates/cursor loops, empty pages, no risk-clear route to review-ready, raw-field omission, edition parity and absence of transport/import/database/funds calls. Existing deposit state-machine and native MySQL custody/evidence/concurrency suites remain required before merge. Fixtures are synthetic and no real account/deposit was queried.
 

@@ -20,14 +20,33 @@ function bc_bybit_config($vendor_id) {
 function bc_bybit_signature($timestamp, $key, $secret, $query, $window = '5000') {
     return hash_hmac('sha256', (string)$timestamp . $key . $window . $query, $secret);
 }
+/** Small manual inspection only: whole-second, past-only window at most one day, five rows. */
+function bc_bybit_deposit_query($coin,$start,$end,$cursor,$now) {
+    if (!in_array($coin,['TRX','USDT'],true)) throw new RuntimeException('bybit_deposit_scope_invalid');
+    foreach ([$start,$end,$now] as $ms) if (!is_string($ms)||!preg_match('/^[1-9][0-9]{12}$/D',$ms)) throw new RuntimeException('bybit_deposit_window_invalid');
+    if (substr($start,-3)!=='000'||substr($end,-3)!=='000'||strcmp($start,$end)>=0||strcmp($end,$now)>0) throw new RuntimeException('bybit_deposit_window_invalid');
+    // Exact fixed-width subtraction without a 13-digit native integer cast (32-bit safe).
+    $difference='';$borrow=0;
+    for ($i=12;$i>=0;$i--) {$d=ord($end[$i])-ord($start[$i])-$borrow;$borrow=$d<0?1:0;if ($d<0)$d+=10;$difference=(string)$d.$difference;}
+    $difference=ltrim($difference,'0');
+    if (strlen($difference)>8||(strlen($difference)===8&&strcmp($difference,'86400000')>0)) throw new RuntimeException('bybit_deposit_window_invalid');
+    if (!is_string($cursor)||strlen($cursor)>2048||($cursor!==''&&!preg_match('/^[\x21-\x7e]+$/D',$cursor))) throw new RuntimeException('bybit_deposit_cursor_invalid');
+    $params=['coin'=>$coin,'startTime'=>$start,'endTime'=>$end,'limit'=>'5'];
+    if ($cursor!=='') $params['cursor']=$cursor;
+    return $params;
+}
 function bc_bybit_request_spec($config, $operation, $params, $timestamp) {
-    $paths = ['key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info', 'master_deposit_address'=>'/v5/asset/deposit/query-address'];
+    $paths = ['key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info', 'master_deposit_address'=>'/v5/asset/deposit/query-address', 'deposit_records'=>'/v5/asset/deposit/query-record'];
     $hosts = ['testnet'=>'https://api-testnet.bybit.com', 'mainnet'=>'https://api.bybit.com'];
     if (!isset($paths[$operation]) || ($hosts[$config['environment'] ?? ''] ?? '') !== ($config['base_url'] ?? '')) throw new RuntimeException('bybit_operation_not_allowed');
-    if (!is_array($params) || array_diff(array_keys($params), $operation === 'coins' ? ['coin'] : ($operation === 'master_deposit_address' ? ['coin','chainType'] : []))) throw new RuntimeException('bybit_parameters_invalid');
+    if (!is_array($params) || array_diff(array_keys($params), $operation === 'coins' ? ['coin'] : ($operation === 'master_deposit_address' ? ['coin','chainType'] : ($operation === 'deposit_records' ? ['coin','startTime','endTime','limit','cursor'] : [])))) throw new RuntimeException('bybit_parameters_invalid');
     if (isset($params['coin']) && (!is_string($params['coin']) || !preg_match('/^[A-Z0-9]{1,24}$/D', $params['coin']))) throw new RuntimeException('bybit_coin_invalid');
     if ($operation === 'master_deposit_address' && (!in_array($params['coin'] ?? null, ['TRX','USDT'], true) || ($params['chainType'] ?? null) !== 'TRX')) throw new RuntimeException('bybit_address_scope_invalid');
     if (!preg_match('/^[0-9]{13}$/D', (string)$timestamp)) throw new RuntimeException('bybit_timestamp_invalid');
+    if ($operation === 'deposit_records') {
+        if (($params['limit']??null)!=='5') throw new RuntimeException('bybit_deposit_limit_invalid');
+        $params=bc_bybit_deposit_query($params['coin']??null,$params['startTime']??null,$params['endTime']??null,array_key_exists('cursor',$params)?$params['cursor']:'',(string)$timestamp);
+    }
     ksort($params);
     $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
     return ['method'=>'GET', 'url'=>$config['base_url'] . $paths[$operation] . ($query !== '' ? '?' . $query : ''),
