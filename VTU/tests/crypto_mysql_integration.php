@@ -15,6 +15,7 @@ require $base.'bc-stepup.php'; // Real production prepared-query helpers, not a 
 require $base.'bc-crypto-v2-schema.php';
 require $base.'bc-crypto-governance-schema.php';
 require $base.'bc-crypto-reservations.php';
+require $base.'bc-crypto-v2-reconcile.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
     $db->query('SET SESSION innodb_lock_wait_timeout=10');
@@ -84,6 +85,18 @@ try {
         bc_crypto_gov_save($actor,$scopeId,'testnet','control',0,['mode'=>'resume'],7);
     }
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'account-closed-001','1'),'crypto_policy_closed');
+    // BEGIN inside caller-owned work must never commit that work, even before any transactional read.
+    foreach(['reservation','policy','integrity'] as $api) {
+        $connection_server->begin_transaction();
+        $fn=$api==='reservation'?fn()=>bc_crypto_v2_reservation($scope,'nested-test-001','1'):($api==='policy'?fn()=>bc_crypto_gov_save($vendor,7,'testnet','control',1,['mode'=>'stop'],7):fn()=>bc_crypto_v2_integrity(7,'testnet'));
+        reject_db($fn,$api==='policy'?'crypto_transaction_unavailable':'crypto_nested_transaction_refused');
+        // A sentinel written AFTER the rejected call still belongs to the outer transaction.
+        bc_q('INSERT INTO sas_users VALUES(99,7,1,0,0,2)');$connection_server->rollback();
+        check_db((int)scalar_db('SELECT COUNT(*) FROM sas_users WHERE id=99')===0,'outer transaction survives rejected '.$api);
+    }
+    $connection_server->autocommit(false);
+    reject_db(fn()=>bc_crypto_v2_reservation($scope,'autocommit-off-001','1'),'crypto_nested_transaction_refused');
+    $connection_server->rollback();$connection_server->autocommit(true);
     // Explicit synthetic funding ONLY in this randomly created disposable database. Not an opening-entry implementation.
     bc_q("INSERT INTO sas_crypto_v2_asset_policies VALUES(7,'testnet','USDT:TRX',6,1,1,'matched',?,100000000)",[time()+3600]);
     foreach(['available'=>'100000000','reserved'=>'0','held'=>'7654321'] as $bucket=>$units) bc_q("INSERT INTO sas_crypto_v2_accounts(vendor_id,user_id,environment,asset_network,scale,bucket,units) VALUES(7,11,'testnet','USDT:TRX',6,?,?)",[$bucket,$units]);

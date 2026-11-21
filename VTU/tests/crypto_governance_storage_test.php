@@ -13,6 +13,7 @@ function bc_q_row($sql,$params=[]){
  throw new RuntimeException('Unexpected test read');
 }
 function bc_q($sql,$params=[],&$changed=null){
+ if($sql==='SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')return true;
  if(strpos($sql,'INSERT IGNORE')===0){$k=implode('|',$params);if(!isset($GLOBALS['store']['rules'][$k]))$GLOBALS['store']['rules'][$k]=['revision'=>0,'document'=>'{}'];return true;}
  if(strpos($sql,'SELECT scale')===0){$r=new mysqli_result();$r->rows=$GLOBALS['account_scales'];return $r;}
  if(strpos($sql,'UPDATE sas_crypto_v2_governance')===0){[$doc,$scope,$env,$key,$revision]=$params;$k=implode('|',[$scope,$env,$key]);$r=&$GLOBALS['store']['rules'][$k];$changed=(int)$r['revision']===$revision?1:0;if($changed)$r=['revision'=>$revision+1,'document'=>$doc];return true;}

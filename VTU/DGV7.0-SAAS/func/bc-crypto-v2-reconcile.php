@@ -1,10 +1,10 @@
 <?php
 /** Read-only internal journal integrity checks. NOT proof of provider reserves or approved custody. */
+require_once __DIR__ . '/bc-crypto-transaction.php';
 function bc_crypto_v2_integrity($vendor_id, $environment) {
     global $connection_server;
     if (!is_int($vendor_id) || $vendor_id <= 0 || !in_array($environment, ['testnet','mainnet'], true)) throw new InvalidArgumentException('crypto_scope_invalid');
-    $state = bc_q_row('SELECT @@session.in_transaction AS in_tx, @@session.autocommit AS auto_commit');
-    if (!$state || (int)$state['in_tx'] !== 0 || (int)$state['auto_commit'] !== 1) throw new RuntimeException('crypto_nested_transaction_refused');
+    if (!bc_crypto_transaction_ready()) throw new RuntimeException('crypto_nested_transaction_refused');
     if (bc_q('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ') !== true || !mysqli_begin_transaction($connection_server, MYSQLI_TRANS_START_READ_ONLY)) throw new RuntimeException('crypto_snapshot_unavailable');
     try {
         $counts = [];

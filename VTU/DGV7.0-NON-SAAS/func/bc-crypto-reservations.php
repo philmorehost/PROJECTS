@@ -36,8 +36,7 @@ function bc_crypto_v2_reservation($scope, $reference, $units, $parent_reference 
     if ($release) bc_crypto_v2_reference($parent_reference);
     $kind = $release ? 'release' : 'reserve';
     $hash = hash('sha256', json_encode([$vid,$uid,$env,$asset,$kind,$units,$parent_reference]));
-    $session = bc_q_row('SELECT @@session.in_transaction AS in_tx, @@session.autocommit AS auto_commit');
-    if (!$session || (int)$session['in_tx'] !== 0 || (int)$session['auto_commit'] !== 1) throw new RuntimeException('crypto_nested_transaction_refused');
+    if (!bc_crypto_transaction_ready()) throw new RuntimeException('crypto_nested_transaction_refused');
     if (!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_storage_failed');
     try {
         // Serializes all bucket operations for this customer; globally consistent account lock order.
