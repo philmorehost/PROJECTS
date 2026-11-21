@@ -24,8 +24,12 @@ function bc_alert_receiver_schema() {
 /** Separate receiver DB connection. Verify every retry before deduplication; receipt only after commit. */
 function bc_alert_receiver_accept($db,$body,$timestamp,$idempotency,$signature,$key,$now) {
     $v=bc_alert_receiver_verify($body,$timestamp,$idempotency,$signature,$key,$now);
-    $state=$db->query('SELECT @@session.in_transaction AS active,@@session.autocommit AS auto_commit')->fetch_assoc();
-    if((int)$state['active']!==0||(int)$state['auto_commit']!==1)throw new RuntimeException('receiver_transaction_unavailable');
+    try {
+        $state=$db->query('SELECT @@session.autocommit AS auto_commit')->fetch_assoc();
+        // MySQL has no MariaDB @@in_transaction. This next-transaction-only SET refuses
+        // active caller transactions without committing/rolling back their work.
+        if((int)$state['auto_commit']!==1||$db->query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')!==true)throw new RuntimeException('receiver_transaction_unavailable');
+    }catch(Throwable $e){throw new RuntimeException('receiver_transaction_unavailable');}
     foreach(['staging_alert_inbox','staging_alert_acceptance_events'] as $table){$q=$db->prepare('SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');$q->bind_param('s',$table);$q->execute();$e=$q->get_result()->fetch_assoc();$q->close();if(!$e||strtoupper($e['engine'])!=='INNODB')throw new RuntimeException('receiver_transactional_schema_required');}
     if(!$db->begin_transaction())throw new RuntimeException('receiver_storage_failed');
     try {
