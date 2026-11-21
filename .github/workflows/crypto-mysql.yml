@@ -70,8 +70,8 @@ jobs:
           php -l VTU/DGV7.0-NON-SAAS/bc-admin/CryptoCustody.php
       - name: Read-only Bybit identity and discovery contracts without network
         run: |
-          php -n VTU/tests/crypto_bybit_identity_test.php
-          php -n VTU/tests/bybit_discovery_test.php
+          php -n -d extension=tokenizer VTU/tests/crypto_bybit_identity_test.php
+          php VTU/tests/bybit_discovery_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections

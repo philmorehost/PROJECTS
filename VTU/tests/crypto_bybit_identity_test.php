@@ -1,7 +1,7 @@
 <?php
 set_exception_handler(function(Throwable $e) {fwrite(STDERR,'::error::'.str_replace(["\r","\n"],' ',$e->getMessage().' at '.basename($e->getFile()).':'.$e->getLine())."\n");exit(1);});
-/** Real bounded adapter with synthetic cURL responses only. Run php -n. */
-if(extension_loaded('curl'))throw new RuntimeException('Run php -n.');
+/** Real bounded adapter with synthetic cURL responses only. Run php -n -d extension=tokenizer. */
+if(extension_loaded('curl'))throw new RuntimeException('Run php -n -d extension=tokenizer.');
 foreach(['CURLOPT_HTTPHEADER','CURLOPT_FOLLOWLOCATION','CURLOPT_SSL_VERIFYPEER','CURLOPT_SSL_VERIFYHOST','CURLOPT_SSLVERSION','CURL_SSLVERSION_TLSv1_2','CURLOPT_PROTOCOLS','CURLPROTO_HTTPS','CURLOPT_CONNECTTIMEOUT','CURLOPT_TIMEOUT','CURLOPT_WRITEFUNCTION','CURLINFO_HTTP_CODE'] as $i=>$c)define($c,100+$i);
 function curl_init($url){$GLOBALS['url']=$url;return (object)['options'=>[]];}
 function curl_setopt_array($h,$opts){$h->options=$opts;$GLOBALS['options']=$opts;return true;}
