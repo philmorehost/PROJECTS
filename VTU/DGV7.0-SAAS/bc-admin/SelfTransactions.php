@@ -6,8 +6,6 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("My Transaction | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
 ?>
-<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "SELF TRANSACTIONS", "crumb" => "Home / Self Transactions")); ?><!-- End Page Title -->
 

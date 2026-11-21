@@ -29,7 +29,7 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
             $amount_display = '<div class="small text-muted">'.$status_summary.'</div>';
             $status_text = "Batch Summary";
             $status_class = "text-primary";
-            $onclick = "window.location.href='BatchDetails.php?batch=$ref'";
+            $onclick = 'window.location.href=' . json_encode('BatchDetails.php?batch=' . rawurlencode($ref), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         } else {
             if (isset($row["product_name"]) && isset($row["api_type"])) {
                 $type = ucwords(($row["product_name"] ?? '') . " " . str_replace(["-", "_"], " ", ($row["api_type"] ?? '')));
@@ -46,12 +46,12 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
             $amount_display = '<div class="fw-bold">₦'.$amount.'</div>';
             $status_text = tranStatus($row['status']);
             $status_class = ($row['status'] == 1 ? 'text-success' : ($row['status'] == 2 ? 'text-warning' : 'text-danger'));
-            $onclick = "showTransactionDetails('$ref', ".($is_admin ? 'true' : 'false').")";
+            $onclick = 'showTransactionDetails(' . json_encode((string)$ref, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ', ' . ($is_admin ? 'true' : 'false') . ')';
         }
 
         $date = date('M d, Y H:i', strtotime($row['date']));
 
-        echo '<tr class="cursor-pointer" onclick="' . $onclick . '">';
+        echo '<tr class="cursor-pointer" tabindex="0" role="button" onkeydown="if(event.target===this &amp;&amp; (event.key===&quot;Enter&quot; || event.key===&quot; &quot;)){event.preventDefault();this.click();}" onclick="' . htmlspecialchars($onclick, ENT_QUOTES, 'UTF-8') . '">';
         echo '<td class="px-4">
                 ' . (!empty($row["product_unique_id"]) ? '<div class="text-primary fw-bold mb-1" style="font-size:15px; letter-spacing: 0.5px;">' . htmlspecialchars($row["product_unique_id"]) . '</div>' : '') . '
                 <div class="fw-bold text-dark" style="font-size:13px;">' . htmlspecialchars($type) . '</div>

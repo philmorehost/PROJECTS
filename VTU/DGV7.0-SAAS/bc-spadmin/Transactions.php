@@ -6,8 +6,6 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head('', array("area" => "spadmin"));
 ?>
-<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "spadmin")); ?>
 <?php bc_adm_topbar(array("area" => "spadmin", "title" => "TRANSACTIONS", "crumb" => "Home / Transactions")); ?><!-- End Page Title -->
 

@@ -203,6 +203,7 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
     var lastId    = 0;
     var opened    = false;
     var polling   = null;
+    var pollInFlight = false;
     var seen      = {};   // message ids already painted
     var seenAny   = false;
 
@@ -312,7 +313,8 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
     function startPolling() {
         if (polling) return;
         polling = setInterval(function () {
-            if (!threadId || document.hidden) return;
+            if (!threadId || document.hidden || pollInFlight) return;
+            pollInFlight = true;
             post({ action: "poll", thread_id: threadId, after_id: lastId }).then(function (res) {
                 if (!res.ok) return;
                 applyThread(res.thread);
@@ -324,7 +326,7 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
                     unreadCount += fresh.filter(function (m) { return m.who === "agent" || m.who === "ai"; }).length;
                     showBadge();
                 }
-            }).catch(function () { /* a dropped poll is not an error worth showing */ });
+            }).catch(function () { /* a dropped poll is not an error worth showing */ }).then(function () { pollInFlight = false; });
         }, 5000);
     }
 
