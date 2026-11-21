@@ -232,10 +232,13 @@ if (!function_exists('bc_q')) {
     /**
      * Prepared-statement helper: bc_q("SELECT ... WHERE id=? AND name=?", [$id, $name]).
      * Returns mysqli_result for SELECTs, true/false for writes, null on failure.
+     * Optional third argument receives the write count captured before statement close.
      * Falls back to escaped interpolation only on hosts without mysqli_prepare
      * (never on a normal production PHP build).
      */
-    function bc_q($sql, $params = array()) {
+    function bc_q($sql, $params = array(), &$affected_rows = null) {
+        // Connection-level affected_rows is not reliable after a prepared statement closes.
+        $affected_rows = null;
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return null;
         $params = array_values((array)$params);
@@ -256,7 +259,8 @@ if (!function_exists('bc_q')) {
             if (!mysqli_stmt_execute($stmt)) { mysqli_stmt_close($stmt); return null; }
             $res = function_exists('mysqli_stmt_get_result') ? mysqli_stmt_get_result($stmt) : null;
             if ($res === false || $res === null) {
-                $ok = mysqli_stmt_affected_rows($stmt) >= 0;
+                $affected_rows = mysqli_stmt_affected_rows($stmt);
+                $ok = $affected_rows >= 0;
                 mysqli_stmt_close($stmt);
                 return $ok;
             }
@@ -274,6 +278,7 @@ if (!function_exists('bc_q')) {
             $out .= $parts[$i + 1];
         }
         $r = mysqli_query($connection_server, $out);
+        if ($r === true) $affected_rows = mysqli_affected_rows($connection_server);
         return $r === false ? null : $r;
     }
 }
@@ -338,8 +343,10 @@ if (!function_exists('bc_stepup_actor_second_factor')) {
                 return 'The authenticator code is incorrect or has already been used.';
             }
             if (!($connection_server instanceof mysqli) || !in_array($table, array('sas_users','sas_vendors','sas_super_admin'), true)) return 'Verification is unavailable.';
-            $saved = bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=? AND (totp_last_step IS NULL OR totp_last_step < ?)", array((int)$step, $actor_id, (int)$step));
-            if ($saved !== true || mysqli_affected_rows($connection_server) !== 1) return 'The authenticator code has already been used.';
+            $claimed_rows = null;
+            $saved = bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=? AND (totp_last_step IS NULL OR totp_last_step < ?)", array((int)$step, $actor_id, (int)$step), $claimed_rows);
+            if ($saved !== true || $claimed_rows === null || $claimed_rows < 0) return 'Unable to verify the authenticator code. Please try again with a fresh code.';
+            if ($claimed_rows !== 1) return 'The authenticator code has already been used. Wait for the next code and try again.';
             return '';
         }
 
