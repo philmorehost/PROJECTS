@@ -2233,9 +2233,10 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                             <div class="mb-3">
                                 <label class="form-label small fw-bold text-muted text-uppercase">Cron Requery Processor Cron Path</label>
                                 <div class="input-group">
-                                    <input type="text" value="php <?php echo realpath(__DIR__ . '/../cron/process_requery_queue.php'); ?>" class="form-control bg-light" readonly />
+                                    <input type="text" value="/bin/sh <?php echo htmlspecialchars(escapeshellarg(dirname(__DIR__) . '/cron/run_requery_queue.sh'), ENT_QUOTES, 'UTF-8'); ?>" class="form-control bg-light" readonly />
                                     <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)"><i class="bi bi-clipboard"></i></button>
                                 </div>
+                                <p class="small text-muted mt-1">Schedule this command every minute. First run it with <code>--check</code> in Terminal and confirm <code>"ready":true</code>. The launcher verifies PHP CLI and writes <code>logs/requery_queue.log</code>; detailed results are in <code>logs/requery_queue_report.log</code>. Replace any old URL/PHP-CGI requery entry; do not run duplicate schedules.</p>
                                 <div class="small text-muted mt-1">Run every 1 minute to automatically re-check pending transactions and settle (charge/refund) them for all vendors.</div>
                             </div>
 

@@ -2123,11 +2123,12 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">System Cronjobs For Automation</h5></div>
                         <div class="card-body p-4">
                             <div class="mb-3">
-                                <label class="form-label small fw-bold text-muted text-uppercase">Cron Requery URL</label>
+                                <label class="form-label small fw-bold text-muted text-uppercase">Cron Requery Command</label>
                                 <div class="input-group">
-                                    <input type="text" value="<?php echo $web_http_host . "/automated-cron-requery.php"; ?>" class="form-control bg-light" readonly />
+                                    <input type="text" value="/bin/sh <?php echo htmlspecialchars(escapeshellarg(dirname(__DIR__) . '/cron/run_requery_queue.sh'), ENT_QUOTES, 'UTF-8'); ?>" class="form-control bg-light" readonly />
                                     <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)"><i class="bi bi-clipboard"></i></button>
                                 </div>
+                                <p class="small text-muted mt-1">Schedule this command every minute. First run it with <code>--check</code> in Terminal and confirm <code>"ready":true</code>. The launcher verifies PHP CLI and writes <code>logs/requery_queue.log</code>; detailed results are in <code>logs/requery_queue_report.log</code>. Replace any old URL/PHP-CGI requery entry; do not run duplicate schedules.</p>
                             </div>
 
                             <div class="mb-3">

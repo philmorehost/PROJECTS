@@ -68,9 +68,10 @@ bc_adm_head("Platform Cron Jobs | Super Admin", array("area" => "spadmin"));
                     <!-- Requery -->
                     <div class="mb-4">
                         <h6 class="fw-bold small text-uppercase d-flex align-items-center gap-2">Cron Requery Processor <span class="badge bg-primary bg-opacity-10 text-primary schedule-badge">Every 1 minute</span></h6>
-                        <p class="text-muted small mb-2">Re-checks pending transactions for every vendor. Detailed run and provider diagnostics are written to <code>logs/requery_queue_report.log</code>; standard output and PHP errors are also appended to <code>logs/requery_queue.log</code>. The report redacts API credentials, email addresses, and long number sequences.</p>
+                        <p class="text-muted small mb-2">Re-checks pending transactions for every vendor. Detailed run and provider diagnostics are written to <code>logs/requery_queue_report.log</code>; standard output and PHP errors are also appended to <code>logs/requery_queue.log</code>. The report redacts API credentials, email addresses, and long number sequences. This launcher selects verified PHP CLI (not PHP-CGI) and handles its own output log.</p>
+                        <p class="small">Before scheduling, run <code>/bin/sh <?php echo htmlspecialchars(escapeshellarg($root . '/cron/run_requery_queue.sh'), ENT_QUOTES, 'UTF-8'); ?> --check</code> in Terminal. It must report <code>"ready":true</code>. This checks runtime/log access only; no database or provider calls. Replace the old requery cron entry rather than adding a duplicate.</p>
                         <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">COPY</button>
-                            <code>* * * * * <?php echo $php_bin; ?> <?php echo realpath($root . '/cron/process_requery_queue.php'); ?> &gt;&gt; <?php echo $logs_dir; ?>/requery_queue.log 2&gt;&amp;1</code>
+                            <code>* * * * * /bin/sh <?php echo htmlspecialchars(escapeshellarg($root . '/cron/run_requery_queue.sh'), ENT_QUOTES, 'UTF-8'); ?></code>
                         </div>
                     </div>
 

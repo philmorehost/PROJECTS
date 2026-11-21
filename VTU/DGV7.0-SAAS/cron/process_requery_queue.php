@@ -1,4 +1,25 @@
 <?php
+// Diagnostics are CLI-only and intentionally run before loading application config.
+if (PHP_SAPI === 'cli') {
+    $runtime_ok = PHP_VERSION_ID >= 80200 && extension_loaded('mysqli') && extension_loaded('curl');
+    if (in_array('--check', $argv ?? array(), true)) {
+        $dir = __DIR__ . '/../logs';
+        $directory_ok = is_dir($dir) || @mkdir($dir, 0750, true);
+        $probe = $directory_ok && is_writable($dir) ? @tempnam($dir, '.requery-check-') : false;
+        $log_ok = $probe !== false;
+        if ($probe !== false) @unlink($probe);
+        echo json_encode(array('sapi' => PHP_SAPI, 'php_version' => PHP_VERSION,
+            'mysqli' => extension_loaded('mysqli'), 'curl' => extension_loaded('curl'),
+            'logs_writable' => $log_ok, 'database_checked' => false,
+            'provider_requests' => 0, 'ready' => $runtime_ok && $log_ok), JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        exit($runtime_ok && $log_ok ? 0 : 2);
+    }
+    if (!$runtime_ok) {
+        fwrite(STDERR, "Requery needs PHP CLI 8.2+ with mysqli and curl. Use /bin/sh cron/run_requery_queue.sh --check. No work performed.\n");
+        exit(2);
+    }
+}
+
 // §35: cron endpoints must never be web-invokable — CLI, or the cron secret
 // (same bc_get_or_create_cron_secret() pattern as process_mail_queue.php).
 // Without this, anyone could trigger provider deactivation, AI mailings and

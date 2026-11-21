@@ -17,6 +17,10 @@ on:
       - 'VTU/tests/clubkonnect_requery_test.php'
       - 'VTU/**/func/bc-clubkonnect-status.php'
       - 'VTU/**/cron/process_requery_queue.php'
+      - 'VTU/**/cron/run_requery_queue.sh'
+      - 'VTU/**/bc-spadmin/CronJobs.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/tests/requery_launcher_test.py'
       - 'VTU/**/automated-cron-requery.php'
       - 'VTU/**/bc-admin/Transactions.php'
       - 'VTU/**/bc-admin/NumberChecker.php'
@@ -38,6 +42,10 @@ on:
       - 'VTU/tests/clubkonnect_requery_test.php'
       - 'VTU/**/func/bc-clubkonnect-status.php'
       - 'VTU/**/cron/process_requery_queue.php'
+      - 'VTU/**/cron/run_requery_queue.sh'
+      - 'VTU/**/bc-spadmin/CronJobs.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/tests/requery_launcher_test.py'
       - 'VTU/**/automated-cron-requery.php'
       - 'VTU/**/bc-admin/Transactions.php'
       - 'VTU/**/bc-admin/NumberChecker.php'
@@ -85,3 +93,15 @@ jobs:
           php -n VTU/tests/vtu_adapter_contract_test.php
           php -n VTU/tests/incident_wallet_test.php
           php -n VTU/tests/clubkonnect_requery_test.php
+
+      - name: Exercise unattended CLI launcher without database or provider requests
+        run: |
+          set -euo pipefail
+          python3 VTU/tests/requery_launcher_test.py
+          for ed in SAAS NON-SAAS; do
+            sh -n "VTU/DGV7.0-$ed/cron/run_requery_queue.sh"
+            php -l "VTU/DGV7.0-$ed/bc-admin/AccountSettings.php"
+            BC_REQUERY_PHP="$(command -v php)" sh "VTU/DGV7.0-$ed/cron/run_requery_queue.sh" --check | tee "/tmp/requery-$ed-check.log"
+            tail -n 1 "/tmp/requery-$ed-check.log" | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ready"] and r["sapi"]=="cli" and r["provider_requests"]==0 and not r["database_checked"]'
+          done
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/CronJobs.php
