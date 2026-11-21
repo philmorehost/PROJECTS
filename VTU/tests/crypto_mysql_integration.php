@@ -5,7 +5,7 @@ if (PHP_SAPI !== 'cli' || getenv('BC_CRYPTO_TEST_MYSQL') !== 'DISPOSABLE_ONLY') 
 }
 set_exception_handler(function(Throwable $e) {
     // GitHub annotation keeps failures inspectable without downloading external log archives.
-    fwrite(STDERR, '::error::'.str_replace(["\r","\n"], ' ', $e->getMessage())."\n"); exit(1);
+    fwrite(STDERR, '::error::'.str_replace(["\r","\n"], ' ', $e->getMessage().' at '.basename($e->getFile()).':'.$e->getLine())."\n"); exit(1);
 });
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $edition=getenv('BC_CRYPTO_TEST_EDITION') ?: 'SAAS';
@@ -108,11 +108,11 @@ try {
     check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='99000000','exact decimal debit');
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'concurrent-same-001','2'),'crypto_idempotency_conflict');
     // Audit insert failure must roll back the preceding policy UPDATE, using a real server trigger.
-    bc_q("CREATE TRIGGER fail_policy_audit BEFORE INSERT ON sas_crypto_v2_policy_audit FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected audit failure'");
+    $connection_server->query("CREATE TRIGGER fail_policy_audit BEFORE INSERT ON sas_crypto_v2_policy_audit FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected audit failure'");
     $before=bc_crypto_gov_row(7,'testnet','control');$audits=scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_policy_audit');
     try {bc_crypto_gov_save($vendor,7,'testnet','control',1,['mode'=>'stop'],7);throw new LogicException('Audit unexpectedly succeeded');} catch(mysqli_sql_exception $e) {check_db($e->getSqlState()==='45000','server rejected audit insert');}
     check_db(bc_crypto_gov_row(7,'testnet','control')===$before && scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_policy_audit')===$audits,'audit failure rolls back document revision and audit');
-    bc_q('DROP TRIGGER fail_policy_audit');
+    $connection_server->query('DROP TRIGGER fail_policy_audit');
     // Hold an uncommitted stop; admission must block, then reject after the stop commits.
     $connection_server->begin_transaction();
     bc_q("UPDATE sas_crypto_v2_governance SET document='{\"stopped\":true}' WHERE vendor_id=0 AND policy_key='control'");
@@ -131,10 +131,10 @@ try {
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_entries')===4,'failed operations leave no partial entries');
     // Entry failure occurs after operation and both balance updates: all must roll back.
     bc_q("UPDATE sas_crypto_v2_governance SET document='{\"stopped\":false}' WHERE vendor_id=0 AND policy_key='control'");
-    bc_q("CREATE TRIGGER fail_journal_entry BEFORE INSERT ON sas_crypto_v2_entries FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected entry failure'");
+    $connection_server->query("CREATE TRIGGER fail_journal_entry BEFORE INSERT ON sas_crypto_v2_entries FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected entry failure'");
     try {bc_crypto_v2_reservation($scope,'entry-failure-001','1');throw new LogicException('Entry unexpectedly succeeded');} catch(mysqli_sql_exception $e) {check_db($e->getSqlState()==='45000','server rejected journal entry');}
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===2 && (int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_entries')===4 && scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='100000000','entry failure rolls back operation, entries and balance projections');
-    bc_q('DROP TRIGGER fail_journal_entry');
+    $connection_server->query('DROP TRIGGER fail_journal_entry');
     $a=start_worker('reserve','overspend-left-001','60000000');$b=start_worker('reserve','overspend-right-001','60000000');
     $results=[finish_worker($a),finish_worker($b)];
     check_db(count(array_filter($results,fn($r)=>isset($r['result'])))===1 && count(array_filter($results,fn($r)=>($r['error']??'')==='crypto_insufficient_balance'))===1,'competing distinct references cannot overspend');
