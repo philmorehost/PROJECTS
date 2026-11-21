@@ -39,6 +39,7 @@ require $base.'bc-crypto-poll-recovery.php';
 require $base.'bc-crypto-poll-delivery.php';
 require $base.'bc-incident-wallet.php';
 require __DIR__.'/../staging/crypto-alert-receiver/receiver.php';
+require __DIR__.'/../staging/crypto-alert-receiver/http.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
     $db->query('SET SESSION innodb_lock_wait_timeout=10');

@@ -1,0 +1,7 @@
+Options -Indexes -MultiViews
+RewriteEngine On
+# Preserve cPanel AutoSSL domain-validation paths.
+RewriteRule ^\.well-known/(acme-challenge|pki-validation)/ - [END]
+# No publicly accessible config, source, health/status page or alternate PHP route.
+RewriteRule ^alert$ index.php [END]
+RewriteRule ^ - [R=404,END]
