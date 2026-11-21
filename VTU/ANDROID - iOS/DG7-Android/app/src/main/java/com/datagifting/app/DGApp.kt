@@ -21,6 +21,7 @@ class DGApp : Application(), DefaultLifecycleObserver {
 
     override fun onCreate() {
         super<Application>.onCreate()
+        com.datagifting.app.util.RequiredSetup.install(this)
         com.datagifting.app.util.BrandTheme.install(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }

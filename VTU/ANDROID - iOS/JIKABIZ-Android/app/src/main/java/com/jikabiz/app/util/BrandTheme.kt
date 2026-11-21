@@ -74,6 +74,14 @@ object BrandTheme : Application.ActivityLifecycleCallbacks {
             else -> if (dark) Color.WHITE else Color.BLACK
         }
     }
+    // site-info carries the same validated public palette; reuse its startup response.
+    fun acceptSiteTheme(data: JSONObject) {
+        if (!valid(data)) return
+        theme = data
+        cache.edit().putString(cacheKey, data.toString()).apply()
+        activities.toList().forEach { apply(it) }
+        externalRoots.toList().filter { it.isAttachedToWindow }.forEach { paint(it) }
+    }
     fun primary(context: Context) = color(context, "primary")
     fun onPrimary(context: Context) = color(context, "on_primary")
     fun ink(context: Context) = color(context, "primary_text")
@@ -153,9 +161,11 @@ object BrandTheme : Application.ActivityLifecycleCallbacks {
         }
         if (view is ViewGroup) for (i in 0 until view.childCount) paint(view.getChildAt(i), onBrand)
     }
+    fun applyNow(activity: Activity) { apply(activity) }
     private fun apply(activity: Activity) {
         paint(activity.window.decorView)
-        val surface = color(activity, "surface")
+        val surface = color(activity, if (activity is com.jikabiz.app.ui.splash.SplashActivity) "primary" else "surface")
+        if (activity is com.jikabiz.app.ui.splash.SplashActivity && barColors[activity] != surface) activity.window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(surface))
         if(activity.window.statusBarColor != surface) activity.window.statusBarColor = surface
         if(activity.window.navigationBarColor != surface) activity.window.navigationBarColor = surface
         if (barColors[activity] != surface) {
@@ -168,7 +178,7 @@ object BrandTheme : Application.ActivityLifecycleCallbacks {
         val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { apply(activity) }
         listeners[activity] = listener; activity.window.decorView.viewTreeObserver.addOnGlobalLayoutListener(listener)
     }
-    override fun onActivityResumed(activity: Activity) { activities.add(activity); apply(activity); refresh(); main.removeCallbacks(ticker); main.postDelayed(ticker,60_000) }
+    override fun onActivityResumed(activity: Activity) { if (RequiredSetup.route(activity)) return; activities.add(activity); apply(activity); refresh(); main.removeCallbacks(ticker); main.postDelayed(ticker,60_000) }
     override fun onActivityPaused(activity: Activity) { activities.remove(activity); if(activities.isEmpty()) main.removeCallbacks(ticker) }
     override fun onActivityDestroyed(activity: Activity) { activities.remove(activity); listeners.remove(activity)?.let { if(activity.window.decorView.viewTreeObserver.isAlive) activity.window.decorView.viewTreeObserver.removeOnGlobalLayoutListener(it) } }
     override fun onActivityStarted(activity: Activity) {}

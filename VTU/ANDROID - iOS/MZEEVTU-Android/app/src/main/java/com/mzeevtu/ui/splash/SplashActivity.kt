@@ -13,6 +13,8 @@ import com.mzeevtu.databinding.ActivitySplashBinding
 import com.mzeevtu.ui.MainActivity
 import com.mzeevtu.ui.auth.LoginActivity
 import com.mzeevtu.util.PreferenceManager
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -33,6 +35,7 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySplashBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.mzeevtu.util.BrandTheme.applyNow(this)
 
         // Read the version from the build rather than hardcoding it — the old literal
         // "v1.0.0" never changed when versionName was bumped to 1.0.9.
@@ -46,6 +49,12 @@ class SplashActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            // In parallel with public branding; bounded so offline launch cannot hang on this check.
+            val policyCheck = async {
+                if (prefs.isLoggedIn()) {
+                    try { withTimeoutOrNull(5000) { RetrofitClient.getService().getProfile(mapOf("api_key" to prefs.getApiKey())) } } catch (_: Exception) { }
+                }
+            }
             // Fetch site info to get dynamic branding
             try {
                 val resp = RetrofitClient.getService().getSiteInfo()
@@ -53,6 +62,7 @@ class SplashActivity : AppCompatActivity() {
                     @Suppress("UNCHECKED_CAST")
                     val data = resp.body()?.get("data") as? Map<String, Any>
                     data?.let {
+                        (it["theme"] as? Map<*, *>)?.let { palette -> com.mzeevtu.util.BrandTheme.acceptSiteTheme(org.json.JSONObject(palette)) }
                         // Show the server's brand on the splash so it can be changed from the
                         // admin panel without shipping a new APK. @string/app_name — the brand
                         // compiled into this APK — is the fallback when the server sends none.
@@ -71,7 +81,9 @@ class SplashActivity : AppCompatActivity() {
             } catch (_: Exception) {}
 
             delay(1000) // Ensure spin animation completes
-            navigateNext()
+            // Revalidate returning sessions before opening cached dashboard UI.
+            policyCheck.await()
+            if (!com.mzeevtu.util.RequiredSetup.route(this@SplashActivity)) navigateNext()
         }
     }
 
