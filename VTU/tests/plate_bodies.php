@@ -7,6 +7,8 @@
 // from the working tree with the same body_of() algorithm.
 // §33 re-baseline for web/AccountSettings.php (both editions): QR code in the
 // authenticator enrolment block — spliced from the working tree the same way.
+// Email-verified no-reload setup: only the two AccountSettings authenticator
+// pending/begin UI blocks are intentionally re-baselined; all other bodies kept.
 return array(
     "VTU/DGV7.0-SAAS/web/AI-Assistant.php" => <<<'PLATEBODY'
 
@@ -447,29 +449,9 @@ PLATEBODY,
                         </div>
                         <button name="totp-disable" type="submit" class="btn btn-outline-danger w-100 rounded-3 fw-bold" onclick="return confirm('Disable authenticator protection?')">DISABLE AUTHENTICATOR</button>
                     </form>
-                <?php elseif ($sec29_state === 'pending'): ?>
-                    <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
-                    <p class="small text-muted">Add this secret to Google Authenticator (or any TOTP app), then enter the 6-digit code it shows:</p>
-                    <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
-                    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-                    <script>(function(){{try{{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){{if(el)el.style.display='none';return;}}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}}catch(e){{var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}}}})();</script>
-                    <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
-                    <p class="small text-muted text-break mb-3">Or paste this link into the app: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
-                    <form method="post" action="">
-                        <?php echo bc_csrf_field(); ?>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted">6-DIGIT CODE FROM THE APP</label>
-                            <input name="totp_code" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control bg-light" inputmode="numeric" required/>
-                        </div>
-                        <button name="totp-confirm" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">CONFIRM &amp; ENABLE</button>
-                    </form>
                 <?php else: ?>
-                    <p class="small text-muted">Protect transfers and withdrawals with a code from Google Authenticator, in addition to your PIN.</p>
-                    <form method="post" action="">
-                        <?php echo bc_csrf_field(); ?>
-                        <button name="totp-begin" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">SET UP AUTHENTICATOR</button>
-                    </form>
-                <?php endif; ?>
+<?php bc_totp_setup_widget(); ?>
+<?php endif; ?>
             </div>
 
             <div class="card shadow-sm border-0 p-4 rounded-4">
@@ -5692,29 +5674,9 @@ PLATEBODY,
                         </div>
                         <button name="totp-disable" type="submit" class="btn btn-outline-danger w-100 rounded-3 fw-bold" onclick="return confirm('Disable authenticator protection?')">DISABLE AUTHENTICATOR</button>
                     </form>
-                <?php elseif ($sec29_state === 'pending'): ?>
-                    <?php $sec29_secret = function_exists('bc_stepup_open_secret') ? bc_stepup_open_secret((string)$sec29_row['totp_secret']) : ''; ?>
-                    <p class="small text-muted">Add this secret to Google Authenticator (or any TOTP app), then enter the 6-digit code it shows:</p>
-                    <div class="text-center my-3"><span id="bcTotpQr" class="d-inline-block bg-white p-2 rounded-3 border"></span><div class="small text-muted mt-1">Scan with Google Authenticator</div></div>
-                    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-                    <script>(function(){{try{{var el=document.getElementById('bcTotpQr');if(!el||typeof qrcode==='undefined'){{if(el)el.style.display='none';return;}}var q=qrcode(0,'M');q.addData(<?php echo json_encode(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : ''); ?>);q.make();el.innerHTML=q.createSvgTag(4,8);}}catch(e){{var b=document.getElementById('bcTotpQr');if(b)b.style.display='none';}}}})();</script>
-                    <div class="bg-light rounded-3 p-3 text-center mb-2"><code class="fs-5" style="letter-spacing:2px;"><?php echo htmlspecialchars($sec29_secret, ENT_QUOTES, 'UTF-8'); ?></code></div>
-                    <p class="small text-muted text-break mb-3">Or paste this link into the app: <code><?php echo htmlspecialchars(function_exists('bc_totp_uri') ? bc_totp_uri($sec29_secret, (string)$get_logged_user_details['username'], 'VTU') : '', ENT_QUOTES, 'UTF-8'); ?></code></p>
-                    <form method="post" action="">
-                        <?php echo bc_csrf_field(); ?>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted">6-DIGIT CODE FROM THE APP</label>
-                            <input name="totp_code" type="text" maxlength="6" pattern="[0-9]{6}" class="form-control bg-light" inputmode="numeric" required/>
-                        </div>
-                        <button name="totp-confirm" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">CONFIRM &amp; ENABLE</button>
-                    </form>
                 <?php else: ?>
-                    <p class="small text-muted">Protect transfers and withdrawals with a code from Google Authenticator, in addition to your PIN.</p>
-                    <form method="post" action="">
-                        <?php echo bc_csrf_field(); ?>
-                        <button name="totp-begin" type="submit" class="btn btn-primary w-100 rounded-3 fw-bold">SET UP AUTHENTICATOR</button>
-                    </form>
-                <?php endif; ?>
+<?php bc_totp_setup_widget(); ?>
+<?php endif; ?>
             </div>
 
             <div class="card shadow-sm border-0 p-4 rounded-4">

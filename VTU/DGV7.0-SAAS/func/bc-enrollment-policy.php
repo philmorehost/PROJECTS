@@ -72,6 +72,8 @@ function bc_enrollment_setup_page($role,$actor) {
     global $connection_server;
     $table=$role==='vendor'?'sas_vendors':'sas_users';
     if ((int)($actor['status'] ?? 0) !== 1 || !empty($actor['is_blocked']) || (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok())) { http_response_code(403); exit('Your session is not permitted. Please log out.'); }
+    require_once __DIR__.'/bc-totp-setup.php';
+    bc_totp_setup_handle($table,$actor);
     $error='';
     if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
         bc_validate_csrf();
@@ -80,12 +82,6 @@ function bc_enrollment_setup_page($role,$actor) {
         if($action==='password' && !empty($actor['force_password_change'])) {
             $error=bc_enrollment_change_password($table,$actor,$_POST);
             if($error==='') {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'password_changed',(string)$actor['id'],'Forced password change completed');header('Location: '.bc_enrollment_url($role));exit;}
-        } elseif(empty($actor['force_password_change']) && $action==='begin' && !bc_gauth_enrolled($actor)) {
-            if(bc_totp_begin_enrolment($table,(int)$actor['id'])!==''){header('Location: '.bc_enrollment_url($role));exit;}
-            $error='Could not start setup.';
-        } elseif(empty($actor['force_password_change']) && $action==='confirm' && ($actor['two_factor_type']??'')==='pending') {
-            if(bc_totp_confirm_enrolment($table,$actor,(string)($_POST['totp_code']??''))) {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'totp_enabled',(string)$actor['id'],'Mandatory authenticator setup completed');header('Location: '.bc_enrollment_url($role));exit;}
-            $error='Code did not match. Check your authenticator and try again.';
         } else $error='Complete the required security step first.';
     }
     $reason=bc_enrollment_reason($actor,$role);
@@ -97,10 +93,11 @@ function bc_enrollment_setup_page($role,$actor) {
     echo '<form method="post">'.bc_csrf_field();
     if($reason==='PASSWORD_CHANGE_REQUIRED') {
         echo '<h2>Change your password</h2><input type="hidden" name="setup_action" value="password"><label>Current password<input name="old_password" type="password" autocomplete="current-password" required></label><label>New password (12–72 characters)<input name="new_password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" required></label><button>Save new password</button>';
-    } elseif(($actor['two_factor_type']??'')==='pending') {
-        $secret=bc_stepup_open_secret((string)$actor['totp_secret']);
-        echo '<h2>Set up Google Authenticator</h2><p>In Google Authenticator, choose Add a code → Enter a setup key. Select a time-based key. Never share it.</p><code>'.$e($secret).'</code><input type="hidden" name="setup_action" value="confirm"><label>Six-digit authenticator code<input name="totp_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label><button>Confirm and continue</button>';
-    } else echo '<h2>Set up Google Authenticator</h2><p>Your administrator requires an authenticator app before you can continue.</p><input type="hidden" name="setup_action" value="begin"><button>Start authenticator setup</button>';
+    } else {
+        echo '</form>';
+        bc_totp_setup_widget();
+        echo '<form>';
+    }
     echo '</form><a href="'.($role==='vendor'?'/admin-logout.php':'/logout.php').'">Log out</a></main></html>';exit;
 }
 
