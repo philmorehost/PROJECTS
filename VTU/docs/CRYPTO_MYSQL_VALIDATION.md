@@ -31,14 +31,22 @@ BC_CRYPTO_TEST_EDITION=NON-SAAS php VTU/tests/crypto_mysql_integration.php
 - Missing controls and missing independent accounting approval deny admission.
 - Independent PHP processes attempting the same reservation reference commit only one operation and two entries, with exact decimal balances and one duplicate response.
 - A changed payload cannot reuse an idempotency reference.
+- Competing distinct references cannot overspend the same available balance.
+- A real entry-insert failure rolls back the operation, both balance updates and partial journal writes.
+- All three transaction-owning APIs reject nested transactions (even before a first read), leave caller work uncommitted, and reservations reject autocommit-off connections.
 - A real MySQL trigger rejects an audit insert; the preceding governance document/revision change and audit count roll back.
 - The runner holds an uncommitted platform stop, observes the reservation worker waiting through MySQL lock instrumentation, commits, and verifies that waiting admission rejects the committed stop without journal writes.
 - Exact release remains available during stop; a second release fails and the held bucket is untouched.
 - A waiting stale editor rejects a newer committed revision rather than overwriting it.
 - Available/reserved totals are restored exactly and rejected operations leave no partial entries.
+- Real integrity queries reject the intentionally unjournaled synthetic opening balances, report balanced/scope-consistent reservation entries, and never claim provider reserves are verified.
 
 Lock waits are observed, not inferred from elapsed sleeps. Polling and server lock-wait timeouts are bounded, and the CI job has an outer timeout. Failure is nonzero and blocks a successful check.
 
 ## Remaining release gates
 
 A passing disposable test is not a deployment approval. It does not prove application/browser authorization flows, real staging schema compatibility, migration backups/restore, restricted DB grants, MariaDB support, production load behavior, custody/account attribution, provider reserves or live Bybit execution. The synthetic opening balances deliberately cannot satisfy a real external reconciliation. Test provider submission-time stops, beneficiary workflows, deposit confirmation processing and operational incident response separately before live activation.
+
+## Transaction portability correction
+
+Real MySQL execution exposed that `@@session.in_transaction` is a MariaDB-specific variable. Both editions now share a crypto transaction preflight: check autocommit, then issue next-transaction `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`. MySQL rejects that statement during an active transaction without committing it. A missing privilege, unsupported server or query error fails closed. This is deliberately not `SET SESSION TRANSACTION`, which would not provide the same nested-transaction guard. No application database migration is needed for this code correction.

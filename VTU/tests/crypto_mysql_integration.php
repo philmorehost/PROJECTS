@@ -140,6 +140,9 @@ try {
     check_db(count(array_filter($results,fn($r)=>isset($r['result'])))===1 && count(array_filter($results,fn($r)=>($r['error']??'')==='crypto_insufficient_balance'))===1,'competing distinct references cannot overspend');
     check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='40000000' && scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='reserved'")==='60000000','serialized overspend leaves exact conserved total');
     check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='held'")==='7654321','all failed and concurrent operations preserve held bucket');
+    $integrity=bc_crypto_v2_integrity(7,'testnet');
+    check_db(!$integrity['internal_integrity_ok'] && !$integrity['provider_reserves_verified'] && $integrity['checks']['projection_mismatches']==='2','integrity correctly rejects synthetic unjournaled opening balances');
+    foreach(['unbalanced_operations','scale_mismatches','scope_mismatches','release_mismatches'] as $key)check_db($integrity['checks'][$key]==='0','real integrity query '.$key);
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
 } finally {
     $connection_server->rollback();
