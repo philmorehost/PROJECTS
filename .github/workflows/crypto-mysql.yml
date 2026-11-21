@@ -8,6 +8,7 @@ on:
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
+      - 'VTU/tests/crypto_custody*.php'
       - '.github/workflows/crypto-mysql.yml'
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
+      - 'VTU/tests/crypto_custody*.php'
       - '.github/workflows/crypto-mysql.yml'
   workflow_dispatch:
 permissions:
@@ -47,6 +49,8 @@ jobs:
           php-version: '8.3'
           extensions: mysqli
           coverage: none
+      - name: Custody registry normalization and dual-control checks
+        run: php VTU/tests/crypto_custody_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections
