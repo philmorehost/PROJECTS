@@ -11,6 +11,31 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
         $_SESSION["bc_admin_transactions_csrf"] = bin2hex(random_bytes(24));
     }
 
+    // Manual reconciliation has the same financial step-up as other admin actions.
+    // Background workers use their own CLI/cron-secret identity, never this UI.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['requery'])) {
+        if (!hash_equals((string)$_SESSION['bc_admin_transactions_csrf'], (string)($_POST['csrf_token'] ?? ''))) {
+            http_response_code(403); exit('Invalid security token.');
+        }
+        $err = function_exists('bc_stepup_admin_verify') ? bc_stepup_admin_verify($get_logged_admin_details, $_POST, 'transaction_requery') : 'Verification unavailable.';
+        if ($err !== '') {
+            $_SESSION['product_purchase_response'] = $err;
+        } else {
+            $ref = mysqli_real_escape_string($connection_server, (string)$_POST['requery']);
+            $vid = (int)$get_logged_admin_details['id'];
+            $q = mysqli_query($connection_server, "SELECT u.* FROM sas_transactions t JOIN sas_users u ON u.vendor_id=t.vendor_id AND u.username=t.username WHERE t.vendor_id='$vid' AND t.reference='$ref' LIMIT 1");
+            $get_logged_user_details = $q ? mysqli_fetch_assoc($q) : null;
+            if ($get_logged_user_details) {
+                $purchase_method = 'WEB';
+                $is_admin_requery = true;
+                include __DIR__ . '/../web/func/requery-transaction.php';
+                $result = json_decode($json_response_encode ?? '{}', true);
+                $_SESSION['product_purchase_response'] = $result['desc'] ?? 'No confirmed provider update.';
+            } else $_SESSION['product_purchase_response'] = 'Transaction not found.';
+        }
+        header('Location: Transactions.php'); exit;
+    }
+
     // Admin-reviewed cancellation for an individual provider transaction. This path deliberately
     // has no age threshold: the admin has opened the transaction details and confirmed the provider
     // failed, so the customer can be refunded without waiting for the automated one-day minimum.
@@ -289,6 +314,17 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "TRANSACTIONS", "crumb" => "Home / Transactions")); ?><!-- End Page Title -->
 
+    <?php if (isset($_GET['review_requery'])): ?>
+    <form method="post" action="Transactions.php" class="card card-body">
+      <h2>Confirm provider reconciliation</h2>
+      <p>This checks the provider and may update the transaction or refund a confirmed cancellation. It does not buy the service again.</p>
+      <input type="hidden" name="requery" value="<?php echo htmlspecialchars((string)$_GET['review_requery'], ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['bc_admin_transactions_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
+      <label>Security PIN <input type="password" name="pin" inputmode="numeric" required autocomplete="off"></label>
+      <label>Authenticator / verification code <input name="otp_code" inputmode="numeric" required autocomplete="one-time-code"></label>
+      <button type="submit" class="btn btn-primary">Verify and requery</button>
+    </form>
+    <?php endif; ?>
     <section class="section dashboard">
       <div class="row">
         <div class="col-12">
@@ -297,23 +333,6 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
                 $page_num = (isset($_GET["page"]) && is_numeric($_GET["page"]) && $_GET["page"] >= 1) ? (int)$_GET["page"] : 1;
                 $limit = 50;
                 $offset = ($page_num - 1) * $limit;
-
-                if(isset($_GET["requery"]) && !empty($_GET["requery"])){
-                    $ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["requery"])));
-                    $select_user_requeried_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='$ref'");
-                    if(mysqli_num_rows($select_user_requeried_transaction_details) == 1){
-                        $get_selected_user_requeried_transaction_details = mysqli_fetch_array($select_user_requeried_transaction_details);
-                        $get_logged_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && username='".$get_selected_user_requeried_transaction_details["username"]."' LIMIT 1");
-                        if(mysqli_num_rows($get_logged_user_query) == 1){
-                            $get_logged_user_details = mysqli_fetch_array($get_logged_user_query);
-                        }
-                        $purchase_method = "web";
-                        $is_admin_requery = true;
-                        include("../web/func/requery-transaction.php");
-                        $json_response_decode = json_decode($json_response_encode,true);
-                        $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-                    }
-                }
 
                 if(isset($_GET["mark_success"]) && !empty($_GET["mark_success"])){
                     $ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["mark_success"])));

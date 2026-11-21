@@ -14,6 +14,11 @@ on:
       - 'VTU/tests/vtu_runtime_test.php'
       - 'VTU/tests/vtu_adapter_contract_test.php'
       - 'VTU/tests/incident_wallet_test.php'
+      - 'VTU/tests/clubkonnect_requery_test.php'
+      - 'VTU/**/func/bc-clubkonnect-status.php'
+      - 'VTU/**/cron/process_requery_queue.php'
+      - 'VTU/**/automated-cron-requery.php'
+      - 'VTU/**/bc-admin/Transactions.php'
       - '.github/workflows/vtu-service-checks.yml'
   pull_request:
     paths:
@@ -28,6 +33,11 @@ on:
       - 'VTU/tests/vtu_runtime_test.php'
       - 'VTU/tests/vtu_adapter_contract_test.php'
       - 'VTU/tests/incident_wallet_test.php'
+      - 'VTU/tests/clubkonnect_requery_test.php'
+      - 'VTU/**/func/bc-clubkonnect-status.php'
+      - 'VTU/**/cron/process_requery_queue.php'
+      - 'VTU/**/automated-cron-requery.php'
+      - 'VTU/**/bc-admin/Transactions.php'
       - '.github/workflows/vtu-service-checks.yml'
 
 permissions:
@@ -56,6 +66,11 @@ jobs:
           for ed in SAAS NON-SAAS; do
             php -l "VTU/DGV7.0-$ed/func/bc-vtu-runtime.php"
             php -l "VTU/DGV7.0-$ed/func/bc-incident-wallet.php"
+            php -l "VTU/DGV7.0-$ed/func/bc-clubkonnect-status.php"
+            php -l "VTU/DGV7.0-$ed/cron/process_requery_queue.php"
+            php -l "VTU/DGV7.0-$ed/automated-cron-requery.php"
+            php -l "VTU/DGV7.0-$ed/bc-admin/Transactions.php"
+            php -l "VTU/DGV7.0-$ed/func/bc-func.php"
             php -l "VTU/DGV7.0-$ed/web/Login.php"
           done
       - name: Exercise routing, bounded transport and wallet safeguards without real requests
@@ -63,3 +78,4 @@ jobs:
           php -n VTU/tests/vtu_runtime_test.php
           php -n VTU/tests/vtu_adapter_contract_test.php
           php -n VTU/tests/incident_wallet_test.php
+          php -n VTU/tests/clubkonnect_requery_test.php

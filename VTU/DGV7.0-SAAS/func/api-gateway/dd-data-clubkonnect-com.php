@@ -5,7 +5,7 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
   $clubkonnect_isp_code = $clubkonnect_isp_codes[$product_name];
 
   if(!empty($quantity)){
-   $clubkonnect_apikey_parts = explode(":", trim($api_detail["api_key"]));
+   $clubkonnect_apikey_parts = explode(":", trim($api_detail["api_key"]), 2);
    $ck_user_id = trim($clubkonnect_apikey_parts[0] ?? '');
    $ck_api_key = trim($clubkonnect_apikey_parts[1] ?? '');
    $request_id = preg_replace('/[^A-Za-z0-9]/', '', $reference);
@@ -33,13 +33,13 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
    } else {
     $curl_json_result = json_decode($curl_result, true);
     if(!is_array($curl_json_result)){ $curl_json_result = array(); }
-    
+
     if (json_last_error() !== JSON_ERROR_NONE) {
         $clean_result = trim($curl_result, "\xEF\xBB\xBF");
         $curl_json_result = json_decode($clean_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }
     }
-    
+
     if (is_array($curl_json_result)) {
         $curl_json_result = array_change_key_case($curl_json_result, CASE_LOWER);
     }
@@ -48,13 +48,13 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
      $sc = $curl_json_result["statuscode"] ?? '';
      $status_text = strtoupper($curl_json_result["status"] ?? '');
 
-     if(in_array($sc, array(200, 201, 299)) || in_array($status_text, ['ORDER_COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'DELIVERED'])){
+     if((string)$sc === "200" && in_array($status_text, ['ORDER_COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'DELIVERED'])){
       $api_response = "successful";
       $api_response_reference = $curl_json_result["orderid"] ?? '';
       $api_response_text = $curl_json_result["status"] ?? 'SUCCESS';
       $api_response_description = "Transaction Successful | ".strtoupper(str_replace(["_","-"]," ",$quantity))." credited to $phone_no";
       $api_response_status = 1;
-     } elseif(in_array($sc, array(100, 300)) || in_array($status_text, ['ORDER_RECEIVED', 'PENDING', 'PROCESSING'])){
+     } elseif(in_array($sc, array(100, 199, 201, 299, 300, 399, 412, 600, 601, 602, 603, 604, 605, 606, 699, 799)) || in_array($status_text, ['ORDER_RECEIVED', 'PENDING', 'PROCESSING'])){
       $api_response = "pending";
       $api_response_reference = $curl_json_result["orderid"] ?? '';
       $api_response_text = $curl_json_result["status"] ?? 'ORDER_RECEIVED';

@@ -38,6 +38,7 @@ function adapter_case($edition,$file,$base,$reply,$expected,$quantity='1gb'){
  return $h;
 }
 foreach(['SAAS','NON-SAAS'] as $edition){
+ foreach([201,299,412,600] as $ckcode)adapter_case($edition,'dd-data-clubkonnect-com.php','clubkonnect.com',['status'=>'ORDER_COMPLETED','statuscode'=>$ckcode,'orderid'=>'fixture-order'],'pending');
  foreach(['airtime-clubkonnect-com.php','dd-data-clubkonnect-com.php'] as $file)adapter_case($edition,$file,' HTTPS://WWW.CLUBKONNECT.COM/ ',['status'=>'ORDER_COMPLETED','statuscode'=>'200','orderid'=>'fixture-order'],'successful');
  foreach(['airtime-vtpass-com.php','dd-data-vtpass-com.php'] as $file)adapter_case($edition,$file,'https://vtpass.com/api/pay',['code'=>'000','requestId'=>'fixture-request','response_description'=>'TRANSACTION SUCCESSFUL'],'successful');
  foreach(['sme-data','cg-data','shared-data'] as $service){

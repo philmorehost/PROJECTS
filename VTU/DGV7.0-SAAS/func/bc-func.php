@@ -1223,7 +1223,7 @@ function adminTransactionActionButton($api_id, $product_id, $transaction_ref, $t
 			$product_transaction_action_button = '<a href="/web/ViewElectric.php?ref=' . $transaction_ref . '" style="text-decoration: underline; color: green;" class="a-cursor">View Receipt</a>';
 
 			if(stripos($transaction_desc, 'PENDING') !== false || stripos($transaction_desc, 'TOKEN:') === false || empty($transaction_desc)) {
-				$product_transaction_action_button .= ' | <a href="/bc-admin/Transactions.php?requery=' . $transaction_ref . '" style="text-decoration: underline; color: blue;" class="a-cursor">Refresh Token</a>';
+				$product_transaction_action_button .= ' | <a href="/bc-admin/Transactions.php?review_requery=' . $transaction_ref . '" style="text-decoration: underline; color: blue;" class="a-cursor">Refresh Token</a>';
 			}
 		}
 
@@ -1239,7 +1239,7 @@ function adminTransactionActionButton($api_id, $product_id, $transaction_ref, $t
 			$product_transaction_action_button = 'Successful';
 		}
 
-		$product_transaction_requery_button = '<a href="/bc-admin/Transactions.php?requery=' . $transaction_ref . '" style="text-decoration: underline; color: red;" class="a-cursor">Requery</a>';
+		$product_transaction_requery_button = '<a href="/bc-admin/Transactions.php?review_requery=' . $transaction_ref . '" style="text-decoration: underline; color: red;" class="a-cursor">Requery</a>';
 
 		$all_product_transaction_actions_button = '-';
 		//Successful
