@@ -1,4 +1,11 @@
 <?php
+    require_once __DIR__ . "/bc-retired-vtu-providers.php";
+    bc_retired_vtu_block_http_route();
+    if (PHP_SAPI !== 'cli' && preg_match('~/(?:tests|scratch)/|/(?:test[^/]*|mtn)\.php$~i', (string)($_SERVER['SCRIPT_NAME'] ?? ''))) {
+        http_response_code(403); exit('Development tools are not web endpoints.');
+    }
+
+
     // ─── JSON purity for API / app clients ───────────────────────────────────────
     // The mobile apps parse every /web/api/* response as JSON. Every other API surface in
     // this codebase already guards against stray output: web/guest-api/guest-bootstrap.php

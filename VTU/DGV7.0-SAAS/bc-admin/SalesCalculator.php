@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-admin-config.php");
 $product_type_array = array("all", "airtime", "sme-data", "cg-data", "dd-data", "datacard", "rechargecard", "electric", "cable", "exam", "bulk-sms");
 ?>

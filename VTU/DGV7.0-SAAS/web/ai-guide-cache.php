@@ -1,10 +1,12 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 /**
  * ai-guide-cache.php — DGV6.90 AI Edition
  * Serves pre-generated AI page guides from DB cache.
  * Falls back to Cloud AI generation only if no cache exists.
  */
-session_start();
+bc_secure_session_start();
 include_once(__DIR__ . "/../func/bc-config.php");
 include_once(__DIR__ . "/../func/bc-ai-engine.php");
 

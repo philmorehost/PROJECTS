@@ -1,8 +1,11 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-admin-config.php");
 include("../func/bc-giftcard-func.php");
 
 $vid = (int)$get_logged_admin_details['id'];
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') bc_validate_csrf(true);
 
 // AJAX: Bulk Install
 if (isset($_POST['action']) && $_POST['action'] == 'bulk_install') {
@@ -38,11 +41,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'bulk_install') {
                 $country = mysqli_real_escape_string($connection_server, $product['country']['isoName'] ?? '');
                 $type = mysqli_real_escape_string($connection_server, $product['denominationType'] ?? 'FIXED');
                 $fixed = mysqli_real_escape_string($connection_server, json_encode($product['fixedRecipientDenominations'] ?? []));
-
-                mysqli_query($connection_server, "INSERT INTO `sas_global_giftcard_products`
-                    (reloadly_product_id, product_name, logo_url, min_value, max_value, fixed_values, denomination_type, currency_code, country_code, category_id, category_name, description, redemption_instructions)
-                    VALUES ('$pid', '$name', '$logo', '$min', '$max', '$fixed', '$type', '$curr', '$country', '$cat_id', '$cat_name', '$desc', '$instr')
-                    ON DUPLICATE KEY UPDATE product_name='$name', logo_url='$logo', min_value='$min', max_value='$max', fixed_values='$fixed', category_id='$cat_id', category_name='$cat_name', description='$desc', redemption_instructions='$instr'");
+                // Vendor input must never mutate the platform catalogue.
 
                 $success_count++;
             } else {
@@ -91,11 +90,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'install') {
             $country = mysqli_real_escape_string($connection_server, $product['country']['isoName'] ?? '');
             $type = mysqli_real_escape_string($connection_server, $product['denominationType'] ?? 'FIXED');
             $fixed = mysqli_real_escape_string($connection_server, json_encode($product['fixedRecipientDenominations'] ?? []));
-
-            mysqli_query($connection_server, "INSERT INTO `sas_global_giftcard_products`
-                (reloadly_product_id, product_name, logo_url, min_value, max_value, fixed_values, denomination_type, currency_code, country_code, category_id, category_name, description, redemption_instructions)
-                VALUES ('$pid', '$name', '$logo', '$min', '$max', '$fixed', '$type', '$curr', '$country', '$cat_id', '$cat_name', '$desc', '$instr')
-                ON DUPLICATE KEY UPDATE product_name='$name', logo_url='$logo', min_value='$min', max_value='$max', fixed_values='$fixed', category_id='$cat_id', category_name='$cat_name', description='$desc', redemption_instructions='$instr'");
+                // Vendor input must never mutate the platform catalogue.
 
             echo json_encode(['status' => 'success']);
         } else {
@@ -106,12 +101,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'install') {
 }
 
 // Search Logic
-$country = $_GET['country'] ?? 'US';
+$country = strtoupper((string)($_GET['country'] ?? 'US'));
+if (!preg_match('/^[A-Z]{2}$/D', $country)) $country = 'US';
 
 // Diagnostic: Check if global library is empty
 $q_global_check = mysqli_query($connection_server, "SELECT id FROM `sas_global_giftcard_products` LIMIT 1");
 $global_is_empty = (mysqli_num_rows($q_global_check) == 0);
-$search = $_GET['search'] ?? '';
+$search = substr((string)($_GET['search'] ?? ''), 0, 150);
 $page = (int)($_GET['page'] ?? 1);
 
 // Get Token
@@ -121,7 +117,7 @@ if($token && $token != "MOCK_TOKEN") {
     $products = fetchReloadlyProducts($token, $country, $page, 50, $search);
 } else {
     // For development/mock, let's use global cache if empty
-    $q_global = mysqli_query($connection_server, "SELECT * FROM `sas_global_giftcard_products` WHERE country_code='$country' AND product_name LIKE '%$search%' LIMIT 50");
+    $q_global = bc_q("SELECT * FROM sas_global_giftcard_products WHERE country_code=? AND product_name LIKE ? LIMIT 50", array($country, '%'.$search.'%'));
     while($r = mysqli_fetch_assoc($q_global)) {
         $products['content'][] = [
             'productId' => $r['reloadly_product_id'],
@@ -260,9 +256,9 @@ bc_adm_head("Gift Card Setup | " . ($get_all_super_admin_site_details["site_titl
                     <?php endif; ?>
                     <div class="card-body p-4">
                         <div class="d-flex align-items-center mb-3">
-                            <img src="../web/func/giftcard-image.php?id=<?php echo $pid; ?>" class="logo-placeholder me-3 rounded" onerror="this.src='<?php echo $p['logoUrls'][0] ?? ''; ?>'">
+                            <img src="../web/func/giftcard-image.php?id=<?php echo $pid; ?>" class="logo-placeholder me-3 rounded" >
                             <div>
-                                <h6 class="fw-bold mb-0"><?php echo $p['productName']; ?></h6>
+                                <h6 class="fw-bold mb-0"><?php echo htmlspecialchars((string)$p['productName'], ENT_QUOTES, 'UTF-8'); ?></h6>
                                 <small class="text-muted"><?php echo $p['recipientCurrencyCode']; ?> <?php echo $p['minRecipientDenomination']; ?> - <?php echo $p['maxRecipientDenomination']; ?></small>
                             </div>
                         </div>
@@ -294,6 +290,7 @@ bc_adm_head("Gift Card Setup | " . ($get_all_super_admin_site_details["site_titl
             this.innerText = 'Installing...';
 
             const fd = new FormData();
+            fd.append('_csrf_token', <?php echo json_encode(bc_generate_csrf_token()); ?>);
             fd.append('action', 'install');
             fd.append('product_data', data);
 
@@ -345,6 +342,7 @@ bc_adm_head("Gift Card Setup | " . ($get_all_super_admin_site_details["site_titl
         });
 
         const fd = new FormData();
+            fd.append('_csrf_token', <?php echo json_encode(bc_generate_csrf_token()); ?>);
         fd.append('action', 'bulk_install');
         fd.append('products_json', JSON.stringify(products));
 

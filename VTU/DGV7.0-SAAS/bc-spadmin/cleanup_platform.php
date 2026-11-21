@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+// The historical utility prunes backups/logs. Never allow browser-triggered execution.
+if (PHP_SAPI !== 'cli') { http_response_code(410); exit('Web execution of the general cleanup utility is retired. Use the dedicated authenticated repair tool.'); }
+
 /**
  * Safe Platform Cleanup & Database Optimizer Utility (SAAS Version)
  * Executable via CLI or Web (requires super admin login).
@@ -13,7 +18,7 @@ if ($is_cli) {
     $execute = in_array('--execute', $argv);
 } else {
     // Web execution session verification (SAAS session is admin_session too)
-    session_start();
+    bc_secure_session_start();
     if (!isset($_SESSION["admin_session"])) {
         http_response_code(403);
         die("<h3>Error 403: Unauthorized Access</h3><p>Only logged-in administrators can execute this utility.</p>");

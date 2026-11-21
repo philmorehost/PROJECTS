@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-config.php");
     // §33: registration disabled in Service Control -> sign-in page.
     if (function_exists('bc_registration_enabled') && !bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))) {

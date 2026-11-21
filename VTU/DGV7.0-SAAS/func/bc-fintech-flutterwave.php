@@ -92,6 +92,7 @@ if (!function_exists('bc_flw_verify_transaction')) {
             'reason'   => 'verified',
             'reference'=> (string)($data['tx_ref'] ?? ''),
             'amount'   => $net,
+            'gross_amount' => $amount,
             'currency' => strtoupper((string)($data['currency'] ?? 'NGN')),
             'status'   => $status,
             'fee'      => $fee,

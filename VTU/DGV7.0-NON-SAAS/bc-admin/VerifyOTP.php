@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
 
     if(!isset($_SESSION["temp_admin_session"]) || !isset($_SESSION["auth_otp_time"])){

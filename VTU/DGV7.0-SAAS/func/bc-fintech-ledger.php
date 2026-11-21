@@ -135,8 +135,19 @@ if (!function_exists('bc_fintech_ledger_post')) {
         $curr_esc  = mysqli_real_escape_string($connection_server, $currency);
         $is_naira  = bc_fintech_ledger_is_naira($currency);
 
-        mysqli_begin_transaction($connection_server);
+        $settlement_key = hash('sha256', json_encode(array($vendor_id,(string)($context['provider'] ?? ''),$direction,$reference)));
+        $payload_hash = hash('sha256', json_encode(array($username,$currency,$direction,$sql_amount)));
+        if (!mysqli_begin_transaction($connection_server)) { $result['reason']='transaction_failed'; return $result; }
         try {
+            $claim = mysqli_query($connection_server, "INSERT INTO sas_provider_settlement_claims(settlement_key,payload_hash) VALUES('$settlement_key','$payload_hash')");
+            if (!$claim) {
+                $old_q = mysqli_query($connection_server, "SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='$settlement_key' LIMIT 1");
+                $old = $old_q ? mysqli_fetch_assoc($old_q) : null;
+                mysqli_rollback($connection_server);
+                if ($old && hash_equals((string)$old['payload_hash'],$payload_hash)) { $result['ok']=true; $result['reason']='already_settled'; }
+                else $result['reason']='settlement_claim_failed';
+                return $result;
+            }
             if ($is_naira) {
                 $lock = mysqli_query($connection_server, "SELECT id, balance, status FROM sas_users
                     WHERE vendor_id='$vendor_id' AND username='$user_esc' LIMIT 1 FOR UPDATE");
@@ -212,7 +223,7 @@ if (!function_exists('bc_fintech_ledger_post')) {
                 if (!$mirror) throw new Exception('history_mirror_failed');
             }
 
-            mysqli_commit($connection_server);
+            if (!mysqli_commit($connection_server)) throw new Exception('commit_failed');
             $result['ok'] = true;
             $result['reason'] = 'ok';
             $result['amount'] = $amount;

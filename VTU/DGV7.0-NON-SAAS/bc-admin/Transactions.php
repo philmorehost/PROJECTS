@@ -1,5 +1,11 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
+if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
+    http_response_code(405); exit('Financial state changes cannot be requested by GET. Use the authenticated reconciliation workflow.');
+}
+
 
     // Handle approve / cancel of pending wallet-funding transactions in sas_transactions
     // and the DGV7.0 manual reversal / restore of successful VTU transactions.

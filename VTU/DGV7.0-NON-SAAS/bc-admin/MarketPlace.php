@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
     
     if(isset($_SESSION["spadmin_vendor_auth"]) && ($_SESSION["spadmin_vendor_auth"] == true)){
@@ -31,9 +33,9 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
         $cat_statement = ($market_cat !== "") ? " && api_type='".mysqli_real_escape_string($connection_server, $market_cat)."'" : "";
         $cat_parameter = ($market_cat !== "") ? "cat=".$market_cat."&&" : "";
 
-        if(isset($_GET["searchq"]) && !empty(trim(strip_tags($_GET["searchq"])))){
-                $search_statement = " && (api_website LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR api_type LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR description LIKE '%".trim(strip_tags($_GET["searchq"]))."%' OR price LIKE '%".trim(strip_tags($_GET["searchq"]))."%')";
-                $search_parameter = "searchq=".trim(strip_tags($_GET["searchq"]))."&&";
+        if(isset($_GET["searchq"]) && !empty(mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"]))))){
+                $search_statement = " && (api_website LIKE '%".mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"])))."%' OR api_type LIKE '%".mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"])))."%' OR description LIKE '%".mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"])))."%' OR price LIKE '%".mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"])))."%')";
+                $search_parameter = "searchq=".mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["searchq"])))."&&";
             }else{
                 $search_statement = "";
                 $search_parameter = "";
@@ -65,7 +67,7 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
                     <div class="col-md-10">
                         <div class="input-group">
                             <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                            <input name="searchq" type="text" value="<?php echo isset($_GET["searchq"]) ? trim(strip_tags($_GET["searchq"])) : ""; ?>" placeholder="Search by Product Name, API Website, Type..." class="form-control border-start-0" />
+                            <input name="searchq" type="text" value="<?php echo htmlspecialchars((string)($_GET["searchq"] ?? ""), ENT_QUOTES, "UTF-8"); ?>" placeholder="Search by Product Name, API Website, Type..." class="form-control border-start-0" />
                         </div>
                     </div>
                     <div class="col-md-2">
@@ -123,6 +125,7 @@ bc_adm_head("API MarketPlace | " . ($get_all_super_admin_site_details["site_titl
             <?php
             if(mysqli_num_rows($get_active_user_details) >= 1){
                 while($user_details = mysqli_fetch_assoc($get_active_user_details)){
+                    if (bc_retired_vtu_provider($user_details['api_website'] ?? '')) continue;
                     $api_website = str_replace(["//www.","/","http:","https:"],"",$user_details["api_website"]);
                     $api_type = strtoupper(str_replace(["_","-"]," ",$user_details["api_type"]));
                     $product_description = strip_tags(checkTextEmpty($user_details["description"]));

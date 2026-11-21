@@ -388,6 +388,7 @@ if (!function_exists('bc_klasha_verify')) {
             'reason'   => 'verified',
             'reference'=> (string)($read('reference') ?? $reference),
             'amount'   => (float)$amount,
+            'gross_amount' => (float)$amount,
             'currency' => strtoupper((string)($read('currency') ?? '')),
             'status'   => $status,
             'fee'      => is_numeric($read('fee')) ? (float)$read('fee') : null,

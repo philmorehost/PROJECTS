@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.19-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-security-2');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -2314,6 +2314,32 @@ if (empty($bc_vendor_settings_schema_ready)) {
     error_log('[DGV-SCHEMA] Unable to create sas_vendor_settings; schema version was not advanced.');
     return;
 }
+
+// Sensitive authentication data must never be retained. Preserve restricted evidence before deployment.
+if (!mysqli_query($connection_server, "UPDATE sas_virtual_cards_v2 SET cvv='' WHERE cvv IS NOT NULL AND cvv<>''")) { error_log('Card security-data scrub failed; review migration before reopening cards.'); return; }
+mysqli_query($connection_server, "UPDATE sas_virtual_cards_v2 SET masked_pan=CONCAT('**** **** **** ',RIGHT(REPLACE(REPLACE(masked_pan,' ',''),'-',''),4)) WHERE masked_pan REGEXP '^[0-9 -]{12,24}$'");
+
+// Only server-created intents are authoritative for incoming payment ownership/currency.
+if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_secure_payment_intents (
+ reference VARCHAR(100) NOT NULL PRIMARY KEY, vendor_id INT UNSIGNED NOT NULL,
+ username VARCHAR(225) NOT NULL, provider VARCHAR(32) NOT NULL,
+ currency VARCHAR(10) NOT NULL, amount DECIMAL(20,2) NOT NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB")) { error_log('Payment intent migration failed; payment settlement will fail closed.'); return; }
+
+if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_provider_settlement_claims (
+ settlement_key CHAR(64) NOT NULL PRIMARY KEY, payload_hash CHAR(64) NOT NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB")) { error_log('Settlement claim migration failed.'); return; }
+
+// Incident hardening: replay claim and wallet receipt share one InnoDB transaction.
+if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_wallet_mutation_events (
+ event_key CHAR(64) NOT NULL PRIMARY KEY, payload_hash CHAR(64) NOT NULL,
+ vendor_id INT UNSIGNED NOT NULL, actor VARCHAR(240) NOT NULL,
+ direction VARCHAR(6) NOT NULL, reference VARCHAR(225) NOT NULL,
+ amount DECIMAL(30,8) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ INDEX wallet_event_lookup(vendor_id,reference)
+) ENGINE=InnoDB")) { error_log('Wallet security migration failed; wallet writes will fail closed.'); return; }
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
 // Deliberately DELETE + INSERT rather than an upsert: not every variant of sas_super_admin_options has

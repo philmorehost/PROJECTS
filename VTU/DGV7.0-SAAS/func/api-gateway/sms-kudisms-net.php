@@ -25,8 +25,8 @@
    curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
  curl_setopt($curl_request, CURLOPT_TIMEOUT, 30);
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
-   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, false);
-   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, false);
+   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
+   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
    $curl_result = curl_exec($curl_request);
    $curl_json_result = json_decode($curl_result, true);
    if(!is_array($curl_json_result)){ $curl_json_result = array(); }

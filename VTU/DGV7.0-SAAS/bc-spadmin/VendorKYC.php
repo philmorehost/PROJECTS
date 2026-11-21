@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
 include_once(__DIR__ . "/../func/bc-plate-admin.php"); // §42: bc_adm_head/sidebar/topbar/foot live here - this page used them without ever loading the plate (fatal on open)
 
@@ -62,7 +64,7 @@ if (isset($_POST['vendor_kyc_decision'])) {
         if ($decision === 'approve') {
             $step_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $factor, 'totp_code' => $factor];
         } else {
-            $step_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+            $step_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         }
         $step_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $step_input, 'vendor_kyc_decision')

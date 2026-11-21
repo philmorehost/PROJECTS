@@ -2,11 +2,28 @@ package com.jikabiz.app.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 class PreferenceManager(context: Context) {
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE)
+    // Fail closed on Keystore failures: never fall back to plaintext credential storage.
+    private val prefs: SharedPreferences = run {
+        val masterKey = MasterKey.Builder(context.applicationContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+        val encrypted = EncryptedSharedPreferences.create(
+            context.applicationContext, Constants.PREF_NAME + "_secure_v1", masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+        val legacy = context.getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE)
+        if (legacy.all.isNotEmpty()) {
+            // Discard legacy login credentials and force reauthentication after the upgrade.
+            // Non-sensitive UI state can be rebuilt from the authenticated profile.
+            check(legacy.edit().clear().commit()) { "Could not remove legacy credentials" }
+        }
+        encrypted
+    }
 
     fun saveString(key: String, value: String) = prefs.edit().putString(key, value).apply()
     fun getString(key: String, default: String = "") = prefs.getString(key, default) ?: default

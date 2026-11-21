@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     // Use basic configs
     include("../func/bc-connect.php");
 	include("../func/bc-tables.php");

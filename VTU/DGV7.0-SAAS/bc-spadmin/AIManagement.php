@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
 include_once("../func/bc-ai-engine.php");
 
@@ -35,7 +37,7 @@ if (isset($_POST["test-connection"])) {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     
     if (in_array($provider, ['deepseek', 'groq'])) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $ai->getApiKey()]);

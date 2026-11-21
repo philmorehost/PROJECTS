@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
 
     if(isset($_GET["action"]) && isset($_GET["product_id"]) && isset($_GET["val_1"]) && isset($_GET["api_id"])){

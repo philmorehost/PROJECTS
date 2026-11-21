@@ -1,4 +1,11 @@
 <?php
+    require_once __DIR__ . "/bc-retired-vtu-providers.php";
+    bc_retired_vtu_block_http_route();
+    if (PHP_SAPI !== 'cli' && preg_match('~/(?:tests|scratch)/|/(?:test[^/]*|mtn)\.php$~i', (string)($_SERVER['SCRIPT_NAME'] ?? ''))) {
+        http_response_code(403); exit('Development tools are not web endpoints.');
+    }
+
+
     // ─── PHP 8.1+ Compatibility Fix ──────────────────────────────────────────────
     // PHP 8.1+ enables STRICT exception mode for MySQLi by default.
     // DGV6.90 legacy code expects mysqli_query to return false on failure instead of crashing.

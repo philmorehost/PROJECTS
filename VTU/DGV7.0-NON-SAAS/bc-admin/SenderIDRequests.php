@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
     
     // ── Admin Edit Sender ID ──────────────────────────────────────────────────
@@ -56,8 +58,8 @@
                                 curl_setopt($pms_ch, CURLOPT_POSTFIELDS, $pms_post);
                                 curl_setopt($pms_ch, CURLOPT_RETURNTRANSFER, true);
                                 curl_setopt($pms_ch, CURLOPT_TIMEOUT, 15);
-                                curl_setopt($pms_ch, CURLOPT_SSL_VERIFYHOST, false);
-                                curl_setopt($pms_ch, CURLOPT_SSL_VERIFYPEER, false);
+                                curl_setopt($pms_ch, CURLOPT_SSL_VERIFYHOST, 2);
+                                curl_setopt($pms_ch, CURLOPT_SSL_VERIFYPEER, true);
                                 curl_setopt($pms_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
                                 curl_exec($pms_ch);
                                 curl_close($pms_ch);
@@ -82,8 +84,8 @@
                                 curl_setopt($kudi_ch, CURLOPT_POSTFIELDS, $kudi_post_data);
                                 curl_setopt($kudi_ch, CURLOPT_RETURNTRANSFER, true);
                                 curl_setopt($kudi_ch, CURLOPT_TIMEOUT, 15);
-                                curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYHOST, false);
-                                curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYPEER, false);
+                                curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYHOST, 2);
+                                curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYPEER, true);
                                 curl_setopt($kudi_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
                                 curl_exec($kudi_ch);
                                 curl_close($kudi_ch);

@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+ bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 include_once("../../func/bc-crypto-func.php");

@@ -7,8 +7,8 @@ if (in_array($epp, array_keys($web_electric_size_array))) {
  curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
  curl_setopt($curl_request, CURLOPT_TIMEOUT, 30);
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
- curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, false);
- curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, false);
+ curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
+ curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
  $curl_http_headers = array(
   "Content-Type: application/json",
  );

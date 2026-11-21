@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 /**
  * DGV7 phase 2 — support chat JSON endpoint.
  *
@@ -8,7 +10,7 @@
  * POST only. Actions: open | send | poll | escalate | close.
  */
 
-session_start();
+bc_secure_session_start();
 include_once("../func/bc-config.php");
 require_once(__DIR__ . '/../func/bc-support-chat.php');
 

@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
 
     // Demo-mode blocked feature notice
@@ -31,7 +33,7 @@
             'domain' => $license_domain
         ]));
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -835,7 +837,7 @@ if(isset($_POST["update-global-withdrawal-settings"])){
             'domain' => $license_domain
         ]));
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
@@ -1563,6 +1565,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                 </div>
                                 <p class="small text-muted mb-4">Safely optimize SAAS database tables, clean update staging files, delete redundant log files, and remove old zip backups.</p>
 
+                                <a href="RetiredProviderRepair.php" class="btn btn-outline-danger btn-sm">Retired Provider Database Repair</a>
                                 <a href="cleanup_platform.php" target="_blank" class="btn btn-outline-danger btn-sm rounded-pill fw-bold px-4 py-2">
                                     <i class="bi bi-trash-fill me-1"></i> Launch Platform Cleanup Utility
                                 </a>

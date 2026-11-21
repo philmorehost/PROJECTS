@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // ajax_backup.php
-session_start();
+bc_secure_session_start();
 if (!isset($_SESSION["admin_session"])) {
     http_response_code(403);
     die(json_encode(['status' => 'error', 'message' => 'Unauthorized Access']));

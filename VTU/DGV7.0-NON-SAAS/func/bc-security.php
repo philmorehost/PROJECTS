@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/bc-secure-session.php';
+
 /**
  * bc-security.php — DGV6.90 AI Edition
  * Centralized Security Utilities
@@ -27,7 +29,7 @@ define('BC_SECURITY_LOADED', true);
  * Rotates every 2 hours for long-lived sessions.
  */
 function bc_generate_csrf_token(): string {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) bc_secure_session_start();
 
     $now = time();
     $rotate_interval = 7200; // 2 hours
@@ -184,7 +186,7 @@ function bc_sanitize_like(string $input): string {
  * This replaces the legacy cookie comparison vulnerability.
  */
 function bc_set_security_answer_session(string $answer): void {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) bc_secure_session_start();
     $_SESSION['_security_answer_hash'] = password_hash(strtolower(trim($answer)), PASSWORD_DEFAULT);
 }
 
@@ -192,7 +194,7 @@ function bc_set_security_answer_session(string $answer): void {
  * Verify the submitted security answer against the session hash.
  */
 function bc_verify_security_answer(string $submitted_answer): bool {
-    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (session_status() === PHP_SESSION_NONE) bc_secure_session_start();
     $hash = $_SESSION['_security_answer_hash'] ?? '';
     if (empty($hash)) return false;
     return password_verify(strtolower(trim($submitted_answer)), $hash);

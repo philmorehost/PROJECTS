@@ -118,3 +118,5 @@ try {
 }
 php.flush();
 process.stdout.write(out);
+// PHP-wasm can report a fatal via output rather than a rejected run promise.
+if (/Fatal error:|Parse error:|\[uncaught\]|^FAIL(?:\s|:)/m.test(out)) process.exitCode = 1;

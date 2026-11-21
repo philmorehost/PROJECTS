@@ -33,6 +33,13 @@ Options -Indexes
 # ─── URL-level guards (all valid in .htaccess context) ────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # Incident hardening: development tools must not execute in the public webroot.
+    RewriteRule ^(?:tests|scratch)(?:/|$) - [F,NC,L]
+    RewriteRule ^(?:test[^/]*|mtn)\.php$ - [G,NC,L]
+
+    # Retired integrations: deny stale files left by additive/FTP deployments.
+    RewriteRule ^(?:webhook|func/api-gateway(?:/requery)?)/[^/]*(?:legitdataway|bilalsadasub)[^/]*\.php$ - [G,NC,L]
+    RewriteRule ^api\.php$ - [G,NC,L]
 
     # Version-control metadata and hidden IDE folders.
     RewriteRule (?:^|/)\.(?:git|svn|hg|bzr)(?:/|$) - [F,NC,L]

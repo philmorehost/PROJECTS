@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     
     $get_host_name = array_filter(explode(":",trim($_SERVER["HTTP_HOST"])));

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/func/bc-secure-session.php';
+
 /**
  * Plisio webhook — RETIRED (DGV7).
  *
@@ -19,7 +21,7 @@ function logPlisio($msg) {
     file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $msg . "\n", FILE_APPEND);
 }
 
-session_start();
+bc_secure_session_start();
 include_once(__DIR__."/func/bc-connect.php");
 include_once(__DIR__."/func/bc-crypto-func.php");
 

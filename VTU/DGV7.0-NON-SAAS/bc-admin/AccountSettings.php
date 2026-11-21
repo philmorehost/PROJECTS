@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include ("../func/bc-admin-config.php");
 include_once(__DIR__ . "/../func/bc-integrity.php");
 
@@ -2206,6 +2208,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
 
                             <div class="mb-1">
                                 <label class="form-label small fw-bold text-muted text-uppercase d-block">System Tools & Maintenance</label>
+                                <a href="RetiredProviderRepair.php" class="btn btn-outline-danger btn-sm">Retired Provider Database Repair</a>
                                 <a href="cleanup_platform.php" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-4 py-2 mt-1">
                                     <i class="bi bi-trash-fill me-1"></i> Launch Platform Cleanup Utility
                                 </a>

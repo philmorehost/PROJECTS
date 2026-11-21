@@ -1,5 +1,11 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
+if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
+    http_response_code(405); exit('Financial state changes cannot be requested by GET. Use the authenticated reconciliation workflow.');
+}
+
 
     if (empty($_SESSION["bc_admin_transactions_csrf"])) {
         $_SESSION["bc_admin_transactions_csrf"] = bin2hex(random_bytes(24));
@@ -323,7 +329,7 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
                         $charge = chargeOtherUser($t_username, "debit", $tx_row["product_unique_id"], "Charge", $reference_2, "", $tx_row["amount"], $amount_to_charge, "Charge for manually marked successful Ref:<i>'$ref'</i>", $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1");
                         
                         if ($charge === "success") {
-                            mysqli_query($connection_server, "UPDATE sas_transactions SET status='1', description='Transaction Successful' WHERE reference='$ref'");
+                            mysqli_query($connection_server, "UPDATE sas_transactions SET status='1', description='Transaction Successful' WHERE vendor_id='".(int)$get_logged_admin_details['id']."' AND reference='$ref'");
                             $_SESSION["product_purchase_response"] = "Transaction marked as successful and user wallet debited ₦" . number_format($amount_to_charge, 2);
                         } else {
                             $_SESSION["product_purchase_response"] = "Failed to debit user wallet. Transaction status not changed.";

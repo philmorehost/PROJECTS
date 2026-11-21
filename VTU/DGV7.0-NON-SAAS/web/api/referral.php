@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+
 /** Authenticated referral growth and locked/unlocked coin rewards. */
-session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 

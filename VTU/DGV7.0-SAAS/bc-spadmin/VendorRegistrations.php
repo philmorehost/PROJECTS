@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     include_once("../func/whmp-func.php");
 
@@ -21,7 +23,7 @@
         $sec33_action = (string)$_POST['vr_action'];
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         if ($sec33_action === 'decline') {
-            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         } else {
             $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
         }

@@ -280,7 +280,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'check_activation') {
     ]));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -451,14 +451,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'install') {
     // ── Step 5: Seed all API providers into sas_apis for vendor_id=1 ──────────
     $api_seeds = [
         'airtime'      => ['vtpass.com','clubkonnect.com','husmodataapi.com','kvdata.net','mobileone.ng','paygold.ng','smartrecharge.ng','smartrechargeapi.com'],
-        'sme-data'     => ['vtpass.com','clubkonnect.com','abumpay.com','benzoni.ng','bilalsadasub.com','datastationapi.com','gladtidingsapihub.com','grecians.ng','hdkdata.com','husmodataapi.com','kvdata.net','legitdataway.com','mobileone.ng','rpidatang.com','smartrecharge.ng','smartrechargeapi.com'],
-        'cg-data'      => ['vtpass.com','clubkonnect.com','abumpay.com','benzoni.ng','bilalsadasub.com','datastationapi.com','gladtidingsapihub.com','grecians.ng','hdkdata.com','husmodataapi.com','kvdata.net','legitdataway.com','mobileone.ng','rpidatang.com','smartrecharge.ng','smartrechargeapi.com'],
+        'sme-data'     => ['vtpass.com','clubkonnect.com','abumpay.com','benzoni.ng','datastationapi.com','gladtidingsapihub.com','grecians.ng','hdkdata.com','husmodataapi.com','kvdata.net','mobileone.ng','rpidatang.com','smartrecharge.ng','smartrechargeapi.com'],
+        'cg-data'      => ['vtpass.com','clubkonnect.com','abumpay.com','benzoni.ng','datastationapi.com','gladtidingsapihub.com','grecians.ng','hdkdata.com','husmodataapi.com','kvdata.net','mobileone.ng','rpidatang.com','smartrecharge.ng','smartrechargeapi.com'],
         'dd-data'      => ['benzoni.ng','clubkonnect.com','grecians.ng','mobileone.ng','smartrecharge.ng','smartrechargeapi.com','vtpass.com'],
         'shared-data'  => ['datastationapi.com','gladtidingsapihub.com','hdkdata.com','husmodataapi.com','kvdata.net'],
         'cable'        => ['vtpass.com','clubkonnect.com','mobileone.ng','smartrecharge.ng','smartrechargeapi.com'],
         'electric'     => ['vtpass.com','clubkonnect.com','smartrecharge.ng','smartrechargeapi.com'],
         'exam'         => ['clubkonnect.com','abumpay.com','naijaresultpins.com'],
-        'rechargecard' => ['alrahuzdata.com','bilalsadasub.com','clubkonnect.com','legitdataway.com'],
+        'rechargecard' => ['alrahuzdata.com','clubkonnect.com'],
         'betting'      => ['clubkonnect.com'],
         'sms'          => ['app.philmoresms.com','kudisms.net','termii.com'],
     ];

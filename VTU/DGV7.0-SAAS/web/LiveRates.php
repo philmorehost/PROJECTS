@@ -1,5 +1,7 @@
 <?php
-session_start(); require __DIR__.'/../func/bc-config.php'; require_once __DIR__.'/../func/bc-mobile-fx.php';
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start(); require __DIR__.'/../func/bc-config.php'; require_once __DIR__.'/../func/bc-mobile-fx.php';
 $quote=null;$notice='';$from='USD';$to='NGN';$amount='1';
 if($_SERVER['REQUEST_METHOD']==='POST') {
     bc_validate_csrf();$from=(string)($_POST['from']??'');$to=(string)($_POST['to']??'');$amount=(string)($_POST['amount']??'');

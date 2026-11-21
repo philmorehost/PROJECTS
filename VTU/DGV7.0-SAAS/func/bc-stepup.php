@@ -337,9 +337,9 @@ if (!function_exists('bc_stepup_actor_second_factor')) {
                 if (function_exists('bc_log_security_event')) bc_log_security_event('STEPUP_TOTP_FAILED', $context, $identity, 'Wrong authenticator code');
                 return 'The authenticator code is incorrect or has already been used.';
             }
-            if ($connection_server instanceof mysqli) {
-                bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=?", array((int)$step, $actor_id));
-            }
+            if (!($connection_server instanceof mysqli) || !in_array($table, array('sas_users','sas_vendors','sas_super_admin'), true)) return 'Verification is unavailable.';
+            $saved = bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=? AND (totp_last_step IS NULL OR totp_last_step < ?)", array((int)$step, $actor_id, (int)$step));
+            if ($saved !== true || mysqli_affected_rows($connection_server) !== 1) return 'The authenticator code has already been used.';
             return '';
         }
 
@@ -395,9 +395,7 @@ if (!function_exists('bc_stepup_user_verify')) {
         if (!$pin_ok) {
             return 'Invalid Transaction PIN';
         }
-        if (!empty($input['pin_check_only'])) {
-            return '';
-        }
+        // Request fields can never select a weaker authentication policy.
         return bc_stepup_actor_second_factor('sas_users', $user_row, (string)$user_row['username'], $input, $context);
     }
 }
@@ -434,9 +432,7 @@ if (!function_exists('bc_stepup_admin_verify')) {
             if (function_exists('bc_log_security_event')) bc_log_security_event('ADMIN_PIN_FAILED', $context, $identity, 'Wrong PIN');
             return 'Invalid Security PIN';
         }
-        if (!empty($input['pin_check_only'])) {
-            return '';
-        }
+        // Request fields can never select a weaker authentication policy.
         return bc_stepup_actor_second_factor('sas_vendors', $vendor_row, $identity, $input, $context);
     }
 }
@@ -473,9 +469,7 @@ if (!function_exists('bc_stepup_spadmin_verify')) {
             if (function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_PIN_FAILED', $context, $identity, 'Wrong PIN');
             return 'Invalid Security PIN';
         }
-        if (!empty($input['pin_check_only'])) {
-            return '';
-        }
+        // Request fields can never select a weaker authentication policy.
         return bc_stepup_actor_second_factor('sas_super_admin', $spadmin_row, $identity, $input, $context);
     }
 }

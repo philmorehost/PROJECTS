@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // One-use POST handoff. API credentials never appear in browser history or URLs.
-session_start();
+bc_secure_session_start();
 header('Cache-Control: no-store');
 header('Referrer-Policy: no-referrer');
 require_once __DIR__.'/../func/bc-connect.php';

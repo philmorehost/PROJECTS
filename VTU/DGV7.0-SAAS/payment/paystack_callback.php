@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();
 include("../func/bc-connect.php");
 
 $reference = isset($_GET['reference']) ? $_GET['reference'] : '';

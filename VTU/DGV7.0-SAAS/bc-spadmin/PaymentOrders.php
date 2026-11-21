@@ -1,5 +1,10 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
+        http_response_code(503); exit('Legacy approval changes are paused pending atomic reconciliation. No credit or refund was posted.');
+    }
     
     // §30: approving a vendor payment order credits the vendor's wallet — it
     // now takes POST + CSRF + the super-admin step-up (PIN + authenticator/

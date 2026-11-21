@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     
     // §33/§9+§10: vendor account actions (activate / suspend / delete) and
@@ -22,7 +24,7 @@
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         $sec33_status = (string)($_POST['account-status'] ?? '');
         if ($sec33_mode === 'status' && $sec33_status === '2') {
-            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         } else {
             $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
         }

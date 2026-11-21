@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-config.php");
 
 // ── Trivial / banned one-liner messages ────────────────────────────────────
@@ -58,8 +60,8 @@ function auto_submit_sender_id_to_api($connection_server, $vendor_id, $s_id, $s_
             curl_setopt($pms_ch, CURLOPT_POSTFIELDS, $pms_post);
             curl_setopt($pms_ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($pms_ch, CURLOPT_TIMEOUT, 15);
-            curl_setopt($pms_ch, CURLOPT_SSL_VERIFYHOST, false);
-            curl_setopt($pms_ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($pms_ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($pms_ch, CURLOPT_SSL_VERIFYPEER, true);
             curl_setopt($pms_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
             $response = curl_exec($pms_ch);
             $err = curl_error($pms_ch);
@@ -89,8 +91,8 @@ function auto_submit_sender_id_to_api($connection_server, $vendor_id, $s_id, $s_
             curl_setopt($kudi_ch, CURLOPT_POSTFIELDS, $kudi_post);
             curl_setopt($kudi_ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($kudi_ch, CURLOPT_TIMEOUT, 15);
-            curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYHOST, false);
-            curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($kudi_ch, CURLOPT_SSL_VERIFYPEER, true);
             curl_setopt($kudi_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
             $response = curl_exec($kudi_ch);
             $err = curl_error($kudi_ch);

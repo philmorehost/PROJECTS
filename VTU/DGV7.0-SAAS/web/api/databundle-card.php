@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-Requested-With, X-App-Source");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
@@ -79,7 +81,7 @@ $description = "API Purchase of $quantity ".ucwords($service_type)." Bundle Card
 // The function chargeUser in func/bc-func.php uses $_SESSION["user_session"].
 // We should temporarily set it if needed or refactor chargeUser.
 // For now, let's try setting the session key.
-session_start();
+bc_secure_session_start();
 $_SESSION["user_session"] = $user['username'];
 
 $debit = chargeUser("debit", $batch_reference, ucwords($service_type)." Bundle Card", $reference, "", $total_price, $total_price, $description, "API", $select_vendor_table['website_url'], 1);

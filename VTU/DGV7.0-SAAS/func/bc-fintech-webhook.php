@@ -243,37 +243,8 @@ if (!function_exists('bc_fintech_webhook_resolve_user')) {
      * Returns the username, or null.
      */
     function bc_fintech_webhook_resolve_user($vendor_id, $reference, $account = null) {
-        global $connection_server;
-        $vendor_id = (int)$vendor_id;
-        $reference = trim((string)$reference);
-        if ($vendor_id <= 0 || $reference === '' || !($connection_server instanceof mysqli)) return null;
-
-        $ref_esc = mysqli_real_escape_string($connection_server, $reference);
-        $q = mysqli_query($connection_server, "SELECT username FROM sas_user_payment_checkouts
-            WHERE vendor_id='$vendor_id' AND reference='$ref_esc' LIMIT 1");
-        if ($q && mysqli_num_rows($q) === 1) {
-            $row = mysqli_fetch_assoc($q);
-            if (!empty($row['username'])) return (string)$row['username'];
-        }
-
-        // Fallback only: the checkout row is missing (expired, cleaned, or a provider that
-        // does not echo our reference). The provider's own account field must name the
-        // customer, and the transaction has already been verified with the provider, but
-        // this path is weaker than the checkout row, so it is logged for audit.
-        $account = trim((string)$account);
-        if ($account !== '') {
-            $acc_esc = mysqli_real_escape_string($connection_server, $account);
-            $q = mysqli_query($connection_server, "SELECT username FROM sas_users
-                WHERE vendor_id='$vendor_id' AND (username='$acc_esc' OR email='$acc_esc') LIMIT 1");
-            if ($q && mysqli_num_rows($q) === 1) {
-                $row = mysqli_fetch_assoc($q);
-                if (!empty($row['username'])) {
-                    error_log("[DGV-FINTECH] webhook credited by account fallback (no checkout row): vendor=$vendor_id account=$account username=" . $row['username']);
-                    return (string)$row['username'];
-                }
-            }
-        }
-        return null;
+        $row = bc_q_row("SELECT username FROM sas_secure_payment_intents WHERE vendor_id=? AND reference=? LIMIT 1", array((int)$vendor_id,(string)$reference));
+        return $row && !empty($row['username']) ? (string)$row['username'] : null;
     }
 }
 
@@ -374,7 +345,16 @@ if (!function_exists('bc_fintech_webhook_handle')) {
             return bc_fintech_webhook_result($provider, $event_id, false, 200, 'no_currency', 'No currency.');
         }
 
-        // 6) Which wallet? The checkout row decides, never the callback.
+        // Bind the authenticated provider result to a server-created immutable intent.
+        $intent = bc_q_row("SELECT username,provider,currency,amount FROM sas_secure_payment_intents WHERE vendor_id=? AND reference=? LIMIT 1", array((int)$vendor_id,$verified_ref));
+        $gross = $verified['gross_amount'] ?? null;
+        if (!$intent || !hash_equals((string)$intent['provider'],(string)$provider)
+            || !hash_equals((string)$intent['currency'],$currency) || !is_numeric($gross)
+            || !is_finite((float)$gross) || number_format((float)$gross,2,'.','') !== number_format((float)$intent['amount'],2,'.','')) {
+            bc_fintech_webhook_release($provider, $event_id);
+            return bc_fintech_webhook_result($provider,$event_id,false,503,'payment_intent_mismatch','Payment needs manual reconciliation. Do not pay again.');
+        }
+        // 6) Which wallet? Only the protected intent decides, never callback account fields.
         $username = bc_fintech_webhook_resolve_user($vendor_id, $verified_ref, $extracted['account']);
         if ($username === null) {
             bc_fintech_webhook_log($provider, $event_id, 'not credited: unknown reference', ['reference' => $verified_ref]);
@@ -397,6 +377,7 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         }
 
         bc_fintech_webhook_complete($provider, $event_id);
+        if (($post['reason'] ?? '') === 'already_settled') return bc_fintech_webhook_result($provider,$event_id,true,200,'already_processed','Payment already settled.');
         // Receipt notification. The ledger is deliberately presentation-free, so the
         // customer/vendor emails that chargeUser() used to send are re-attached here.
         bc_fintech_webhook_notify(
