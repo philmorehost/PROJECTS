@@ -16,6 +16,15 @@ class AppNetworkService {
 
     var mobileOrigin: String { baseURL }
 
+    private func inspectRequiredSetup(_ data: Data) -> Bool {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let code = json["code"] as? String,
+              ["AUTHENTICATOR_SETUP_REQUIRED", "PASSWORD_CHANGE_REQUIRED"].contains(code) else { return false }
+        DispatchQueue.main.async { RequiredSetupState.shared.activate() }
+        return true
+    }
+
+
     var apiKey: String? {
         get {
             UserDefaults.standard.removeObject(forKey: "user_api_key")
@@ -90,6 +99,10 @@ class AppNetworkService {
                 return
             }
 
+            if self.inspectRequiredSetup(data) {
+                DispatchQueue.main.async { completion(.failure(NSError(domain: "RequiredSecuritySetup", code: 403, userInfo: [NSLocalizedDescriptionKey: "Complete required security setup on the website, then sign in again."]))) }
+                return
+            }
             do {
                 let decoded = try JSONDecoder().decode(T.self, from: data)
                 DispatchQueue.main.async { completion(.success(decoded)) }
@@ -130,6 +143,10 @@ class AppNetworkService {
                 return
             }
 
+            if self.inspectRequiredSetup(data) {
+                DispatchQueue.main.async { completion(.failure(NSError(domain: "RequiredSecuritySetup", code: 403, userInfo: [NSLocalizedDescriptionKey: "Complete required security setup on the website, then sign in again."]))) }
+                return
+            }
             do {
                 let decoded = try JSONDecoder().decode(T.self, from: data)
                 DispatchQueue.main.async { completion(.success(decoded)) }
@@ -182,6 +199,10 @@ class AppNetworkService {
                 }
                 return
             }
+            if self.inspectRequiredSetup(data) {
+                DispatchQueue.main.async { completion(.failure(NSError(domain: "RequiredSecuritySetup", code: 403, userInfo: [NSLocalizedDescriptionKey: "Complete required security setup on the website, then sign in again."]))) }
+                return
+            }
             DispatchQueue.main.async { completion(.success(object)) }
         }.resume()
     }
@@ -191,6 +212,48 @@ struct APIResponse: Codable {
     let status: String
     let message: String?
     let desc: String?
+}
+
+import SwiftUI
+import UIKit
+
+// MARK: Required security setup (server-enforced; no credentials in browser URLs)
+@MainActor
+final class RequiredSetupState: ObservableObject {
+    static let shared = RequiredSetupState()
+    private var key: String { "required-setup:" + AppNetworkService.shared.mobileOrigin }
+    @Published var blocked = false
+    private init() { blocked = UserDefaults.standard.bool(forKey: key) }
+    func activate() {
+        UserDefaults.standard.set(true, forKey: key)
+        AppNetworkService.shared.apiKey = nil
+        blocked = true
+    }
+    func retry() { UserDefaults.standard.removeObject(forKey: key); blocked = false }
+    var setupURL: URL? { URL(string: "web/SecuritySetup.php", relativeTo: URL(string: AppNetworkService.shared.mobileOrigin))?.absoluteURL }
+}
+
+struct RequiredSetupView: View {
+    let retry: () -> Void
+    @ObservedObject private var theme = BrandTheme.shared
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Required security setup").font(.title).bold()
+            Text("Sign in to your website and complete the required password change or Google Authenticator setup. Then return here and sign in again. App actions remain locked until the server confirms completion.")
+            if let url = RequiredSetupState.shared.setupURL { Link("Open secure website", destination: url) }
+            Button("Return to sign in", action: retry)
+        }.padding(28).foregroundStyle(theme.onSurface).frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.background).tint(theme.ink)
+    }
+}
+
+struct BrandedStartupView: View {
+    @ObservedObject private var theme = BrandTheme.shared
+    var body: some View {
+        VStack(spacing: 20) {
+            Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Welcome").font(.largeTitle).bold()
+            ProgressView().tint(theme.onPrimary)
+        }.foregroundStyle(theme.onPrimary).frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.primary.ignoresSafeArea())
+    }
 }
 
 // MARK: - Tenant branding (public configuration, never account credentials)

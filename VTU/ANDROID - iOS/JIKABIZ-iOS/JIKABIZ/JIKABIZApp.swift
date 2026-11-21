@@ -3,6 +3,9 @@ import SwiftUI
 @main
 @MainActor
 struct JIKABIZApp: App {
+    @StateObject private var requiredSetup = RequiredSetupState.shared
+    @State private var checkingSession = true
+    @State private var validatingSession = false
     @StateObject private var brandTheme = BrandTheme.shared
     @Environment(\.scenePhase) private var themeScenePhase
     @State private var isLoggedIn = AppNetworkService.shared.apiKey != nil
@@ -14,7 +17,14 @@ struct JIKABIZApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-            if !isLoggedIn {
+            if requiredSetup.blocked {
+                RequiredSetupView(retry: {
+                    isLoggedIn = false
+                    requiredSetup.retry()
+                })
+            } else if checkingSession {
+                BrandedStartupView()
+            } else if !isLoggedIn {
                 LoginView(onLoginSuccess: {
                     pinSet = AppNetworkService.shared.pinSet
                     isLoggedIn = true
@@ -36,15 +46,29 @@ struct JIKABIZApp: App {
             }
             }
             .tint(brandTheme.ink)
-            .task { await brandTheme.refresh() }
+            .task {
+                validateSession()
+                await brandTheme.refresh()
+            }
             .onChange(of: themeScenePhase) { phase in
-                if phase == .active { Task { await brandTheme.refresh() } }
+                if phase == .active { validateSession(); Task { await brandTheme.refresh() } }
             }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
                 if themeScenePhase == .active { Task { await brandTheme.refresh() } }
             }
         }
     }
+    private func validateSession() {
+        guard !validatingSession else { return }
+        guard AppNetworkService.shared.apiKey != nil else { checkingSession = false; return }
+        checkingSession = true
+        validatingSession = true
+        AppNetworkService.shared.requestObject("profile.php", params: [:]) { _ in
+            checkingSession = false
+            validatingSession = false
+        }
+    }
+
 }
 
 class SessionManager: ObservableObject {

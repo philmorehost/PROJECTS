@@ -87,7 +87,7 @@ object RetrofitClient {
                     }
                 }
 
-                chain.proceed(builder.build())
+                chain.proceed(builder.build()).also { com.datagifting.app.util.RequiredSetup.inspect(it) }
             }
             .addInterceptor(logging)
             .build()
