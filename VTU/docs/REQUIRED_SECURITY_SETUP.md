@@ -26,7 +26,7 @@ No network calls, background scans, bulk account updates, per-page schema change
 
 ## Validation
 
-- `node VTU/tests/harness/run-test.mjs tests/enrollment_policy_test.php`: 120 policy, hierarchy, route allowlist, replay, enrolment-state and edition-parity checks.
+- `node VTU/tests/harness/run-test.mjs tests/enrollment_policy_test.php`: 122 policy, hierarchy, route allowlist, replay, enrolment-state and edition-parity checks.
 - `node VTU/tests/harness/run-test.mjs tests/enrollment_password_test.php`: 60 checks with actual password helpers (legacy MD5 and modern hashes, unchanged/wrong/mismatched/weak passwords, failed and concurrent writes).
 - `node VTU/tests/harness/enrollment-api.test.mjs`: both real PHP API guard fixtures emit clean JSON and exit before simulated side effects.
 - Existing regressions: security33 86, user-action gate 162, TOTP claims 26, fintech gate 1077 checks pass.

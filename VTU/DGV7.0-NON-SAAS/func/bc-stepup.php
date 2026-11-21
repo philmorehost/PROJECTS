@@ -719,7 +719,7 @@ if (!function_exists('bc_totp_begin_enrolment')) {
         $secret = bc_totp_generate_secret();
         if (!in_array($table, ['sas_users','sas_vendors','sas_super_admin'], true)) return '';
         $claimed = null;
-        $ok = bc_q("UPDATE `$table` SET totp_secret=?, two_factor_type='pending' WHERE id=? AND (two_factor_type IS NULL OR two_factor_type <> 'totp')",
+        $ok = bc_q("UPDATE `$table` SET totp_secret=?, two_factor_type='pending' WHERE id=? AND (two_factor_type IS NULL OR two_factor_type <> 'totp' OR totp_secret IS NULL OR totp_secret='')",
             array(bc_stepup_seal_secret($secret), (int)$actor_id), $claimed);
         return $ok === true && $claimed === 1 ? $secret : '';
     }

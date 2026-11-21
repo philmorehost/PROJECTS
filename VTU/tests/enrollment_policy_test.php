@@ -23,7 +23,7 @@ function bc_q($sql,$params=[],&$affected=null){
     global $writes,$steps;$writes++;
     if (strpos($sql,"SET totp_secret=?")!==false) {
         [$secret,$id]=$params;$row=$GLOBALS['enrol'][$id]??[];
-        $affected=($row['two_factor_type']??'none')!=='totp'?1:0;
+        $affected=(($row['two_factor_type']??'none')!=='totp' || empty($row['totp_secret']))?1:0;
         if($affected)$GLOBALS['enrol'][$id]=['id'=>$id,'two_factor_type'=>'pending','totp_secret'=>$secret];
         return true;
     }
@@ -102,4 +102,7 @@ foreach(['sas_users','sas_vendors','sas_super_admin'] as $index=>$table){
     enrollment_check(!bc_totp_confirm_enrolment($table,$pending,bc_totp_code($secret,time())),'stale confirm cannot activate twice');
     enrollment_check(bc_totp_begin_enrolment($table,$id)==='','enrolled secret cannot be overwritten by begin action');
 }
+enrollment_check(bc_enrollment_reason(['id'=>9,'vendor_id'=>7,'two_factor_type'=>'totp','totp_secret'=>''],'user')==='AUTHENTICATOR_SETUP_REQUIRED','empty active secret does not bypass mandate');
+$GLOBALS['enrol'][200]=['id'=>200,'two_factor_type'=>'totp','totp_secret'=>''];
+enrollment_check(bc_totp_begin_enrolment('sas_users',200)!=='','invalid empty-secret state can recover through mandatory setup');
 echo "$n enrollment policy checks passed\n";
