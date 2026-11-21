@@ -76,9 +76,10 @@ try {
     foreach($ddl as $sql) bc_q($sql); // Additive installer is repeatable, not a schema repair tool.
     check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===8,'seven production tables plus fixture are InnoDB; second install succeeds');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_asset_policies')===0,'migration creates no enabled policies');
-    reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_emergency_stop');
+    reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_catalogue_stale');
     $network=['asset_network'=>'USDT:TRX','platform_enabled'=>false,'provider_deposit_available'=>true,'provider_withdraw_available'=>true,'confirmations'=>'20','withdrawal_confirmations'=>'40'];
     bc_crypto_gov_store_snapshot(7,['provider'=>'bybit','environment'=>'testnet','security'=>['read_only'=>true,'ip_binding_verified'=>true],'networks'=>[$network]]);
+    reject_db(fn()=>bc_crypto_v2_reservation($scope,'controls-missing-001','1'),'crypto_emergency_stop');
     $input=['mode'=>'approve','scale'=>'6','minimum'=>'0.000001','maximum'=>'100','fee_bps'=>'100','confirmations'=>'40','cooldown_seconds'=>'86400','valid_seconds'=>'3600'];
     foreach([[$platform,0],[$vendor,7]] as [$actor,$scopeId]) {
         bc_crypto_gov_save($actor,$scopeId,'testnet','USDT:TRX',0,$input,7);
