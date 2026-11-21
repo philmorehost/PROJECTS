@@ -42,7 +42,7 @@ Different actor IDs are enforced; actual independence of humans, administrator a
 
 ## Migration, validation and next gate
 
-The explicit `crypto-v2-manage.php schema` preview/approved installer now includes sixteen additive production tables. There is no new DDL on request/intake. Separate migration/backup review and deployment authorization are required; neither was performed by the agent. Missing or incompatible schema fails closed.
+The explicit `crypto-v2-manage.php schema` preview/approved installer now includes nineteen additive production tables. There is no new DDL on request/intake. Separate migration/backup review and deployment authorization are required; neither was performed by the agent. Missing or incompatible schema fails closed.
 
 Tests cover encryption/AAD/tamper/key rotation, source/edition boundaries, mocked management CSRF/session/fresh-actor/rate/step-up gates, and disposable MySQL immutable evidence, access receipts, actor/revision/expiry scope, transactional view/store audit failure and outer-transaction refusal. Mocked authorization tests do not constitute device/session penetration testing. Native OpenSSL/MySQL CI must pass before merge. No live provider account was inspected and no real evidence/key was used.
 

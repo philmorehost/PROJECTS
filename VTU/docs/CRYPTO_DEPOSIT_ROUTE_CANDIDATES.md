@@ -30,7 +30,7 @@ No provider-issued ownership/allocation proof or approved legal custody model is
 
 ## Atomicity and explicit migration
 
-Two additive InnoDB tables (`sas_crypto_v2_route_candidates`, `sas_crypto_v2_route_candidate_audit`) are added to the explicit CLI schema preview/approved installer, bringing the production schema to sixteen tables. No DDL is performed on requests or intake. No production schema migration/deployment was performed.
+Two additive InnoDB tables (`sas_crypto_v2_route_candidates`, `sas_crypto_v2_route_candidate_audit`) are added to the explicit CLI schema preview/approved installer, bringing that milestone to sixteen tables; the later polling-stream schema brings the current installer to nineteen (see `CRYPTO_POLL_STREAMS.md`). No DDL is performed on requests or intake. No production schema migration/deployment was performed.
 
 Custody, candidate and safety rows are locked in the owner transaction. New candidate + encrypted manifest + stored-evidence audit + candidate audit commit together. Audit failure rolls everything back. Review/revocation changes and revisioned audit commit atomically. Nested/autocommit-off callers and missing/non-InnoDB supporting tables fail closed. Independent concurrent proposals serialize at the custody lock and global unique tuple; stale edits are refused. Evidence view is a separately audited operation as before.
 
