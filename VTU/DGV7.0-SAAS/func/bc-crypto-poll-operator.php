@@ -3,15 +3,16 @@
 require_once __DIR__.'/bc-crypto-poll.php';
 require_once __DIR__.'/bc-crypto-poll-retry.php';
 function bc_crypto_poll_claim($authority,$id,$revision,$enforce_retry=false) {
-    global $connection_server;$actor=bc_crypto_custody_actor($authority);bc_crypto_poll_begin();
+    global $connection_server;$actor=bc_crypto_poll_execution_actor($authority);bc_crypto_poll_begin();
     try {
-        $row=bc_crypto_poll_locked($id,$revision);$doc=bc_crypto_poll_open($row);
+        $row=bc_crypto_poll_locked($id,$revision);bc_crypto_poll_worker_fence($authority,$row,'claim');$doc=bc_crypto_poll_open($row);
         if ($row['state']!=='ready'||(int)$row['valid_until_epoch']<=time())throw new RuntimeException('crypto_poll_not_ready');
         bc_crypto_poll_guard($row,$doc);
         $lease=bc_q_row('SELECT * FROM sas_crypto_v2_poll_leases WHERE stream_id=? FOR UPDATE',[$id]);
         if ($lease&&(int)$lease['expires_at_epoch']>time())throw new RuntimeException('crypto_poll_lease_busy');
-        if ($enforce_retry)bc_crypto_poll_retry_check($id,time());
+        if ($enforce_retry||$authority instanceof BcCryptoPollWorkerAuthority)bc_crypto_poll_retry_check($id,time());
         $token=bin2hex(random_bytes(32));$hash=hash('sha256',$token);$until=time()+60;
+        if($authority instanceof BcCryptoPollWorkerAuthority)$authority->bindLease($row,$token);
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_poll_leases(stream_id,token_hash,revision,actor_id,expires_at_epoch) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE token_hash=VALUES(token_hash),revision=VALUES(revision),actor_id=VALUES(actor_id),expires_at_epoch=VALUES(expires_at_epoch)',[$id,$hash,$revision,$actor,$until]);
         bc_crypto_custody_must("INSERT INTO sas_crypto_v2_poll_lease_events(stream_id,revision,actor_id,action,token_hash,occurred_at_epoch) VALUES(?,?,?,'claimed',?,?)",[$id,$revision,$actor,$hash,time()]);
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');
@@ -19,7 +20,7 @@ function bc_crypto_poll_claim($authority,$id,$revision,$enforce_retry=false) {
     }catch(Throwable $e){mysqli_rollback($connection_server);throw $e;}
 }
 function bc_crypto_poll_release_failed($authority,$id,$revision,$token) {
-    global $connection_server;$actor=bc_crypto_custody_actor($authority);bc_crypto_poll_begin();
+    global $connection_server;$actor=bc_crypto_poll_execution_actor($authority);bc_crypto_poll_begin();
     try {
         // Serializes with stop/progress/reclaims. The original stream revision may already have changed.
         bc_q_row('SELECT stream_id FROM sas_crypto_v2_poll_streams WHERE stream_id=? FOR UPDATE',[bc_crypto_poll_id($id)]);
