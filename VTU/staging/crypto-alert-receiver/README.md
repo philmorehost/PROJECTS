@@ -1,6 +1,6 @@
 # Staging alert-receiver reference and failure drills
 
-This directory is **not a deployed service or production HTTP endpoint**. It contains a standalone receiver verifier/durable inbox and a disabled-by-default CLI stdin adapter. It does not load application configuration, hold provider credentials, acknowledge operator alerts or perform financial actions. The production installer remains at **29 tables**; the two `staging_alert_*` tables belong in a separate disposable/staging receiver database, not the application database. CI uses them only inside its disposable database after production-schema assertions.
+This directory is **not a deployed service or production HTTP endpoint**. It contains a standalone receiver verifier/durable inbox, a disabled-by-default CLI stdin adapter, and a later disabled-by-default HTTPS adapter source package. See **CPANEL_INSTALL.md** for the separate public/private file layout, private configuration and deployment gates. Nothing is installed or listening merely because these files were merged. It does not load application configuration, hold provider credentials, acknowledge operator alerts or perform financial actions. The production installer remains at **29 tables**; the two `staging_alert_*` tables belong in a separate disposable/staging receiver database, not the application database. CI uses them only inside its disposable database after production-schema assertions.
 
 ## Receiver contract
 

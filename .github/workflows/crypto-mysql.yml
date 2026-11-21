@@ -101,6 +101,9 @@ jobs:
           php VTU/tests/crypto_poll_worker_test.php
           php VTU/tests/crypto_poll_delivery_test.php
           php VTU/tests/crypto_poll_receiver_test.php
+          php VTU/tests/crypto_poll_receiver_http_test.php
+          php -l VTU/staging/crypto-alert-receiver/http-entry.php
+          php -l VTU/staging/crypto-alert-receiver/public/index.php
           php -n -d extension=tokenizer VTU/tests/crypto_poll_delivery_transport_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php

@@ -26,3 +26,10 @@ $j['delivery_id']=bin2hex(random_bytes(16));$p3=receiver_drill_packet(['id'=>$j[
 check_db((int)scalar_db('SELECT COUNT(*) FROM staging_alert_acceptance_events')===3,'exactly one acceptance event per unique valid delivery');
 $connection_server->begin_transaction();reject_db(fn()=>receiver_drill_accept($p3),'receiver_transaction_unavailable');$connection_server->rollback();
 check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===$opsBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposits')===$depBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes')===$routesBefore,'staging receiver drills leave financial objects unchanged');
+
+// Exercise the actual adapter policy/read/DB/receipt pipeline without a listener.
+$packet=receiver_drill_packet(['id'=>$p3['id'],'payload'=>$p3['body']],$key);$dbCalls=0;
+$httpHeaders=['Content-Type'=>'application/json','Content-Length'=>(string)strlen($packet['body']),'X-Crypto-Timestamp'=>$packet['timestamp'],'X-Crypto-Signature'=>$packet['signature'],'Idempotency-Key'=>$packet['id']];
+$receipt=bc_alert_http_accept(['HTTPS'=>'on','REQUEST_METHOD'=>'POST','HTTP_HOST'=>'staging.example.com','REQUEST_URI'=>'/alert'],$httpHeaders,['enabled'=>true,'hostname'=>'staging.example.com','key'=>$key],fn($limit)=>$packet['body'],function()use(&$dbCalls,$connection_server){$dbCalls++;return $connection_server;},time());
+check_db($dbCalls===1&&bc_crypto_poll_delivery_receipt($receipt,$packet['id'],$packet['body'],$key),'HTTP adapter accepts authenticated exact bytes and emits sender-verifiable durable receipt');
+check_db((int)scalar_db('SELECT COUNT(*) FROM staging_alert_acceptance_events')===3,'HTTP retry does not duplicate durable acceptance');
