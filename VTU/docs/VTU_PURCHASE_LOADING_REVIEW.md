@@ -33,7 +33,7 @@ Most handlers built adapter filenames directly from admin-entered API base URLs.
 
 For the **Localhost/website API** profile, use the upstream website's real HTTPS domain (and installation prefix if any), not the literal machine name `localhost` or `127.0.0.1`. It is an authenticated supplier API integration, not permission to bypass upstream PIN/API approval, tenant policy, balance or license gates. TLS validation is never disabled.
 
-A bounded `X-BC-VTU-Hop` header is forwarded by website API adapters. Updated service endpoints reject malformed or excessive hops before session/DB work, limiting cycles in reseller routing. The header grants no authentication or free-fulfillment privilege. It is a safety bound, not a substitute for checking that each vendor route ultimately terminates at an actual supplier. Older upstream installations/proxies that do not preserve this header need independent loop/worker-pool review.
+A bounded `X-BC-VTU-Hop` header is forwarded by website API adapters. SMS inline headers and exam endpoint construction are included, and SMS logging helpers are safe to include repeatedly in bulk requests. Updated service endpoints reject malformed or excessive hops before session/DB work, limiting cycles in reseller routing. The header grants no authentication or free-fulfillment privilege. It is a safety bound, not a substitute for checking that each vendor route ultimately terminates at an actual supplier. Older upstream installations/proxies that do not preserve this header need independent loop/worker-pool review.
 
 HDK's static plan mappings still require checking against the actual purchased plan catalogue. Different editions have pre-existing different mappings; this fix does not invent or silently replace plan IDs. Unsupported plans must be configured/mapped after supplier verification, not forced through as success.
 
@@ -65,8 +65,8 @@ The async Google identity script remains optional for the Google sign-in button 
 
 ## Validation
 
-- 428 no-network runtime/routing/loading checks, covering every shipped gateway call site, base URLs, TLS/timeouts, single submission, loop-header behavior and login dependencies.
-- 130 no-network adapter contracts using the real ClubKonnect and VTPass airtime/direct-data adapters, HDK SME/corporate/shared-data adapters and website-API airtime/data adapters in both editions. Synthetic success and timeout/pending responses only; **not supplier certification**.
+- 532 no-network runtime/routing/loading checks, covering every shipped gateway call site, base URLs, TLS/timeouts, single submission, loop-header behavior and login dependencies.
+- 214 no-network adapter contracts using the real ClubKonnect and VTPass airtime/direct-data adapters, HDK SME/corporate/shared-data adapters and all website-API purchase service families (airtime, data, cable, electricity, exam, betting, SMS and recharge/data cards) in both editions. Synthetic success and timeout/pending responses only; **not supplier certification**.
 - 30 wallet storage-double checks plus real MySQL wallet tests in both edition jobs.
 - Shared service-handler WEB/APP/API/AI PIN, suspension and balance-gate tests.
 - Gateway verdict/refund safety, login OTP/bootstrap, crypto and existing security/performance regression suites.

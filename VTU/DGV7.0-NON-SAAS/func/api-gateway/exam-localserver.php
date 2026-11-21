@@ -18,7 +18,7 @@ if (in_array($product_name, array_keys($exam_service_provider_alter_code))) {
 		// api_base_url is admin-typed and may already carry a scheme; strip it so we never build
 		// "https://https://..." and fail DNS.
 		$exam_local_host = rtrim(preg_replace('#^https?://#i', '', strtolower(trim($api_detail["api_base_url"]))), "/");
-		$curl_url = "https://" . $exam_local_host . "/web/api/exam.php";
+		$curl_url = bc_vtu_local_url($api_detail["api_base_url"], "exam");
 		$curl_request = curl_init($curl_url);
 		curl_setopt($curl_request, CURLOPT_POST, true);
 		curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);

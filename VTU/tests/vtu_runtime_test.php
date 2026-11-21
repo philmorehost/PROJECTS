@@ -31,7 +31,7 @@ foreach(['SAAS','NON-SAAS'] as $ed){
  $root=dirname(__DIR__).'/DGV7.0-'.$ed;
  rt_check(file_get_contents($root.'/func/bc-vtu-runtime.php')===file_get_contents(dirname(__DIR__).'/DGV7.0-SAAS/func/bc-vtu-runtime.php'),'runtime edition parity');
  $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/func/api-gateway'));
- foreach($it as $file){if($file->getExtension()!=='php')continue;$s=file_get_contents($file->getPathname());rt_check(!preg_match('/(?<![a-zA-Z_])curl_exec\(/',$s),'every supplier/website API transport uses bounded shared runtime');}
+ foreach($it as $file){if($file->getExtension()!=='php')continue;$s=file_get_contents($file->getPathname());rt_check(!preg_match('/(?<![a-zA-Z_])curl_exec\(/',$s),'every supplier/website API transport uses bounded shared runtime');if(substr($file->getFilename(),-strlen('-localserver.php'))==='-localserver.php' && strpos($s,'bc_vtu_curl_exec')!==false){rt_check(strpos($s,'bc_vtu_local_url(')!==false,'every website API adapter normalizes endpoint URLs');rt_check(strpos($s,'bc_vtu_forward_hop()')!==false,'every website API adapter propagates loop bounds');}}
  $login=file_get_contents($root.'/web/Login.php');
  rt_check(strpos($login,'code.jquery.com')===false && strpos($login,'cdn.jsdelivr.net')===false,'login has no parser-blocking third-party JS');
  rt_check(strpos($login,"document.addEventListener('DOMContentLoaded', function ()")!==false && strpos($login,"typeof Swal === 'undefined'")!==false,'login alert waits for deferred script and has a no-library fallback');

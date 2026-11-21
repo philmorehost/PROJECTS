@@ -3,6 +3,7 @@ require_once __DIR__ . '/../bc-vtu-runtime.php';
 // ─── Logging Helper ──────────────────────────────────────────────────────────
 // Writes a timestamped entry to logs/sms-localserver-YYYY-MM-DD.log
 // Log is protected by the existing logs/.htaccess (deny from all).
+if (!function_exists('sms_ls_log')) {
 function sms_ls_log($msg, $data = null) {
     $log_dir  = $_SERVER['DOCUMENT_ROOT'] . '/logs';
     $log_file = $log_dir . '/sms-localserver-' . date('Y-m-d') . '.log';
@@ -11,6 +12,7 @@ function sms_ls_log($msg, $data = null) {
         $line .= ' | ' . (is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
     @file_put_contents($log_file, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
 }
 
 // ─── Gateway Logic ───────────────────────────────────────────────────────────
@@ -40,7 +42,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
         curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($curl_request, CURLOPT_HTTPHEADER, array("Content-Type: application/json"));
+        curl_setopt($curl_request, CURLOPT_HTTPHEADER, array("Content-Type: application/json", "X-BC-VTU-Hop: ".bc_vtu_forward_hop()));
 
         $curl_postfields_data = "";
 
