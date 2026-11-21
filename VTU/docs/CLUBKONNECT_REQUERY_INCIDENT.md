@@ -23,3 +23,26 @@ Provider references consulted:
 - https://www.clubkonnect.com/APIParaGetDataBundleV1
 - https://www.clubkonnect.com/APIParaGetDisputeResolutionV1
 The latter explicitly documents 201 as network-unresponsive, 299 as unspecified error, and 521 as ambiguous already-completed/cancelled/refunded; no automated cancel API was added.
+
+## Automated-launch follow-up
+Manual authenticated reconciliation has been confirmed working by the operator, and the direct-data purchase issue is resolved. The earlier `Forbidden`/CGI header remains a scheduling/runtime symptom, not evidence of a provider failure. This repository cannot inspect or change the production crontab.
+
+Both editions now ship `cron/run_requery_queue.sh`. It selects a verified CLI PHP 8.2+ executable with mysqli/curl, rejects CGI output, establishes the install working directory, creates the log directory before redirecting output, and propagates worker exit codes. It requires no user PIN/TOTP, no HTTP URL and no cron secret. The existing worker still owns overlap locking, tenant scope and financial safeguards; HTTP access is NOT made anonymous. Setup screens now publish this launcher instead of bare PHP or an unauthenticated URL.
+
+For the reported install, after separately authorized rollout, first run in Terminal:
+
+```sh
+/bin/sh /home/v8data/public_html/cron/run_requery_queue.sh --check
+```
+
+`"ready":true` verifies only CLI extensions and log write access. It explicitly does not connect to the database or query providers. If PHP cannot be located, pin a trusted absolute binary using `BC_REQUERY_PHP=/absolute/path/to/php` before the command. Do not use php-cgi.
+
+Replace the old requery cron entry (do not add a duplicate). Set minute/hour/day/month/weekday to `*`, with command:
+
+```sh
+/bin/sh /home/v8data/public_html/cron/run_requery_queue.sh
+```
+
+For a raw crontab entry, prefix the command with `* * * * *`. No extra `>>` redirection is necessary; the launcher writes `logs/requery_queue.log`. Keep cron failure-email enabled so runtime selection or directory failures are visible before logging can begin. Confirm fresh `run_started`, `vendor_queue_loaded`, `provider_reply`, `transaction_processed` and `run_completed` records in `logs/requery_queue_report.log`. Pending outcomes can be legitimate and must not be force-completed/refunded. A successful `--check` is not proof the hosting scheduler runs, the database is reachable, or the provider returns final status.
+
+Validation: six offline shell-launcher contracts cover CGI refusal, explicit path validation, paths with spaces, log redirection, bad arguments and nonzero worker exit propagation. Native CI also exercises each real worker's `--check` without application config/DB/provider calls. Production unattended operation still requires the above operator verification; no deployment or schedule installation is claimed.
