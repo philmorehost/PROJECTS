@@ -92,6 +92,7 @@ jobs:
         run: |
           php VTU/tests/crypto_routes_test.php
           php VTU/tests/crypto_poll_test.php
+          php VTU/tests/crypto_poll_operator_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections

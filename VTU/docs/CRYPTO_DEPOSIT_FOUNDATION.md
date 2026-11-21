@@ -12,7 +12,7 @@ There is no HTTP endpoint, webhook receiver, address allocator, poller, route-ap
 
 ## Additive schema and migration
 
-`crypto-v2-manage.php schema` now previews **nineteen** additive production tables: four accounting, three governance, three deposit-observation, two custody-registry, two protected-evidence and two route-candidate and three polling-stream tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
+`crypto-v2-manage.php schema` now previews **twenty-one** additive production tables: four accounting, three governance, three deposit-observation, two custody-registry, two protected-evidence and two route-candidate and three polling-stream and two polling-lease tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
 
 - `sas_crypto_v2_deposit_routes`: exclusive environment/custody-account/asset-network/routing-hash attribution. Disabled and expired by default. Stores user/vendor, scale, evidence digest and explicit approval expiry. No route provisioning function is supplied in this stage.
 - `sas_crypto_v2_deposits`: immutable original vendor, asset, units/scale and economic fingerprint; bound original route/customer where approved; latest confirmation high-water mark, state/reason, revision and observation fingerprint.

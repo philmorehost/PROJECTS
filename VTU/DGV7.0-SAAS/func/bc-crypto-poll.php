@@ -15,7 +15,7 @@ function bc_crypto_poll_config($vendor,$env) {
 }
 function bc_crypto_poll_engines() {
     bc_crypto_custody_evidence_engines();
-    foreach(['sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
+    foreach(['sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
         $r=bc_q_row('SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$table]);
         if (!$r||strtoupper($r['engine']??'')!=='INNODB') throw new RuntimeException('crypto_poll_transactional_schema_required');
     }
@@ -110,10 +110,10 @@ function bc_crypto_poll_locked($id,$revision) {
     return $row;
 }
 /** Audited internal cursor read, never a human evidence-view/review receipt. */
-function bc_crypto_poll_prepare($authority,$id,$revision) {
+function bc_crypto_poll_prepare($authority,$id,$revision,$lease_token=null) {
     global $connection_server;$actor=bc_crypto_custody_actor($authority);bc_crypto_poll_begin();
     try {
-        $row=bc_crypto_poll_locked($id,$revision);$doc=bc_crypto_poll_open($row);
+        $row=bc_crypto_poll_locked($id,$revision);bc_crypto_poll_lease_check($row,$lease_token,$actor);$doc=bc_crypto_poll_open($row);
         if ($row['state']!=='ready'||(int)$row['valid_until_epoch']<=time())throw new RuntimeException('crypto_poll_not_ready');
         bc_crypto_poll_guard($row,$doc);bc_crypto_poll_event($id,$revision,$actor,'read_requested');
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');
@@ -121,10 +121,10 @@ function bc_crypto_poll_prepare($authority,$id,$revision) {
     } catch(Throwable $e){mysqli_rollback($connection_server);throw $e;}
 }
 /** INTERNAL reader result only. Atomic evidence + seen identities + cursor + audit; no imports. */
-function bc_crypto_poll_commit($authority,$id,$revision,$evidence) {
+function bc_crypto_poll_commit($authority,$id,$revision,$evidence,$lease_token=null) {
     global $connection_server;$actor=bc_crypto_custody_actor($authority);bc_crypto_poll_begin();
     try {
-        $row=bc_crypto_poll_locked($id,$revision);$doc=bc_crypto_poll_open($row);bc_crypto_poll_guard($row,$doc);
+        $row=bc_crypto_poll_locked($id,$revision);bc_crypto_poll_lease_check($row,$lease_token,$actor);$doc=bc_crypto_poll_open($row);bc_crypto_poll_guard($row,$doc);
         $next=bc_crypto_poll_next($doc,$row,$evidence,time());
         foreach($evidence['page']['records'] as $r) {
             $record_hash=hash('sha256',$r['provider_record_key']);
@@ -139,9 +139,30 @@ function bc_crypto_poll_commit($authority,$id,$revision,$evidence) {
         $state=bc_crypto_custody_evidence_seal($row['custody_account'],$row['environment'],bc_crypto_gov_json($next['document']));
         bc_crypto_custody_must('UPDATE sas_crypto_v2_poll_streams SET sealed_state=?,state_hash=?,state=?,page_count=page_count+1,revision=revision+1 WHERE stream_id=?',[$state['sealed'],$state['hash'],$next['state'],$id]);
         bc_crypto_poll_event($id,$revision+1,$actor,'page_committed',$sealed['hash']);
+        if ($lease_token!==null) bc_crypto_poll_lease_finish($id,$revision,$actor,$lease_token,'released');
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');
         return ['stream_id'=>$id,'revision'=>$revision+1,'state'=>$next['state'],'evidence_hash'=>$sealed['hash'],'import_enabled'=>false,'settlement_enabled'=>false,'history_complete'=>false];
     } catch(Throwable $e){mysqli_rollback($connection_server);throw $e;}
+}
+/** Existing lease row permanently opts the stream into token-fenced prepare/commit. */
+function bc_crypto_poll_lease_valid($lease,$revision,$actor,$token,$now) {
+    return is_array($lease)&&is_string($token)&&preg_match('/^[a-f0-9]{64}$/D',$token)
+        &&(int)$lease['revision']===$revision&&(int)$lease['actor_id']===$actor
+        &&(int)$lease['expires_at_epoch']>$now&&hash_equals($lease['token_hash'],hash('sha256',$token));
+}
+function bc_crypto_poll_lease_check($row,$token,$actor) {
+    $lease=bc_q_row('SELECT * FROM sas_crypto_v2_poll_leases WHERE stream_id=? FOR UPDATE',[$row['stream_id']]);
+    if (!$lease&&$token===null) return; // Internal, not-yet-enrolled foundation streams only.
+    if (!bc_crypto_poll_lease_valid($lease,(int)$row['revision'],$actor,$token,time())) throw new RuntimeException('crypto_poll_lease_invalid');
+}
+/** Owner transaction required. Release audit failure rolls back checkpoint progress too. */
+function bc_crypto_poll_lease_finish($id,$revision,$actor,$token,$action) {
+    $lease=bc_q_row('SELECT * FROM sas_crypto_v2_poll_leases WHERE stream_id=? FOR UPDATE',[$id]);
+    if (!$lease||!is_string($token)||!hash_equals($lease['token_hash'],hash('sha256',$token))||(int)$lease['revision']!==$revision||(int)$lease['actor_id']!==$actor) throw new RuntimeException('crypto_poll_lease_invalid');
+    if ($action==='released'&&(int)$lease['expires_at_epoch']<=time())throw new RuntimeException('crypto_poll_lease_invalid');
+    if (!in_array($action,['released','failed'],true))throw new RuntimeException('crypto_poll_lease_invalid');
+    bc_crypto_custody_must('UPDATE sas_crypto_v2_poll_leases SET expires_at_epoch=0 WHERE stream_id=?',[$id]);
+    bc_crypto_custody_must('INSERT INTO sas_crypto_v2_poll_lease_events(stream_id,revision,actor_id,action,token_hash,occurred_at_epoch) VALUES(?,?,?,?,?,?)',[$id,$revision,$actor,$action,$lease['token_hash'],time()]);
 }
 function bc_crypto_poll_stop($authority,$id,$revision) {
     global $connection_server;$actor=bc_crypto_custody_actor($authority);bc_crypto_poll_begin();
@@ -153,9 +174,9 @@ function bc_crypto_poll_stop($authority,$id,$revision) {
         return ['stream_id'=>$id,'revision'=>$revision+1,'state'=>'stopped','import_enabled'=>false];
     } catch(Throwable $e){mysqli_rollback($connection_server);throw $e;}
 }
-/** No entry point calls this yet. Future caller must authenticate/step-up or use isolated worker authority. */
-function bc_crypto_poll_fetch($authority,$id,$revision) {
-    $p=bc_crypto_poll_prepare($authority,$id,$revision);$q=$p['query'];
+/** Authenticated operator wrapper supplies the lease. Legacy internal calls cannot bypass an enrolled lease. */
+function bc_crypto_poll_fetch($authority,$id,$revision,$lease_token=null) {
+    $p=bc_crypto_poll_prepare($authority,$id,$revision,$lease_token);$q=$p['query'];
     $e=bc_crypto_bybit_read_deposit_page($p['vendor_id'],$p['environment'],$p['custody_account'],$q['coin'],$q['startTime'],$q['endTime'],$p['cursor']);
-    return bc_crypto_poll_commit($authority,$id,$revision,$e);
+    return bc_crypto_poll_commit($authority,$id,$revision,$e,$lease_token);
 }
