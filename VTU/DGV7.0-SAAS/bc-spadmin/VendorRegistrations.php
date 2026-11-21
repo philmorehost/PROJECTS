@@ -102,9 +102,24 @@
                     $access_hash = bin2hex(random_bytes(32));
 
                     $insert_sql = "INSERT INTO sas_vendors (email, access_hash, password, firstname, lastname, phone_number, website_url, home_address, balance, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, apk_ordered, ios_ordered, playstore_ordered, sms_bridge_ordered, selected_addons)
-                                   VALUES ('$email', '$access_hash', '$password', '$firstname', '$lastname', '$phone_number', '$website_url', '$home_address', '0.00', '1', '$min_with', '$max_with', '$payout_limit', '$app_base_url', '$apk_ordered', '$ios_ordered', '$playstore_ordered', '$sms_bridge_ordered', '$selected_addons')";
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '0.00', '1', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $insert_stmt = mysqli_prepare($connection_server, $insert_sql);
+                    if (!$insert_stmt) {
+                        error_log("[VendorReg] Could not prepare vendor insert: " . mysqli_error($connection_server));
+                        $_SESSION["page_alert"] = "An error occurred. Please try again.";
+                        header("Location: VendorRegistrations.php");
+                        exit;
+                    }
+                    mysqli_stmt_bind_param(
+                        $insert_stmt,
+                        "sssssssssssssssss",
+                        $email, $access_hash, $password, $firstname, $lastname, $phone_number, $website_url, $home_address,
+                        $min_with, $max_with, $payout_limit, $app_base_url, $apk_ordered, $ios_ordered, $playstore_ordered,
+                        $sms_bridge_ordered, $selected_addons
+                    );
 
-                        if(mysqli_query($connection_server, $insert_sql)) {
+                        if(mysqli_stmt_execute($insert_stmt)) {
+                        mysqli_stmt_close($insert_stmt);
                         $new_vendor_id = mysqli_insert_id($connection_server);
                         $domain_registration_warning = '';
                         $addon_domain_warning = '';

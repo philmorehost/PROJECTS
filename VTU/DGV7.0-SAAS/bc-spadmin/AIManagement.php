@@ -56,35 +56,66 @@ if (isset($_POST["test-connection"])) {
     header("Location: AIManagement.php"); exit();
 }
 
-// ── Handle: Approve/Reject Vendor Request ─────────────────
-if (isset($_GET['approve'])) {
-    $v_id = (int)$_GET['approve'];
-    $bonus = (int)getSuperAdminOption('ai_default_token_bonus', 1000);
-    $v_q = mysqli_query($connection_server, "SELECT ai_pending_tokens FROM sas_vendors WHERE id='$v_id'");
-    $v_data = mysqli_fetch_assoc($v_q);
-    $requested_tokens = (int)($v_data['ai_pending_tokens'] ?? 0);
-    $total_grant = $requested_tokens + $bonus;
+// ── Handle: Approve/Reject Vendor Request (POST + CSRF + step-up) ─
+if (isset($_POST['ai_request_action']) && isset($_POST['vendor_id'])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
 
-    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status=1, ai_request_status='approved', ai_token_balance = ai_token_balance + $total_grant, ai_pending_tokens=0, ai_pending_cost=0 WHERE id='$v_id'");
-    $_SESSION["response"] = "✅ Vendor AI activation approved. $total_grant tokens granted.";
-    header("Location: AIManagement.php"); exit();
-}
-if (isset($_GET['reject'])) {
-    $v_id = (int)$_GET['reject'];
-    $v_q = mysqli_query($connection_server, "SELECT ai_pending_cost, email FROM sas_vendors WHERE id='$v_id'");
-    $v_data = mysqli_fetch_assoc($v_q);
-    $refund_amount = (float)($v_data['ai_pending_cost'] ?? 0);
-    $v_email = $v_data['email'] ?? '';
+    $v_id = (int)$_POST['vendor_id'];
+    $action = (string)$_POST['ai_request_action'];
+    $step = $_POST;
+    $factor = (string)($_POST['sec_factor'] ?? '');
+    $step['otp_code'] = $factor;
+    $step['totp_code'] = $factor;
 
-    if ($refund_amount > 0) {
-        $ref = "RFND_AI_" . time();
-        chargeVendor("credit", "ai_refund", "AI Refund", $ref, $refund_amount, $refund_amount, "Refund for rejected AI activation request", $_SERVER["HTTP_HOST"], 1);
+    $sec_err = function_exists('bc_stepup_spadmin_verify')
+        ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $step, 'ai_activation_review')
+        : 'Verification is unavailable.';
+    if ($sec_err !== '') {
+        $_SESSION["response"] = "❌ " . $sec_err;
+        header("Location: AIManagement.php"); exit();
     }
 
-    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_request_status='rejected', ai_pending_cost=0, ai_pending_tokens=0 WHERE id='$v_id'");
-    if (!empty($v_email)) sendVendorEmail($v_email, "AI Request Update", "Your AI activation request has been reviewed and rejected.");
+    $v_q = bc_q_row("SELECT ai_pending_tokens, ai_pending_cost, email, ai_request_status FROM sas_vendors WHERE id=? LIMIT 1", array($v_id));
+    if (!$v_q || (string)($v_q['ai_request_status'] ?? '') !== 'pending') {
+        $_SESSION["response"] = "❌ This AI request is no longer pending.";
+        header("Location: AIManagement.php"); exit();
+    }
 
-    $_SESSION["response"] = "❌ Vendor AI request rejected. Refund of ₦" . number_format($refund_amount, 2) . " processed.";
+    if ($action === 'approve') {
+        $bonus = (int)getSuperAdminOption('ai_default_token_bonus', 1000);
+        $requested_tokens = (int)($v_q['ai_pending_tokens'] ?? 0);
+        $total_grant = max(0, $requested_tokens) + max(0, $bonus);
+        mysqli_begin_transaction($connection_server);
+        $ok = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status=1, ai_request_status='approved', ai_token_balance=ai_token_balance+" . (int)$total_grant . ", ai_pending_tokens=0, ai_pending_cost=0 WHERE id=" . (int)$v_id . " AND ai_request_status='pending'");
+        if (!$ok || mysqli_affected_rows($connection_server) !== 1) {
+            mysqli_rollback($connection_server);
+            $_SESSION["response"] = "❌ This AI request could not be claimed.";
+        } else {
+            mysqli_commit($connection_server);
+            if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'ai_activation_approved', 'vendor#' . $v_id, 'Granted ' . $total_grant . ' AI tokens');
+            $_SESSION["response"] = "✅ Vendor AI activation approved. " . $total_grant . " tokens granted.";
+        }
+    } elseif ($action === 'reject') {
+        $refund_amount = (float)($v_q['ai_pending_cost'] ?? 0);
+        $v_email = $v_q['email'] ?? '';
+        mysqli_begin_transaction($connection_server);
+        $ok = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_request_status='rejected', ai_pending_cost=0, ai_pending_tokens=0 WHERE id=" . (int)$v_id . " AND ai_request_status='pending'");
+        if (!$ok || mysqli_affected_rows($connection_server) !== 1) {
+            mysqli_rollback($connection_server);
+            $_SESSION["response"] = "❌ This AI request could not be claimed.";
+        } else {
+            mysqli_commit($connection_server);
+            if ($refund_amount > 0) {
+                $ref = "RFND_AI_" . bin2hex(random_bytes(8));
+                chargeVendor("credit", "ai_refund", "AI Refund", $ref, $refund_amount, $refund_amount, "Refund for rejected AI activation request", $_SERVER["HTTP_HOST"], 1);
+            }
+            if (!empty($v_email)) sendVendorEmail($v_email, "AI Request Update", "Your AI activation request has been reviewed and rejected.");
+            if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'ai_activation_rejected', 'vendor#' . $v_id, 'Refund NGN ' . number_format($refund_amount, 2));
+            $_SESSION["response"] = "❌ Vendor AI request rejected. Refund of ₦" . number_format($refund_amount, 2) . " processed.";
+        }
+    } else {
+        $_SESSION["response"] = "❌ Unknown AI request action.";
+    }
     header("Location: AIManagement.php"); exit();
 }
 
@@ -416,8 +447,14 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                                         <td class="ps-4"><strong><?php echo htmlspecialchars($req['company_name'] ?: ($req['firstname'].' '.$req['lastname'])); ?></strong></td>
                                         <td class="small"><?php echo date('M j', strtotime($req['reg_date'])); ?></td>
                                         <td class="text-end pe-4">
-                                            <a href="AIManagement.php?approve=<?php echo $req['id']; ?>" class="btn btn-success btn-sm rounded-pill px-3">Approve</a>
-                                            <a href="AIManagement.php?reject=<?php echo $req['id']; ?>" class="btn btn-danger btn-sm rounded-pill px-3">Reject</a>
+                                            <form method="post" action="AIManagement.php" class="d-inline" onsubmit="return confirm('Approve or reject this AI activation request?');">
+                                                <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                                                <input type="hidden" name="vendor_id" value="<?php echo (int)$req['id']; ?>">
+                                                <input type="password" name="pin" class="form-control form-control-sm d-inline-block w-auto mb-1" placeholder="Security PIN" autocomplete="off" required>
+                                                <input type="text" name="sec_factor" class="form-control form-control-sm d-inline-block w-auto mb-1" placeholder="OTP/TOTP" autocomplete="off" required>
+                                                <button type="submit" name="ai_request_action" value="approve" class="btn btn-success btn-sm rounded-pill px-3">Approve</button>
+                                                <button type="submit" name="ai_request_action" value="reject" class="btn btn-danger btn-sm rounded-pill px-3">Reject</button>
+                                            </form>
                                         </td>
                                     </tr>
                                 <?php endwhile; else: ?>
