@@ -45,7 +45,7 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
         if (!($alerts_result instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
         $alerts=[];while($alert=mysqli_fetch_assoc($alerts_result))$alerts[]=$alert;
         $alerts_truncated=count($alerts)>50;$alerts=array_slice($alerts,0,50);
-        $gr=bc_q('SELECT g.grant_id,g.stream_id,g.revision,g.worker_name,g.state,g.expires_at_epoch,g.created_by,g.created_at_epoch,g.revoked_by,g.revoked_at_epoch,g.completed_at_epoch FROM sas_crypto_v2_poll_worker_grants g JOIN sas_crypto_v2_poll_streams s ON s.stream_id=g.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY g.created_at_epoch DESC,g.grant_id LIMIT 21 FOR UPDATE',[$identity,$env]);
+        $gr=bc_q('SELECT g.grant_id,g.stream_id,g.revision,g.worker_name,g.state,g.expires_at_epoch,g.created_by,g.created_at_epoch,g.revoked_by,g.revoked_at_epoch,g.completed_at_epoch,r.recovered_by,r.recovered_at_epoch,r.outcome AS recovery_outcome FROM sas_crypto_v2_poll_worker_grants g LEFT JOIN sas_crypto_v2_poll_recoveries r ON r.grant_id=g.grant_id JOIN sas_crypto_v2_poll_streams s ON s.stream_id=g.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY g.created_at_epoch DESC,g.grant_id LIMIT 21 FOR UPDATE',[$identity,$env]);
         if(!($gr instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
         $grants=[];while($g=mysqli_fetch_assoc($gr))$grants[]=$g;
         $grants_truncated=count($grants)>20;$grants=array_slice($grants,0,20);

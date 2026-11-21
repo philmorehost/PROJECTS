@@ -18,7 +18,7 @@ function bc_crypto_poll_config($vendor,$env) {
 }
 function bc_crypto_poll_engines() {
     bc_crypto_custody_evidence_engines();
-    foreach(['sas_crypto_v2_poll_worker_grants','sas_crypto_v2_poll_alerts','sas_crypto_v2_poll_identities','sas_crypto_v2_poll_sightings','sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
+    foreach(['sas_crypto_v2_poll_recoveries','sas_crypto_v2_poll_worker_grants','sas_crypto_v2_poll_alerts','sas_crypto_v2_poll_identities','sas_crypto_v2_poll_sightings','sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
         $r=bc_q_row('SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$table]);
         if (!$r||strtoupper($r['engine']??'')!=='INNODB') throw new RuntimeException('crypto_poll_transactional_schema_required');
     }
