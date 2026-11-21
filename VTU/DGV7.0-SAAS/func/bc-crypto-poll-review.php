@@ -41,7 +41,11 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
             $stream['health']=bc_crypto_poll_health($stream,$now);
             $stream['retry_policy']=bc_crypto_poll_retry_decision($events,$now);
         }unset($stream);
-        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
+        $alerts_result=bc_q('SELECT a.stream_id,a.revision,a.kind,a.created_at_epoch,a.acknowledged_by,a.acknowledged_at_epoch FROM sas_crypto_v2_poll_alerts a JOIN sas_crypto_v2_poll_streams s ON s.stream_id=a.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY a.created_at_epoch DESC,a.stream_id,a.revision DESC LIMIT 51 FOR UPDATE',[$identity,$env]);
+        if (!($alerts_result instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
+        $alerts=[];while($alert=mysqli_fetch_assoc($alerts_result))$alerts[]=$alert;
+        $alerts_truncated=count($alerts)>50;$alerts=array_slice($alerts,0,50);
+        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'alerts'=>$alerts,'alerts_truncated'=>$alerts_truncated,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
         $json=bc_crypto_gov_json($report);
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_poll_review_events(custody_account,environment,custody_revision,actor_id,report_hash,occurred_at_epoch) VALUES(?,?,?,?,?,?)',[$identity,$env,$revision,$actor,hash('sha256',$json),time()]);
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');

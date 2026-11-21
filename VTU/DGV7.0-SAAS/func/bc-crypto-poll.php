@@ -3,6 +3,7 @@
 require_once __DIR__.'/bc-crypto-bybit-deposit-read.php';
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
 require_once __DIR__.'/bc-crypto-poll-overlap.php';
+require_once __DIR__.'/bc-crypto-poll-alert.php';
 function bc_crypto_poll_id($id) {
     if (!is_string($id)||!preg_match('/^[a-f0-9]{32}$/D',$id)) throw new RuntimeException('crypto_poll_id_invalid');
     return $id;
@@ -16,7 +17,7 @@ function bc_crypto_poll_config($vendor,$env) {
 }
 function bc_crypto_poll_engines() {
     bc_crypto_custody_evidence_engines();
-    foreach(['sas_crypto_v2_poll_identities','sas_crypto_v2_poll_sightings','sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
+    foreach(['sas_crypto_v2_poll_alerts','sas_crypto_v2_poll_identities','sas_crypto_v2_poll_sightings','sas_crypto_v2_poll_streams','sas_crypto_v2_poll_events','sas_crypto_v2_poll_seen','sas_crypto_v2_poll_leases','sas_crypto_v2_poll_lease_events','sas_vendors','sas_crypto_v2_governance','sas_crypto_v2_catalogues'] as $table) {
         $r=bc_q_row('SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[$table]);
         if (!$r||strtoupper($r['engine']??'')!=='INNODB') throw new RuntimeException('crypto_poll_transactional_schema_required');
     }

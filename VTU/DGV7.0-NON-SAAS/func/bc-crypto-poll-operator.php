@@ -24,6 +24,7 @@ function bc_crypto_poll_release_failed($authority,$id,$revision,$token) {
         // Serializes with stop/progress/reclaims. The original stream revision may already have changed.
         bc_q_row('SELECT stream_id FROM sas_crypto_v2_poll_streams WHERE stream_id=? FOR UPDATE',[bc_crypto_poll_id($id)]);
         bc_crypto_poll_lease_finish($id,$revision,$actor,$token,'failed');
+        bc_crypto_poll_alert_capture($id,$revision);
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');
     }catch(Throwable $e){mysqli_rollback($connection_server);throw $e;}
 }

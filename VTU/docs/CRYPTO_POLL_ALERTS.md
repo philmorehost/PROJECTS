@@ -1,0 +1,25 @@
+# Durable local retry escalation alerts
+
+A third unsuccessful attempt recorded through failed lease release now creates a local `retry_escalation` alert in the same transaction as the failed-release event and lease release. The alert is uniquely keyed by stream, checkpoint revision and kind. It contains only stream/revision, kind, creation epoch and optional first acknowledgement actor/epoch; no records, addresses, tokens, provider errors or message body. Repeated capture cannot overwrite the original alert or acknowledgement. There is no new remote notification channel.
+
+The explicit CLI installer adds one InnoDB table (`sas_crypto_v2_poll_alerts`), bringing the production schema total to **25 tables**. Supporting transactional schema is required before polling operations. Requests do not install/repair schema. Separate operator migration/backup/deployment authorization remains necessary; none was performed.
+
+## Capture and failure semantics
+
+Capture uses the same conservative newest-first bounded retry-history policy as operator admission. Claimed+failed events for one token count once, and successful checkpoint/release ends the sequence. The owner transaction already holds the stream lock. Alert insertion failure rolls back failed-release auditing and lease release; no false claim of a successful release is returned. The fetch wrapper retains its original operation error and the lease expires naturally, preserving existing fencing/backoff safety. A later safe release retry can capture the alert.
+
+This is **not comprehensive crash detection**. A process that dies before failed release can leave unknown attempts visible in retry-health escalation without a persisted local alert. Audit/database outage can also prevent alert creation. No autonomous reconciler scans/repairs these cases; operators must inspect the protected health report. Existing rows are not backfilled. No alert-delivery or on-call response guarantee is implied. Alerts are per revision, not per asset/account outage; conflicts and expiry are still report signals, not new alert kinds.
+
+## Protected review and acknowledgement
+
+The existing fresh stepped-up platform report includes at most fifty alerts for the selected account/environment with explicit truncation. Report generation still records the exact returned JSON hash before disclosure and renders only escaped no-store POST output. Alert metadata is never put in redirects or logs. Normal page loads do not expose the alert list or contact a provider.
+
+A new explicit POST acknowledgement form accepts the report's stream ID and alert revision through the existing platform-session/CSRF/fresh active actor/PIN/replay-protected TOTP/throttle boundary. Posted actor, kind, records, evidence, query, cursor and lease token cannot choose authority or mutate alert type. The selected current custody revision and account/environment are locked/rechecked; the stream must belong to that exact scope. An alert for an older stream revision remains acknowledgeable after a stop/progress change, because a receipt must not be trapped by a stopped stream.
+
+The acknowledgement is a **single-shot application-level receipt**, storing the server-derived actor and time. A concurrent/repeated acknowledgement refuses instead of replacing the first actor. Storage failure leaves the alert unacknowledged. It does not clear backoff/escalation, amend retry history, resolve an identity conflict, change a stream/cursor, release funds or authorize replacement windows/credits. There is intentionally no unacknowledge, delete, resolve or reset action. This is not independent dual-control review, proof of a human investigation, immutable off-host audit or delivery confirmation.
+
+## Validation and operational gates
+
+Mocked management tests now include seven posted-override refusals (58 total boundary checks). Disposable real InnoDB cases cover third-failure alert creation, account/environment/current-revision/role/missing-alert refusal, acknowledgement storage rollback, immutable first receipt, concurrent one-winner acknowledgements, unchanged retry/stream history, alert-insert rollback of lease release/audit, bounded report visibility and unchanged financial objects. Existing retry, lease, overlap, checkpoint, parser, identity and report tests remain required. Tests use synthetic provider assertions, not live Bybit credentials or browser/device verification.
+
+Unattended workers remain disabled. Before connecting one, define an isolated worker identity, narrowly scoped expiring/revocable authority, mandatory retry admission and unknown-outcome recovery; add monitored authenticated alert delivery/acknowledgement ownership, window/overlap lifecycle and completeness/reconciliation controls. Do not turn an internal role array or low-level unguarded claim into worker authentication. No external email/webhook/SMS dispatch, scheduler, automatic window rollover, deposit import/credit, active route, balance/hold or withdrawal-containment changes are included here.
