@@ -42,6 +42,7 @@ function bc_totp_setup_process($table, $actor, $action, $input) {
     }
     if (!bc_totp_confirm_enrolment($table,$actor,(string)($input['totp_code']??''))) throw new BcTotpSetupError('App code did not match. Check your phone time and try a new code.');
     unset($_SESSION['bc_totp_setup'][$binding]);
+    if (function_exists('bc_sec_audit')) bc_sec_audit($vendor,$table==='sas_users'?'user':($table==='sas_vendors'?'admin':'spadmin'),(string)($actor['username']??$actor['email']),'totp_enabled',(string)$actor['id'],'Email-verified authenticator enrollment completed');
     if (function_exists('bc_log_security_event')) bc_log_security_event('TOTP_ENABLED','enrollment',(string)($actor['email']??''),'Email-verified authenticator enrollment completed');
     return ['ok'=>true,'enabled'=>true,'message'=>'Saved — Google Authenticator is enabled. Keep the app entry; setup is complete.'];
 }
