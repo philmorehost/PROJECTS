@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $vtpass_isp_codes = array("mtn" => "mtn-data", "airtel" => "airtel-data", "glo" => "glo-data", "9mobile" => "etisalat-data");
  if(in_array($product_name, array_keys($vtpass_isp_codes))){
   $vtpass_isp_code = $vtpass_isp_codes[$product_name];
@@ -20,7 +21,7 @@
    $vtpass_reference = substr(str_shuffle("12345678901234567890"), 0, 15);
    $curl_postfields_data = json_encode(array("request_id"=>$vtpass_reference,"serviceID"=>$vtpass_isp_code,"billersCode"=>$phone_no,"variation_code"=>$quantity,"phone"=>$phone_no),true);
    curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-   $curl_result = curl_exec($curl_request);
+   $curl_result = bc_vtu_curl_exec($curl_request);
    $curl_json_result = json_decode($curl_result, true);
 if(!is_array($curl_json_result) || !isset($curl_json_result["code"])){
    $curl_json_result = array("code" => "999", "response_description" => "Invalid API response. Check your API credentials and try again.");

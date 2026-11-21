@@ -589,7 +589,6 @@ bc_plate_auth_top(array(
 })();
 </script>
 <script src="../jsfile/bc-custom-all.js"></script>
-<script src="../asset/pwa-handler.js"></script>
 <script>
 function togglePasswordVisibility(fieldId, toggleElement) {
     const field = document.getElementById(fieldId);

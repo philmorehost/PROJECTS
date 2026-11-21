@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $raw_number = "123456789012345678901234567890";
 $reference = substr(str_shuffle($raw_number), 0, 15);
 $check_authorized_user_before_recharge = mysqli_query($conn_server_db, "SELECT * FROM authorized_rechargecard_user WHERE email='$user_session'");
@@ -45,7 +46,7 @@ if (mysqli_num_rows($check_authorized_user_before_recharge) >= 1) {
   curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYPEER, true);
 
-  $GetrechargecardJSON = curl_exec($rechargecardPurchase);
+  $GetrechargecardJSON = bc_vtu_curl_exec($rechargecardPurchase);
   $rechargecardJSONObj = json_decode($GetrechargecardJSON, true);
   if(!is_array($rechargecardJSONObj)){ $rechargecardJSONObj = array(); }
 

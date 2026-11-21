@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 // ─── Logging Helper ──────────────────────────────────────────────────────────
 // Writes a timestamped entry to logs/sms-localserver-YYYY-MM-DD.log
 // Log is protected by the existing logs/.htaccess (deny from all).
@@ -29,7 +30,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
     $web_sms_size_array = array("standard_sms" => "standard_sms", "flash_sms" => "flash_sms", "in_app_otp" => "in_app_otp");
 
     if (!empty($sms_type)) {
-        $curl_url = "https://" . $api_detail["api_base_url"] . "/web/api/sms.php";
+        $curl_url = bc_vtu_local_url($api_detail["api_base_url"], "sms");
         sms_ls_log("Initiating cURL to upstream API", $curl_url);
 
         $curl_request = curl_init($curl_url);
@@ -104,7 +105,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
             curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
 
             $start_time  = microtime(true);
-            $curl_result = curl_exec($curl_request);
+            $curl_result = bc_vtu_curl_exec($curl_request,true);
             $elapsed_ms  = round((microtime(true) - $start_time) * 1000);
             $http_code   = curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
 

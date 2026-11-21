@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     $explode_clubkonnect_apikey = array_filter(explode(":",trim($api_detail["api_key"])));
     $curl_url = "https://www.nellobytesystems.com/APIQueryV1.asp?UserID=".$explode_clubkonnect_apikey[0]."&APIKey=".$explode_clubkonnect_apikey[1]."&OrderID=".$get_api_reference_id;
     $curl_request = curl_init($curl_url);
@@ -6,7 +7,7 @@
     curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-    $curl_result = trim(curl_exec($curl_request));
+    $curl_result = trim(bc_vtu_curl_exec($curl_request));
     $curl_json_result = json_decode($curl_result, true);
     if(!is_array($curl_json_result)){ $curl_json_result = array(); }
     

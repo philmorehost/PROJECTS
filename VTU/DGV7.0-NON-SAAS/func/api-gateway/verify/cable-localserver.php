@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     $data_service_provider_alter_code = array("startimes" => "startimes", "dstv" => "dstv", "gotv" => "gotv");
     if(in_array($product_name, array_keys($data_service_provider_alter_code))){
         if($product_name == "startimes"){
@@ -14,7 +15,7 @@
         }
     	
     	if(in_array($quantity, array_keys($web_cable_size_array))){
-    		$curl_url = "https://".$api_detail["api_base_url"]."/web/api/verify-cable.php";
+            $curl_url = bc_vtu_local_url($api_detail["api_base_url"], "verify-cable");
     		$curl_request = curl_init($curl_url);
 // cURL waits forever by default: one unresponsive provider would hold this PHP worker and the
 // customer's request open indefinitely. Bound the connect and the whole call.
@@ -25,12 +26,13 @@ curl_setopt($curl_request, CURLOPT_TIMEOUT, 30);
             curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
             curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
     		$curl_http_headers = array(
+        "X-BC-VTU-Hop: ".bc_vtu_forward_hop(),
     			"Content-Type: application/json",
     		);
     		curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
     		$curl_postfields_data = json_encode(array("api_key"=> $api_detail["api_key"],"type"=> $product_name,"iuc_number"=> $iuc_no,"package"=> $web_cable_size_array[$quantity]), true);
     		curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-    		$curl_result = curl_exec($curl_request);
+            $curl_result = bc_vtu_curl_exec($curl_request,true);
     		$curl_json_result = json_decode($curl_result, true);
     		if(!is_array($curl_json_result)){ $curl_json_result = array(); }
     		

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $clubkonnect_isp_codes = array("mtn" => "01", "airtel" => "04", "glo" => "02", "9mobile" => "03");
  if(in_array($product_name, array_keys($clubkonnect_isp_codes))){
   $clubkonnect_isp_code = $clubkonnect_isp_codes[$product_name];
@@ -20,7 +21,7 @@
    curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
    curl_setopt($curl_request, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
    curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
-   $curl_result = curl_exec($curl_request);
+   $curl_result = bc_vtu_curl_exec($curl_request);
    $curl_error = curl_errno($curl_request);
    curl_close($curl_request);
 

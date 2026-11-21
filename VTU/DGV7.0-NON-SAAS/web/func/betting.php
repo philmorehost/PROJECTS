@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -82,9 +83,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                         if (productIDPurchaseChecker($customer_id, "betting", $purchase_method) == "success") {
                                                             $debit_user = chargeUser("debit", $customer_id, $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
                                                             if ($debit_user === "success") {
-                                                                $api_gateway_name_file_exists = "betting-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                                $api_gateway_name_file_exists = bc_vtu_gateway_candidate("betting", $api_detail["api_base_url"]);
                                                                 if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/" . $api_gateway_name_file_exists)) {
-                                                                    $api_gateway_name = "betting-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                                    $api_gateway_name = bc_vtu_gateway_candidate("betting", $api_detail["api_base_url"]);
                                                                 } else {
                                                                     $api_gateway_name = "betting-localserver.php";
                                                                 }
@@ -242,9 +243,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                         $product_table = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_products WHERE vendor_id='" . $get_logged_user_details["vendor_id"] . "' && product_name='" . $product_name . "' LIMIT 1"));
                                     }
                                     if (($product_table["status"] == 1) && ($product_status_table["status"] == 1)) {
-                                        $api_gateway_name_file_exists = "betting-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                        $api_gateway_name_file_exists = bc_vtu_gateway_candidate("betting", $api_detail["api_base_url"]);
                                         if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/verify/" . $api_gateway_name_file_exists)) {
-                                            $api_gateway_name = "betting-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                            $api_gateway_name = bc_vtu_gateway_candidate("betting", $api_detail["api_base_url"]);
                                         } else {
                                             $api_gateway_name = "betting-localserver.php";
                                         }

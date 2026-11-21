@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -68,9 +69,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                 $debit_user = chargeUser("debit", $phone_no, $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
                                                     
                                                 if ($debit_user === "success") {
-                                                    $api_gateway_name_file_exists = "airtime-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                    $api_gateway_name_file_exists = bc_vtu_gateway_candidate("airtime", $api_detail["api_base_url"]);
                                                     if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/" . $api_gateway_name_file_exists)) {
-                                                        $api_gateway_name = "airtime-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                        $api_gateway_name = bc_vtu_gateway_candidate("airtime", $api_detail["api_base_url"]);
                                                     } else {
                                                         $api_gateway_name = "airtime-localserver.php";
                                                     }

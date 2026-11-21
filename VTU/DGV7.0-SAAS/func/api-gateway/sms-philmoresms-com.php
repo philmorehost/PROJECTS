@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 // sms-philmoresms-com.php
 // Alias gateway for api_base_url = "philmoresms.com" (without the "app." subdomain).
 // Correctly routes to https://app.philmoresms.com/api/sms.php — the live PhilmoreSMS API endpoint.
@@ -34,7 +35,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($curl_request, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
 
-        $curl_result     = curl_exec($curl_request);
+        $curl_result     = bc_vtu_curl_exec($curl_request);
         $http_code       = curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
         $curl_json_result = json_decode($curl_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }

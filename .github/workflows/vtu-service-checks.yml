@@ -6,12 +6,26 @@ on:
       - 'VTU/DGV7.0-SAAS/web/func/**'
       - 'VTU/DGV7.0-NON-SAAS/web/func/**'
       - 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
+      - 'VTU/**/func/api-gateway/**'
+      - 'VTU/**/func/bc-vtu-runtime.php'
+      - 'VTU/**/func/bc-incident-wallet.php'
+      - 'VTU/**/func/bc-plate-auth.php'
+      - 'VTU/**/web/Login.php'
+      - 'VTU/tests/vtu_runtime_test.php'
+      - 'VTU/tests/incident_wallet_test.php'
       - '.github/workflows/vtu-service-checks.yml'
   pull_request:
     paths:
       - 'VTU/DGV7.0-SAAS/web/func/**'
       - 'VTU/DGV7.0-NON-SAAS/web/func/**'
       - 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
+      - 'VTU/**/func/api-gateway/**'
+      - 'VTU/**/func/bc-vtu-runtime.php'
+      - 'VTU/**/func/bc-incident-wallet.php'
+      - 'VTU/**/func/bc-plate-auth.php'
+      - 'VTU/**/web/Login.php'
+      - 'VTU/tests/vtu_runtime_test.php'
+      - 'VTU/tests/incident_wallet_test.php'
       - '.github/workflows/vtu-service-checks.yml'
 
 permissions:
@@ -33,3 +47,16 @@ jobs:
           find 'VTU/DGV7.0-SAAS/web/func' 'VTU/DGV7.0-NON-SAAS/web/func' -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Exercise service purchase security gates
         run: php -n 'VTU/DGV7.0-SAAS/tests/vtu_service_handlers_test.php'
+
+      - name: Parse gateways and shared runtime
+        run: |
+          find VTU/DGV7.0-{SAAS,NON-SAAS}/func/api-gateway -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          for ed in SAAS NON-SAAS; do
+            php -l "VTU/DGV7.0-$ed/func/bc-vtu-runtime.php"
+            php -l "VTU/DGV7.0-$ed/func/bc-incident-wallet.php"
+            php -l "VTU/DGV7.0-$ed/web/Login.php"
+          done
+      - name: Exercise routing, bounded transport and wallet safeguards without real requests
+        run: |
+          php -n VTU/tests/vtu_runtime_test.php
+          php -n VTU/tests/incident_wallet_test.php

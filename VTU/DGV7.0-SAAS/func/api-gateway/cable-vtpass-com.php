@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $data_service_provider_alter_code = array("startimes" => "startimes", "dstv" => "dstv", "gotv" => "gotv", "showmax" => "showmax");
 if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
  if ($product_name == "startimes") {
@@ -43,7 +44,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   $vtpass_reference = substr(str_shuffle("12345678901234567890"), 0, 15);
   $curl_postfields_data = json_encode(array("request_id" => $vtpass_reference, "serviceID" => $vtpass_isp_code, "billersCode" => $iuc_no, "variation_code" => $web_cable_size_array[$quantity], "phone" => "09111111111"), true);
   curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = json_decode($curl_result, true);
 if(!is_array($curl_json_result) || !isset($curl_json_result["code"])){
   $curl_json_result = array("code" => "999", "response_description" => "Invalid API response. Check your API credentials and try again.");

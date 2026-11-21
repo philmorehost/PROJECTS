@@ -2,6 +2,11 @@
 /** Incident remediation: NGN mutation, receipt and replay key commit together.
  * No DDL here, no nested transaction and no provider calls while a row is locked.
  */
+function bc_incident_wallet_failure($code) {
+    error_log('[WALLET_MUTATION_REFUSED] '.$code);
+    $GLOBALS['bc_charge_failure_reason']='Unable to update wallet safely. Please contact support with code WALLET_'.strtoupper($code).'.';
+    return 'failed';
+}
 function bc_incident_decimal($value) {
     if (is_bool($value) || !is_scalar($value) || !is_numeric($value) || !is_finite((float)$value) || (float)$value <= 0) return null;
     if (is_float($value)) $value = sprintf('%.8F', $value);
@@ -20,18 +25,26 @@ function bc_incident_refund_source($description) {
 }
 function bc_incident_wallet_post($vendor, $username, $direction, $product, $label, $reference, $api_reference, $amount, $charged, $description, $mode, $website, $status, $is_vendor = false) {
     global $connection_server;
+    $started=microtime(true);
+    $GLOBALS['bc_charge_failure_reason']=null;
     $vid=(int)$vendor; $direction=strtolower((string)$direction);
     $amount=bc_incident_decimal($amount); $charged=bc_incident_decimal($charged);
     $username=strtolower(trim((string)$username)); $reference=trim((string)$reference);
     if (!$connection_server || $vid<=0 || (!$is_vendor && $username==='') || $amount===null || $charged===null || !in_array($direction,array('credit','debit'),true) || !in_array((int)$status,array(1,2,3),true) || $reference==='' || strlen($reference)>225) return 'failed';
     $table=$is_vendor?'sas_vendors':'sas_users'; $history=$is_vendor?'sas_vendor_transactions':'sas_transactions';
     // Fail closed on missing/nontransactional migrations. Never silently commit caller work.
-    $q=mysqli_query($connection_server,"SELECT @@session.in_transaction AS active");
-    $tx=$q?mysqli_fetch_assoc($q):null;
-    if (!$tx || !empty($tx['active'])) return 'failed';
+    try {
+        $q=mysqli_query($connection_server,"SELECT @@session.autocommit AS auto_commit");
+        $tx=$q?mysqli_fetch_assoc($q):null;
+        // MySQL has no MariaDB @@in_transaction. This next-transaction statement
+        // refuses an active outer transaction without committing it (not SET SESSION).
+        if (!$tx || (int)$tx['auto_commit']!==1 || mysqli_query($connection_server,'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')!==true) {
+            return bc_incident_wallet_failure('transaction_unavailable');
+        }
+    } catch(Throwable $e) { return bc_incident_wallet_failure('transaction_unavailable'); }
     $q=mysqli_query($connection_server,"SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('$table','$history','sas_wallet_mutation_events')");
     $engines=array(); while($q && ($r=mysqli_fetch_assoc($q))) $engines[$r['TABLE_NAME']]=strtoupper((string)$r['ENGINE']);
-    foreach(array($table,$history,'sas_wallet_mutation_events') as $t) if (($engines[$t]??'')!=='INNODB') return 'failed';
+    foreach(array($table,$history,'sas_wallet_mutation_events') as $t) if (($engines[$t]??'')!=='INNODB') return bc_incident_wallet_failure('transactional_schema_required');
     if (!$is_vendor && $direction==='debit' && $label!=='Charge' && function_exists('bc_tx_failure_guard_check') && bc_tx_failure_guard_check($vid,$username,$label)!==true) return 'failed';
     $refund=$direction==='credit' && strcasecmp(trim((string)$label),'Refund')===0;
     $original=$refund?bc_incident_refund_source($description):null;
@@ -43,7 +56,7 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
     $esc=function($v)use($connection_server){return mysqli_real_escape_string($connection_server,(string)$v);};
     $u=$esc($username);$ref=$esc($reference);$api=$esc($api_reference);$lab=$esc(strip_tags((string)$label));
     $where=$is_vendor?"id=$vid":"vendor_id=$vid AND username='$u'";
-    if (!mysqli_begin_transaction($connection_server)) return 'failed';
+    if (!mysqli_begin_transaction($connection_server)) return bc_incident_wallet_failure('transaction_unavailable');
     try {
         $q=mysqli_query($connection_server,"SELECT balance,status,email FROM $table WHERE $where LIMIT 1 FOR UPDATE");
         $row=$q?mysqli_fetch_assoc($q):null;
@@ -81,9 +94,9 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
         if (!mysqli_commit($connection_server)) throw new RuntimeException('commit_failed');
     } catch(Throwable $e) {
         mysqli_rollback($connection_server);
-        error_log('[WALLET_MUTATION_REFUSED] '.$e->getMessage());
-        return 'failed';
+        return bc_incident_wallet_failure(preg_match('/^[a-z_]+$/D',$e->getMessage()) ? $e->getMessage() : 'storage_error');
     }
+    $committed_at=microtime(true);
     // Notify only AFTER the wallet, replay claim and receipt have committed.
     try {
         if (function_exists('sendVendorEmail')) {
@@ -91,5 +104,7 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
             if (is_string($recipient) && filter_var($recipient,FILTER_VALIDATE_EMAIL)) sendVendorEmail($recipient,'Wallet transaction recorded',htmlspecialchars("Reference: $reference | $direction NGN $charged | Balance: $after | $description",ENT_QUOTES,'UTF-8'));
         }
     } catch(Throwable $ignored) { error_log('[WALLET_NOTICE] Delivery failed after committed transaction.'); }
+    $finished=microtime(true);
+    if ($finished-$started>=1) error_log('[WALLET_TIMING] '.json_encode(['mutation_ms'=>(int)round(1000*($committed_at-$started)),'notice_ms'=>(int)round(1000*($finished-$committed_at))]));
     return 'success';
 }

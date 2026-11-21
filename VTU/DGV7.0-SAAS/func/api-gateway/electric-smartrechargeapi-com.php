@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $web_electric_size_array = array("ekedc"=>$epp."_".$type."_custom","eedc"=>$epp."_".$type."_custom","ikedc"=>$epp."_".$type."_custom","jedc"=>$epp."_".$type."_custom","kedco"=>$epp."_".$type."_custom","ibedc"=>$epp."_".$type."_custom","phed"=>$epp."_".$type."_custom","aedc"=>$epp."_".$type."_custom", "bedc"=>$epp."_".$type."_custom", "kaedco"=>$epp."_".$type."_custom", "aba"=>$epp."_".$type."_custom", "yedc"=>$epp."_".$type."_custom");
  if(in_array($epp, array_keys($web_electric_size_array))){
   $curl_url = "https://".$api_detail["api_base_url"]."/api/v2/electric/?api_key=".$api_detail["api_key"]."&meter_number=".$meter_number."&product_code=".$web_electric_size_array[$epp]."&amount=".$amount;
@@ -9,7 +10,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

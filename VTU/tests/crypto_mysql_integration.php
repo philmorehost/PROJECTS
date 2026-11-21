@@ -18,6 +18,7 @@ require $base.'bc-crypto-reservations.php';
 require $base.'bc-crypto-v2-reconcile.php';
 require $base.'bc-crypto-deposit-schema.php';
 require $base.'bc-crypto-deposits.php';
+require $base.'bc-incident-wallet.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
     $db->query('SET SESSION innodb_lock_wait_timeout=10');
@@ -35,6 +36,7 @@ if (($argv[1]??'')==='worker') {
     file_put_contents($argv[3],(string)$connection_server->thread_id);
     try {
         if ($argv[4]==='reserve') $result=bc_crypto_v2_reservation($scope,$argv[5],$argv[6]);
+        elseif ($argv[4]==='wallet') $result=bc_incident_wallet_post(7,'ada','debit','08000000000','Data',$argv[5],'',$argv[6],$argv[6],'Synthetic VTU fixture','API','merchant.invalid',3);
         elseif ($argv[4]==='deposit') $result=bc_crypto_deposit_observe(json_decode($argv[5],true),json_decode($argv[6],true));
         else $result=bc_crypto_gov_save($vendor,7,'testnet','control',(int)$argv[5],['mode'=>'stop'],7);
         echo json_encode(['result'=>$result]);
@@ -147,6 +149,7 @@ try {
     check_db(!$integrity['internal_integrity_ok'] && !$integrity['provider_reserves_verified'] && $integrity['checks']['projection_mismatches']==='2','integrity correctly rejects synthetic unjournaled opening balances');
     foreach(['unbalanced_operations','scale_mismatches','scope_mismatches','release_mismatches'] as $key)check_db($integrity['checks'][$key]==='0','real integrity query '.$key);
     require __DIR__.'/crypto_deposits_mysql_cases.php';
+    require __DIR__.'/vtu_wallet_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
 } finally {
     $connection_server->rollback();

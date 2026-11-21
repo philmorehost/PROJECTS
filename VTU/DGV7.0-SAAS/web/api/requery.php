@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
+bc_vtu_guard_hop();
 require_once __DIR__ . '/../../func/bc-secure-session.php';
  bc_secure_session_start();
 header("Access-Control-Allow-Origin: *");

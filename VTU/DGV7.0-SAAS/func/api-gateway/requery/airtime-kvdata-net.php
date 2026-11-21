@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
 if (!empty($requery_reference)) {
     $curl_url = "https://" . $api_detail["api_base_url"] . "/api/data/" . getTransaction($requery_reference, "api_reference");
     $curl_request = curl_init($curl_url);
@@ -11,7 +12,7 @@ if (!empty($requery_reference)) {
         "Content-Type: application/json",
     );
     curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
-    $curl_result = trim(curl_exec($curl_request));
+    $curl_result = trim(bc_vtu_curl_exec($curl_request));
 	if (strtoupper((string)($purchase_method ?? "")) === "CRON_JOB" && function_exists("bc_requery_queue_log")) {
 		$curl_errno = curl_errno($curl_request);
 		$curl_error = curl_error($curl_request);

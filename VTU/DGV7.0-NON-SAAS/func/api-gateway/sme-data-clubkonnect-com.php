@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $data_service_provider_alter_code = array("mtn" => "mtn", "airtel" => "airtel", "9mobile" => "9mobile");
 if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
  if ($product_name == "mtn") {
@@ -32,7 +33,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

@@ -1,9 +1,10 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $data_service_provider_alter_code = array("startimes" => "startimes", "dstv" => "dstv", "gotv" => "gotv", "showmax" => "showmax");
 if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
 
  if (!empty($quantity)) {
-  $curl_url = "https://" . $api_detail["api_base_url"] . "/web/api/cable.php";
+  $curl_url = bc_vtu_local_url($api_detail["api_base_url"], "cable");
   $curl_request = curl_init($curl_url);
   curl_setopt($curl_request, CURLOPT_POST, true);
   curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -12,12 +13,13 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
   $curl_http_headers = array(
+        "X-BC-VTU-Hop: ".bc_vtu_forward_hop(),
    "Content-Type: application/json",
   );
   curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
   $curl_postfields_data = json_encode(array("api_key" => $api_detail["api_key"], "type" => $product_name, "iuc_number" => $iuc_no, "package" => $quantity), true);
   curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request,true);
   $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

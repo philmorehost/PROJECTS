@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "CRON_JOB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -57,7 +58,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                 return;
                             }
                             if (!empty($api_detail["api_key"])) {
-                                $api_gateway_name_file_exists = $api_detail["api_type"] . "-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                $api_gateway_name_file_exists = bc_vtu_gateway_candidate($api_detail["api_type"], $api_detail["api_base_url"]);
                                 $gateway_path = dirname(__DIR__, 2) . "/func/api-gateway/requery/";
 
                                 if (file_exists($gateway_path . $api_gateway_name_file_exists)) {

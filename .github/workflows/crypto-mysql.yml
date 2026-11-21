@@ -4,6 +4,8 @@ on:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/func/bc-incident-wallet.php'
+      - 'VTU/tests/vtu_wallet_mysql_cases.php'
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
       - '.github/workflows/crypto-mysql.yml'
@@ -11,6 +13,8 @@ on:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/func/bc-incident-wallet.php'
+      - 'VTU/tests/vtu_wallet_mysql_cases.php'
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
       - '.github/workflows/crypto-mysql.yml'

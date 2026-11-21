@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 // Two-level mapping: product_name (exam type) → quantity (sub-type) → NaijaResultPins card_type_id.
 // card_type_ids confirmed live against GET https://www.naijaresultpins.com/api/v1:
 // 1=WAEC Scratch Card, 2=NECO TOKEN, 3=NABTEB Scratch Card, 4=WAEC Verification Pin,
@@ -40,7 +41,7 @@ if (array_key_exists($product_name, $nrp_card_type_map) && array_key_exists($qua
     // $quantity here is the exam sub-type (e.g. "result_checker") used for the card_type_id lookup above.
     $curl_postfields_data = json_encode(array("card_type_id" => $card_type_id, "quantity" => "1"));
     curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-    $curl_result = curl_exec($curl_request);
+    $curl_result = bc_vtu_curl_exec($curl_request);
     // Must be read before curl_close(). It forms part of the success test below: this provider
     // signals failure through the HTTP status, so a 401 carrying a JSON body is still a failure.
     $nrp_http_code = (int)curl_getinfo($curl_request, CURLINFO_HTTP_CODE);

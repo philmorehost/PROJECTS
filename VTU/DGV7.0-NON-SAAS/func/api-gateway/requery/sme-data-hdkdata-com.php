@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     if(!empty($requery_reference)){
         // The base URL and key must be normalised exactly like the purchase gateway does, otherwise
         // a stored "https://" scheme (-> https://https://host/...) or a key stored WITH its "Token "
@@ -20,7 +21,7 @@
             "Accept: application/json",
         );
         curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
-        $curl_result = trim(curl_exec($curl_request));
+        $curl_result = trim(bc_vtu_curl_exec($curl_request));
         $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

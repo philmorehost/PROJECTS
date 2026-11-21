@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method ?? '');
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -106,7 +107,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                             $normalized_api_base_url = strtolower(trim($api_detail["api_base_url"]));
                                                             $normalized_api_base_url = preg_replace('#^https?://#', '', $normalized_api_base_url);
                                                             $normalized_api_base_url = rtrim($normalized_api_base_url, "/");
-                                                            $api_gateway_name_file_exists = $type . "-" . str_replace(".", "-", $normalized_api_base_url) . ".php";
+                                                            $api_gateway_name_file_exists = bc_vtu_gateway_candidate($type, $api_detail["api_base_url"]);
                                                             if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/" . $api_gateway_name_file_exists)) {
                                                                 $api_gateway_name = $api_gateway_name_file_exists;
                                                             } else {
