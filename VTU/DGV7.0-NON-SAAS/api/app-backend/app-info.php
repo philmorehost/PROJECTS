@@ -84,6 +84,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         if (mysqli_num_rows($checkuser) == 1) {
             $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $decode_post_request["username"] . "' AND password = '" . $decode_post_request["encoded-passkey"] . "'");
             if (mysqli_num_rows($checkuser_pass) == 1) {
+                bc_enrollment_api_guard(mysqli_fetch_assoc($checkuser_pass));
 
                 //Transactions
                 $user_trans_ref_array = array();

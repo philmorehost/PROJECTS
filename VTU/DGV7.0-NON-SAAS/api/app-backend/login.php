@@ -27,6 +27,7 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE  vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "') AND password = '" . $password . "'");
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_detail = mysqli_fetch_array($checkuser_pass);
+                    bc_enrollment_api_guard($get_user_detail);
                     if ($get_user_detail["status"] == "1") {
                         
                         // Email Beginning

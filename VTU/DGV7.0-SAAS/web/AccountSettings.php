@@ -118,6 +118,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
     if (isset($_POST["totp-disable"])) {
+    $mandate = bc_enrollment_policy($get_logged_user_details['vendor_id']);
+    if ($mandate['user']) { http_response_code(403); exit('Your administrator requires Google Authenticator. It cannot be disabled.'); }
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $pin_ok = function_exists('verifyUserPIN') && verifyUserPIN((string)($_POST["pin"] ?? ''), $get_logged_user_details);
         $ok = $pin_ok && function_exists('bc_totp_disable') && bc_totp_disable('sas_users', (int)$get_logged_user_details['id']);

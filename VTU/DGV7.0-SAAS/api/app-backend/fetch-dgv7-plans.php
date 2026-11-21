@@ -51,12 +51,13 @@ try {
     }
 
     $api_key_esc = mysqli_real_escape_string($connection_server, $api_key);
-    $user_q = mysqli_query($connection_server, "SELECT id, account_level, vendor_id, status, api_status FROM sas_users WHERE api_key='$api_key_esc' LIMIT 1");
+    $user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE api_key='$api_key_esc' LIMIT 1");
     if (mysqli_num_rows($user_q) == 0) {
         throw new Error("Invalid API Key");
     }
     
     $user = mysqli_fetch_assoc($user_q);
+    bc_enrollment_api_guard($user);
     // The same access rule the sibling web/api/*-plans.php endpoints apply: this catalogue is only
     // served to an API user the SELLER has approved. Without it, a suspended or still-pending key
     // could keep reading prices, and "activate another vendor's API" would mean nothing.

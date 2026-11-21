@@ -52,6 +52,7 @@ try {
     }
     
     $user = mysqli_fetch_assoc($user_q);
+    bc_enrollment_api_guard($user);
     $vendor_id = $user['vendor_id'];
     $account_level = (int)$user['account_level'];
     

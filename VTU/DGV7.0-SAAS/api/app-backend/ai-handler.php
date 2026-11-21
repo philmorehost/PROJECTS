@@ -43,6 +43,8 @@ if (!$user_row) {
     ai_json(401, ['success' => false, 'error' => 'Invalid or expired token']);
 }
 
+bc_enrollment_api_guard($user_row);
+
 // ── Rate limit: 30 AI requests per user per minute ───────────────────────────
 if (bc_is_rate_limited('mobile_ai', $user_row['username'], 30, 60)) {
     ai_json(429, ['success' => false, 'error' => 'Too many requests. Please slow down.']);

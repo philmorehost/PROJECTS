@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include ("../func/bc-admin-config.php");
+bc_enrollment_policy_save(false, $get_logged_admin_details);
 include_once(__DIR__ . "/../func/bc-integrity.php");
 
 // Demo-mode blocked feature notice
@@ -20,7 +21,7 @@ $mail_queue_cron_secret = bc_get_or_create_cron_secret($connection_server);
 
 // §44: saving settings on this page requires a Google Authenticator unlock
 // (10-minute window — see bc_gauth_settings_gate in func/bc-stepup.php).
-if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('bc_admin_settings', 'sas_vendors', $get_logged_admin_details, array('totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'demo-unlock-session', 'demo-relock-session', 'gauth-unlock', 'gauth-lock'));
+if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('bc_admin_settings', 'sas_vendors', $get_logged_admin_details, array('save-enrollment-policy', 'totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'demo-unlock-session', 'demo-relock-session', 'gauth-unlock', 'gauth-lock'));
 
 // Demo Mode: unlock / relock settings editing for this session with the Super Admin
 // Demo security lock key (see func/bc-demo-mode.php). In Demo Mode the page stays
@@ -575,6 +576,8 @@ if (isset($_POST["totp-confirm"])) {
     exit();
 }
 if (isset($_POST["totp-disable"])) {
+    $mandate=bc_enrollment_policy((int)$get_logged_admin_details['id']);
+    if ($mandate['vendor']) { http_response_code(403); exit('Your administrator requires Google Authenticator. It cannot be disabled.'); }
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
     $pin_ok = function_exists('verifyUserPIN') && verifyUserPIN((string)($_POST["pin"] ?? ''), $get_logged_admin_details);
     $ok = $pin_ok && function_exists('bc_totp_disable') && bc_totp_disable('sas_vendors', (int)$get_logged_admin_details['id']);
@@ -1928,6 +1931,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
 
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
+                    <?php bc_enrollment_policy_form(false, (int)$get_logged_admin_details['id']); ?>
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-info-circle me-2"></i>Google Client ID Setup Guide</h5></div>
                         <div class="card-body p-4">

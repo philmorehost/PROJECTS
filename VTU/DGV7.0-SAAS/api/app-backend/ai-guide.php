@@ -23,6 +23,7 @@ $tok = mysqli_real_escape_string($connection_server, trim($m[1]));
 $u   = mysqli_fetch_assoc(mysqli_query($connection_server,
     "SELECT u.*, v.id vid, v.ai_status FROM sas_users u JOIN sas_vendors v ON v.id=u.vendor_id WHERE u.api_token='$tok' AND u.status=1 LIMIT 1"));
 if (!$u) guide_json(401, ['success'=>false,'error'=>'Invalid token']);
+bc_enrollment_api_guard($u);
 if (empty($u['ai_status'])) guide_json(403, ['success'=>false,'error'=>'AI not enabled']);
 
 $page    = preg_replace('/[^a-z_]/', '', strtolower($_GET['page'] ?? 'home'));

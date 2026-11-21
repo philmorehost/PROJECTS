@@ -717,9 +717,11 @@ if (!function_exists('bc_totp_begin_enrolment')) {
         if (!($connection_server instanceof mysqli) || (int)$actor_id <= 0) return '';
         bc_security_ensure_schema();
         $secret = bc_totp_generate_secret();
-        $ok = bc_q("UPDATE `$table` SET totp_secret=?, two_factor_type='pending' WHERE id=?",
-            array(bc_stepup_seal_secret($secret), (int)$actor_id));
-        return $ok === true ? $secret : '';
+        if (!in_array($table, ['sas_users','sas_vendors','sas_super_admin'], true)) return '';
+        $claimed = null;
+        $ok = bc_q("UPDATE `$table` SET totp_secret=?, two_factor_type='pending' WHERE id=? AND (two_factor_type IS NULL OR two_factor_type <> 'totp' OR totp_secret IS NULL OR totp_secret='')",
+            array(bc_stepup_seal_secret($secret), (int)$actor_id), $claimed);
+        return $ok === true && $claimed === 1 ? $secret : '';
     }
 }
 
@@ -727,13 +729,16 @@ if (!function_exists('bc_totp_confirm_enrolment')) {
     /** Activates TOTP after the actor proves they hold the secret. */
     function bc_totp_confirm_enrolment($table, $actor_row, $code) {
         global $connection_server;
-        if (!($connection_server instanceof mysqli) || !is_array($actor_row)) return false;
+        if (!($connection_server instanceof mysqli) || !is_array($actor_row) || ($actor_row['two_factor_type'] ?? '') !== 'pending') return false;
         $secret = bc_stepup_open_secret((string)($actor_row['totp_secret'] ?? ''));
         if ($secret === '') return false;
         $step = bc_totp_verify($secret, (string)$code, 0);
         if ($step === false) return false;
-        return bc_q("UPDATE `$table` SET two_factor_type='totp', totp_last_step=? WHERE id=?",
-            array((int)$step, (int)$actor_row['id'])) === true;
+        if (!in_array($table, ['sas_users','sas_vendors','sas_super_admin'], true)) return false;
+        $claimed = null;
+        $saved = bc_q("UPDATE `$table` SET two_factor_type='totp', totp_last_step=? WHERE id=? AND two_factor_type='pending' AND totp_secret=?",
+            array((int)$step, (int)$actor_row['id'], (string)$actor_row['totp_secret']), $claimed);
+        return $saved === true && $claimed === 1;
     }
 }
 

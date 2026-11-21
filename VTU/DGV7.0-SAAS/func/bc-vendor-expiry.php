@@ -17,7 +17,7 @@ function bc_vendor_expiry_route($script) {
         '/vendors-payhub.php', '/vendors-payvessel.php');
     if (in_array($script, $settlements, true)) return 'settlement';
     if (in_array($script, array('/bc-admin/Login.php', '/bc-admin/PasswordRecovery.php',
-        '/bc-admin/RenewSubscription.php', '/admin-logout.php'), true)) return 'recovery';
+        '/bc-admin/RenewSubscription.php', '/bc-admin/SecuritySetup.php', '/web/SecuritySetup.php', '/web/logout.php', '/bc-admin/admin-logout.php', '/admin-logout.php'), true)) return 'recovery';
     return strpos($script, '/bc-admin/') === 0 ? 'admin' : 'public';
 }
 
