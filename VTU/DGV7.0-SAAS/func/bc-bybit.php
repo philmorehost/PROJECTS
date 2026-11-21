@@ -42,7 +42,7 @@ function bc_bybit_decode($status, $body) {
 }
 function bc_bybit_get($config, $operation, $params = []) {
     if (!function_exists('curl_init')) throw new RuntimeException('bybit_transport_unavailable');
-    $spec = bc_bybit_request_spec($config, $operation, $params, (string)(int)floor(microtime(true) * 1000));
+    $spec = bc_bybit_request_spec($config, $operation, $params, sprintf('%.0f', floor(microtime(true) * 1000)));
     $body = '';
     $ch = curl_init($spec['url']);
     curl_setopt_array($ch, [CURLOPT_HTTPHEADER=>$spec['headers'], CURLOPT_FOLLOWLOCATION=>false,

@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
+      - 'VTU/**/func/bc-bybit.php'
+      - 'VTU/tests/bybit_discovery_test.php'
+      - 'VTU/tests/crypto_bybit_identity_test.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-incident-wallet.php'
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
@@ -15,6 +18,9 @@ on:
   pull_request:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
+      - 'VTU/**/func/bc-bybit.php'
+      - 'VTU/tests/bybit_discovery_test.php'
+      - 'VTU/tests/crypto_bybit_identity_test.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-incident-wallet.php'
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
@@ -62,6 +68,10 @@ jobs:
           php -l VTU/DGV7.0-SAAS/bc-spadmin/CryptoCustody.php
           php -l VTU/DGV7.0-SAAS/bc-admin/CryptoCustody.php
           php -l VTU/DGV7.0-NON-SAAS/bc-admin/CryptoCustody.php
+      - name: Read-only Bybit identity and discovery contracts without network
+        run: |
+          php -n VTU/tests/crypto_bybit_identity_test.php
+          php -n VTU/tests/bybit_discovery_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections

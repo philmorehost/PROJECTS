@@ -6,7 +6,7 @@ function mg_check($ok,$label){global $n;if(!$ok)throw new RuntimeException($labe
 function mg_reject($fn,$code){try{$fn();}catch(Throwable $e){mg_check($e->getMessage()===$code,$code.' got '.$e->getMessage());return;}throw new RuntimeException('Unexpected success '.$code);}
 function bc_validate_csrf(){global $csrf,$calls;$calls[]='csrf';if(!$csrf)throw new RuntimeException('test_csrf_denied');}
 function bc_is_rate_limited($action,$key,$max,$window){global $limited,$calls;$calls[]=['rate',$action,$key,$max,$window];return $limited;}
-function bc_q_row($sql,$params=[]){global $fresh,$calls;$calls[]=['lookup',$sql,$params];return $fresh;}
+function bc_q_row($sql,$params=[]){global $fresh,$calls;$calls[]=['lookup',$sql,$params];if(strpos($sql,'sas_crypto_v2_custody_accounts')!==false)return $GLOBALS['account_row']??null;if(strpos($sql,'sas_vendors')!==false)return $GLOBALS['vendor_row']??null;return $fresh;}
 function bc_gauth_enrolled($row){return ($row['two_factor_type']??'')==='totp'&&!empty($row['totp_secret']);}
 function bc_stepup_spadmin_verify($row,$input,$context){global $stepup,$calls;$calls[]=['stepup',$row['id'],$context];return $stepup;}
 $valid=['id'=>11,'status'=>1,'is_blocked'=>0,'force_password_change'=>0,'two_factor_type'=>'totp','totp_secret'=>'synthetic'];
@@ -23,4 +23,13 @@ mg_check(in_array(['rate','crypto_custody_sensitive','spadmin:11',5,300],$calls,
 mg_reject(fn()=>bc_crypto_custody_manage(11,['environment'=>'testnet','action'=>'withdraw']),'crypto_custody_action_invalid');
 mg_reject(fn()=>bc_crypto_custody_manage(11,['environment'=>'testnet','action'=>'review','uid'=>'123']),'crypto_custody_proposal_required');
 mg_reject(fn()=>bc_crypto_custody_manage(11,['environment'=>'testnet','action'=>'review','custody_account'=>str_repeat('a',64),'uid'=>'123']),'crypto_custody_identity_ambiguous');
+$verify=['environment'=>'testnet','action'=>'verify_provider','revision'=>'4','custody_account'=>str_repeat('a',64),'source_vendor_id'=>'7'];
+mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_proposal_required');
+$GLOBALS['account_row']=['environment'=>'testnet','revision'=>4];
+mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_vendor_inactive');
+$GLOBALS['vendor_row']=['id'=>7,'status'=>0,'is_blocked'=>0];
+mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_vendor_inactive');
+$GLOBALS['vendor_row']=['id'=>7,'status'=>1,'is_blocked'=>0];
+$GLOBALS['account_row']['revision']=5;
+mg_reject(fn()=>bc_crypto_custody_manage(11,$verify),'crypto_custody_edit_conflict');
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";
