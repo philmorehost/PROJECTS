@@ -25,3 +25,17 @@ function bc_alert_http_accept($server,$headers,$config,$read,$connect,$now) {
     $db=$connect();
     return bc_alert_receiver_accept($db,$body,$r['timestamp'],$r['id'],$r['signature'],$config['key'],time());
 }
+
+/** Both engines retain a three-second budget; unknown/unsupported settings fail closed. */
+function bc_alert_http_database_limits($connection) {
+    $result=$connection->query('SELECT VERSION() AS version');
+    if($result===false)throw new RuntimeException('receiver_database_limits_failed');
+    $row=$result->fetch_assoc();
+    if(!is_string($row['version']??null)||$row['version']==='')throw new RuntimeException('receiver_database_limits_failed');
+    if($connection->query('SET SESSION innodb_lock_wait_timeout=3')!==true)throw new RuntimeException('receiver_database_limits_failed');
+    // MariaDB uses seconds; MySQL max_execution_time is measured in milliseconds.
+    $sql=stripos($row['version'],'MariaDB')!==false
+        ? 'SET SESSION max_statement_time=3'
+        : 'SET SESSION max_execution_time=3000';
+    if($connection->query($sql)!==true)throw new RuntimeException('receiver_database_limits_failed');
+}

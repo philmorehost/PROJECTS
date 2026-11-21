@@ -62,3 +62,5 @@ No real endpoint or infrastructure was supplied/configured in this task. An oper
 - Assign on-call ownership and independently verify forwarding/escalation and human response. Receiver acceptance alone does not satisfy that gate.
 
 Record actual staging observations and deployment approvals separately. No production migration/deployment, network endpoint, secret provisioning, worker scheduling, credits, balances, holds or withdrawal controls are changed by this reference implementation.
+
+Receiver HTTP session-limit compatibility is separately tested on MySQL 8.0 and MariaDB 10.11 with PHP 8.3 and 8.5. This receiver-only coverage does not imply MariaDB compatibility for all application modules. See CPANEL_INSTALL.md for updating the two private adapter files without changing config or schema.

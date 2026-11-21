@@ -14,3 +14,21 @@ ht_reject(fn()=>bc_alert_http_accept($server,$headers,$config,fn($n)=>$body.'x',
 $h=array_merge($headers,['X-Crypto-Signature'=>str_repeat('0',64)]);ht_reject(fn()=>bc_alert_http_accept($server,$h,$config,fn($n)=>$body,$connect,$now),'receiver_request_denied');ht_check(!$connected,'signature rejected before DB');
 ht_reject(fn()=>bc_alert_http_accept($server,$headers,$config,fn($n)=>$body,$connect,$now),'test_connector_reached');ht_check($connected,'valid authenticated request reaches internal connector only');
 echo "$n HTTP adapter policy/auth-before-DB checks passed; no listener or network.\n";
+
+class ReceiverLimitResult {
+    private $version;
+    function __construct($version){$this->version=$version;}
+    function fetch_assoc(){return ['version'=>$this->version];}
+}
+class ReceiverLimitDatabase {
+    public $queries=[];public $version;public $fail='';
+    function __construct($version){$this->version=$version;}
+    function query($sql){$this->queries[]=$sql;if($sql===$this->fail)throw new RuntimeException('test_limit_refused');return $sql==='SELECT VERSION() AS version'?new ReceiverLimitResult($this->version):true;}
+}
+foreach(['10.11.19-MariaDB','5.5.5-10.11.19-MariaDB','11.4.5-mariadb','8.0.45','8.4.1-Percona'] as $version){
+    $db=new ReceiverLimitDatabase($version);bc_alert_http_database_limits($db);
+    $expected=stripos($version,'MariaDB')!==false?'SET SESSION max_statement_time=3':'SET SESSION max_execution_time=3000';
+    ht_check($db->queries===['SELECT VERSION() AS version','SET SESSION innodb_lock_wait_timeout=3',$expected],'engine-specific timeout units and common lock limit');
+    $db->fail=$expected;ht_reject(fn()=>bc_alert_http_database_limits($db),'test_limit_refused');
+}
+echo "Database limit compatibility checks passed; unsupported limits are not ignored.\n";

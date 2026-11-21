@@ -48,7 +48,7 @@ Preview the two receiver-only table statements in Terminal, outside public_html:
 php /home/CPANELUSER/crypto-alert-receiver/receiver-cli.php schema
 ```
 
-Review/apply them only to the new staging database through phpMyAdmin or an approved admin process. Do not apply the production application installer just for this receiver. No schema is created by HTTP requests. Tables must be InnoDB. MySQL 8 behavior is tested; other database versions need independent validation.
+Review/apply them only to the new staging database through phpMyAdmin or an approved admin process. Do not apply the production application installer just for this receiver. No schema is created by HTTP requests. Tables must be InnoDB. Receiver-only compatibility CI covers MySQL 8.0 and MariaDB 10.11 on PHP 8.3/8.5; this does not establish MariaDB support for the full financial application.
 
 After schema setup, the runtime user needs SELECT/INSERT/UPDATE on `staging_alert_inbox` and SELECT/INSERT on `staging_alert_acceptance_events`, not schema administration, deletion or access to application financial tables. Verify cPanel per-table privileges with the database administrator if its UI only offers database-wide grants. The runtime sets session transaction/lock/query limits. `information_schema` table-engine metadata must be readable. Do not give broader global privileges to bypass a configuration failure.
 
@@ -63,7 +63,7 @@ Requirements before setting enabled=true:
 - PHP rejects case-variant duplicate header keys when visible and combined invalid signature values, but **cannot reliably detect duplicates discarded/overwritten by Apache/Cloudflare before getallheaders()**. Upstream duplicate rejection is a deployment gate, not a guarantee supplied by PHP.
 - Confirm PHP-FPM exposes original POST URI `/alert`, real origin HTTPS, expected Host and required headers. Host including a port, alternate aliases or a query string is rejected deliberately. Do not weaken these checks based on untrusted forwarded headers.
 - Supported request is `Content-Type: application/json`, explicit Content-Length, no content/transfer encoding; sender cURL produces this. No CORS/browser UI is provided.
-- Configure MySQL/PHP-FPM/server wall-clock execution limits, logging redaction and disk/resource quotas. The adapter sets a 3s DB connect timeout, InnoDB lock wait limit and SELECT execution limit; these are not an absolute bound on every database write or request.
+- Configure MySQL/PHP-FPM/server wall-clock execution limits, logging redaction and disk/resource quotas. The adapter sets a 3s DB connect timeout, InnoDB lock wait limit and engine-specific query limit (MySQL max_execution_time=3000 milliseconds; MariaDB max_statement_time=3 seconds); these are not an absolute wall-clock bound on every request. Failure to set limits refuses acceptance rather than dropping the safeguard.
 
 ## 5. Controlled staging activation and checks
 
@@ -80,3 +80,7 @@ Receiver inbox stores only delivery ID and payload/key fingerprints plus accepta
 Set private enabled=false to refuse new HTTP requests; already executing requests may finish. Disable sender delivery in its own environment separately (running processes retain their environment). Keep receiver DB/deduplication records and audit intact. Do not delete delivery IDs, reset budgets or alter financial holds. If keys/config were exposed, stop, rotate via the reviewed incident plan and investigate rather than changing pins blindly.
 
 No VPS/cPanel login, private key or database password is needed in this chat. Installation, certificate validation and actual staging observations remain operator actions; the code merge is not deployment approval.
+
+## MariaDB timeout compatibility update
+
+If private `http-entry.php` previously called `SET SESSION max_execution_time=3000` directly, MariaDB rejects it with error 1193 and the HTTP adapter returns generic 400. While the receiver is disabled, update **both private `http.php` and `http-entry.php`** from this revision. Do not overwrite private config.php, change keys, remove timeouts, alter tables or delete acceptance records. The bootstrap now delegates to an engine-aware session-limit helper; MySQL retains its millisecond limit and MariaDB uses its seconds-based equivalent. Unknown/unsupported setting or permission failures still fail closed. Re-run syntax checks, then a separately authorized brief synthetic HTTPS test and disable again. This fixes one proven connector incompatibility; it does not prove that other HTTPS/header/vhost issues are absent.
