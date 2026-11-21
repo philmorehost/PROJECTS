@@ -48,3 +48,22 @@ verification was performed. After deployment, verify on a test account: both API
 directions, archive/restore, and (only on a disposable archived account) permanent
 delete. Test email delivery for an actor without enrolled TOTP and a fresh
 Authenticator code for an enrolled actor. Existing financial holds remain unchanged.
+
+## Follow-up: full-shell placement and footer script compatibility
+
+User-action dialog styling is now scoped directly to `#sec33UserModal`, not to
+an ancestor content wrapper. This covers confirmations rendered after the table
+wrapper, provides explicit field/panel layout and backdrop styling, and keeps
+closed confirmations hidden. Compatibility styles also cover older div-based
+modal markup. Native dialogs stay in the browser top layer.
+
+The vendor footer bundle now installs legacy action handlers only when the page
+has not supplied its own secure handler. This preserves selected row IDs and
+avoids replacing page-specific confirmation logic. Footer helper URLs carry a
+content hash to invalidate stale browser caches when their contents change.
+
+The browser regression now includes the actual shell CSS and vendor footer
+bundle, with the dialog deliberately outside the content wrapper after a tall
+table. It asserts viewport placement, usable field widths, and row-ID retention
+in addition to the existing submission/cancellation checks. No live account
+actions or deployment were performed during this validation.
