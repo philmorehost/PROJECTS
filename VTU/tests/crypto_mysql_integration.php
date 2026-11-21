@@ -25,7 +25,6 @@ require $base.'bc-crypto-route-schema.php';
 require $base.'bc-crypto-routes.php';
 require $base.'bc-crypto-poll-schema.php';
 require $base.'bc-crypto-poll-worker-schema.php';
-require $base.'bc-crypto-poll-worker.php';
 require $base.'bc-crypto-poll-alert-schema.php';
 require $base.'bc-crypto-poll.php';
 require $base.'bc-crypto-poll-review.php';
@@ -33,6 +32,7 @@ require $base.'bc-crypto-poll-review-schema.php';
 require $base.'bc-crypto-poll-overlap-schema.php';
 require $base.'bc-crypto-poll-lease-schema.php';
 require $base.'bc-crypto-poll-operator.php';
+require $base.'bc-crypto-poll-worker.php';
 require $base.'bc-incident-wallet.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
