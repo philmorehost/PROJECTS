@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $data_service_provider_alter_code = array("mtn" => "gifting", "airtel" => "airtel_cg");
  if(in_array($product_name, array_keys($data_service_provider_alter_code))){
   if($product_name == "mtn"){
@@ -22,7 +23,7 @@
   }
   if(in_array($quantity, array_keys($web_data_size_array))){
    $abumpay_reference = substr(str_shuffle("12345678901234567890"), 0, 15);
-   $curl_url = "https://".$api_detail["api_base_url"]."/api/".str_replace("-","_",$base_url_suffix)."?apiToken=".$api_detail["api_key"]."&network=".$base_url_suffix."&network_code=".$web_data_size_array[$quantity]."&mobile=".$phone_no."&ref=".$abumpay_reference;
+   $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/").str_replace("-","_",$base_url_suffix)."?apiToken=".$api_detail["api_key"]."&network=".$base_url_suffix."&network_code=".$web_data_size_array[$quantity]."&mobile=".$phone_no."&ref=".$abumpay_reference;
    $curl_request = curl_init($curl_url);
    curl_setopt($curl_request, CURLOPT_HTTPGET, true);
    curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -30,7 +31,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
    curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
    curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-   $curl_result = curl_exec($curl_request);
+   $curl_result = bc_vtu_curl_exec($curl_request);
    $curl_json_result = json_decode($curl_result, true);
 if(!is_array($curl_json_result) || !isset($curl_json_result["code"])){
    $curl_json_result = array("code" => "999", "response_description" => "Invalid API response. Check your API credentials and try again.");

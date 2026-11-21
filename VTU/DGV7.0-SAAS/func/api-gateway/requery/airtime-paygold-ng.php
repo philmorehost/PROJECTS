@@ -1,12 +1,13 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     $explode_paygold_apikey = array_filter(explode(":",trim($api_detail["api_key"])));
-    $curl_url = "https://".$api_detail["api_base_url"]."/wp-json/wc-order-status/v1/order/".$get_api_reference_id."?username=".$explode_paygold_apikey[0]."&password=".$explode_paygold_apikey[1];
+    $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/wp-json/wc-order-status/v1/order/").$get_api_reference_id."?username=".$explode_paygold_apikey[0]."&password=".$explode_paygold_apikey[1];
     $curl_request = curl_init($curl_url);
     curl_setopt($curl_request, CURLOPT_HTTPGET, true);
     curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-    $curl_result = trim(curl_exec($curl_request));
+    $curl_result = trim(bc_vtu_curl_exec($curl_request));
 	if (strtoupper((string)($purchase_method ?? "")) === "CRON_JOB" && function_exists("bc_requery_queue_log")) {
 		$curl_errno = curl_errno($curl_request);
 		$curl_error = curl_error($curl_request);

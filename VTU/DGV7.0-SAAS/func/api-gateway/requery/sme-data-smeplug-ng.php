@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
 // SME Plug transaction lookup: GET https://smeplug.ng/api/v1/transactions/{provider_reference}
 $api_response = "pending";
 $api_response_text = "";
@@ -23,7 +24,7 @@ if (!empty($get_api_reference_id) && !empty($api_detail["api_key"])) {
             "Accept: application/json"
         )
     ));
-    $curl_result = curl_exec($curl_request);
+    $curl_result = bc_vtu_curl_exec($curl_request);
     $smeplug_curl_errno = curl_errno($curl_request);
     $smeplug_http_code = (int)curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
     $smeplug_curl_error = curl_error($curl_request);

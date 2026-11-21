@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $exam_service_provider_alter_code = array("waec" => "waec", "neco" => "neco", "nabteb" => "nabteb", "jamb" => "jamb");
 
 // Default to a failure. Every branch below may overwrite this, but if none of them runs - an HTML
@@ -17,7 +18,7 @@ if (in_array($product_name, array_keys($exam_service_provider_alter_code))) {
 		// api_base_url is admin-typed and may already carry a scheme; strip it so we never build
 		// "https://https://..." and fail DNS.
 		$exam_local_host = rtrim(preg_replace('#^https?://#i', '', strtolower(trim($api_detail["api_base_url"]))), "/");
-		$curl_url = "https://" . $exam_local_host . "/web/api/exam.php";
+		$curl_url = bc_vtu_local_url($api_detail["api_base_url"], "exam");
 		$curl_request = curl_init($curl_url);
 		curl_setopt($curl_request, CURLOPT_POST, true);
 		curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -26,12 +27,13 @@ if (in_array($product_name, array_keys($exam_service_provider_alter_code))) {
 		curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 		curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
 		$curl_http_headers = array(
+        "X-BC-VTU-Hop: ".bc_vtu_forward_hop(),
 			"Content-Type: application/json",
 		);
 		curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
 		$curl_postfields_data = json_encode(array("api_key" => $api_detail["api_key"], "type" => $product_name, "quantity" => $quantity), true);
 		curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-		$curl_result = curl_exec($curl_request);
+        $curl_result = bc_vtu_curl_exec($curl_request,true);
   $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
 		if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 		// A non-JSON body (e.g. the 404 HTML page a wrong host returns) leaves $json_status null,

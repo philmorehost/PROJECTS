@@ -14,7 +14,8 @@ function mysqli_commit($db){if($db->fail==='commit')return false;$db->active=0;r
 function mysqli_rollback($db){if($db->snapshot!==null)list($db->balance,$db->events,$db->history)=$db->snapshot;$db->active=0;$db->rollbacks++;return true;}
 function mysqli_query($db,$sql){
  $db->queries[]=$sql;
- if(strpos($sql,'@@session.in_transaction')!==false)return new WRows(array(array('active'=>$db->active)));
+ if(strpos($sql,'@@session.autocommit')!==false)return new WRows(array(array('auto_commit'=>$db->autocommit??1)));
+ if($sql==='SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')return !$db->active;
  if(strpos($sql,'information_schema.TABLES')!==false){$rows=array();foreach(array('sas_users','sas_vendors','sas_transactions','sas_vendor_transactions','sas_wallet_mutation_events') as $t)$rows[]=array('TABLE_NAME'=>$t,'ENGINE'=>$db->engine);return new WRows($rows);}
  if(strpos($sql,'SELECT balance,status,email')===0)return new WRows(array(array('balance'=>(string)$db->balance,'status'=>1,'email'=>'not-a-mail')));
  if(preg_match("/SELECT (payload_hash|amount) FROM sas_wallet_mutation_events WHERE event_key='([a-f0-9]+)'/",$sql,$m))return new WRows(isset($db->events[$m[2]])?array($db->events[$m[2]]):array());

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     $web_electric_size_array = array("ekedc"=>"eko-electric","eedc"=>"enugu-electric","ikedc"=>"ikeja-electric","jedc"=>"jos-electric","kedco"=>"kano-electric","ibedc"=>"ibadan-electric","phed"=>"portharcourt-electric","aedc"=>"abuja-electric","yedc"=>"yola-electric", "bedc" => "benin-electric", "aba" => "aba-electric", "kaedco" => "kaduna-electric");
     if(in_array($epp, array_keys($web_electric_size_array))){
         $curl_url = "https://vtpass.com/api/merchant-verify";
@@ -18,7 +19,7 @@ curl_setopt($curl_request, CURLOPT_TIMEOUT, 30);
         curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
         $curl_postfields_data = json_encode(array("billersCode"=>$meter_number,"serviceID"=>$web_electric_size_array[$epp],"type"=>$type),true);
         curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-        $curl_result = curl_exec($curl_request);
+        $curl_result = bc_vtu_curl_exec($curl_request);
         $curl_json_result = json_decode($curl_result, true);
 if(!is_array($curl_json_result) || !isset($curl_json_result["code"])){
         $curl_json_result = array("code" => "999", "response_description" => "Invalid API response. Check your API credentials and try again.");

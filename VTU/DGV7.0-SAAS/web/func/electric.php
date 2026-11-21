@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -85,9 +86,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                         if (productIDPurchaseChecker($meter_number, "electric", $purchase_method) == "success") {
                                                             $debit_user = chargeUser("debit", $meter_number, $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
                                                             if ($debit_user === "success") {
-                                                                $api_gateway_name_file_exists = "electric-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                                $api_gateway_name_file_exists = bc_vtu_gateway_candidate("electric", $api_detail["api_base_url"]);
                                                                 if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/" . $api_gateway_name_file_exists)) {
-                                                                    $api_gateway_name = "electric-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                                    $api_gateway_name = bc_vtu_gateway_candidate("electric", $api_detail["api_base_url"]);
                                                                 } else {
                                                                     $api_gateway_name = "electric-localserver.php";
                                                                 }
@@ -155,7 +156,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                                 }
                                                             } else {
                                                                 //Unable to proceed with charges
-                                                                $json_response_array = array("status" => "failed", "desc" => "Unable to proceed with charges");
+                                                                $json_response_array = array("status" => "failed", "desc" => ($GLOBALS['bc_charge_failure_reason'] ?? "Unable to proceed with charges"));
                                                                 $json_response_encode = json_encode($json_response_array, true);
                                                             }
                                                         } else {
@@ -251,9 +252,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                         $product_table = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_products WHERE vendor_id='" . $get_logged_user_details["vendor_id"] . "' && product_name='" . $product_name . "' LIMIT 1"));
                                     }
                                     if (($product_table["status"] == 1) && ($product_status_table["status"] == 1)) {
-                                        $api_gateway_name_file_exists = "electric-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                        $api_gateway_name_file_exists = bc_vtu_gateway_candidate("electric", $api_detail["api_base_url"]);
                                         if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/verify/" . $api_gateway_name_file_exists)) {
-                                            $api_gateway_name = "electric-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                            $api_gateway_name = bc_vtu_gateway_candidate("electric", $api_detail["api_base_url"]);
                                         } else {
                                             $api_gateway_name = "electric-localserver.php";
                                         }

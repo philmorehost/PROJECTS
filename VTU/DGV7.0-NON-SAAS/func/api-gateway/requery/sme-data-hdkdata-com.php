@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     if(!empty($requery_reference)){
         // The base URL and key must be normalised exactly like the purchase gateway does, otherwise
         // a stored "https://" scheme (-> https://https://host/...) or a key stored WITH its "Token "
@@ -6,7 +7,7 @@
         // refunded transactions HDK had actually delivered and charged for.
         $clean_base_url = rtrim(preg_replace('#^https?://#', '', trim((string)$api_detail["api_base_url"])), "/");
         $clean_api_key  = trim(str_ireplace("Token ", "", (string)$api_detail["api_key"]));
-        $curl_url = "https://".$clean_base_url."/api/data/".rawurlencode((string)getTransaction($requery_reference, "api_reference"));
+        $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/data/").rawurlencode((string)getTransaction($requery_reference, "api_reference"));
         $curl_request = curl_init($curl_url);
         curl_setopt($curl_request, CURLOPT_HTTPGET, true);
         curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -20,7 +21,7 @@
             "Accept: application/json",
         );
         curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
-        $curl_result = trim(curl_exec($curl_request));
+        $curl_result = trim(bc_vtu_curl_exec($curl_request));
         $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

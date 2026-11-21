@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../func/bc-vtu-runtime.php';
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
@@ -60,9 +61,9 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                             if (($product_table["status"] == 1) && ($product_status_table["status"] == 1)) {
                                                 $debit_user = chargeUser("debit", $qty_number, $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
                                                 if ($debit_user === "success") {
-                                                    $api_gateway_name_file_exists = $type . "-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                    $api_gateway_name_file_exists = bc_vtu_gateway_candidate($type, $api_detail["api_base_url"]);
                                                     if (file_exists($_SERVER['DOCUMENT_ROOT'] . "/func/api-gateway/" . $api_gateway_name_file_exists)) {
-                                                        $api_gateway_name = $type . "-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
+                                                        $api_gateway_name = bc_vtu_gateway_candidate($type, $api_detail["api_base_url"]);
                                                     } else {
                                                         $api_gateway_name = $type . "-localserver.php";
                                                     }
@@ -123,7 +124,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                     }
                                                 } else {
                                                     //Unable to proceed with charges
-                                                    $json_response_array = array("status" => "failed", "desc" => "Unable to proceed with charges");
+                                                    $json_response_array = array("status" => "failed", "desc" => ($GLOBALS['bc_charge_failure_reason'] ?? "Unable to proceed with charges"));
                                                     $json_response_encode = json_encode($json_response_array, true);
                                                 }
                                             } else {

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $web_electric_size_array = array("ekedc"=>"01","eedc"=>"09","ikedc"=>"02","jedc"=>"06","kedco"=>"04","ibedc"=>"07","phed"=>"05","aedc"=>"03", "bedc"=>"08", "kaedco"=>"10", "yedc"=>"11", "aba"=>"12");
  if(in_array($epp, array_keys($web_electric_size_array))){
   $explode_clubkonnect_apikey = array_filter(explode(":",trim($api_detail["api_key"])));
@@ -12,7 +13,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

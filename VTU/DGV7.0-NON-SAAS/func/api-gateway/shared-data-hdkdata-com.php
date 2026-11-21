@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 $data_service_provider_alter_code = array("mtn" => "mtn", "airtel" => "airtel", "9mobile" => "9mobile");
 if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
  if ($product_name == "mtn") {
@@ -21,7 +22,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   }
  }
  if (in_array($quantity, array_keys($web_data_size_array))) {
-  $curl_url = "https://" . $api_detail["api_base_url"] . "/api/data/";
+  $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/data/");
   $curl_request = curl_init($curl_url);
   curl_setopt($curl_request, CURLOPT_POST, true);
   curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -36,8 +37,7 @@ if (in_array($product_name, array_keys($data_service_provider_alter_code))) {
   curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
   $curl_postfields_data = json_encode(array("network" => $net_id, "plan" => $web_data_size_array[$quantity], "mobile_number" => $phone_no, "Ported_number" => true), true);
   curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-  $curl_result = curl_exec($curl_request);
-  error_log("HDK DATA API RAW RESPONSE: " . $curl_result);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

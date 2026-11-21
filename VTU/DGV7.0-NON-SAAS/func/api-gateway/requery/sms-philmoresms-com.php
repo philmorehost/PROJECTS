@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     if(!empty($requery_reference)){
         $explode_philmoresms_apikey = array_filter(explode(":",trim($api_detail["api_key"])));
         $curl_url = "https://smsc.philmoresms.com/smsAPI&groupstatus&apikey=".$explode_philmoresms_apikey[0]."&apitoken=".$explode_philmoresms_apikey[1]."&groupid=".getTransaction($requery_reference, "api_reference");
@@ -7,7 +8,7 @@
         curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-        $curl_result = trim(curl_exec($curl_request));
+        $curl_result = trim(bc_vtu_curl_exec($curl_request));
         $curl_json_result = json_decode($curl_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }
         

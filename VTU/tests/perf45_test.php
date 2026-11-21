@@ -61,7 +61,7 @@ foreach ($roots as $name => $root) {
 
     foreach (['bc-plate-app.php', 'bc-plate-admin.php'] as $plate) {
         $pl = file_get_contents($root . '/func/' . $plate);
-        chk(strpos($pl, 'sweetalert2.all.min.js" defer') !== false, "$name $plate: SweetAlert no longer parser-blocking");
+        chk(preg_match('~sweetalert2\.all\.min\.js(?:\?[^"]*)?" defer~', $pl) === 1, "$name $plate: SweetAlert no longer parser-blocking");
     }
 }
 

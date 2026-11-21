@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 // SME Plug Data Purchase: POST https://smeplug.ng/api/v1/data/purchase
 // DGV stores provider plan ids in lowercase; SME Plug's alpha-numeric ids are case-sensitive in the catalogue.
 $smeplug_network_ids = array("mtn" => 1, "airtel" => 2, "9mobile" => 3, "glo" => 4);
@@ -42,7 +43,7 @@ if ($smeplug_token === "" || !isset($smeplug_network_ids[$smeplug_network]) || $
             "customer_reference" => $smeplug_customer_reference
         ))
     ));
-    $curl_result = curl_exec($curl_request);
+    $curl_result = bc_vtu_curl_exec($curl_request);
     $smeplug_curl_errno = curl_errno($curl_request);
     $smeplug_http_code = (int)curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
     $smeplug_curl_error = curl_error($curl_request);

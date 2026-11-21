@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  $web_betting_size_array = array("msport" => "msport", "naijabet" => "naijabet", "nairabet" => "nairabet", "bet9ja-agent" => "bet9ja-agent", "betland" => "betland", "betlion" => "betlion", "supabet" => "supabet", "bet9ja" => "bet9ja", "bangbet" => "bangbet", "betking" => "betking", "1xbet" => "1xbet", "betway" => "betway", "merrybet" => "merrybet", "mlotto" => "mlotto", "western-lotto" => "western-lotto", "hallabet" => "hallabet", "green-lotto" => "green-lotto");
  if(in_array($epp, array_keys($web_betting_size_array))){
   $explode_clubkonnect_apikey = array_filter(explode(":",trim($api_detail["api_key"])));
@@ -12,7 +13,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
   curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-  $curl_result = curl_exec($curl_request);
+  $curl_result = bc_vtu_curl_exec($curl_request);
   $curl_json_result = json_decode($curl_result, true);
   if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

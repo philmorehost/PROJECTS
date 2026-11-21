@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 // ─── Logging Helper ──────────────────────────────────────────────────────────
 // Writes a timestamped entry to logs/sms-localserver-YYYY-MM-DD.log
 // Log is protected by the existing logs/.htaccess (deny from all).
+if (!function_exists('sms_ls_log')) {
 function sms_ls_log($msg, $data = null) {
     $log_dir  = $_SERVER['DOCUMENT_ROOT'] . '/logs';
     $log_file = $log_dir . '/sms-localserver-' . date('Y-m-d') . '.log';
@@ -10,6 +12,7 @@ function sms_ls_log($msg, $data = null) {
         $line .= ' | ' . (is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
     @file_put_contents($log_file, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
 }
 
 // ─── Gateway Logic ───────────────────────────────────────────────────────────
@@ -29,7 +32,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
     $web_sms_size_array = array("standard_sms" => "standard_sms", "flash_sms" => "flash_sms", "in_app_otp" => "in_app_otp");
 
     if (!empty($sms_type)) {
-        $curl_url = "https://" . $api_detail["api_base_url"] . "/web/api/sms.php";
+        $curl_url = bc_vtu_local_url($api_detail["api_base_url"], "sms");
         sms_ls_log("Initiating cURL to upstream API", $curl_url);
 
         $curl_request = curl_init($curl_url);
@@ -39,7 +42,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
         curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($curl_request, CURLOPT_HTTPHEADER, array("Content-Type: application/json"));
+        curl_setopt($curl_request, CURLOPT_HTTPHEADER, array("Content-Type: application/json", "X-BC-VTU-Hop: ".bc_vtu_forward_hop()));
 
         $curl_postfields_data = "";
 
@@ -104,7 +107,7 @@ if (in_array($product_name, array_keys($sms_service_provider_alter_code))) {
             curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
 
             $start_time  = microtime(true);
-            $curl_result = curl_exec($curl_request);
+            $curl_result = bc_vtu_curl_exec($curl_request,true);
             $elapsed_ms  = round((microtime(true) - $start_time) * 1000);
             $http_code   = curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
 

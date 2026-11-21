@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  if($isp == "mtn"){
   $localserver_isp_code = "mtn";
  }else{
@@ -15,7 +16,7 @@
   }
  }
 
- $curl_url = "https://".$api_detail["api_base_url"]."/web/api/airtime.php";
+ $curl_url = bc_vtu_local_url($api_detail["api_base_url"], "airtime");
  $curl_request = curl_init($curl_url);
  curl_setopt($curl_request, CURLOPT_POST, true);
  curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -24,12 +25,13 @@
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
  $curl_http_headers = array(
+        "X-BC-VTU-Hop: ".bc_vtu_forward_hop(),
   "Content-Type: application/json",
  );
  curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
  $curl_postfields_data = json_encode(array("api_key"=> $api_detail["api_key"],"network"=> $localserver_isp_code,"amount"=> $amount,"phone_number"=> $phone_no), true);
  curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
- $curl_result = curl_exec($curl_request);
+ $curl_result = bc_vtu_curl_exec($curl_request,true);
  $curl_json_result = function_exists('bc_gateway_json_decode') ? bc_gateway_json_decode($curl_result) : json_decode($curl_result, true);
  if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

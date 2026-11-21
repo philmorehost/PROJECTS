@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
 if ($isp == "mtn") {
  $localserver_isp_code = "1";
 } else {
@@ -15,7 +16,7 @@ if ($isp == "mtn") {
  }
 }
 
-$curl_url = "https://" . $api_detail["api_base_url"] . "/api/topup/";
+$curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/topup/");
 $curl_request = curl_init($curl_url);
 curl_setopt($curl_request, CURLOPT_POST, true);
 curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -30,7 +31,7 @@ $curl_http_headers = array(
 curl_setopt($curl_request, CURLOPT_HTTPHEADER, $curl_http_headers);
 $curl_postfields_data = json_encode(array("network" => $localserver_isp_code, "amount" => $amount, "mobile_number" => $phone_no, "Ported_number" => true, "airtime_type" => "VTU"), true);
 curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);
-$curl_result = curl_exec($curl_request);
+$curl_result = bc_vtu_curl_exec($curl_request);
 $curl_json_result = json_decode($curl_result, true);
 if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

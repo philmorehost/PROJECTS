@@ -1,5 +1,6 @@
 <?php
- $curl_url = "https://".$api_detail["api_base_url"]."/api/v2/airtime/?api_key=".$api_detail["api_key"]."&product_code=".$isp."_custom&phone=".$phone_no."&amount=".$amount;
+require_once __DIR__ . '/../bc-vtu-runtime.php';
+ $curl_url = bc_vtu_provider_url($api_detail["api_base_url"], "/api/v2/airtime/?api_key=").$api_detail["api_key"]."&product_code=".$isp."_custom&phone=".$phone_no."&amount=".$amount;
  $curl_request = curl_init($curl_url);
  curl_setopt($curl_request, CURLOPT_HTTPGET, true);
  curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
@@ -7,7 +8,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
- $curl_result = curl_exec($curl_request);
+ $curl_result = bc_vtu_curl_exec($curl_request);
  $curl_json_result = json_decode($curl_result, true);
  if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 

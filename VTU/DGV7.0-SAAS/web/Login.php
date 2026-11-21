@@ -435,13 +435,18 @@ bc_plate_auth_top(array(
             </form>
         <?php endif; ?>
 
-  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
+  <script src="../assets-2/vendor/sweetalert2/sweetalert2.all.min.js" defer></script>
 
 <?php if(isset($_SESSION["product_purchase_response"])){ ?>
 
 <script>
-  const msg = '<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>';
+document.addEventListener('DOMContentLoaded', function () {
+  const msg = <?php echo json_encode($_SESSION["product_purchase_response"], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT); ?>;
+  if (typeof Swal === 'undefined') {
+    const note = document.createElement('p'); note.setAttribute('role', 'alert'); note.textContent = msg;
+    const form = document.querySelector('form'); if (form) form.prepend(note);
+    return;
+  }
   const isBlocked = msg.includes('Access Denied') || msg.includes('Account Locked');
 
   if (isBlocked) {
@@ -497,6 +502,7 @@ bc_plate_auth_top(array(
   setTimeout(() => {
     fetch('/func/unset-product-response.php').then(response => response.text());
   }, 1000);
+});
 </script>
 
 
@@ -560,9 +566,8 @@ bc_plate_auth_top(array(
 .network-status.online { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 .network-status.offline { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 </style>
-<script src="../jsfile/bc-custom-all.js"></script>
-<script src="../asset/pwa-handler.js"></script>
-<script src="../asset/biometric-handler.js"></script>
+<script src="../jsfile/bc-custom-all.js" defer></script>
+<script src="../asset/biometric-handler.js" defer></script>
 <script>
 // Biometric Login Initialization
 document.addEventListener('DOMContentLoaded', () => {

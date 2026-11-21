@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../bc-vtu-runtime.php';
     if(!empty($requery_reference)){
         $clubkonnect_apikey_parts = explode(":", trim($api_detail["api_key"]));
         $ck_user_id = trim($clubkonnect_apikey_parts[0] ?? '');
@@ -16,7 +17,7 @@
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($curl_request, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        $curl_result = trim(curl_exec($curl_request));
+        $curl_result = trim(bc_vtu_curl_exec($curl_request));
         $curl_json_result = json_decode($curl_result, true);
         if(!is_array($curl_json_result)){ $curl_json_result = array(); }
         

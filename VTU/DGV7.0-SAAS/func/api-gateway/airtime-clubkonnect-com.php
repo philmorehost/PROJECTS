@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../bc-vtu-runtime.php';
  if($isp == "mtn"){
   $clubkonnect_isp_code = "01";
  }else{
@@ -25,7 +26,7 @@
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
  curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
- $curl_result = curl_exec($curl_request);
+ $curl_result = bc_vtu_curl_exec($curl_request);
  $curl_json_result = json_decode($curl_result, true);
  if(!is_array($curl_json_result)){ $curl_json_result = array(); }
 
