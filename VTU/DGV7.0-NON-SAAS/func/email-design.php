@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bc-email-assets.php';
 /**
  * bc_extractEmailBodyContent()
  * Reduces a full HTML document (e.g. a GrapesJS export) to just the content inside
@@ -42,7 +43,7 @@ function bc_email_shade($hex, $factor) {
  */
 function bc_email_brand() {
     global $connection_server;
-    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+    $host = bc_email_asset_host($_SERVER['HTTP_HOST'] ?? '');
     $vendor_id = (int)($GLOBALS['get_logged_user_details']['vendor_id'] ?? $GLOBALS['get_logged_admin_details']['id'] ?? $GLOBALS['vendor_id'] ?? 0);
     if ($vendor_id <= 0 && $connection_server instanceof mysqli && function_exists('resolveVendorID')) {
         $vendor_id = (int)resolveVendorID();
@@ -66,8 +67,8 @@ function bc_email_brand() {
         $vq2 = mysqli_query($connection_server, "SELECT email, website_url FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
         if ($vq2 && ($vr2 = mysqli_fetch_assoc($vq2))) {
             $support = (string)$vr2['email'];
-            $vendor_host = strtolower(trim((string)($vr2['website_url'] ?? '')));
-            if (preg_match('/^[a-z0-9.-]+$/D', $vendor_host)) $host = $vendor_host;
+            $vendor_host = bc_email_asset_host($vr2['website_url'] ?? '');
+            if ($vendor_host !== '') $host = $vendor_host;
         }
     }
     if ($site_name === '' && $connection_server instanceof mysqli) {
@@ -77,6 +78,10 @@ function bc_email_brand() {
     if ($site_name === '') $site_name = $host !== '' ? $host : 'Our Platform';
     if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) $color = '#287bff';
     if ($support === '' || !filter_var($support, FILTER_VALIDATE_EMAIL)) $support = 'support@' . ($host !== '' ? $host : 'example.com');
+    $logo_key = str_replace(array(':', '.'), '-', $host);
+    $logo_path = __DIR__ . '/../uploaded-image/' . $logo_key . '_logo.png';
+    $logo_mime = $host !== '' ? bc_email_logo_mime($logo_path) : '';
+    $has_logo = $logo_mime !== '';
     $brand = array(
         'vendor_id' => $vendor_id,
         'site_name' => $site_name,
@@ -85,7 +90,9 @@ function bc_email_brand() {
         'support_email' => $support,
         'host' => $host,
         'apk_url' => $apk,
-        'logo_url' => $host !== '' ? 'https://' . $host . '/uploaded-image/' . str_replace(array(':', '.'), '-', $host) . '_logo.png' : '',
+        'logo_url' => $has_logo ? 'https://' . $host . '/uploaded-image/' . $logo_key . '_logo.png?v=' . (int)filemtime($logo_path) : '',
+        'logo_path' => $has_logo ? $logo_path : '',
+        'logo_mime' => $logo_mime,
     );
     return $brand;
 }
@@ -124,11 +131,12 @@ function mailDesignTemplate($title, $message, $details_array, $show_app = true) 
     global $connection_server;
 
     // All outgoing messages use one shell, including saved full-document designs.
-    if (strpos(ltrim((string)$message), '<!-- bc-email-shell:v2 -->') === 0) return $message;
+    if (strpos(ltrim((string)$message), '<!-- bc-email-shell:v2 -->') === 0) return bc_email_prepare_assets($message, bc_email_brand()['host']);
     if (preg_match('/<(?:html|body)\b/i', (string)$message)) {
         $message = bc_extractEmailBodyContent($message);
     }
 
+    $message = bc_email_prepare_assets($message, bc_email_brand()['host']);
     $mail_title = !empty(trim(strip_tags($title))) ? trim(strip_tags($title)) : 'Notification';
     $mail_message = str_replace("\n", "<br/>", trim($message));
 
@@ -192,10 +200,10 @@ function mailDesignTemplate($title, $message, $details_array, $show_app = true) 
 
     $app_section_html = '';
     if ($show_app && $base_url !== '') {
-        $badge_img = '<img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" height="40" alt="Get the app" style="border:0;">';
-        $app_cta = !empty($brand['apk_url'])
-            ? '<a href="' . htmlspecialchars($brand['apk_url'], ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener" style="text-decoration:none;">' . $badge_img . '</a>'
-            : $badge_img;
+        // Text CTA works in Gmail/Outlook even when all remote images are blocked.
+        $app_url = bc_email_asset_url($brand['apk_url'], $brand['host']);
+        if ($app_url === '' || stripos($app_url, 'cid:') === 0) $app_url = $base_url . '/DownloadApp.php';
+        $app_cta = '<a href="' . htmlspecialchars($app_url, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener" style="display:inline-block;padding:12px 22px;background-color:' . $primary_color . ';color:#ffffff;text-decoration:none;border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-weight:700;">Download the app</a>';
         $app_section_html = '<tr><td style="padding:20px 25px;background-color:#f8fafc;text-align:center;border-top:1px solid #eef2f7;">'
             . '<p style="margin:0;font-size:12px;color:#64748b;font-weight:700;letter-spacing:1.5px;font-family:Arial,Helvetica,sans-serif;">GET THE APP</p>'
             . '<div style="margin-top:10px;">' . $app_cta . '</div></td></tr>';
@@ -209,7 +217,7 @@ function mailDesignTemplate($title, $message, $details_array, $show_app = true) 
     . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;table-layout:fixed;background-color:#edf1f6;">'
     . '<tr><td align="center" style="padding:28px 12px 36px 12px;">'
     . '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color:#ffffff;margin:0 auto;width:100%;max-width:600px;border-spacing:0;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.10);">'
-    . '<tr><td align="center" style="background-color:' . $primary_color . ';background:linear-gradient(135deg,' . $primary_color . ',' . $dark_color . ');padding:26px 25px 22px 25px;text-align:center;">'
+    . '<tr><td align="center" style="background-color:' . $primary_color . ';padding:26px 25px 22px 25px;text-align:center;">'
     . $logo_html
     . '<div style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;margin-top:10px;letter-spacing:0.2px;">' . $site_name_e . '</div>'
     . '<div style="color:rgba(255,255,255,0.85);font-family:Arial,Helvetica,sans-serif;font-size:12.5px;margin-top:3px;">Fast payments, data, airtime &amp; bills — done in seconds.</div>'
