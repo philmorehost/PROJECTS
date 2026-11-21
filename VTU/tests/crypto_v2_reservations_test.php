@@ -10,6 +10,8 @@ function mysqli_rollback($db) { $GLOBALS['db']=$GLOBALS['snapshot']; return true
 function bc_q_row($sql,$p=[]) {
     $db=$GLOBALS['db'];
     if (strpos($sql,'@@session')!==false) return ['in_tx'=>$GLOBALS['in_tx']??0,'auto_commit'=>1];
+    if (strpos($sql,'FROM sas_crypto_v2_governance')!==false) return $db['governance'][$p[0]][$p[2]]??null;
+    if (strpos($sql,'FROM sas_crypto_v2_catalogues')!==false) return $db['catalogue'];
     if (strpos($sql,'FROM sas_users')!==false) return $db['user'];
     if (strpos($sql,'FROM sas_crypto_v2_asset_policies')!==false) return $db['policy'];
     if (strpos($sql,'FROM sas_crypto_v2_accounts')!==false) return $db['accounts'][strpos($sql,"bucket='available'")!==false?1:2];
@@ -44,6 +46,10 @@ function reset_reservation_db(){
     $GLOBALS['db']=['user'=>['id'=>9,'status'=>1,'is_blocked'=>0,'force_password_change'=>0,'kyc_status'=>2],
        'policy'=>['enabled'=>1,'withdrawals_enabled'=>1,'reconciliation_status'=>'matched','valid_until_epoch'=>time()+600,'max_reservation_units'=>'10000000','scale'=>6],
        'accounts'=>[1=>$a,2=>$b],'ops'=>[],'entries'=>[]];
+    $network=['asset_network'=>'USDT:TRX','provider_withdraw_available'=>true,'confirmations'=>'1','withdrawal_confirmations'=>'2'];
+    $rule=['approved'=>true,'scale'=>6,'min_units'=>'0','max_units'=>'10000000','fee_bps'=>0,'confirmations'=>2,'cooldown_seconds'=>86400,'expires_at'=>time()+3600,'provider_fingerprint'=>hash('sha256',json_encode($network,JSON_UNESCAPED_SLASHES))];
+    foreach([0,7] as $scope) $GLOBALS['db']['governance'][$scope]=['control'=>['document'=>'{"stopped":false}'],'USDT:TRX'=>['document'=>json_encode($rule)]];
+    $GLOBALS['db']['catalogue']=['document'=>json_encode(['USDT:TRX'=>$network]),'expires_at_epoch'=>time()+900,'fetched_at_epoch'=>time()];
     $GLOBALS['calls']=0;$GLOBALS['fail_at']=-1;$GLOBALS['commit_fail']=false;$GLOBALS['in_tx']=0;
 }
 function reserve_reject($call,$label){try{$call();}catch(Throwable $e){reserve_check(strpos($e->getMessage(),'crypto_')===0,$label);return;}throw new RuntimeException('Expected refusal '.$label);}
@@ -71,4 +77,8 @@ reset_reservation_db();$GLOBALS['in_tx']=1;reserve_reject(function()use($scope){
 reset_reservation_db();$GLOBALS['db']['accounts'][1]['units']='0';reserve_reject(function()use($scope){bc_crypto_v2_reservation($scope,'insufficient-0001','1');},'insufficient available funds');
 reset_reservation_db();$GLOBALS['db']['policy']=null;reserve_reject(function()use($scope){bc_crypto_v2_reservation($scope,'missing-policy-0001','1');},'missing policy defaults closed');
 reserve_reject(function()use($scope){bc_crypto_v2_reservation($scope,'zero-test-0001','0');},'zero refused');
+reset_reservation_db();$GLOBALS['db']['governance'][0]['control']['document']='{"stopped":true}';$before=$GLOBALS['db'];
+reserve_reject(function()use($scope){bc_crypto_v2_reservation($scope,'stopped-test-0001','1');},'platform stop blocks new reservation');reserve_check($before===$GLOBALS['db'],'stop causes no balance writes');
+reset_reservation_db();bc_crypto_v2_reservation($scope,'stop-release-0001','1');$GLOBALS['db']['governance'][0]['control']['document']='{"stopped":true}';
+reserve_check(bc_crypto_v2_reservation($scope,'stop-release-0002','1','stop-release-0001')['ok'],'stop does not strand unsubmitted reservation reversal');
 echo "$n V2 transactional reservation checks passed (storage double, not live MySQL)\n";

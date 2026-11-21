@@ -3,6 +3,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 bc_secure_session_start();
 require_once __DIR__ . '/../func/bc-admin-config.php';
 require_once __DIR__ . '/../func/bc-bybit.php';
+require_once __DIR__ . '/../func/bc-crypto-governance.php';
 header('Cache-Control: no-store, private');
 if (empty($get_logged_admin_details['id']) || (int)($get_logged_admin_details['status'] ?? 0) !== 1 || !empty($get_logged_admin_details['is_blocked'])) {
     http_response_code(403); exit('Access denied.');
@@ -24,6 +25,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $snapshot = bc_bybit_discover($vid);
                 $audited = bc_sec_audit($vid, 'vendor', (string)$actor['email'], 'bybit_discovery', 'read_only_catalogue', 'Verified read-only key/IP bindings; fetched ' . count($snapshot['networks']) . ' asset/network pairs. No funds moved.');
                 if (!$audited) throw new RuntimeException('bybit_audit_unavailable');
+                bc_crypto_gov_store_snapshot($vid, $snapshot);
                 $discovery = $snapshot;
             } catch (Throwable $e) {
                 // Only module-defined safe codes leave this boundary. Never echo provider bodies, URLs, keys or curl errors.
@@ -43,7 +45,7 @@ bc_adm_topbar(['area'=>'admin','title'=>'CRYPTO PROVIDER READINESS','crumb'=>'Cr
 <section class="section p-4">
     <h1 class="h3">Bybit coin and network discovery</h1>
     <div class="alert alert-warning"><strong>Read-only implementation stage.</strong> Deposits, trading, conversions and withdrawals are not connected to Bybit. Provider availability does not enable an asset on this platform. Existing financial holds remain in force.</div>
-    <a class="btn btn-outline-primary mb-3" href="CryptoHub.php">Back to Crypto Hub</a>
+    <a class="btn btn-outline-primary mb-3" href="CryptoHub.php">Back to Crypto Hub</a> <a class="btn btn-outline-primary mb-3" href="CryptoPolicies.php">Asset approvals and emergency stop</a>
     <?php if ($notice !== ''): ?><div role="alert" class="alert alert-danger"><?php echo $escape($notice); ?></div><?php endif; ?>
     <div class="card p-4 mb-4">
         <h2 class="h5">Verify connection and inspect catalogue</h2>

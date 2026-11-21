@@ -2,10 +2,12 @@
 // No web-accessible migration, fund provisioning, or reconciliation execution.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/bc-crypto-v2-schema.php';
+require_once __DIR__ . '/bc-crypto-governance-schema.php';
+$schema = array_merge(bc_crypto_v2_schema_statements(), bc_crypto_governance_schema_statements());
 $command = $argv[1] ?? 'schema';
 if ($command === 'schema') {
     echo "-- Additive V2 schema preview. No existing balances are imported or modified.\n";
-    echo implode(";\n\n", bc_crypto_v2_schema_statements()) . ";\n"; exit;
+    echo implode(";\n\n", $schema) . ";\n"; exit;
 }
 if (!in_array($command, ['install','check'], true)) { fwrite(STDERR,"Usage: schema | install --apply | check <vendor-id> <testnet|mainnet>\n"); exit(2); }
 if ($command === 'install' && (($argv[2] ?? '') !== '--apply' || getenv('BC_CRYPTO_V2_SCHEMA_APPROVED') !== '1')) {
@@ -14,7 +16,7 @@ if ($command === 'install' && (($argv[2] ?? '') !== '--apply' || getenv('BC_CRYP
 require_once __DIR__ . '/bc-connect.php';
 try {
     if ($command === 'install') {
-        foreach (bc_crypto_v2_schema_statements() as $sql) if (mysqli_query($connection_server,$sql) !== true) throw new RuntimeException('crypto_schema_install_failed');
+        foreach ($schema as $sql) if (mysqli_query($connection_server,$sql) !== true) throw new RuntimeException('crypto_schema_install_failed');
         echo "V2 additive schema installed. No assets enabled, accounts funded, or legacy balances changed.\n";
     } else {
         require_once __DIR__ . '/bc-crypto-v2-reconcile.php';

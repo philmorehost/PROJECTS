@@ -1,6 +1,7 @@
 <?php
 /** Isolated V2 bucket journal. Not connected to historical wallets or provider submission. */
 require_once __DIR__ . '/bc-crypto-decimal.php';
+require_once __DIR__ . '/bc-crypto-governance.php';
 function bc_crypto_v2_scope($scope) {
     foreach (['vendor_id','user_id'] as $key) if (!isset($scope[$key]) || !is_int($scope[$key]) || $scope[$key] <= 0) throw new InvalidArgumentException('crypto_scope_invalid');
     if (!in_array($scope['environment'] ?? '', ['testnet','mainnet'], true) || !is_string($scope['asset_network'] ?? null) || !preg_match('/^[A-Z0-9]{1,24}:[A-Za-z0-9_-]{1,48}$/D', $scope['asset_network'])) throw new InvalidArgumentException('crypto_scope_invalid');
@@ -57,6 +58,7 @@ function bc_crypto_v2_reservation($scope, $reference, $units, $parent_reference 
             if ($prior) throw new RuntimeException('crypto_reservation_already_released');
         } else {
             if ((int)$user['status'] !== 1 || !empty($user['is_blocked']) || !empty($user['force_password_change']) || (int)$user['kyc_status'] !== 2) throw new RuntimeException('crypto_account_restricted');
+            $governance = bc_crypto_gov_reservation_guard($scope, $units);
             // New empty policy table defaults closed. No fallback to another tenant/environment/network.
             $policy = bc_q_row('SELECT * FROM sas_crypto_v2_asset_policies WHERE vendor_id=? AND environment=? AND asset_network=? LIMIT 1 FOR UPDATE', [$vid,$env,$asset]);
             if (!$policy || (int)$policy['enabled'] !== 1 || (int)$policy['withdrawals_enabled'] !== 1 || $policy['reconciliation_status'] !== 'matched' || (int)$policy['valid_until_epoch'] <= time()) throw new RuntimeException('crypto_policy_closed');
@@ -65,7 +67,7 @@ function bc_crypto_v2_reservation($scope, $reference, $units, $parent_reference 
         $available = bc_q_row("SELECT * FROM sas_crypto_v2_accounts WHERE vendor_id=? AND user_id=? AND environment=? AND asset_network=? AND bucket='available' LIMIT 1 FOR UPDATE", [$vid,$uid,$env,$asset]);
         $reserved = bc_q_row("SELECT * FROM sas_crypto_v2_accounts WHERE vendor_id=? AND user_id=? AND environment=? AND asset_network=? AND bucket='reserved' LIMIT 1 FOR UPDATE", [$vid,$uid,$env,$asset]);
         if (!$available || !$reserved) throw new RuntimeException('crypto_accounts_not_provisioned');
-        if (!$release && (int)$available['scale'] !== (int)$policy['scale']) throw new RuntimeException('crypto_policy_scale_mismatch');
+        if (!$release && ((int)$available['scale'] !== (int)$policy['scale'] || (int)$available['scale'] !== $governance['scale'])) throw new RuntimeException('crypto_policy_scale_mismatch');
         $from = $release ? $reserved : $available; $to = $release ? $available : $reserved;
         $plan = bc_crypto_v2_plan($scope, $from, $to, $units);
         bc_crypto_v2_must('INSERT INTO sas_crypto_v2_operations (vendor_id,user_id,environment,asset_network,reference,kind,units,payload_hash,parent_id) VALUES (?,?,?,?,?,?,?,?,?)', [$vid,$uid,$env,$asset,$reference,$kind,$units,$hash,$parent ? (int)$parent['id'] : null]);
