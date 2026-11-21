@@ -13,7 +13,7 @@ check_db(bc_q_row('SELECT state FROM sas_crypto_v2_poll_worker_grants WHERE gran
 $x=bc_crypto_poll_recover($pa,$pi,'testnet',$cr,$input);check_db($x['worker_recovered']&&!$x['settlement_enabled']&&poll_row_fixture($sid)===$before,'recovery preserves exact checkpoint/ciphertext and grants no settlement authority');
 $r=bc_q_row('SELECT * FROM sas_crypto_v2_poll_recoveries WHERE grant_id=?',[$gid]);check_db((int)$r['recovered_by']===$pa['id']&&$r['outcome']==='unknown_expired_attempt','recovery retains human provenance and unknown outcome');
 reject_db(fn()=>bc_crypto_poll_prepare($w,$sid,1,$t),'crypto_poll_worker_grant_invalid');
-reject_db(fn()=>bc_crypto_poll_commit($w,$sid,1,poll_evidence_fixture($sid,'','980001','980001'),$t),'crypto_poll_worker_grant_invalid');
+reject_db(fn()=>bc_crypto_poll_commit($w,$sid,1,poll_evidence_fixture($sid,'','980001','980001'),$t),'crypto_poll_lease_invalid');
 reject_db(fn()=>bc_crypto_poll_recover($pa,$pi,'testnet',$cr,$input),'crypto_poll_recovery_not_eligible');
 $d=bc_crypto_poll_retry_history($sid,time());check_db($d['consecutive_unsuccessful_attempts']===1&&!$d['admission_allowed'],'unknown closure counts once and starts retry backoff');
 // Lost response after committed checkpoint must not be reclassified as failed.
