@@ -59,7 +59,7 @@ New additive InnoDB tables:
 2. `sas_crypto_v2_governance` — revisioned controls and asset rules; vendor_id=0 denotes platform scope.
 3. `sas_crypto_v2_policy_audit` — atomic before/after audit records, unique per policy revision.
 
-The existing CLI management tool now previews/installs these three tables together with the four accounting tables. Existing installations must run the reviewed additive installer again after backup; CREATE TABLE IF NOT EXISTS does not repair incompatible pre-existing definitions.
+The existing CLI management tool now previews/installs these three tables together with the four accounting tables and three observation-only deposit tables (see `CRYPTO_DEPOSIT_FOUNDATION.md`). Existing installations must run the reviewed additive installer again after backup; CREATE TABLE IF NOT EXISTS does not repair incompatible pre-existing definitions.
 
 ```text
 php func/crypto-v2-manage.php schema
@@ -71,7 +71,7 @@ No page request creates tables or bumps the global migration version. Missing sc
 
 ## Suggested staging test sequence
 
-1. Back up staging; review/install all seven additive tables and verify actual definitions/indexes/FKs.
+1. Back up staging; review/install all ten additive tables and verify actual definitions/indexes/FKs.
 2. Configure the dedicated read-only Bybit testnet key and exact IP binding from the discovery runbook; do not enable withdrawal privileges.
 3. Enrol administrator PIN/TOTP; fetch verified catalogue in vendor discovery.
 4. Create platform and vendor rules for one matching asset/network, with strict limits. Confirm approvals alone do not permit admissions while stops remain active.

@@ -10,7 +10,7 @@ This is a subset of Phase 2 of `CRYPTOHUB_BYBIT_BLUEPRINT.md`, not completion of
 
 - `func/bc-crypto-decimal.php`: exact non-negative decimal-string/integer-unit arithmetic.
 - `func/bc-crypto-reservations.php`: transactional reserve/full-release API for already provisioned V2 customer bucket accounts.
-- `func/bc-crypto-v2-schema.php`: four additive, default-closed InnoDB accounting tables (the CLI installer additionally includes three governance tables). Never included in web bootstrap.
+- `func/bc-crypto-v2-schema.php`: four additive, default-closed InnoDB accounting tables (the CLI installer additionally includes three governance and three deposit-observation tables). Never included in web bootstrap.
 - `func/bc-crypto-v2-reconcile.php`: tenant/environment-scoped, read-only, consistent-snapshot journal integrity checks.
 - `func/crypto-v2-manage.php`: CLI-only schema preview, explicitly approved schema installation and internal integrity checks.
 
@@ -114,3 +114,5 @@ These do NOT establish native MySQL locking, isolation, deadlock handling, FK/DE
 ### Disposable database validation
 
 See `CRYPTO_MYSQL_VALIDATION.md` for the MySQL 8 integration runner and CI matrix. It exercises migrations, actual rollback and competing connections without loading application config or touching an existing application database. Synthetic opening fixtures are intentionally rejected by integrity checks; this is not a custody/reconciliation approval. Both editions use a fail-closed next-transaction isolation preflight rather than MariaDB-specific transaction variables.
+
+Observation-only deposit intake is documented in `CRYPTO_DEPOSIT_FOUNDATION.md`. It never writes these accounting accounts/operations/entries and cannot fund available/reserved/held balances. Deposit settlement and balanced external-asset/liability accounting remain unimplemented.

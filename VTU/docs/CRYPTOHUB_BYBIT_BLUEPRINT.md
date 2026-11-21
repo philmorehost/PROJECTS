@@ -144,6 +144,8 @@ Implement exact-decimal module, versioned asset/network and approved capability 
 
 ### Phase 3 — deposits, limited pilot
 
+Source progress: `CRYPTO_DEPOSIT_FOUNDATION.md` documents observation-only intake, exclusive attribution schema, exact-unit deduplication, confirmation/risk review states and sticky quarantine with transactional audit, tested in disposable MySQL. No live provider poller, route provisioning or wallet credit/settlement is implemented.
+
 Approved attribution/custody model; address allocation, records polling, confirmation/risk gates, deduplication, reconciliation and operator exception queues. Begin with a limited stablecoin/network allowlist after actual approval—not automatically every Bybit coin. Acceptance: real tiny-value controlled deposits, duplicate/reordered events, shared/memo routing, wrong network, reorg/freeze and outage tests; liabilities reconcile exactly.
 
 ### Phase 4 — controlled withdrawals
@@ -165,7 +167,7 @@ Use environment variables injected by the deployment secret manager; never commi
 - `BC_BYBIT_VENDOR_<id>_KEY`, `BC_BYBIT_VENDOR_<id>_SECRET`: dedicated HMAC read-only key.
 - `BC_BYBIT_VENDOR_<id>_EXPECTED_IPS`: comma-separated exact static egress IPs, matching provider key bindings. CIDR/wildcards unsupported deliberately in this phase.
 
-Configure the provider key/IP bindings in the approved account, confirm server clock/NTP and outbound access to the correct fixed origin, then visit bc-admin → Crypto Hub → Bybit discovery. Enrol Google Authenticator and Security PIN first. Discovery results are a non-persistent snapshot; refresh requires another fresh verification. No automated retry on errors. Do not configure withdrawal-capable keys for this phase.
+Configure the provider key/IP bindings in the approved account, confirm server clock/NTP and outbound access to the correct fixed origin, then visit bc-admin → Crypto Hub → Bybit discovery. Enrol Google Authenticator and Security PIN first. Discovery results are persisted as sanitized expiring governance snapshots after the explicit schema install; refresh requires another fresh verification. No automated retry on errors. Do not configure withdrawal-capable keys for this phase.
 
 Environment variables are an initial server-only injection mechanism, not a finished managed signing service. Before transactional phases, complete KMS/signing isolation and secret lifecycle controls. Neither a green discovery screen nor passing mocked tests establishes production readiness.
 

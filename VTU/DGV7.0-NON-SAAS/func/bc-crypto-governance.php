@@ -68,7 +68,8 @@ function bc_crypto_gov_build_rule($input, $network, $now) {
         'provider_fingerprint'=>hash('sha256',bc_crypto_gov_json($network))];
 }
 /** Missing/malformed approvals or controls default closed; no external calls. */
-function bc_crypto_gov_evaluate($platform, $tenant, $platform_control, $tenant_control, $network, $now) {
+function bc_crypto_gov_evaluate($platform, $tenant, $platform_control, $tenant_control, $network, $now, $activity='withdraw') {
+    if (!in_array($activity,['withdraw','deposit'],true)) throw new InvalidArgumentException('crypto_activity_invalid');
     foreach([$platform_control,$tenant_control] as $control) if (($control['stopped']??true)!==false) throw new RuntimeException('crypto_emergency_stop');
     foreach([$platform,$tenant] as $rule) {
         if (($rule['approved']??false)!==true || (int)($rule['expires_at']??0)<=$now || !hash_equals((string)($rule['provider_fingerprint']??''), hash('sha256',bc_crypto_gov_json($network)))) throw new RuntimeException('crypto_approval_stale_or_missing');
@@ -78,7 +79,7 @@ function bc_crypto_gov_evaluate($platform, $tenant, $platform_control, $tenant_c
         if ($rule['confirmations']<max((int)($network['confirmations']??0),(int)($network['withdrawal_confirmations']??0))) throw new RuntimeException('crypto_confirmation_below_provider');
     }
     if ($platform['scale']!==$tenant['scale'] || bc_crypto_compare($tenant['max_units'],$platform['max_units'])>0 || bc_crypto_compare($tenant['min_units'],$platform['min_units'])<0 || $tenant['fee_bps']>$platform['fee_bps'] || $tenant['confirmations']<$platform['confirmations'] || $tenant['cooldown_seconds']<$platform['cooldown_seconds']) throw new RuntimeException('crypto_platform_ceiling');
-    if (($network['provider_withdraw_available']??false)!==true) throw new RuntimeException('crypto_provider_withdraw_suspended');
+    if (($network['provider_'.$activity.'_available']??false)!==true) throw new RuntimeException('crypto_provider_'.$activity.'_suspended');
     return ['approved'=>true,'scale'=>$tenant['scale'],'min_units'=>$tenant['min_units'],'max_units'=>$tenant['max_units'],
         'fee_bps'=>$tenant['fee_bps'],'confirmations'=>$tenant['confirmations'],'cooldown_seconds'=>$tenant['cooldown_seconds'],
         'live_money_movement_enabled'=>false];
