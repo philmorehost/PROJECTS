@@ -122,7 +122,7 @@ register_shutdown_function(function () {
     }
 });
 
-include(__DIR__ . "/../func/bc-connect.php");
+include_once(__DIR__ . "/../func/bc-connect.php");
 
 if (!$connection_server) {
     bc_requery_queue_log('database_connection_failed', array(

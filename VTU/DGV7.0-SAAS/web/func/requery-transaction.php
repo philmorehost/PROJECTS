@@ -5,7 +5,7 @@ $purchase_method_array = array("API", "WEB", "CRON_JOB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {
     if ($purchase_method === "WEB") {
         $action_function = 2;
-        $requery_reference = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($_GET["requery"]))));
+        $requery_reference = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($_POST["requery"] ?? $_GET["requery"] ?? ""))));
     }
 
     if (in_array($purchase_method, array("API", "APP"))) {
@@ -24,7 +24,10 @@ if (in_array($purchase_method, $purchase_method_array)) {
     //Requery Transaction
     if ($action_function == 2) {
         if (!empty($requery_reference)) {
-            $transaction_query = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE reference='$requery_reference' LIMIT 1");
+            $requery_vendor = (int)($get_logged_user_details['vendor_id'] ?? 0);
+            $requery_user = mysqli_real_escape_string($connection_server, (string)($get_logged_user_details['username'] ?? ''));
+            $requery_scope = "vendor_id='$requery_vendor' AND username='$requery_user'";
+            $transaction_query = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE $requery_scope AND reference='$requery_reference' LIMIT 1");
             if (!$transaction_query) {
                 if ($purchase_method === "CRON_JOB" && function_exists('bc_requery_queue_log')) {
                     bc_requery_queue_log('requery_transaction_lookup_failed', array(
@@ -109,7 +112,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                 // charged our wallet, so refunding loses that money. Downgrading to pending leaves
                                 // the transaction for the next requery, which is what tells the truth.
                                 if (function_exists('bc_gateway_refund_is_safe') && !bc_gateway_refund_is_safe($api_response, $api_response_text) && $api_response == "failed") { $api_response = "pending"; $api_response_text = ""; $api_response_description = "Transaction Pending | awaiting confirmation from the upstream provider"; $api_response_status = 2; }
-                                
+
                                 if (($api_response == "successful" || $api_response == "pending") && $get_transaction_data["status"] == "3") {
                                     $amount_to_charge = $get_transaction_data["discounted_amount"];
                                     $t_username = $get_transaction_data["username"];
@@ -150,7 +153,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                     // provider failed the transaction late). A duplicate or concurrent requery
                                     // run sees 0 affected rows and skips the credit - previously a
                                     // transaction that stayed pending was refunded again on every run.
-                                    $claim_result = mysqli_query($connection_server, "UPDATE sas_transactions SET status='3' WHERE reference='$requery_reference' AND status IN ('2','1')");
+                                    $claim_result = mysqli_query($connection_server, "UPDATE sas_transactions SET status='3' WHERE $requery_scope AND reference='$requery_reference' AND status IN ('2','1')");
 
                                     // GFTAL: this point is reached only for a DEFINITIVE provider failure (the
                                     // bc_gateway_refund_is_safe() gate above downgrades anything unclassifiable to
@@ -164,7 +167,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                     // it (status 3 normally means "refunded"), so it would stay stuck for
                                     // ever. Claim it - the guard makes that happen exactly once.
                                     if (!$claimed && !bc_refund_already_credited($get_transaction_data["vendor_id"], $get_transaction_data["username"], "Refund", "Refund for Ref:'$requery_reference'")) {
-                                        $stuck_q = mysqli_query($connection_server, "SELECT status FROM sas_transactions WHERE reference='$requery_reference' LIMIT 1");
+                                        $stuck_q = mysqli_query($connection_server, "SELECT status FROM sas_transactions WHERE $requery_scope AND reference='$requery_reference' LIMIT 1");
                                         $stuck_r = $stuck_q ? mysqli_fetch_assoc($stuck_q) : null;
                                         if ($stuck_r && (string)$stuck_r["status"] === '3') {
                                             $claimed = true;

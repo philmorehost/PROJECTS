@@ -30,7 +30,7 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
     $vid=(int)$vendor; $direction=strtolower((string)$direction);
     $amount=bc_incident_decimal($amount); $charged=bc_incident_decimal($charged);
     $username=strtolower(trim((string)$username)); $reference=trim((string)$reference);
-    if (!$connection_server || $vid<=0 || (!$is_vendor && $username==='') || $amount===null || $charged===null || !in_array($direction,array('credit','debit'),true) || !in_array((int)$status,array(1,2,3),true) || $reference==='' || strlen($reference)>225) return 'failed';
+    if (!$connection_server || $vid<=0 || (!$is_vendor && $username==='') || $amount===null || $charged===null || !in_array($direction,array('credit','debit'),true) || !in_array((int)$status,array(1,2,3),true) || $reference==='' || strlen($reference)>225) return bc_incident_wallet_failure('invalid_input');
     $table=$is_vendor?'sas_vendors':'sas_users'; $history=$is_vendor?'sas_vendor_transactions':'sas_transactions';
     // Fail closed on missing/nontransactional migrations. Never silently commit caller work.
     try {
@@ -45,7 +45,7 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
     $q=mysqli_query($connection_server,"SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('$table','$history','sas_wallet_mutation_events')");
     $engines=array(); while($q && ($r=mysqli_fetch_assoc($q))) $engines[$r['TABLE_NAME']]=strtoupper((string)$r['ENGINE']);
     foreach(array($table,$history,'sas_wallet_mutation_events') as $t) if (($engines[$t]??'')!=='INNODB') return bc_incident_wallet_failure('transactional_schema_required');
-    if (!$is_vendor && $direction==='debit' && $label!=='Charge' && function_exists('bc_tx_failure_guard_check') && bc_tx_failure_guard_check($vid,$username,$label)!==true) return 'failed';
+    if (!$is_vendor && $direction==='debit' && $label!=='Charge' && function_exists('bc_tx_failure_guard_check') && bc_tx_failure_guard_check($vid,$username,$label)!==true) return bc_incident_wallet_failure('service_security_hold');
     $refund=$direction==='credit' && strcasecmp(trim((string)$label),'Refund')===0;
     $original=$refund?bc_incident_refund_source($description):null;
     if ($refund && !$original) return 'failed';
