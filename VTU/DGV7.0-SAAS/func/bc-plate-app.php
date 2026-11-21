@@ -922,13 +922,13 @@ if (!function_exists('bc_app_css')) {
         }
         .pk-app__wrap .btn:active { transform: translateY(1px); }
         .pk-app__wrap .btn-primary {
-            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+            background: var(--brand);
             border: none; color: var(--brand-fg);
             box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 75%, transparent);
         }
         .pk-app__wrap .btn-primary:hover { background: var(--brand); color: var(--brand-fg); }
         .pk-app__wrap .btn-primary { border: 1px solid var(--brand-ink); }
-        .pk-app__wrap .btn-primary .text-white, .pk-app__wrap .bg-primary .text-white, .pk-app__wrap .bg-primary .text-primary { color: var(--brand-fg) !important; }
+        .pk-app__wrap .btn-primary .text-white { color: var(--brand-fg) !important; }
         .pk-app__wrap .btn-primary i, .pk-app__wrap .bg-primary i { color: inherit; }
         .pk-app__wrap .text-primary { color: var(--brand-ink) !important; }
         .pk-app__wrap .btn-outline-primary { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line)); color: var(--brand-ink); background: transparent; }
@@ -946,7 +946,7 @@ if (!function_exists('bc_app_css')) {
             border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: .88rem;
             color: var(--muted); background: var(--wash); border: 1px solid var(--line); text-decoration: none;
         }
-        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
         /* \u00a737: .nav itself never got display:flex, so tab/pill lists
            (the settings SEO sub-tabs) rendered as stacked block lists
            instead of a tab strip. Tabs now form a single scrollable row. */
@@ -969,7 +969,7 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .pagination .page-item.active .page-link { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
         .pk-app__wrap a { color: var(--brand-ink); }
         .pk-app__wrap .text-primary { color: var(--brand-ink) !important; }
-        .pk-app__wrap .bg-primary { background: var(--brand) !important; color: var(--brand-fg); }
+        /* Primary surfaces are defined with their matching foreground below. */
         .pk-app__wrap hr { border: 0; border-top: 1px solid var(--line); opacity: 1; }
         @keyframes pk-app__spin { to { transform: rotate(360deg); } }
         @media (max-width: 1080px) {
@@ -1002,11 +1002,11 @@ if (!function_exists('bc_app_css')) {
         }
         .pk-app__wrap .btn { border-radius: 12px; }
         .pk-app__wrap .btn-primary {
-            background: linear-gradient(135deg, var(--brand), var(--brand-dark)) !important;
+            background: var(--brand) !important;
             border: none; color: var(--brand-fg) !important;
             box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--brand) 80%, transparent);
         }
-        .pk-app__wrap .btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
+        .pk-app__wrap .btn-primary:hover { filter: none; transform: translateY(-1px); }
         .pk-app__wrap .form-control, .pk-app__wrap .form-select, .pk-app__wrap .input-group-text {
             border-radius: 12px;
         }
@@ -1146,6 +1146,55 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .accordion-collapse { display: none; }
         .pk-app__wrap .accordion-collapse.show { display: block; }
         .pk-app__wrap .accordion-body { padding: 4px 18px 18px; color: var(--muted); line-height: 1.65; }
+        /* Context-aware foregrounds: faint panels are NOT filled brand buttons.
+           Neutral nested cards/inputs restore their own text and link context. */
+        .pk-app__wrap, .pk-app__wrap :is(.card,.bg-white,.bg-light,.form-control,.form-select,.input-group-text) {
+            --bc-context-fg: var(--ink); --bc-context-link: var(--brand-ink);
+            color: var(--bc-context-fg);
+        }
+        .pk-app__wrap .bg-primary {
+            --bc-context-fg: var(--brand-fg); --bc-context-link: var(--brand-fg);
+            background-image: none !important;
+            background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity,1)) !important;
+            color: var(--bc-context-fg);
+        }
+<?php foreach (array(0,10,20,25,50,75,100) as $opacity): $tint=bc_theme_tint($brand,$opacity/100); ?>
+        .pk-app__wrap .bg-primary.bg-opacity-<?php echo $opacity; ?> {
+            --bc-context-fg: <?php echo $tint['foreground']; ?>;
+            --bc-context-link: <?php echo $tint['link']; ?>;
+            /* Flatten the tint on white so text contrast is deterministic on every page. */
+            background-color: <?php echo $tint['background']; ?> !important;
+        }
+<?php endforeach; ?>
+<?php foreach (array('secondary'=>'#64748B','success'=>'#059669','danger'=>'#DC2626','warning'=>'#D97706','info'=>'#0284C7','dark'=>'#0B1220') as $name=>$base): $full=bc_theme_tint($base,1); ?>
+        .pk-app__wrap .bg-<?php echo $name; ?> {
+            --bc-context-fg: <?php echo $full['foreground']; ?>; --bc-context-link: <?php echo $full['foreground']; ?>;
+            color: var(--bc-context-fg);
+        }
+<?php foreach (array(0,10,20,25,50,75,100) as $opacity): $tint=bc_theme_tint($base,$opacity/100); ?>
+        .pk-app__wrap .bg-<?php echo $name; ?>.bg-opacity-<?php echo $opacity; ?> {
+            --bc-context-fg: <?php echo $tint['foreground']; ?>; --bc-context-link: <?php echo $tint['link']; ?>;
+            background-color: <?php echo $tint['background']; ?> !important;
+        }
+<?php endforeach; ?>
+        .pk-app__wrap .bg-<?php echo $name; ?>.text-<?php echo $name; ?>,
+        .pk-app__wrap .bg-<?php echo $name; ?> .text-<?php echo $name; ?> { color: var(--bc-context-link) !important; }
+        .pk-app__wrap .bg-<?php echo $name; ?>:is(.text-dark,.text-white,.text-muted,.text-body),
+        .pk-app__wrap .bg-<?php echo $name; ?> :is(.text-dark,.text-white,.text-muted,.text-body) { color: var(--bc-context-fg) !important; }
+<?php endforeach; ?>
+        .pk-app__wrap .bg-primary:is(.text-dark,.text-dark-primary,.text-white,.text-muted,.text-body) { color: var(--bc-context-fg) !important; }
+        .pk-app__wrap .bg-primary.text-primary { color: var(--bc-context-link) !important; }
+        .pk-app__wrap .bg-primary :is(.text-dark,.text-dark-primary,.text-white,.text-muted,.text-secondary,.text-body) { color: var(--bc-context-fg) !important; }
+        .pk-app__wrap .bg-primary :is(.text-primary,.link-primary) { color: var(--bc-context-link) !important; }
+        .pk-app__wrap .bg-primary .text-dark-primary { opacity: 1 !important; }
+        .pk-app__wrap .bg-primary a:not(.btn):not(.badge) { color: var(--bc-context-link); }
+        .pk-app__wrap .btn-primary, .pk-app__wrap .nav-pills .nav-link.active {
+            --bc-context-fg: var(--brand-fg); --bc-context-link: var(--brand-fg);
+            background: var(--brand) !important; color: var(--brand-fg) !important;
+            border: 1px solid var(--brand-ink);
+        }
+        .pk-app__wrap .btn-primary:hover { filter: none; }
+        .pk-app__wrap :is(.btn-primary,.nav-pills .nav-link.active) :is(.text-primary,.text-dark,.text-dark-primary,.text-white,.text-muted) { color: var(--bc-context-fg) !important; }
 </style>
         <?php
     }
