@@ -44,7 +44,7 @@ jobs:
           extensions: mysqli
           coverage: none
       - name: Pure deposit validation and state-machine checks
-        run: php -n VTU/tests/crypto_deposits_test.php
+        run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections
         env:
           BC_CRYPTO_TEST_MYSQL: DISPOSABLE_ONLY

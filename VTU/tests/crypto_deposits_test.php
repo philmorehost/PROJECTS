@@ -1,4 +1,5 @@
 <?php
+set_exception_handler(function(Throwable $e){fwrite(STDERR,"::error::".$e->getMessage()."\n");exit(1);});
 require dirname(__DIR__).'/DGV7.0-SAAS/func/bc-crypto-deposits.php';
 require dirname(__DIR__).'/DGV7.0-SAAS/func/bc-crypto-deposit-schema.php';
 $n=0;
