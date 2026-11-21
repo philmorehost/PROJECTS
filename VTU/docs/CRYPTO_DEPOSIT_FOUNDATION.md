@@ -8,6 +8,8 @@ There is no HTTP endpoint, webhook receiver, address allocator, poller, route-ap
 
 `review_ready` means only that the last normalized observation passed local checks and can be reviewed. It is **not** verified provider settlement, a liability, a spendable balance, a funding receipt or authorization for a later worker to credit funds. A stale label must never authorize money movement. Actual settlement must reverify the provider, ownership, account/asset policies, risk, chain finality and external reconciliation inside its own approved accounting workflow.
 
+> A separate offline Bybit decoded-record parser now validates a narrow TRON-only result contract: see `CRYPTO_BYBIT_DEPOSIT_RECORDS.md`. It supplies no authenticated transport, trusted worker context, evidence digest, risk clearance, importer or checkpoint writer, and is not connected to this intake.
+
 ## Additive schema and migration
 
 `crypto-v2-manage.php schema` now previews **sixteen** additive production tables: four accounting, three governance, three deposit-observation, two custody-registry, two protected-evidence and two route-candidate tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
