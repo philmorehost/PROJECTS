@@ -138,7 +138,7 @@ Acceptance: deterministic signing/validation tests, edition parity, invalid-prov
 
 ### Phase 2 — domain/accounting foundation
 
-Implementation progress: `CRYPTO_V2_ACCOUNTING.md` documents exact-decimal arithmetic, additive V2 tables, atomic reserve/full-release journaling and internal integrity tooling now in source. These are isolated from historical balances and provider submission; the full Phase 2 release gate below is NOT yet complete.
+Implementation progress: `CRYPTO_V2_ACCOUNTING.md` documents exact-decimal arithmetic, additive V2 tables, atomic reserve/full-release journaling and internal integrity tooling now in source. These are isolated from historical balances and provider submission; the full Phase 2 release gate below is NOT yet complete. `CRYPTO_ASSET_GOVERNANCE.md` now documents local platform/vendor asset approvals, expiring verified catalogue snapshots, fee/limit/confirmation/cooldown settings, revisioned atomic policy audits and admission stops integrated into V2 reservations. These controls do not activate live transactions.
 
 Implement exact-decimal module, versioned asset/network and approved capability tables, policy hierarchy, double-entry journal, reservations, outbox and state machines. Provide explicit reviewed migrations/rollback procedures; no DDL on public page loads. Wire read-only customer/native capability interfaces. Acceptance: property-based accounting/concurrency tests, migration/reconciliation dry run and independent review.
 

@@ -1184,6 +1184,7 @@ bc_adm_head('', array("area" => "spadmin"));
 
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
+                    <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto platform asset ceilings and emergency stop</a></p>
                     <?php bc_enrollment_policy_form(true, 0); ?>
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Global Security Policy</h5></div>

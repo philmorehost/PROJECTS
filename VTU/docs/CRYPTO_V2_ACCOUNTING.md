@@ -4,13 +4,13 @@
 
 Implemented in both editions as an isolated accounting foundation. NOT connected to legacy wallets, customer HTTP routes, Bybit trade/withdrawal submission or native clients. No historical balances imported; no holds released; no credentials configured or production deployment performed.
 
-This is a subset of Phase 2 of `CRYPTOHUB_BYBIT_BLUEPRINT.md`, not completion of the entire custody/ledger design. Production requires verified MySQL behavior, reviewed migrations, customer/provider account attribution, balanced opening entries, asset approval workflows, withdrawal state/outbox controls, provider reconciliation, permission-isolated finance database access, and release authorization.
+This is a subset of Phase 2 of `CRYPTOHUB_BYBIT_BLUEPRINT.md`, not completion of the entire custody/ledger design. Local asset-approval governance is now implemented separately; see `CRYPTO_ASSET_GOVERNANCE.md`. Production still requires verified MySQL behavior, reviewed migrations, customer/provider account attribution, balanced opening entries, transaction workflow integration, withdrawal state/outbox controls, provider reconciliation, permission-isolated finance database access, and release authorization.
 
 ## Added modules
 
 - `func/bc-crypto-decimal.php`: exact non-negative decimal-string/integer-unit arithmetic.
 - `func/bc-crypto-reservations.php`: transactional reserve/full-release API for already provisioned V2 customer bucket accounts.
-- `func/bc-crypto-v2-schema.php`: four additive, default-closed InnoDB tables. Never included in web bootstrap.
+- `func/bc-crypto-v2-schema.php`: four additive, default-closed InnoDB accounting tables (the CLI installer additionally includes three governance tables). Never included in web bootstrap.
 - `func/bc-crypto-v2-reconcile.php`: tenant/environment-scoped, read-only, consistent-snapshot journal integrity checks.
 - `func/crypto-v2-manage.php`: CLI-only schema preview, explicitly approved schema installation and internal integrity checks.
 
@@ -104,7 +104,7 @@ These do NOT establish native MySQL locking, isolation, deadlock handling, FK/DE
 ## Remaining production gates (not waived by general authorization)
 
 - Real database concurrency, rollback/fault injection and restore tests; independent ledger review.
-- Versioned asset approval, platform/tenant limits and kill switches with fresh step-up and audit.
+- Integrate the implemented asset-governance constraints into future deposit/quote/submission workflows; actual beneficiary cooldown/confirmation processing and provider submission-time stops remain required.
 - Approved customer deposit attribution; explicit nonzero opening migration with balanced system accounts and signed reconciliation.
 - Deposit records polling, idempotent external-event claims, confirmation/risk handling and exact liabilities/reserves matching.
 - Transaction-specific authorization and cooldown/beneficiary checks; signed-state withdrawal outbox; stable provider request IDs and unknown-outcome reconciliation.
