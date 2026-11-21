@@ -38,6 +38,7 @@ require $base.'bc-crypto-poll-worker.php';
 require $base.'bc-crypto-poll-recovery.php';
 require $base.'bc-crypto-poll-delivery.php';
 require $base.'bc-incident-wallet.php';
+require __DIR__.'/../staging/crypto-alert-receiver/receiver.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
     $db->query('SET SESSION innodb_lock_wait_timeout=10');
@@ -63,6 +64,7 @@ if (($argv[1]??'')==='worker') {
         elseif ($argv[4]==='route') {$r=json_decode($argv[5],true);$result=bc_crypto_route_save($r['authority'],$r['env'],$r['identity'],$r['custody_revision'],$r['action'],$r['input']);}
         elseif ($argv[4]==='ack_poll_alert') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_alert_ack($p['actor'],$p['identity'],$p['environment'],$p['custody_revision'],$p['id'],$p['revision']);}
         elseif ($argv[4]==='recover_poll_worker') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_recover($p['actor'],$p['identity'],'testnet',$p['custody_revision'],$p['input']);}
+        elseif ($argv[4]==='receiver_accept') {$p=json_decode($argv[5],true);$result=bc_alert_receiver_accept($connection_server,$p['body'],$p['timestamp'],$p['id'],$p['signature'],$p['key'],time());}
         elseif ($argv[4]==='delivery_claim') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_delivery_claim($p['stream'],$p['revision'],$p['config']);}
         elseif ($argv[4]==='worker_claim') {$p=json_decode($argv[5],true);$w=BcCryptoPollWorkerAuthority::authenticate($p['grant']);$result=bc_crypto_poll_claim($w,$p['id'],1);}
         elseif ($argv[4]==='claim_poll') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_claim($p['actor'],$p['id'],$p['revision']);}
@@ -189,6 +191,7 @@ try {
     require __DIR__.'/crypto_poll_worker_mysql_cases.php';
     require __DIR__.'/crypto_poll_recovery_mysql_cases.php';
     require __DIR__.'/crypto_poll_delivery_mysql_cases.php';
+    require __DIR__.'/crypto_poll_receiver_mysql_cases.php';
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
