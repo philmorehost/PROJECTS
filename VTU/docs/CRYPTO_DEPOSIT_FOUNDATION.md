@@ -10,7 +10,7 @@ There is no HTTP endpoint, webhook receiver, address allocator, poller, route-ap
 
 ## Additive schema and migration
 
-`crypto-v2-manage.php schema` now previews **ten** additive production tables: four accounting, three governance and three deposit-observation tables:
+`crypto-v2-manage.php schema` now previews **twelve** additive production tables: four accounting, three governance, three deposit-observation and two custody-registry tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
 
 - `sas_crypto_v2_deposit_routes`: exclusive environment/custody-account/asset-network/routing-hash attribution. Disabled and expired by default. Stores user/vendor, scale, evidence digest and explicit approval expiry. No route provisioning function is supplied in this stage.
 - `sas_crypto_v2_deposits`: immutable original vendor, asset, units/scale and economic fingerprint; bound original route/customer where approved; latest confirmation high-water mark, state/reason, revision and observation fingerprint.
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS does not repair incompatible definitions. There is no
 
 ## Routing and identity
 
-The future trusted worker supplies server-side context: positive integer vendor ID, exact `testnet`/`mainnet`, and a canonical 64-lowercase-hex custody-account fingerprint. All integrations referring to the same physical Bybit account must use the **same** fingerprint across tenants; it must not be a tenant-chosen alias. This canonical account registry and verified custody model are not implemented yet.
+The future trusted worker supplies server-side context: positive integer vendor ID, exact `testnet`/`mainnet`, and a canonical 64-lowercase-hex custody-account fingerprint. All integrations referring to the same physical Bybit account must use the **same** fingerprint across tenants; it must not be a tenant-chosen alias. An internal local-review registry is now implemented (see `CRYPTO_CUSTODY_REGISTRY.md`); intake rechecks its expiring account and tenant-binding reviews. The authenticated management workflow and provider-verified UID/custody model are NOT implemented yet.
 
 `bc_crypto_deposit_route_hash(asset_network, address, tag)` binds exact network, case-sensitive address and memo/tag. Empty tag and `0` are different; missing/null tag is rejected. No trimming, case-folding or chain-specific normalization is assumed. Any provider/network requiring other characters or normalization needs its own reviewed adapter first; the initial ASCII validation is intentionally narrow. Do not assume a shared master address proves customer ownership.
 
@@ -70,4 +70,4 @@ Row locks and the cross-tenant external identity constraint serialize competing 
 
 `tests/crypto_deposits_test.php` covers normalization, immutable fingerprints, tags/case, pure state transitions, direction-specific governance and source/parity boundaries. The real MySQL runner includes `crypto_deposits_mysql_cases.php` in each isolated edition job for default-closed routing, wrong memo/network/environment, cross-tenant replay, exact-unit preservation, progress/duplicates/conflicts/reorgs, audit rollback, competing processes, stops and unchanged balances/holds/journal.
 
-Before live use: approved custody/account registry; audited route provisioning with fresh step-up and dual review as appropriate; authenticated read-only provider adapter with exact record/status mapping, pagination/checkpoints/rate limits and protected evidence; operator exception queue and reconciliation; separately reviewed balanced deposit settlement accounting; real tiny-value testnet/pilot cases, reorg/freeze/outage recovery and operational signoff. Existing withdrawal disablement and all financial holds remain in force.
+Before live use: authenticated management of the local custody/account registry and externally verified account identity/custody model; audited route provisioning with fresh step-up and dual review as appropriate; authenticated read-only provider adapter with exact record/status mapping, pagination/checkpoints/rate limits and protected evidence; operator exception queue and reconciliation; separately reviewed balanced deposit settlement accounting; real tiny-value testnet/pilot cases, reorg/freeze/outage recovery and operational signoff. Existing withdrawal disablement and all financial holds remain in force.

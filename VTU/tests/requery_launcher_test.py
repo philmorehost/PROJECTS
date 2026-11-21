@@ -55,6 +55,16 @@ exit "${TEST_EXIT:-0}"
     def test_bad_arguments_refused(self):
         self.assertEqual(self.run_launcher('--purchase').returncode, 2)
 
+    def test_setup_pages_publish_complete_schedule(self):
+        for ed in ['SAAS', 'NON-SAAS']:
+            page = (ROOT / f'DGV7.0-{ed}/bc-admin/AccountSettings.php').read_text()
+            self.assertIn('value="* * * * * /bin/sh', page)
+            self.assertIn('/cron/run_requery_queue.sh', page)
+            self.assertIn('paste only the /bin/sh command', page)
+        platform = (ROOT / 'DGV7.0-SAAS/bc-spadmin/CronJobs.php').read_text()
+        self.assertIn('$root = dirname(__DIR__);', platform)
+        self.assertIn('Confirmed Working Launcher', platform)
+
     def test_editions_identical(self):
         self.assertEqual((ROOT / 'DGV7.0-SAAS/cron/run_requery_queue.sh').read_bytes(),
                          (ROOT / 'DGV7.0-NON-SAAS/cron/run_requery_queue.sh').read_bytes())

@@ -1,6 +1,7 @@
 <?php
 /** Internal normalized observation intake ONLY. No HTTP, provider transport, address allocation or credits. */
 require_once __DIR__.'/bc-crypto-governance.php';
+require_once __DIR__.'/bc-crypto-custody.php';
 function bc_crypto_deposit_digest($value) {
     if (!is_string($value) || !preg_match('/^[a-f0-9]{64}$/D',$value)) throw new InvalidArgumentException('crypto_deposit_digest_invalid');
     return $value;
@@ -59,6 +60,7 @@ function bc_crypto_deposit_observe($context,$input) {
     $o=bc_crypto_deposit_normalize($input);
     if (!bc_crypto_transaction_ready() || !mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
     try {
+        $custody_allowed=bc_crypto_custody_observation_allowed($vid,$env,$custody);
         // Global per external account/environment, NOT per tenant: one external record cannot be claimed twice.
         bc_crypto_deposit_must('INSERT INTO sas_crypto_v2_deposits(vendor_id,environment,custody_account,provider_record_id,asset_network,scale,units,identity_hash,last_observation_hash) VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id',[$vid,$env,$custody,$o['record_id'],$o['asset_network'],$o['scale'],$o['units'],$o['identity_hash'],$o['observation_hash']]);
         $row=bc_q_row('SELECT * FROM sas_crypto_v2_deposits WHERE environment=? AND custody_account=? AND provider_record_id=? FOR UPDATE',[$env,$custody,$o['record_id']]);
@@ -90,6 +92,7 @@ function bc_crypto_deposit_observe($context,$input) {
                 }
             }
         }
+        if (!$custody_allowed) $failure='custody_unapproved';
         $next=bc_crypto_deposit_decide($row,$o,$failure,$required);
         $duplicate=(int)$row['revision']>0 && hash_equals($row['last_observation_hash'],$o['observation_hash']) && $row['state']===$next['state'] && $row['reason']===$next['reason'];
         if (!$duplicate) {

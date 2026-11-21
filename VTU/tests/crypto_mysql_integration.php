@@ -17,6 +17,7 @@ require $base.'bc-crypto-governance-schema.php';
 require $base.'bc-crypto-reservations.php';
 require $base.'bc-crypto-v2-reconcile.php';
 require $base.'bc-crypto-deposit-schema.php';
+require $base.'bc-crypto-custody-schema.php';
 require $base.'bc-crypto-deposits.php';
 require $base.'bc-incident-wallet.php';
 function connect_test() {
@@ -37,6 +38,10 @@ if (($argv[1]??'')==='worker') {
     try {
         if ($argv[4]==='reserve') $result=bc_crypto_v2_reservation($scope,$argv[5],$argv[6]);
         elseif ($argv[4]==='wallet') $result=bc_incident_wallet_post(7,'ada','debit','08000000000','Data',$argv[5],'',$argv[6],$argv[6],'Synthetic VTU fixture','API','merchant.invalid',3);
+        elseif ($argv[4]==='custody') {
+            $c=json_decode($argv[5],true);
+            $result=bc_crypto_custody_save($c['authority'],$c['env'],$c['uid'],$c['revision'],$c['action'],$c['input']);
+        }
         elseif ($argv[4]==='deposit') $result=bc_crypto_deposit_observe(json_decode($argv[5],true),json_decode($argv[6],true));
         else $result=bc_crypto_gov_save($vendor,7,'testnet','control',(int)$argv[5],['mode'=>'stop'],7);
         echo json_encode(['result'=>$result]);
@@ -76,10 +81,10 @@ try {
     // Minimal legacy fixture: never an application's sas_users or live balance table.
     bc_q('CREATE TABLE sas_users (id BIGINT UNSIGNED PRIMARY KEY,vendor_id BIGINT UNSIGNED,status INT,is_blocked INT,force_password_change INT,kyc_status INT) ENGINE=InnoDB');
     bc_q('INSERT INTO sas_users VALUES(11,7,1,0,0,2)');
-    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements());
+    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements(),bc_crypto_custody_schema_statements());
     foreach($ddl as $sql) bc_q($sql);
     foreach($ddl as $sql) bc_q($sql); // Additive installer is repeatable, not a schema repair tool.
-    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===11,'ten production tables plus fixture are InnoDB; second install succeeds');
+    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===13,'twelve production tables plus fixture are InnoDB; second install succeeds');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_asset_policies')===0,'migration creates no enabled policies');
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_catalogue_stale');
     $network=['asset_network'=>'USDT:TRX','platform_enabled'=>false,'provider_deposit_available'=>true,'provider_withdraw_available'=>true,'confirmations'=>'20','withdrawal_confirmations'=>'40'];
@@ -148,6 +153,7 @@ try {
     $integrity=bc_crypto_v2_integrity(7,'testnet');
     check_db(!$integrity['internal_integrity_ok'] && !$integrity['provider_reserves_verified'] && $integrity['checks']['projection_mismatches']==='2','integrity correctly rejects synthetic unjournaled opening balances');
     foreach(['unbalanced_operations','scale_mismatches','scope_mismatches','release_mismatches'] as $key)check_db($integrity['checks'][$key]==='0','real integrity query '.$key);
+    require __DIR__.'/crypto_custody_mysql_cases.php';
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";

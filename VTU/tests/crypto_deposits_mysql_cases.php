@@ -1,7 +1,9 @@
 <?php
 // Included ONLY by the guarded disposable MySQL runner after accounting tests.
 if (!isset($created,$name) || !$created || !preg_match('/^crypto_ci_[a-f0-9]{24}$/D',$name)) throw new RuntimeException('Disposable runner required');
-$context=['vendor_id'=>7,'environment'=>'testnet','custody_account'=>str_repeat('c',64)];
+// Synthetic UID identity registered only in this disposable DB; no provider account is claimed.
+$account=bc_crypto_custody_identity('testnet','1234567');
+$context=['vendor_id'=>7,'environment'=>'testnet','custody_account'=>$account];
 $deposit=['record_id'=>'provider-record-001','asset_network'=>'USDT:TRX','scale'=>6,'amount'=>'2.000001','address'=>'SyntheticAddress','tag'=>'123','txid'=>'synthetic-chain-id-001','confirmations'=>'5','status'=>'pending','risk'=>'clear','evidence_hash'=>str_repeat('d',64)];
 $balances=bc_q_row("SELECT GROUP_CONCAT(CONCAT(bucket,':',units) ORDER BY bucket) AS balances FROM sas_crypto_v2_accounts");
 $operations=scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations');
@@ -35,7 +37,7 @@ check_db(bc_crypto_deposit_observe($context,$wrong)['reason']==='attribution_una
 $wrong['record_id']='wrong-network-001';$wrong['asset_network']='USDT:ETH';$wrong['tag']='123';
 check_db(bc_crypto_deposit_observe($context,$wrong)['reason']==='attribution_unapproved','wrong network cannot route');
 $wrong=$deposit;$wrong['record_id']='wrong-env-001';$test_context=$context;$test_context['environment']='mainnet';
-check_db(bc_crypto_deposit_observe($test_context,$wrong)['reason']==='attribution_unapproved','environment cannot borrow testnet attribution');
+check_db(bc_crypto_deposit_observe($test_context,$wrong)['reason']==='custody_unapproved','environment cannot borrow testnet attribution');
 $regression=$deposit;$regression['record_id']='regression-001';
 check_db(bc_crypto_deposit_observe($context,$regression)['state']==='review_ready','complete observation before regression');
 $regression['confirmations']='39';
@@ -77,6 +79,24 @@ $limit=$deposit;$limit['record_id']='over-limit-001';$limit['amount']='101';
 check_db(bc_crypto_deposit_observe($context,$limit)['reason']==='deposit_policy_limit','large observation is recorded but quarantined under local bounds');
 $unknown=$deposit;$unknown['record_id']='unknown-risk-001';$unknown['risk']='unknown';
 check_db(bc_crypto_deposit_observe($context,$unknown)['reason']==='risk_not_cleared','unverified risk cannot reach review-ready');
+// Reviewed registry is necessary, not a substitute for route/customer/provider checks.
+$registryRepeat=$deposit;$registryRepeat['record_id']='custody-suspend-001';
+check_db(bc_crypto_deposit_observe($context,$registryRepeat)['state']==='review_ready','registry-backed observation before custody suspension');
+bc_crypto_custody_save(['role'=>'spadmin','id'=>1],'testnet','1234567',4,'suspend',[]);
+$r=bc_crypto_deposit_observe($context,$registryRepeat);
+check_db($r['state']==='quarantined' && $r['reason']==='custody_unapproved' && !$r['duplicate'],'identical repeat after custody suspension loses stale review-ready label');
+$unknownAccount=$context;$unknownAccount['custody_account']=str_repeat('f',64);
+$unregistered=$deposit;$unregistered['record_id']='unregistered-custody-001';
+check_db(bc_crypto_deposit_observe($unknownAccount,$unregistered)['reason']==='custody_unapproved','arbitrary custody fingerprint cannot reach review-ready');
+// Restore test registry via new independent reviews, never by toggling an enabled flag.
+$cp=['model'=>'omnibus_exclusive_routes','evidence_hash'=>str_repeat('a',64)];
+$cr=['evidence_hash'=>str_repeat('a',64),'valid_seconds'=>'3600'];
+$cb=['vendor_id'=>7,'evidence_hash'=>str_repeat('b',64),'valid_seconds'=>'3600'];
+bc_crypto_custody_save(['role'=>'spadmin','id'=>1],'testnet','1234567',5,'propose',$cp);
+bc_crypto_custody_save(['role'=>'spadmin','id'=>2],'testnet','1234567',6,'review',$cr);
+bc_crypto_custody_save(['role'=>'spadmin','id'=>1],'testnet','1234567',7,'propose_binding',$cb);
+bc_crypto_custody_save(['role'=>'spadmin','id'=>2],'testnet','1234567',8,'review_binding',$cb);
+check_db(bc_crypto_deposit_observe($context,$registryRepeat)['state']==='quarantined','new registry approval cannot silently unfreeze quarantined evidence');
 // Identical repeat MUST recheck current policy, not preserve a stale green label through a stop.
 bc_q("UPDATE sas_crypto_v2_governance SET document='{\"stopped\":true}' WHERE vendor_id=0 AND policy_key='control'");
 $r=bc_crypto_deposit_observe($context,$concurrent);
