@@ -7,7 +7,8 @@ require_once __DIR__ . '/bc-crypto-deposit-schema.php';
 require_once __DIR__ . '/bc-crypto-custody-schema.php';
 require_once __DIR__ . '/bc-crypto-custody-evidence-schema.php';
 require_once __DIR__ . '/bc-crypto-route-schema.php';
-$schema = array_merge(bc_crypto_v2_schema_statements(), bc_crypto_governance_schema_statements(), bc_crypto_deposit_schema_statements(), bc_crypto_custody_schema_statements(), bc_crypto_custody_evidence_schema_statements(), bc_crypto_route_schema_statements());
+require_once __DIR__ . '/bc-crypto-poll-schema.php';
+$schema = array_merge(bc_crypto_v2_schema_statements(), bc_crypto_governance_schema_statements(), bc_crypto_deposit_schema_statements(), bc_crypto_custody_schema_statements(), bc_crypto_custody_evidence_schema_statements(), bc_crypto_route_schema_statements(), bc_crypto_poll_schema_statements());
 $command = $argv[1] ?? 'schema';
 if ($command === 'schema') {
     echo "-- Additive V2 schema preview. No existing balances are imported or modified.\n";

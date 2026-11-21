@@ -17,6 +17,7 @@ on:
       - 'VTU/tests/crypto_deposits*.php'
       - 'VTU/tests/crypto_custody*.php'
       - 'VTU/tests/crypto_routes*.php'
+      - 'VTU/tests/crypto_poll*.php'
       - 'VTU/**/bc-spadmin/CryptoCustody.php'
       - 'VTU/**/bc-admin/CryptoCustody.php'
       - '.github/workflows/crypto-mysql.yml'
@@ -37,6 +38,7 @@ on:
       - 'VTU/tests/crypto_deposits*.php'
       - 'VTU/tests/crypto_custody*.php'
       - 'VTU/tests/crypto_routes*.php'
+      - 'VTU/tests/crypto_poll*.php'
       - 'VTU/**/bc-spadmin/CryptoCustody.php'
       - 'VTU/**/bc-admin/CryptoCustody.php'
       - '.github/workflows/crypto-mysql.yml'
@@ -87,7 +89,9 @@ jobs:
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_deposit_records_test.php
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_deposit_read_test.php
       - name: Deposit route candidate contracts
-        run: php VTU/tests/crypto_routes_test.php
+        run: |
+          php VTU/tests/crypto_routes_test.php
+          php VTU/tests/crypto_poll_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections
