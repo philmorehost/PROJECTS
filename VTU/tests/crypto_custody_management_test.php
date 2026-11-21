@@ -54,4 +54,5 @@ $GLOBALS['poll_row']=['custody_account'=>str_repeat('a',64),'environment'=>'main
 $GLOBALS['account_row']['revision']=5;mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_custody_edit_conflict');
 $GLOBALS['account_row']['revision']=4;
 foreach(['cursor','evidence','query','page','lease_token','stream_id'] as $field){$try=$verify;$try['action']='review_poll';$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
+foreach(['cursor','evidence','query','page','lease_token','acknowledged_by','kind'] as $field){$try=$verify;$try['action']='ack_poll_alert';$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";
