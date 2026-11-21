@@ -115,6 +115,7 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
 <?php bc_adm_topbar(array("area" => "admin", "title" => "CRYPTO HUB MANAGEMENT", "crumb" => "Home / Crypto")); ?>
 
     <section class="section p-4">
+        <div class="alert alert-info">Bybit integration is in read-only discovery. Existing payout holds are unchanged. <a href="CryptoBybit.php" class="fw-bold">Inspect provider security readiness and coin/network catalogue</a>.</div>
         <div class="row g-4">
             <!-- Payout Settings -->
             <div class="col-lg-4">
