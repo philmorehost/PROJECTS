@@ -45,7 +45,11 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
         if (!($alerts_result instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
         $alerts=[];while($alert=mysqli_fetch_assoc($alerts_result))$alerts[]=$alert;
         $alerts_truncated=count($alerts)>50;$alerts=array_slice($alerts,0,50);
-        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'alerts'=>$alerts,'alerts_truncated'=>$alerts_truncated,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
+        $gr=bc_q('SELECT g.grant_id,g.stream_id,g.revision,g.worker_name,g.state,g.expires_at_epoch,g.created_by,g.created_at_epoch,g.revoked_by,g.revoked_at_epoch,g.completed_at_epoch FROM sas_crypto_v2_poll_worker_grants g JOIN sas_crypto_v2_poll_streams s ON s.stream_id=g.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY g.created_at_epoch DESC,g.grant_id LIMIT 21 FOR UPDATE',[$identity,$env]);
+        if(!($gr instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
+        $grants=[];while($g=mysqli_fetch_assoc($gr))$grants[]=$g;
+        $grants_truncated=count($grants)>20;$grants=array_slice($grants,0,20);
+        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'worker_grants'=>$grants,'worker_grants_truncated'=>$grants_truncated,'alerts'=>$alerts,'alerts_truncated'=>$alerts_truncated,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
         $json=bc_crypto_gov_json($report);
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_poll_review_events(custody_account,environment,custody_revision,actor_id,report_hash,occurred_at_epoch) VALUES(?,?,?,?,?,?)',[$identity,$env,$revision,$actor,hash('sha256',$json),time()]);
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');
