@@ -412,7 +412,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             <div>&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_title); ?>. All rights reserved.</div>
             <div>Designed with Glassmorphism Excellence.</div>
         </div>
-    </footer>
+    <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
+</footer>
 
     <?php echo $custom_footer; ?>
 </body>

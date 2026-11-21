@@ -687,7 +687,8 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
                 <a href="/web/policy/terms.php" style="color:var(--gray-text); text-decoration:none; font-size:0.9rem;">Terms of Service</a>
             </div>
         </div>
-    </footer>
+    <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
+</footer>
 
     <!-- Scripting -->
     <script>

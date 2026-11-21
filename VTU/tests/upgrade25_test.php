@@ -135,7 +135,7 @@ foreach ($editions as $ed) {
     u25(strpos($sc, 'save-active-provider') !== false && strpos($sc, 'fintech_active_provider') !== false, "$ed ServiceControl switches the active provider");
 
     // ── Landing: client template structure, automated branding, China visual ──
-    $tpl = src($b . '/index-bc-style-template-1.php');
+    $tpl = src($b . '/index-freelancers-template.php');
     u25(strpos($tpl, 'MzeeVTU') === false, "$ed landing has no hardcoded client brand");
     u25(strpos($tpl, '--brand-red:<?php echo htmlspecialchars($brand_colour') !== false, "$ed landing brand colour comes from bc-admin primary colour");
     u25(strpos($tpl, 'id="who"') !== false && strpos($tpl, 'id="receive"') !== false && strpos($tpl, 'id="manage"') !== false && strpos($tpl, 'id="currencies"') !== false && strpos($tpl, 'id="spend"') !== false && strpos($tpl, 'id="faq"') !== false && strpos($tpl, 'id="signup"') !== false, "$ed landing keeps the client template section map");

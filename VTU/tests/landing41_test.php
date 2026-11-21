@@ -32,7 +32,7 @@ foreach ($roots as $name => $root) {
     }
 
     foreach ([1, 2, 3, 6] as $t) {
-        $tpl = file_get_contents($root . "/index-bc-style-template-$t.php");
+        $tpl = file_get_contents($root . ($t === 1 ? "/index-bc-style-template-home.php" : "/index-bc-style-template-$t.php"));
         chk(strpos($tpl, 'ReferAndEarn.php') !== false && strpos($tpl, 'Services.php') !== false,
             "$name template $t: menu links Services + Refer & Earn");
     }
