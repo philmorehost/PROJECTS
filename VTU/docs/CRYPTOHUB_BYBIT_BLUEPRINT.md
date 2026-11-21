@@ -1,6 +1,6 @@
 # CryptoHub + Bybit: implementation blueprint and security release gates
 
-Status: Phase 1 implemented in source; NOT a live custody, deposit, trading or withdrawal integration. Subsequent phases below are planned, not completed. Applies to SAAS and NON-SAAS, with shared web/mobile business rules.
+Status: Phase 1 and an isolated Phase 2 reservation/accounting foundation implemented in source; NOT a live custody, deposit, trading or withdrawal integration. Subsequent phases below are planned, not completed. Applies to SAAS and NON-SAAS, with shared web/mobile business rules.
 
 ## 1. Mandate and boundaries
 
@@ -137,6 +137,8 @@ Files in both editions: `func/bc-bybit.php`, `bc-admin/CryptoBybit.php`, entry l
 Acceptance: deterministic signing/validation tests, edition parity, invalid-provider responses fail closed, tenant config isolation, no money-moving operation available, live testnet check by operator pending.
 
 ### Phase 2 — domain/accounting foundation
+
+Implementation progress: `CRYPTO_V2_ACCOUNTING.md` documents exact-decimal arithmetic, additive V2 tables, atomic reserve/full-release journaling and internal integrity tooling now in source. These are isolated from historical balances and provider submission; the full Phase 2 release gate below is NOT yet complete.
 
 Implement exact-decimal module, versioned asset/network and approved capability tables, policy hierarchy, double-entry journal, reservations, outbox and state machines. Provide explicit reviewed migrations/rollback procedures; no DDL on public page loads. Wire read-only customer/native capability interfaces. Acceptance: property-based accounting/concurrency tests, migration/reconciliation dry run and independent review.
 
