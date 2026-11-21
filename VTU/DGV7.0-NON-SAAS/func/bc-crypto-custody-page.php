@@ -11,14 +11,14 @@ require_once __DIR__.'/bc-crypto-custody-management.php';
 $env=in_array($_GET['environment']??null,['testnet','mainnet'],true)?$_GET['environment']:'testnet';
 $selected=$_GET['account']??'';
 if (!is_string($selected)||!preg_match('/^[a-f0-9]{64}$/D',$selected)) $selected='';
-$notice='';$evidence=null;$row=null;$accounts=[];$events=[];$schema=true;
+$notice='';$evidence=null;$row=null;$accounts=[];$events=[];$route_candidates=[];$routes_schema=true;$schema=true;
 if ($method==='POST') {
     try {
         $result=bc_crypto_custody_manage((int)$actor['id'],$_POST);
         $env=$_POST['environment'];$selected=$result['custody_account'];
         if (array_key_exists('text',$result)) $evidence=$result['text'];
         else {
-            $_SESSION['crypto_custody_notice']=isset($result['evidence_hash'])?(isset($result['provider_identity_compared'])?'Provider UID matched at inspection time. Encrypted evidence digest: ':'Evidence stored. Digest: ').$result['evidence_hash']:'Local custody review updated. No live capability activated.';
+            $_SESSION['crypto_custody_notice']=isset($result['route_candidate_updated'])?'Route candidate updated; no funding address activated. Evidence digest: '.$result['evidence_hash']:(isset($result['evidence_hash'])?(isset($result['provider_identity_compared'])?'Provider UID matched at inspection time. Encrypted evidence digest: ':'Evidence stored. Digest: ').$result['evidence_hash']:'Local custody review updated. No live capability activated.');
             header('Location: CryptoCustody.php?environment='.rawurlencode($env).'&account='.$selected);exit;
         }
     } catch(Throwable $ex) {
@@ -40,6 +40,13 @@ if ($platform) {
             }
         }
     } catch(Throwable $ex) {$schema=false;$notice='crypto_custody_schema_required';}
+}
+if ($platform && $row) {
+    try {
+        $candidates=bc_q('SELECT * FROM sas_crypto_v2_route_candidates WHERE custody_account=? AND environment=? ORDER BY id DESC LIMIT 30',[$selected,$env]);
+        if (!($candidates instanceof mysqli_result)) throw new RuntimeException('schema');
+        while($candidate=mysqli_fetch_assoc($candidates)) $route_candidates[]=$candidate;
+    } catch(Throwable $ex) {$routes_schema=false;}
 }
 if (isset($_SESSION['crypto_custody_notice'])) {$notice=$_SESSION['crypto_custody_notice'];unset($_SESSION['crypto_custody_notice']);}
 $e=function($s){return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8');};
@@ -72,6 +79,14 @@ $target=function() use($row,$selected,$env,$revision,$e) {
 <form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">3. Open evidence at this revision</h2><?php $target();?><input type="hidden" name="action" value="view_evidence"><label>Evidence SHA-256 digest<input class="form-control" name="evidence_hash" pattern="[a-f0-9]{64}" maxlength="64" required></label><?php $security();?><button class="btn btn-outline-primary mt-2">Verify and open protected evidence</button></form>
 <form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">4. Independent review or suspension</h2><?php $target();?><label>Evidence digest (required for review)<input class="form-control" name="evidence_hash" maxlength="64"></label><label>Review lifetime in seconds (1–86,400)<input class="form-control" name="valid_seconds" value="3600" inputmode="numeric"></label><?php $security();?><button class="btn btn-primary mt-2" name="action" value="review">Record independent account review</button> <button class="btn btn-danger mt-2" name="action" value="suspend">Suspend account eligibility</button></form>
 <form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">5. Explicit tenant binding</h2><p>Propose with stored binding evidence, then have another reviewer open that evidence at the new revision before review.</p><?php $target();?><label>Vendor ID<input name="vendor_id" class="form-control" inputmode="numeric" required></label><label>Binding evidence digest<input name="evidence_hash" class="form-control" maxlength="64"></label><label>Lifetime in seconds<input name="valid_seconds" class="form-control" value="3600"></label><?php $security();?><button class="btn btn-primary mt-2" name="action" value="propose_binding">Propose binding</button> <button class="btn btn-outline-primary mt-2" name="action" value="review_binding">Record independent binding review</button> <button class="btn btn-danger mt-2" name="action" value="revoke_binding">Revoke binding</button></form>
+<div class="card p-3 mb-3"><h2 class="h5">Deposit route candidates — never funding addresses</h2><p>Reserve an exact network/address/memo claim for independent review. This does not allocate an address at Bybit or create an enabled deposit route. Current custody binding, eligible customer/KYC and fresh deposit policies are required. Details and review note are encrypted; metadata retains only the routing hash. Candidates cannot be reassigned, even after expiry/revocation.</p>
+<?php if(!$routes_schema):?><p>Route-candidate schema is missing; arrange an authorized explicit migration. No DDL runs here.</p><?php else:?>
+<form method="post" action="CryptoCustody.php"><?php $target();?><input type="hidden" name="action" value="propose_route">
+<?php foreach(['vendor_id'=>'Vendor ID','user_id'=>'Customer ID','asset_network'=>'Exact asset/network key (for example USDT:TRX)','scale'=>'Accounting scale','address'=>'Exact address claim','tag'=>'Exact memo/tag (explicitly empty when absent)'] as $name=>$label):?><label class="d-block"><?php echo $e($label);?><input class="form-control" name="<?php echo $e($name);?>" <?php echo $name==='tag'?'':'required';?> autocomplete="off"></label><?php endforeach;?>
+<label class="d-block">Attribution review note (20–4096 bytes; no secrets or customer identity documents)<textarea class="form-control" name="note" maxlength="4096" required></textarea></label><?php $security();?><button class="btn btn-primary mt-2">Propose encrypted route candidate only</button></form>
+<?php foreach($route_candidates as $candidate):?><div class="border rounded p-3 my-3"><p>Candidate <?php echo (int)$candidate['id'];?> · revision <?php echo (int)$candidate['revision'];?> · <?php echo $e($candidate['state']);?> · vendor/customer <?php echo (int)$candidate['vendor_id'].'/'.(int)$candidate['user_id'];?> · <?php echo $e($candidate['asset_network']);?> · expires <?php echo (int)$candidate['valid_until_epoch']>0?$e(gmdate('c',(int)$candidate['valid_until_epoch'])):'not reviewed';?></p><p style="overflow-wrap:anywhere">Evidence digest: <?php echo $e($candidate['evidence_hash']);?>. Open this exact manifest using the protected evidence form above before independent review. It contains the address, memo, customer and note. No candidate shown here is an active funding route.</p>
+<form method="post" action="CryptoCustody.php"><?php $target();?><input type="hidden" name="candidate_id" value="<?php echo (int)$candidate['id'];?>"><input type="hidden" name="candidate_revision" value="<?php echo (int)$candidate['revision'];?>"><label>Candidate review lifetime (1–86,400 seconds; current approvals/catalogue may shorten this)<input class="form-control" name="valid_seconds" value="900"></label><?php $security();?><button class="btn btn-outline-primary mt-2" name="action" value="review_route">Record independent candidate review</button> <button class="btn btn-danger mt-2" name="action" value="revoke_route">Revoke candidate</button></form></div><?php endforeach;?>
+<?php endif;?></div>
 <h2 class="h5">Registry audit (latest 30)</h2><?php foreach($events as $a):?><p><?php echo $e($a['created_at'].' · revision '.$a['revision'].' · actor '.$a['actor_id'].' · '.$a['action']);?></p><?php endforeach;?>
 <?php endif;?>
 <?php endif;endif;?>
