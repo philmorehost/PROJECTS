@@ -67,3 +67,42 @@ bundle, with the dialog deliberately outside the content wrapper after a tall
 table. It asserts viewport placement, usable field widths, and row-ID retention
 in addition to the existing submission/cancellation checks. No live account
 actions or deployment were performed during this validation.
+
+## Superseding repair: standalone confirmation (current flow)
+
+The repeated production screenshot still showed an unusable footer confirmation,
+with wording from an older helper. That does not establish which PHP/JS version
+is deployed, and an offline modal test cannot prove a production modal is fixed.
+The current source therefore replaces the modal entirely rather than adding more
+shell-dependent modal rules.
+
+`Users.php` entry points now navigate to authenticated `UserAction.php` pages
+(SAAS vendor/super-admin, NON-SAAS admin). Both editions share
+`func/bc-user-action-confirm.php`. The screen owns its complete document and CSS,
+has no external assets or script dependency, and submits to the unchanged
+`Users.php` POST/CSRF/PIN/second-factor gate. A GET only renders a confirmation;
+it never enables an API, archives/deletes a user, or creates an impersonation.
+The obsolete user modal markup was removed from Users.php.
+
+Email requests and failed verification redirect directly back to this screen with
+only whitelisted action/target fields. Feedback is escaped and consumed once.
+PINs/codes are never in URLs. Successful writes return to the Users list as before.
+The confirmation and Users pages send no-store cache headers. TOTP enrollment
+still forbids email fallback. No security or financial hold was relaxed.
+
+Validation:
+- `node VTU/tests/harness/user-actions.test.mjs`: standalone HTML forms exercised
+  at mobile/desktop widths with JavaScript DISABLED; real page entry functions
+  also tested with the legacy footer helpers, preserving target/action.
+- `node VTU/tests/harness/run-test.mjs tests/user_confirmation_test.php`:
+  escaping, CSRF, no factor leakage, authenticated wrappers, redirects and closed
+  action validation.
+- Existing `user_action_gate_test.php` and `security33_test.php` remain applicable.
+
+Deploy ALL changed files together: Users.php, UserAction.php and the shared
+renderer in each deployed edition/admin area. Clear server OPcache/HTML caches.
+An API click on the new version must change the browser URL to
+`/bc-admin/UserAction.php?...` (or `/bc-spadmin/UserAction.php?...`) and show a
+standalone Enable/Disable API access form. If it still opens the old footer box,
+the server is still serving old/mixed source; a Git merge alone does not deploy it.
+No production deployment, live OTP delivery or live API toggle was performed.

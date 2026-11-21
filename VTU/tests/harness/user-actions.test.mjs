@@ -5,12 +5,13 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import fs from 'node:fs';
 import os from 'node:os';
 import { brotliDecompressSync } from 'node:zlib';
 import { createRequire } from 'node:module';
 const dir=path.dirname(fileURLToPath(import.meta.url));
-const shellCSS=JSON.parse(execFileSync(process.execPath,[path.join(dir,'run-test.mjs'),'tests/readability_fixture.php'],{encoding:'utf8',maxBuffer:4*1024*1024})).styles['#10756F'];
+const fixtures=JSON.parse(execFileSync(process.execPath,[path.join(dir,'run-test.mjs'),'tests/user_confirmation_fixture.php'],{encoding:'utf8',maxBuffer:4*1024*1024}));
 // The npm binary bundles NSS/NSPR for minimal Linux CI images as well as Lambda.
 const require=createRequire(import.meta.url);
 const libraries=fs.mkdtempSync(path.join(os.tmpdir(),'user-action-libs-'));
@@ -19,69 +20,75 @@ fs.writeFileSync(path.join(libraries,'libs.tar'),brotliDecompressSync(fs.readFil
 execFileSync('tar',['-xf',path.join(libraries,'libs.tar'),'-C',libraries]);
 const browser=await playwright.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,
  env:{...process.env,LD_LIBRARY_PATH:path.join(libraries,'lib')+':'+(process.env.LD_LIBRARY_PATH||'')}});
-let checks = 0;
+let checks=0;
+// Exercise the actual page entry points with the actual legacy footer overrides present.
+for(const rel of ['DGV7.0-SAAS/bc-admin/Users.php','DGV7.0-NON-SAAS/bc-admin/Users.php','DGV7.0-SAAS/bc-spadmin/Users.php']) {
+ const source=fs.readFileSync(path.resolve(dir,'../..',rel),'utf8');
+ const sp=rel.includes('bc-spadmin');
+ const names=sp?['sec33OpenUserModal','updateAPI']:['sec33OpenUserModal','updateUserAccountAPIStatus'];
+ const js=[...source.matchAll(/^    function (\w+)\([^\n]*\) \{[\s\S]*?^    \}/gm)].filter(m=>names.includes(m[1])).map(m=>m[0]).join('\n');
+ let destination;
+ const sandbox={URLSearchParams,location:{assign:url=>{destination=url}}};sandbox.window=sandbox;
+ vm.createContext(sandbox);vm.runInContext(js,sandbox);
+ if(!sp){
+  const legacy=fs.readFileSync(path.resolve(dir,'../..',rel.split('/')[0],'jsfile/bc-custom-vendor.js'),'utf8');
+  vm.runInContext(legacy.slice(legacy.indexOf('    // Page-specific secure handlers'),legacy.indexOf('    function getCookieDet')),sandbox);
+ }
+ for(const status of ['1','2']){
+  if(sp) sandbox.updateAPI('test+user','7',status==='1');
+  else sandbox.updateUserAccountAPIStatus(status,'test+user','42');
+  const target=new URL(destination,'https://console.test/bc-admin/');
+  assert.ok(target.pathname.endsWith('/UserAction.php'));
+  assert.equal(target.searchParams.get('mode'),'api');
+  assert.equal(target.searchParams.get('status'),status);
+  assert.equal(target.searchParams.get('username'),'test+user');
+  if(sp) assert.equal(target.searchParams.get('vid'),'7');
+  else assert.equal(target.searchParams.get('id'),rel.includes('NON-SAAS')?'':'42');
+  assert.ok(!target.searchParams.has('sec_pin')&&!target.searchParams.has('sec_factor'));
+  checks+=6;
+ }
+}
+
 try {
- const page=await browser.newPage();
- await page.route('https://console.test/**',r=>r.fulfill({body:'<!doctype html><body></body>',contentType:'text/html'}));
- await page.goto('https://console.test/');
- for (const rel of ['DGV7.0-SAAS/bc-admin/Users.php','DGV7.0-NON-SAAS/bc-admin/Users.php','DGV7.0-SAAS/bc-spadmin/Users.php']) {
-  const src=fs.readFileSync(path.resolve(dir,'../..',rel),'utf8');
-  const sp=rel.includes('bc-spadmin');
-  const functions=[...src.matchAll(/^    function (\w+)\([^\n]*\) \{[\s\S]*?^    \}/gm)];
-  const names=sp?['sec33OpenUserModal','updateStatus','updateAPI','permanentlyDelete']:['sec33OpenUserModal','updateUserAccountStatus','updateUserAccountAPIStatus','permanentlyDeleteUser','loginUserAccount'];
-  const js=functions.filter(m=>names.includes(m[1])).map(m=>m[0]).join('\n');
-  assert.equal(names.filter(n=>js.includes('function '+n+'(')).length,names.length);
-  const markup=src.match(/<dialog id="sec33UserModal"[\s\S]*?<\/dialog>/)[0].replace(/<\?php[\s\S]*?\?>/g,'');
-  const cases=sp?[
-   ["updateAPI('test+user','7',true)",'api','1'],["updateAPI('test+user','7',false)",'api','2'],
-   ["updateStatus('3','test+user','7')",'status','3'],["permanentlyDelete('test+user','7')",'permanent','']
-  ]:[
-   ["updateUserAccountAPIStatus('1','test+user','42')",'api','1'],["updateUserAccountAPIStatus('2','test+user','42')",'api','2'],
-   ["updateUserAccountStatus('3','test+user','42')",'status','3'],["permanentlyDeleteUser('test+user','42')",'permanent',''],
-   ["loginUserAccount('42','test+user')",'log','']
-  ];
-  for(const width of [390,1280]) {
-   await page.setViewportSize({width,height:850});
-   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-   // Deliberately NO Bootstrap or SweetAlert scripts: the shell doesn't promise them.
-   const legacy = sp ? '' : fs.readFileSync(path.resolve(dir,'../..',rel.split('/')[0],'jsfile/bc-custom-vendor.js'),'utf8');
-   await page.setContent('<!doctype html>'+shellCSS+'<body><main class="pk-app__wrap"><div style="height:1400px">Users table</div></main>'+markup+'<script>'+js+'</script><script>'+legacy+'</script>');
-   await page.evaluate(()=>{delete window.submitted;document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();window.submitted=Object.fromEntries(new FormData(e.target,e.submitter));});});
-   assert.equal(await page.locator('dialog').isVisible(),false);checks++;
-   for(const [call,mode,status] of cases){
-    await page.evaluate(call);
-    assert.equal(await page.locator('dialog').isVisible(),true);
-    const box=await page.locator('dialog').boundingBox();
-    assert.ok(box.x>=0 && box.y>=0 && box.x+box.width<=width+1 && box.y+box.height<=851,'dialog stays in viewport');
-    assert.equal(await page.locator('#sec33UserId').inputValue(),sp ? '' : (rel.includes('NON-SAAS') && mode !== 'log' ? '' : '42'), 'footer must not overwrite row ID');
-    const inputBox=await page.locator('[name=sec_pin]').boundingBox();
-    assert.ok(inputBox.width>box.width*.75 && inputBox.x>=box.x && inputBox.y>=box.y, 'usable fields inside overlay even outside content wrapper');
-    assert.equal(await page.locator('#sec33UserMode').inputValue(),mode);
-    assert.equal(await page.locator('#sec33UserStatus').inputValue(),status);
-    assert.equal(await page.locator('#sec33UserName').inputValue(),'test+user');
-    await page.locator('#sec33UserBtn').click();
-    assert.equal(await page.evaluate(()=>window.submitted),undefined,'empty credentials cannot submit');
-    await page.locator('[name=sec_pin]').fill('1234');
-    await page.locator('[name=sec_factor]').fill('123456');
-    await page.locator('#sec33UserBtn').click();
-    const submitted=await page.evaluate(()=>window.submitted);
-    assert.equal(submitted.sec33_user_action,mode);assert.equal(submitted.sec_factor,'123456');
-    await page.getByRole('button',{name:'Cancel',exact:true}).click();
-    assert.equal(await page.locator('dialog').isVisible(),false);
-    await page.evaluate(()=>{delete window.submitted;});
-    checks+=8;
+ const page=await browser.newPage({javaScriptEnabled:false});
+ let current;let posted;
+ await page.route('https://console.test/**', async r=>{
+  if(r.request().method()==='POST'){
+   posted=Object.fromEntries(new URLSearchParams(r.request().postData()));
+   return r.fulfill({body:'<!doctype html><p>Request captured</p>',contentType:'text/html'});
+  }
+  return r.fulfill({body:current.html,contentType:'text/html'});
+ });
+ for(const width of [390,1280]) {
+  await page.setViewportSize({width,height:850});
+  for(current of fixtures){
+   await page.goto('https://console.test/UserAction.php');
+   assert.equal(await page.locator('h1').isVisible(),true);
+   const pin=await page.locator('[name=sec_pin]').boundingBox();
+   assert.ok(pin.x>=0 && pin.width>250 && pin.x+pin.width<=width && pin.y>=0 && pin.y+pin.height<=850,'usable input in viewport');
+   posted=undefined;
+   await page.locator('.actions button').click();
+   assert.equal(posted,undefined,'empty credentials blocked by HTML validation without JS');
+   await page.locator('[name=sec_pin]').fill('1234');
+   await page.locator('[name=sec_factor]').fill('123456');
+   await Promise.all([page.waitForURL('**/Users.php'),page.locator('.actions button').click()]);
+   assert.equal(posted.sec33_user_action,current.mode);
+   assert.equal(posted.sec33_status,current.status);
+   assert.equal(posted['account-user-id'],'42');
+   assert.equal(posted['account-username'],'test+user');
+   assert.equal(posted._csrf_token,'fixture-token');
+   assert.equal(posted.sec_factor,'123456');
+   assert.equal(posted.vid,current.super?'7':undefined);
+   await page.goto('https://console.test/UserAction.php');
+   if(current.enrolled){
+    assert.equal(await page.locator('[name=sec33_send_code]').count(),0,'no TOTP email bypass');
+   }else{
+    await Promise.all([page.waitForURL('**/Users.php'),page.locator('[name=sec33_send_code]').click()]);
+    assert.equal(posted.sec33_send_code,'1','email submission works with empty credentials and no JS');
+    assert.equal(posted['account-user-id'],'42');
    }
-   await page.evaluate(cases[0][0]);
-   await page.locator('[name=sec33_send_code]').click();
-   const sent=await page.evaluate(()=>window.submitted);
-   assert.ok('sec33_send_code' in sent,'email button submits without credentials');
-   assert.equal(sent['account-username'],'test+user','request carries target for safe restoration');
-   await page.keyboard.press('Escape');
-   assert.equal(await page.locator('dialog').isVisible(),false);
-   assert.deepEqual(errors,[]);
-   checks+=4;
-   page.removeAllListeners('pageerror');
+   checks+=11;
   }
  }
- console.log(`${checks} real Chromium user-action checks passed (three panels, desktop/mobile, no external modal libraries).`);
-} finally {await browser.close();fs.rmSync(libraries,{recursive:true,force:true});}
+ console.log(`${checks} standalone user-confirmation browser checks passed, mobile/desktop with JavaScript disabled.`);
+}finally{await browser.close();fs.rmSync(libraries,{recursive:true,force:true});}
