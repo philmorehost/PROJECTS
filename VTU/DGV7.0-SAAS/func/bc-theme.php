@@ -18,6 +18,14 @@ function bc_theme_readable($brand, $surfaces) {
     }
     return $target;
 }
+/** Resolve brand tints against the shell's neutral card surface, with matching ink. */
+function bc_theme_tint($raw, $opacity) {
+    $brand=bc_theme_hex($raw) ?: '#287BFF';
+    $alpha=max(0,min(1,(float)$opacity));
+    $background='#';
+    foreach(array(1,3,5) as $pos) $background.=sprintf('%02X',round(hexdec(substr($brand,$pos,2))*$alpha+255*(1-$alpha)));
+    return array('background'=>$background,'foreground'=>bc_theme_on($background),'link'=>bc_theme_readable($brand,array($background)));
+}
 function bc_theme_palette($raw) {
     $primary=bc_theme_hex($raw) ?: '#287BFF';
     $modes=array();

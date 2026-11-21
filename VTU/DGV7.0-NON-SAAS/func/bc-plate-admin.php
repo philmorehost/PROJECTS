@@ -525,7 +525,7 @@ if (!function_exists('bc_adm_css')) {
         .pk-app__wrap .tab-content > .tab-pane.fade:not(.show) { opacity: 0; }
         .pk-app__wrap .nav-pills .nav-link { border: 1px solid transparent; color: var(--ink); background: transparent; border-radius: 12px; font-weight: 600; text-align: left; padding: 12px 14px; width: 100%; cursor: pointer; }
         .pk-app__wrap .nav-pills .nav-link:hover { background: var(--wash); }
-        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); color: #fff; }
+        .pk-app__wrap .nav-pills .nav-link.active { background: var(--brand); color: var(--brand-fg); }
         .pk-settings-nav { display: flex; flex-direction: column; gap: 6px; flex-wrap: nowrap; }
         .pk-settings-nav .nav-link { display: flex; align-items: center; white-space: normal; }
         .pk-settings-nav .nav-link i { font-size: 1rem; }
@@ -559,7 +559,7 @@ if (!function_exists('bc_adm_css')) {
             box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--brand) 70%, transparent);
             transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
         }
-        .pk-app__action:hover { color: var(--brand-fg, #fff) !important; text-decoration: none !important; transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 22px -10px color-mix(in srgb, var(--brand) 70%, transparent); }
+        .pk-app__action:hover { color: var(--brand-fg, #fff) !important; text-decoration: none !important; transform: translateY(-1px); filter: none; box-shadow: 0 12px 22px -10px color-mix(in srgb, var(--brand) 70%, transparent); }
         .pk-app__action:active { transform: translateY(0); }
         .pk-app__action:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
         .pk-app__action i { font-size: .95rem; }
