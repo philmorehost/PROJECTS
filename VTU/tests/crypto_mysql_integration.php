@@ -26,6 +26,7 @@ require $base.'bc-crypto-routes.php';
 require $base.'bc-crypto-poll-schema.php';
 require $base.'bc-crypto-poll-worker-schema.php';
 require $base.'bc-crypto-poll-recovery-schema.php';
+require $base.'bc-crypto-poll-delivery-schema.php';
 require $base.'bc-crypto-poll-alert-schema.php';
 require $base.'bc-crypto-poll.php';
 require $base.'bc-crypto-poll-review.php';
@@ -35,6 +36,7 @@ require $base.'bc-crypto-poll-lease-schema.php';
 require $base.'bc-crypto-poll-operator.php';
 require $base.'bc-crypto-poll-worker.php';
 require $base.'bc-crypto-poll-recovery.php';
+require $base.'bc-crypto-poll-delivery.php';
 require $base.'bc-incident-wallet.php';
 function connect_test() {
     $db=new mysqli(getenv('BC_CRYPTO_TEST_HOST') ?: '127.0.0.1',getenv('BC_CRYPTO_TEST_USER') ?: 'root',getenv('BC_CRYPTO_TEST_PASSWORD') ?: '', '', (int)(getenv('BC_CRYPTO_TEST_PORT') ?: 3306));
@@ -61,6 +63,7 @@ if (($argv[1]??'')==='worker') {
         elseif ($argv[4]==='route') {$r=json_decode($argv[5],true);$result=bc_crypto_route_save($r['authority'],$r['env'],$r['identity'],$r['custody_revision'],$r['action'],$r['input']);}
         elseif ($argv[4]==='ack_poll_alert') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_alert_ack($p['actor'],$p['identity'],$p['environment'],$p['custody_revision'],$p['id'],$p['revision']);}
         elseif ($argv[4]==='recover_poll_worker') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_recover($p['actor'],$p['identity'],'testnet',$p['custody_revision'],$p['input']);}
+        elseif ($argv[4]==='delivery_claim') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_delivery_claim($p['stream'],$p['revision'],$p['config']);}
         elseif ($argv[4]==='worker_claim') {$p=json_decode($argv[5],true);$w=BcCryptoPollWorkerAuthority::authenticate($p['grant']);$result=bc_crypto_poll_claim($w,$p['id'],1);}
         elseif ($argv[4]==='claim_poll') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_claim($p['actor'],$p['id'],$p['revision']);}
         elseif ($argv[4]==='poll') {$p=json_decode($argv[5],true);$result=bc_crypto_poll_commit($p['actor'],$p['id'],$p['revision'],$p['evidence'],$p['token']??null);}
@@ -103,10 +106,10 @@ try {
     // Minimal legacy fixture: never an application's sas_users or live balance table.
     bc_q('CREATE TABLE sas_users (id BIGINT UNSIGNED PRIMARY KEY,vendor_id BIGINT UNSIGNED,status INT,is_blocked INT,force_password_change INT,kyc_status INT) ENGINE=InnoDB');
     bc_q('INSERT INTO sas_users VALUES(11,7,1,0,0,2)');
-    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements(),bc_crypto_custody_schema_statements(),bc_crypto_custody_evidence_schema_statements(),bc_crypto_route_schema_statements(),bc_crypto_poll_schema_statements(),bc_crypto_poll_lease_schema_statements(),bc_crypto_poll_overlap_schema_statements(),bc_crypto_poll_review_schema_statements(),bc_crypto_poll_alert_schema_statements(),bc_crypto_poll_worker_schema_statements(),bc_crypto_poll_recovery_schema_statements());
+    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements(),bc_crypto_custody_schema_statements(),bc_crypto_custody_evidence_schema_statements(),bc_crypto_route_schema_statements(),bc_crypto_poll_schema_statements(),bc_crypto_poll_lease_schema_statements(),bc_crypto_poll_overlap_schema_statements(),bc_crypto_poll_review_schema_statements(),bc_crypto_poll_alert_schema_statements(),bc_crypto_poll_worker_schema_statements(),bc_crypto_poll_recovery_schema_statements(),bc_crypto_poll_delivery_schema_statements());
     foreach($ddl as $sql) bc_q($sql);
     foreach($ddl as $sql) bc_q($sql); // Additive installer is repeatable, not a schema repair tool.
-    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===28,'twenty-seven production tables plus fixture are InnoDB; second install succeeds');
+    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===30,'twenty-nine production tables plus fixture are InnoDB; second install succeeds');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_asset_policies')===0,'migration creates no enabled policies');
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_catalogue_stale');
     $network=['asset_network'=>'USDT:TRX','platform_enabled'=>false,'provider_deposit_available'=>true,'provider_withdraw_available'=>true,'confirmations'=>'20','withdrawal_confirmations'=>'40'];
@@ -185,6 +188,7 @@ try {
     require __DIR__.'/crypto_poll_alert_mysql_cases.php';
     require __DIR__.'/crypto_poll_worker_mysql_cases.php';
     require __DIR__.'/crypto_poll_recovery_mysql_cases.php';
+    require __DIR__.'/crypto_poll_delivery_mysql_cases.php';
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";

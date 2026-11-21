@@ -1,0 +1,13 @@
+<?php
+/** Run php -n to avoid real cURL: synthetic transport only. */
+foreach(['CURLOPT_POST','CURLOPT_POSTFIELDS','CURLOPT_HTTPHEADER','CURLOPT_FOLLOWLOCATION','CURLOPT_MAXREDIRS','CURLOPT_PROXY','CURLOPT_PROTOCOLS','CURLOPT_SSL_VERIFYPEER','CURLOPT_SSL_VERIFYHOST','CURLOPT_SSLVERSION','CURL_SSLVERSION_TLSv1_2','CURLOPT_CONNECTTIMEOUT','CURLOPT_TIMEOUT','CURLOPT_RESOLVE','CURLOPT_WRITEFUNCTION','CURLPROTO_HTTPS','CURLINFO_HTTP_CODE'] as $i=>$c)if(!defined($c))define($c,$i+1);
+function curl_init($url){return new stdClass();}function curl_setopt_array($ch,$opts){$GLOBALS['opts']=$opts;return true;}function curl_close($ch){}function curl_getinfo($ch,$key){return $GLOBALS['status']??200;}
+function curl_exec($ch){$o=$GLOBALS['opts'];$p=json_decode($o[CURLOPT_POSTFIELDS],true);$body=json_encode(['delivery_id'=>$p['delivery_id'],'accepted'=>true,'signature'=>hash_hmac('sha256',"receipt\n".$p['delivery_id']."\n".hash('sha256',$o[CURLOPT_POSTFIELDS]),str_repeat('d',64))]);if(!empty($GLOBALS['oversize']))$body=str_repeat('x',4097);if(!empty($GLOBALS['unsigned']))$body='{}';$r=$o[CURLOPT_WRITEFUNCTION]($ch,$body);return $r===strlen($body);}
+require dirname(__DIR__).'/DGV7.0-SAAS/func/bc-crypto-poll-delivery.php';
+$n=0;function dt_check($v,$s){global $n;if(!$v)throw new RuntimeException($s);$n++;}
+$c=bc_crypto_poll_delivery_validate_config('https://alerts.example.com/hook',str_repeat('d',64));$claim=['id'=>str_repeat('a',32),'payload'=>json_encode(['delivery_id'=>str_repeat('a',32)])];
+dt_check(bc_crypto_poll_delivery_send_to_ip($c,$claim,'8.8.8.8'),'signed synthetic receipt');$o=$GLOBALS['opts'];
+dt_check($o[CURLOPT_FOLLOWLOCATION]===false&&$o[CURLOPT_MAXREDIRS]===0&&$o[CURLOPT_PROXY]==='','redirects/proxies disabled');dt_check($o[CURLOPT_SSL_VERIFYPEER]===true&&$o[CURLOPT_SSL_VERIFYHOST]===2&&$o[CURLOPT_PROTOCOLS]===CURLPROTO_HTTPS,'TLS/HTTPS enforced');dt_check($o[CURLOPT_CONNECTTIMEOUT]===3&&$o[CURLOPT_TIMEOUT]===8,'bounded timeouts');dt_check($o[CURLOPT_RESOLVE]===['alerts.example.com:443:8.8.8.8'],'public IP pinned for TLS host');
+$headers=implode("\n",$o[CURLOPT_HTTPHEADER]);dt_check(strpos($headers,'X-Crypto-Signature: ')!==false&&strpos($headers,str_repeat('d',64))===false,'signature sent, raw key never sent');
+$GLOBALS['status']=302;dt_check(!bc_crypto_poll_delivery_send_to_ip($c,$claim,'8.8.8.8'),'redirect not confirmation');$GLOBALS['status']=200;$GLOBALS['unsigned']=true;dt_check(!bc_crypto_poll_delivery_send_to_ip($c,$claim,'8.8.8.8'),'unsigned 2xx not confirmation');$GLOBALS['unsigned']=false;$GLOBALS['oversize']=true;dt_check(!bc_crypto_poll_delivery_send_to_ip($c,$claim,'8.8.8.8'),'oversize response refuses confirmation');
+echo "$n synthetic signed-alert transport checks passed; no network.\n";
