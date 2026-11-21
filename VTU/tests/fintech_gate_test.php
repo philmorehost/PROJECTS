@@ -1110,6 +1110,14 @@ foreach ($editions as $edition) {
     gtrue("$edition bc-admin keeps the landing APK setting untouched", strpos($settings, "apk_download_url='\$apk_download_url'") !== false);
 }
 
+// Reject ineligible accounts after credentials, before generating/emailing OTPs.
+$loginSource = file_get_contents($root . '/DGV7.0-SAAS/web/api/login.php');
+$loginPolicyAt = strpos($loginSource, 'bc_fintech_app_access($user_detail)');
+gtrue('app policy is checked only after password validation', strpos($loginSource, 'if ($sec29_pass_ok)') < $loginPolicyAt);
+gtrue('app policy is checked only for active users', strpos($loginSource, 'if ($user_detail["status"] == 1)') < $loginPolicyAt);
+gtrue('app policy precedes OTP challenge issuance', $loginPolicyAt < strpos($loginSource, 'bc_create_login_token'));
+gtrue('app policy precedes OTP email delivery', $loginPolicyAt < strpos($loginSource, 'bc_send_user_login_otp'));
+
 // SAAS OTP step must gate too
 $otp = file_get_contents($root . '/DGV7.0-SAAS/web/api/login-otp.php');
 gtrue('SAAS OTP step re-applies the account policy', strpos($otp, 'bc_fintech_app_access($user_detail)') !== false);

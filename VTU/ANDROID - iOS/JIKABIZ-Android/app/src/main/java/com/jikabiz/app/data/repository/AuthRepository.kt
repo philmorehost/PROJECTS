@@ -32,7 +32,7 @@ class AuthRepository(private val context: Context) {
     suspend fun loginStart(username: String, password: String): LoginOutcome {
         return try {
             val response = api.login(mapOf("user" to username, "pass" to password))
-            if (!response.isSuccessful) return LoginOutcome.Failure("Server error: ${response.code()}")
+            if (!response.isSuccessful) return LoginOutcome.Failure(LoginHttpError.message(response.code(), response.errorBody()?.string()))
 
             val body = response.body() ?: return LoginOutcome.Failure("Empty response")
             when ((body["status"] as? String ?: "error").lowercase()) {
@@ -57,7 +57,7 @@ class AuthRepository(private val context: Context) {
     suspend fun loginWithOtp(challenge: String, otp: String): LoginOutcome {
         return try {
             val response = api.loginOtp(mapOf("challenge" to challenge, "otp" to otp))
-            if (!response.isSuccessful) return LoginOutcome.Failure("Server error: ${response.code()}")
+            if (!response.isSuccessful) return LoginOutcome.Failure(LoginHttpError.message(response.code(), response.errorBody()?.string()))
 
             val body = response.body() ?: return LoginOutcome.Failure("Empty response")
             if ((body["status"] as? String ?: "error") == "success") {

@@ -55,6 +55,15 @@ if (mysqli_num_rows($check_user) == 1) {
             }
 
         if ($user_detail["status"] == 1) {
+            // ── DGV7: mobile apps are personal-account only ──────────────────────
+            // Business accounts are web-only. Check after valid credentials, before sending
+            // an OTP; login-otp.php re-checks policy in case it changes mid-challenge.
+            $bc_app_decision = bc_fintech_app_access($user_detail);
+            if (!$bc_app_decision['allowed']) {
+                recordLoginAttempt($user, $ip, 0, $vendor_id);
+                bc_fintech_send_app_denial($bc_app_decision);
+            }
+
             // ── Login OTP gate ──────────────────────────────────────────────────
             // The password is correct, but that is no longer the whole story when the
             // vendor has switched user login OTP on. Nothing sensitive (api_key, balance)
@@ -83,15 +92,6 @@ if (mysqli_num_rows($check_user) == 1) {
                     "message" => "A 6-digit verification code has been sent to your email.",
                 ]);
                 exit;
-            }
-
-            // ── DGV7: mobile apps are personal-account only ──────────────────────
-            // Business accounts are web-only. Checked after the password (and after OTP when
-            // enabled) but BEFORE any api_key/balance is returned or an app session is minted.
-            $bc_app_decision = bc_fintech_app_access($user_detail);
-            if (!$bc_app_decision['allowed']) {
-                recordLoginAttempt($user, $ip, 0, $vendor_id);
-                bc_fintech_send_app_denial($bc_app_decision);
             }
 
             recordLoginAttempt($user, $ip, 1, $vendor_id);
