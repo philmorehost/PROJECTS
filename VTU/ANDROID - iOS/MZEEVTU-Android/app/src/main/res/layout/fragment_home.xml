@@ -16,7 +16,7 @@
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/background">
+        android:background="@color/background" android:tag="brand:bg=background">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -32,7 +32,7 @@
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
                 android:paddingTop="48dp"
-                android:paddingBottom="32dp">
+                android:paddingBottom="32dp" android:tag="brand:bg=primary">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -72,7 +72,7 @@
                         android:src="@drawable/ic_home"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:tint="#FFFFFF"
-                        android:contentDescription="Notifications" />
+                        android:contentDescription="Notifications"  android:tag="brand:icon=primary_text" />
                 </LinearLayout>
 
                 <!-- Balance Card (Crypto-style) -->
@@ -81,7 +81,7 @@
                     android:layout_height="wrap_content"
                     app:cardCornerRadius="20dp"
                     app:cardElevation="6dp"
-                    app:cardBackgroundColor="@color/primary">
+                    app:cardBackgroundColor="@color/primary" android:tag="brand:bg=primary">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -113,7 +113,7 @@
                                 android:src="@drawable/ic_eye"
                                 android:background="?attr/selectableItemBackgroundBorderless"
                                 android:tint="#CCFFFFFF"
-                                android:contentDescription="Toggle balance" />
+                                android:contentDescription="Toggle balance"  android:tag="brand:icon=primary_text" />
                         </LinearLayout>
 
                         <TextView
@@ -151,7 +151,7 @@
                                     android:layout_height="26dp"
                                     android:src="@drawable/ic_wallet"
                                     android:tint="#FFFFFF"
-                                    android:contentDescription="Fund wallet" />
+                                    android:contentDescription="Fund wallet"  android:tag="brand:icon=primary_text" />
                             </LinearLayout>
 
                             <LinearLayout
@@ -171,7 +171,7 @@
                                     android:layout_height="26dp"
                                     android:src="@drawable/ic_bank"
                                     android:tint="#FFFFFF"
-                                    android:contentDescription="Withdraw" />
+                                    android:contentDescription="Withdraw"  android:tag="brand:icon=primary_text" />
                             </LinearLayout>
 
                             <LinearLayout
@@ -190,7 +190,7 @@
                                     android:layout_height="26dp"
                                     android:src="@drawable/ic_share"
                                     android:tint="#FFFFFF"
-                                    android:contentDescription="Share fund" />
+                                    android:contentDescription="Share fund"  android:tag="brand:icon=primary_text" />
                             </LinearLayout>
 
                         </LinearLayout>
@@ -212,7 +212,7 @@
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
-                    android:layout_marginBottom="12dp" />
+                    android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                 <!-- Row 1 -->
                 <LinearLayout
@@ -227,10 +227,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_airtime" android:padding="12dp"
-                            android:background="@drawable/bg_icon_airtime" />
+                            android:background="@drawable/bg_icon_airtime"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Airtime" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_data"
@@ -239,10 +239,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_data" android:padding="12dp"
-                            android:background="@drawable/bg_icon_data" />
+                            android:background="@drawable/bg_icon_data"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Data" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_electric"
@@ -251,10 +251,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_electric" android:padding="12dp"
-                            android:background="@drawable/bg_icon_electric" />
+                            android:background="@drawable/bg_icon_electric"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Electric" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_cable"
@@ -263,10 +263,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_cable" android:padding="12dp"
-                            android:background="@drawable/bg_icon_cable" />
+                            android:background="@drawable/bg_icon_cable"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Cable TV" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_nin"
@@ -275,10 +275,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_print" android:padding="12dp"
-                            android:background="@drawable/bg_icon_print" />
+                            android:background="@drawable/bg_icon_print"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="NIN" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -295,10 +295,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_exam" android:padding="12dp"
-                            android:background="@drawable/bg_icon_exam" />
+                            android:background="@drawable/bg_icon_exam"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Exam Pin" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_sms"
@@ -307,10 +307,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_message" android:padding="12dp"
-                            android:background="@drawable/bg_icon_data" />
+                            android:background="@drawable/bg_icon_data"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Bulk Ops" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_giftcard"
@@ -319,10 +319,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_giftcard" android:padding="12dp"
-                            android:background="@drawable/bg_icon_giftcard" />
+                            android:background="@drawable/bg_icon_giftcard"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Gift Cards" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_vcard"
@@ -331,10 +331,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_vcard" android:padding="12dp"
-                            android:background="@drawable/bg_icon_vcard" />
+                            android:background="@drawable/bg_icon_vcard"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="V-Card" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_bvn"
@@ -343,10 +343,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_bvn_verify" android:padding="12dp"
-                            android:background="@drawable/bg_icon_bvn_verify" />
+                            android:background="@drawable/bg_icon_bvn_verify"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="BVN" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -363,10 +363,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_bitcoin" android:padding="12dp"
-                            android:background="@drawable/bg_icon_crypto" />
+                            android:background="@drawable/bg_icon_crypto"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Crypto" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_betting"
@@ -375,10 +375,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_casino" android:padding="12dp"
-                            android:background="@drawable/bg_icon_betting" />
+                            android:background="@drawable/bg_icon_betting"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Betting" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_print"
@@ -387,10 +387,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_print" android:padding="12dp"
-                            android:background="@drawable/bg_icon_print" />
+                            android:background="@drawable/bg_icon_print"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Print Cards" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_withdraw_shortcut"
@@ -399,10 +399,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_bank" android:padding="12dp"
-                            android:background="@drawable/bg_icon_bank" />
+                            android:background="@drawable/bg_icon_bank"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Withdraw" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_history"
@@ -411,10 +411,10 @@
                         android:gravity="center" android:padding="8dp">
                         <ImageView android:layout_width="52dp" android:layout_height="52dp"
                             android:src="@drawable/ic_grid" android:padding="12dp"
-                            android:background="@drawable/bg_icon_data" />
+                            android:background="@drawable/bg_icon_data"  android:tag="brand:icon=primary_text" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="History" android:textSize="11sp" android:layout_marginTop="4dp"
-                            android:textColor="@color/text_primary" android:gravity="center" />
+                            android:textColor="@color/text_primary" android:gravity="center"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -442,7 +442,7 @@
                         android:text="Recent Transactions"
                         android:textSize="16sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary" />
+                        android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
 
                     <TextView
                         android:id="@+id/btn_see_all"
@@ -451,7 +451,7 @@
                         android:text="See All"
                         android:textColor="@color/primary"
                         android:textSize="13sp"
-                        android:padding="4dp" />
+                        android:padding="4dp"  android:tag="brand:text=primary_text" />
                 </LinearLayout>
 
                 <TextView
@@ -463,7 +463,7 @@
                     android:textSize="14sp"
                     android:layout_gravity="center"
                     android:visibility="gone"
-                    android:padding="16dp" />
+                    android:padding="16dp"  android:tag="brand:text=on_surface" />
 
                 <LinearLayout
                     android:id="@+id/container_recent_tx"
@@ -488,7 +488,7 @@
         app:elevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:contentDescription="AI Budgeting" />
+        android:contentDescription="AI Budgeting"  android:tag="brand:icon=primary_text" />
 
     <!-- Glowing Premium AI Assistant Floating Action Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -502,6 +502,6 @@
         app:elevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:contentDescription="AI Assistant" />
+        android:contentDescription="AI Assistant"  android:tag="brand:bg=primary;button=fill;icon=primary_text" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

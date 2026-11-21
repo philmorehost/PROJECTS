@@ -290,7 +290,7 @@ if (isset($_POST["update-theme"])) {
     $template = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["template-name"])));
     $primary_color = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["primary-color"])));
 
-    if (!empty($template) && in_array($template, $style_templates)) {
+    if (preg_match('/^#[0-9a-fA-F]{6}$/D', $primary_color) && !empty($template) && in_array($template, $style_templates)) {
         $select_vendor_style_templates_details = mysqli_query($connection_server, "SELECT * FROM sas_vendor_style_templates WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
         if (mysqli_num_rows($select_vendor_style_templates_details) == 0) {
             // Both branches set only $json_response_array; $json_response_encode was NEVER assigned on

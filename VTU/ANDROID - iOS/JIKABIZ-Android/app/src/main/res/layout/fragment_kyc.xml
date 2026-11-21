@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
@@ -9,12 +9,12 @@
         <!-- Toolbar -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back"
                 android:layout_width="40dp" android:layout_height="40dp"
                 android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="KYC Verification"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -39,7 +39,7 @@
                     android:orientation="vertical" android:padding="16dp">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="VERIFICATION STATUS" android:textSize="11sp" android:textStyle="bold"
-                        android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"/>
+                        android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_kyc_status"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="KYC Status: Loading..."
@@ -61,22 +61,22 @@
                 android:textSize="15sp" android:textStyle="bold"
                 android:backgroundTint="@color/primary"
                 style="@style/Widget.Material3.Button"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp"  android:tag="brand:bg=primary;button=fill" />
 
             <!-- BVN / NIN Section -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="STEP 1 — ENTER BVN OR NIN" android:textSize="11sp" android:textStyle="bold"
-                android:textColor="@color/text_secondary" android:layout_marginBottom="12dp"/>
+                android:textColor="@color/text_secondary" android:layout_marginBottom="12dp" android:tag="brand:text=on_surface" />
 
             <!-- Radio group -->
             <RadioGroup android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:layout_marginBottom="12dp">
                 <RadioButton android:id="@+id/rb_bvn"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="BVN" android:checked="true" android:layout_marginEnd="20dp"/>
+                    android:text="BVN" android:checked="true" android:layout_marginEnd="20dp" android:tag="brand:button=fill" />
                 <RadioButton android:id="@+id/rb_nin"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="NIN" />
+                    android:text="NIN"  android:tag="brand:button=fill" />
             </RadioGroup>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -96,16 +96,16 @@
                 android:textSize="14sp"
                 android:backgroundTint="@color/primary"
                 style="@style/Widget.Material3.Button"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="24dp" android:tag="brand:bg=primary;button=fill" />
 
             <!-- Document Upload Section -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="STEP 2 — UPLOAD IDENTITY DOCUMENTS" android:textSize="11sp" android:textStyle="bold"
-                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"/>
+                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" android:tag="brand:text=on_surface" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Upload a government-issued ID card and a clear selfie. Supported formats: JPG, PNG."
                 android:textSize="12sp" android:textColor="@color/text_secondary"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginBottom="16dp" android:tag="brand:text=on_surface" />
 
             <!-- Govt ID picker -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -116,13 +116,13 @@
                     android:text="Choose ID Card"
                     android:textSize="13sp"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_marginEnd="12dp"/>
+                    android:layout_marginEnd="12dp" android:tag="brand:button=outline" />
                 <TextView android:id="@+id/tv_govt_id_name"
                     android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="No file selected"
                     android:textSize="12sp" android:textColor="@color/text_secondary"
-                    android:ellipsize="end" android:maxLines="1"/>
+                    android:ellipsize="end" android:maxLines="1" android:tag="brand:text=on_surface" />
             </LinearLayout>
 
             <!-- Selfie picker -->
@@ -134,13 +134,13 @@
                     android:text="Choose Selfie"
                     android:textSize="13sp"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_marginEnd="12dp"/>
+                    android:layout_marginEnd="12dp" android:tag="brand:button=outline" />
                 <TextView android:id="@+id/tv_selfie_name"
                     android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="No file selected"
                     android:textSize="12sp" android:textColor="@color/text_secondary"
-                    android:ellipsize="end" android:maxLines="1"/>
+                    android:ellipsize="end" android:maxLines="1" android:tag="brand:text=on_surface" />
             </LinearLayout>
 
             <Button android:id="@+id/btn_upload_documents"
@@ -148,7 +148,7 @@
                 android:text="Submit for Verification"
                 android:textSize="15sp" android:textStyle="bold"
                 android:backgroundTint="@color/primary"
-                style="@style/Widget.Material3.Button"/>
+                style="@style/Widget.Material3.Button" android:tag="brand:bg=primary;button=fill" />
 
         </LinearLayout>
     </LinearLayout>

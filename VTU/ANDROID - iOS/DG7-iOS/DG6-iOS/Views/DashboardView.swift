@@ -12,7 +12,9 @@ struct MobileWallet: Identifiable {
     let code: String
     let balance: String
 }
+@MainActor
 struct DashboardView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @EnvironmentObject var session: SessionManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var name = ""
@@ -25,7 +27,7 @@ struct DashboardView: View {
     @State private var portal: MobileService?
     @State private var receipt: MobileReceipt?
     @State private var locked = UserDefaults.standard.bool(forKey: "mobile_biometric_lock")
-    private let orange = Color(red: 1, green: 0.49, blue: 0.23)
+    private var orange: Color { brandTheme.ink }
 
     var body: some View {
         ZStack {
@@ -44,7 +46,7 @@ struct DashboardView: View {
                             if !error.isEmpty { Text(error).font(.caption).foregroundColor(.orange).padding() }
                         }.padding(16)
                     }
-                    .background(Color(red: 0.035, green: 0.035, blue: 0.035).ignoresSafeArea())
+                    .background(brandTheme.background.ignoresSafeArea())
                     .navigationBarHidden(true)
                     .refreshable { reload() }
                 }.tabItem { Label("Home", systemImage: "house.fill") }
@@ -79,7 +81,7 @@ struct DashboardView: View {
                 Image(systemName: "person.crop.circle.fill").font(.title)
                 Text(name.isEmpty ? "Welcome back" : "Hello, \(name)").font(.headline)
                 Spacer()
-                Button { open("settings") } label: { Image(systemName: "bell").padding(12).background(Color.black.opacity(0.12)).clipShape(Circle()) }.accessibilityLabel("Account and notifications")
+                Button { open("settings") } label: { Image(systemName: "bell").padding(12).background(brandTheme.primary).clipShape(Circle()) }.accessibilityLabel("Account and notifications")
             }
             HStack {
                 Button { balanceVisible.toggle() } label: { Label("Wallet balance", systemImage: balanceVisible ? "eye" : "eye.slash").font(.caption) }
@@ -87,15 +89,15 @@ struct DashboardView: View {
                 Menu {
                     ForEach(wallets) { wallet in Button(wallet.code) { selectedCurrency = wallet.code } }
                     Button("Live currency conversion") { open("fx") }
-                } label: { HStack { Text(selectedCurrency); Image(systemName: "chevron.down") }.font(.caption.bold()).padding(10).background(Color.white.opacity(0.15)).clipShape(Capsule()) }
+                } label: { HStack { Text(selectedCurrency); Image(systemName: "chevron.down") }.font(.caption.bold()).padding(10).background(brandTheme.primary).clipShape(Capsule()) }
                 .accessibilityLabel("Switch existing currency wallet")
             }
             Text(balanceText).font(.system(size: 39, weight: .bold, design: .rounded)).minimumScaleFactor(0.5).lineLimit(1).padding(.vertical, 8)
             if balanceVisible && selectedCurrency == "NGN" && recent.count > 1 {
                 MobileBalanceLine(values: recent.reversed().compactMap { MobileReceipt.number($0["balance_after"]) })
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(brandTheme.onPrimary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .frame(height: 62).accessibilityLabel("Recent recorded naira balance trend")
-            } else { Text("Your money. Your next move.").font(.caption).opacity(0.8).frame(height: 40) }
+            } else { Text("Your money. Your next move.").font(.caption).frame(height: 40) }
             HStack {
                 NavigationLink(destination: serviceList(group: "Send")) { quick("Send", "arrow.up.right") }
                 Spacer()
@@ -106,8 +108,8 @@ struct DashboardView: View {
                 NavigationLink(destination: serviceList(group: nil)) { quick("More", "ellipsis") }
             }
         }
-        .foregroundColor(.white).padding(24)
-        .background(LinearGradient(colors: [orange, Color(red: 0.76, green: 0.10, blue: 0.025)], startPoint: .top, endPoint: .bottom))
+        .foregroundColor(brandTheme.onPrimary).tint(brandTheme.onPrimary).padding(24)
+        .background(brandTheme.primary)
         .cornerRadius(32)
     }
     private var balanceText: String {
@@ -117,11 +119,11 @@ struct DashboardView: View {
         return "\(selectedCurrency) \(fmt.string(from: NSNumber(value: value)) ?? wallet.balance)"
     }
     private func quick(_ title: String, _ icon: String) -> some View {
-        VStack(spacing: 8) { Image(systemName: icon).font(.title2).frame(width: 52, height: 52).background(Color.black.opacity(0.15)).clipShape(Circle()); Text(title).font(.caption) }
+        VStack(spacing: 8) { Image(systemName: icon).font(.title2).frame(width: 52, height: 52).background(brandTheme.primary).clipShape(Circle()); Text(title).font(.caption) }
     }
     private func tile(_ title: String, _ icon: String) -> some View {
-        VStack(spacing: 14) { Image(systemName: icon).font(.title2).foregroundColor(orange); Text(title).font(.system(size: 11, weight: .medium)).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.7) }
-            .frame(maxWidth: .infinity).frame(height: 102).background(Color(white: 0.14)).cornerRadius(20)
+        VStack(spacing: 14) { Image(systemName: icon).font(.title2).foregroundColor(orange); Text(title).font(.system(size: 11, weight: .medium)).foregroundColor(brandTheme.onSurface).lineLimit(1).minimumScaleFactor(0.7) }
+            .frame(maxWidth: .infinity).frame(height: 102).background(brandTheme.surface).cornerRadius(20)
     }
     private func shortcut(_ title: String, _ icon: String, _ slug: String) -> some View {
         Button { open(slug) } label: { tile(title, icon) }
@@ -137,10 +139,10 @@ struct DashboardView: View {
                         VStack(alignment: .leading, spacing: 4) { Text(row["description"] as? String ?? "Transaction").font(.subheadline).lineLimit(1); Text(row["date"] as? String ?? "").font(.caption2).foregroundColor(.secondary) }
                         Spacer()
                         Text("₦\(String(format: "%.2f", MobileReceipt.number(row["amount"]) ?? 0))").font(.subheadline.bold())
-                    }.foregroundColor(.black)
+                    }.foregroundColor(brandTheme.onSurface)
                 }
             }
-        }.padding(22).background(Color.white).cornerRadius(28)
+        }.padding(22).background(brandTheme.surface).cornerRadius(28)
     }
     private func serviceList(group: String?) -> some View {
         List {
@@ -214,7 +216,9 @@ struct MobileBalanceLine: Shape {
         }; return p
     }
 }
+@MainActor
 struct MobilePortalView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     let service: MobileService
     @Environment(\.dismiss) private var dismiss
     @State private var token: String?

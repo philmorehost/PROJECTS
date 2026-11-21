@@ -376,11 +376,10 @@ if (!function_exists('bc_app_css')) {
         // ANY tenant-picked brand. A light brand (e.g. amber) gets dark text; a
         // dark brand keeps white. --brand-ink is the brand darkened enough to be
         // readable as text on white surfaces.
-        $bc_brand_fg = '#ffffff';
-        if (isset($bc_rgb_m)) {
-            $bc_lum = (0.2126 * hexdec($bc_rgb_m[1]) + 0.7152 * hexdec($bc_rgb_m[2]) + 0.0722 * hexdec($bc_rgb_m[3])) / 255;
-            if ($bc_lum > 0.55) $bc_brand_fg = '#0b1220';
-        }
+        require_once __DIR__ . '/bc-theme.php';
+        $bc_palette = bc_theme_palette($brand);
+        $bc_brand_fg = $bc_palette['modes']['light']['on_primary'];
+        $bc_brand_ink = $bc_palette['modes']['light']['primary_text'];
         ?><style>
         :root {
             --brand: <?php echo $brand; ?>;
@@ -403,7 +402,7 @@ if (!function_exists('bc_app_css')) {
             /* Derived, so a tenant's own brand colour never gets a teal hover state. */
             --brand-dark: color-mix(in srgb, var(--brand) 82%, #000);
             --brand-fg: <?php echo $bc_brand_fg; ?>;
-            --brand-ink: color-mix(in srgb, var(--brand) 60%, #000);
+            --brand-ink: <?php echo $bc_brand_ink; ?>;
             --ink: #0b1220;
             --muted: #64748b;
             --line: #e2e8f0;
@@ -927,9 +926,13 @@ if (!function_exists('bc_app_css')) {
             border: none; color: var(--brand-fg);
             box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 75%, transparent);
         }
-        .pk-app__wrap .btn-primary:hover { background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand) 130%); color: var(--brand-fg); }
+        .pk-app__wrap .btn-primary:hover { background: var(--brand); color: var(--brand-fg); }
+        .pk-app__wrap .btn-primary { border: 1px solid var(--brand-ink); }
+        .pk-app__wrap .btn-primary .text-white, .pk-app__wrap .bg-primary .text-white, .pk-app__wrap .bg-primary .text-primary { color: var(--brand-fg) !important; }
+        .pk-app__wrap .btn-primary i, .pk-app__wrap .bg-primary i { color: inherit; }
+        .pk-app__wrap .text-primary { color: var(--brand-ink) !important; }
         .pk-app__wrap .btn-outline-primary { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--line)); color: var(--brand-ink); background: transparent; }
-        .pk-app__wrap .btn-outline-primary:hover { background: color-mix(in srgb, var(--brand) 8%, var(--surface)); color: var(--brand-dark); }
+        .pk-app__wrap .btn-outline-primary:hover { background: var(--surface); color: var(--brand-ink); }
         .pk-app__wrap .badge { border-radius: 999px; padding: 5px 10px; font-weight: 700; letter-spacing: .02em; }
         .pk-app__wrap .alert { border-radius: 14px; border: 1px solid var(--line); border-left: 4px solid var(--brand); padding: 14px 16px; }
         .pk-app__wrap .alert-success { border-left-color: var(--ok); }

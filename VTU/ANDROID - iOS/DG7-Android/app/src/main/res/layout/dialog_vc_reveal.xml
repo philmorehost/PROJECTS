@@ -12,7 +12,7 @@
         android:text="Enter your Transaction PIN to reveal full card details."
         android:textColor="@color/text_secondary"
         android:textSize="13sp"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="16dp"  android:tag="brand:text=on_surface" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"

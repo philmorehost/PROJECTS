@@ -139,7 +139,8 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
         // Update tab button styles
         allTypeBtns().forEach { btn ->
             btn.setBackgroundColor(requireContext().getColor(android.R.color.transparent))
-            btn.setTextColor(requireContext().getColor(R.color.primary))
+            com.mzeevtu.util.BrandTheme.mark(btn, "button=outline")
+            btn.setTextColor(com.mzeevtu.util.BrandTheme.ink(requireContext()))
         }
         val activeBtn = when (type) {
             SERVICE_TYPE_DATA -> binding.btnTypeData
@@ -150,8 +151,9 @@ class PrintHubFragment : Fragment(R.layout.fragment_print_hub) {
             SERVICE_TYPE_BETTING -> binding.btnTypeBetting
             else -> binding.btnTypeData
         }
-        activeBtn.setBackgroundColor(requireContext().getColor(R.color.primary))
-        activeBtn.setTextColor(requireContext().getColor(R.color.text_on_primary))
+        com.mzeevtu.util.BrandTheme.mark(activeBtn, "button=fill")
+        activeBtn.setBackgroundColor(com.mzeevtu.util.BrandTheme.primary(requireContext()))
+        activeBtn.setTextColor(com.mzeevtu.util.BrandTheme.onPrimary(requireContext()))
 
         // Show/hide sections
         binding.sectionNetwork.visibility = if (isNetwork) View.VISIBLE else View.GONE

@@ -45,6 +45,7 @@ object ReceiptHelper {
         }
 
         dialog.show()
+        dialog.window?.decorView?.let { com.datagifting.app.util.BrandTheme.applyView(it) }
     }
 
     /** Convenience overload used from non-fragment contexts that already have a LayoutInflater */
@@ -67,6 +68,7 @@ object ReceiptHelper {
         }
 
         dialog.show()
+        dialog.window?.decorView?.let { com.datagifting.app.util.BrandTheme.applyView(it) }
     }
 
     private fun bindReceiptView(view: View, tx: Transaction) {
@@ -164,7 +166,7 @@ object ReceiptHelper {
             val canvas = page.canvas
             canvas.drawColor(Color.WHITE)
 
-            val primaryColor = ContextCompat.getColor(context, R.color.primary)
+            val primaryColor = com.datagifting.app.util.BrandTheme.printInk()
             val paintTitle = Paint().apply { color = primaryColor; textSize = 22f; isFakeBoldText = true; isAntiAlias = true }
             val paintLabel = Paint().apply { color = Color.GRAY; textSize = 14f; isAntiAlias = true }
             val paintValue = Paint().apply { color = Color.BLACK; textSize = 14f; isAntiAlias = true }

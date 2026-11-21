@@ -15,8 +15,10 @@ struct TransactionListResponse: Codable {
     let status: String
     let data: [TransactionItem]?
 }
+@MainActor
 
 struct TransactionHistoryView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var transactions: [TransactionItem] = []
     @State private var isLoading = false
     @State private var feedbackMessage = ""
@@ -48,7 +50,7 @@ struct TransactionHistoryView: View {
                     Text("Filters Active")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(.blue)
+                        .foregroundColor(brandTheme.ink)
                     Spacer()
                     Button("Reset") {
                         filterType = ""
@@ -61,7 +63,7 @@ struct TransactionHistoryView: View {
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.1))
+                .background(brandTheme.primary.opacity(0.1))
             }
 
             List {
@@ -142,7 +144,7 @@ struct TransactionHistoryView: View {
                             fetchHistory()
                         }
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(.blue)
+                        .foregroundColor(brandTheme.ink)
                     }
                 }
                 .navigationTitle("Filters")

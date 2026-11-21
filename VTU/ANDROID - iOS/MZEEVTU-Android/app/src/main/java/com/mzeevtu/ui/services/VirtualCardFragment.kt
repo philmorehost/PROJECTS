@@ -40,7 +40,7 @@ class VirtualCardFragment : Fragment(R.layout.fragment_virtual_card) {
         _binding = FragmentVirtualCardBinding.bind(view)
 
         binding.btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
-        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        binding.swipeRefresh.setColorSchemeColors(com.mzeevtu.util.BrandTheme.ink(requireContext()))
         binding.swipeRefresh.setOnRefreshListener { loadData() }
         binding.btnIssueCard.setOnClickListener { showIssueDialog() }
 

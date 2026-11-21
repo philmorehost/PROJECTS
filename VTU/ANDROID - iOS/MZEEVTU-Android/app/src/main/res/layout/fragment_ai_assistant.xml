@@ -5,14 +5,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background"
-    tools:context=".ui.ai.AIAssistantFragment">
+    tools:context=".ui.ai.AIAssistantFragment" android:tag="brand:bg=background">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/primary"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent" android:tag="brand:bg=primary">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"
@@ -59,7 +59,7 @@
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:text="⚡ Airtime"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
             <Button
                 android:id="@+id/chip_data"
@@ -67,7 +67,7 @@
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:text="📶 Data"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
             <Button
                 android:id="@+id/chip_electricity"
@@ -75,7 +75,7 @@
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:text="💡 Electricity"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
             <Button
                 android:id="@+id/chip_cable"
@@ -83,7 +83,7 @@
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:text="📺 Cable"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
             <Button
                 android:id="@+id/chip_betting"
@@ -91,14 +91,14 @@
                 android:layout_height="36dp"
                 android:layout_marginEnd="8dp"
                 android:text="🎲 Betting"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
             <Button
                 android:id="@+id/chip_exam"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
                 android:text="📝 Exam PIN"
-                style="@style/QuickAmountChipStyle" />
+                style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
 
         </LinearLayout>
     </HorizontalScrollView>
@@ -125,7 +125,7 @@
             android:inputType="textMultiLine"
             android:maxLines="4"
             android:padding="12dp"
-            android:textColor="@color/text_primary" />
+            android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
 
         <ImageButton
             android:id="@+id/sendButton"
@@ -134,7 +134,7 @@
             android:layout_marginStart="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_send_24"
-            app:tint="@color/primary" />
+            app:tint="@color/primary"  android:tag="brand:icon=primary_text" />
     </LinearLayout>
 
     <ProgressBar

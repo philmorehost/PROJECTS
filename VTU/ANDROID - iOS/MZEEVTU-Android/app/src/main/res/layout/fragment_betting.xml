@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Betting"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -54,7 +54,7 @@
                 android:text="Verify Account" android:textColor="#FFFFFF"
                 android:backgroundTint="@color/primary"
                 android:layout_marginBottom="16dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:bg=primary;button=fill" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -74,7 +74,7 @@
             <Button android:id="@+id/btn_pay" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Fund Betting Account"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

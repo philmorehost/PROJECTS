@@ -13,7 +13,7 @@
         android:layout_height="48dp"
         android:background="@drawable/bg_icon_electric"
         android:padding="10dp"
-        android:src="@drawable/ic_electric" />
+        android:src="@drawable/ic_electric"  android:tag="brand:icon=primary_text" />
 
     <TextView
         android:layout_width="wrap_content"

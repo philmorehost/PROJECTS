@@ -6,7 +6,9 @@ import SwiftUI
 /// version of them: a conversion is a REQUEST that an admin approves, so the confirmation says
 /// "pending approval" instead of implying the money has arrived. Rate, minimum and balance all come
 /// from the server so a vendor's own settings are what the user sees.
+@MainActor
 struct CoinsView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var loading = true
     @State private var submitting = false
     @State private var errorText: String?
@@ -78,7 +80,7 @@ struct CoinsView: View {
                         Text(hint).font(.caption).foregroundColor(.red).frame(maxWidth: .infinity)
                     }
                     if let statusText = statusText {
-                        Text(statusText).font(.caption).foregroundColor(.blue).frame(maxWidth: .infinity)
+                        Text(statusText).font(.caption).foregroundColor(brandTheme.ink).frame(maxWidth: .infinity)
                     }
 
                     Button {

@@ -72,7 +72,7 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
         btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         btnLoadMore.setOnClickListener { loadMore() }
         swipeRefresh.setOnRefreshListener { loadTransactions(reset = true) }
-        swipeRefresh.setColorSchemeResources(R.color.primary)
+        swipeRefresh.setColorSchemeColors(com.mzeevtu.util.BrandTheme.ink(requireContext()))
 
         setupFilters()
         loadTransactions(reset = true)

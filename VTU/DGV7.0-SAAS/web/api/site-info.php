@@ -1,5 +1,7 @@
 <?php
 header("Content-Type: application/json");
+header("Cache-Control: no-store");
+require_once __DIR__ . "/../../func/bc-theme.php";
 include_once("../../func/bc-connect.php");
 
 // Identify vendor by host
@@ -36,7 +38,8 @@ if ($get_vendor) {
         "data" => [
             "site_title" => $get_site['site_title'] ?? "VTU Platform",
             "logo_url" => "https://" . $host . "/uploaded-image/" . str_replace([".", ":"], "-", $sanitized_host) . "_logo.png",
-            "primary_color" => $get_style['primary_color'] ?? "#287bff",
+            "primary_color" => bc_theme_palette($get_style['primary_color'] ?? null)['primary_color'],
+            "theme" => bc_theme_palette($get_style['primary_color'] ?? null),
             "secondary_color" => $get_style['secondary_color'] ?? "#f6f9fc",
             "services" => $services,
             "currency_symbol" => "₦",

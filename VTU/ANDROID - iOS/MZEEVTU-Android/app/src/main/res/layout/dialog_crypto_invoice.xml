@@ -26,7 +26,7 @@
             android:text="Reference Number"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
-            android:textAllCaps="true" />
+            android:textAllCaps="true"  android:tag="brand:text=on_surface" />
         <TextView
             android:id="@+id/tv_reference"
             android:layout_width="match_parent"
@@ -35,7 +35,7 @@
             android:textSize="13sp"
             android:textStyle="bold"
             android:layout_marginBottom="14dp"
-            android:layout_marginTop="2dp" />
+            android:layout_marginTop="2dp"  android:tag="brand:text=on_surface" />
 
         <!-- Wallet address -->
         <TextView
@@ -46,7 +46,7 @@
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
             android:textAllCaps="true"
-            android:visibility="gone" />
+            android:visibility="gone"  android:tag="brand:text=on_surface" />
         <TextView
             android:id="@+id/tv_wallet_address"
             android:layout_width="match_parent"
@@ -58,7 +58,7 @@
             android:background="@color/surface_variant"
             android:layout_marginBottom="14dp"
             android:layout_marginTop="2dp"
-            android:visibility="gone" />
+            android:visibility="gone"  android:tag="brand:bg=surface;text=on_surface" />
 
         <!-- Invoice URL -->
         <TextView
@@ -67,7 +67,7 @@
             android:text="Invoice Link"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
-            android:textAllCaps="true" />
+            android:textAllCaps="true"  android:tag="brand:text=on_surface" />
         <TextView
             android:id="@+id/tv_invoice_url"
             android:layout_width="match_parent"
@@ -77,7 +77,7 @@
             android:padding="8dp"
             android:background="@color/surface_variant"
             android:layout_marginBottom="14dp"
-            android:layout_marginTop="2dp" />
+            android:layout_marginTop="2dp"  android:tag="brand:text=primary_text;bg=surface" />
 
         <!-- Action buttons -->
         <LinearLayout
@@ -92,7 +92,7 @@
                 android:text="Copy Link"
                 android:textSize="13sp"
                 android:layout_marginEnd="6dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
             <Button
                 android:id="@+id/btn_open_url"
                 android:layout_width="0dp"
@@ -100,7 +100,7 @@
                 android:layout_weight="1"
                 android:text="Open Invoice"
                 android:textSize="13sp"
-                style="@style/Widget.Material3.Button" />
+                style="@style/Widget.Material3.Button"  android:tag="brand:button=fill" />
         </LinearLayout>
 
         <TextView

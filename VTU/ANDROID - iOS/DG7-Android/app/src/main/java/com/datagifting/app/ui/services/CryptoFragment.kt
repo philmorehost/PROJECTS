@@ -46,7 +46,7 @@ class CryptoFragment : Fragment(R.layout.fragment_crypto) {
         _binding = FragmentCryptoBinding.bind(view)
 
         binding.btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
-        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        binding.swipeRefresh.setColorSchemeColors(com.datagifting.app.util.BrandTheme.ink(requireContext()))
         binding.swipeRefresh.setOnRefreshListener { loadData() }
 
         binding.btnActionDeposit.setOnClickListener { showDepositDialog() }

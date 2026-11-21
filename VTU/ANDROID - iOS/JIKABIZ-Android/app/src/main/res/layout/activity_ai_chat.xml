@@ -32,7 +32,7 @@
         android:orientation="horizontal"
         android:padding="8dp"
         android:background="#ffffff"
-        android:elevation="8dp">
+        android:elevation="8dp" android:tag="brand:bg=surface">
         <ImageButton
             android:id="@+id/btn_mic"
             android:layout_width="48dp"

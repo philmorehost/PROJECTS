@@ -12,8 +12,10 @@
 //
 
 import SwiftUI
+@MainActor
 
 struct PinSetupView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var pin = ""
     @State private var confirmPin = ""
     @State private var isLoading = false
@@ -32,7 +34,7 @@ struct PinSetupView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 70, height: 70)
-                .foregroundColor(.blue)
+                .foregroundColor(brandTheme.ink)
 
             Text("Set your transaction PIN")
                 .font(.title2)
@@ -66,7 +68,7 @@ struct PinSetupView: View {
             Button(action: setPin) {
                 if isLoading {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
                 } else {
                     Text("Set PIN")
                         .fontWeight(.bold)
@@ -74,8 +76,8 @@ struct PinSetupView: View {
                 }
             }
             .padding()
-            .background(isValid ? Color.blue : Color.gray.opacity(0.5))
-            .foregroundColor(.white)
+            .background(isValid ? brandTheme.primary : Color.gray.opacity(0.5))
+            .foregroundColor(isValid ? brandTheme.onPrimary : brandTheme.onSurface)
             .cornerRadius(12)
             .padding(.horizontal)
             .disabled(!isValid || isLoading)

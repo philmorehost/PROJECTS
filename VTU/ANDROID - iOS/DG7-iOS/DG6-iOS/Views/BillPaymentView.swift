@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct BillPaymentView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var selectedCategory: String = "Electricity"
     @State private var meterNumber: String = ""
     @State private var amount: String = ""
@@ -48,10 +50,10 @@ struct BillPaymentView: View {
                     } else {
                         Text("Pay Bill")
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                     }
                 }
-                .listRowBackground(Color.blue)
+                .listRowBackground(brandTheme.primary)
                 .disabled(isLoading || meterNumber.isEmpty || amount.isEmpty || selectedProvider.isEmpty)
             }
 

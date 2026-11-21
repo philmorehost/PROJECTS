@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <!-- Header Toolbar -->
     <LinearLayout
@@ -13,7 +13,7 @@
         android:background="@color/primary"
         android:gravity="center_vertical"
         android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:paddingEnd="8dp" android:tag="brand:bg=primary">
 
         <ImageButton
             android:id="@+id/btn_back"
@@ -22,7 +22,7 @@
             android:src="@drawable/ic_home"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:tint="#FFFFFF"
-            android:contentDescription="Back" />
+            android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
 
         <TextView
             android:layout_width="0dp"
@@ -41,7 +41,7 @@
             android:src="@drawable/ic_grid"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:tint="#FFFFFF"
-            android:contentDescription="Filters" />
+            android:contentDescription="Filters"  android:tag="brand:icon=primary_text" />
 
         <ImageButton
             android:id="@+id/btn_export"
@@ -50,7 +50,7 @@
             android:src="@drawable/ic_print"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:tint="#FFFFFF"
-            android:contentDescription="Export CSV" />
+            android:contentDescription="Export CSV"  android:tag="brand:icon=primary_text" />
     </LinearLayout>
 
     <!-- Collapsible Filters Drawer -->
@@ -90,7 +90,7 @@
                 android:paddingRight="12dp"
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
-                android:layout_marginEnd="8dp" />
+                android:layout_marginEnd="8dp"  android:tag="brand:text=on_surface" />
 
             <!-- Status Spinner -->
             <Spinner
@@ -120,7 +120,7 @@
                 android:textSize="13sp"
                 android:layout_marginEnd="8dp"
                 android:focusable="false"
-                android:clickable="true" />
+                android:clickable="true"  android:tag="brand:text=on_surface" />
 
             <EditText
                 android:id="@+id/et_end_date"
@@ -134,7 +134,7 @@
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
                 android:focusable="false"
-                android:clickable="true" />
+                android:clickable="true"  android:tag="brand:text=on_surface" />
         </LinearLayout>
 
         <Button
@@ -144,7 +144,7 @@
             android:text="APPLY FILTERS"
             android:textColor="@android:color/white"
             android:backgroundTint="@color/primary"
-            app:cornerRadius="8dp" />
+            app:cornerRadius="8dp"  android:tag="brand:bg=primary;button=fill" />
     </LinearLayout>
 
     <ProgressBar
@@ -164,7 +164,7 @@
         android:textSize="16sp"
         android:gravity="center"
         android:padding="32dp"
-        android:visibility="gone" />
+        android:visibility="gone"  android:tag="brand:text=on_surface" />
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipe_refresh"
@@ -192,6 +192,6 @@
         android:text="Load More"
         android:textSize="14sp"
         android:layout_margin="12dp"
-        style="@style/Widget.Material3.Button.OutlinedButton" />
+        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
 </LinearLayout>

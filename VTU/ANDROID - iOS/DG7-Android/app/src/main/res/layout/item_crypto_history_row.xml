@@ -5,7 +5,7 @@
     android:orientation="horizontal"
     android:padding="14dp"
     android:gravity="center_vertical"
-    android:background="@color/surface">
+    android:background="@color/surface" android:tag="brand:bg=surface">
 
     <!-- Status dot -->
     <View
@@ -27,7 +27,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/text_primary"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"  android:tag="brand:text=on_surface" />
 
         <TextView
             android:id="@+id/tv_date"
@@ -35,7 +35,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
-            android:layout_marginTop="2dp" />
+            android:layout_marginTop="2dp"  android:tag="brand:text=on_surface" />
 
     </LinearLayout>
 
@@ -52,7 +52,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/text_primary"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"  android:tag="brand:text=on_surface" />
 
         <TextView
             android:id="@+id/tv_status"

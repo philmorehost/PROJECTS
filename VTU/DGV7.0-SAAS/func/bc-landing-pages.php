@@ -312,6 +312,8 @@ if (!function_exists('bc_landing_head')) {
 
     function bc_landing_head($ctx, $title, $desc) {
         $brand = $ctx['brand'];
+        require_once __DIR__ . '/bc-theme.php';
+        $theme = bc_theme_palette($brand)['modes']['light'];
         ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -322,7 +324,7 @@ if (!function_exists('bc_landing_head')) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--brand:<?php echo bc_landing_e($brand); ?>;--ink:#101828;--cream:#f6f3ec;--card:#ffffff;--muted:#5b6472;--line:#e7e2d6}
+:root{--brand:<?php echo bc_landing_e($brand); ?>;--brand-fg:<?php echo $theme['on_primary']; ?>;--brand-ink:<?php echo $theme['primary_text']; ?>;--ink:#101828;--cream:#f6f3ec;--card:#ffffff;--muted:#5b6472;--line:#e7e2d6}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--cream);color:var(--ink)}
 h1,h2,h3,.disp{font-family:'Archivo',sans-serif;letter-spacing:-.02em}
@@ -337,10 +339,10 @@ a{color:inherit}
 .hero{padding:72px 0 30px;text-align:center}
 .kick{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
 .hero h1{font-size:clamp(42px,7.2vw,84px);line-height:.98;margin:22px 0 14px;font-weight:900;text-transform:uppercase}
-.hero h1 .hl{color:var(--brand)}
+.hero h1 .hl{color:var(--brand-ink)}
 .hero p{max-width:640px;margin:0 auto;color:var(--muted);font-size:19px;line-height:1.55}
 .btn{display:inline-block;border-radius:999px;padding:15px 30px;font-weight:700;text-decoration:none;font-size:16px}
-.btn-dark{background:var(--ink);color:#fff}.btn-brand{background:var(--brand);color:#fff}
+.btn-dark{background:var(--ink);color:#fff}.btn-brand{background:var(--brand);color:var(--brand-fg);border:1px solid var(--brand-ink)}
 .hero-cta{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:38px 0 8px}
 .stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 22px;text-align:left;min-width:170px}
@@ -375,7 +377,7 @@ details p{color:var(--muted);line-height:1.6;margin:10px 0 0}
 .svc .ic{font-size:34px}
 .svc h3{margin:12px 0 6px;font-size:22px}
 .svc p{color:var(--muted);margin:0;line-height:1.55}
-.svc .go{margin-top:14px;font-weight:700;color:var(--brand)}
+.svc .go{margin-top:14px;font-weight:700;color:var(--brand-ink)}
 .cta-band{background:var(--brand);color:#fff;border-radius:30px;padding:44px 30px;text-align:center;margin:30px 0 60px}
 .cta-band h2{color:#fff;margin:0 0 8px}
 footer{border-top:1px solid var(--line);padding:34px 0 44px;color:var(--muted);font-size:14px}

@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@color/background">
+        android:background="@color/background" android:tag="brand:bg=background">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -40,7 +40,7 @@
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
             <!-- Gateway buttons container -->
             <LinearLayout
@@ -66,7 +66,7 @@
                 android:textSize="14sp"
                 android:gravity="center"
                 android:padding="24dp"
-                android:visibility="gone" />
+                android:visibility="gone"  android:tag="brand:text=on_surface" />
 
         </LinearLayout>
     </ScrollView>
@@ -88,6 +88,6 @@
         android:textColor="#FFFFFF"
         android:backgroundTint="@color/primary"
         android:visibility="gone"
-        style="@style/Widget.Material3.Button" />
+        style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
 </LinearLayout>

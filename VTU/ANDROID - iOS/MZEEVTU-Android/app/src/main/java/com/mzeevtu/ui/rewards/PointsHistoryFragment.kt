@@ -39,7 +39,7 @@ class PointsHistoryFragment : Fragment(R.layout.fragment_points_history) {
         binding.btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         binding.btnLoadMore.setOnClickListener { load(reset = false) }
         binding.swipeRefresh.setOnRefreshListener { load(reset = true) }
-        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        binding.swipeRefresh.setColorSchemeColors(com.mzeevtu.util.BrandTheme.ink(requireContext()))
 
         load(reset = true)
     }

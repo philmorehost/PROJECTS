@@ -18,7 +18,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="4dp"
             app:cardBackgroundColor="#FFFFFF"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="16dp" android:tag="brand:bg=surface">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -35,7 +35,7 @@
                     android:textStyle="bold"
                     android:textColor="@color/primary"
                     android:gravity="center"
-                    android:layout_marginBottom="4dp" />
+                    android:layout_marginBottom="4dp"  android:tag="brand:text=primary_text" />
 
                 <TextView
                     android:id="@+id/tv_receipt_app_name"
@@ -45,7 +45,7 @@
                     android:textSize="13sp"
                     android:textColor="@color/text_secondary"
                     android:gravity="center"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="16dp"  android:tag="brand:text=on_surface" />
 
                 <!-- Divider -->
                 <View
@@ -78,7 +78,7 @@
                         android:text="Successful"
                         android:textSize="16sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary" />
+                        android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Amount -->
@@ -91,7 +91,7 @@
                     android:textStyle="bold"
                     android:textColor="@color/primary"
                     android:gravity="center"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="16dp"  android:tag="brand:text=primary_text" />
 
                 <!-- Divider -->
                 <View
@@ -109,12 +109,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Reference"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_reference"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" android:maxLines="2" />
+                        android:gravity="end" android:maxLines="2"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Type -->
@@ -125,12 +125,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Type"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_type"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Description -->
@@ -141,12 +141,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Description"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_description"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" android:maxLines="3" />
+                        android:gravity="end" android:maxLines="3"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Amount Paid -->
@@ -157,12 +157,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Amount Paid"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_amount_paid"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Balance Before -->
@@ -173,12 +173,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Balance Before"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_balance_before"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Balance After -->
@@ -189,12 +189,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Balance After"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_balance_after"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Mode -->
@@ -205,12 +205,12 @@
                     android:layout_marginBottom="8dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Mode"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_mode"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Date -->
@@ -221,12 +221,12 @@
                     android:layout_marginBottom="4dp">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="1" android:text="Date"
-                        android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                     <TextView android:id="@+id/tv_receipt_date"
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Footer divider -->
@@ -244,7 +244,7 @@
                     android:text="@string/receipt_thanks"
                     android:textSize="12sp"
                     android:textColor="@color/text_secondary"
-                    android:gravity="center" />
+                    android:gravity="center"  android:tag="brand:text=on_surface" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -263,7 +263,7 @@
                 android:layout_marginEnd="6dp"
                 android:text="Share Image"
                 android:textSize="13sp"
-                style="@style/Widget.Material3.Button" />
+                style="@style/Widget.Material3.Button"  android:tag="brand:button=fill" />
 
             <Button
                 android:id="@+id/btn_share_pdf"
@@ -273,7 +273,7 @@
                 android:layout_marginStart="6dp"
                 android:text="Share PDF"
                 android:textSize="13sp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
         </LinearLayout>
 

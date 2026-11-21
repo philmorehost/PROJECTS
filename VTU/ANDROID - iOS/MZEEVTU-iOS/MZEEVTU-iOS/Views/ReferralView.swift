@@ -9,7 +9,9 @@ import UIKit
 /// Sign-ups and actual rewards are shown SEPARATELY: a referral only pays out once the referred
 /// person completes their first transaction, so merging "pending" into "earned" would promise coins
 /// the user has not been given yet.
+@MainActor
 struct ReferralView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var loading = true
     @State private var errorText: String?
     @State private var code = ""
@@ -62,7 +64,7 @@ struct ReferralView: View {
                         .font(.caption).fontWeight(.bold).foregroundColor(.secondary)
                     Text(link.isEmpty ? "—" : link)
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(brandTheme.ink)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color(.secondarySystemBackground))

@@ -41,27 +41,27 @@ class HomeFragment : Fragment() {
     private var wallets = listOf<Pair<String, String>>()
     private var directory = listOf<Map<String, String>>()
     private var balanceAvailable = false
-    private val orange = Color.rgb(255, 120, 57)
+    private val orange get() = com.mzeevtu.util.BrandTheme.primary(requireContext())
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun rounded(color: Int, radius: Int = 24) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
     private fun text(value: String, size: Float = 15f, color: Int = Color.WHITE) = TextView(requireContext()).apply {
-        text = value; textSize = size; setTextColor(color); setPadding(dp(8), dp(8), dp(8), dp(8))
+        tag = "brand:text=" + if(color==Color.WHITE) "on_primary" else "on_surface"; text = value; textSize = size; setTextColor(color); setPadding(dp(8), dp(8), dp(8), dp(8))
     }
     private fun action(label: String, glyph: String, callback: () -> Unit) = LinearLayout(requireContext()).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; minimumHeight = dp(80)
-        val icon = text(glyph, 26f).apply { gravity = Gravity.CENTER; background = rounded(0x30000000, 32); contentDescription = label }
+        val icon = text(glyph, 26f).apply { gravity = Gravity.CENTER; background = rounded(orange, 32); contentDescription = label }
         addView(icon, LinearLayout.LayoutParams(dp(54), dp(54)))
         addView(text(label, 12f)); isClickable = true; isFocusable = true; setOnClickListener { callback() }
     }
     override fun onCreateView(inflater: android.view.LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         prefs = PreferenceManager(requireContext())
         refresh = SwipeRefreshLayout(requireContext())
-        val scroll = ScrollView(requireContext()).apply { isFillViewport = true; setBackgroundColor(Color.rgb(10,10,10)) }
+        val scroll = ScrollView(requireContext()).apply { isFillViewport = true; tag="brand:bg=background"; setBackgroundColor(com.mzeevtu.util.BrandTheme.color(requireContext(), "background")) }
         root = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(30)) }
         scroll.addView(root); refresh.addView(scroll)
         val hero = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(20), dp(18), dp(20))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(orange, Color.rgb(197,29,8))).apply { cornerRadius = dp(32).toFloat() }
+            tag="brand:bg=primary"; orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(20), dp(18), dp(20))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(orange, orange)).apply { cornerRadius = dp(32).toFloat() }
         }
         greeting = text("Hello, ${prefs.getString(Constants.KEY_FIRSTNAME)}", 18f)
         val header = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -70,13 +70,13 @@ class HomeFragment : Fragment() {
         hero.addView(header)
         val titleRow = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
         titleRow.addView(text("Wallet balance  ◉", 13f).apply { isFocusable=true; contentDescription="Show or hide wallet balance"; setOnClickListener { visible = !visible; renderBalance() } }, LinearLayout.LayoutParams(0,-2,1f))
-        currencyButton = text("NGN ⌄", 14f).apply { background = rounded(0x20FFFFFF); setOnClickListener { chooseWallet() } }
+        currencyButton = text("NGN ⌄", 14f).apply { background = rounded(orange); setOnClickListener { chooseWallet() } }
         titleRow.addView(currencyButton); hero.addView(titleRow)
         balanceLabel = text("Loading…", 38f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(dp(8), dp(28), dp(8), dp(25)) }
         hero.addView(balanceLabel)
         trend=MobileBalanceTrend(requireContext())
         hero.addView(trend,LinearLayout.LayoutParams(-1,dp(66)))
-        hero.addView(text("Your money. Your next move.", 12f, Color.rgb(255,220,204)))
+        hero.addView(text("Your money. Your next move.", 12f, Color.WHITE))
         val actions = LinearLayout(requireContext())
         listOf(action("Send", "↗") { services("Send") }, action("Receive", "↙") { openService("invoice") },
             action("Top up", "+") { findNavController().safeNavigate(R.id.nav_fund_wallet) }, action("More", "⋮") { services(null) })
@@ -84,11 +84,11 @@ class HomeFragment : Fragment() {
         hero.addView(actions); root.addView(hero)
         val shortcuts = LinearLayout(requireContext()).apply { setPadding(0,dp(18),0,dp(18)) }
         listOf(Triple("Crypto", "₿", "crypto"), Triple("Virtual card", "▱", "cards"), Triple("Gift card", "♧", "giftcards"), Triple("VTU", "▤", "vtu")).forEach { (title, icon, slug) ->
-            val tile=action(title,icon) { if(slug=="vtu") services("VTU") else openService(slug) }.apply { background=rounded(Color.rgb(35,35,35),18) }
-            shortcuts.addView(tile, LinearLayout.LayoutParams(0,dp(108),1f).apply { setMargins(dp(3),0,dp(3),0) })
+            val tile=action(title,icon) { if(slug=="vtu") services("VTU") else openService(slug) }.apply { tag="brand:bg=surface"; background=rounded(com.mzeevtu.util.BrandTheme.color(requireContext(), "surface"),18) }
+            for (i in 0 until tile.childCount) { val child=tile.getChildAt(i); if(child is TextView) child.tag="brand:text=on_surface"; if(child is ViewGroup) for(k in 0 until child.childCount) child.getChildAt(k).tag="brand:text=primary_text" }; shortcuts.addView(tile, LinearLayout.LayoutParams(0,dp(108),1f).apply { setMargins(dp(3),0,dp(3),0) })
         }
         root.addView(shortcuts)
-        history = LinearLayout(requireContext()).apply { orientation=LinearLayout.VERTICAL; background=rounded(Color.WHITE,28); setPadding(dp(12),dp(14),dp(12),dp(14)) }
+        history = LinearLayout(requireContext()).apply { tag="brand:bg=surface"; orientation=LinearLayout.VERTICAL; background=rounded(Color.WHITE,28); setPadding(dp(12),dp(14),dp(12),dp(14)) }
         history.addView(text("Transaction history  →",20f,Color.BLACK).apply { setTypeface(typeface,1); setOnClickListener { findNavController().safeNavigate(R.id.nav_transactions) } })
         root.addView(history)
         root.addView(text("Rewards · KYC · Security · Support",13f,Color.LTGRAY).apply { gravity=Gravity.CENTER; minimumHeight=dp(48); setOnClickListener { services(null) } })
@@ -163,6 +163,6 @@ private class MobileBalanceTrend(context: android.content.Context): View(context
         val low=values.minOrNull() ?: return; val high=values.maxOrNull() ?: return
         val range=(high-low).coerceAtLeast(1.0); val path=android.graphics.Path()
         values.forEachIndexed { i,v -> val x=width.toFloat()*i/(values.size-1); val y=(height-8)*(1-(v-low)/range).toFloat()+4; if(i==0)path.moveTo(x,y) else path.lineTo(x,y) }
-        canvas.drawPath(path,paint)
+        paint.color=com.mzeevtu.util.BrandTheme.onPrimary(context); canvas.drawPath(path,paint)
     }
 }

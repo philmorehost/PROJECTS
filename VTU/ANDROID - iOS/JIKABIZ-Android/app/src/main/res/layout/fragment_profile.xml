@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -20,7 +20,7 @@
             android:paddingTop="48dp"
             android:paddingBottom="32dp"
             android:paddingStart="20dp"
-            android:paddingEnd="20dp">
+            android:paddingEnd="20dp" android:tag="brand:bg=primary">
 
             <TextView
                 android:layout_width="72dp"
@@ -30,7 +30,7 @@
                 android:textSize="28sp"
                 android:textStyle="bold"
                 android:textColor="@color/primary"
-                android:text="U" />
+                android:text="U"  android:tag="brand:text=primary_text" />
 
             <TextView
                 android:id="@+id/tv_full_name"
@@ -79,7 +79,7 @@
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        android:layout_marginBottom="12dp" />
+                        android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -88,12 +88,12 @@
                         android:layout_marginBottom="8dp">
                         <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:text="Email"
-                            android:textColor="@color/text_secondary" android:textSize="13sp" />
+                            android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                         <TextView android:id="@+id/tv_email"
                             android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="2" android:text="user@example.com"
                             android:textColor="@color/text_primary" android:textSize="13sp"
-                            android:gravity="end" />
+                            android:gravity="end"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -102,12 +102,12 @@
                         android:orientation="horizontal">
                         <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:text="Phone"
-                            android:textColor="@color/text_secondary" android:textSize="13sp" />
+                            android:textColor="@color/text_secondary" android:textSize="13sp"  android:tag="brand:text=on_surface" />
                         <TextView android:id="@+id/tv_phone"
                             android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="2" android:text="08012345678"
                             android:textColor="@color/text_primary" android:textSize="13sp"
-                            android:gravity="end" />
+                            android:gravity="end"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
@@ -133,7 +133,7 @@
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        android:layout_marginBottom="12dp" />
+                        android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                     <Button
                         android:id="@+id/btn_set_pin"
@@ -143,7 +143,7 @@
                         android:textSize="14sp"
                         android:backgroundTint="@color/primary"
                         android:layout_marginBottom="12dp"
-                        style="@style/Widget.Material3.Button" />
+                        style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -157,7 +157,7 @@
                             android:layout_weight="1"
                             android:text="Dark Mode"
                             android:textSize="14sp"
-                            android:textColor="@color/text_primary" />
+                            android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
                         <androidx.appcompat.widget.SwitchCompat
                             android:id="@+id/switch_dark_mode"
                             android:layout_width="wrap_content"
@@ -176,7 +176,7 @@
                             android:layout_weight="1"
                             android:text="Biometric Login"
                             android:textSize="14sp"
-                            android:textColor="@color/text_primary" />
+                            android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
                         <androidx.appcompat.widget.SwitchCompat
                             android:id="@+id/switch_biometric"
                             android:layout_width="wrap_content"
@@ -207,7 +207,7 @@
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        android:layout_marginBottom="12dp" />
+                        android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                     <Button
                         android:id="@+id/btn_kyc"
@@ -216,7 +216,7 @@
                         android:text="KYC Verification"
                         android:textSize="14sp"
                         android:layout_marginBottom="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button
                         android:id="@+id/btn_nin_card"
@@ -224,7 +224,7 @@
                         android:layout_height="48dp"
                         android:text="NIN Slip Printing"
                         android:textSize="14sp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
@@ -257,7 +257,7 @@
                         android:text="Refer and Earn"
                         android:textSize="14sp"
                         android:layout_marginBottom="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button
                         android:id="@+id/btn_coins"
@@ -266,7 +266,7 @@
                         android:text="Convert Coins"
                         android:textSize="14sp"
                         android:layout_marginBottom="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button
                         android:id="@+id/btn_points_history"
@@ -274,7 +274,7 @@
                         android:layout_height="48dp"
                         android:text="Points History"
                         android:textSize="14sp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
@@ -299,7 +299,7 @@
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        android:layout_marginBottom="12dp" />
+                        android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                     <Button
                         android:id="@+id/btn_email_support"
@@ -308,7 +308,7 @@
                         android:layout_marginBottom="8dp"
                         android:text="Email Support"
                         android:textSize="14sp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button
                         android:id="@+id/btn_whatsapp_support"
@@ -316,7 +316,7 @@
                         android:layout_height="48dp"
                         android:text="WhatsApp Support"
                         android:textSize="14sp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

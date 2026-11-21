@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Bulk SMS"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -25,11 +25,11 @@
                 android:layout_marginBottom="4dp">
                 <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:text="From (Sender ID)"
-                    android:textSize="14sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                    android:textSize="14sp" android:textStyle="bold" android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
                 <Button android:id="@+id/btn_register_sender_id"
                     android:layout_width="wrap_content" android:layout_height="36dp"
                     android:text="+ Register ID" android:textSize="12sp"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
+                    style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
             </LinearLayout>
 
             <TextView android:id="@+id/tv_no_sender_id"
@@ -79,7 +79,7 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Numbers: 0" android:textSize="12sp"
                 android:textColor="@color/text_primary" android:gravity="end"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="16dp"  android:tag="brand:text=on_surface" />
 
             <!-- Message field with char counter -->
             <com.google.android.material.textfield.TextInputLayout
@@ -96,7 +96,7 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="0/459" android:textSize="12sp"
                 android:textColor="@color/text_primary" android:gravity="end"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp"  android:tag="brand:text=on_surface" />
 
             <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_gravity="center"
@@ -104,7 +104,7 @@
             <Button android:id="@+id/btn_send" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Send SMS"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

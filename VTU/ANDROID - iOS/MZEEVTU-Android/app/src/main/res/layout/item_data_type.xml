@@ -10,7 +10,7 @@
     android:gravity="center_vertical"
     android:background="@drawable/selector_network_btn"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true" android:tag="brand:bg=primary">
 
     <RadioButton
         android:id="@+id/rb_type"
@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:clickable="false"
         android:focusable="false"
-        android:buttonTint="@color/primary" />
+        android:buttonTint="@color/primary"  android:tag="brand:button=fill" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -33,7 +33,7 @@
             android:layout_height="wrap_content"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
 
         <TextView
             android:id="@+id/tv_type_desc"
@@ -41,7 +41,7 @@
             android:layout_height="wrap_content"
             android:textSize="12sp"
             android:textColor="@color/text_secondary"
-            android:layout_marginTop="2dp" />
+            android:layout_marginTop="2dp"  android:tag="brand:text=on_surface" />
 
     </LinearLayout>
 

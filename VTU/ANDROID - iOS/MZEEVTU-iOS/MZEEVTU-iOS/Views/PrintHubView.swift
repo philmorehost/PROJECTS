@@ -47,8 +47,10 @@ struct PrintCardPurchaseResponse: Codable {
     let desc: String?
     let cards: [PrintedCard]?
 }
+@MainActor
 
 struct PrintHubView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var serviceType = "data"
     @State private var selectedNetwork = "mtn"
     @State private var selectedDataType = "sme-data"
@@ -183,16 +185,16 @@ struct PrintHubView: View {
                 Button(action: purchasePrintCards) {
                     if isLoading {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
                             .frame(maxWidth: .infinity, minHeight: 52)
                     } else {
                         Text("PRINT CARDS")
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                             .frame(maxWidth: .infinity, minHeight: 52)
                     }
                 }
-                .background(Color.blue)
+                .background(brandTheme.primary)
                 .cornerRadius(26)
                 .padding(.horizontal)
                 .disabled(isLoading || selectedPlanCode.isEmpty)
@@ -218,7 +220,7 @@ struct PrintHubView: View {
                                 HStack {
                                     Text(selectedNetwork.uppercased() + " \(serviceType.uppercased()) CARD")
                                         .font(.headline)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(brandTheme.onPrimary)
                                     Spacer()
                                     Text("Plan: \(selectedPlanCode)")
                                         .font(.subheadline)
@@ -239,7 +241,7 @@ struct PrintHubView: View {
                             }
                             .padding()
                             .background(
-                                LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.95), Color.purple.opacity(0.95)]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                                LinearGradient(gradient: Gradient(colors: [brandTheme.primary.opacity(0.95), Color.purple.opacity(0.95)]), startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
                             .cornerRadius(12)
                             .padding(.horizontal)

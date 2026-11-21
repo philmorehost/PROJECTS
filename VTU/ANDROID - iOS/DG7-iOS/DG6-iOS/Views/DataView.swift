@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct DataView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var phoneNumber: String = ""
     @State private var selectedNetwork: String = "MTN"
     @State private var selectedPlan: String = ""
@@ -38,10 +40,10 @@ struct DataView: View {
                     } else {
                         Text("Purchase Data")
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                     }
                 }
-                .listRowBackground(Color.blue)
+                .listRowBackground(brandTheme.primary)
                 .disabled(isLoading || selectedPlan.isEmpty)
             }
 

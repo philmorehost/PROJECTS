@@ -114,11 +114,15 @@ if (!function_exists('bc_plate_auth_css')) {
      * function so the design tokens have exactly one definition.
      */
     function bc_plate_auth_css($brand) {
+        require_once __DIR__ . '/bc-theme.php';
+        $palette = bc_theme_palette($brand)['modes']['light'];
         ?>
 <style>
         /* ── Plate auth shell ─────────────────────────────────────────── */
         :root {
             --brand: <?php echo $brand; ?>;
+            --brand-fg: <?php echo $palette['on_primary']; ?>;
+            --brand-ink: <?php echo $palette['primary_text']; ?>;
             --ink: #0b1220;
             --muted: #64748b;
             --line: #e2e8f0;
@@ -150,7 +154,7 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__brandlink { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 800; letter-spacing: -.02em; }
         .pk-auth__brandlink img { height: 36px; width: auto; display: block; }
         .pk-auth__mark {
-            width: 36px; height: 36px; border-radius: 10px; background: var(--brand); color: #fff;
+            width: 36px; height: 36px; border-radius: 10px; background: var(--brand); color: var(--brand-fg);
             display: grid; place-items: center; font-weight: 800; font-size: .95rem;
         }
         .pk-auth__main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; width: 100%; }
@@ -162,7 +166,7 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__card--wide { max-width: 560px; }
         .pk-auth__icon {
             width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
-            background: #f0fdfa; color: var(--brand); margin-bottom: 18px;
+            background: #f0fdfa; color: var(--brand-ink); margin-bottom: 18px;
         }
         .pk-auth__icon--danger { background: #fef2f2; color: var(--danger); }
         .pk-auth__icon--warn { background: #fffbeb; color: #d97706; }
@@ -175,7 +179,7 @@ if (!function_exists('bc_plate_auth_css')) {
             padding: 12px 14px; outline: none; transition: border-color .15s ease, box-shadow .15s ease;
         }
         .pk-auth__input:focus, .pk-auth__select:focus {
-            border-color: var(--brand); box-shadow: 0 0 0 3px rgba(15, 118, 110, .14); background: #fff;
+            border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(15, 118, 110, .14); background: #fff;
         }
         .pk-auth__field { margin-bottom: 18px; }
         .pk-auth__row { display: flex; gap: 12px; }
@@ -183,7 +187,7 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 8px;
             width: 100%; font: inherit; font-size: .95rem; font-weight: 700; letter-spacing: .01em;
-            color: #fff; background: var(--brand); border: 1px solid transparent;
+            color: var(--brand-fg); background: var(--brand); border: 1px solid transparent;
             border-radius: 10px; padding: 13px 18px; cursor: pointer; text-decoration: none;
             transition: opacity .15s ease;
         }
@@ -191,7 +195,7 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__btn--ghost { background: transparent; color: var(--ink); border-color: var(--line); }
         .pk-auth__btn--ghost:hover { color: var(--ink); border-color: var(--ink); }
         .pk-auth__btn--danger { background: var(--danger); }
-        .pk-auth__link { color: var(--brand); font-weight: 600; text-decoration: none; font-size: .9rem; }
+        .pk-auth__link { color: var(--brand-ink); font-weight: 600; text-decoration: none; font-size: .9rem; }
         .pk-auth__link:hover { text-decoration: underline; }
         .pk-auth__note { color: var(--muted); font-size: .88rem; text-align: center; }
         .pk-auth__alert {

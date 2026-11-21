@@ -13,7 +13,7 @@
         android:layout_height="48dp"
         android:background="@drawable/bg_icon_data"
         android:padding="10dp"
-        android:src="@drawable/ic_data" />
+        android:src="@drawable/ic_data"  android:tag="brand:icon=primary_text" />
 
     <TextView
         android:layout_width="wrap_content"

@@ -12,8 +12,10 @@ struct BatchListResponse: Codable {
     let batches: [BatchItem]?
     let desc: String?
 }
+@MainActor
 
 struct BatchTransactionsView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var batches: [BatchItem] = []
     @State private var isLoading = false
     @State private var errorMessage = ""
@@ -52,10 +54,10 @@ struct BatchTransactionsView: View {
                         
                         Text("#\(batch.batch_number)")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(Color.blue)
+                            .background(brandTheme.primary)
                             .cornerRadius(8)
                     }
                     .padding(.vertical, 4)

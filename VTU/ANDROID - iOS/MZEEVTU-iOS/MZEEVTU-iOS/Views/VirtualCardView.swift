@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct VirtualCardView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var cards: [VirtualCard] = []
     @State private var isLoading = false
 
@@ -21,7 +23,7 @@ struct VirtualCardView: View {
                             Text(card.provider.uppercased())
                                 .font(.caption)
                                 .padding(4)
-                                .background(Color.blue.opacity(0.1))
+                                .background(brandTheme.primary.opacity(0.1))
                                 .cornerRadius(4)
                         }
 
@@ -44,8 +46,8 @@ struct VirtualCardView: View {
                         }
                     }
                     .padding()
-                    .background(Color.black)
-                    .foregroundColor(.white)
+                    .background(brandTheme.primary)
+                    .foregroundColor(brandTheme.onPrimary)
                     .cornerRadius(15)
                     .padding(.vertical, 5)
                 }
@@ -54,7 +56,7 @@ struct VirtualCardView: View {
             Section {
                 NavigationLink(destination: CreateCardView()) {
                     Text("Create New Card")
-                        .foregroundColor(.blue)
+                        .foregroundColor(brandTheme.ink)
                         .bold()
                 }
             }
@@ -76,8 +78,10 @@ struct VirtualCardView: View {
         }
     }
 }
+@MainActor
 
 struct CreateCardView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var nameOnCard: String = ""
     @State private var amount: String = ""
     @State private var selectedProvider: String = "bsicards"
