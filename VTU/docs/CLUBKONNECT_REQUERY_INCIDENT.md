@@ -4,6 +4,7 @@
 - Admin transaction links pointed at an intentionally forbidden mutating GET. Links now open a non-mutating confirmation page; reconciliation uses POST, session CSRF, admin PIN and the existing second-factor verifier. GET `requery`/`mark_success` remains 405.
 - Legacy root automated-cron-requery.php bypassed the canonical worker's authentication and overlap controls. It now delegates to that worker. Unauthenticated old HTTP schedules must be replaced, not exempted.
 - NON-SAAS lacked the canonical worker. Added it restricted to standalone vendor 1, and brought shared reconciliation behavior in line with SAAS (explicit cron action, bounded late reversal support and logging). No schema migration added.
+- Already-refunded transactions cannot be automatically re-debited through admin requery. Such discrepancies require separate financial review.
 - Reconciliation transaction lookup and refund claim now constrain vendor AND username, including API callers and reconstructed worker context.
 - ClubKonnect direct-data requery now encodes credentials, supports mixed-case keys, and uses exact documented codes/states. Only code 200 with a compatible completion state confirms delivery. 201/299, holds, query-auth errors, HTTP/transport failures, unknown/conflicting replies and 521 remain pending. Refund eligibility requires explicit terminal cancellation/refund evidence; mismatched OrderID remains pending. No new purchase/retry is sent.
 - Direct-data purchase no longer treats 201/299 as success in either edition; on-hold codes stay pending.

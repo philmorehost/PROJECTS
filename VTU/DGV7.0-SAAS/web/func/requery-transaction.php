@@ -40,7 +40,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                 $get_transaction_data = mysqli_fetch_assoc($transaction_query);
             }
             if ($get_transaction_data) {
-                if ($get_transaction_data["status"] != "3" || (isset($is_admin_requery) && $is_admin_requery)) {
+                if ($get_transaction_data["status"] != "3") {
                     $get_api_lists = mysqli_query($connection_server, "SELECT * FROM sas_apis WHERE vendor_id='" . $get_transaction_data["vendor_id"] . "' && id='" . $get_transaction_data["api_id"] . "'");
 
                     if (!$get_api_lists) {
@@ -113,12 +113,8 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                 // the transaction for the next requery, which is what tells the truth.
                                 if (function_exists('bc_gateway_refund_is_safe') && !bc_gateway_refund_is_safe($api_response, $api_response_text) && $api_response == "failed") { $api_response = "pending"; $api_response_text = ""; $api_response_description = "Transaction Pending | awaiting confirmation from the upstream provider"; $api_response_status = 2; }
 
-                                if (($api_response == "successful" || $api_response == "pending") && $get_transaction_data["status"] == "3") {
-                                    $amount_to_charge = $get_transaction_data["discounted_amount"];
-                                    $t_username = $get_transaction_data["username"];
-                                    $reference_2 = substr(str_shuffle("12345678901234567890"), 0, 15);
-                                    chargeOtherUser($t_username, "debit", $get_transaction_data["product_unique_id"], "Charge", $reference_2, "", $get_transaction_data["amount"], $amount_to_charge, "Charge for automatically updated Ref:<i>'$requery_reference'</i>", $get_transaction_data["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1");
-                                }
+                                // Reconciliation never creates a replacement debit for a refunded
+                                // purchase. Any such discrepancy requires separate financial review.
 
                                 if ($api_response == "successful") {
                                     // GFTAL: a definitive success ends the consecutive-failure streak. Recorded
