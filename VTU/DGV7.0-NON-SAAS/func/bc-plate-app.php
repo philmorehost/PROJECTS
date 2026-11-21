@@ -103,7 +103,7 @@ if (!function_exists('bc_app_base')) {
         $site = bc_app_site();
         if ($site['host'] !== '') return $site['host'];
         $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host  = isset($_SERVER['HTTP_HOST']) ? (string)$$_SERVER['HTTP_HOST'] : 'localhost';
+        $host  = isset($_SERVER['HTTP_HOST']) ? (string)$_SERVER['HTTP_HOST'] : 'localhost';
         return $proto . '://' . $host;
     }
 }
@@ -1227,8 +1227,10 @@ if (!function_exists('bc_app_head')) {
     <title><?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+    <!-- Optional typography must not hold the wallet UI's first paint hostage. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(bc_app_base(), ENT_QUOTES, 'UTF-8'); ?>/assets-2/vendor/bootstrap-icons/bootstrap-icons.min.css">
         <?php bc_app_css($brand); ?>
 </head>
         <?php
@@ -1427,6 +1429,7 @@ if (!function_exists('bc_app_flash')) {
     var ref = <?php echo json_encode($ref !== null && $ref !== '' ? (string)$ref : null); ?>;
     var icon = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'error');
     var title = type === 'success' ? 'Successful!' : (type === 'warning' ? 'Pending' : 'Failed');
+    function presentFlash() {
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: icon,
@@ -1440,8 +1443,32 @@ if (!function_exists('bc_app_flash')) {
             }
         });
     } else {
-        alert((type === 'error' ? 'Alert: ' : 'Message: ') + msg.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ''));
+        // A failed optional library must not trigger a synchronous browser alert
+        // while the document is still parsing. Keep feedback and receipt access visible.
+        var notice = document.createElement('section');
+        notice.setAttribute('role', 'status');
+        notice.setAttribute('aria-live', 'polite');
+        notice.style.cssText = 'position:relative;margin:16px;padding:18px;background:#fff;color:#172033;border:1px solid #cbd5e1;border-radius:12px;z-index:100';
+        var text = document.createElement('p');
+        text.textContent = msg.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
+        notice.appendChild(text);
+        if (ref && type === 'success') {
+            var receipt = document.createElement('button');
+            receipt.type = 'button'; receipt.textContent = 'View Receipt';
+            receipt.onclick = function () { if (typeof showTransactionDetails === 'function') showTransactionDetails(ref); };
+            notice.appendChild(receipt);
+        }
+        var close = document.createElement('button');
+        close.type = 'button'; close.textContent = 'Dismiss';
+        close.onclick = function () { notice.remove(); };
+        notice.appendChild(close);
+        var host = document.querySelector('main') || document.body;
+        host.insertBefore(notice, host.firstChild);
     }
+    }
+    // Deferred local scripts execute before DOMContentLoaded, so Swal exists here.
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', presentFlash, { once: true });
+    else presentFlash();
 }());
 </script>
         <?php
@@ -1691,8 +1718,8 @@ if (!function_exists('bc_app_foot')) {
     <a href="<?php echo htmlspecialchars(bc_app_url('SiteMap.php')); ?>">Platform Guide</a>
 </footer>
 <?php endif; ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js" defer></script>
-<script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/bc-custom-all.js"></script>
+<script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/assets-2/vendor/sweetalert2/sweetalert2.all.min.js?v=11.0.16" defer></script>
+<script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/bc-custom-all.js" defer></script>
 <?php bc_app_flash(); ?>
 <script>
 (function () {
