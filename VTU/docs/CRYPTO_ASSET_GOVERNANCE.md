@@ -87,4 +87,6 @@ No page request creates tables or bumps the global migration version. Missing sc
 - Updated reservation storage double: 57 checks including actual governance admission integration, platform stop/no mutation and exact unsubmitted release during stop.
 - Existing arithmetic, schema, Bybit, authentication and fintech regressions retained.
 
+See `CRYPTO_MYSQL_VALIDATION.md` and the dedicated MySQL CI workflow for disposable database integration checks. These do not replace staging/browser/provider validation.
+
 Storage doubles and PHP parsing are NOT proof of live MySQL isolation, performance, deployment correctness or end-to-end Bybit transactions. Those tests remain mandatory release gates.

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bc-crypto-decimal.php';
+require_once __DIR__ . '/bc-crypto-transaction.php';
 /** Governance is local approval, not live transaction activation or proof of reserves. */
 function bc_crypto_gov_environment($env) {
     if (!in_array($env, ['testnet','mainnet'], true)) throw new InvalidArgumentException('crypto_environment_invalid');
@@ -104,8 +105,7 @@ function bc_crypto_gov_save($authority, $scope, $env, $key, $revision, $input, $
     if (!is_int($scope)||$scope<0 || !is_int($revision)||$revision<0 || !in_array($authority['role']??'', ['vendor','spadmin'],true) || !is_int($authority['id']??null)||$authority['id']<=0) throw new InvalidArgumentException('crypto_authority_invalid');
     if ($authority['role']==='vendor' && $scope!==$authority['id'] && !($scope===0 && ($authority['single_owner']??false)===true)) throw new RuntimeException('crypto_authority_denied');
     if ($key!=='control') bc_crypto_gov_asset($key);
-    $state=bc_q_row('SELECT @@session.in_transaction AS in_tx, @@session.autocommit AS auto_commit');
-    if (!$state||(int)$state['in_tx']!==0||(int)$state['auto_commit']!==1||!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
+    if (!bc_crypto_transaction_ready()||!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
     try {
         if (bc_q("INSERT IGNORE INTO sas_crypto_v2_governance(vendor_id,environment,policy_key,revision,document) VALUES(?,?,?,0,'{}')",[$scope,$env,$key])!==true) throw new RuntimeException('crypto_policy_storage_failed');
         $before=bc_crypto_gov_row($scope,$env,$key,true);

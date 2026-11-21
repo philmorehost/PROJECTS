@@ -110,3 +110,7 @@ These do NOT establish native MySQL locking, isolation, deadlock handling, FK/DE
 - Transaction-specific authorization and cooldown/beneficiary checks; signed-state withdrawal outbox; stable provider request IDs and unknown-outcome reconciliation.
 - Isolated restricted signing/runtime database credentials, production key verification, monitoring/incident drills and tiny-value controlled end-to-end pilot.
 - Source/UI/native client rollout and explicit authorization to release relevant withdrawal holds only after verification.
+
+### Disposable database validation
+
+See `CRYPTO_MYSQL_VALIDATION.md` for the MySQL 8 integration runner and CI matrix. It exercises migrations, actual rollback and competing connections without loading application config or touching an existing application database. Synthetic opening fixtures are intentionally rejected by integrity checks; this is not a custody/reconciliation approval. Both editions use a fail-closed next-transaction isolation preflight rather than MariaDB-specific transaction variables.

@@ -24,6 +24,7 @@ function bc_q_row($sql,$p=[]) {
     throw new RuntimeException('Unhandled test SQL '.$sql);
 }
 function bc_q($sql,$p=[],&$affected=null) {
+    if($sql==='SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')return empty($GLOBALS['in_tx']);
     $GLOBALS['calls']++;
     if (($GLOBALS['fail_at']??-1)===$GLOBALS['calls'])return null;
     if (strpos($sql,'INSERT INTO sas_crypto_v2_operations')===0) {
