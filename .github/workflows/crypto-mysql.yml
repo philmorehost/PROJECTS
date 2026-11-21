@@ -97,6 +97,8 @@ jobs:
           php VTU/tests/crypto_poll_health_test.php
           php VTU/tests/crypto_poll_retry_test.php
           php VTU/tests/crypto_poll_worker_test.php
+          php VTU/tests/crypto_poll_delivery_test.php
+          php -n -d extension=tokenizer VTU/tests/crypto_poll_delivery_transport_test.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections

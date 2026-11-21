@@ -41,7 +41,7 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
             $stream['health']=bc_crypto_poll_health($stream,$now);
             $stream['retry_policy']=bc_crypto_poll_retry_decision($events,$now);
         }unset($stream);
-        $alerts_result=bc_q('SELECT a.stream_id,a.revision,a.kind,a.created_at_epoch,a.acknowledged_by,a.acknowledged_at_epoch FROM sas_crypto_v2_poll_alerts a JOIN sas_crypto_v2_poll_streams s ON s.stream_id=a.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY a.created_at_epoch DESC,a.stream_id,a.revision DESC LIMIT 51 FOR UPDATE',[$identity,$env]);
+        $alerts_result=bc_q('SELECT a.stream_id,a.revision,a.kind,a.created_at_epoch,a.acknowledged_by,a.acknowledged_at_epoch,d.delivery_id,d.state AS delivery_state,d.attempts AS delivery_attempts,d.lease_until AS delivery_lease_until,d.next_attempt_at FROM sas_crypto_v2_poll_alerts a LEFT JOIN sas_crypto_v2_poll_deliveries d ON d.stream_id=a.stream_id AND d.revision=a.revision AND d.kind=a.kind JOIN sas_crypto_v2_poll_streams s ON s.stream_id=a.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY a.created_at_epoch DESC,a.stream_id,a.revision DESC LIMIT 51 FOR UPDATE',[$identity,$env]);
         if (!($alerts_result instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
         $alerts=[];while($alert=mysqli_fetch_assoc($alerts_result))$alerts[]=$alert;
         $alerts_truncated=count($alerts)>50;$alerts=array_slice($alerts,0,50);
