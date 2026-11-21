@@ -35,3 +35,11 @@ $connection_server->rollback();
 bc_crypto_custody_save_identity($evActor2,'testnet',$evIdentity,1,'review',['evidence_hash'=>$hash,'valid_seconds'=>'3600']);
 reject_db(fn()=>bc_crypto_custody_save_identity($evActor1,'testnet',str_repeat('f',64),0,'propose',['model'=>'omnibus_exclusive_routes','evidence_hash'=>$hash]),'crypto_custody_edit_conflict');
 check_db((int)scalar_db("SELECT COUNT(*) FROM sas_crypto_v2_custody_accounts WHERE custody_account='".str_repeat('f',64)."'")===0,'arbitrary identity management cannot create an alias account');
+
+// Provider comparison evidence must be pinned to the revision that was inspected.
+$identityCount=scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_custody_evidence');
+reject_db(fn()=>bc_crypto_custody_evidence_store($evActor1,$evIdentity,'testnet',$text.' Provider comparison.',1),'crypto_custody_edit_conflict');
+check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_custody_evidence')===$identityCount,'stale provider-read revision writes neither evidence nor audit');
+$identityHash=bc_crypto_custody_evidence_store($evActor1,$evIdentity,'testnet',$text.' Provider comparison.',2);
+check_db(bc_crypto_custody_evidence_view($evActor2,$evIdentity,'testnet',$identityHash,2)===$text.' Provider comparison.','current-revision comparison evidence can be read only through audited view');
+check_db((int)bc_q_row('SELECT revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$evIdentity])['revision']===2,'provider evidence storage never changes registry approval/revision');

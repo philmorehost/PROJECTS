@@ -45,13 +45,18 @@ function bc_crypto_custody_evidence_engines() {
     }
 }
 /** Internal callers must authenticate the actor before invoking. Records are immutable via this API. */
-function bc_crypto_custody_evidence_store($authority,$identity,$env,$text) {
+function bc_crypto_custody_evidence_store($authority,$identity,$env,$text,$expected_revision=null) {
     global $connection_server;
     $actor=bc_crypto_custody_actor($authority);$sealed=bc_crypto_custody_evidence_seal($identity,$env,$text);
     if (!bc_crypto_transaction_ready()) throw new RuntimeException('crypto_transaction_unavailable');
     bc_crypto_custody_evidence_engines();
     if (!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
     try {
+        if ($expected_revision!==null) {
+            if (!is_int($expected_revision)||$expected_revision<0) throw new InvalidArgumentException('crypto_custody_revision_invalid');
+            $current=bc_q_row('SELECT environment,revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=? FOR UPDATE',[$identity]);
+            if (!$current||$current['environment']!==$env||(int)$current['revision']!==$expected_revision) throw new RuntimeException('crypto_custody_edit_conflict');
+        }
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_custody_evidence(custody_account,evidence_hash,environment,sealed_document,stored_by) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE evidence_hash=evidence_hash',[$identity,$sealed['hash'],$env,$sealed['sealed'],$actor]);
         bc_crypto_custody_must("INSERT INTO sas_crypto_v2_custody_evidence_events(custody_account,evidence_hash,actor_id,revision,action,occurred_at_epoch) VALUES(?,?,?,0,'stored',?)",[$identity,$sealed['hash'],$actor,time()]);
         if (!mysqli_commit($connection_server)) throw new RuntimeException('crypto_evidence_commit_failed');
