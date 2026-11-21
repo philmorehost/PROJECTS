@@ -31,7 +31,7 @@
                 android:layout_weight="1"
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"  android:tag="brand:text=on_surface" />
 
             <TextView
                 android:id="@+id/tv_status"
@@ -54,7 +54,7 @@
             android:textSize="14sp"
             android:fontFamily="monospace"
             android:letterSpacing="0.1"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="4dp"  android:tag="brand:text=on_surface" />
 
         <!-- Expiry -->
         <TextView
@@ -63,7 +63,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
         <!-- Balance -->
         <TextView
@@ -91,7 +91,7 @@
                 android:textSize="12sp"
                 android:layout_marginEnd="4dp"
                 app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_reveal"
@@ -102,7 +102,7 @@
                 android:textSize="12sp"
                 android:layout_marginEnd="4dp"
                 app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_withdraw"
@@ -112,7 +112,7 @@
                 android:text="Withdraw"
                 android:textSize="12sp"
                 app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
         </LinearLayout>
     </LinearLayout>

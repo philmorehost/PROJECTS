@@ -76,6 +76,9 @@ class GiftCardFragment : Fragment(R.layout.fragment_giftcard) {
     }
 
     private fun showTab(index: Int) {
+        listOf(binding.tabBuy, binding.tabMyCards, binding.tabP2p).forEachIndexed { i, button ->
+            com.jikabiz.app.util.BrandTheme.mark(button, "button=" + if(i == index) "fill" else "outline")
+        }
         binding.tabBuy.isSelected = index == 0
         binding.tabMyCards.isSelected = index == 1
         binding.tabP2p.isSelected = index == 2
@@ -656,7 +659,7 @@ class GiftCardFragment : Fragment(R.layout.fragment_giftcard) {
         return TextView(requireContext()).apply {
             this.text = text
             textSize = sizeSp
-            setTextColor(requireContext().getColor(colorRes))
+            setTextColor(if(colorRes == R.color.primary) com.jikabiz.app.util.BrandTheme.ink(requireContext()) else requireContext().getColor(colorRes))
             if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

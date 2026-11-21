@@ -128,10 +128,12 @@ class ElectricFragment : Fragment(R.layout.fragment_electric) {
     }
 
     private fun updateMeterTypeUI() {
-        val primaryColor = ContextCompat.getColor(requireContext(), R.color.primary)
+        com.datagifting.app.util.BrandTheme.mark(binding.btnPrepaid, "button=" + if(selectedMeterType == "prepaid") "fill" else "outline")
+        com.datagifting.app.util.BrandTheme.mark(binding.btnPostpaid, "button=" + if(selectedMeterType == "postpaid") "fill" else "outline")
+        val primaryColor = com.datagifting.app.util.BrandTheme.primary(requireContext())
         val inactiveColor = ContextCompat.getColor(requireContext(), R.color.surface_variant)
         val inactiveTextColor = ContextCompat.getColor(requireContext(), R.color.text_secondary)
-        val whiteColor = ContextCompat.getColor(requireContext(), R.color.white)
+        val whiteColor = com.datagifting.app.util.BrandTheme.onPrimary(requireContext())
         if (selectedMeterType == "prepaid") {
             binding.btnPrepaid.backgroundTintList = ColorStateList.valueOf(primaryColor)
             binding.btnPrepaid.setTextColor(whiteColor)

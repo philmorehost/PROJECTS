@@ -28,7 +28,7 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
         binding.btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         binding.btnLoadMore.setOnClickListener { loadMore() }
         binding.swipeRefresh.setOnRefreshListener { loadTransactions(reset = true) }
-        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        binding.swipeRefresh.setColorSchemeColors(com.datagifting.app.util.BrandTheme.ink(requireContext()))
         loadTransactions(reset = true)
     }
 

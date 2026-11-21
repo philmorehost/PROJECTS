@@ -6,8 +6,10 @@
 //
 
 import SwiftUI
+@MainActor
 
 struct KYCView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @StateObject private var viewModel = KYCViewModel()
     @Environment(\.dismiss) var dismiss
     
@@ -38,8 +40,10 @@ struct KYCView: View {
             }
     }
 }
+@MainActor
 
 struct KYCStatusCard: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
     
     var body: some View {
@@ -105,8 +109,10 @@ struct KYCStatusCard: View {
         }
     }
 }
+@MainActor
 
 struct TraditionalKYCSection: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
     
     var body: some View {
@@ -166,8 +172,10 @@ struct TraditionalKYCSection: View {
         .cornerRadius(16)
     }
 }
+@MainActor
 
 struct KYCSubmitButton: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     let title: String
     let isEnabled: Bool
     let action: () -> Void
@@ -178,15 +186,17 @@ struct KYCSubmitButton: View {
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(isEnabled ? Color.blue : Color.gray.opacity(0.4))
-                .foregroundColor(.white)
+                .background(isEnabled ? brandTheme.primary : Color.gray.opacity(0.4))
+                .foregroundColor(isEnabled ? brandTheme.onPrimary : brandTheme.onSurface)
                 .cornerRadius(10)
         }
         .disabled(!isEnabled)
     }
 }
+@MainActor
 
 struct KYCInputField: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     let title: String
     let placeholder: String
     @Binding var value: String
@@ -216,8 +226,10 @@ struct KYCInputField: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
+@MainActor
 
 struct AIInterviewSection: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
     
     var body: some View {
@@ -236,21 +248,21 @@ struct AIInterviewSection: View {
                             .font(.headline)
                         Text("Complete your KYC by talking to our AI Compliance Officer. No forms required.")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(brandTheme.onPrimary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(brandTheme.onPrimary)
                 }
                 .padding()
                 .background(
                     LinearGradient(
-                        colors: [Color.blue, Color.purple],
+                        colors: [brandTheme.primary, brandTheme.primary],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .foregroundColor(.white)
+                .foregroundColor(brandTheme.onPrimary)
                 .cornerRadius(16)
             }
         }

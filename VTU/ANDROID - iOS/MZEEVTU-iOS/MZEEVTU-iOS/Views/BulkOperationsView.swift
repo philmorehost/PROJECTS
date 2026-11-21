@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct BulkOperationsView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var serviceType: String = "airtime"
     @State private var recipients: String = ""
     @State private var paramValue: String = ""
@@ -89,20 +91,20 @@ struct BulkOperationsView: View {
                     if isProcessing {
                         VStack {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
                             Text(progressMessage)
                                 .font(.caption)
-                                .foregroundColor(.white)
+                                .foregroundColor(brandTheme.onPrimary)
                         }
                         .frame(maxWidth: .infinity, minHeight: 52)
                     } else {
                         Text("PROCESS BATCH")
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                             .frame(maxWidth: .infinity, minHeight: 52)
                     }
                 }
-                .background(Color.blue)
+                .background(brandTheme.primary)
                 .cornerRadius(26)
                 .padding(.horizontal)
                 .disabled(isProcessing)
@@ -122,7 +124,7 @@ struct BulkOperationsView: View {
                         Text("View Batch History")
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(brandTheme.ink)
                     .padding()
                 }
 

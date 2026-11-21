@@ -52,7 +52,7 @@
             android:text="Save your Reference number to manually sync if payment doesn't reflect within 5–10 minutes."
             android:textColor="@color/text_secondary"
             android:textSize="11sp"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="6dp"  android:tag="brand:text=on_surface" />
 
     </LinearLayout>
 </ScrollView>

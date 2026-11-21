@@ -10,8 +10,10 @@
 //
 
 import SwiftUI
+@MainActor
 
 struct AIInterviewView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -35,7 +37,7 @@ struct AIInterviewView: View {
                                 if turn.isOfficer { Spacer(minLength: 0) }
                                 Text(turn.text)
                                     .padding(12)
-                                    .background(turn.isOfficer ? Color.blue.opacity(0.12) : Color(.systemGray6))
+                                    .background(turn.isOfficer ? brandTheme.primary.opacity(0.12) : Color(.systemGray6))
                                     .foregroundColor(.primary)
                                     .cornerRadius(14)
                                 if !turn.isOfficer { Spacer(minLength: 0) }
@@ -67,8 +69,8 @@ struct AIInterviewView: View {
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
+                            .background(brandTheme.primary)
+                            .foregroundColor(brandTheme.onPrimary)
                             .cornerRadius(12)
                     }
                     .padding()

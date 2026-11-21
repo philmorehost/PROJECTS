@@ -2,16 +2,16 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Buy Electricity"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -40,7 +40,7 @@
                 android:text="Meter Type"
                 android:textSize="12sp"
                 android:textColor="@color/text_secondary"
-                android:layout_marginBottom="6dp" />
+                android:layout_marginBottom="6dp"  android:tag="brand:text=on_surface" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -63,7 +63,7 @@
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         app:cornerRadius="0dp"
-                        style="@style/Widget.Material3.Button" />
+                        style="@style/Widget.Material3.Button"  android:tag="brand:button=fill" />
                     <Button
                         android:id="@+id/btn_postpaid"
                         android:layout_width="0dp"
@@ -73,7 +73,7 @@
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         app:cornerRadius="0dp"
-                        style="@style/Widget.Material3.Button" />
+                        style="@style/Widget.Material3.Button"  android:tag="brand:button=fill" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
             <com.google.android.material.textfield.TextInputLayout
@@ -96,7 +96,7 @@
                 android:layout_width="match_parent" android:layout_height="48dp"
                 android:text="Verify Meter"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"  android:tag="brand:button=outline" />
             <LinearLayout android:id="@+id/layout_verified_info"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -111,7 +111,7 @@
                 <TextView android:id="@+id/tv_verified_meter"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:textColor="@color/text_secondary" android:textSize="12sp"
-                    android:layout_marginTop="2dp" />
+                    android:layout_marginTop="2dp"  android:tag="brand:text=on_surface" />
             </LinearLayout>
             <ProgressBar android:id="@+id/progress_bar" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_gravity="center"
@@ -119,7 +119,7 @@
             <Button android:id="@+id/btn_buy" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Pay Electricity"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

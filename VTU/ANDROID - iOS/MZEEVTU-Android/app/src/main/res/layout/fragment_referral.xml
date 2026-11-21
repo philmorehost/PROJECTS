@@ -6,15 +6,15 @@
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="@color/background">
+    android:orientation="vertical" android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
         android:background="@color/primary" android:gravity="center_vertical"
-        android:paddingStart="8dp" android:paddingEnd="16dp">
+        android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
         <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
             android:layout_height="40dp" android:src="@drawable/ic_home"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="#FFFFFF" android:contentDescription="Back" />
+            android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
         <TextView android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:text="Refer and Earn"
             android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -62,10 +62,10 @@
                     android:layout_height="wrap_content" android:layout_weight="1"
                     android:text="—" android:textSize="18sp" android:textStyle="bold"
                     android:textColor="#1E293B" android:background="#FFFFFF"
-                    android:padding="12dp" />
+                    android:padding="12dp"  android:tag="brand:bg=surface" />
                 <Button android:id="@+id/btn_copy_code" android:layout_width="wrap_content"
                     android:layout_height="wrap_content" android:text="Copy"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"  android:tag="brand:button=fill" />
             </LinearLayout>
 
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -74,17 +74,17 @@
             <TextView android:id="@+id/tv_referral_link" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:text="—" android:textSize="12sp"
                 android:textColor="#0d6efd" android:background="#FFFFFF" android:padding="12dp"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"  android:tag="brand:bg=surface" />
             <Button android:id="@+id/btn_share_link" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="SHARE REFERRAL LINK"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp"  android:tag="brand:button=fill" />
 
             <!-- Stats -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:layout_marginBottom="16dp">
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical"
-                    android:background="#FFFFFF" android:padding="12dp" android:gravity="center">
+                    android:background="#FFFFFF" android:padding="12dp" android:gravity="center" android:tag="brand:bg=surface">
                     <TextView android:id="@+id/tv_total_referrals" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="0"
                         android:textSize="20sp" android:textStyle="bold" android:textColor="#1E293B" />
@@ -94,7 +94,7 @@
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical"
                     android:background="#FFFFFF" android:padding="12dp" android:gravity="center"
-                    android:layout_marginStart="8dp">
+                    android:layout_marginStart="8dp" android:tag="brand:bg=surface">
                     <TextView android:id="@+id/tv_qualified_referrals" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="0"
                         android:textSize="20sp" android:textStyle="bold" android:textColor="#2E7D32" />
@@ -104,7 +104,7 @@
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical"
                     android:background="#FFFFFF" android:padding="12dp" android:gravity="center"
-                    android:layout_marginStart="8dp">
+                    android:layout_marginStart="8dp" android:tag="brand:bg=surface">
                     <TextView android:id="@+id/tv_pending_referrals" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="0"
                         android:textSize="20sp" android:textStyle="bold" android:textColor="#F9A825" />
@@ -121,7 +121,7 @@
             <!-- Coins from referrals -->
             <LinearLayout android:id="@+id/card_coins" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:orientation="vertical"
-                android:background="#FFFFFF" android:padding="16dp" android:layout_marginBottom="24dp">
+                android:background="#FFFFFF" android:padding="16dp" android:layout_marginBottom="24dp" android:tag="brand:bg=surface">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content"
@@ -142,7 +142,7 @@
                 </LinearLayout>
                 <Button android:id="@+id/btn_open_coins" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:text="CONVERT COINS TO CASH"
-                    android:layout_marginTop="12dp" />
+                    android:layout_marginTop="12dp"  android:tag="brand:button=fill" />
             </LinearLayout>
 
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"

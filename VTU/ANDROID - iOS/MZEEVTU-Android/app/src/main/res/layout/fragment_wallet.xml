@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,7 +18,7 @@
             android:textStyle="bold"
             android:textColor="@color/text_primary"
             android:layout_marginBottom="20dp"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="8dp"  android:tag="brand:text=on_surface" />
 
         <!-- Virtual Cards Card (Blue Background) -->
         <LinearLayout
@@ -47,7 +47,7 @@
                     android:background="@drawable/bg_icon_vcard"
                     android:padding="10dp"
                     android:layout_marginEnd="12dp"
-                    android:contentDescription="Virtual Card Icon" />
+                    android:contentDescription="Virtual Card Icon"  android:tag="brand:icon=primary_text" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -95,7 +95,7 @@
                     android:text="Manage Virtual Cards ›"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:textColor="@color/primary" />
+                    android:textColor="@color/primary"  android:tag="brand:text=primary_text" />
             </LinearLayout>
         </LinearLayout>
 
@@ -126,7 +126,7 @@
                     android:background="@drawable/bg_icon_giftcard"
                     android:padding="10dp"
                     android:layout_marginEnd="12dp"
-                    android:contentDescription="Gift Card Icon" />
+                    android:contentDescription="Gift Card Icon"  android:tag="brand:icon=primary_text" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -140,14 +140,14 @@
                         android:text="Gift Cards"
                         android:textSize="17sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary" />
+                        android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Trade local &amp; international gift cards"
                         android:textSize="13sp"
-                        android:textColor="@color/text_secondary" />
+                        android:textColor="@color/text_secondary"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -158,7 +158,7 @@
                 android:text="Buy, sell and redeem local and international gift cards at the best rates."
                 android:textSize="13sp"
                 android:textColor="@color/text_secondary"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="16dp"  android:tag="brand:text=on_surface" />
 
             <LinearLayout
                 android:id="@+id/btn_open_giftcard"
@@ -166,7 +166,7 @@
                 android:layout_height="48dp"
                 android:background="@drawable/bg_btn_primary_pill"
                 android:gravity="center"
-                android:orientation="horizontal">
+                android:orientation="horizontal" android:tag="brand:bg=primary">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -205,7 +205,7 @@
                     android:background="@drawable/bg_icon_crypto"
                     android:padding="10dp"
                     android:layout_marginEnd="12dp"
-                    android:contentDescription="Crypto Icon" />
+                    android:contentDescription="Crypto Icon"  android:tag="brand:icon=primary_text" />
 
                 <LinearLayout
                     android:layout_width="0dp"

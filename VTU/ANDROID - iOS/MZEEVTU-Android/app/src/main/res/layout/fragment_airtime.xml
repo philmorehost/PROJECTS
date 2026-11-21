@@ -3,18 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Buy Airtime"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -26,7 +26,7 @@
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Select Network" android:textSize="14sp" android:textStyle="bold"
-                android:textColor="@color/text_primary" android:layout_marginBottom="12dp" />
+                android:textColor="@color/text_primary" android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:layout_marginBottom="20dp">
@@ -37,13 +37,13 @@
                     android:gravity="center" android:padding="8dp"
                     android:layout_marginEnd="6dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="40dp" android:layout_height="40dp"
                         android:src="@drawable/net_mtn" android:scaleType="fitCenter"
                         android:contentDescription="MTN" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="MTN" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/btn_glo"
@@ -52,13 +52,13 @@
                     android:gravity="center" android:padding="8dp"
                     android:layout_marginEnd="6dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="40dp" android:layout_height="40dp"
                         android:src="@drawable/net_glo" android:scaleType="fitCenter"
                         android:contentDescription="Glo" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="Glo" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/btn_airtel"
@@ -67,13 +67,13 @@
                     android:gravity="center" android:padding="8dp"
                     android:layout_marginEnd="6dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="40dp" android:layout_height="40dp"
                         android:src="@drawable/net_airtel" android:scaleType="fitCenter"
                         android:contentDescription="Airtel" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="Airtel" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/btn_ninemobile"
@@ -81,13 +81,13 @@
                     android:layout_weight="1" android:orientation="vertical"
                     android:gravity="center" android:padding="8dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="40dp" android:layout_height="40dp"
                         android:src="@drawable/net_9mobile" android:scaleType="fitCenter"
                         android:contentDescription="9mobile" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="9mobile" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -97,7 +97,7 @@
                 android:text="Override Network" android:textSize="12sp"
                 android:layout_gravity="end" android:layout_marginBottom="12dp"
                 android:visibility="gone"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -116,29 +116,29 @@
 
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Quick Amount" android:textSize="14sp" android:textStyle="bold"
-                android:textColor="@color/text_primary" android:layout_marginBottom="8dp" />
+                android:textColor="@color/text_primary" android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:layout_marginBottom="16dp">
                 <Button android:id="@+id/chip_50" android:layout_width="0dp" android:layout_height="36dp"
                     android:layout_weight="1" android:text="₦50"
                     android:layout_marginEnd="4dp"
-                    style="@style/QuickAmountChipStyle" />
+                    style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
                 <Button android:id="@+id/chip_100" android:layout_width="0dp" android:layout_height="36dp"
                     android:layout_weight="1" android:text="₦100"
                     android:layout_marginEnd="4dp"
-                    style="@style/QuickAmountChipStyle" />
+                    style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
                 <Button android:id="@+id/chip_200" android:layout_width="0dp" android:layout_height="36dp"
                     android:layout_weight="1" android:text="₦200"
                     android:layout_marginEnd="4dp"
-                    style="@style/QuickAmountChipStyle" />
+                    style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
                 <Button android:id="@+id/chip_500" android:layout_width="0dp" android:layout_height="36dp"
                     android:layout_weight="1" android:text="₦500"
                     android:layout_marginEnd="4dp"
-                    style="@style/QuickAmountChipStyle" />
+                    style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
                 <Button android:id="@+id/chip_1000" android:layout_width="0dp" android:layout_height="36dp"
                     android:layout_weight="1" android:text="₦1000"
-                    style="@style/QuickAmountChipStyle" />
+                    style="@style/QuickAmountChipStyle"  android:tag="brand:button=outline" />
             </LinearLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -157,7 +157,7 @@
             <Button android:id="@+id/btn_buy" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Buy Airtime"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

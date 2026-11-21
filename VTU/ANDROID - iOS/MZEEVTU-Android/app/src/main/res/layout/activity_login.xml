@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="@color/primary">
+    android:background="@color/primary" android:tag="brand:bg=primary">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -57,7 +57,7 @@
                     android:textSize="22sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
-                    android:layout_marginBottom="4dp" />
+                    android:layout_marginBottom="4dp"  android:tag="brand:text=on_surface" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -65,7 +65,7 @@
                     android:text="Sign in to your account"
                     android:textSize="14sp"
                     android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="24dp" />
+                    android:layout_marginBottom="24dp"  android:tag="brand:text=on_surface" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
@@ -116,7 +116,7 @@
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:backgroundTint="@color/primary"
-                    style="@style/Widget.Material3.Button" />
+                    style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
                 <Button
                     android:id="@+id/btn_biometric_login"
@@ -126,7 +126,7 @@
                     android:textSize="15sp"
                     android:layout_marginTop="8dp"
                     android:visibility="gone"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
+                    style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                 <TextView
                     android:id="@+id/tv_register"
@@ -137,7 +137,7 @@
                     android:textSize="14sp"
                     android:layout_gravity="center"
                     android:layout_marginTop="16dp"
-                    android:padding="8dp" />
+                    android:padding="8dp"  android:tag="brand:text=primary_text" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>

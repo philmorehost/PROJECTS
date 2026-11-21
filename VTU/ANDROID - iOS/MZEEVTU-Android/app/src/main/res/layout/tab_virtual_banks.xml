@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -25,7 +25,7 @@
                 android:layout_weight="1"
                 android:text="Transfer to any account below to fund your wallet automatically."
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
+                android:textSize="13sp"  android:tag="brand:text=on_surface" />
 
             <Button
                 android:id="@+id/btn_resync"
@@ -34,7 +34,7 @@
                 android:text="⟳ Resync"
                 android:textSize="12sp"
                 android:backgroundTint="@color/primary"
-                style="@style/Widget.Material3.Button" />
+                style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
 
         <!-- Loading indicator -->
@@ -62,7 +62,7 @@
             android:textSize="14sp"
             android:gravity="center"
             android:padding="32dp"
-            android:visibility="gone" />
+            android:visibility="gone"  android:tag="brand:text=on_surface" />
 
     </LinearLayout>
 </ScrollView>

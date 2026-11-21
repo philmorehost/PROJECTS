@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct AirtimeView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var phoneNumber: String = ""
     @State private var amount: String = ""
     @State private var selectedNetwork: String = "MTN"
@@ -33,10 +35,10 @@ struct AirtimeView: View {
                     } else {
                         Text("Purchase Now")
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                     }
                 }
-                .listRowBackground(Color.blue)
+                .listRowBackground(brandTheme.primary)
                 .disabled(isLoading)
             }
 

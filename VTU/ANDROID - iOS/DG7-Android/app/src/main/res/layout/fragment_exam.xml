@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Exam Pin"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -20,7 +20,7 @@
             android:orientation="vertical" android:padding="20dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Select Exam Body" android:textSize="14sp" android:textStyle="bold"
-                android:textColor="@color/text_primary" android:layout_marginBottom="12dp" />
+                android:textColor="@color/text_primary" android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
             <!-- Row 1: WAEC + NECO -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:layout_marginBottom="8dp">
@@ -31,13 +31,13 @@
                     android:gravity="center" android:padding="8dp"
                     android:layout_marginEnd="6dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="48dp" android:layout_height="48dp"
                         android:src="@drawable/exam_waec" android:scaleType="fitCenter"
                         android:contentDescription="WAEC" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="WAEC" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/btn_neco"
@@ -45,13 +45,13 @@
                     android:layout_weight="1" android:orientation="vertical"
                     android:gravity="center" android:padding="8dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="48dp" android:layout_height="48dp"
                         android:src="@drawable/exam_neco" android:scaleType="fitCenter"
                         android:contentDescription="NECO" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="NECO" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -65,13 +65,13 @@
                     android:gravity="center" android:padding="8dp"
                     android:layout_marginEnd="6dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="48dp" android:layout_height="48dp"
                         android:src="@drawable/exam_nabteb" android:scaleType="fitCenter"
                         android:contentDescription="NABTEB" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="NABTEB" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/btn_jamb"
@@ -79,20 +79,20 @@
                     android:layout_weight="1" android:orientation="vertical"
                     android:gravity="center" android:padding="8dp"
                     android:background="@drawable/selector_network_btn"
-                    android:clickable="true" android:focusable="true">
+                    android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                     <ImageView android:layout_width="48dp" android:layout_height="48dp"
                         android:src="@drawable/exam_jamb" android:scaleType="fitCenter"
                         android:contentDescription="JAMB" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="JAMB" android:textSize="11sp"
-                        android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                        android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
             </LinearLayout>
             <TextView android:id="@+id/tv_price_info"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Price: Loading..." android:textColor="@color/text_secondary"
-                android:textSize="13sp" android:layout_marginBottom="12dp" />
+                android:textSize="13sp" android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:hint="Select Product / PIN Type"
@@ -113,7 +113,7 @@
             <Button android:id="@+id/btn_buy" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Buy Exam Pin"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -282,6 +282,12 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
     }
     @media(max-width:560px){.three-ways-grid,.steps-grid,.feature-grid,.svc-strip,.footer-grid,.bento-grid{grid-template-columns:1fr}}
     </style>
+<?php require_once __DIR__ . '/func/bc-theme.php'; $freelancer_theme = bc_theme_palette($brand_colour)['modes']['light']; ?>
+<style>
+:root{--brand-on:<?php echo $freelancer_theme['on_primary']; ?>;--brand-readable:<?php echo $freelancer_theme['primary_text']; ?>}
+.btn-red{background:var(--brand-red)!important;color:var(--brand-on)!important;border:1px solid var(--brand-readable)!important}
+.btn-red *{color:inherit!important}
+</style>
 </head>
 <body>
 

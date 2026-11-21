@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
 
         <!-- Toolbar -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back"
                 android:layout_width="40dp" android:layout_height="40dp"
                 android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Print Hub"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -26,7 +26,7 @@
             <!-- Service type tabs (horizontal scroll) -->
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="SERVICE TYPE" android:textSize="11sp" android:textStyle="bold"
-                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" />
+                android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
             <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:scrollbars="none" android:layout_marginBottom="20dp">
@@ -38,48 +38,48 @@
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Data Card" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button" />
+                        style="@style/Widget.Material3.Button"  android:tag="brand:button=fill" />
 
                     <Button android:id="@+id/btn_type_airtime"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Recharge Card" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_cable"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Cable Card" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_electric"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Electric Token" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_exam"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Exam PIN" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_betting"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="Betting Card" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_nin"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="NIN Slip" android:textSize="12sp"
                         android:layout_marginEnd="8dp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
 
                     <Button android:id="@+id/btn_type_bvn"
                         android:layout_width="wrap_content" android:layout_height="36dp"
                         android:text="BVN Verify" android:textSize="12sp"
-                        style="@style/Widget.Material3.Button.OutlinedButton" />
+                        style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
                 </LinearLayout>
             </HorizontalScrollView>
 
@@ -90,7 +90,7 @@
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="NETWORK" android:textSize="11sp" android:textStyle="bold"
-                    android:textColor="@color/text_secondary" android:layout_marginBottom="8dp" />
+                    android:textColor="@color/text_secondary" android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal" android:layout_marginBottom="20dp">
@@ -101,13 +101,13 @@
                         android:gravity="center" android:padding="8dp"
                         android:layout_marginEnd="6dp"
                         android:background="@drawable/selector_network_btn"
-                        android:clickable="true" android:focusable="true">
+                        android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                         <ImageView android:layout_width="40dp" android:layout_height="40dp"
                             android:src="@drawable/net_mtn" android:scaleType="fitCenter"
                             android:contentDescription="MTN" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="MTN" android:textSize="11sp"
-                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_glo"
@@ -116,13 +116,13 @@
                         android:gravity="center" android:padding="8dp"
                         android:layout_marginEnd="6dp"
                         android:background="@drawable/selector_network_btn"
-                        android:clickable="true" android:focusable="true">
+                        android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                         <ImageView android:layout_width="40dp" android:layout_height="40dp"
                             android:src="@drawable/net_glo" android:scaleType="fitCenter"
                             android:contentDescription="Glo" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Glo" android:textSize="11sp"
-                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_airtel"
@@ -131,13 +131,13 @@
                         android:gravity="center" android:padding="8dp"
                         android:layout_marginEnd="6dp"
                         android:background="@drawable/selector_network_btn"
-                        android:clickable="true" android:focusable="true">
+                        android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                         <ImageView android:layout_width="40dp" android:layout_height="40dp"
                             android:src="@drawable/net_airtel" android:scaleType="fitCenter"
                             android:contentDescription="Airtel" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="Airtel" android:textSize="11sp"
-                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                     <LinearLayout android:id="@+id/btn_ninemobile"
@@ -145,13 +145,13 @@
                         android:layout_weight="1" android:orientation="vertical"
                         android:gravity="center" android:padding="8dp"
                         android:background="@drawable/selector_network_btn"
-                        android:clickable="true" android:focusable="true">
+                        android:clickable="true" android:focusable="true" android:tag="brand:bg=primary">
                         <ImageView android:layout_width="40dp" android:layout_height="40dp"
                             android:src="@drawable/net_9mobile" android:scaleType="fitCenter"
                             android:contentDescription="9mobile" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="9mobile" android:textSize="11sp"
-                            android:textColor="@color/text_primary" android:layout_marginTop="4dp" />
+                            android:textColor="@color/text_primary" android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -222,7 +222,7 @@
                 android:textSize="16sp" android:textStyle="bold"
                 android:textColor="@color/primary"
                 android:gravity="center"
-                android:layout_marginBottom="20dp" />
+                android:layout_marginBottom="20dp"  android:tag="brand:text=primary_text" />
 
             <ProgressBar android:id="@+id/progress_bar"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -234,7 +234,7 @@
                 android:text="Buy Cards"
                 android:textSize="16sp" android:textStyle="bold"
                 android:backgroundTint="@color/primary"
-                style="@style/Widget.Material3.Button" />
+                style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
             <!-- Generated cards container -->
             <TextView android:id="@+id/tv_cards_header"
@@ -243,7 +243,7 @@
                 android:textSize="11sp" android:textStyle="bold"
                 android:textColor="@color/text_secondary"
                 android:layout_marginTop="24dp" android:layout_marginBottom="8dp"
-                android:visibility="gone" />
+                android:visibility="gone"  android:tag="brand:text=on_surface" />
 
             <LinearLayout android:id="@+id/container_cards"
                 android:layout_width="match_parent" android:layout_height="wrap_content"

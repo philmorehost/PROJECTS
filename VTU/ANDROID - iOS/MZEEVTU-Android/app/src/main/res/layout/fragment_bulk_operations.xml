@@ -4,14 +4,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/primary"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent" android:tag="brand:bg=primary">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"
@@ -46,14 +46,14 @@
                     android:layout_weight="1"
                     android:text="Process transactions in batches"
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
+                    android:textSize="14sp"  android:tag="brand:text=on_surface" />
 
                 <Button
                     android:id="@+id/btnViewHistory"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="History"
-                    style="@style/Widget.Material3.Button.TextButton" />
+                    style="@style/Widget.Material3.Button.TextButton"  android:tag="brand:button=fill" />
             </LinearLayout>
 
             <!-- Service Selection -->
@@ -64,7 +64,7 @@
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_secondary"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
             <RadioGroup
                 android:id="@+id/rgServiceType"
@@ -79,21 +79,21 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Airtime"
-                    android:checked="true" />
+                    android:checked="true"  android:tag="brand:button=fill" />
 
                 <RadioButton
                     android:id="@+id/rbData"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Data" />
+                    android:text="Data"  android:tag="brand:button=fill" />
 
                 <RadioButton
                     android:id="@+id/rbSms"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="SMS" />
+                    android:text="SMS"  android:tag="brand:button=fill" />
             </RadioGroup>
 
             <!-- Recipients Input -->
@@ -104,7 +104,7 @@
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_secondary"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
             <EditText
                 android:id="@+id/etRecipients"
@@ -116,7 +116,7 @@
                 android:inputType="textMultiLine"
                 android:padding="12dp"
                 android:textColor="@color/text_primary"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
             <!-- Validation Feedback Panel -->
             <com.google.android.material.card.MaterialCardView
@@ -140,7 +140,7 @@
                         android:text="Live Validation: 0 numbers parsed"
                         android:textColor="@color/text_primary"
                         android:textStyle="bold"
-                        android:textSize="13sp" />
+                        android:textSize="13sp"  android:tag="brand:text=on_surface" />
 
                     <TextView
                         android:id="@+id/tvValidationDetails"
@@ -149,7 +149,7 @@
                         android:text="MTN: 0 | Airtel: 0 | Glo: 0 | 9mobile: 0"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp"
-                        android:layout_marginTop="4dp" />
+                        android:layout_marginTop="4dp"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -162,7 +162,7 @@
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_secondary"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
 
             <EditText
                 android:id="@+id/etParamValue"
@@ -173,7 +173,7 @@
                 android:inputType="number"
                 android:padding="12dp"
                 android:textColor="@color/text_primary"
-                android:layout_marginBottom="24dp" />
+                android:layout_marginBottom="24dp"  android:tag="brand:text=on_surface" />
 
             <!-- Submit Button -->
             <Button
@@ -183,7 +183,7 @@
                 android:text="PROCESS BATCH"
                 android:backgroundTint="@color/primary"
                 android:textColor="@android:color/white"
-                app:cornerRadius="26dp" />
+                app:cornerRadius="26dp"  android:tag="brand:bg=primary;button=fill" />
 
             <ProgressBar
                 android:id="@+id/progressBar"

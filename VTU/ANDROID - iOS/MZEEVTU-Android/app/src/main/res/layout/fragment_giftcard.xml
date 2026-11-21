@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <!-- Header -->
     <LinearLayout
@@ -12,7 +12,7 @@
         android:background="@color/primary"
         android:gravity="center_vertical"
         android:paddingStart="8dp"
-        android:paddingEnd="16dp">
+        android:paddingEnd="16dp" android:tag="brand:bg=primary">
         <ImageButton
             android:id="@+id/btn_back"
             android:layout_width="40dp"
@@ -20,7 +20,7 @@
             android:src="@drawable/ic_giftcard"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:tint="#FFFFFF"
-            android:contentDescription="Back" />
+            android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -38,7 +38,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="12dp"
-        android:background="@color/surface">
+        android:background="@color/surface" android:tag="brand:bg=surface">
         <Button
             android:id="@+id/tab_buy"
             android:layout_width="0dp"
@@ -47,7 +47,7 @@
             android:text="Buy Card"
             android:textSize="12sp"
             android:layout_marginEnd="4dp"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
+            style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
         <Button
             android:id="@+id/tab_my_cards"
             android:layout_width="0dp"
@@ -56,7 +56,7 @@
             android:text="My Cards"
             android:textSize="12sp"
             android:layout_marginEnd="4dp"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
+            style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
         <Button
             android:id="@+id/tab_p2p"
             android:layout_width="0dp"
@@ -64,7 +64,7 @@
             android:layout_weight="1"
             android:text="P2P Market"
             android:textSize="12sp"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
+            style="@style/Widget.Material3.Button.OutlinedButton"  android:tag="brand:button=outline" />
     </LinearLayout>
 
     <!-- Global Progress Bar -->
@@ -157,7 +157,7 @@
                 android:textSize="12sp"
                 android:textColor="@color/text_secondary"
                 android:layout_marginBottom="16dp"
-                android:visibility="gone" />
+                android:visibility="gone"  android:tag="brand:text=on_surface" />
 
             <!-- FIXED denomination: buttons row -->
             <LinearLayout
@@ -181,7 +181,7 @@
                 android:padding="8dp"
                 android:background="@color/primary_light"
                 android:layout_marginBottom="16dp"
-                android:visibility="gone" />
+                android:visibility="gone"  android:tag="brand:bg=surface;text=on_surface" />
 
             <!-- Buy Button -->
             <Button
@@ -192,7 +192,7 @@
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:backgroundTint="@color/primary"
-                style="@style/Widget.Material3.Button" />
+                style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
         </LinearLayout>
     </ScrollView>
 

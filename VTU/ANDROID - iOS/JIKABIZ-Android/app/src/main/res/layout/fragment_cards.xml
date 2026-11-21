@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tab_layout"
@@ -13,7 +13,7 @@
         app:tabSelectedTextColor="@color/primary"
         app:tabTextColor="@color/text_secondary"
         app:tabIndicatorColor="@color/primary"
-        android:background="@color/surface" />
+        android:background="@color/surface"  android:tag="brand:bg=surface" />
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/view_pager"

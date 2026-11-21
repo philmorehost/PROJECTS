@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,7 +18,7 @@
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="4dp"  android:tag="brand:text=on_surface" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -26,7 +26,7 @@
             android:text="Transfer to any admin bank below, then submit your payment notification for approval."
             android:textColor="@color/text_secondary"
             android:textSize="13sp"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"  android:tag="brand:text=on_surface" />
 
         <!-- Admin bank accounts container -->
         <LinearLayout
@@ -51,7 +51,7 @@
             android:textSize="14sp"
             android:gravity="center"
             android:padding="16dp"
-            android:visibility="gone" />
+            android:visibility="gone"  android:tag="brand:text=on_surface" />
 
         <!-- Submit notification form -->
         <androidx.cardview.widget.CardView
@@ -74,7 +74,7 @@
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
-                    android:layout_marginBottom="12dp" />
+                    android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
@@ -110,7 +110,7 @@
                     android:layout_height="48dp"
                     android:text="Submit Notification"
                     style="@style/Widget.Material3.Button"
-                    android:backgroundTint="@color/primary" />
+                    android:backgroundTint="@color/primary"  android:tag="brand:bg=primary;button=fill" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>

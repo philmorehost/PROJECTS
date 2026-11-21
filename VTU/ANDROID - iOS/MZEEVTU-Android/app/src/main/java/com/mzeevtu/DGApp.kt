@@ -21,6 +21,7 @@ class DGApp : Application(), DefaultLifecycleObserver {
 
     override fun onCreate() {
         super<Application>.onCreate()
+        com.mzeevtu.util.BrandTheme.install(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 

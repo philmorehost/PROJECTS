@@ -10,8 +10,10 @@
 //
 
 import SwiftUI
+@MainActor
 
 struct RegisterView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var username = ""
@@ -66,7 +68,7 @@ struct RegisterView: View {
                     Button(action: register) {
                         if isLoading {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
                         } else {
                             Text("Create Account")
                                 .fontWeight(.bold)
@@ -74,8 +76,8 @@ struct RegisterView: View {
                         }
                     }
                     .padding()
-                    .background(canSubmit ? Color.blue : Color.gray.opacity(0.5))
-                    .foregroundColor(.white)
+                    .background(canSubmit ? brandTheme.primary : Color.gray.opacity(0.5))
+                    .foregroundColor(canSubmit ? brandTheme.onPrimary : brandTheme.onSurface)
                     .cornerRadius(12)
                     .disabled(!canSubmit || isLoading)
                 }

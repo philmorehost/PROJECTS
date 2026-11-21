@@ -152,3 +152,86 @@ struct APIResponse: Codable {
     let message: String?
     let desc: String?
 }
+
+// MARK: - Tenant branding (public configuration, never account credentials)
+import SwiftUI
+import UIKit
+
+@MainActor
+final class BrandTheme: ObservableObject {
+    static let shared = BrandTheme()
+    @Published private var document: [String: Any] = [:]
+    private var fetching = false
+    private var lastAttempt = Date.distantPast
+    private var origin: String { AppNetworkService.shared.mobileOrigin }
+    private var cacheKey: String { "public-theme-v1:" + origin }
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: cacheKey),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], Self.valid(json) { document = json }
+    }
+    nonisolated private static func ui(_ hex: String) -> UIColor {
+        let n = UInt32(hex.dropFirst(), radix: 16) ?? 0
+        return UIColor(red: CGFloat((n >> 16) & 255)/255, green: CGFloat((n >> 8) & 255)/255, blue: CGFloat(n & 255)/255, alpha: 1)
+    }
+    nonisolated private static func luminance(_ hex: String) -> Double {
+        let n = UInt32(hex.dropFirst(), radix: 16) ?? 0
+        let values = [Double((n >> 16) & 255), Double((n >> 8) & 255), Double(n & 255)].map { value -> Double in
+            let c = value/255; return c <= 0.04045 ? c/12.92 : pow((c+0.055)/1.055, 2.4)
+        }
+        return values[0]*0.2126 + values[1]*0.7152 + values[2]*0.0722
+    }
+    nonisolated private static func contrast(_ a: String, _ b: String) -> Double { let x=luminance(a), y=luminance(b); return (max(x,y)+0.05)/(min(x,y)+0.05) }
+    nonisolated private static func valid(_ json: [String: Any]) -> Bool {
+        guard json["schema_version"] as? Int == 1, let version=json["version"] as? String,
+              version.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil, let modes=json["modes"] as? [String: [String: String]] else { return false }
+        for mode in ["light", "dark"] {
+            guard let p=modes[mode] else { return false }
+            for key in ["primary", "on_primary", "primary_text", "background", "surface", "on_surface", "outline"] {
+                guard let hex=p[key], hex.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { return false }
+            }
+            guard contrast(p["on_primary"]!,p["primary"]!) >= 4.5,
+                  contrast(p["primary_text"]!,p["surface"]!) >= 4.5,
+                  contrast(p["primary_text"]!,p["background"]!) >= 4.5,
+                  contrast(p["on_surface"]!,p["surface"]!) >= 4.5,
+                  contrast(p["outline"]!,p["surface"]!) >= 3 else { return false }
+        }
+        return true
+    }
+    private func token(_ key: String) -> Color {
+        let modes = document["modes"] as? [String: [String: String]] ?? [:]
+        return Color(UIColor { traits in
+            let dark = traits.userInterfaceStyle == .dark
+            let fallback: String
+            switch key {
+            case "primary": fallback = "#287BFF"
+            case "on_primary": fallback = "#000000"
+            case "surface", "background": fallback = dark ? "#0F172A" : "#FFFFFF"
+            default: fallback = dark ? "#FFFFFF" : "#000000"
+            }
+            return Self.ui(modes[dark ? "dark" : "light"]?[key] ?? fallback)
+        })
+    }
+    var primary: Color { token("primary") }
+    var onPrimary: Color { token("on_primary") }
+    var ink: Color { token("primary_text") }
+    var surface: Color { token("surface") }
+    var background: Color { token("background") }
+    var onSurface: Color { token("on_surface") }
+    func refresh() async {
+        guard !fetching, Date().timeIntervalSince(lastAttempt) >= 60,
+              let url=URL(string: origin + "web/api/theme.php"), url.scheme == "https" else { return }
+        fetching=true; lastAttempt=Date(); defer { fetching=false }
+        var request=URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.httpShouldHandleCookies=false
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        do {
+            let (data,response)=try await URLSession.shared.data(for: request)
+            guard let http=response as? HTTPURLResponse, http.statusCode==200,
+                  http.url?.scheme=="https", http.url?.host==url.host,
+                  let body=try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  body["status"] as? String=="success", let config=body["data"] as? [String: Any], Self.valid(config) else { return }
+            document=config
+            if let encoded=try? JSONSerialization.data(withJSONObject: config) { UserDefaults.standard.set(encoded, forKey: cacheKey) }
+        } catch { /* Last-known-good origin-scoped palette remains usable offline. */ }
+    }
+}

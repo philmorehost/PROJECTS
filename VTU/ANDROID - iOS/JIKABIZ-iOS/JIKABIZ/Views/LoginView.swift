@@ -1,6 +1,8 @@
 import SwiftUI
+@MainActor
 
 struct LoginView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -19,7 +21,7 @@ struct LoginView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 80, height: 80)
-                .foregroundColor(.blue)
+                .foregroundColor(brandTheme.ink)
 
             Text("Digital Payments")
                 .font(.largeTitle)
@@ -41,10 +43,10 @@ struct LoginView: View {
                     .keyboardType(.numberPad)
                     .padding(.horizontal)
                 Button(action: verifyOtp) {
-                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
+                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary)) }
                     else { Text("Verify and sign in").fontWeight(.bold).frame(maxWidth: .infinity) }
                 }
-                .padding().background(Color.blue).foregroundColor(.white).cornerRadius(12).padding(.horizontal)
+                .padding().background(brandTheme.primary).foregroundColor(brandTheme.onPrimary).cornerRadius(12).padding(.horizontal)
                 .disabled(isLoading || otp.count != 6 || !otp.allSatisfy({ $0.isNumber }))
                 Button("Cancel and sign in again") {
                     challenge = nil
@@ -62,10 +64,10 @@ struct LoginView: View {
                 .padding(.horizontal)
 
                 Button(action: login) {
-                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)) }
+                    if isLoading { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary)) }
                     else { Text("Login").fontWeight(.bold).frame(maxWidth: .infinity) }
                 }
-                .padding().background(Color.blue).foregroundColor(.white).cornerRadius(12).padding(.horizontal)
+                .padding().background(brandTheme.primary).foregroundColor(brandTheme.onPrimary).cornerRadius(12).padding(.horizontal)
                 .disabled(isLoading || email.isEmpty || password.isEmpty)
 
                 Button("Create an account") { showRegister = true }

@@ -45,14 +45,14 @@
                     android:layout_height="wrap_content"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"  android:tag="brand:text=on_surface" />
 
                 <TextView
                     android:id="@+id/tv_ticker"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="@color/text_secondary"
-                    android:textSize="10sp" />
+                    android:textSize="10sp"  android:tag="brand:text=on_surface" />
             </LinearLayout>
 
         </LinearLayout>
@@ -65,7 +65,7 @@
             android:textColor="@color/text_primary"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:layout_marginBottom="2dp" />
+            android:layout_marginBottom="2dp"  android:tag="brand:text=on_surface" />
 
         <!-- Live NGN rate -->
         <TextView
@@ -73,7 +73,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/text_secondary"
-            android:textSize="11sp" />
+            android:textSize="11sp"  android:tag="brand:text=on_surface" />
 
         <!-- Total NGN value -->
         <TextView

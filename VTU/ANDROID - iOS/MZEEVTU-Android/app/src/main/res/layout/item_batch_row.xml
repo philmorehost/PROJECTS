@@ -7,7 +7,7 @@
     android:layout_marginBottom="8dp"
     app:cardCornerRadius="12dp"
     app:cardElevation="1dp"
-    app:cardBackgroundColor="@color/surface">
+    app:cardBackgroundColor="@color/surface" android:tag="brand:bg=surface">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -37,7 +37,7 @@
                 android:textSize="14sp"
                 android:textColor="@color/text_primary"
                 android:maxLines="1"
-                android:ellipsize="end" />
+                android:ellipsize="end"  android:tag="brand:text=on_surface" />
 
             <TextView
                 android:id="@+id/tv_batch_date"
@@ -45,7 +45,7 @@
                 android:layout_height="wrap_content"
                 android:text="2024-01-01"
                 android:textSize="12sp"
-                android:textColor="@color/text_secondary" />
+                android:textColor="@color/text_secondary"  android:tag="brand:text=on_surface" />
         </LinearLayout>
 
         <TextView
@@ -55,7 +55,7 @@
             android:text="#BATCH"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:textColor="@color/primary" />
+            android:textColor="@color/primary"  android:tag="brand:text=primary_text" />
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>

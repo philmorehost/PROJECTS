@@ -49,7 +49,7 @@ class BatchTransactionsFragment : Fragment() {
         swipeRefresh.setOnRefreshListener {
             loadBatches()
         }
-        swipeRefresh.setColorSchemeResources(R.color.primary)
+        swipeRefresh.setColorSchemeColors(com.mzeevtu.util.BrandTheme.ink(requireContext()))
 
         loadBatches()
 

@@ -2,18 +2,18 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical">
 
         <!-- Toolbar -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
             android:background="@color/primary" android:gravity="center_vertical"
-            android:paddingStart="8dp" android:paddingEnd="16dp">
+            android:paddingStart="8dp" android:paddingEnd="16dp" android:tag="brand:bg=primary">
             <ImageButton android:id="@+id/btn_back" android:layout_width="40dp"
                 android:layout_height="40dp" android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#FFFFFF" android:contentDescription="Back" />
+                android:tint="#FFFFFF" android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Withdraw to Bank"
                 android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
@@ -26,7 +26,7 @@
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Type the bank name to search and select from the list"
                 android:textColor="@color/text_secondary" android:textSize="13sp"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="12dp"  android:tag="brand:text=on_surface" />
 
             <!-- Bank Name Search (AutoComplete - filters 645 banks as user types) -->
             <com.google.android.material.textfield.TextInputLayout
@@ -63,7 +63,7 @@
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Verifying account…" android:textColor="@color/text_secondary"
                 android:textSize="13sp" android:visibility="gone"
-                android:layout_marginBottom="4dp" />
+                android:layout_marginBottom="4dp"  android:tag="brand:text=on_surface" />
 
             <!-- Verified account name -->
             <TextView android:id="@+id/tv_verified_name"
@@ -88,7 +88,7 @@
             <Button android:id="@+id/btn_withdraw" android:layout_width="match_parent"
                 android:layout_height="52dp" android:text="Withdraw"
                 android:textSize="16sp" android:textStyle="bold"
-                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button" />
+                android:backgroundTint="@color/primary" style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
         </LinearLayout>
     </LinearLayout>

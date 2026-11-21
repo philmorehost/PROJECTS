@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@color/background" android:tag="brand:bg=background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -24,7 +24,7 @@
                 android:layout_height="40dp"
                 android:src="@drawable/ic_home"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Back" />
+                android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
 
             <TextView
                 android:layout_width="0dp"
@@ -34,7 +34,7 @@
                 android:textSize="20sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
-                android:layout_marginStart="8dp" />
+                android:layout_marginStart="8dp"  android:tag="brand:text=on_surface" />
         </LinearLayout>
 
         <com.google.android.material.textfield.TextInputLayout
@@ -183,7 +183,7 @@
             android:textSize="16sp"
             android:textStyle="bold"
             android:backgroundTint="@color/primary"
-            style="@style/Widget.Material3.Button" />
+            style="@style/Widget.Material3.Button"  android:tag="brand:bg=primary;button=fill" />
 
         <TextView
             android:id="@+id/tv_login"
@@ -194,7 +194,7 @@
             android:textSize="14sp"
             android:layout_gravity="center"
             android:layout_marginTop="16dp"
-            android:padding="8dp" />
+            android:padding="8dp"  android:tag="brand:text=primary_text" />
 
     </LinearLayout>
 </ScrollView>

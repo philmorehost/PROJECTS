@@ -9,8 +9,10 @@ struct AIParsedResponse: Codable {
     let response: String?
     let needs_confirmation: Bool?
 }
+@MainActor
 
 struct AIChatView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var prompt: String = ""
     @State private var chatHistory: [ChatMessage] = []
     @State private var isLoading: Bool = false
@@ -43,8 +45,8 @@ struct AIChatView: View {
                                     if message.isUser { Spacer() }
                                     Text(message.text)
                                         .padding(12)
-                                        .background(message.isUser ? Color.blue : Color(UIColor.secondarySystemBackground))
-                                        .foregroundColor(message.isUser ? .white : .primary)
+                                        .background(message.isUser ? brandTheme.primary : Color(UIColor.secondarySystemBackground))
+                                        .foregroundColor(message.isUser ? brandTheme.onPrimary : .primary)
                                         .cornerRadius(16)
                                     if !message.isUser { Spacer() }
                                 }
@@ -77,18 +79,18 @@ struct AIChatView: View {
                     
                     Button(action: toggleRecording) {
                         Image(systemName: isRecording ? "mic.fill" : "mic")
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                             .padding(12)
-                            .background(isRecording ? Color.red : Color.blue)
+                            .background(isRecording ? Color.red : brandTheme.primary)
                             .clipShape(Circle())
                     }
                     .disabled(isLoading)
                     
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                             .padding()
-                            .background(prompt.isEmpty ? Color.gray : Color.blue)
+                            .background(prompt.isEmpty ? Color.gray : brandTheme.primary)
                             .clipShape(Circle())
                     }
                     .disabled(prompt.isEmpty || isLoading)

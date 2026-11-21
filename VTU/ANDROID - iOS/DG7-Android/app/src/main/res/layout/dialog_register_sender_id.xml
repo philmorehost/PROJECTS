@@ -40,6 +40,6 @@
         android:layout_height="wrap_content"
         android:text="Note: Approval may take 24-48 hours. You will be notified once approved."
         android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+        android:textSize="12sp"  android:tag="brand:text=on_surface" />
 
 </LinearLayout>

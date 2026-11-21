@@ -8,8 +8,10 @@ struct BudgetStatsResponse: Codable {
     let burn_rate_days: Int
     let forecast: [Double]
 }
+@MainActor
 
 struct AIBudgetingView: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     @State private var stats: BudgetStatsResponse? = nil
     @State private var isLoading = false
     @State private var feedbackMessage = ""
@@ -30,7 +32,7 @@ struct AIBudgetingView: View {
                         
                         Text("₦\(String(format: "%.2f", budget.total_spent))")
                             .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(brandTheme.onPrimary)
                         
                         Text("\(budget.trans_count) successful transactions analyzed.")
                             .font(.caption)
@@ -158,7 +160,9 @@ struct AIBudgetingView: View {
 }
 
 // Custom simple Line graph using SwiftUI shapes
+@MainActor
 struct BudgetLineChart: View {
+    @ObservedObject private var brandTheme = BrandTheme.shared
     let points: [Double]
 
     var body: some View {
@@ -186,7 +190,7 @@ struct BudgetLineChart: View {
                         }
                     }
                 }
-                .stroke(Color.blue, lineWidth: 4)
+                .stroke(brandTheme.primary, lineWidth: 4)
                 
                 // Draw dots
                 ForEach(Array(points.enumerated()), id: \.offset) { idx, val in

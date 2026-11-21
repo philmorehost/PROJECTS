@@ -21,30 +21,30 @@
             android:textSize="13sp"
             android:textStyle="bold"
             android:textColor="@color/primary"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="10dp"  android:tag="brand:text=primary_text" />
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:layout_marginBottom="6dp">
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Account Name"
-                android:textColor="@color/text_secondary" android:textSize="12sp" />
+                android:textColor="@color/text_secondary" android:textSize="12sp"  android:tag="brand:text=on_surface" />
             <TextView android:id="@+id/tv_item_account_name"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="2" android:text="---"
                 android:textColor="@color/text_primary" android:textSize="12sp"
-                android:textStyle="bold" android:gravity="end" />
+                android:textStyle="bold" android:gravity="end"  android:tag="brand:text=on_surface" />
         </LinearLayout>
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal">
             <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:text="Account Number"
-                android:textColor="@color/text_secondary" android:textSize="12sp" />
+                android:textColor="@color/text_secondary" android:textSize="12sp"  android:tag="brand:text=on_surface" />
             <TextView android:id="@+id/tv_item_account_number"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="2" android:text="---"
                 android:textColor="@color/primary" android:textSize="16sp"
-                android:textStyle="bold" android:gravity="end" />
+                android:textStyle="bold" android:gravity="end"  android:tag="brand:text=primary_text" />
         </LinearLayout>
 
     </LinearLayout>
