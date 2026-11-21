@@ -14,7 +14,9 @@ public_check(strpos($home, 'file:///') === false && strpos($home, 'Home_files') 
 public_check(strpos($home, 'react.js') === false && strpos($home, 'text/x-dc') === false, 'no editor runtime');
 public_check(strpos($home, '[FEE]') === false && strpos($home, '[NN]') === false, 'no placeholder commercial figures');
 public_check(strpos($home, '1,950,000.00') === false, 'no frozen quoted conversion');
-public_check(strpos($home, 'data-fx-enabled="0"') !== false, 'unconfigured public FX fails closed');
+public_check(strpos($home, 'data-fx-enabled') === false, 'public reference converter independent of transaction FX settings');
+public_check(strpos($home, 'Illustrations show example balances') === false, 'requested top disclaimer removed');
+public_check(strpos($home, 'Open-source Currency API') !== false && strpos($home, 'mz-refresh') !== false, 'reference source and refresh available');
 $ctx = bc_landing_context();
 $rendered = array('home' => $home);
 foreach (bc_public_catalog() as $key => $p) {
