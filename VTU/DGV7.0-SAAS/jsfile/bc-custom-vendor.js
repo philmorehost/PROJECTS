@@ -373,37 +373,45 @@ function tickProduct(element, networkName, productID, buttonID, fileExt) {
     	}
     }
     
-    function updateUserAccountStatus(status, user){
+    // Page-specific secure handlers take precedence over legacy fallbacks.
+    if (typeof window.updateUserAccountStatus !== 'function') {
+        window.updateUserAccountStatus = function (status, user){
     	// §33: user account actions are POST + CSRF + step-up now (see Users.php sec33OpenUserModal).
     	var statusArray = ["1","2","3"];
     	var actionArray = {"1":"activate", "2":"block", "3":"delete"};
     	if(Number(status) && (statusArray.indexOf(status) !== -1)){
     		if(typeof sec33OpenUserModal === "function"){
-    			sec33OpenUserModal('status', String(status), 0, user, 'Confirm user action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account? This needs your Security PIN (plus an authenticator code to activate or delete) and is audited.", 'Confirm');
+                sec33OpenUserModal('status', String(status), 0, user, 'Confirm user action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account? This needs your Security PIN (plus a verification code for every action) and is audited.", 'Confirm');
     		}else{
     			alert("Open the Users page to perform this action securely.");
     		}
     	}else{
     		alert("Invalid Account Status");
     	}
+    };
     }
 
-    function updateUserAccountAPIStatus(status, user){
+    // Page-specific secure handlers take precedence over legacy fallbacks.
+    if (typeof window.updateUserAccountAPIStatus !== 'function') {
+        window.updateUserAccountAPIStatus = function (status, user){
     	// §33: see updateUserAccountStatus above.
     	var statusArray = ["1","2"];
     	var actionArray = {"1":"activate", "2":"block"};
     	if(Number(status) && (statusArray.indexOf(status) !== -1)){
     		if(typeof sec33OpenUserModal === "function"){
-    			sec33OpenUserModal('api', String(status), 0, user, 'Confirm API action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account API Gateway? This needs your Security PIN (plus an authenticator code to activate) and is audited.", 'Confirm');
+                sec33OpenUserModal('api', String(status), 0, user, 'Confirm API action', "Are you sure you want to "+actionArray[status]+" "+user+"'s account API Gateway? This needs your Security PIN (plus a verification code for every action) and is audited.", 'Confirm');
     		}else{
     			alert("Open the Users page to perform this action securely.");
     		}
     	}else{
     		alert("Invalid Account API Status");
     	}
+    };
     }
 
-    function loginUserAccount(idNumber, user){
+    // Page-specific secure handlers take precedence over legacy fallbacks.
+    if (typeof window.loginUserAccount !== 'function') {
+        window.loginUserAccount = function (idNumber, user){
         if(Number(idNumber) && (idNumber >= 1)){
             if(user.trim() !== ""){
                 // §33: impersonation is POST + CSRF + step-up (see Users.php).
@@ -418,6 +426,7 @@ function tickProduct(element, networkName, productID, buttonID, fileExt) {
     	}else{
     		alert("Error: Login Failed! Invalid Account ID");
     	}
+    };
     }
     
     function getCookieDet(cookieName){

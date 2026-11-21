@@ -514,6 +514,30 @@ if (!function_exists('bc_adm_css')) {
     /** Back-office additions: nav group headings, the topbar profile menu, print tweaks. */
     function bc_adm_css($brand, $area) {
         ?><style>
+        /* User confirmations can live after the content wrapper. Never depend on
+           wrapper-scoped Bootstrap compatibility rules for these security forms. */
+        #sec33UserModal:not([open]):not(.show) { display: none !important; }
+        dialog#sec33UserModal { position: fixed; inset: 0; margin: auto; box-sizing: border-box;
+            width: min(94vw, 520px); max-height: 90vh; overflow: auto; padding: 0;
+            background: #fff; color: #172033; border: 0; border-radius: 18px;
+            box-shadow: 0 24px 80px rgba(0,0,0,.28); }
+        #sec33UserModal::backdrop { background: rgba(15,23,42,.6); }
+        /* Also cover older cached page markup while a deployment rolls out. */
+        div#sec33UserModal.modal.show { display: flex; position: fixed; inset: 0;
+            z-index: 2100; align-items: center; justify-content: center;
+            padding: 16px; overflow-y: auto; background: rgba(15,23,42,.6); }
+        #sec33UserModal .modal-dialog { width: 100%; max-width: 520px; margin: auto; }
+        #sec33UserModal .modal-content { box-sizing: border-box; background: #fff; color: #172033;
+            padding: 22px; border-radius: 18px; width: 100%; }
+        #sec33UserModal .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        #sec33UserModal .modal-title { margin: 0; font-size: 1.1rem; font-weight: 800; }
+        #sec33UserModal .modal-body { padding: 18px 0; }
+        #sec33UserModal .form-label { display: block; margin-bottom: 8px; }
+        #sec33UserModal .form-control { box-sizing: border-box; display: block; width: 100%; min-height: 46px;
+            padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; color: #172033; }
+        #sec33UserModal .modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+        #sec33UserModal .btn-close { min-width: 32px; min-height: 32px; cursor: pointer; }
+        #sec33UserModal .btn-close::before { content: '\00d7'; font-size: 24px; color: #172033; }
         .pk-app__glabel { letter-spacing: .01em; }
         /* \u00a733 settings tabs: the retired bundle used to hide inactive panes;
            without these rules every pane stacked and the tab rail looked
@@ -1403,7 +1427,10 @@ if (!function_exists('bc_adm_assets')) {
             echo '<script src="' . $vendor . 'simple-datatables/simple-datatables.js" defer></script>' . "\n";
         }
         echo '<script src="' . htmlspecialchars($root, ENT_QUOTES, 'UTF-8') . '/jsfile/bc-custom-all.js"></script>' . "\n";
-        echo '<script src="' . htmlspecialchars($root, ENT_QUOTES, 'UTF-8') . '/jsfile/bc-custom-' . $area_prefix . '.js"></script>' . "\n";
+        // Content version prevents a stale footer helper from replacing repaired page handlers.
+        $helper_file = __DIR__ . '/../jsfile/bc-custom-' . $area_prefix . '.js';
+        $helper_version = is_file($helper_file) ? substr(hash_file('sha256', $helper_file), 0, 12) : '1';
+        echo '<script src="' . htmlspecialchars($root, ENT_QUOTES, 'UTF-8') . '/jsfile/bc-custom-' . $area_prefix . '.js?v=' . $helper_version . '"></script>' . "\n";
         if (!empty($opts['assets']) && is_array($opts['assets'])) {
             foreach ($opts['assets'] as $src) {
                 echo '<script src="' . htmlspecialchars((string)$src, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
