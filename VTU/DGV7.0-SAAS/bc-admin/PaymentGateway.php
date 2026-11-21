@@ -658,12 +658,11 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                         <div class="mb-3">
                                             <label class="form-label small fw-bold text-muted">WEBHOOK URL</label>
                                             <div class="input-group input-group-sm">
-                                                <?php if (!empty($payment_gateway_webhook_array[$gateway_name])): ?>
-                                                    <input type="text" value="<?php echo $payment_gateway_webhook_array[$gateway_name]; ?>" class="form-control bg-light border-0" readonly />
-                                                    <?php else: ?>
-                                                    <input type="text" value="Not required — status is confirmed inside the app" class="form-control bg-light border-0" readonly />
-                                                    <?php endif; ?>
-                                                <button class="btn btn-outline-secondary border-0" type="button" onclick="navigator.clipboard.writeText('<?php echo $payment_gateway_webhook_array[$gateway_name]; ?>')"><i class="bi bi-clipboard"></i></button>
+                                                <?php $webhook_url_display = (string)($payment_gateway_webhook_array[$gateway_name] ?? ''); ?>
+                                                <input type="text" value="<?php echo htmlspecialchars($webhook_url_display !== '' ? $webhook_url_display : 'Not required — status is confirmed inside the app', ENT_QUOTES, 'UTF-8'); ?>" class="form-control bg-light border-0" readonly />
+                                                <?php if ($webhook_url_display !== ''): ?>
+                                                <button class="btn btn-outline-secondary border-0" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(() => { this.title = 'Copied'; }).catch(() => { this.title = 'Select and copy the URL manually'; })" aria-label="Copy webhook URL"><i class="bi bi-clipboard"></i></button>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </div>

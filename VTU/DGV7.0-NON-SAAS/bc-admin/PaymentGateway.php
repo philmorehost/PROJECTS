@@ -647,7 +647,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                             <label class="form-label small fw-bold text-muted">WEBHOOK URL</label>
                                             <div class="input-group input-group-sm">
                                                 <input type="text" value="<?php echo htmlspecialchars($webhook_url_display, ENT_QUOTES); ?>" class="form-control bg-light border-0" readonly />
-                                                <button class="btn btn-outline-secondary border-0" type="button" onclick="navigator.clipboard.writeText('<?php echo htmlspecialchars(addslashes($webhook_url_display), ENT_QUOTES); ?>')"><i class="bi bi-clipboard"></i></button>
+                                                <button class="btn btn-outline-secondary border-0" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(() => { this.title = 'Copied'; }).catch(() => { this.title = 'Select and copy the URL manually'; })" aria-label="Copy webhook URL"><i class="bi bi-clipboard"></i></button>
                                             </div>
                                             <?php if ($gateway_name === 'beewave' && empty($get_gateway_details["webhook_secret"])): ?>
                                                 <div class="form-text small text-danger">Set a Webhook Secret above first, then copy this URL (it will include the secret) into Beewave's dashboard.</div>
