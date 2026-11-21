@@ -2,6 +2,7 @@
 /** Server-side authority boundary for platform custody UI; never accept a posted actor/role. */
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
 require_once __DIR__.'/bc-crypto-bybit-identity.php';
+require_once __DIR__.'/bc-crypto-routes.php';
 function bc_crypto_custody_authorize($session_id,$input) {
     if (!is_int($session_id)||$session_id<=0) throw new RuntimeException('crypto_custody_access_denied');
     if (bc_is_rate_limited('crypto_custody_sensitive','spadmin:'.$session_id,5,300)) throw new RuntimeException('crypto_custody_rate_limited');
@@ -17,7 +18,7 @@ function bc_crypto_custody_manage($session_id,$input) {
     $authority=bc_crypto_custody_authorize($session_id,$input);
     $env=bc_crypto_gov_environment($input['environment']??null);
     $action=$input['action']??null;
-    if (!in_array($action,['verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    if (!in_array($action,['propose_route','review_route','revoke_route','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
     $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
     if ($identity==='') {
         if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
@@ -33,6 +34,20 @@ function bc_crypto_custody_manage($session_id,$input) {
         return ['custody_account'=>$identity,'evidence_hash'=>$hash,'live_enabled'=>false];
     }
     $revision=bc_crypto_gov_uint($input['revision']??null,1000000000);
+    if (in_array($action,['propose_route','review_route','revoke_route'],true)) {
+        $route=[];
+        if ($action==='propose_route') {
+            foreach(['vendor_id','user_id'] as $key) $route[$key]=bc_crypto_gov_uint($input[$key]??null,1000000000);
+            $route['scale']=bc_crypto_gov_uint($input['scale']??null,30);
+            foreach(['asset_network','address','tag','note'] as $key) $route[$key]=$input[$key]??null;
+        } else {
+            foreach(['candidate_id','candidate_revision'] as $key) $route[$key==='candidate_revision'?'revision':$key]=bc_crypto_gov_uint($input[$key]??null,1000000000);
+            $route['valid_seconds']=$input['valid_seconds']??null;
+        }
+        $result=bc_crypto_route_save($authority,$env,$identity,$revision,['propose_route'=>'propose','review_route'=>'review','revoke_route'=>'revoke'][$action],$route);
+        $result['custody_account']=$identity;$result['route_candidate_updated']=true;
+        return $result;
+    }
     if ($action==='verify_provider') {
         $source=bc_crypto_gov_uint($input['source_vendor_id']??null,1000000000);
         if ($source===0) throw new InvalidArgumentException('crypto_custody_vendor_invalid');
