@@ -1184,6 +1184,7 @@ bc_adm_head('', array("area" => "spadmin"));
 
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
+                    <p><a class="btn btn-outline-primary" href="CryptoCustody.php">Crypto custody accounts and protected evidence</a></p>
                     <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto platform asset ceilings and emergency stop</a></p>
                     <?php bc_enrollment_policy_form(true, 0); ?>
                     <div class="card shadow-sm border-0 rounded-4">

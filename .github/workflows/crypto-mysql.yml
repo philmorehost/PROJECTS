@@ -9,6 +9,8 @@ on:
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
       - 'VTU/tests/crypto_custody*.php'
+      - 'VTU/**/bc-spadmin/CryptoCustody.php'
+      - 'VTU/**/bc-admin/CryptoCustody.php'
       - '.github/workflows/crypto-mysql.yml'
   pull_request:
     paths:
@@ -19,6 +21,8 @@ on:
       - 'VTU/tests/crypto_mysql_integration.php'
       - 'VTU/tests/crypto_deposits*.php'
       - 'VTU/tests/crypto_custody*.php'
+      - 'VTU/**/bc-spadmin/CryptoCustody.php'
+      - 'VTU/**/bc-admin/CryptoCustody.php'
       - '.github/workflows/crypto-mysql.yml'
   workflow_dispatch:
 permissions:
@@ -51,6 +55,13 @@ jobs:
           coverage: none
       - name: Custody registry normalization and dual-control checks
         run: php VTU/tests/crypto_custody_test.php
+      - name: Protected evidence and management boundary checks
+        run: |
+          php VTU/tests/crypto_custody_evidence_test.php
+          php VTU/tests/crypto_custody_management_test.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/CryptoCustody.php
+          php -l VTU/DGV7.0-SAAS/bc-admin/CryptoCustody.php
+          php -l VTU/DGV7.0-NON-SAAS/bc-admin/CryptoCustody.php
       - name: Pure deposit validation and state-machine checks
         run: php VTU/tests/crypto_deposits_test.php
       - name: Real InnoDB migrations, rollback and competing connections

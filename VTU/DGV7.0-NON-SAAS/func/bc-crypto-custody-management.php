@@ -1,0 +1,52 @@
+<?php
+/** Server-side authority boundary for platform custody UI; never accept a posted actor/role. */
+require_once __DIR__.'/bc-crypto-custody-evidence.php';
+function bc_crypto_custody_authorize($session_id,$input) {
+    if (!is_int($session_id)||$session_id<=0) throw new RuntimeException('crypto_custody_access_denied');
+    if (bc_is_rate_limited('crypto_custody_sensitive','spadmin:'.$session_id,5,300)) throw new RuntimeException('crypto_custody_rate_limited');
+    $fresh=bc_q_row('SELECT * FROM sas_super_admin WHERE id=? LIMIT 1',[$session_id]);
+    if (!$fresh||(int)($fresh['id']??0)!==$session_id||(int)($fresh['status']??0)!==1||!empty($fresh['is_blocked'])||!empty($fresh['force_password_change'])||!bc_gauth_enrolled($fresh)) throw new RuntimeException('crypto_custody_fresh_authenticator_required');
+    if (bc_stepup_spadmin_verify($fresh,$input,'crypto_custody_sensitive')!=='') throw new RuntimeException('crypto_custody_stepup_failed');
+    return ['role'=>'spadmin','id'=>$session_id];
+}
+/** POST/CSRF enforced here as well as authenticated route configuration. */
+function bc_crypto_custody_manage($session_id,$input) {
+    if (($_SERVER['REQUEST_METHOD']??'GET')!=='POST') throw new RuntimeException('crypto_custody_post_required');
+    bc_validate_csrf();
+    $authority=bc_crypto_custody_authorize($session_id,$input);
+    $env=bc_crypto_gov_environment($input['environment']??null);
+    $action=$input['action']??null;
+    if (!in_array($action,['store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
+    if ($identity==='') {
+        if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
+        $identity=bc_crypto_custody_identity($env,$uid);$new=true;
+    } else {
+        if ($uid!=='') throw new InvalidArgumentException('crypto_custody_identity_ambiguous');
+        bc_crypto_custody_digest($identity);
+        $account=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$identity]);
+        if (!$account||$account['environment']!==$env) throw new RuntimeException('crypto_custody_proposal_required');
+    }
+    if ($action==='store_evidence') {
+        $hash=bc_crypto_custody_evidence_store($authority,$identity,$env,$input['evidence_text']??null);
+        return ['custody_account'=>$identity,'evidence_hash'=>$hash,'live_enabled'=>false];
+    }
+    $revision=bc_crypto_gov_uint($input['revision']??null,1000000000);
+    if ($action==='view_evidence') return ['custody_account'=>$identity,'text'=>bc_crypto_custody_evidence_view($authority,$identity,$env,bc_crypto_custody_digest($input['evidence_hash']??null),$revision),'live_enabled'=>false];
+    $values=[];
+    if (in_array($action,['propose','review','propose_binding','review_binding'],true)) {
+        $hash=bc_crypto_custody_digest($input['evidence_hash']??null);
+        bc_crypto_custody_evidence_require($identity,$env,$hash,$authority['id'],$revision,in_array($action,['review','review_binding'],true));
+        $values['evidence_hash']=$hash;
+    }
+    if ($action==='propose') $values['model']=$input['model']??null;
+    if (in_array($action,['review','review_binding'],true)) $values['valid_seconds']=$input['valid_seconds']??null;
+    if (in_array($action,['propose_binding','review_binding','revoke_binding'],true)) {
+        $vendor=bc_crypto_gov_uint($input['vendor_id']??null,1000000000);
+        if ($vendor===0) throw new InvalidArgumentException('crypto_custody_vendor_invalid');
+        $row=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? LIMIT 1',[$vendor]);
+        if (!$row || ($action!=='revoke_binding' && ((int)$row['status']!==1||!empty($row['is_blocked'])))) throw new RuntimeException('crypto_custody_vendor_inactive');
+        $values['vendor_id']=$vendor;
+    }
+    return $new?bc_crypto_custody_save($authority,$env,$uid,$revision,$action,$values):bc_crypto_custody_save_identity($authority,$env,$identity,$revision,$action,$values);
+}
