@@ -286,8 +286,6 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
 ?>
-<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "TRANSACTIONS", "crumb" => "Home / Transactions")); ?><!-- End Page Title -->
 

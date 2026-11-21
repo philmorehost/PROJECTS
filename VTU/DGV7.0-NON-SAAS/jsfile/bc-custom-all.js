@@ -1746,64 +1746,41 @@
         else if (typeof tickBulkDataCarrier === 'function' && type === 'data') tickBulkDataCarrier();
     }
 
-    // Site-wide Real-time Search Logic
+    // Site-wide real-time search: one delegated listener also covers dynamic forms.
+    // Do not rescan the entire document for every chat/cart/receipt DOM mutation.
     (function() {
-        const debounce = (func, wait) => {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        };
-
-        const initAutoSearch = () => {
-            const searchInputs = document.querySelectorAll('input[name="searchq"]');
-            searchInputs.forEach(input => {
-                // Prevent multiple attachments
-                if (input.dataset.autoSearchInit) return;
-                input.dataset.autoSearchInit = "true";
-
-                const form = input.closest('form');
-                if (!form) return;
-
-                const autoSubmit = debounce(() => {
-                    // Store focus info in session storage before submit
+        const pendingSearches = new WeakMap();
+        document.addEventListener('input', function (event) {
+            const input = event.target;
+            if (!input.matches || !input.matches('input[name="searchq"]')) return;
+            const form = input.form;
+            if (!form) return;
+            clearTimeout(pendingSearches.get(form));
+            pendingSearches.set(form, setTimeout(function () {
+                if (!form.isConnected) return;
+                try {
                     sessionStorage.setItem('lastSearchInputId', input.id || input.name);
                     sessionStorage.setItem('lastSearchValue', input.value);
-                    form.submit();
-                }, 600);
-
-                input.addEventListener('input', autoSubmit);
-            });
-        };
-
-        // Initialize on load
-        window.addEventListener('load', () => {
-            initAutoSearch();
-
-            // Restore focus if we just searched
-            const lastInputId = sessionStorage.getItem('lastSearchInputId');
-            if (lastInputId) {
-                const input = document.querySelector(`input[id="${lastInputId}"], input[name="${lastInputId}"]`);
-                if (input) {
+                } catch (e) { /* Search still works if storage is disabled. */ }
+                form.submit();
+            }, 600));
+        });
+        // A manual submit must not be followed by another delayed submission.
+        document.addEventListener('submit', function (event) {
+            clearTimeout(pendingSearches.get(event.target));
+        });
+        function restoreSearchFocus() {
+            try {
+                const key = sessionStorage.getItem('lastSearchInputId');
+                if (!key) return;
+                const input = document.getElementById(key) || document.getElementsByName(key)[0];
+                if (input && input.matches('input[name="searchq"]')) {
                     input.focus();
-                    // Move cursor to end
-                    const val = input.value;
-                    input.value = '';
-                    input.value = val;
+                    if (input.setSelectionRange) input.setSelectionRange(input.value.length, input.value.length);
                 }
                 sessionStorage.removeItem('lastSearchInputId');
-            }
-        });
-
-        // Also watch for dynamic content
-        const observer = new MutationObserver((mutations) => {
-            initAutoSearch();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
+            } catch (e) { /* Focus restoration is optional. */ }
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreSearchFocus, { once: true });
+        else restoreSearchFocus();
     })();
-    

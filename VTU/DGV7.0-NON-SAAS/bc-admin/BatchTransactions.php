@@ -23,8 +23,6 @@ bc_adm_head("Users Batch Transaction | " . ($get_all_super_admin_site_details["s
 .bt-pager{display:flex;align-items:center;gap:10px;margin-top:18px}
 .bt-pager .bt-page{font-weight:800;color:var(--muted);font-size:.85rem}
 </style>
-<link href="../assets-2/vendor/quill/quill.snow.css" rel="stylesheet">
-<link href="../assets-2/vendor/quill/quill.bubble.css" rel="stylesheet">
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => "BATCH TRANSACTIONS", "crumb" => "Home / Batch Transactions")); ?><!-- End Page Title -->
 

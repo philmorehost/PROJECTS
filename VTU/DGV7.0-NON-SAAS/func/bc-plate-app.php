@@ -836,6 +836,11 @@ if (!function_exists('bc_app_css')) {
         .pk-app__wrap .modal { position: fixed; inset: 0; z-index: 90; display: none;
             align-items: center; justify-content: center; padding: 20px; background: rgba(11,18,32,.5); }
         .pk-app__wrap .modal.show { display: flex; }
+        /* Receipt lives beside main, not in the scrollable history/card tree. */
+        .bc-receipt-host .modal { overflow-y: auto; overscroll-behavior: contain; }
+        .bc-receipt-host .modal-dialog { margin: auto; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .bc-receipt-host .modal-footer { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 16px; }
+
         .pk-app__wrap .modal-dialog { width: 100%; max-width: 520px; background: #fff;
             border-radius: var(--radius); box-shadow: var(--shadow); }
         .pk-app__wrap .modal-content { padding: 22px; }
@@ -1464,11 +1469,13 @@ if (!function_exists('bc_app_foot')) {
 <!-- §32 transaction receipt: history rows + post-purchase "View Receipt" call
      showTransactionDetails(ref[, isAdmin]); it fetches a scoped JSON payload
      (provider internals are staff-only) and offers PDF / image downloads. -->
+<!-- Keep the footer receipt in the shell CSS scope after main has closed. -->
+<div class="pk-app__wrap bc-receipt-host">
 <div class="modal" id="bcReceiptModal" tabindex="-1" aria-hidden="true" style="display:none;z-index:2000;">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold"><i class="bi bi-receipt me-2"></i>Transaction Receipt</h5>
+        <h5 class="modal-title fw-bold" id="bcReceiptTitle"><i class="bi bi-receipt me-2"></i>Transaction Receipt</h5>
         <button type="button" class="btn-close" data-bc-receipt-close aria-label="Close"></button>
       </div>
       <div class="modal-body" id="bcReceiptBody"><div class="text-center text-muted py-4">Loading receipt&hellip;</div></div>
@@ -1480,6 +1487,7 @@ if (!function_exists('bc_app_foot')) {
     </div>
   </div>
 </div>
+</div><!-- .bc-receipt-host -->
 <script>
 (function () {
     'use strict';
@@ -1516,20 +1524,28 @@ if (!function_exists('bc_app_foot')) {
         }
         return h + '<div style="text-align:center;color:#9ca3af;font-size:11px;margin-top:14px;">Thank you for your business.</div></div>';
     }
+    var receiptRequest = 0;
+    var receiptController = null;
+    var receiptTrigger = null;
     function openModal(el) {
-        if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getOrCreateInstance) {
-            window.bootstrap.Modal.getOrCreateInstance(el).show();
-        }
+        // This is a shell-owned overlay; do not mix Bootstrap backdrops/body locks
+        // with the shell shim. Its styles are supplied by .bc-receipt-host.
+        if (el.getAttribute('aria-hidden') !== 'false') receiptTrigger = document.activeElement;
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.setAttribute('aria-labelledby', 'bcReceiptTitle');
+        el.setAttribute('aria-hidden', 'false');
         el.classList.add('show');
         el.style.display = 'flex';
+        el.focus();
     }
     function closeModal(el) {
+        receiptRequest++;
+        if (receiptController) receiptController.abort();
         el.classList.remove('show');
         el.style.display = 'none';
-        if (window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance) {
-            var inst = window.bootstrap.Modal.getInstance(el);
-            if (inst) inst.hide();
-        }
+        el.setAttribute('aria-hidden', 'true');
+        if (receiptTrigger && receiptTrigger.isConnected) receiptTrigger.focus();
     }
     var currentRef = '';
     window.showTransactionDetails = function (ref, isAdmin) {
@@ -1539,9 +1555,13 @@ if (!function_exists('bc_app_foot')) {
         currentRef = String(ref);
         body.innerHTML = '<div class="text-center text-muted py-4">Loading receipt&hellip;</div>';
         openModal(modal);
-        fetch('transaction-details.php?ref=' + encodeURIComponent(ref), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
+        var requestId = ++receiptRequest;
+        if (receiptController) receiptController.abort();
+        receiptController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        fetch('transaction-details.php?ref=' + encodeURIComponent(ref), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: receiptController ? receiptController.signal : undefined })
+            .then(function (r) { if (!r.ok) throw new Error('Receipt request failed'); return r.json(); })
             .then(function (d) {
+                if (requestId !== receiptRequest) return;
                 if (!d || !d.ok) {
                     body.innerHTML = '<div class="alert alert-warning mb-0">Receipt unavailable for this transaction.</div>';
                     return;
@@ -1549,6 +1569,7 @@ if (!function_exists('bc_app_foot')) {
                 body.innerHTML = card(d);
             })
             .catch(function () {
+                if (requestId !== receiptRequest) return;
                 body.innerHTML = '<div class="alert alert-warning mb-0">Could not load the receipt. Please try again.</div>';
             });
     };
@@ -1557,6 +1578,15 @@ if (!function_exists('bc_app_foot')) {
         if (!modal) return;
         modal.addEventListener('click', function (e) {
             if (e.target === modal || e.target.closest('[data-bc-receipt-close]')) closeModal(modal);
+        });
+        modal.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); closeModal(modal); }
+            if (e.key === 'Tab') {
+                var buttons = modal.querySelectorAll('button:not([disabled])');
+                var first = buttons[0], last = buttons[buttons.length - 1];
+                if (e.shiftKey && (document.activeElement === first || document.activeElement === modal)) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && (document.activeElement === last || document.activeElement === modal)) { e.preventDefault(); first.focus(); }
+            }
         });
         var pdfBtn = document.getElementById('bcReceiptPdfBtn');
         var imgBtn = document.getElementById('bcReceiptImgBtn');
