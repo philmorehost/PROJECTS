@@ -19,6 +19,8 @@ on:
       - 'VTU/**/cron/process_requery_queue.php'
       - 'VTU/**/automated-cron-requery.php'
       - 'VTU/**/bc-admin/Transactions.php'
+      - 'VTU/**/bc-admin/NumberChecker.php'
+      - 'VTU/**/func/history-table.php'
       - '.github/workflows/vtu-service-checks.yml'
   pull_request:
     paths:
@@ -38,6 +40,8 @@ on:
       - 'VTU/**/cron/process_requery_queue.php'
       - 'VTU/**/automated-cron-requery.php'
       - 'VTU/**/bc-admin/Transactions.php'
+      - 'VTU/**/bc-admin/NumberChecker.php'
+      - 'VTU/**/func/history-table.php'
       - '.github/workflows/vtu-service-checks.yml'
 
 permissions:
@@ -70,6 +74,8 @@ jobs:
             php -l "VTU/DGV7.0-$ed/cron/process_requery_queue.php"
             php -l "VTU/DGV7.0-$ed/automated-cron-requery.php"
             php -l "VTU/DGV7.0-$ed/bc-admin/Transactions.php"
+            php -l "VTU/DGV7.0-$ed/bc-admin/NumberChecker.php"
+            php -l "VTU/DGV7.0-$ed/func/history-table.php"
             php -l "VTU/DGV7.0-$ed/func/bc-func.php"
             php -l "VTU/DGV7.0-$ed/web/Login.php"
           done

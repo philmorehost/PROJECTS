@@ -251,7 +251,7 @@ bc_adm_head("Number Credit Checker | " . ($get_all_super_admin_site_details["sit
                                                     <?php foreach (array_slice($attempt_rows, 0, 2) as $att): ?>
                                                         <a class="btn btn-warning btn-sm py-1 px-2 text-dark mb-1" style="font-size:11px;"
                                                            title="Check status with provider"
-                                                           href="Transactions.php?requery=<?php echo urlencode($att['reference']); ?>">
+                                                           href="Transactions.php?review_requery=<?php echo urlencode($att['reference']); ?>">
                                                             Requery <?php echo ($att['status'] == 2) ? '(Pending)' : '(Failed)'; ?>
                                                         </a>
                                                     <?php endforeach; ?>
