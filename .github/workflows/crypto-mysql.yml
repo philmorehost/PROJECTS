@@ -6,6 +6,7 @@ on:
       - 'VTU/**/func/bc-bybit.php'
       - 'VTU/tests/bybit_discovery_test.php'
       - 'VTU/tests/crypto_bybit_identity_test.php'
+      - 'VTU/tests/crypto_bybit_address_test.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-incident-wallet.php'
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
@@ -22,6 +23,7 @@ on:
       - 'VTU/**/func/bc-bybit.php'
       - 'VTU/tests/bybit_discovery_test.php'
       - 'VTU/tests/crypto_bybit_identity_test.php'
+      - 'VTU/tests/crypto_bybit_address_test.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-incident-wallet.php'
       - 'VTU/tests/vtu_wallet_mysql_cases.php'
@@ -74,6 +76,7 @@ jobs:
         run: |
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_identity_test.php
           php VTU/tests/bybit_discovery_test.php
+          php -n -d extension=tokenizer VTU/tests/crypto_bybit_address_test.php
       - name: Deposit route candidate contracts
         run: php VTU/tests/crypto_routes_test.php
       - name: Pure deposit validation and state-machine checks
