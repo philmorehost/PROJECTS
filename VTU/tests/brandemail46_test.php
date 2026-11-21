@@ -103,8 +103,8 @@ chk(strpos($otp['body'], 'Never share this code') !== false, 'OTP body carries t
 
 $shell = mailDesignTemplate('Wallet Update', 'Hello Ada, your wallet changed.', [], false);
 chk(strpos($shell, 'shop.example.com') !== false, 'shell brands itself with the site host when no DB row exists');
-chk(strpos($shell, 'display:flex') === false && strpos($shell, 'linear-gradient') !== false,
-    'shell is a modern gradient design without flex');
+chk(strpos($shell, 'display:flex') === false && strpos($shell, 'linear-gradient') === false,
+    'shell uses email-safe solid backgrounds without flex');
 chk(bc_email_shade('#287bff', 0.72) === '#1c58b8' || preg_match('/^#[0-9a-f]{6}$/', bc_email_shade('#287bff', 0.72)) === 1,
     'brand shade helper returns a valid darker hex');
 

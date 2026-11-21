@@ -80,7 +80,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 		$smtpMAIL->IsHTML(true);
         $smtpMAIL->Encoding = 'base64'; // Fix "lines too long" error
 		$smtpMAIL->Subject = $subject;
-		$smtpMAIL->Body = $message;
+		$smtpMAIL->Body = bc_email_embed_logo($smtpMAIL, $message);
 		$smtpMAIL->AltBody = strip_tags($message);
 		$sent = $smtpMAIL->send();
 	} catch (Exception $e) {
@@ -146,7 +146,7 @@ function sendEmailWithAttachments($to, $subject, $message, $from_name, $from_ema
         $smtpMAIL->IsHTML(true);
         $smtpMAIL->Encoding = 'base64'; // Fix "lines too long" error
         $smtpMAIL->Subject = $subject;
-        $smtpMAIL->Body = $message;
+        $smtpMAIL->Body = bc_email_embed_logo($smtpMAIL, $message);
         $smtpMAIL->AltBody = strip_tags($message);
 
         foreach ($attachments as $file) {
