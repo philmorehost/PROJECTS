@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/bc-crypto-poll.php';
 require_once __DIR__.'/bc-crypto-poll-health.php';
+require_once __DIR__.'/bc-crypto-poll-retry.php';
 /** Caller authenticates with POST/CSRF/fresh platform PIN/TOTP. No plaintext record decrypt. */
 function bc_crypto_poll_review($authority,$identity,$env,$revision) {
     global $connection_server;$actor=bc_crypto_custody_actor($authority);
@@ -31,13 +32,14 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
         $streams_truncated=count($streams)>20;$streams=array_slice($streams,0,20);
         foreach($streams as &$stream) {
             // Bounded recent history only. Counts are not lifetime totals or successful provider requests.
-            $attempts=bc_q('SELECT action FROM sas_crypto_v2_poll_lease_events WHERE stream_id=? ORDER BY id DESC LIMIT 101 FOR UPDATE',[$stream['stream_id']]);
+            $attempts=bc_q('SELECT action,token_hash,occurred_at_epoch FROM sas_crypto_v2_poll_lease_events WHERE stream_id=? ORDER BY id DESC LIMIT 101 FOR UPDATE',[$stream['stream_id']]);
             if (!($attempts instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
-            $actions=[];while($a=mysqli_fetch_assoc($attempts))$actions[]=$a['action'];
+            $events=[];$actions=[];while($a=mysqli_fetch_assoc($attempts)){$actions[]=$a['action'];$events[]=['action'=>$a['action'],'token'=>$a['token_hash'],'at'=>(int)$a['occurred_at_epoch']];}
             $stream['attempt_history_truncated']=count($actions)>100;$actions=array_slice($actions,0,100);
             $stream['recent_lease_event_count']=count($actions);
             $stream['failed_attempts']=count(array_filter($actions,static function($a){return $a==='failed';}));
             $stream['health']=bc_crypto_poll_health($stream,$now);
+            $stream['retry_policy']=bc_crypto_poll_retry_decision($events,$now);
         }unset($stream);
         $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
         $json=bc_crypto_gov_json($report);
