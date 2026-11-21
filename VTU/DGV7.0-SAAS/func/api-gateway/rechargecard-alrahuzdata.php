@@ -42,8 +42,8 @@ if (mysqli_num_rows($check_authorized_user_before_recharge) >= 1) {
    "name_on_card" => $site_name
   ));
   curl_setopt($rechargecardPurchase, CURLOPT_POSTFIELDS, $pay_loads);
-  curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYHOST, false);
-  curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYPEER, false);
+  curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYHOST, 2);
+  curl_setopt($rechargecardPurchase, CURLOPT_SSL_VERIFYPEER, true);
 
   $GetrechargecardJSON = curl_exec($rechargecardPurchase);
   $rechargecardJSONObj = json_decode($GetrechargecardJSON, true);

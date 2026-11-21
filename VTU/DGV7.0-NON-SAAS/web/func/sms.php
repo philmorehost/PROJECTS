@@ -76,6 +76,11 @@ if (in_array($purchase_method, $purchase_method_array)) {
                 if (mysqli_num_rows($get_api_lists) > 0) {
                     if (mysqli_num_rows($get_api_enabled_lists) == 1) {
                         while ($api_detail = mysqli_fetch_array($get_api_lists)) {
+                            // Never route retired providers to the generic localserver fallback.
+                            if (bc_retired_vtu_provider($api_detail['api_base_url'] ?? '')) {
+                                $json_response_encode = json_encode(array('status'=>'failed', 'desc'=>'This service provider has been removed. Contact support to select another provider.'));
+                                return;
+                            }
                             if (!empty($api_detail["api_key"])) {
                                 if ($api_detail["status"] == 1) {
                                     $account_level_table_name_arrays = array(1 => "sas_smart_parameter_values", 2 => "sas_agent_parameter_values", 3 => "sas_api_parameter_values");

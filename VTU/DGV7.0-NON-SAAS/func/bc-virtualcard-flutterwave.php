@@ -26,6 +26,8 @@ require_once(__DIR__ . '/bc-fintech-providers.php');
 if (!function_exists('bc_vc_flw_call')) {
     /** One Flutterwave card call through the registry seam. Never guesses a URL. */
     function bc_vc_flw_call($vendor_id, $endpoint, $method, $payload = null) {
+        return ['status'=>'error','reason'=>'security_review_required','message'=>'Virtual-card operations are paused pending verified reservation and settlement support.'];
+
         if (!function_exists('bc_fintech_provider_request')) {
             return ['status' => 'error', 'message' => 'Virtual card service is not available on this installation.'];
         }
@@ -56,10 +58,10 @@ if (!function_exists('issueVirtualCardFlutterwave')) {
         $data = is_array($res['data']) ? $res['data'] : [];
         $card_id = (string)($data['id'] ?? $data['card_id'] ?? '');
         $reference = 'FLWVC-' . date('ymdHis') . '-' . $vid;
-        $masked = (string)($data['masked_pan'] ?? $data['card_pan'] ?? '**** **** **** ****');
+        $masked = (string)($data['masked_pan'] ?? '**** **** **** ****');
         $exp_m = (string)($data['expiry_month'] ?? '');
         $exp_y = (string)($data['expiry_year'] ?? '');
-        $cvv = (string)($data['cvv'] ?? '');
+        $cvv = ''; // Never persist sensitive authentication data.
 
         $uname_e = mysqli_real_escape_string($connection_server, (string)$username);
         $ref_e = mysqli_real_escape_string($connection_server, $reference);

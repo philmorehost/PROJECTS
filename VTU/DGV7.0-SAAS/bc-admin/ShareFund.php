@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
         
     // §30: crediting/debiting a user wallet takes the full step-up now —

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/bc-secure-session.php';
+
 	if(isset($_SERVER["HTTPS"]) && ($_SERVER["HTTPS"] == "on")){
 		$web_http_host = "https://".$_SERVER["HTTP_HOST"];
 	}else{
@@ -7,7 +9,7 @@
 
 	// Standardize session_start across the platform
 	if (session_status() === PHP_SESSION_NONE) {
-		session_start();
+		bc_secure_session_start();
 	}
 
 	include_once(__DIR__ . "/bc-connect.php");

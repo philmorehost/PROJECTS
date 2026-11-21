@@ -1,5 +1,10 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
+        http_response_code(503); exit('Legacy approval changes are paused pending atomic reconciliation. No credit or refund was posted.');
+    }
 
     // §29: full step-up is mandatory for every money-crediting action.
     function sec29_require_stepup($admin, $ctx) {

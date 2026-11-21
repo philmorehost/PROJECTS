@@ -1,5 +1,12 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-admin-config.php");
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
+    http_response_code(503);
+    exit('Withdrawal mutations are paused. Reconcile existing provider transfers before any approval, rejection or refund.');
+}
+
 
 // Handle Actions
 if (isset($_POST['withdrawal_action']) || isset($_POST['send_stepup_code'])) {
@@ -225,7 +232,7 @@ if (isset($_POST['withdrawal_action']) || isset($_POST['send_stepup_code'])) {
     if (!empty($withdrawal_claimed)) {
         $cur = function_exists('bc_q_row') ? bc_q_row("SELECT status FROM sas_transactions WHERE reference=? AND vendor_id=? LIMIT 1", array((string)($_POST['reference'] ?? ''), $admin_vid)) : null;
         if ($cur && (int)$cur['status'] === 6) {
-            mysqli_query($connection_server, "UPDATE sas_transactions SET status=2 WHERE reference='$ref' AND vendor_id='$admin_vid' AND status=6");
+            // Processing/unknown remains held for provider reconciliation; never auto-release.
         }
     }
     header("Location: Withdrawals.php");

@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 header('Content-Type: application/json');
-session_start();
+bc_secure_session_start();
 include("../func/bc-admin-config.php");
 
 if (!isset($_SESSION["admin_session"])) {
@@ -9,6 +11,7 @@ if (!isset($_SESSION["admin_session"])) {
 }
 
 $gateway = $_GET['gateway'] ?? '';
+if (bc_retired_vtu_provider($gateway)) { http_response_code(410); echo json_encode(['success'=>false,'message'=>'Provider removed']); exit; }
 $network = $_GET['network'] ?? '';
 $type = $_GET['type'] ?? ''; // dd, sme, shared, cg
 
@@ -328,8 +331,8 @@ try {
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
             curl_setopt($ch, CURLOPT_TIMEOUT, 45);
             $response = curl_exec($ch);
@@ -415,8 +418,8 @@ try {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPGET        => true,
             CURLOPT_TIMEOUT        => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_HTTPHEADER     => ["Authorization: Bearer $api_key", "Content-Type: application/json"],
         ]);
         $response = curl_exec($ch);
@@ -578,7 +581,7 @@ try {
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
             curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
             curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer $api_key", "Content-Type: application/json"]);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             $response = curl_exec($ch);
             $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

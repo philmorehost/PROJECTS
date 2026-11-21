@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // execute_update.php
 
 // Buffer ALL output immediately — bc-admin-config.php is a full page router
@@ -7,7 +9,7 @@ ob_start();
 ini_set('display_errors', 0);
 error_reporting(0);
 
-session_start();
+bc_secure_session_start();
 if (!isset($_SESSION["admin_session"])) {
     ob_end_clean();
     http_response_code(403);

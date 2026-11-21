@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
     
 	if(isset($_SESSION["spadmin_vendor_auth"]) && ($_SESSION["spadmin_vendor_auth"] == true)){
@@ -27,7 +29,8 @@
 						$get_active_cart_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_api_marketplace_listings WHERE id='".$item_id."' && $status_statement"));
 						
 						if(isset($get_active_cart_details["api_type"])){
-							$api_website = str_replace(["//www.","/","http:","https:"],"",$get_active_cart_details["api_website"]);
+							if (bc_retired_vtu_provider($get_active_cart_details['api_website'] ?? '')) continue;
+                            $api_website = str_replace(["//www.","/","http:","https:"],"",$get_active_cart_details["api_website"]);
 							$api_type = strtoupper(str_replace(["_","-"]," ",$get_active_cart_details["api_type"]));
 							$product_description = $get_active_cart_details["description"];
 							$product_api_price = toDecimal($get_active_cart_details["price"], 2);
@@ -181,7 +184,8 @@ bc_adm_head("Checkout Cart | " . ($get_all_super_admin_site_details["site_title"
                                         $get_active_cart_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_api_marketplace_listings WHERE id='".$item_id."' && $status_statement"));
 
                                         if(isset($get_active_cart_details["api_type"])){
-                                            $api_website = str_replace(["//www.","/","http:","https:"],"",$get_active_cart_details["api_website"]);
+                                            if (bc_retired_vtu_provider($get_active_cart_details['api_website'] ?? '')) continue;
+                            $api_website = str_replace(["//www.","/","http:","https:"],"",$get_active_cart_details["api_website"]);
                                             $api_type = strtoupper(str_replace(["_","-"]," ",$get_active_cart_details["api_type"]));
                                             $product_description = checkTextEmpty($get_active_cart_details["description"]);
                                             $product_api_price = number_format($get_active_cart_details["price"], 2);

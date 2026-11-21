@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-admin-config.php");
 // AI KYC Compliance Engine: show AI analysis results in the review console
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
@@ -65,7 +67,7 @@ if (isset($_POST['kyc_decision'])) {
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         $sec33_input = ((int)$decision['status'] === 2)
             ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
-            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1];
+            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         $sec33_err = function_exists('bc_stepup_admin_verify')
             ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'kyc_decision')
             : 'Verification is unavailable.';

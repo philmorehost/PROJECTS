@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
 
     // PHP 8.3 Stability: Fallback for undefined keys
@@ -70,7 +72,7 @@
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         $sec33_pin_only = ($sec33_mode === 'status' && $sec33_status === '2') || ($sec33_mode === 'api' && $sec33_status === '2');
         $sec33_input = $sec33_pin_only
-            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'pin_check_only' => 1]
+            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')]
             : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
         $sec33_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'user_account_action')

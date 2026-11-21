@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+
 /**
  * web/api/points-history.php
  *
@@ -12,7 +14,7 @@
  *
  * GET -> { status, data: { points_balance, entries: [ { date, log_type, label, points, direction } ] } }
  */
-session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 

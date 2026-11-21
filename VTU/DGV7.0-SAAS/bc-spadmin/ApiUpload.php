@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     
     $api_type_array = array(1 => "api", 2 => "requery", 3 => "verify");

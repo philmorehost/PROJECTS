@@ -1,0 +1,571 @@
+{
+  "base_commit": "7454158556ca9304a620af4656a8ad6ae79bb1a5",
+  "method": "Offline source inventory and targeted manual review. Counts are not vulnerability counts. No live exploitation.",
+  "editions": {
+    "DGV7.0-SAAS": {
+      "php_files_inventoried": 788,
+      "tls_verification_disabled_files": [
+        "DGV7.0-SAAS/api.php",
+        "DGV7.0-SAAS/mtn.php",
+        "DGV7.0-SAAS/test_hdkdata.php",
+        "DGV7.0-SAAS/users-beewave.php",
+        "DGV7.0-SAAS/users-monnify.php",
+        "DGV7.0-SAAS/users-paystack.php",
+        "DGV7.0-SAAS/users-payvessel-webhook.php",
+        "DGV7.0-SAAS/users-payvessel.php",
+        "DGV7.0-SAAS/vendors-flutterwave.php",
+        "DGV7.0-SAAS/vendors-monnify.php",
+        "DGV7.0-SAAS/vendors-paystack.php",
+        "DGV7.0-SAAS/vendors-payvessel.php",
+        "DGV7.0-SAAS/bc-admin/SenderIDRequests.php",
+        "DGV7.0-SAAS/bc-admin/ajax-fetch-plans.php",
+        "DGV7.0-SAAS/bc-spadmin/AIManagement.php",
+        "DGV7.0-SAAS/bc-spadmin/AccountSettings.php",
+        "DGV7.0-SAAS/bc-spadmin/ajax_download_update.php",
+        "DGV7.0-SAAS/bc-spadmin/cron_update.php",
+        "DGV7.0-SAAS/cron/sync_sender_ids.php",
+        "DGV7.0-SAAS/func/bc-ai-engine.php",
+        "DGV7.0-SAAS/func/bc-func.php",
+        "DGV7.0-SAAS/func/bc-levelup.php",
+        "DGV7.0-SAAS/func/cpanel-func.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-paygold-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/airtime-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/betting-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/betting-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cable-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-abumpay-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-benzoni-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-bilalsadasub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-datastationapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-grecians-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-legitdataway-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-rpidatang-com.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/cg-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/datacard-bilalsadasub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/datacard-legitdataway-com.php",
+        "DGV7.0-SAAS/func/api-gateway/datacard-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-benzoni-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-grecians-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/dd-data-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/electric-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/electric-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/electric-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/electric-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/electric-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/exam-abumpay-com.php",
+        "DGV7.0-SAAS/func/api-gateway/exam-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/exam-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/exam-naijaresultpins-com.php",
+        "DGV7.0-SAAS/func/api-gateway/rechargecard-alrahuzdata.php",
+        "DGV7.0-SAAS/func/api-gateway/rechargecard-bilalsadasub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/rechargecard-legitdataway-com.php",
+        "DGV7.0-SAAS/func/api-gateway/rechargecard-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-datastationapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/shared-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-abumpay-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-benzoni-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-bilalsadasub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-datastationapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-grecians-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-legitdataway-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-rpidatang-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/sme-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-account-philmoresms-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-app-philmoresms-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-kudisms-net.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-philmoresms-com.php",
+        "DGV7.0-SAAS/func/api-gateway/sms-termii-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-paygold-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/airtime-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cable-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-datastationapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-rpidatang-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/cg-data-subvtu-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/datacard-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-benzoni-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-gresians-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/dd-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/electric-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/exam-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/exam-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/rechargecard-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/shared-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/shared-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/shared-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/shared-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/shared-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-benzoni-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-datastationapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-gladtidingsapihub-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-grecians-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-hdkdata-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-husmodataapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-kvdata-net.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-rpidatang-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sme-data-subvtu-com.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sms-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/requery/sms-philmoresms-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/betting-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/betting-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-mobileone-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/cable-vtpass-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/electric-clubkonnect-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/electric-localserver.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/electric-smartrecharge-ng.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/electric-smartrechargeapi-com.php",
+        "DGV7.0-SAAS/func/api-gateway/verify/electric-vtpass-com.php",
+        "DGV7.0-SAAS/scratch/test_license.php",
+        "DGV7.0-SAAS/web/SubmitSenderID.php",
+        "DGV7.0-SAAS/web/api/monnify-webhook.php",
+        "DGV7.0-SAAS/web/api/paystack-webhook.php"
+      ],
+      "evidence": {
+        "stepup_flags": {
+          "file": "DGV7.0-SAAS/func/bc-stepup.php",
+          "lines": [
+            398,
+            437,
+            476
+          ]
+        },
+        "gateway_sql": {
+          "file": "DGV7.0-SAAS/web/api/verify-funding.php",
+          "lines": [
+            66
+          ]
+        },
+        "giftcard_sql": {
+          "file": "DGV7.0-SAAS/bc-admin/GiftCardSetup.php",
+          "lines": [
+            124
+          ]
+        },
+        "untrusted_checkout": {
+          "file": "DGV7.0-SAAS/web/finance-ajax.php",
+          "lines": [
+            19
+          ]
+        },
+        "fake_liquidation": {
+          "file": "DGV7.0-SAAS/web/virtual-card-ajax.php",
+          "lines": [
+            112
+          ]
+        },
+        "wrong_fund_arguments": {
+          "file": "DGV7.0-SAAS/web/virtual-card-ajax.php",
+          "lines": [
+            87
+          ]
+        },
+        "fund_signature": {
+          "file": "DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php",
+          "lines": [
+            82
+          ]
+        },
+        "reject_refund": {
+          "file": "DGV7.0-SAAS/bc-admin/Withdrawals.php",
+          "lines": [
+            190
+          ]
+        },
+        "payout_reset": {
+          "file": "DGV7.0-SAAS/bc-admin/Withdrawals.php",
+          "lines": [
+            228
+          ]
+        },
+        "global_update": {
+          "file": "DGV7.0-SAAS/func/bc-func.php",
+          "lines": [
+            1648
+          ]
+        },
+        "zero_row_debit": {
+          "file": "DGV7.0-SAAS/func/bc-func.php",
+          "lines": [
+            1082,
+            1184,
+            1234
+          ]
+        },
+        "get_debit": {
+          "file": "DGV7.0-SAAS/bc-admin/Transactions.php",
+          "lines": [
+            314,
+            315
+          ]
+        },
+        "plaintext_cvv": {
+          "file": "DGV7.0-SAAS/func/bc-virtualcard-flutterwave.php",
+          "lines": [
+            62
+          ]
+        },
+        "public_provider_test": {
+          "file": "DGV7.0-SAAS/test_hdkdata.php",
+          "lines": [
+            40
+          ]
+        },
+        "csrf_gap": {
+          "file": "DGV7.0-SAAS/bc-admin/GiftCardSetup.php",
+          "lines": [
+            8,
+            62
+          ]
+        }
+      }
+    },
+    "DGV7.0-NON-SAAS": {
+      "php_files_inventoried": 679,
+      "tls_verification_disabled_files": [
+        "DGV7.0-NON-SAAS/api.php",
+        "DGV7.0-NON-SAAS/install.php",
+        "DGV7.0-NON-SAAS/mtn.php",
+        "DGV7.0-NON-SAAS/users-beewave.php",
+        "DGV7.0-NON-SAAS/users-monnify.php",
+        "DGV7.0-NON-SAAS/users-paystack.php",
+        "DGV7.0-NON-SAAS/users-payvessel-webhook.php",
+        "DGV7.0-NON-SAAS/users-payvessel.php",
+        "DGV7.0-NON-SAAS/bc-admin/SenderIDRequests.php",
+        "DGV7.0-NON-SAAS/bc-admin/ajax-fetch-plans.php",
+        "DGV7.0-NON-SAAS/bc-admin/ajax_download_update.php",
+        "DGV7.0-NON-SAAS/bc-admin/cron_update.php",
+        "DGV7.0-NON-SAAS/cron/sync_sender_ids.php",
+        "DGV7.0-NON-SAAS/func/bc-ai-engine.php",
+        "DGV7.0-NON-SAAS/func/bc-func.php",
+        "DGV7.0-NON-SAAS/func/bc-integrity.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-paygold-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/airtime-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/betting-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/betting-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cable-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-abumpay-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-benzoni-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-bilalsadasub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-datastationapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-grecians-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-legitdataway-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-rpidatang-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/cg-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/datacard-bilalsadasub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/datacard-legitdataway-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/datacard-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-benzoni-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-grecians-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/dd-data-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/electric-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/electric-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/electric-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/electric-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/electric-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/exam-abumpay-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/exam-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/exam-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/exam-naijaresultpins-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/rechargecard-alrahuzdata.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/rechargecard-bilalsadasub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/rechargecard-legitdataway-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/rechargecard-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-datastationapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/shared-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-abumpay-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-benzoni-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-bilalsadasub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-datastationapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-grecians-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-legitdataway-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-rpidatang-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sme-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sms-app-philmoresms-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sms-kudisms-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sms-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sms-philmoresms-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/sms-termii-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-paygold-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/airtime-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cable-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-datastationapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-rpidatang-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/cg-data-subvtu-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/datacard-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-benzoni-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-gresians-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/dd-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/electric-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/exam-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/exam-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/rechargecard-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/shared-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/shared-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/shared-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/shared-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/shared-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-benzoni-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-datastationapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-gladtidingsapihub-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-grecians-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-hdkdata-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-husmodataapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-kvdata-net.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-rpidatang-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sme-data-subvtu-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sms-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/requery/sms-philmoresms-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/betting-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/betting-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-mobileone-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/cable-vtpass-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/electric-clubkonnect-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/electric-localserver.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/electric-smartrecharge-ng.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/electric-smartrechargeapi-com.php",
+        "DGV7.0-NON-SAAS/func/api-gateway/verify/electric-vtpass-com.php",
+        "DGV7.0-NON-SAAS/web/SubmitSenderID.php",
+        "DGV7.0-NON-SAAS/web/api/monnify-webhook.php",
+        "DGV7.0-NON-SAAS/web/api/paystack-webhook.php"
+      ],
+      "evidence": {
+        "stepup_flags": {
+          "file": "DGV7.0-NON-SAAS/func/bc-stepup.php",
+          "lines": [
+            398,
+            437,
+            476
+          ]
+        },
+        "gateway_sql": {
+          "file": "DGV7.0-NON-SAAS/web/api/verify-funding.php",
+          "lines": [
+            39
+          ]
+        },
+        "giftcard_sql": {
+          "file": "DGV7.0-NON-SAAS/bc-admin/GiftCardSetup.php",
+          "lines": [
+            124
+          ]
+        },
+        "untrusted_checkout": {
+          "file": "DGV7.0-NON-SAAS/web/finance-ajax.php",
+          "lines": [
+            19
+          ]
+        },
+        "fake_liquidation": {
+          "file": "DGV7.0-NON-SAAS/web/virtual-card-ajax.php",
+          "lines": [
+            112
+          ]
+        },
+        "wrong_fund_arguments": {
+          "file": "DGV7.0-NON-SAAS/web/virtual-card-ajax.php",
+          "lines": [
+            87
+          ]
+        },
+        "fund_signature": {
+          "file": "DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php",
+          "lines": [
+            82
+          ]
+        },
+        "reject_refund": {
+          "file": "DGV7.0-NON-SAAS/bc-admin/Withdrawals.php",
+          "lines": [
+            186
+          ]
+        },
+        "payout_reset": {
+          "file": "DGV7.0-NON-SAAS/bc-admin/Withdrawals.php",
+          "lines": [
+            224
+          ]
+        },
+        "global_update": {
+          "file": "DGV7.0-NON-SAAS/func/bc-func.php",
+          "lines": [
+            1208
+          ]
+        },
+        "zero_row_debit": {
+          "file": "DGV7.0-NON-SAAS/func/bc-func.php",
+          "lines": []
+        },
+        "get_debit": {
+          "file": "DGV7.0-NON-SAAS/bc-admin/Transactions.php",
+          "lines": []
+        },
+        "plaintext_cvv": {
+          "file": "DGV7.0-NON-SAAS/func/bc-virtualcard-flutterwave.php",
+          "lines": [
+            62
+          ]
+        },
+        "csrf_gap": {
+          "file": "DGV7.0-NON-SAAS/bc-admin/GiftCardSetup.php",
+          "lines": [
+            8,
+            62
+          ]
+        }
+      }
+    }
+  },
+  "mobile": {
+    ".xml": 370,
+    ".kt": 168,
+    ".swift": 65
+  }
+}

@@ -111,11 +111,16 @@ function fake_mysqli_affected_rows($db) { return $GLOBALS['db']['affected']; }
 function fake_mysqli_insert_id($db) { return $GLOBALS['db']['insert_id']; }
 function fake_mysqli_errno($db) { return $GLOBALS['db']['errno']; }
 function fake_mysqli_error($db) { return $GLOBALS['db']['error']; }
-function fake_mysqli_begin_transaction($db) { $GLOBALS['db']['errno'] = 0; $GLOBALS['db']['error'] = ''; return true; }
+function fake_mysqli_begin_transaction($db) { $GLOBALS['claim_snapshot'] = $GLOBALS['db']['settlement_claims'] ?? []; $GLOBALS['db']['errno'] = 0; $GLOBALS['db']['error'] = ''; return true; }
 function fake_mysqli_commit($db) { return true; }
-function fake_mysqli_rollback($db) { return true; }
+function fake_mysqli_rollback($db) { $GLOBALS['db']['settlement_claims']=$GLOBALS['claim_snapshot'] ?? []; return true; }
 
 function fake_mysqli_query($db, $sql) { return fake_result(fake_mysqli_query_raw($db, $sql)); }
+
+function bc_q_row($sql, $params=array()) {
+    if (strpos($sql, 'FROM sas_secure_payment_intents') !== false) return $GLOBALS['db']['secure_intents'][$params[0].':'.$params[1]] ?? null;
+    throw new RuntimeException('Unexpected prepared lookup in fixture: '.$sql);
+}
 
 function fake_mysqli_query_raw($db, $sql) {
     $GLOBALS['db']['affected'] = 0;
@@ -124,6 +129,14 @@ function fake_mysqli_query_raw($db, $sql) {
     // would have to be mirrored in a regex.
     $sql = preg_replace('/\s+/', ' ', $sql);
 
+    // Canonical provider-reference claims, separate from delivery-event claims.
+    if (preg_match("/^INSERT INTO sas_provider_settlement_claims\\(settlement_key,payload_hash\\) VALUES\\('([a-f0-9]+)','([a-f0-9]+)'\\)$/", $sql, $m)) {
+        if (isset($GLOBALS['db']['settlement_claims'][$m[1]])) return false;
+        $GLOBALS['db']['settlement_claims'][$m[1]]=$m[2]; return true;
+    }
+    if (preg_match("/^SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='([a-f0-9]+)' LIMIT 1$/", $sql, $m)) {
+        return isset($GLOBALS['db']['settlement_claims'][$m[1]]) ? [['payload_hash'=>$GLOBALS['db']['settlement_claims'][$m[1]]]] : [];
+    }
     // schema: SHOW COLUMNS FROM `t` LIKE 'c'
     if (preg_match('/^SHOW COLUMNS FROM `([a-z0-9_]+)` LIKE \'([a-z0-9_]+)\'$/i', $sql, $m)) {
         return empty($GLOBALS['db']['columns'][$m[1]][$m[2]]) ? [] : [['Field' => $m[2]]];
@@ -1975,6 +1988,7 @@ gfalse('a non-number is refused', bc_fintech_ledger_valid_amount('abc'));
 
 $GLOBALS['db']['users'][30] = ['id' => 30, 'vendor_id' => 7, 'username' => 'payer', 'status' => 1, 'balance' => 100.0, 'email' => 'payer@example.com'];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['crypto_wallets'] = [];
 
@@ -2053,6 +2067,7 @@ gtrue('header lookup is case-insensitive',
 // ── 23. webhook idempotency and the full delivery pipeline ─────────────────
 $GLOBALS['db']['users'][30] = ['id' => 30, 'vendor_id' => 7, 'username' => 'payer', 'status' => 1, 'balance' => 100.0, 'email' => 'payer@example.com'];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['crypto_wallets'] = [];
@@ -2090,6 +2105,7 @@ $GLOBALS['bc_fintech_http_responses'] = [
     ],
 ];
 
+$GLOBALS['db']['secure_intents'] = ['7:FLW-REF-1'=>['username'=>'payer','provider'=>'flutterwave','currency'=>'NGN','amount'=>5000]];
 $first = bc_flw_handle_webhook(7, $flw_payload, ['verif-hash' => 'verifhash']);
 gtrue('a verified delivery is credited', $first['ok']);
 gcheck('credit reason', $first['reason'], 'credited');
@@ -2098,6 +2114,26 @@ gcheck('the event is recorded as processed', $GLOBALS['db']['webhook_events']['f
 gcheck('one audit row for the credit', count($GLOBALS['db']['ledger']), 1);
 gcheck('the audit row records the fee context', $GLOBALS['db']['ledger'][1]['context']['fee'], 50);
 gcheck('the delivery used the provider verify endpoint', $GLOBALS['bc_fintech_http_calls'][0]['url'], 'https://api.flutterwave.com/v3/transactions/9001/verify');
+
+// A different delivery ID for the same provider payment must also be a no-op.
+$GLOBALS['bc_fintech_http_responses']['/v3/transactions/9009/verify'] = [
+ 'ok'=>true,'status'=>200,'body'=>'{}','error'=>'',
+ 'json'=>['status'=>'success','data'=>['id'=>9009,'tx_ref'=>'FLW-REF-1','amount'=>5000,'currency'=>'NGN','status'=>'successful','app_fee'=>50]],
+];
+$relabelled = bc_flw_handle_webhook(7,json_encode(['event'=>'charge.completed','data'=>['id'=>9009,'tx_ref'=>'FLW-REF-1']]),['verif-hash'=>'verifhash']);
+gtrue('same payment with different delivery ID is acknowledged', $relabelled['ok']);
+gcheck('different delivery ID does not duplicate settlement', $GLOBALS['db']['users'][30]['balance'],5050.0);
+gcheck('different delivery ID writes no additional ledger', count($GLOBALS['db']['ledger']),1);
+foreach (['amount'=>['amount'=>5001,'currency'=>'NGN'],'currency'=>['amount'=>5000,'currency'=>'USD']] as $bad_field=>$bad_values) {
+ $bad_id=$bad_field==='amount'?9010:9011;
+ $GLOBALS['bc_fintech_http_responses']['/v3/transactions/'.$bad_id.'/verify']=[
+  'ok'=>true,'status'=>200,'body'=>'{}','error'=>'',
+  'json'=>['status'=>'success','data'=>array_merge(['id'=>$bad_id,'tx_ref'=>'FLW-REF-1','status'=>'successful','app_fee'=>0],$bad_values)],
+ ];
+ $mismatch=bc_flw_handle_webhook(7,json_encode(['event'=>'charge.completed','data'=>['id'=>$bad_id,'tx_ref'=>'FLW-REF-1']]),['verif-hash'=>'verifhash']);
+ gfalse('server intent rejects mismatching '.$bad_field,$mismatch['ok']);
+ gcheck('mismatching '.$bad_field.' changes no balance',$GLOBALS['db']['users'][30]['balance'],5050.0);
+}
 
 // The same event again: skipped, never credited twice.
 $before_balance = $GLOBALS['db']['users'][30]['balance'];
@@ -2111,11 +2147,13 @@ gcheck('a retry writes no audit row', count($GLOBALS['db']['ledger']), $before_l
 // A bad signature must produce NO write at all.
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['users'][30]['balance'] = 100.0;
 $bad_sig_payload = json_encode(['event' => 'charge.completed', 'data' => [
     'id' => '9002', 'tx_ref' => 'FLW-REF-1', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful',
 ]]);
+$calls_before_bad_signature = count($GLOBALS['bc_fintech_http_calls']);
 $bad_sig = bc_flw_handle_webhook(7, $bad_sig_payload, ['verif-hash' => 'forged']);
 gfalse('a bad signature is refused', $bad_sig['ok']);
 gcheck('a bad signature is acknowledged fast with 200', $bad_sig['status'], 200);
@@ -2123,7 +2161,7 @@ gcheck('a bad signature is a mismatch', $bad_sig['reason'], 'signature_mismatch'
 gcheck('a bad signature writes no webhook event', count($GLOBALS['db']['webhook_events']), 0);
 gcheck('a bad signature writes no ledger row', count($GLOBALS['db']['ledger']), 0);
 gcheck('a bad signature credits nothing', $GLOBALS['db']['users'][30]['balance'], 100.0);
-gcheck('a bad signature never reaches the provider', count($GLOBALS['bc_fintech_http_calls']), 1);
+gcheck('a bad signature never reaches the provider', count($GLOBALS['bc_fintech_http_calls']), $calls_before_bad_signature);
 
 // A transaction the provider does not confirm is not credited, and the claim is
 // released so a later, genuine retry can proceed.
@@ -2156,7 +2194,7 @@ $unknown_ref = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.complete
     'id' => '9004', 'tx_ref' => 'FLW-REF-X', 'amount' => 5000, 'currency' => 'NGN', 'status' => 'successful',
 ]]), ['verif-hash' => 'verifhash']);
 gfalse('an unknown reference is not credited', $unknown_ref['ok']);
-gcheck('unknown reference reason', $unknown_ref['reason'], 'unknown_reference');
+gcheck('unknown reference reason', $unknown_ref['reason'], 'payment_intent_mismatch');
 
 // A verified transaction paired with another reference is refused (users-flutterwave.php:59 rule).
 $GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
@@ -2176,6 +2214,7 @@ gcheck('reference mismatch reason', $mismatch['reason'], 'reference_mismatch');
 // Klasha: unconfigured field mapping refuses before any write.
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $klasha_unconfigured = bc_klasha_handle_webhook(7, json_encode(['data' => ['id' => '1']]), ['x-klasha-signature' => 's']);
 gfalse('an unmapped klasha payload is refused', $klasha_unconfigured['ok']);
 gcheck('klasha refusal is the signature scheme', $klasha_unconfigured['reason'], 'signature_scheme_not_configured');
@@ -2213,6 +2252,7 @@ $klasha_payload = json_encode(['event' => 'collection.completed', 'data' => [
     'id' => 'KL-9001', 'tx_ref' => 'KL-REF-9', 'amount' => 10, 'currency' => 'USDC',
     'status' => 'SUCCESSFUL', 'customer' => ['email' => 'payer@example.com'],
 ]]);
+$GLOBALS['db']['secure_intents']['7:KL-REF-9']=['username'=>'payer','provider'=>'klasha','currency'=>'USDC','amount'=>10];
 $klasha_good = bc_klasha_handle_webhook(7, $klasha_payload, ['x-klasha-signature' => 'kl_verify']);
 gtrue('a configured klasha delivery is credited', $klasha_good['ok']);
 gcheck('klasha credit currency', $klasha_good['currency'], 'USDC');
@@ -2244,6 +2284,7 @@ $GLOBALS['bc_fintech_email_sender'] = function ($to, $subject, $body) {
 
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
 $GLOBALS['db']['users'][30]['balance'] = 100.0;
@@ -2254,6 +2295,7 @@ $GLOBALS['bc_fintech_http_responses'] = [
         'error' => '',
     ],
 ];
+$GLOBALS['db']['secure_intents'] = ['7:FLW-REF-1'=>['username'=>'payer','provider'=>'flutterwave','currency'=>'NGN','amount'=>2000]];
 $with_mail = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
     'id' => '9006', 'tx_ref' => 'FLW-REF-1', 'amount' => 2000, 'currency' => 'NGN', 'status' => 'successful',
 ]]), ['verif-hash' => 'verifhash']);
@@ -2277,6 +2319,7 @@ $GLOBALS['sent_mail'] = [];
 $GLOBALS['bc_fintech_email_sender'] = function ($to, $subject, $body) { throw new RuntimeException('mail down'); };
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['users'][30]['balance'] = 100.0;
 $GLOBALS['bc_fintech_http_responses'] = [
@@ -2304,6 +2347,7 @@ unset($GLOBALS['bc_fintech_email_sender']);
 // the shared pipeline; the only behaviour carried across is its historical FEE (%) rule.
 $GLOBALS['db']['webhook_events'] = [];
 $GLOBALS['db']['ledger'] = [];
+$GLOBALS['db']['settlement_claims'] = [];
 $GLOBALS['db']['fintech_tx'] = [];
 $GLOBALS['db']['crypto_wallets'] = [];
 $GLOBALS['db']['checkouts'] = ['7:FLW-REF-1' => 'payer'];
@@ -2324,6 +2368,7 @@ $GLOBALS['bc_fintech_http_responses'] = [
         'error' => '',
     ],
 ];
+$GLOBALS['db']['secure_intents'] = ['7:FLW-REF-1'=>['username'=>'payer','provider'=>'flutterwave','currency'=>'NGN','amount'=>1000]];
 $legacy = bc_flw_handle_webhook(7, json_encode(['event' => 'charge.completed', 'data' => [
     'id' => '9008', 'tx_ref' => 'FLW-REF-1', 'amount' => 1000, 'currency' => 'NGN', 'status' => 'successful',
 ]]), ['verif-hash' => 'verifhash'], 10);
@@ -2736,7 +2781,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker present', $version[1] ?? null, '2026.11.19-1');
+gcheck('schema version marker present', $version[1] ?? null, '2026.11.18-security-2');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+
 /**
  * web/api/coin-conversion.php
  * App/API endpoint for the VTU Coins -> Wallet conversion feature.
@@ -12,7 +14,7 @@
  * The "coins reached threshold" guide email and the "request approved/declined"
  * emails are sent server-side automatically, so apps benefit with no extra work.
  */
-session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 require_once __DIR__."/../../func/bc-referral-coins.php";

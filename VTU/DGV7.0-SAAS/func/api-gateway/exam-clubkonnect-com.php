@@ -29,8 +29,8 @@
 	curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
  curl_setopt($curl_request, CURLOPT_TIMEOUT, 30);
  curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 10);
-	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, false);
-	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, false);
+	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
+	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
 	$abumpay_reference = substr(str_shuffle("12345678901234567890"), 0, 15);
 	$curl_postfields_data = json_encode(array("token"=>$api_detail["api_key"],"service_id"=>$web_exam_size_array[$epp],"request_id"=>$abumpay_reference),true);
 	curl_setopt($curl_request, CURLOPT_POSTFIELDS, $curl_postfields_data);

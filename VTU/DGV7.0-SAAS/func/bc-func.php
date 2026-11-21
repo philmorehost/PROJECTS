@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . "/bc-incident-wallet.php";
+
 /**
  * AI Edition: Smart Re-query Failure Explanation
  */
@@ -949,571 +951,22 @@ function bc_charge_failure($reason, $context = array())
 
 function chargeUser($type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-	global $connection_server;
-	unset($GLOBALS['bc_charge_failure_reason']);
-
-	$type = mysqli_real_escape_string($connection_server, trim(strip_tags($type)));
-	$product_unique_id = mysqli_real_escape_string($connection_server, trim(strip_tags($product_unique_id)));
-	$type_alternative = mysqli_real_escape_string($connection_server, trim(strip_tags($type_alternative)));
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$api_reference = mysqli_real_escape_string($connection_server, trim(strip_tags($api_reference)));
-	$amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($amount))));
-	$discounted_amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($discounted_amount))));
-	$description = mysqli_real_escape_string($connection_server, trim(strip_tags($description)));
-	$mode = mysqli_real_escape_string($connection_server, trim(strip_tags($mode)));
-	$api_website = mysqli_real_escape_string($connection_server, trim(strip_tags($api_website)));
-	$status = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($status))));
-
-	$transactionTypeArray = array("credit", "debit");
-	$statusArray = array(1, 2, 3);
-
-	// Robust vendor lookup
-	$v_id = resolveVendorID();
-    if($v_id <= 0) return bc_charge_failure('Vendor could not be resolved', array('reference' => $reference));
-
-	$get_vendor_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . $v_id . "' LIMIT 1"));
-
-    // Robust user lookup
-	// Prefer the authenticated user loaded for this request.  A stale session
-	// username on the website must never make the wallet lookup target another
-	// user or silently fail while the API request succeeds.
-	$u_name = isset($GLOBALS["get_logged_user_details"]["username"]) ? $GLOBALS["get_logged_user_details"]["username"] : (isset($_SESSION["user_session"]) ? $_SESSION["user_session"] : "");
-	$get_logged_user_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $v_id . "' && username='" . mysqli_real_escape_string($connection_server, $u_name) . "' LIMIT 1"));
-	if (!$get_logged_user_det) return bc_charge_failure('Authenticated wallet user was not found for the resolved vendor', array('vendor_id' => $v_id, 'username' => $u_name, 'reference' => $reference));
-
-
-	if (isset($get_logged_user_det["balance"]) && is_numeric($get_logged_user_det["balance"]) && !empty($amount) && is_numeric($amount) && !empty($discounted_amount) && is_numeric($discounted_amount) && ($discounted_amount > 0) && $get_logged_user_det["status"] == 1) {
-		if (in_array($type, $transactionTypeArray) && !empty($product_unique_id) && !empty($type_alternative) && !empty($reference) && !empty($description) && is_numeric($status) && in_array($status, $statusArray)) {
-			if ($type === "debit") {
-				// ─── AI Edition: Atomic Wallet Debit (Race Condition Fix) ───────────────
-				// Use bc_atomic_debit_user() which wraps the balance read+write in a
-				// MySQL transaction with SELECT FOR UPDATE. This prevents double-spend
-				// when concurrent requests hit simultaneously.
-				// GFTAL: refuse NEW spending when the user is locked for repeated user-caused transaction
-				// failures. This returns before anything is charged or debited, so there is nothing to
-				// refund, and it never touches the credit branch. The service key is the same
-				// $type_alternative the settlement records, so a per-service lock matches the service
-				// it was actually set from.
-				$tx_guard_result = bc_tx_failure_guard_check($get_logged_user_det["vendor_id"], $get_logged_user_det["username"], $type_alternative);
-				if ($tx_guard_result !== true) {
-					$GLOBALS['bc_tx_lock_message'] = $tx_guard_result;
-					return bc_charge_failure((string)$tx_guard_result, array('vendor_id' => $v_id, 'username' => $u_name, 'reference' => $reference));
-				}
-				// Pre-check: fast balance check before acquiring the lock
-				if (($get_logged_user_det["balance"] > 0) && ($amount > 0) && ($get_logged_user_det["balance"] >= $discounted_amount)) {
-
-					// Acquire lock and debit atomically
-					$atomic_result = function_exists('bc_atomic_debit_user')
-						? bc_atomic_debit_user((int)$get_logged_user_det["vendor_id"], $get_logged_user_det["username"], (float)$discounted_amount, $reference)
-						: 'legacy'; // Fallback if security lib not loaded (shouldn't happen)
-
-					if ($atomic_result === 'insufficient_balance') {
-						return bc_charge_failure('Insufficient wallet balance after locking the account', array('username' => $u_name, 'reference' => $reference));
-					}
-					if ($atomic_result === 'failed') {
-						return bc_charge_failure('Atomic wallet debit failed; database error or concurrent wallet update', array('username' => $u_name, 'reference' => $reference));
-					}
-
-					// Atomic debit succeeded — fetch fresh balance for accurate records
-					$fresh_user_q = mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE vendor_id='" . (int)$get_logged_user_det["vendor_id"] . "' AND username='" . mysqli_real_escape_string($connection_server, $get_logged_user_det["username"]) . "' LIMIT 1");
-					$fresh_user   = $fresh_user_q ? mysqli_fetch_assoc($fresh_user_q) : null;
-					$user_balance_before_debit = $get_logged_user_det["balance"]; // Original read (for email/log)
-					$user_balance_after_debit  = $fresh_user ? (float)$fresh_user["balance"] : ($user_balance_before_debit - (float)$discounted_amount);
-
-					// Legacy fallback path (if bc_atomic_debit_user not available)
-					if ($atomic_result === 'legacy') {
-						$user_balance_after_debit = $user_balance_before_debit - (float)$discounted_amount;
-						mysqli_query($connection_server, "UPDATE sas_users SET balance = balance - " . sprintf('%.18F', (float)$discounted_amount) . " WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' && username='" . $get_logged_user_det["username"] . "' AND balance >= " . sprintf('%.18F', (float)$discounted_amount));
-							$user_balance_after_debit = (float)(mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' AND username='" . $get_logged_user_det["username"] . "' LIMIT 1"))["balance"] ?? $user_balance_after_debit);
-							$user_balance_before_debit = $user_balance_after_debit + (float)$discounted_amount;
-					}
-
-					// Insert transaction record
-					$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, api_reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status) VALUES ('" . $get_logged_user_det["vendor_id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$api_reference', '" . $get_logged_user_det["username"] . "', '$amount', '$discounted_amount', '$user_balance_before_debit', '$user_balance_after_debit', '$description', '$mode', '$api_website', '$status')");
-
-					$charge_user = true; // Debit already committed by atomic function
-					if ($insert_transaction) {
-						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
-						$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
-						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-							$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-						}
-
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
-						$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
-						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-							$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-							$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-						}
-						sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-						sendVendorEmail($get_vendor_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-						// Email End
-
-						// Referral coins are never awarded on a first purchase.
-                        // Only audited qualifying settlements unlock the reward.
-
-						return "success";
-					} else {
-						// The debit is already committed by the atomic routine.  Compensate
-						// immediately if the ledger insert fails, otherwise the customer
-						// would lose funds while receiving a charge error.
-						$compensate_q = mysqli_query($connection_server, "UPDATE sas_users SET balance = balance + " . sprintf('%.18F', (float)$discounted_amount) . " WHERE vendor_id='" . (int)$get_logged_user_det["vendor_id"] . "' AND username='" . mysqli_real_escape_string($connection_server, $get_logged_user_det["username"]) . "'");
-						if (!$compensate_q || mysqli_affected_rows($connection_server) !== 1) {
-							error_log('[BC_CHARGE_CRITICAL] Debit compensation failed after ledger insert failure for reference ' . $reference);
-						}
-						return bc_charge_failure('Wallet debit succeeded but transaction record could not be created', array('username' => $u_name, 'reference' => $reference, 'db_error' => mysqli_error($connection_server)));
-					}
-				} else {
-					return bc_charge_failure('Insufficient balance or invalid charge amount', array('username' => $u_name, 'reference' => $reference, 'amount' => $amount, 'discounted_amount' => $discounted_amount));
-				}
-			}
-
-			if ($type === "credit") {
-				$user_balance_before_credit = $get_logged_user_det["balance"];
-				$user_balance_after_credit = ($user_balance_before_credit + $discounted_amount);
-
-				$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, api_reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status) VALUES ('" . $get_logged_user_det["vendor_id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$api_reference', '" . $get_logged_user_det["username"] . "', '$amount', '$discounted_amount', '$user_balance_before_credit', '$user_balance_after_credit', '$description', '$mode', '$api_website', '$status')");
-				$bc_dup_refund = bc_refund_already_credited($get_logged_user_det["vendor_id"], $get_logged_user_det["username"], $type_alternative, $description);
-						$charge_user = $bc_dup_refund ? false : mysqli_query($connection_server, "UPDATE sas_users SET balance = balance + $discounted_amount WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' && username='" . $get_logged_user_det["username"] . "'");
-						$bc_bal_row = $charge_user ? mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' AND username='" . $get_logged_user_det["username"] . "' LIMIT 1")) : null;
-						if ($bc_bal_row) {
-							$user_balance_after_credit = (float)$bc_bal_row["balance"];
-							$user_balance_before_credit = $user_balance_after_credit - $discounted_amount;
-							mysqli_query($connection_server, "UPDATE sas_transactions SET balance_before='$user_balance_before_credit', balance_after='$user_balance_after_credit' WHERE reference='$reference' AND type_alternative='$type_alternative'");
-						}
-						if ($bc_dup_refund) { return "failed"; }
-				if (($user_balance_before_credit !== false) && ($charge_user == true)) {
-					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
-					$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
-					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-						$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-					}
-
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_vendor_det["firstname"], "{admin_lastname}" => $get_vendor_det["lastname"], "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
-					$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
-					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-						$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-						$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-					}
-					sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-					sendVendorEmail($get_vendor_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-					// Email End
-					return "success";
-				} else {
-					return "failed";
-				}
-			}
-
-			if (!in_array($type, $transactionTypeArray)) {
-				return "failed";
-			}
-		} else {
-			return bc_charge_failure('Invalid wallet charge parameters', array('username' => $u_name, 'reference' => $reference));
-		}
-	} else {
-		return bc_charge_failure('Wallet account is inactive, unavailable, or charge amount is invalid', array('username' => $u_name, 'reference' => $reference));
-	}
+    return bc_incident_wallet_post(resolveVendorID(), $GLOBALS['get_logged_user_details']['username'] ?? ($_SESSION['user_session'] ?? ''), $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status, false);
 }
 
 function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-	global $connection_server;
-
-	// SECURITY: the sanitiser below strips EVERY non-numeric character, including the minus sign.
-	// A caller passing a negative amount therefore became a POSITIVE credit (-982,500,000 was
-	// credited as +982,500,000). Reject negatives before sanitising so the bug cannot be expressed
-	// as money again, whatever the caller does upstream.
-	foreach (array('amount' => $amount, 'discounted_amount' => $discounted_amount) as $__field => $__value) {
-		if (is_string($__value) && strpos($__value, '-') !== false) return "failed";
-		if ((is_int($__value) || is_float($__value)) && $__value < 0) return "failed";
-	}
-
-	$user_id = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($user_id))));
-	$type = mysqli_real_escape_string($connection_server, trim(strip_tags($type)));
-	$product_unique_id = mysqli_real_escape_string($connection_server, trim(strip_tags($product_unique_id)));
-	$type_alternative = mysqli_real_escape_string($connection_server, trim(strip_tags($type_alternative)));
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$api_reference = mysqli_real_escape_string($connection_server, trim(strip_tags($api_reference)));
-	$amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($amount))));
-	$discounted_amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($discounted_amount))));
-	$description = mysqli_real_escape_string($connection_server, trim(strip_tags($description)));
-	$mode = mysqli_real_escape_string($connection_server, trim(strip_tags($mode)));
-	$api_website = mysqli_real_escape_string($connection_server, trim(strip_tags($api_website)));
-	$status = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($status))));
-
-	$transactionTypeArray = array("credit", "debit");
-	$statusArray = array(1, 2, 3);
-
-	// Robust vendor lookup
-	$v_id = resolveVendorID();
-	if($v_id <= 0) return "failed";
-
-	$get_vendor_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . $v_id . "' LIMIT 1"));
-
-	$get_logged_user_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $v_id . "' && username='" . $user_id . "' LIMIT 1"));
-
-
-	if (isset($get_logged_user_det["balance"]) && is_numeric($get_logged_user_det["balance"]) && !empty($amount) && is_numeric($amount) && !empty($discounted_amount) && is_numeric($discounted_amount) && ($discounted_amount > 0) && $get_logged_user_det["status"] == 1) {
-		if (in_array($type, $transactionTypeArray) && !empty($product_unique_id) && !empty($type_alternative) && !empty($reference) && !empty($description) && is_numeric($status) && in_array($status, $statusArray)) {
-			if ($type === "debit") {
-				// GFTAL: refuse NEW spending for a locked user. Deliberately SKIPPED for the internal
-				// "Charge" label, which the requery settlement uses to re-charge a transaction the provider
-				// later confirmed - blocking that would let a user keep a service they were never charged
-				// for. The credit branch (refunds) is never blocked at all.
-				if ($type_alternative !== 'Charge') {
-					$tx_guard_result = bc_tx_failure_guard_check($get_logged_user_det["vendor_id"], $get_logged_user_det["username"], $type_alternative);
-					if ($tx_guard_result !== true) {
-						$GLOBALS['bc_tx_lock_message'] = $tx_guard_result;
-						return "failed";
-					}
-				}
-				if (($get_logged_user_det["balance"] > 0) && ($amount > 0) && ($get_logged_user_det["balance"] >= $amount) && ($get_logged_user_det["balance"] >= $discounted_amount)) {
-					$user_balance_before_debit = $get_logged_user_det["balance"];
-					$user_balance_after_debit = ($user_balance_before_debit - $discounted_amount);
-
-					$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, api_reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status) VALUES ('" . $get_logged_user_det["vendor_id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$api_reference', '" . $user_id . "', '$amount', '$discounted_amount', '$user_balance_before_debit', '$user_balance_after_debit', '$description', '$mode', '$api_website', '$status')");
-					$charge_user = mysqli_query($connection_server, "UPDATE sas_users SET balance = balance - $discounted_amount WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' && username='" . $user_id . "' AND balance >= $discounted_amount");
-						$bc_bal_row = $charge_user ? mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' AND username='" . $user_id . "' LIMIT 1")) : null;
-						if ($bc_bal_row) {
-							$user_balance_after_debit = (float)$bc_bal_row["balance"];
-							$user_balance_before_debit = $user_balance_after_debit + $discounted_amount;
-							mysqli_query($connection_server, "UPDATE sas_transactions SET balance_before='$user_balance_before_debit', balance_after='$user_balance_after_debit' WHERE reference='$reference' AND type_alternative='$type_alternative'");
-						} elseif (mysqli_affected_rows($connection_server) !== 1) {
-							return "failed";
-						}
-					if (($user_balance_before_debit !== false) && ($charge_user == true)) {
-						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
-						$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
-						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-							$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-						}
-
-						$vendor_firstname = $get_vendor_det ? ($get_vendor_det["firstname"] ?? "") : "";
-						$vendor_lastname = $get_vendor_det ? ($get_vendor_det["lastname"] ?? "") : "";
-						$vendor_email = $get_vendor_det ? ($get_vendor_det["email"] ?? "") : "";
-
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
-						$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
-						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-							$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-							$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-						}
-						sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-						if (!empty($vendor_email)) {
-							sendVendorEmail($vendor_email, $raw_transaction_template_subject, $raw_transaction_template_body);
-						}
-						// Email End
-						return "success";
-					} else {
-						return "failed";
-					}
-				} else {
-					return "failed";
-				}
-			}
-
-			if ($type === "credit") {
-				$user_balance_before_credit = $get_logged_user_det["balance"];
-				$user_balance_after_credit = ($user_balance_before_credit + $discounted_amount);
-
-				$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_transactions (vendor_id, product_unique_id, type_alternative, reference, api_reference, username, amount, discounted_amount, balance_before, balance_after, description, mode, api_website, status) VALUES ('" . $get_logged_user_det["vendor_id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$api_reference', '" . $user_id . "', '$amount', '$discounted_amount', '$user_balance_before_credit', '$user_balance_after_credit', '$description', '$mode', '$api_website', '$status')");
-				$bc_dup_refund = bc_refund_already_credited($get_logged_user_det["vendor_id"], $user_id, $type_alternative, $description);
-						$charge_user = $bc_dup_refund ? false : mysqli_query($connection_server, "UPDATE sas_users SET balance = balance + $discounted_amount WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' && username='" . $user_id . "'");
-						$bc_bal_row = $charge_user ? mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE vendor_id='" . $get_logged_user_det["vendor_id"] . "' AND username='" . $user_id . "' LIMIT 1")) : null;
-						if ($bc_bal_row) {
-							$user_balance_after_credit = (float)$bc_bal_row["balance"];
-							$user_balance_before_credit = $user_balance_after_credit - $discounted_amount;
-							mysqli_query($connection_server, "UPDATE sas_transactions SET balance_before='$user_balance_before_credit', balance_after='$user_balance_after_credit' WHERE reference='$reference' AND type_alternative='$type_alternative'");
-						}
-						if ($bc_dup_refund) { return "failed"; }
-				if (($user_balance_before_credit !== false) && ($charge_user == true)) {
-					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_funding_template_subject = getUserEmailTemplate('user-funding', 'subject');
-					$raw_funding_template_body = getUserEmailTemplate('user-funding', 'body');
-					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-						$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-					}
-
-					$vendor_firstname = $get_vendor_det ? ($get_vendor_det["firstname"] ?? "") : "";
-					$vendor_lastname = $get_vendor_det ? ($get_vendor_det["lastname"] ?? "") : "";
-					$vendor_email = $get_vendor_det ? ($get_vendor_det["email"] ?? "") : "";
-
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $vendor_firstname, "{admin_lastname}" => $vendor_lastname, "{username}" => $get_logged_user_det["username"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_transaction_template_subject = getUserEmailTemplate('user-transactions', 'subject');
-					$raw_transaction_template_body = getUserEmailTemplate('user-transactions', 'body');
-					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-						$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-						$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-					}
-					sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-					if (!empty($vendor_email)) {
-						sendVendorEmail($vendor_email, $raw_transaction_template_subject, $raw_transaction_template_body);
-					}
-					// Email End
-					return "success";
-				} else {
-					return "failed";
-				}
-			}
-
-			if (!in_array($type, $transactionTypeArray)) {
-				return "failed";
-			}
-		} else {
-			return "failed";
-		}
-	} else {
-		return "failed";
-	}
+    return bc_incident_wallet_post(resolveVendorID(), $user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status, false);
 }
 
 function chargeVendor($type, $product_unique_id, $type_alternative, $reference, $amount, $discounted_amount, $description, $api_website, $status)
 {
-	global $connection_server;
-
-	$type = mysqli_real_escape_string($connection_server, trim(strip_tags($type)));
-	$product_unique_id = mysqli_real_escape_string($connection_server, trim(strip_tags($product_unique_id)));
-	$type_alternative = mysqli_real_escape_string($connection_server, trim(strip_tags($type_alternative)));
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($amount))));
-	$discounted_amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($discounted_amount))));
-	$description = mysqli_real_escape_string($connection_server, trim(strip_tags($description)));
-	$api_website = mysqli_real_escape_string($connection_server, trim(strip_tags($api_website)));
-	$status = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($status))));
-
-	$transactionTypeArray = array("credit", "debit");
-	$statusArray = array(1, 2, 3);
-
-	$get_spadmin_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin LIMIT 1"));
-
-	// Robust vendor lookup
-	$v_id = resolveVendorID();
-	if($v_id <= 0) return "failed";
-
-	$get_logged_user_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . $v_id . "' LIMIT 1"));
-
-
-	if (isset($get_logged_user_det["balance"]) && is_numeric($get_logged_user_det["balance"]) && !empty($amount) && is_numeric($amount) && !empty($discounted_amount) && is_numeric($discounted_amount) && ($discounted_amount > 0)) {
-		if (in_array($type, $transactionTypeArray) && !empty($product_unique_id) && !empty($type_alternative) && !empty($reference) && !empty($description) && is_numeric($status) && in_array($status, $statusArray)) {
-			if ($type === "debit") {
-				if (($get_logged_user_det["balance"] > 0) && ($amount > 0) && ($get_logged_user_det["balance"] >= $amount) && ($get_logged_user_det["balance"] >= $discounted_amount)) {
-					// Relative wallet write: the move and its read-back happen in ONE statement on the
-					// row MySQL locks, and the debit additionally requires the balance to cover it, so a
-					// balance that moved after the pre-check above cannot be over-drawn. The absolute
-					// write that used to be here lost a concurrent debit and could resurrect a balance
-					// a concurrent debit had already lowered.
-					$bc_bal_delta = bc_vendor_wallet_apply_delta((int)$get_logged_user_det["id"], -1 * (float)$discounted_amount, $user_balance_before_debit, $user_balance_after_debit);
-					if ($bc_bal_delta !== "success") {
-						return "failed";
-					}
-
-					$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) VALUES ('" . $get_logged_user_det["id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$amount', '$discounted_amount', '$user_balance_before_debit', '$user_balance_after_debit', '$description', '$api_website', '$status')");
-					$charge_user = ($bc_bal_delta === "success");
-					if ($insert_transaction && ($charge_user == true)) {
-						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
-						$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
-						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-							$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-						}
-
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
-						$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
-						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-							$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-							$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-						}
-						sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-						sendVendorEmail($get_spadmin_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-						// Email End
-						return "success";
-					} else {
-						return "failed";
-					}
-				} else {
-					return "failed";
-				}
-			}
-
-			if ($type === "credit") {
-				// Relative wallet write: the move and its read-back happen in ONE statement on the
-				// row MySQL locks. The absolute write that used to be here RESURRECTED a balance a
-				// concurrent debit had already lowered, so a refused purchase's refund could hand back
-				// money that was never actually taken.
-				$bc_bal_delta = bc_vendor_wallet_apply_delta((int)$get_logged_user_det["id"], (float)$discounted_amount, $user_balance_before_credit, $user_balance_after_credit);
-				if ($bc_bal_delta !== "success") {
-					return "failed";
-				}
-
-				$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) VALUES ('" . $get_logged_user_det["id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$amount', '$discounted_amount', '$user_balance_before_credit', '$user_balance_after_credit', '$description', '$api_website', '$status')");
-				$charge_user = ($bc_bal_delta === "success");
-				if ($insert_transaction && ($charge_user == true)) {
-					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
-					$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
-					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-						$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-					}
-
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
-					$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
-					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-						$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-						$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-					}
-					sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-					sendVendorEmail($get_spadmin_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-					// Email End
-					return "success";
-				} else {
-					return "failed";
-				}
-			}
-
-			if (!in_array($type, $transactionTypeArray)) {
-				return "failed";
-			}
-		} else {
-			return "failed";
-		}
-	} else {
-		return "failed";
-	}
+    return bc_incident_wallet_post(resolveVendorID(), '', $type, $product_unique_id, $type_alternative, $reference, '', $amount, $discounted_amount, $description, 'WEB', $api_website, $status, true);
 }
 
 function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternative, $reference, $amount, $discounted_amount, $description, $api_website, $status)
 {
-	global $connection_server;
-
-	$type = mysqli_real_escape_string($connection_server, trim(strip_tags($type)));
-	$product_unique_id = mysqli_real_escape_string($connection_server, trim(strip_tags($product_unique_id)));
-	$type_alternative = mysqli_real_escape_string($connection_server, trim(strip_tags($type_alternative)));
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($amount))));
-	$discounted_amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($discounted_amount))));
-	$description = mysqli_real_escape_string($connection_server, trim(strip_tags($description)));
-	$api_website = mysqli_real_escape_string($connection_server, trim(strip_tags($api_website)));
-	$status = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($status))));
-
-	$transactionTypeArray = array("credit", "debit");
-	$statusArray = array(1, 2, 3);
-
-	$get_spadmin_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin LIMIT 1"));
-	$get_logged_user_det = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE email='" . $vendor_id . "' LIMIT 1"));
-
-
-	if (isset($get_logged_user_det["balance"]) && is_numeric($get_logged_user_det["balance"]) && !empty($amount) && is_numeric($amount) && !empty($discounted_amount) && is_numeric($discounted_amount) && ($discounted_amount > 0)) {
-		if (in_array($type, $transactionTypeArray) && !empty($product_unique_id) && !empty($type_alternative) && !empty($reference) && !empty($description) && is_numeric($status) && in_array($status, $statusArray)) {
-			if ($type === "debit") {
-				if (($get_logged_user_det["balance"] > 0) && ($amount > 0) && ($get_logged_user_det["balance"] >= $amount) && ($get_logged_user_det["balance"] >= $discounted_amount)) {
-					// Relative wallet write: the move and its read-back happen in ONE statement on the
-					// row MySQL locks, and the debit additionally requires the balance to cover it, so a
-					// balance that moved after the pre-check above cannot be over-drawn. The absolute
-					// write that used to be here lost a concurrent debit and could resurrect a balance
-					// a concurrent debit had already lowered.
-					$bc_bal_delta = bc_vendor_wallet_apply_delta((int)$get_logged_user_det["id"], -1 * (float)$discounted_amount, $user_balance_before_debit, $user_balance_after_debit);
-					if ($bc_bal_delta !== "success") {
-						return "failed";
-					}
-
-					$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) VALUES ('" . $get_logged_user_det["id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$amount', '$discounted_amount', '$user_balance_before_debit', '$user_balance_after_debit', '$description', '$api_website', '$status')");
-					$charge_user = ($bc_bal_delta === "success");
-					if ($insert_transaction && ($charge_user == true)) {
-						// Email Beginning
-						$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
-						$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
-						foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-							$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-							$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-						}
-
-						$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_debit, 2), "{balance_after}" => toDecimal($user_balance_after_debit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-						$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
-						$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
-						foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-							$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-							$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-						}
-						sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-						sendSuperAdminEmail($get_spadmin_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-						// Email End
-						return "success";
-					} else {
-						return "failed";
-					}
-				} else {
-					return "failed";
-				}
-			}
-
-			if ($type === "credit") {
-				// Relative wallet write: the move and its read-back happen in ONE statement on the
-				// row MySQL locks. The absolute write that used to be here RESURRECTED a balance a
-				// concurrent debit had already lowered, so a refused purchase's refund could hand back
-				// money that was never actually taken.
-				$bc_bal_delta = bc_vendor_wallet_apply_delta((int)$get_logged_user_det["id"], (float)$discounted_amount, $user_balance_before_credit, $user_balance_after_credit);
-				if ($bc_bal_delta !== "success") {
-					return "failed";
-				}
-
-				$insert_transaction = mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status) VALUES ('" . $get_logged_user_det["id"] . "', '$product_unique_id', '$type_alternative', '$reference', '$amount', '$discounted_amount', '$user_balance_before_credit', '$user_balance_after_credit', '$description', '$api_website', '$status')");
-				$charge_user = ($bc_bal_delta === "success");
-				if ($insert_transaction && ($charge_user == true)) {
-					// Email Beginning
-					$funding_template_encoded_text_array = array("{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_funding_template_subject = getSuperAdminEmailTemplate('vendor-funding', 'subject');
-					$raw_funding_template_body = getSuperAdminEmailTemplate('vendor-funding', 'body');
-					foreach ($funding_template_encoded_text_array as $array_key => $array_val) {
-						$raw_funding_template_subject = str_replace($array_key, $array_val, $raw_funding_template_subject);
-						$raw_funding_template_body = str_replace($array_key, $array_val, $raw_funding_template_body);
-					}
-
-					$transaction_template_encoded_text_array = array("{admin_firstname}" => $get_spadmin_det["firstname"], "{admin_lastname}" => $get_spadmin_det["lastname"], "{email}" => $get_logged_user_det["email"], "{firstname}" => $get_logged_user_det["firstname"], "{lastname}" => $get_logged_user_det["lastname"], "{balance_before}" => toDecimal($user_balance_before_credit, 2), "{balance_after}" => toDecimal($user_balance_after_credit, 2), "{amount}" => toDecimal($amount, 2) . " @ " . toDecimal($discounted_amount, 2), "{type}" => $type, "{description}" => $description, "{phone}" => ($get_logged_user_det["phone_number"] ?? ""), "{email}" => ($get_logged_user_det["email"] ?? ""), "{reference}" => (isset($reference) ? $reference : ""), "{status}" => (!isset($status) ? "" : ($status == 1 ? "Success" : ($status == 2 ? "Pending" : ($status == 3 ? "Failed" : "Completed")))), "{date}" => date("d M Y, h:i A"));
-					$raw_transaction_template_subject = getSuperAdminEmailTemplate('vendor-transactions', 'subject');
-					$raw_transaction_template_body = getSuperAdminEmailTemplate('vendor-transactions', 'body');
-					foreach ($transaction_template_encoded_text_array as $array_key => $array_val) {
-						$raw_transaction_template_subject = str_replace($array_key, $array_val, $raw_transaction_template_subject);
-						$raw_transaction_template_body = str_replace($array_key, $array_val, $raw_transaction_template_body);
-					}
-					sendVendorEmail($get_logged_user_det["email"], $raw_funding_template_subject, $raw_funding_template_body);
-					sendSuperAdminEmail($get_spadmin_det["email"], $raw_transaction_template_subject, $raw_transaction_template_body);
-					// Email End
-					return "success";
-				} else {
-					return "failed";
-				}
-			}
-
-			if (!in_array($type, $transactionTypeArray)) {
-				return "failed";
-			}
-		} else {
-			return "failed";
-		}
-	} else {
-		return "failed";
-	}
+    return bc_incident_wallet_post($vendor_id, '', $type, $product_unique_id, $type_alternative, $reference, '', $amount, $discounted_amount, $description, 'WEB', $api_website, $status, true);
 }
 
 function addUserVirtualBank($reference, $bank_code, $bank_name, $account_number, $account_name, $vid = 0, $username = "", $gateway_name = "")
@@ -1647,30 +1100,20 @@ function getVendorVirtualBank()
 
 function alterTransaction($reference, $column_name, $column_value)
 {
-	global $connection_server;
-
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$column_name = mysqli_real_escape_string($connection_server, trim(strip_tags($column_name)));
-	$column_value = mysqli_real_escape_string($connection_server, trim(strip_tags($column_value)));
-
-	if (!empty($reference) && !empty($column_name) && ($column_value !== "")) {
-		// Use reference directly as it is unique. This supports both web and cron contexts.
-		mysqli_query($connection_server, "UPDATE sas_transactions SET " . $column_name . "='" . $column_value . "' WHERE reference='" . $reference . "'");
-	}
+    global $connection_server;
+    $vid = (int)resolveVendorID();
+    $allowed = array('status','description','api_reference','api_website','api_id','product_id','balance_before','balance_after','mode');
+    if ($vid <= 0 || !in_array($column_name, $allowed, true) || !is_scalar($column_value) || (string)$reference === '') return false;
+    return bc_q("UPDATE sas_transactions SET `$column_name`=? WHERE vendor_id=? AND reference=?", array((string)$column_value,$vid,(string)$reference));
 }
 
 function alterVendorTransaction($reference, $column_name, $column_value)
 {
-	global $connection_server;
-
-	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($reference)));
-	$column_name = mysqli_real_escape_string($connection_server, trim(strip_tags($column_name)));
-	$column_value = mysqli_real_escape_string($connection_server, trim(strip_tags($column_value)));
-
-	if (!empty($reference) && !empty($column_name) && ($column_value !== "")) {
-		// Use reference directly as it is unique.
-		mysqli_query($connection_server, "UPDATE sas_vendor_transactions SET " . $column_name . "='" . $column_value . "' WHERE reference='" . $reference . "'");
-	}
+    global $connection_server;
+    $vid = (int)resolveVendorID();
+    $allowed = array('status','description','api_reference','api_website','api_id','product_id','balance_before','balance_after','mode');
+    if ($vid <= 0 || !in_array($column_name, $allowed, true) || !is_scalar($column_value) || (string)$reference === '') return false;
+    return bc_q("UPDATE sas_vendor_transactions SET `$column_name`=? WHERE vendor_id=? AND reference=?", array((string)$column_value,$vid,(string)$reference));
 }
 
 function getTransaction($reference, $column_name)
@@ -1682,7 +1125,7 @@ function getTransaction($reference, $column_name)
 
 	if (!empty($reference) && !empty($column_name)) {
 		// Use reference directly as it is unique. This supports both web and cron contexts.
-		$select_transaction = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE reference='" . $reference . "' LIMIT 1");
+		$select_transaction = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='" . (int)resolveVendorID() . "' AND reference='" . $reference . "' LIMIT 1");
 		if (($select_transaction == true) && (mysqli_num_rows($select_transaction) == 1)) {
 			$get_transaction_column = mysqli_fetch_array($select_transaction);
 			return $get_transaction_column[$column_name];
@@ -6641,7 +6084,7 @@ function verifyGoogleToken($id_token) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     $response = curl_exec($ch);
     curl_close($ch);
     return json_decode($response, true);

@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();
 include("../func/bc-config.php");
 
 $ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["ref"] ?? "")));

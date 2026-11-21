@@ -1,7 +1,9 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 $_SERVER["HTTP_HOST"] = "localhost";
 $_SERVER["REQUEST_URI"] = "/web/BulkAirtime.php";
-session_start();
+bc_secure_session_start();
 $_SESSION["username"] = "test";
 require "../func/bc-config.php"; 
 $get_logged_user_details = ["vendor_id" => 1, "username" => "test", "id" => 1, "account_level" => 1, "status" => 1, "is_blocked" => 0];

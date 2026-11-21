@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 ob_start();
-session_start();
+bc_secure_session_start();
 include("../func/bc-config.php");
 include("../func/bc-giftcard-func.php");
 

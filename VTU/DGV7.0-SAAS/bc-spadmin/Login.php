@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 	
     include("../func/bc-spadmin-config.php");
     if(isset($get_logged_spadmin_details["email"]) && !empty($get_logged_spadmin_details["email"]) && ($get_logged_spadmin_details["status"] == 1)){

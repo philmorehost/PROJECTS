@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-admin-config.php");
 include("../func/bc-whatsapp.php");
 require_once("../func/bc-giftcard-func.php"); // For Live USD to NGN rate

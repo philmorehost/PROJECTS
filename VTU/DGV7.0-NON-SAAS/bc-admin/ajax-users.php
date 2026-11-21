@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();
 header("Content-Type: application/json");
 include("../func/bc-admin-config.php");
 

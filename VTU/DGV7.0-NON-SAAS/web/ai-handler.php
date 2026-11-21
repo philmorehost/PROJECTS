@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 /**
  * ai-handler.php — DGV6.90 AI Edition
  * AI Middleware — The PHP Safety Wall
@@ -18,7 +20,7 @@
  * 6. Every call is logged to sas_ai_transactions
  */
 
-session_start();
+bc_secure_session_start();
 ob_start();
 include_once(__DIR__ . "/../func/bc-config.php");
 

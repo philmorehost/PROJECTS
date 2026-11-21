@@ -25,6 +25,11 @@ if (in_array($purchase_method, $purchase_method_array)) {
 
                     if (mysqli_num_rows($get_api_lists) > 0) {
                         while ($api_detail = mysqli_fetch_array($get_api_lists)) {
+                            // Never route retired providers to the generic localserver fallback.
+                            if (bc_retired_vtu_provider($api_detail['api_base_url'] ?? '')) {
+                                $json_response_encode = json_encode(array('status'=>'failed', 'desc'=>'This service provider has been removed. Contact support to select another provider.'));
+                                return;
+                            }
                             if (!empty($api_detail["api_key"])) {
                                 $api_gateway_name_file_exists = $api_detail["api_type"] . "-" . str_replace(".", "-", $api_detail["api_base_url"]) . ".php";
                                 $gateway_path = dirname(__DIR__, 2) . "/func/api-gateway/requery/";

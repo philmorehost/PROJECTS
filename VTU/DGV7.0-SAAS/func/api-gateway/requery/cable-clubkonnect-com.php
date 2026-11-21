@@ -4,8 +4,8 @@
     $curl_request = curl_init($curl_url);
     curl_setopt($curl_request, CURLOPT_HTTPGET, true);
     curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
     $curl_result = trim(curl_exec($curl_request));
 	if (strtoupper((string)($purchase_method ?? "")) === "CRON_JOB" && function_exists("bc_requery_queue_log")) {
 		$curl_errno = curl_errno($curl_request);

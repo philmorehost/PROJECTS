@@ -1,11 +1,13 @@
 <?php
+require_once __DIR__ . '/bc-secure-session.php';
+
 // ─── PHP 8.3 Compatibility Shim — must be first ──────────────────────────────
 // Sets up secure session params, custom error handlers, polyfills, security headers
 require_once __DIR__ . '/bc-php-compat.php';
 
 // Standardize session_start across the platform
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    bc_secure_session_start();
 }
 
 if (isset($_SERVER["HTTPS"]) && ($_SERVER["HTTPS"] == "on")) {

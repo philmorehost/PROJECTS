@@ -1,4 +1,8 @@
 <?php
+// Provider timeouts must not become automatic refunds/retries of an unknown payout.
+$json_response_encode = json_encode(array('status'=>'failed','code'=>'PAYOUT_SECURITY_HOLD','desc'=>'Payouts remain paused pending verified provider reconciliation. No debit, payout or refund was attempted.'));
+return;
+
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
 if (in_array($purchase_method, $purchase_method_array)) {

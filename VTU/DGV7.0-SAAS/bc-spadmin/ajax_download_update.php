@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // ajax_download_update.php
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -26,7 +28,7 @@ set_exception_handler(function($exception) {
     echo json_encode(['status' => 'error', 'message' => 'An uncaught exception occurred: ' . $exception->getMessage()]);
 });
 
-session_start();
+bc_secure_session_start();
 if (!isset($_SESSION["spadmin_session"])) {
     http_response_code(403);
     die(json_encode(['status' => 'error', 'message' => 'Unauthorized Access']));
@@ -78,7 +80,7 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_fields));
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 $response = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
@@ -117,7 +119,7 @@ $ch = curl_init($download_url);
 curl_setopt($ch, CURLOPT_TIMEOUT, 300);
 curl_setopt($ch, CURLOPT_FILE, $fp);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 $res = curl_exec($ch);
 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);

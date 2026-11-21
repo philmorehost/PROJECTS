@@ -1,9 +1,11 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // run_migrations.php
 // Runs the missing DB migrations for the v7.01 update.
 // DELETE THIS FILE after running.
 
-session_start();
+bc_secure_session_start();
 if (!isset($_SESSION['admin_session']) && !isset($_SESSION['spadmin_session'])) {
     die('Unauthorized. Log in first.');
 }

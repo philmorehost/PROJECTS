@@ -77,7 +77,7 @@ set_exception_handler(function ($e) {
 $lifetime = 259200; // 72 hours in seconds
 $path = '/';
 $domain = '';
-$secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+$secure = true; // Production sessions require HTTPS, including behind a trusted TLS proxy.
 $httponly = true;
 
 // Ensure server does not collect/expire session files early

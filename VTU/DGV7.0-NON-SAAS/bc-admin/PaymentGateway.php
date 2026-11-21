@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
     include("../func/bc-admin-config.php");
 	// §28: commercialised fintech API access. NON-SAAS includes all three APIs;
 	// SAAS vendors buy each one here, charged to the vendor wallet. Prices are set

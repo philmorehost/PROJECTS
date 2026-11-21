@@ -1,5 +1,7 @@
 <?php
-session_start();require __DIR__.'/../func/bc-config.php';require_once __DIR__.'/../func/bc-fintech-flutterwave.php';
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();require __DIR__.'/../func/bc-config.php';require_once __DIR__.'/../func/bc-fintech-flutterwave.php';
 $vid=(int)$get_logged_user_details['vendor_id'];$url='';$notice='';
 if($_SERVER['REQUEST_METHOD']==='POST') {
     bc_validate_csrf();
@@ -12,6 +14,9 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
         // Bind the beneficiary BEFORE creating a payment. The verified webhook,
         // not this form or return URL, is the only code that credits the wallet.
         $saved=mysqli_query($connection_server,"INSERT INTO sas_user_payment_checkouts(vendor_id,username,reference,status) VALUES($vid,'$user','$ref','1')");
+        if ($saved) {
+            $saved = bc_q("INSERT INTO sas_secure_payment_intents(reference,vendor_id,username,provider,currency,amount) VALUES(?,?,?,'flutterwave','NGN',?)", array($ref,$vid,(string)$get_logged_user_details['username'],number_format((float)$amount,2,'.',''))) === true;
+        }
         if($saved) {
             $response=bc_flw_create_payment_link($vid,array('tx_ref'=>$ref,'amount'=>number_format((float)$amount,2,'.',''),'currency'=>'NGN',
                 'redirect_url'=>'https://'.bc_safe_host().'/web/InvoiceReturn.php',

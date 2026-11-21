@@ -13,8 +13,8 @@
         $curl_request = curl_init($curl_url);
         curl_setopt($curl_request, CURLOPT_HTTPGET, true);
         curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($curl_request, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         $curl_result = trim(curl_exec($curl_request));
 	if (strtoupper((string)($purchase_method ?? "")) === "CRON_JOB" && function_exists("bc_requery_queue_log")) {

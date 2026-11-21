@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();
 require __DIR__.'/../func/bc-admin-config.php';
 require_once __DIR__.'/../func/bc-fintech-services.php';
 $vid=(int)$get_logged_admin_details['id'];

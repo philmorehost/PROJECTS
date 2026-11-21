@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/func/bc-secure-session.php';
+
 if (!file_exists(__DIR__ . '/installed.lock')) {
     header('Location: /install.php');
     exit();
@@ -51,7 +53,7 @@ if ($connection_server) {
 
 // Optional per-vendor App redirect (Off / Prompt / Force) — bc-admin > Account
 // Settings > Site Details. Anonymous visitors only; logged-in users/admins are skipped.
-if (session_status() === PHP_SESSION_NONE) { @session_start(); }
+if (session_status() === PHP_SESSION_NONE) { @bc_secure_session_start(); }
 $app_redirect = ['mode' => 'off', 'link' => ''];
 if ($vendor_account_details) {
     $app_redirect = bc_get_app_redirect_info($vendor_account_details["id"]);

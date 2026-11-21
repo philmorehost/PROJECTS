@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 header('Content-Type: application/json');
-session_start();
+bc_secure_session_start();
 include("../func/bc-admin-config.php");
 
 if (!isset($_SESSION["admin_session"])) {

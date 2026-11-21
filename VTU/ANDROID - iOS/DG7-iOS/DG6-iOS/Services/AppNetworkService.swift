@@ -1,4 +1,5 @@
 ﻿import Foundation
+import Security
 
 class AppNetworkService {
     static let shared = AppNetworkService()
@@ -16,8 +17,28 @@ class AppNetworkService {
     var mobileOrigin: String { baseURL }
 
     var apiKey: String? {
-        get { UserDefaults.standard.string(forKey: "user_api_key") }
-        set { UserDefaults.standard.set(newValue, forKey: "user_api_key") }
+        get {
+            UserDefaults.standard.removeObject(forKey: "user_api_key")
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "platform.app-session", kSecAttrAccount as String: "bearer",
+                kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+            var result: CFTypeRef?
+            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+                  let data = result as? Data else { return nil }
+            return String(data: data, encoding: .utf8)
+        }
+        set {
+            UserDefaults.standard.removeObject(forKey: "user_api_key")
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "platform.app-session", kSecAttrAccount as String: "bearer"]
+            SecItemDelete(query as CFDictionary)
+            if let token = newValue, let data = token.data(using: .utf8) {
+                var item = query
+                item[kSecValueData as String] = data
+                item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+                _ = SecItemAdd(item as CFDictionary, nil)
+            }
+        }
     }
 
     /// Mirrors the server's `security_pin_set`. The website finishes registration with

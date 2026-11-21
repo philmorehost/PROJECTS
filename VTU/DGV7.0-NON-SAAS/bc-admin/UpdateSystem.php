@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
 // UpdateSystem.php
-session_start();
+bc_secure_session_start();
 include("../func/bc-admin-config.php");
 include_once("../func/bc-integrity.php");
 

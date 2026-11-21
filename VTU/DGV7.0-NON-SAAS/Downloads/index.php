@@ -1,5 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . '/../func/bc-secure-session.php';
+
+bc_secure_session_start();
 
 // ─── CSRF Token Generation ──────────────────────────────────────────────────
 if (empty($_SESSION['csrf_token'])) {

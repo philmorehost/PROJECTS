@@ -1,4 +1,6 @@
-<?php session_start();
+<?php
+require_once __DIR__ . '/../func/bc-secure-session.php';
+ bc_secure_session_start();
 include("../func/bc-config.php");
 
 $history = mysqli_query($connection_server, "SELECT * FROM sas_nin_card_requests WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' AND user_id='".$get_logged_user_details["id"]."' ORDER BY date_created DESC LIMIT 50");
