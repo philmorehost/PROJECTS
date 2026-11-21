@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/bc-crypto-poll.php';
+require_once __DIR__.'/bc-crypto-poll-health.php';
 /** Caller authenticates with POST/CSRF/fresh platform PIN/TOTP. No plaintext record decrypt. */
 function bc_crypto_poll_review($authority,$identity,$env,$revision) {
     global $connection_server;$actor=bc_crypto_custody_actor($authority);
@@ -23,7 +24,22 @@ function bc_crypto_poll_review($authority,$identity,$env,$revision) {
             $competing=[];while($p=mysqli_fetch_assoc($pairs))$competing[]=$p;
             $s['current_conflict']=count($competing)>0;$s['competing_pairs_truncated']=count($competing)>10;$s['competing_pairs']=array_slice($competing,0,10);
         }unset($s);
-        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>time(),'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
+        $now=time();
+        $streams_result=bc_q('SELECT s.stream_id,s.revision,s.custody_revision,s.state,s.page_count,s.valid_until_epoch,COALESCE(l.expires_at_epoch,0) AS lease_until FROM sas_crypto_v2_poll_streams s LEFT JOIN sas_crypto_v2_poll_leases l ON l.stream_id=s.stream_id WHERE s.custody_account=? AND s.environment=? ORDER BY s.created_at DESC,s.stream_id LIMIT 21 FOR UPDATE',[$identity,$env]);
+        if (!($streams_result instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
+        $streams=[];while($stream=mysqli_fetch_assoc($streams_result))$streams[]=$stream;
+        $streams_truncated=count($streams)>20;$streams=array_slice($streams,0,20);
+        foreach($streams as &$stream) {
+            // Bounded recent history only. Counts are not lifetime totals or successful provider requests.
+            $attempts=bc_q('SELECT action FROM sas_crypto_v2_poll_lease_events WHERE stream_id=? ORDER BY id DESC LIMIT 101 FOR UPDATE',[$stream['stream_id']]);
+            if (!($attempts instanceof mysqli_result))throw new RuntimeException('crypto_poll_storage_failed');
+            $actions=[];while($a=mysqli_fetch_assoc($attempts))$actions[]=$a['action'];
+            $stream['attempt_history_truncated']=count($actions)>100;$actions=array_slice($actions,0,100);
+            $stream['recent_lease_event_count']=count($actions);
+            $stream['failed_attempts']=count(array_filter($actions,static function($a){return $a==='failed';}));
+            $stream['health']=bc_crypto_poll_health($stream,$now);
+        }unset($stream);
+        $report=['kind'=>'poll_conflict_review_v1','custody_account'=>$identity,'environment'=>$env,'custody_revision'=>$revision,'generated_at'=>$now,'streams'=>$streams,'streams_truncated'=>$streams_truncated,'sightings'=>$sightings,'truncated'=>$truncated,'history_complete'=>false,'conflicts_resolved'=>false,'import_enabled'=>false,'settlement_enabled'=>false];
         $json=bc_crypto_gov_json($report);
         bc_crypto_custody_must('INSERT INTO sas_crypto_v2_poll_review_events(custody_account,environment,custody_revision,actor_id,report_hash,occurred_at_epoch) VALUES(?,?,?,?,?,?)',[$identity,$env,$revision,$actor,hash('sha256',$json),time()]);
         if (!mysqli_commit($connection_server))throw new RuntimeException('crypto_poll_storage_failed');

@@ -15,3 +15,9 @@ try{bc_crypto_poll_review($pa,$pi,'testnet',$rev);throw new LogicException('Repo
 check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_poll_review_events')===$before+1,'failed review leaves no successful access audit');
 $connection_server->begin_transaction();reject_db(fn()=>bc_crypto_poll_review($pa,$pi,'testnet',$rev),'crypto_transaction_unavailable');$connection_server->rollback();
 check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===$opsBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposits')===$depBefore&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes')===$routesBefore,'review does not import/route/settle');
+
+check_db(count($report['streams'])<=20&&is_bool($report['streams_truncated']),'health report bounds stream monitoring independently of sightings');
+foreach($report['streams'] as $stream){
+    check_db($stream['recent_lease_event_count']<=100&&is_bool($stream['attempt_history_truncated']),'attempt monitoring bounded and truncation explicit');
+    check_db(!$stream['health']['automatic_retry_authorized']&&!$stream['health']['replacement_window_authorized']&&!$stream['health']['settlement_enabled'],'health advice cannot grant worker/replacement/settlement authority');
+}
