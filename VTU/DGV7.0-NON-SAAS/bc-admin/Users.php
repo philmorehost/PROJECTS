@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
+header('Cache-Control: no-store, private');
+require_once __DIR__ . '/../func/bc-user-action-confirm.php';
     include("../func/bc-admin-config.php");
 
     /**
@@ -198,9 +200,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $sec33_send_err = function_exists('bc_stepup_send_email_otp')
             ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'user_account_action', 'User Account Action')
             : 'Verification is unavailable.';
-        $_SESSION['sec33_user_draft'] = array_intersect_key($_POST, array_flip(['sec33_user_action', 'sec33_status', 'account-user-id', 'account-username', 'vid']));
         $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
-        header("Location: /bc-admin/Users.php");
+        header("Location: " . bc_user_action_confirmation_url($_POST));
         exit();
     }
     if (isset($_POST['sec33_user_action'])) {
@@ -214,9 +215,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'user_account_action')
             : 'Verification is unavailable.';
         if ($sec33_err !== '') {
-            $_SESSION['sec33_user_draft'] = array_intersect_key($_POST, array_flip(['sec33_user_action', 'sec33_status', 'account-user-id', 'account-username', 'vid']));
             $_SESSION["product_purchase_response"] = "Error: " . $sec33_err;
-            header("Location: /bc-admin/Users.php");
+            header("Location: " . bc_user_action_confirmation_url($_POST));
             exit();
         }
         unset($_GET['account-status'], $_GET['account-api-status'], $_GET['account-log'], $_GET['login-as']);
@@ -935,41 +935,11 @@ bc_adm_head("Users | " . ($get_all_super_admin_site_details["site_title"] ?? 'DG
 
 
 
-    <!-- §33: step-up confirmation for user account actions -->
-    <dialog id="sec33UserModal" aria-labelledby="sec33UserTitle" style="border:0;border-radius:1rem;padding:0;width:min(94vw,520px);max-height:90vh;overflow:auto">
-      <div class="modal-dialog modal-dialog-centered">
-        <form method="post" class="modal-content rounded-4 border-0">
-          <div class="modal-header border-0"><h5 class="modal-title fw-bold" id="sec33UserTitle">Confirm action</h5><button type="button" class="btn-close" onclick="document.getElementById('sec33UserModal').close()" aria-label="Close"></button></div>
-          <div class="modal-body">
-            <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
-            <input type="hidden" name="sec33_user_action" id="sec33UserMode" value="">
-            <input type="hidden" name="sec33_status" id="sec33UserStatus" value="">
-            <input type="hidden" name="account-user-id" id="sec33UserId" value="">
-            <input type="hidden" name="account-username" id="sec33UserName" value="">
-            <p class="text-muted small" id="sec33UserText"></p>
-            <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
-            <div class="mb-1"><label class="form-label small fw-bold text-muted"><?php echo !empty($get_logged_admin_details['totp_secret']) && ($get_logged_admin_details['two_factor_type'] ?? '') === 'totp' ? 'GOOGLE AUTHENTICATOR CODE' : 'EMAIL OTP'; ?></label><input name="sec_factor" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" class="form-control rounded-3" placeholder="6-digit code"></div>
-            <?php if (($get_logged_admin_details['two_factor_type'] ?? '') !== 'totp' || empty($get_logged_admin_details['totp_secret'])): ?>
-            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code</button>
-            <?php else: ?><p class="small text-muted">Use a fresh code from Google Authenticator. Email cannot bypass your enrolled authenticator.</p><?php endif; ?>
-          </div>
-          <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" onclick="document.getElementById('sec33UserModal').close()">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33UserBtn">Confirm</button></div>
-        </form>
-      </div>
-    </dialog>
     <script>
     function sec33OpenUserModal(mode, status, id, username, title, text, btn) {
-        document.getElementById('sec33UserMode').value = mode;
-        document.getElementById('sec33UserStatus').value = status || '';
-        document.getElementById('sec33UserId').value = id || '';
-        document.getElementById('sec33UserName').value = username || '';
-        document.getElementById('sec33UserTitle').textContent = title;
-        document.getElementById('sec33UserText').textContent = text;
-        document.getElementById('sec33UserBtn').textContent = btn;
-        const dialog = document.getElementById('sec33UserModal');
-        dialog.querySelector('[name=sec_pin]').value = '';
-        dialog.querySelector('[name=sec_factor]').value = '';
-        if (!dialog.open) dialog.showModal();
+        // A full document avoids modal clipping, unsupported dialog APIs and stale shell CSS.
+        const query = new URLSearchParams({ mode: mode, status: status || '', id: id || '', username: username || '' });
+        window.location.assign('UserAction.php?' + query.toString());
     }
 
     <?php $sec33_draft = $_SESSION['sec33_user_draft'] ?? null; unset($_SESSION['sec33_user_draft']); ?>
