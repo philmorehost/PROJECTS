@@ -129,6 +129,17 @@ try {
     check_db((finish_worker($w)['error']??'')==='crypto_policy_edit_conflict','waiting stale editor rejects committed newer revision');
     check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='100000000' && scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='reserved'")==='0','reserve and release conserve exact synthetic balance');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_entries')===4,'failed operations leave no partial entries');
+    // Entry failure occurs after operation and both balance updates: all must roll back.
+    bc_q("UPDATE sas_crypto_v2_governance SET document='{\"stopped\":false}' WHERE vendor_id=0 AND policy_key='control'");
+    bc_q("CREATE TRIGGER fail_journal_entry BEFORE INSERT ON sas_crypto_v2_entries FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected entry failure'");
+    try {bc_crypto_v2_reservation($scope,'entry-failure-001','1');throw new LogicException('Entry unexpectedly succeeded');} catch(mysqli_sql_exception $e) {check_db($e->getSqlState()==='45000','server rejected journal entry');}
+    check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===2 && (int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_entries')===4 && scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='100000000','entry failure rolls back operation, entries and balance projections');
+    bc_q('DROP TRIGGER fail_journal_entry');
+    $a=start_worker('reserve','overspend-left-001','60000000');$b=start_worker('reserve','overspend-right-001','60000000');
+    $results=[finish_worker($a),finish_worker($b)];
+    check_db(count(array_filter($results,fn($r)=>isset($r['result'])))===1 && count(array_filter($results,fn($r)=>($r['error']??'')==='crypto_insufficient_balance'))===1,'competing distinct references cannot overspend');
+    check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='available'")==='40000000' && scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='reserved'")==='60000000','serialized overspend leaves exact conserved total');
+    check_db(scalar_db("SELECT units FROM sas_crypto_v2_accounts WHERE bucket='held'")==='7654321','all failed and concurrent operations preserve held bucket');
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
 } finally {
     $connection_server->rollback();
