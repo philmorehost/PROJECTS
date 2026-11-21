@@ -42,6 +42,7 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "') AND password = '" . $password . "'");
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_info = mysqli_fetch_array($checkuser_pass);
+                    bc_enrollment_api_guard($get_user_info);
                     $api_file_url = $_SERVER["DOCUMENT_ROOT"] . "/web/api/electric.php";
                     if (file_exists($api_file_url)) {
                         $api_post_info_from_app = array("api_key" => $get_user_info["api_key"], "provider" => $network, "meter_number" => $meter_number, "type" => $meter_type, "amount" => $amount);

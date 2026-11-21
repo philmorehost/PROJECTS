@@ -172,6 +172,8 @@ function bc_app_session_user($token, $vendor_id) {
         mysqli_query($connection_server, "UPDATE sas_app_tokens SET last_used_at=NOW() WHERE id='$session_id'");
     }
 
+    if (function_exists('bc_enrollment_api_guard')) bc_enrollment_api_guard($user);
+
     // Attach the session id so a logout can revoke exactly this device.
     $user['_app_token_id'] = (int)$session['id'];
     return $user;

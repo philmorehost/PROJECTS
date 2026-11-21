@@ -66,9 +66,11 @@ if ($connection_server) {
             // Auto-release expired brute-force auto-blocks so blocked admins aren't stuck after the block window.
             bc_release_expired_blocks($email, $_SERVER['REMOTE_ADDR'] ?? '', $vid);
 
-            $get_logged_admin_query = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
-            if (mysqli_num_rows($get_logged_admin_query) == 1) {
-                $get_logged_admin_details = mysqli_fetch_array($get_logged_admin_query);
+            $bc_fresh_actor = ($GLOBALS['bc_enrollment_role'] ?? '') === 'vendor' ? ($GLOBALS['bc_enrollment_actor'] ?? null) : null;
+                // Auto-release may have changed a blocked row since the shared guard read it.
+                if (!empty($bc_fresh_actor['is_blocked']) || ($bc_fresh_actor && (string)$bc_fresh_actor['email'] !== (string)$_SESSION['admin_session'])) $bc_fresh_actor = null;
+                $get_logged_admin_details = $bc_fresh_actor ?: bc_q_row("SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
+                if ($get_logged_admin_details) {
 
                     // §29: a forced password change confines the admin session to
                     // Account Settings until a new password is set.
@@ -89,8 +91,8 @@ if ($connection_server) {
                             include_once(__DIR__ . '/bc-edition.php');
                         }
                         if (function_exists('bc_is_saas_edition') && bc_is_saas_edition()) {
-                            $sec33_totp_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_totp' LIMIT 1");
-                            $sec33_force_totp = $sec33_totp_q ? (string)(mysqli_fetch_assoc($sec33_totp_q)['option_value'] ?? '0') : '0';
+                            // Shared request memo contains force_vendor_totp; no duplicate options read.
+                            $sec33_force_totp = bc_enrollment_policy((int)$get_logged_admin_details['id'])['vendor'] ? '1' : '0';
                             $sec33_admin_confined = ($sec33_force_totp === '1' && (string)($get_logged_admin_details['two_factor_type'] ?? 'none') !== 'totp');
                                 if (!empty($sec33_admin_confined)) {
                                 $sec33_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));

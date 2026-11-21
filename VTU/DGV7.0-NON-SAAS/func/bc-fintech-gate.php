@@ -94,6 +94,10 @@ if (!function_exists('bc_fintech_app_access')) {
                 'message' => 'Unable to verify account policy. Please try again later.',
             ];
         }
+        if (function_exists('bc_enrollment_reason')) {
+            $reason = bc_enrollment_reason($user, 'user');
+            if ($reason !== '') return ['allowed'=>false,'http'=>403,'code'=>$reason,'message'=>'Complete required password/authenticator setup on the website before continuing.','setup_url'=>'/web/SecuritySetup.php'];
+        }
         if (bc_fintech_mobile_app_allowed($user)) {
             return ['allowed' => true, 'http' => 200, 'code' => 'OK', 'message' => ''];
         }
@@ -135,6 +139,7 @@ if (!function_exists('bc_fintech_web_login_destination')) {
             ];
         }
 
+        if (function_exists('bc_enrollment_reason') && bc_enrollment_reason($user, 'user') !== '') return ['action'=>'redirect','location'=>'/web/SecuritySetup.php'];
         $type = bc_fintech_account_type($user);
         if ($type === 'business') {
             // Business is web-only: never redirected, even if an app URL is configured.
@@ -279,6 +284,7 @@ if (!function_exists('bc_fintech_web_login_flow')) {
         if ($destination['action'] === 'dashboard') return;
 
         if ($destination['action'] === 'redirect') {
+            if ($destination['location'] === '/web/SecuritySetup.php') { header('Location: /web/SecuritySetup.php'); exit; }
             bc_fintech_app_landing($destination['location'], $vendor_id, $user);
             exit;
         }
@@ -439,6 +445,11 @@ if (!function_exists('bc_fintech_api_credential')) {
                 } catch (Throwable $e) {
                     // Never let the expiry probe break authentication itself.
                 }
+            }
+            if ($provided_api_key !== '' && function_exists('bc_enrollment_api_guard') && $connection_server instanceof mysqli) {
+                $scope = (int)$vendor_id > 0 ? (int)$vendor_id : (int)resolveVendorID();
+                $owner = isset($key_owner) && is_array($key_owner) ? $key_owner : bc_q_row('SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1', [$scope,$provided_api_key]);
+                if ($owner) bc_enrollment_api_guard($owner);
             }
             return $provided_api_key;
         }

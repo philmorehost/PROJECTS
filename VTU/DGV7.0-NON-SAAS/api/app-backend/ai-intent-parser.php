@@ -40,6 +40,7 @@ $user_row = mysqli_fetch_assoc(mysqli_query($connection_server,
      WHERE u.api_token='$tok_esc' AND u.status=1 LIMIT 1"
 ));
 if (!$user_row) intent_json(401, ['success' => false, 'error' => 'Invalid token']);
+bc_enrollment_api_guard($user_row);
 if (empty($user_row['ai_status'])) intent_json(403, ['success' => false, 'error' => 'AI not enabled']);
 if ((int)$user_row['ai_voice_status'] !== 2) {
     intent_json(403, ['success' => false, 'error' => 'Security Override: You do not have Autonomous Access yet. Please apply for this feature from your dashboard.']);

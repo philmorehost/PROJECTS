@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
+bc_enrollment_policy_save(true, $get_logged_spadmin_details);
 
     // Demo-mode blocked feature notice
     if (isset($_GET['demo_blocked']) && bc_is_demo_mode($connection_server)) {
@@ -15,7 +16,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     // §44: saving settings on this page requires a Google Authenticator unlock
     // (10-minute window — see bc_gauth_settings_gate in func/bc-stepup.php).
-    if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('spadmin_settings', 'sas_super_admin', $get_logged_spadmin_details, array('totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'gauth-unlock', 'gauth-lock'));
+    if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('spadmin_settings', 'sas_super_admin', $get_logged_spadmin_details, array('save-enrollment-policy', 'totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'gauth-unlock', 'gauth-lock'));
 
     if (isset($_GET['refresh_license'])) {
         header('Content-Type: application/json');
@@ -435,9 +436,6 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     if(isset($_POST["update-security"])){ 
         $force_pin = isset($_POST["force_vendor_pin"]) ? '1' : '0';
-        // §33: platform-wide Google Authenticator mandate for vendor admins.
-        $force_totp = isset($_POST["force_vendor_totp"]) ? '1' : '0';
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_vendor_totp', '$force_totp') ON DUPLICATE KEY UPDATE option_value='$force_totp'");
         $force_email = isset($_POST["force_spadmin_trans_email"]) ? '1' : '0';
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_vendor_pin', '$force_pin') ON DUPLICATE KEY UPDATE option_value='$force_pin'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('spadmin_trans_email_enabled', '$force_email') ON DUPLICATE KEY UPDATE option_value='$force_email'");
@@ -1186,6 +1184,7 @@ bc_adm_head('', array("area" => "spadmin"));
 
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
+                    <?php bc_enrollment_policy_form(true, 0); ?>
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Global Security Policy</h5></div>
                         <div class="card-body p-4">
@@ -1193,9 +1192,6 @@ bc_adm_head('', array("area" => "spadmin"));
                                 <?php
                                 $opt_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_pin'");
                                 $force_vendor_pin = mysqli_fetch_assoc($opt_q)['option_value'] ?? '0';
-
-                                $opt_totp = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_totp'");
-                                $force_vendor_totp = ($opt_totp ? (mysqli_fetch_assoc($opt_totp)['option_value'] ?? '0') : '0');
 
                                 $opt_email = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='spadmin_trans_email_enabled'");
                                 $spadmin_trans_email = mysqli_fetch_assoc($opt_email)['option_value'] ?? '1';
@@ -1213,13 +1209,6 @@ bc_adm_head('', array("area" => "spadmin"));
                                             <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, all Vendors (bc-admin) MUST configure and use a Security PIN for sensitive dashboard operations.</p>
                                         </div>
                                         <input type="checkbox" name="force_vendor_pin" class="form-check-input ms-0" id="forcePin" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_vendor_pin == '1') ? 'checked' : ''; ?>>
-                                    </div>
-                                    <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0 mb-3">
-                                        <div>
-                                            <label class="form-check-label fw-bold h6 mb-1 text-dark-primary" for="forceTotp">Force Google Authenticator for Vendors</label>
-                                            <p class="text-dark-primary small mb-0" style="opacity: 0.8;">When enabled, every Vendor (bc-admin) is confined to Account Settings until they enrol Google Authenticator. Their approvals and wallet crediting then require PIN + authenticator code.</p>
-                                        </div>
-                                        <input type="checkbox" name="force_vendor_totp" class="form-check-input ms-0" id="forceTotp" style="width: 3.5rem; height: 1.75rem;" <?php echo ($force_vendor_totp == '1') ? 'checked' : ''; ?>>
                                     </div>
                                     <div class="form-check form-switch d-flex align-items-center justify-content-between ps-0">
                                         <div>

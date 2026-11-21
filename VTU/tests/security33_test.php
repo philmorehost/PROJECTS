@@ -115,7 +115,7 @@ foreach ($editions as $ed) {
 // ── SAAS-only platform surfaces ──────────────────────────────────────────
 $sp = 'DGV7.0-SAAS';
 $spSettings = src($root, $sp, 'bc-spadmin/AccountSettings.php');
-chk33('spadmin can force Google Authenticator for vendors', strpos($spSettings, 'force_vendor_totp') !== false && strpos($spSettings, 'Force Google Authenticator for Vendors') !== false);
+chk33('spadmin can force Google Authenticator for vendors', strpos($spSettings, 'bc_enrollment_policy_form(true, 0)') !== false && strpos($spSettings, 'bc_enrollment_policy_save(true,') !== false);
 chk33('spadmin TOTP enrolment renders a QR code', strpos($spSettings, 'bcTotpQr') !== false);
 chk33('spadmin settings use the rail', strpos($spSettings, 'pk-settings-nav') !== false);
 chk33('spadmin global Service Control lists registration', strpos(src($root, $sp, 'bc-spadmin/ServiceControl.php'), "'registration' =>") !== false);

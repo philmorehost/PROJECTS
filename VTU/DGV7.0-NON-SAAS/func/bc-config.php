@@ -472,10 +472,11 @@ if ($connection_server) {
 			// Auto-release expired brute-force auto-blocks so blocked users aren't stuck after the block window.
 			bc_release_expired_blocks($username, $_SERVER['REMOTE_ADDR'] ?? '', $vendor_id);
 
-			$get_logged_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' LIMIT 1");
-
-			if (mysqli_num_rows($get_logged_user_query) == 1) {
-				$get_logged_user_details = mysqli_fetch_array($get_logged_user_query);
+			$bc_fresh_actor = ($GLOBALS['bc_enrollment_role'] ?? '') === 'user' ? ($GLOBALS['bc_enrollment_actor'] ?? null) : null;
+                // Auto-release may have changed a blocked row since the shared guard read it.
+                if (!empty($bc_fresh_actor['is_blocked']) || ($bc_fresh_actor && (string)$bc_fresh_actor['username'] !== (string)$_SESSION['user_session'])) $bc_fresh_actor = null;
+                $get_logged_user_details = $bc_fresh_actor ?: bc_q_row("SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' LIMIT 1");
+                if ($get_logged_user_details) {
 
         // §29: a forced password change confines the web session to Account
         // Settings until a new password is set.

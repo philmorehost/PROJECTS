@@ -48,6 +48,8 @@ if (!$user_row) {
     exit;
 }
 
+$guard_row=bc_q_row('SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1',[$vendor_id,$api_key]);
+if ($guard_row) bc_enrollment_api_guard($guard_row);
 $username = $user_row["username"];
 
 // Upsert: insert token or update it if already registered for this user,
