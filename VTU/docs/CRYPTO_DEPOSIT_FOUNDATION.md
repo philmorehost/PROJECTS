@@ -10,7 +10,7 @@ There is no HTTP endpoint, webhook receiver, address allocator, poller, route-ap
 
 ## Additive schema and migration
 
-`crypto-v2-manage.php schema` now previews **twelve** additive production tables: four accounting, three governance, three deposit-observation and two custody-registry tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
+`crypto-v2-manage.php schema` now previews **fourteen** additive production tables: four accounting, three governance, three deposit-observation, two custody-registry and two protected-evidence tables (see `CRYPTO_CUSTODY_REGISTRY.md`):
 
 - `sas_crypto_v2_deposit_routes`: exclusive environment/custody-account/asset-network/routing-hash attribution. Disabled and expired by default. Stores user/vendor, scale, evidence digest and explicit approval expiry. No route provisioning function is supplied in this stage.
 - `sas_crypto_v2_deposits`: immutable original vendor, asset, units/scale and economic fingerprint; bound original route/customer where approved; latest confirmation high-water mark, state/reason, revision and observation fingerprint.
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS does not repair incompatible definitions. There is no
 
 ## Routing and identity
 
-The future trusted worker supplies server-side context: positive integer vendor ID, exact `testnet`/`mainnet`, and a canonical 64-lowercase-hex custody-account fingerprint. All integrations referring to the same physical Bybit account must use the **same** fingerprint across tenants; it must not be a tenant-chosen alias. An internal local-review registry is now implemented (see `CRYPTO_CUSTODY_REGISTRY.md`); intake rechecks its expiring account and tenant-binding reviews. The authenticated management workflow and provider-verified UID/custody model are NOT implemented yet.
+The future trusted worker supplies server-side context: positive integer vendor ID, exact `testnet`/`mainnet`, and a canonical 64-lowercase-hex custody-account fingerprint. All integrations referring to the same physical Bybit account must use the **same** fingerprint across tenants; it must not be a tenant-chosen alias. An internal local-review registry is now implemented (see `CRYPTO_CUSTODY_REGISTRY.md`); intake rechecks its expiring account and tenant-binding reviews. The SAAS authenticated dual-review management/evidence workflow is documented in `CRYPTO_CUSTODY_MANAGEMENT.md`; provider-verified UID/custody model and standalone independent-operator provisioning remain unimplemented.
 
 `bc_crypto_deposit_route_hash(asset_network, address, tag)` binds exact network, case-sensitive address and memo/tag. Empty tag and `0` are different; missing/null tag is rejected. No trimming, case-folding or chain-specific normalization is assumed. Any provider/network requiring other characters or normalization needs its own reviewed adapter first; the initial ASCII validation is intentionally narrow. Do not assume a shared master address proves customer ownership.
 

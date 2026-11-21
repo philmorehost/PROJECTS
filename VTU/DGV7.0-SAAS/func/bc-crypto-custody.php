@@ -1,6 +1,6 @@
 <?php
-/** INTERNAL registry workflow. No HTTP/CLI mutations, provider calls, routes or wallet writes.
- * Future controller MUST supply a fresh authenticated platform actor after CSRF/PIN/TOTP.
+/** INTERNAL registry workflow. No provider calls, routes or wallet writes.
+ * Management controller supplies fresh authenticated platform authority after POST/CSRF/PIN/TOTP.
  * Local dual review references evidence; it does not authenticate a provider account or prove custody eligibility.
  */
 require_once __DIR__.'/bc-crypto-governance.php';
@@ -77,13 +77,22 @@ function bc_crypto_custody_engines() {
 /** Trusted internal caller only. No user-submitted identity/authority may reach this function. */
 function bc_crypto_custody_save($authority,$env,$uid,$revision,$action,$input) {
     global $connection_server;
-    $actor=bc_crypto_custody_actor($authority);$identity=bc_crypto_custody_identity($env,$uid);
+    $identity=bc_crypto_custody_identity($env,$uid);
+    return bc_crypto_custody_save_identity($authority,$env,$identity,$revision,$action,$input,true);
+}
+/** Existing identities can be managed without redisclosing the raw provider UID.
+ * Only the canonical UID wrapper may create a row. Trusted internal caller only.
+ */
+function bc_crypto_custody_save_identity($authority,$env,$identity,$revision,$action,$input,$create=false) {
+    global $connection_server;
+    $actor=bc_crypto_custody_actor($authority);
+    bc_crypto_gov_environment($env);bc_crypto_custody_digest($identity);
     if (!is_int($revision)||$revision<0) throw new InvalidArgumentException('crypto_custody_revision_invalid');
     if (!bc_crypto_transaction_ready()) throw new RuntimeException('crypto_transaction_unavailable');
     bc_crypto_custody_engines();
     if (!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
     try {
-        bc_crypto_custody_must("INSERT INTO sas_crypto_v2_custody_accounts(custody_account,provider,environment,document) VALUES(?,'bybit',?,'{}') ON DUPLICATE KEY UPDATE custody_account=custody_account",[$identity,$env]);
+        if ($create) bc_crypto_custody_must("INSERT INTO sas_crypto_v2_custody_accounts(custody_account,provider,environment,document) VALUES(?,'bybit',?,'{}') ON DUPLICATE KEY UPDATE custody_account=custody_account",[$identity,$env]);
         $row=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=? FOR UPDATE',[$identity]);
         if (!$row || $row['provider']!=='bybit' || $row['environment']!==$env || (int)$row['revision']!==$revision) throw new RuntimeException('crypto_custody_edit_conflict');
         $before=bc_crypto_gov_decode($row);

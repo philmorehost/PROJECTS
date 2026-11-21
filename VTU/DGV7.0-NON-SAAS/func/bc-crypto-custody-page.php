@@ -1,0 +1,77 @@
+<?php
+if (!defined('BC_CRYPTO_CUSTODY_PAGE')) {http_response_code(404);exit;}
+header('Cache-Control: no-store, private, max-age=0');header('Referrer-Policy: no-referrer');header('X-Content-Type-Options: nosniff');
+$platform=BC_CRYPTO_CUSTODY_PAGE==='spadmin';
+$actor=$platform?($get_logged_spadmin_details??null):($get_logged_admin_details??null);
+if (!$actor||empty($actor['id'])||(int)($actor['status']??0)!==1||!empty($actor['is_blocked'])||!empty($actor['force_password_change'])) {http_response_code(403);exit('Access denied. Complete required account security setup.');}
+$method=$_SERVER['REQUEST_METHOD']??'GET';
+if (!in_array($method,['GET','POST'],true)) {http_response_code(405);header('Allow: GET, POST');exit;}
+if (!$platform && $method==='POST') {http_response_code(403);exit('Independent platform review is required; vendor self-approval is not available.');}
+require_once __DIR__.'/bc-crypto-custody-management.php';
+$env=in_array($_GET['environment']??null,['testnet','mainnet'],true)?$_GET['environment']:'testnet';
+$selected=$_GET['account']??'';
+if (!is_string($selected)||!preg_match('/^[a-f0-9]{64}$/D',$selected)) $selected='';
+$notice='';$evidence=null;$row=null;$accounts=[];$events=[];$schema=true;
+if ($method==='POST') {
+    try {
+        $result=bc_crypto_custody_manage((int)$actor['id'],$_POST);
+        $env=$_POST['environment'];$selected=$result['custody_account'];
+        if (array_key_exists('text',$result)) $evidence=$result['text'];
+        else {
+            $_SESSION['crypto_custody_notice']=isset($result['evidence_hash'])?'Evidence stored. Digest: '.$result['evidence_hash']:'Local custody review updated. No live capability activated.';
+            header('Location: CryptoCustody.php?environment='.rawurlencode($env).'&account='.$selected);exit;
+        }
+    } catch(Throwable $ex) {
+        $notice=preg_match('/^crypto_[a-z_]+$/D',$ex->getMessage())?$ex->getMessage():'crypto_custody_unavailable';
+        http_response_code(400);
+    }
+}
+if ($platform) {
+    try {
+        $list=bc_q('SELECT custody_account,revision,document FROM sas_crypto_v2_custody_accounts WHERE environment=? ORDER BY custody_account LIMIT 100',[$env]);
+        if (!($list instanceof mysqli_result)) throw new RuntimeException('schema');
+        while($a=mysqli_fetch_assoc($list)) $accounts[]=$a;
+        if ($selected!=='') {
+            $row=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=? AND environment=?',[$selected,$env]);
+            if ($row) {
+                $audit=bc_q('SELECT revision,actor_id,action,created_at FROM sas_crypto_v2_custody_audit WHERE custody_account=? ORDER BY revision DESC LIMIT 30',[$selected]);
+                if (!($audit instanceof mysqli_result)) throw new RuntimeException('schema');
+                while($a=mysqli_fetch_assoc($audit)) $events[]=$a;
+            }
+        }
+    } catch(Throwable $ex) {$schema=false;$notice='crypto_custody_schema_required';}
+}
+if (isset($_SESSION['crypto_custody_notice'])) {$notice=$_SESSION['crypto_custody_notice'];unset($_SESSION['crypto_custody_notice']);}
+$e=function($s){return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8');};
+$area=$platform?'spadmin':'admin';
+require_once __DIR__.'/bc-plate-admin.php';bc_adm_head('Crypto custody reviews',['area'=>$area]);bc_adm_sidebar(['area'=>$area]);bc_adm_topbar(['area'=>$area,'title'=>'CRYPTO CUSTODY REVIEWS','crumb'=>'Crypto / Custody']);
+?>
+<section class="section p-4"><h1 class="h3">Crypto custody accounts and protected evidence</h1>
+<div class="alert alert-warning">Local review only. No provider ownership/eligibility verification, routes, deposits, withdrawals or trading are activated here. Balances and financial holds are unchanged. A manually supplied UID or evidence note is not provider proof.</div>
+<?php if($notice!==''):?><div role="alert" class="alert alert-info"><?php echo $e($notice);?></div><?php endif;?>
+<?php if(!$platform):?><p>Custody provisioning requires two independent platform reviewers. Vendor/self-approval is unavailable in this edition. No registry records or evidence are exposed here.</p><?php else:?>
+<p>Every sensitive action requires fresh PIN + authenticator verification. A second reviewer must open the exact evidence at the current registry revision before approval. Viewing evidence creates an audit receipt valid for 15 minutes; wait for a new authenticator code before approving. Never create a second account to bypass independent review.</p>
+<form method="get" class="card p-3 mb-3"><label>Environment<select name="environment" class="form-select"><option value="testnet" <?php echo $env==='testnet'?'selected':'';?>>Testnet</option><option value="mainnet" <?php echo $env==='mainnet'?'selected':'';?>>Mainnet — local review only</option></select></label><label>Existing account fingerprint (optional)<input class="form-control" name="account" value="<?php echo $e($selected);?>" maxlength="64"></label><button class="btn btn-outline-primary mt-2">Load local registry</button></form>
+<?php if(!$schema):?><p>Review the explicit schema preview and arrange an authorized migration. This page never runs DDL.</p><?php else:?>
+<div class="card p-3 mb-3"><h2 class="h5">Registered accounts (first 100)</h2><?php foreach($accounts as $a):?><p><a href="?environment=<?php echo $e($env);?>&amp;account=<?php echo $e($a['custody_account']);?>"><?php echo $e($a['custody_account']);?></a> · revision <?php echo (int)$a['revision'];?></p><?php endforeach;?></div>
+<?php $doc=$row?bc_crypto_gov_decode($row):null;$revision=(int)($row['revision']??0);?>
+<?php if($row):?><div class="card p-3 mb-3"><h2 class="h5">Current review document — revision <?php echo $revision;?></h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><?php echo $e(json_encode($doc,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));?></pre></div><?php endif;?>
+<?php if($evidence!==null):?><div class="card p-3 mb-3"><h2 class="h5">Protected evidence — audited view</h2><p>Do not copy into tickets, URLs or screenshots. This response is not cached.</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere"><?php echo $e($evidence);?></pre></div><?php endif;?>
+<?php
+$security=function() {echo '<label class="d-block">Security PIN<input class="form-control" name="pin" type="password" required autocomplete="off" inputmode="numeric"></label><label class="d-block">Fresh authenticator code<input class="form-control" name="totp_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code"></label>';};
+$target=function() use($row,$selected,$env,$revision,$e) {
+ echo bc_csrf_field().'<input type="hidden" name="environment" value="'.$e($env).'"><input type="hidden" name="revision" value="'.$revision.'">';
+ if($row) echo '<input type="hidden" name="custody_account" value="'.$e($selected).'">';
+ else echo '<label>Provider-issued physical account/subaccount UID<input class="form-control" name="uid" pattern="[1-9][0-9]{0,19}" maxlength="20" required autocomplete="off"></label>';
+};
+?>
+<form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">1. Store protected review evidence</h2><p>Short UTF-8 narrative only (20–16,384 bytes): account/model verification steps, approval reference, reviewer context. No API credentials, recovery phrases, customer identity documents or uploads. Secret detection is limited; do not rely on it. Stored using dedicated AES-256-GCM keys; missing keys fail closed.</p><?php $target();?><input type="hidden" name="action" value="store_evidence"><textarea name="evidence_text" class="form-control mb-2" rows="5" maxlength="16384" required autocomplete="off"></textarea><?php $security();?><button class="btn btn-primary mt-2">Encrypt and store evidence</button></form>
+<form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">2. Propose <?php echo $row?'replacement review':'account';?></h2><p>Reproposal invalidates all existing reviews and tenant bindings.</p><?php $target();?><input type="hidden" name="action" value="propose"><label>Proposed custody model<select name="model" class="form-select"><option value="dedicated_subaccount">Dedicated subaccount — evidence required</option><option value="omnibus_exclusive_routes">Omnibus with exclusive routes — evidence required</option></select></label><label>Stored evidence SHA-256 digest<input name="evidence_hash" class="form-control" pattern="[a-f0-9]{64}" maxlength="64" required></label><?php $security();?><button class="btn btn-primary mt-2">Propose local review</button></form>
+<?php if($row):?>
+<form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">3. Open evidence at this revision</h2><?php $target();?><input type="hidden" name="action" value="view_evidence"><label>Evidence SHA-256 digest<input class="form-control" name="evidence_hash" pattern="[a-f0-9]{64}" maxlength="64" required></label><?php $security();?><button class="btn btn-outline-primary mt-2">Verify and open protected evidence</button></form>
+<form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">4. Independent review or suspension</h2><?php $target();?><label>Evidence digest (required for review)<input class="form-control" name="evidence_hash" maxlength="64"></label><label>Review lifetime in seconds (1–86,400)<input class="form-control" name="valid_seconds" value="3600" inputmode="numeric"></label><?php $security();?><button class="btn btn-primary mt-2" name="action" value="review">Record independent account review</button> <button class="btn btn-danger mt-2" name="action" value="suspend">Suspend account eligibility</button></form>
+<form method="post" action="CryptoCustody.php" class="card p-3 mb-3"><h2 class="h5">5. Explicit tenant binding</h2><p>Propose with stored binding evidence, then have another reviewer open that evidence at the new revision before review.</p><?php $target();?><label>Vendor ID<input name="vendor_id" class="form-control" inputmode="numeric" required></label><label>Binding evidence digest<input name="evidence_hash" class="form-control" maxlength="64"></label><label>Lifetime in seconds<input name="valid_seconds" class="form-control" value="3600"></label><?php $security();?><button class="btn btn-primary mt-2" name="action" value="propose_binding">Propose binding</button> <button class="btn btn-outline-primary mt-2" name="action" value="review_binding">Record independent binding review</button> <button class="btn btn-danger mt-2" name="action" value="revoke_binding">Revoke binding</button></form>
+<h2 class="h5">Registry audit (latest 30)</h2><?php foreach($events as $a):?><p><?php echo $e($a['created_at'].' · revision '.$a['revision'].' · actor '.$a['actor_id'].' · '.$a['action']);?></p><?php endforeach;?>
+<?php endif;?>
+<?php endif;endif;?>
+</section><?php bc_adm_foot(['area'=>$area]);?>

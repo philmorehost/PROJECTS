@@ -49,6 +49,7 @@ bc_adm_head('Crypto asset and network policies',['area'=>$area]);bc_adm_sidebar(
 ?>
 <section class="section p-4">
 <h1 class="h3">Crypto asset/network approvals and emergency stop</h1>
+<p><a href="CryptoCustody.php"><?php echo $platform?'Custody accounts and protected evidence reviews':'Custody review requirements'; ?></a></p>
 <div class="alert alert-warning">Governance only: live deposits, trading and withdrawals remain disconnected. Nothing here changes reconciliation status, legacy withdrawals, customer balances or existing holds. Missing policies/controls, stale catalogues and expired approvals fail closed.</div>
 <?php if($notice):?><div role="alert" class="alert alert-danger"><?php echo $e($notice); ?>. If schema is missing, have the operator review and run the explicit CLI migration; this page performs no DDL.</div><?php endif;?>
 <p>Editing <strong><?php echo $scope===0?'platform ceilings':'vendor '.$scope; ?></strong>, environment <strong><?php echo $e($env); ?></strong>. Platform controls and asset approval are required in addition to each vendor's controls and approval. No setting overrides an existing financial hold.</p>
