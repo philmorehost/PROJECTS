@@ -97,6 +97,16 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // Public browser return is intentionally sessionless and non-authoritative.
+        if ($name === 'InvoiceReturn.php') {
+            chk(strpos($cur, "header('Cache-Control: no-store');") !== false, "$label is non-cacheable");
+            chk(strpos($cur, 'Returning to this page does not confirm payment.') !== false, "$label makes no payment claim");
+            foreach (array('$_GET', '$_POST', '$_REQUEST', '$_SESSION', 'bc-config.php', 'mysqli_', 'chargeUser(', 'chargeVendor(') as $token) {
+                chk(strpos($cur, $token) === false, "$label has no authority via $token");
+            }
+            continue;
+        }
+
         // Anything else must be on the app shell. If it is not, it has to be a chrome-less
         // endpoint (AJAX, CLI, webhook) rather than a page somebody forgot.
         if (strpos($cur, 'bc_app_head(') === false) {
@@ -175,8 +185,8 @@ foreach ($editions as $edition) {
             chk(strpos($cur, 'SF_BANKS') !== false, "$label ships the bank list for type-ahead");
             foreach (array('name="verify-bank"', 'name="process-transfer"', 'name="initiate-transfer"', 'name="reset-bank"',
                            'id="bank-code"', 'name="bank-code"', 'id="account-number"', 'id="resolved-account-name"',
-                           "'resolve_account'", "'delete_beneficiary'", "'send_otp'", 'fillBeneficiary', 'deleteBeneficiary',
-                           'sendWithdrawalOTP', 'handleTransferSubmit', 'sas_withdrawal_beneficiaries') as $token) {
+                           "'resolve_account'", "'delete_beneficiary'", 'isset($_POST["send_otp"])', 'fillBeneficiary', 'deleteBeneficiary',
+                           'data-feature-otp="withdrawal"', 'bc-feature-email-otp.js', "bc_feature_email_otp(\$get_logged_user_details,'withdrawal')", 'handleTransferSubmit', 'sas_withdrawal_beneficiaries') as $token) {
                 chk(strpos($cur, $token) !== false, "$label keeps $token");
             }
             chk(strpos($cur, 'TomSelect') === false, "$label no longer depends on the unloaded TomSelect");
@@ -214,6 +224,58 @@ foreach ($editions as $edition) {
         if (in_array($name, $newServices, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             chk(strpos($cur, 'bc-fintech-services.php') !== false, "$label loads the provider service layer");
+            continue;
+        }
+
+        // Security remediations deliberately replaced these captured handlers.
+        // Pin their current boundaries rather than restoring unsafe old snapshots.
+        if ($name === 'BusinessUpgrade.php') {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
+            foreach (array('bc_validate_csrf();', "bc_is_rate_limited('kyb_submit'", 'bc_fintech_kyb_submit($bc_upgrade_user, $bc_upgrade_vendor, [', 'name="submit_business_kyb"', 'name="kyb_document"', 'is_uploaded_file($tmp)', 'getimagesize($tmp)', "bin2hex(random_bytes(8))") as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps KYB boundary $token");
+            }
+            chk(strpos($cur, 'UPDATE sas_users') === false, "$label cannot directly promote its user");
+            chk(strpos($cur, 'chargeUser(') === false && strpos($cur, 'chargeVendor(') === false, "$label does not charge for Business requests");
+            continue;
+        }
+        if ($name === 'CoinConversion.php') {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
+            foreach (array('bc-referral-coins.php', "isServiceEnabled('vtu_coins')", 'bc_validate_csrf();', 'bc_coin_conversion_change((int)$vendor_id, $username, $points)', 'name="convert-coins"', 'name="points"', 'SELECT * FROM sas_conversions WHERE vendor_id = ? AND username = ?') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps atomic conversion boundary $token");
+            }
+            chk(strpos($cur, 'chargeUser(') === false && strpos($cur, 'updateUserBalance(') === false && strpos($cur, 'UPDATE sas_') === false, "$label cannot bypass the atomic conversion helper");
+            chk(strpos($cur, 'bc_validate_csrf();') < strpos($cur, 'bc_coin_conversion_change('), "$label verifies CSRF before conversion");
+            continue;
+        }
+
+        if ($name === 'LiveRates.php') {
+            foreach (array('bc_app_sidebar(', 'bc-mobile-fx.php', 'bc_validate_csrf();', "bc_mobile_live_quote((int)\$get_logged_user_details['vendor_id']", 'bc_csrf_field()', 'This calculator does not exchange or move wallet funds.', 'htmlspecialchars($notice,ENT_QUOTES,') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps indicative FX boundary $token");
+            }
+            foreach (array('chargeUser(', 'chargeVendor(', 'bc_fintech_ledger_post(', 'UPDATE sas_') as $token) {
+                chk(strpos($cur, $token) === false, "$label cannot move funds via $token");
+            }
+            continue;
+        }
+
+        if ($name === 'Receive.php') {
+            foreach (array('bc_app_sidebar(', 'bc-fintech-flutterwave.php', 'bc_validate_csrf();', "bc_is_rate_limited('invoice_create'", 'sas_secure_payment_intents', 'bc_flw_create_payment_link($vid,', '/web/InvoiceReturn.php', 'bc_csrf_field()', 'htmlspecialchars($url,ENT_QUOTES,', 'rawurlencode($email)') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps invoice boundary $token");
+            }
+            chk(strpos($cur, 'bc_validate_csrf();') < strpos($cur, 'bc_flw_create_payment_link('), "$label verifies CSRF before provider calls");
+            chk(strpos($cur, 'sas_secure_payment_intents') < strpos($cur, 'bc_flw_create_payment_link('), "$label binds intent before provider calls");
+            foreach (array('chargeUser(', 'chargeVendor(', 'bc_fintech_ledger_post(', 'updateUserBalance(') as $token) {
+                chk(strpos($cur, $token) === false, "$label cannot directly credit via $token");
+            }
+            continue;
+        }
+
+        if ($name === 'handle_upgrade.php') {
+            foreach (array('bc_app_sidebar(', 'bc-paid-entitlements.php', 'bc-paid-security.php', 'bc_validate_csrf();', 'bc_paid_verify(', 'bc_paid_level_change(', 'name="expected_level"', 'name="paid_quote"', 'data-paid-save', 'bc_paid_fields(', 'bc_paid_otp_script();', 'Business access requires KYB review') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps paid level boundary $token");
+            }
+            chk(strpos($cur, 'bc_paid_verify(') < strpos($cur, 'bc_paid_level_change('), "$label verifies before charging");
+            chk(strpos($cur, 'UPDATE sas_users') === false && strpos($cur, 'chargeUser(') === false, "$label delegates atomic changes");
             continue;
         }
 
