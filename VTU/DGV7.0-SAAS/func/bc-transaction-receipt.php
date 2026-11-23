@@ -105,3 +105,18 @@ if (!function_exists('bc_receipt_fetch')) {
         return $row ?: null;
     }
 }
+
+/** Shared customer receipt details for native screens/PDF/image exporters. */
+function bc_receipt_detail_lines($payload) {
+    $lines=[];
+    if (!empty($payload['recipient'])) $lines[]=['label'=>'Credited number / destination','value'=>(string)$payload['recipient']];
+    if (!empty($payload['utility'])) {
+        foreach (['customer_name'=>'Customer name','customer_address'=>'Customer address','meter_number'=>'Meter number','meter_type'=>'Meter type'] as $key=>$label) {
+            $lines[]=['label'=>$label,'value'=>(string)($payload['utility'][$key] ?: 'Not supplied')];
+        }
+        foreach (['token'=>'Prepaid token','units'=>'Units'] as $key=>$label) {
+            if (!empty($payload['utility'][$key])) $lines[]=['label'=>$label,'value'=>(string)$payload['utility'][$key]];
+        }
+    }
+    return $lines;
+}

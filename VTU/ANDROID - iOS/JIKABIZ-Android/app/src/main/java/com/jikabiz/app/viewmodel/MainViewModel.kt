@@ -95,7 +95,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             status = (m["status"] as? Double)?.toInt() ?: 0,
                             statusName = m["status_name"] as? String ?: "",
                             mode = m["mode"] as? String ?: "",
-                            date = m["date"] as? String ?: ""
+                            date = m["date"] as? String ?: "",
+                            receiptDetails = (m["receipt_details"] as? List<*>)?.mapNotNull { detail ->
+                                val fields = detail as? Map<*, *> ?: return@mapNotNull null
+                                val label = fields["label"] as? String ?: return@mapNotNull null
+                                val value = fields["value"] as? String ?: return@mapNotNull null
+                                com.jikabiz.app.data.model.ReceiptDetail(label, value)
+                            } ?: emptyList()
                         )
                     }
                     _transactions.postValue(ApiResult.Success(list))

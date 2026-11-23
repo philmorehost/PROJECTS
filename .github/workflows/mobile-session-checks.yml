@@ -40,6 +40,7 @@ jobs:
       - name: Mobile source and OTP client contracts (not native compilation)
         run: |
           python3 "VTU/ANDROID - iOS/tools/check-mobile-session.py"
+          python3 "VTU/ANDROID - iOS/tools/check-mobile-receipts.py"
           python3 "VTU/ANDROID - iOS/tools/check-mobile-redesign.py"
           python3 VTU/DGV7.0-SAAS/tests/user_login_otp_clients_test.py
           node VTU/tests/harness/user-action-otp-ui-test.mjs

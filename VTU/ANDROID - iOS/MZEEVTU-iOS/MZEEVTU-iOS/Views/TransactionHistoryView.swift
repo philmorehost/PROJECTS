@@ -1,5 +1,7 @@
 import SwiftUI
 
+struct HistoryReceiptDetail: Codable { let label: String; let value: String }
+
 struct TransactionItem: Codable, Identifiable {
     var id: String { reference }
     let reference: String
@@ -8,6 +10,18 @@ struct TransactionItem: Codable, Identifiable {
     let description: String
     let status: Int
     let status_name: String
+    let receipt_details: [HistoryReceiptDetail]?
+    let discounted_amount: Double?
+    let balance_before: Double?
+    let balance_after: Double?
+    var receiptRow: [String: Any] {
+        var row: [String: Any] = ["reference":reference,"type":type,"amount":amount,"status":status,"date":date,"description":description,
+            "receipt_details":(receipt_details ?? []).map { ["label":$0.label,"value":$0.value] }]
+        row["discounted_amount"]=discounted_amount
+        row["balance_before"]=balance_before
+        row["balance_after"]=balance_after
+        return row
+    }
     let date: String
 }
 
@@ -22,6 +36,7 @@ struct TransactionHistoryView: View {
     @State private var transactions: [TransactionItem] = []
     @State private var isLoading = false
     @State private var feedbackMessage = ""
+    @State private var receipt: MobileReceipt?
     
     // Filters States
     @State private var showFilters = false
@@ -66,6 +81,7 @@ struct TransactionHistoryView: View {
                 .background(brandTheme.primary.opacity(0.1))
             }
 
+            if !feedbackMessage.isEmpty { Text(feedbackMessage).foregroundColor(.red) }
             List {
                 if isLoading {
                     HStack {
@@ -99,6 +115,8 @@ struct TransactionHistoryView: View {
                             }
                         }
                         .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture { receipt = MobileReceipt(row: tx.receiptRow) }
                     }
                 }
             }
@@ -156,11 +174,14 @@ struct TransactionHistoryView: View {
                 ShareSheet(activityItems: [url])
             }
         }
+        .sheet(item: $receipt) { item in MobileReceiptView(receipt: item) }
         .onAppear(perform: fetchHistory)
     }
 
     func fetchHistory() {
+        guard !isLoading else { return }
         isLoading = true
+        feedbackMessage = ""
         var params: [String: Any] = [:]
         
         if !filterType.isEmpty { params["type"] = filterType }
@@ -176,9 +197,13 @@ struct TransactionHistoryView: View {
             isLoading = false
             switch result {
             case .success(let response):
-                self.transactions = response.data ?? []
+                guard response.status == "success", let rows = response.data else {
+                    feedbackMessage = "Unable to load history. Please retry."
+                    return
+                }
+                self.transactions = rows
             case .failure(let error):
-                print("History error: \(error)")
+                feedbackMessage = "Unable to load history. Check your connection and retry."
             }
         }
     }

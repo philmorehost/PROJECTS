@@ -49,6 +49,7 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
     private val transactions = mutableListOf<Transaction>()
     private var currentOffset = 0
     private val pageSize = 20
+    private var historyLoading = false
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -123,10 +124,12 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
     }
 
     private fun loadTransactions(reset: Boolean = false) {
-        if (reset) { currentOffset = 0; transactions.clear() }
+        if (historyLoading) return
+        historyLoading = true
+        val requestedOffset = if (reset) 0 else currentOffset
         progressBar.visibility = View.VISIBLE
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val prefs = PreferenceManager(requireContext())
                 val api = RetrofitClient.getService()
@@ -141,7 +144,7 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
                 val params = mutableMapOf<String, Any>(
                     "api_key" to prefs.getApiKey(),
                     "limit" to pageSize,
-                    "offset" to currentOffset,
+                    "offset" to requestedOffset,
                     "type" to etFilterType.text.toString().trim(),
                     "status" to statusSelection,
                     "start_date" to etStartDate.text.toString().trim(),
@@ -149,8 +152,10 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
                 )
 
                 val resp = api.getTransactions(params)
+                if (!resp.isSuccessful || resp.body()?.get("status") != "success")
+                    throw IllegalStateException(resp.body()?.get("message") as? String ?: "Unable to load history. Please retry.")
                 @Suppress("UNCHECKED_CAST")
-                val list = resp.body()?.get("data") as? List<Map<String, Any>>
+                val list = resp.body()?.get("data") as? List<Map<String, Any>> ?: throw IllegalStateException("Invalid history response")
                 val parsed = list?.mapNotNull { m ->
                     Transaction(
                         reference = m["reference"] as? String ?: "",
@@ -163,23 +168,35 @@ class TransactionsFragment : Fragment(R.layout.fragment_transactions) {
                         status = (m["status"] as? Double)?.toInt() ?: (m["status"].toString().toIntOrNull() ?: 0),
                         statusName = m["status_name"] as? String ?: statusLabel((m["status"] as? Double)?.toInt() ?: 0),
                         mode = m["mode"] as? String ?: "",
-                        date = m["date"] as? String ?: ""
+                        date = m["date"] as? String ?: "",
+                            receiptDetails = (m["receipt_details"] as? List<*>)?.mapNotNull { detail ->
+                                val fields = detail as? Map<*, *> ?: return@mapNotNull null
+                                val label = fields["label"] as? String ?: return@mapNotNull null
+                                val value = fields["value"] as? String ?: return@mapNotNull null
+                                com.mzeevtu.data.model.ReceiptDetail(label, value)
+                            } ?: emptyList()
                     )
                 } ?: emptyList()
 
+                if (reset) transactions.clear()
                 transactions.addAll(parsed)
-                currentOffset += pageSize
+                currentOffset = requestedOffset + parsed.size
                 activity?.runOnUiThread {
+                    if (view == null) return@runOnUiThread
                     renderTransactions()
                     progressBar.visibility = View.GONE
                     swipeRefresh.isRefreshing = false
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 activity?.runOnUiThread {
+                    if (view == null) return@runOnUiThread
+                    Toast.makeText(requireContext(), e.message ?: "Unable to load history. Please retry.", Toast.LENGTH_LONG).show()
                     progressBar.visibility = View.GONE
                     swipeRefresh.isRefreshing = false
                 }
-            }
+            } finally { historyLoading = false }
         }
     }
 

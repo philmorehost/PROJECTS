@@ -25,6 +25,11 @@ object ReceiptHelper {
 
     private const val DEFAULT_RECEIPT_WIDTH_PX = 900
 
+    private fun receiptDescription(tx: Transaction): String = if (tx.receiptDetails.isNotEmpty())
+        tx.receiptDetails.joinToString("\n\n") { "${it.label}\n${it.value}" }
+    else tx.description.ifEmpty { "—" }
+
+
     fun showReceiptDialog(fragment: Fragment, tx: Transaction) {
         val context = fragment.requireContext()
         val dialogView = fragment.layoutInflater.inflate(R.layout.dialog_transaction_receipt, null)
@@ -82,7 +87,7 @@ object ReceiptHelper {
         view.findViewById<TextView>(R.id.tv_receipt_amount).text = tx.amount.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_reference).text = tx.reference.ifEmpty { "\u2014" }
         view.findViewById<TextView>(R.id.tv_receipt_type).text = tx.type.ifEmpty { "\u2014" }
-        view.findViewById<TextView>(R.id.tv_receipt_description).text = tx.description.ifEmpty { "\u2014" }
+        view.findViewById<TextView>(R.id.tv_receipt_description).text = receiptDescription(tx)
         view.findViewById<TextView>(R.id.tv_receipt_amount_paid).text = tx.discountedAmount.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_balance_before).text = tx.balanceBefore.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_balance_after).text = tx.balanceAfter.toNaira()
@@ -158,7 +163,25 @@ object ReceiptHelper {
     ) {
         try {
             val pageWidth = 595
-            val pageHeight = 842
+            val receiptRows = listOf("Reference" to tx.reference, "Type" to tx.type) +
+                (if (tx.receiptDetails.isNotEmpty()) tx.receiptDetails.map { it.label to it.value }
+                 else listOf("Description" to tx.description)) + listOf(
+                    "Amount Paid" to tx.discountedAmount.toNaira(),
+                    "Balance Before" to tx.balanceBefore.toNaira(),
+                    "Balance After" to tx.balanceAfter.toNaira(),
+                    "Mode" to tx.mode, "Date" to tx.date)
+            val measure = Paint().apply { textSize = 14f; isAntiAlias = true }
+            fun wrapped(value: String): List<String> = value.ifEmpty { "—" }.split("\n").flatMap { paragraph ->
+                val parts = mutableListOf<String>()
+                var remaining = paragraph
+                while (remaining.isNotEmpty()) {
+                    val count = measure.breakText(remaining, true, 335f, null).coerceAtLeast(1)
+                    parts.add(remaining.take(count)); remaining = remaining.drop(count)
+                }
+                if (parts.isEmpty()) listOf("") else parts
+            }
+            val prepared = receiptRows.map { (label, value) -> label to wrapped(value) }
+            val pageHeight = maxOf(842, 280 + prepared.sumOf { 22 + it.second.size * 18 })
 
             val pdfDoc = PdfDocument()
             val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
@@ -187,20 +210,12 @@ object ReceiptHelper {
 
             canvas.drawLine(lx, y, rx, y, paintDivider); y += 20f
 
-            fun row(label: String, value: String) {
+            prepared.forEach { (label, lines) ->
                 canvas.drawText(label, lx, y, paintLabel)
-                canvas.drawText(value, lx + 160f, y, paintValue)
-                y += 22f
+                y += 18f
+                lines.forEach { line -> canvas.drawText(line, lx, y, paintValue); y += 18f }
+                y += 4f
             }
-
-            row("Reference:", tx.reference.ifEmpty { "\u2014" })
-            row("Type:", tx.type.ifEmpty { "\u2014" })
-            row("Description:", tx.description.ifEmpty { "\u2014" })
-            row("Amount Paid:", tx.discountedAmount.toNaira())
-            row("Balance Before:", tx.balanceBefore.toNaira())
-            row("Balance After:", tx.balanceAfter.toNaira())
-            row("Mode:", tx.mode.ifEmpty { "\u2014" })
-            row("Date:", tx.date.ifEmpty { "\u2014" })
 
             y += 10f
             canvas.drawLine(lx, y, rx, y, paintDivider); y += 20f

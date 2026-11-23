@@ -7,8 +7,13 @@ struct MobileReceipt: Identifiable {
     static func number(_ value: Any?) -> Double? { if let n=value as? NSNumber { return n.doubleValue }; if let s=value as? String { return Double(s) }; return nil }
     var lines: [(String,String)] {
         let status=Int(Self.number(row["status"]) ?? 0)
+        let details = (row["receipt_details"] as? [[String: Any]] ?? []).compactMap { item -> (String, String)? in
+            guard let label = item["label"] as? String, let value = item["value"] as? String else { return nil }
+            return (label, value)
+        }
         return [("Reference",id),("Status",status==1 ? "Completed" : status==2 ? "Pending" : "Failed"),
-            ("Description",row["description"] as? String ?? ""),("Date",row["date"] as? String ?? ""),
+            ("Date",row["date"] as? String ?? "")] +
+            (details.isEmpty ? [("Description",row["description"] as? String ?? "")] : details) + [
             ("Amount","NGN \(String(format:"%.2f",Self.number(row["amount"]) ?? 0))"),
             ("Balance before","NGN \(String(format:"%.2f",Self.number(row["balance_before"]) ?? 0))"),
             ("Balance after","NGN \(String(format:"%.2f",Self.number(row["balance_after"]) ?? 0))")]
@@ -30,15 +35,21 @@ struct MobileReceiptView: View {
         }.sheet(isPresented:$sharing) { if let url=exportURL { BCShareSheet(items:[url]) } }
     }
     private func export(pdf: Bool) {
-        let size=CGSize(width:600,height:780)
+        let font=UIFont.systemFont(ofSize:16)
+        let rendered = receipt.lines.map { key, value -> (String, String, CGFloat) in
+            let rect=(value as NSString).boundingRect(with:CGSize(width:536,height:CGFloat.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:[.font:font],context:nil)
+            return (key,value,max(24,ceil(rect.height)))
+        }
+        let height=rendered.reduce(CGFloat(130)) { $0 + $1.2 + 48 }
+        let size=CGSize(width:600,height:max(780,height))
         let draw={
             UIColor.white.setFill(); UIRectFill(CGRect(origin:.zero,size:size))
             let heading=[NSAttributedString.Key.font:UIFont.boldSystemFont(ofSize:26),.foregroundColor:UIColor.black]
             ("Transaction receipt" as NSString).draw(at:CGPoint(x:32,y:32),withAttributes:heading)
             var y:CGFloat=90
-            for (key,value) in receipt.lines {
+            for (key,value,height) in rendered {
                 (key as NSString).draw(at:CGPoint(x:32,y:y),withAttributes:[.font:UIFont.systemFont(ofSize:12),.foregroundColor:UIColor.darkGray])
-                (value as NSString).draw(in:CGRect(x:32,y:y+20,width:536,height:60),withAttributes:[.font:UIFont.systemFont(ofSize:16),.foregroundColor:UIColor.black]); y+=88
+                (value as NSString).draw(in:CGRect(x:32,y:y+20,width:536,height:height),withAttributes:[.font:font,.foregroundColor:UIColor.black]); y+=height+48
             }
         }
         let url=FileManager.default.temporaryDirectory.appendingPathComponent("receipt-\(UUID().uuidString)."+(pdf ? "pdf":"png"))
