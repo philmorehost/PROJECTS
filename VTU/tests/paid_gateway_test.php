@@ -3,7 +3,7 @@ require __DIR__.'/../DGV7.0-SAAS/func/bc-paid-entitlements.php';
 $n=0;function paid_source_check($v,$m){global $n;if(!$v)throw new RuntimeException($m);$n++;}
 foreach(['0'=>'0.00','50000'=>'50000.00','150000.25'=>'150000.25'] as $v=>$expected)paid_source_check(bc_paid_money($v)===$expected,'valid amount');
 foreach(['-1','NaN','INF','1e3','1,000','0.001','',[],true] as $v){$failed=false;try{bc_paid_money($v);}catch(Throwable $e){$failed=true;}paid_source_check($failed,'invalid amount refused');}
-paid_source_check(bc_fintech_api_price('bybit')===150000.0 && bc_fintech_api_price('klasha')===50000.0,'per-module defaults');
+paid_source_check(bc_fintech_api_price('platnova')===50000.0 && bc_fintech_api_price('klasha')===50000.0,'per-module defaults');
 foreach(['SAAS','NON-SAAS'] as $ed){
  $root=__DIR__.'/../DGV7.0-'.$ed;
  $page=file_get_contents($root.'/bc-admin/PaymentGateway.php');
@@ -14,7 +14,7 @@ foreach(['SAAS','NON-SAAS'] as $ed){
  paid_source_check(strpos($core,'FOR UPDATE')!==false && strpos($core,'mysqli_rollback')!==false && strpos($core,'INNODB')!==false,'locked rollback-safe transactional core');
  paid_source_check(strpos($core,'$type=bc_fintech_account_type($row);')!==false && strpos($core,"account_type='\$type'")!==false,'pricing preserves pre-change explicit or inferred type');
  $cards=file_get_contents($root.'/func/bc-gateway-api-settings.php');
- paid_source_check(strpos($cards,"['klasha'=>'Klasha','bybit'=>'Bybit']")!==false,'both provider cards');
+ paid_source_check(strpos($cards,"['klasha'=>'Klasha']")!==false,'supported encrypted provider card');
  paid_source_check(strpos($cards,"value=\"\"")!==false && strpos($cards,"'gcm:'")!==false,'secrets write-only and encrypted');
  paid_source_check(strpos($cards,'Crypto staging and live activation remain paused')!==false,'paused activation explicit');
  $security=file_get_contents($root.'/func/bc-paid-security.php');

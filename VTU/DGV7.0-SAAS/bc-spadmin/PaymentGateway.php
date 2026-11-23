@@ -293,7 +293,7 @@ bc_adm_head('', array("area" => "spadmin"));
 
             <div class="card p-4 mb-4" id="fintech-api-prices">
             <h5>Fintech API Access Prices (SAAS vendors)</h5>
-            <p>One-time vendor access purchases. Bybit defaults to ₦150,000; Klasha to ₦50,000. Zero is allowed. NON-SAAS includes access without purchase. Changing prices does not enable services or crypto staging.</p>
+            <p>One-time vendor access purchases. Available provider modules default to ₦50,000. Zero is allowed. NON-SAAS includes access without purchase. Changing prices does not enable services or crypto staging.</p>
             <form method="post" data-paid-save>
             <?php foreach(bc_fintech_api_providers() as $fintech_slug=>$meta):
               $fintech_price_val=bc_fintech_api_price($fintech_slug); ?>

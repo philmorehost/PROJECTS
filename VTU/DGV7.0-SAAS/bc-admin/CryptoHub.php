@@ -117,7 +117,7 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
     <section class="section p-4">
 <p class="p-3"><a href="CryptoCustody.php">Custody review requirements</a></p>
         <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto asset/network policies and emergency stop</a></p>
-        <div class="alert alert-info">Bybit integration is in read-only discovery. Existing payout holds are unchanged. <a href="CryptoBybit.php" class="fw-bold">Inspect provider security readiness and coin/network catalogue</a>.</div>
+        <div class="alert alert-info">Bybit integration is in read-only discovery. Existing payout holds are unchanged. .</div>
         <div class="row g-4">
             <!-- Payout Settings -->
             <div class="col-lg-4">
