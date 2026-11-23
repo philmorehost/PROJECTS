@@ -3,6 +3,25 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-admin-config.php");
 
+    header('Cache-Control: no-store, private');
+    require_once __DIR__ . '/../func/bc-app-update-validation.php';
+    require_once __DIR__ . '/../func/bc-app-update-security.php';
+    if (($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
+        bc_validate_csrf();
+        if (isset($_POST['app_update_send_code'])) {
+            header('Content-Type: application/json; charset=UTF-8');
+            $context=(string)$_POST['app_update_send_code'];
+            $error='Invalid update action.';
+            if (in_array($context,array_values(bc_app_update_contexts()),true)) {
+                $error=bc_stepup_send_email_otp((int)$get_logged_admin_details['id'],(string)$get_logged_admin_details['email'],(string)$get_logged_admin_details['email'],$context,'App update confirmation');
+            }
+            echo json_encode(['status'=>$error===''?'success':'error','message'=>$error===''?'OTP SENT':$error]);exit;
+        }
+        $actions=array_intersect(array_keys(bc_app_update_contexts()),array_keys($_POST));
+        $error=count($actions)===1 ? bc_app_update_stepup($get_logged_admin_details,bc_app_update_contexts()[reset($actions)],$_POST) : 'Choose one update action.';
+        if($error!==''){$_SESSION['product_purchase_response']='Error: '.$error;header('Location: AppUpdateBroadcast.php');exit;}
+    }
+
     // ── Helper: generate a Google OAuth2 JWT for FCM v1 API ───────────────
     function _fcm_base64url($data) {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
@@ -29,7 +48,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $private_key   = openssl_pkey_get_private($sa['private_key']);
         if (!$private_key) return null;
 
-        openssl_sign($signing_input, $signature, $private_key, 'SHA256');
+        if (!openssl_sign($signing_input, $signature, $private_key, 'SHA256')) return null;
         $jwt = $signing_input . '.' . _fcm_base64url($signature);
 
         // Exchange JWT for access token
@@ -41,10 +60,13 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 'assertion'  => $jwt,
             ]),
             CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT        => 15,
         ]);
         $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+        if ($code !== 200) return null;
 
         $data = json_decode($resp, true);
         return $data['access_token'] ?? null;
@@ -66,6 +88,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 "Authorization: Bearer $access_token",
             ],
             CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT        => 20,
         ]);
         $resp      = curl_exec($ch);
@@ -110,16 +133,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     // ── Handle Save App Update Settings ───────────────────────────────────
     if (isset($_POST["save-update-settings"])) {
-        $source_in       = (($_POST["update_source"] ?? "local") === "play") ? "play" : "local";
-        $play_url_in     = trim(strip_tags($_POST["play_store_url"] ?? ""));
-        $version_code_in = (int) ($_POST["apk_version_code"] ?? 0);
-        $version_name_in = trim(strip_tags($_POST["apk_version_name"] ?? ""));
-        $apk_file_in     = trim(strip_tags($_POST["apk_filename"] ?? ""));
-        $changelog_in    = trim(strip_tags($_POST["changelog"] ?? ""));
-
-        if ($source_in === "play" && !preg_match('#^https?://#i', $play_url_in)) {
-            $_SESSION["product_purchase_response"] = "Error: a full Google Play store URL is required when the update source is Google Play (e.g. https://play.google.com/store/apps/details?id=com.yourapp).";
-        } else {
+        try {
+            $release=bc_app_update_release($_POST);
+            $source_in=$release['source'];$play_url_in=$release['url'];$version_code_in=$release['code'];
+            $version_name_in=$release['name'];$apk_file_in=$release['file'];$changelog_in=$release['changelog'];
             $stmt = $connection_server->prepare(
                 "INSERT INTO sas_app_update_settings
                     (vendor_id, update_source, play_store_url, apk_version_code, apk_version_name, apk_filename, changelog, date)
@@ -131,8 +148,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             );
             if ($stmt) {
                 $stmt->bind_param("ississs", $vendor_id, $source_in, $play_url_in, $version_code_in, $version_name_in, $apk_file_in, $changelog_in);
-                $stmt->execute();
+                $saved=$stmt->execute();
                 $stmt->close();
+                if (!$saved) throw new RuntimeException("save_failed");
                 $_SESSION["product_purchase_response"] = ($source_in === "play")
                     ? "App update source saved: Google Play Store."
                     : "App update source saved: local host (directory).";
@@ -140,31 +158,34 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $_SESSION["product_purchase_response"] = "Error: could not save app update settings.";
             }
         }
-        header("Location: " . $_SERVER["REQUEST_URI"]);
+        catch (InvalidArgumentException $e) { $_SESSION['product_purchase_response']='Error: '.$e->getMessage(); }
+        catch (Throwable $e) { $_SESSION['product_purchase_response']='Error: Could not confirm settings saved. Refresh before retrying.'; }
+        header("Location: AppUpdateBroadcast.php");
         exit;
     }
 
     if (isset($_POST["save-fcm-settings"])) {
-        $project_id          = trim(strip_tags($_POST["project_id"] ?? ""));
-        $service_account_raw = trim($_POST["service_account_json"] ?? "");
-
-        if (empty($project_id) || empty($service_account_raw)) {
-            $_SESSION["product_purchase_response"] = "Project ID and Service Account JSON are required";
-        } elseif (!json_decode($service_account_raw)) {
-            $_SESSION["product_purchase_response"] = "Service Account JSON is not valid JSON";
-        } else {
-            $stmt = $connection_server->prepare(
-                "INSERT INTO sas_fcm_settings (vendor_id, project_id, service_account_json)
-                 VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE project_id=VALUES(project_id), service_account_json=VALUES(service_account_json)"
-            );
-            $stmt->bind_param("iss", $vendor_id, $project_id, $service_account_raw);
-            $stmt->execute();
-            $stmt->close();
-            $_SESSION["product_purchase_response"] = "FCM settings saved successfully";
-        }
-        header("Location: " . $_SERVER["REQUEST_URI"]);
-        exit;
+        try {
+            $project_id=trim((string)($_POST['project_id']??''));
+            $raw=trim((string)($_POST['service_account_json']??''));
+            if ($raw==='') {
+                if (!$fcm_row || $project_id!==$fcm_row['project_id']) throw new InvalidArgumentException('Provide a service-account key when changing projects.');
+                $_SESSION['product_purchase_response']='Saved Firebase key retained. No credentials were changed.';
+            } else {
+                $normalized=bc_app_update_fcm_account($project_id,$raw);
+                if (empty($GLOBALS['mySqlPass']) || !function_exists('bc_stepup_seal_secret')) throw new RuntimeException('secure_storage_unavailable');
+                $sealed=bc_stepup_seal_secret($normalized);
+                if (strpos($sealed,'gcm:')!==0) throw new RuntimeException('secure_storage_unavailable');
+                $stmt=$connection_server->prepare("INSERT INTO sas_fcm_settings (vendor_id,project_id,service_account_json) VALUES (?,?,?) ON DUPLICATE KEY UPDATE project_id=VALUES(project_id),service_account_json=VALUES(service_account_json)");
+                if(!$stmt)throw new RuntimeException('save_failed');
+                $stmt->bind_param('iss',$vendor_id,$project_id,$sealed);
+                $saved=$stmt->execute();$stmt->close();
+                if(!$saved)throw new RuntimeException('save_failed');
+                $_SESSION['product_purchase_response']='FCM settings saved. The private key will not be redisplayed.';
+            }
+        } catch(InvalidArgumentException $e) { $_SESSION['product_purchase_response']='Error: '.$e->getMessage(); }
+        catch(Throwable $e) { $_SESSION['product_purchase_response']='Error: Could not validate or securely save Firebase settings. Check OpenSSL and server secret configuration, then refresh before retrying.'; }
+        header('Location: AppUpdateBroadcast.php');exit;
     }
 
     // ── Handle Broadcast Update Notification ──────────────────────────────
@@ -172,7 +193,20 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         if (empty($fcm_row)) {
             $_SESSION["product_purchase_response"] = "Error: FCM settings not configured. Save your Firebase project ID and Service Account JSON first.";
         } else {
-            $access_token = generateFcmAccessToken($fcm_row["service_account_json"]);
+            try {
+                bc_app_update_release(['update_source'=>$update_source,'play_store_url'=>$play_store_url,'apk_version_code'=>$update_version_code,'apk_version_name'=>$update_version_name,'apk_filename'=>$update_apk_filename,'changelog'=>$update_changelog]);
+                $raw=bc_stepup_open_secret($fcm_row['service_account_json']);
+                $account=bc_app_update_fcm_account($fcm_row['project_id'],$raw);
+                // app_updates is a project-wide topic: refuse a project shared by other tenants.
+                $project=mysqli_real_escape_string($connection_server,$fcm_row['project_id']);
+                $shared=mysqli_query($connection_server,"SELECT vendor_id FROM sas_fcm_settings WHERE project_id='$project' AND vendor_id<>'$vendor_id' LIMIT 1");
+                if(!$shared || mysqli_num_rows($shared)>0)throw new RuntimeException('shared_project');
+                if ($update_source==='local' && !is_file(__DIR__.'/../apk/'.$update_apk_filename))throw new RuntimeException('apk_missing');
+            } catch(Throwable $e) {
+                $_SESSION['product_purchase_response']='Error: Verify the saved release, APK and Firebase key. Topic broadcasts require a dedicated Firebase project, not one shared by multiple vendors.';
+                header('Location: AppUpdateBroadcast.php');exit;
+            }
+            $access_token = generateFcmAccessToken($account);
             if (!$access_token) {
                 $_SESSION["product_purchase_response"] = "Error: Could not obtain FCM access token. Check your Service Account JSON.";
             } else {
@@ -191,11 +225,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                         "version_name"  => (string) $update_version_name,
                     ]
                 );
-                if ($result["code"] === 200) {
-                    $_SESSION["product_purchase_response"] = "Update notification broadcast to all app users successfully!" . ($update_source === "play" ? " (source: Google Play Store)" : " (source: local host directory)");
+                if ($result["code"] === 200 && !empty($result['body']['name'])) {
+                    $_SESSION["product_purchase_response"] = "Firebase accepted the update notification. Delivery to every device is not guaranteed." . ($update_source === "play" ? " (source: Google Play Store)" : " (source: local host directory)");
                 } else {
-                    $err = ($result["body"]["error"]["message"] ?? null) ?? "Unknown error";
-                    $_SESSION["product_purchase_response"] = "FCM Error ({$result["code"]}): $err";
+                    $_SESSION["product_purchase_response"] = "Firebase delivery was not confirmed. Check Firebase delivery logs before retrying to avoid duplicate notifications.";
                 }
             }
         }
@@ -246,8 +279,9 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
           <div class="card info-card px-4 py-4">
             <h5 class="card-title">📣 Broadcast Update Notification</h5>
             <p class="text-muted">
-              Sends a push notification to all users who have your app installed.
-              Their app will immediately check for a new APK version and prompt them to update.
+              Requires a dedicated Firebase project for this vendor. The existing app-update topic is project-wide; do not reuse another vendor's project.
+              Sends a push notification to subscribed app instances.
+              Compatible online apps check the saved release when Firebase delivers the message. Delivery and installation are not guaranteed.
             </p>
             <p>
               <strong>Registered devices:</strong>
@@ -262,7 +296,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
               <?php else: ?>
                 1. Upload your new APK to cPanel at <code>/public_html/apk/<?php echo htmlspecialchars($update_apk_filename); ?></code><br/>
                 2. Keep the version below higher than the installed build<br/>
-                3. Click Broadcast below — users will be notified instantly.
+                3. Click Broadcast below — Firebase delivery is best effort.
               <?php endif; ?>
             </div>
             <?php if (!$fcm_row): ?>
@@ -271,6 +305,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
             </div>
             <?php endif; ?>
             <form method="post" action="">
+                <?php bc_app_update_security_fields($get_logged_admin_details,'app_release_broadcast'); ?>
                 <button name="broadcast-update" type="submit"
                     class="btn btn-success col-12"
                     <?php echo (!$fcm_row ? 'disabled' : ''); ?>
@@ -302,8 +337,10 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
                     <label class="form-label">Service Account JSON</label>
                     <textarea name="service_account_json" class="form-control" rows="8"
                         placeholder='Paste the contents of the service account JSON key file here...'
-                        required><?php echo htmlspecialchars($fcm_row["service_account_json"] ?? ""); ?></textarea>
+                        autocomplete="off"></textarea>
+                    <div class="form-text">Leave blank to retain the saved key. Paste a replacement only to rotate it. New keys are encrypted at rest; saved private keys are never shown here.</div>
                 </div>
+                <?php bc_app_update_security_fields($get_logged_admin_details,'app_fcm_save'); ?>
                 <button name="save-fcm-settings" type="submit" class="btn btn-primary col-12">
                     💾 Save FCM Settings
                 </button>
@@ -341,7 +378,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
                 <input type="url" name="play_store_url" class="form-control"
                   placeholder="https://play.google.com/store/apps/details?id=com.example.app"
                   value="<?php echo htmlspecialchars($play_store_url); ?>"/>
-                <div class="form-text">Required while the source is Google Play. Clearing it makes the app report “up to date” again.</div>
+                <div class="form-text">Required while the source is Google Play. Only official HTTPS Google Play app-details links are accepted.</div>
               </div>
 
               <hr/>
@@ -349,7 +386,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
               <div class="row">
                 <div class="col-md-3 mb-3">
                   <label class="form-label">Version code</label>
-                  <input type="number" min="0" name="apk_version_code" class="form-control"
+                  <input type="number" min="1" max="2147483647" name="apk_version_code" class="form-control"
                     value="<?php echo (int) $update_version_code; ?>"/>
                   <div class="form-text">Must be higher than the installed build.</div>
                 </div>
@@ -370,6 +407,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
                 <label class="form-label">Changelog (optional, shown in the update dialog)</label>
                 <textarea name="changelog" class="form-control" rows="3"><?php echo htmlspecialchars($update_changelog); ?></textarea>
               </div>
+                <?php bc_app_update_security_fields($get_logged_admin_details,'app_release_save'); ?>
               <button name="save-update-settings" type="submit" class="btn btn-primary col-12">
                 💾 Save App Update Settings
               </button>
@@ -408,3 +446,5 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
 
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
+
+<script src="../asset/bc-app-update-otp.js" defer></script>

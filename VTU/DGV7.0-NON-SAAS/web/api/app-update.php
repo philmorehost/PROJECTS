@@ -89,6 +89,17 @@ if ($app_update_row && trim($app_update_row["changelog"] ?? "") !== "") {
 // Only return update_available when the APK file actually exists on disk.
 $apk_path = __DIR__ . "/../../apk/{$apk_filename}";
 
+// Reject malformed legacy settings too; saving a corrected configuration is required.
+require_once __DIR__ . '/../../func/bc-app-update-validation.php';
+try {
+    $release=bc_app_update_release(['update_source'=>$update_source,'play_store_url'=>$play_store_url,'apk_version_code'=>$latest_version_code,'apk_version_name'=>$latest_version_name,'apk_filename'=>$apk_filename,'changelog'=>$changelog]);
+    $play_store_url=$release['url'];
+} catch (Throwable $e) {
+    http_response_code(503);
+    echo json_encode(['status'=>'error','code'=>'UPDATE_CONFIG_INVALID','message'=>'App update configuration is unavailable. Contact support.']);
+    exit;
+}
+
 // ── Google Play mode ───────────────────────────────────────────────────────────
 // No local APK is involved, so the file check below does not apply: the admin "publishes" by
 // selecting Google Play and saving a store URL, and clearing that URL stops the prompt again.
@@ -111,7 +122,7 @@ if ($update_source === "play") {
 }
 
 // ── Local host (directory) mode ────────────────────────────────────────────────
-if (file_exists($apk_path)) {
+if (is_file($apk_path)) {
     echo json_encode([
         "status"        => "update_available",
         "update_source" => "local",
