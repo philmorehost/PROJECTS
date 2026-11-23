@@ -16,7 +16,7 @@ function bc_feature_email_otp($actor,$purpose){
     $otp=(string)random_int(100000,999999);
     try{$sent=sendVendorEmail($email,$otp.' is your '.$label.' code','Your verification code is <b>'.$otp.'</b>. It expires in 10 minutes.');}catch(Throwable $e){$sent=false;}
     if(!$sent)return ['status'=>'error','message'=>'Could not send the code. Please wait before retrying.'];
-    $_SESSION[$key]=$otp;$_SESSION[$key.'_time']=$now;$_SESSION[$key.'_scope']=$scope;
+    $_SESSION[$key.'_attempts']=0;$_SESSION[$key]=$otp;$_SESSION[$key.'_time']=$now;$_SESSION[$key.'_scope']=$scope;
     return ['status'=>'success','message'=>'OTP SENT'];
 }
 

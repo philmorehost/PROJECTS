@@ -3,6 +3,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-config.php");
 require_once __DIR__.'/../func/bc-feature-email-otp.php';
+require_once __DIR__.'/../func/bc-feature-action-security.php';
+bc_feature_action_post_guard('withdrawal');
 
 // Wallet to Bank service toggle (Service Control Center)
 if (!isServiceEnabled('withdraw')) {
@@ -41,29 +43,11 @@ if (isset($_POST["initiate-transfer"]) || isset($_POST["process-transfer"])) {
         exit();
     }
 
-    // Verify OTP
-    if (!bc_feature_email_otp_scope($get_logged_user_details,'withdrawal') || empty($_SESSION["withdrawal_otp"]) || $otp !== $_SESSION["withdrawal_otp"]) {
-        $error_data = [
-            "status" => "error",
-            "title" => "Verification Failed",
-            "message" => "Invalid Email OTP"
-        ];
-        if (isset($_POST['is_ajax'])) {
-            echo json_encode($error_data);
-            exit();
-        }
-        $_SESSION["transfer_result"] = $error_data;
-        header("Location: SendFund.php");
-        exit();
-    }
-    if (time() - $_SESSION["withdrawal_otp_time"] > 600) {
-        $_SESSION["transfer_result"] = [
-            "status" => "error",
-            "title" => "Verification Failed",
-            "message" => "OTP has expired"
-        ];
-        header("Location: SendFund.php");
-        exit();
+    $email_error=bc_feature_action_code_check($get_logged_user_details,'withdrawal',$otp);
+    if($email_error!==''){
+        $error_data=['status'=>'error','title'=>'Verification Failed','message'=>$email_error];
+        if(isset($_POST['is_ajax'])){header('Content-Type: application/json');echo json_encode($error_data);exit;}
+        $_SESSION['transfer_result']=$error_data;header('Location: SendFund.php');exit;
     }
 
     // §29: customers who enrolled an authenticator app must also prove it.
@@ -86,6 +70,7 @@ if (isset($_POST["initiate-transfer"]) || isset($_POST["process-transfer"])) {
         }
     }
 
+    bc_feature_action_code_consume('withdrawal');
     include("func/bank-transfer.php");
     $json_response_decode = json_decode($json_response_encode, true);
     $status = $json_response_decode["status"] ?? "failed";
@@ -396,7 +381,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
                         <style>.last-border-0:last-child { border-bottom: 0 !important; }</style>
                         <?php } ?>
 
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <div class="mb-4 sf-bank">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-2" for="bank-search"><i class="bi bi-building me-2"></i>Select Bank</label>
                                 <div class="sf-bank__box">
@@ -472,7 +457,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
                             </div>
                         </div>
 
-                        <form method="post" action="" onsubmit="event.preventDefault(); handleTransferSubmit(this);">
+                        <form method="post" action="" onsubmit="event.preventDefault(); handleTransferSubmit(this);"><?php echo bc_csrf_field(); ?>
                             <input type="hidden" name="process-transfer" value="1" />
                             <input type="hidden" name="overwrite_id" id="overwrite_id" value="0" />
                             <input type="hidden" name="is_ajax" value="1" />
@@ -508,7 +493,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
                             </button>
                         </form>
 
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <button name="reset-bank" type="submit" class="btn btn-link text-danger w-100 fw-bold text-decoration-none small">
                                 <i class="bi bi-x-circle me-1"></i> Cancel and Change Details
                             </button>
@@ -520,7 +505,9 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
     </section>
 
     <?php if ($sf_result !== null) { ?>
-    <script>
+    <meta name="feature-action-csrf" content="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">
+<script src="../asset/bc-feature-action.js"></script>
+<script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof Swal === 'undefined') {
                 console.error('SweetAlert2 not loaded');
@@ -855,7 +842,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
 
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(() => {
-                        const formData = new URLSearchParams();
+                        const formData = bcFeatureActionParams();
                         formData.append('resolve_account', '1');
                         formData.append('bank_code', bankCode);
                         formData.append('account_number', accountNo);
@@ -913,7 +900,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
             row.style.pointerEvents = 'none';
         }
 
-        const formData = new URLSearchParams();
+        const formData = bcFeatureActionParams();
         formData.append('delete_beneficiary', id);
 
         fetch('SendFund.php', {

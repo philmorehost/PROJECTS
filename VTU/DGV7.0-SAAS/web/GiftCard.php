@@ -5,6 +5,8 @@ ob_start();
 bc_secure_session_start();
 include("../func/bc-config.php");
 require_once __DIR__.'/../func/bc-feature-email-otp.php';
+require_once __DIR__.'/../func/bc-feature-action-security.php';
+bc_feature_action_post_guard('giftcard');
 include("../func/bc-giftcard-func.php");
 
 if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
@@ -32,13 +34,14 @@ if (isset($_POST['action'])) {
         $pin = $_POST['pin'] ?? '';
         $otp = $_POST['otp'] ?? '';
 
-        if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
+        if($product_id<1 || !is_finite($amount) || $amount<=0){
+            $response=['status'=>'error','message'=>'Invalid product or positive purchase amount required.'];
+        } elseif (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
-        } elseif (!bc_feature_email_otp_scope($get_logged_user_details,'giftcard') || empty($_SESSION["giftcard_otp"]) || $otp !== $_SESSION["giftcard_otp"]) {
-            $response = ['status' => 'error', 'message' => 'Invalid Email OTP'];
-        } elseif (time() - $_SESSION["giftcard_otp_time"] > 600) {
-            $response = ['status' => 'error', 'message' => 'OTP has expired'];
+        } elseif (($email_error=bc_feature_action_code_check($get_logged_user_details,'giftcard',$otp))!=='') {
+            $response=['status'=>'error','message'=>$email_error];
         } else {
+            bc_feature_action_code_consume('giftcard');
             $q_p = mysqli_query($connection_server, "SELECT * FROM `sas_vendor_giftcard_products` WHERE vendor_id='$vid' AND reloadly_product_id='$product_id' AND status=1 LIMIT 1");
             $product = mysqli_fetch_assoc($q_p);
 
@@ -89,6 +92,7 @@ if (isset($_POST['action'])) {
     } elseif ($action == 'list_for_sale') {
         $card_id = (int)$_POST['card_id'];
         $price = (float)$_POST['price'];
+        if($card_id<1 || !is_finite($price) || $price<=0){header('Content-Type: application/json');echo json_encode(['status'=>'error','message'=>'A positive sale price is required.']);exit;}
         mysqli_query($connection_server, "UPDATE `sas_giftcard_inventory` SET is_for_sale=1, sale_price_ngn='$price' WHERE id='$card_id' AND current_owner_id='$user_id' AND vendor_id='$vid'");
         $response = ['status' => 'success', 'message' => 'Card listed on marketplace.'];
     } elseif ($action == 'cancel_listing') {
@@ -125,7 +129,7 @@ if (isset($_POST['action'])) {
             $q_c = mysqli_query($connection_server, "SELECT * FROM `sas_giftcard_inventory` WHERE id='$card_id' AND is_for_sale=1 AND vendor_id='$vid' LIMIT 1");
             $card = mysqli_fetch_assoc($q_c);
 
-            if (!$card || $card['current_owner_id'] == $user_id) {
+            if (!$card || $card['current_owner_id'] == $user_id || !is_finite((float)$card['sale_price_ngn']) || (float)$card['sale_price_ngn']<=0) {
                 $response = ['status' => 'error', 'message' => 'Invalid trade.'];
             } else {
                 $qv = mysqli_query($connection_server, "SELECT giftcard_fee_percent FROM sas_vendors WHERE id='$vid' LIMIT 1");
@@ -426,7 +430,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <form id="purchaseForm">
+                    <form id="purchaseForm"><?php echo bc_csrf_field(); ?>
                         <input type="hidden" id="p_id" name="product_id">
                         <div class="mb-4">
                             <label class="form-label small fw-bold text-muted text-uppercase">Select Denomination</label>
@@ -461,7 +465,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <form id="transferForm">
+                    <form id="transferForm"><?php echo bc_csrf_field(); ?>
                         <input type="hidden" id="t_card_id" name="card_id">
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-muted">Recipient (Username or Email)</label>
@@ -480,7 +484,9 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
 
     <?php bc_app_foot(); ?>
 
-    <script>
+    <meta name="feature-action-csrf" content="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">
+<script src="../asset/bc-feature-action.js"></script>
+<script>
     const VENDOR_FEE = <?php echo (float)($vendor_fee_percent ?? 0); ?>;
     let currentRate = 1.0;
     let currentCurrency = 'USD';
@@ -583,14 +589,14 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
     function listCard(id, defPrice) {
         const price = prompt("Enter Selling Price (NGN):", defPrice);
         if(price) {
-            const fd = new FormData(); fd.append('action', 'list_for_sale'); fd.append('card_id', id); fd.append('price', price);
+            const fd = bcFeatureActionBody(); fd.append('action', 'list_for_sale'); fd.append('card_id', id); fd.append('price', price);
             fetch('GiftCard.php', { method: 'POST', body: fd }).then(r => r.json()).then(res => { alert(res.message); if(res.status=='success') location.reload(); });
         }
     }
 
     function cancelListing(id) {
         if(!confirm('Delist this card?')) return;
-        const fd = new FormData(); fd.append('action', 'cancel_listing'); fd.append('card_id', id);
+        const fd = bcFeatureActionBody(); fd.append('action', 'cancel_listing'); fd.append('card_id', id);
         fetch('GiftCard.php', { method: 'POST', body: fd }).then(r => r.json()).then(res => { alert(res.message); if(res.status=='success') location.reload(); });
     }
 
@@ -598,7 +604,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
         if(!confirm(`Confirm P2P Purchase of ${name} for ₦${price.toLocaleString()}?`)) return;
         const pin = prompt("Enter Transaction PIN:");
         if(pin) {
-            const fd = new FormData(); fd.append('action', 'buy_p2p'); fd.append('card_id', id); fd.append('pin', pin);
+            const fd = bcFeatureActionBody(); fd.append('action', 'buy_p2p'); fd.append('card_id', id); fd.append('pin', pin);
             fetch('GiftCard.php', { method: 'POST', body: fd }).then(r => r.json()).then(res => { alert(res.message); if(res.status=='success') location.reload(); });
         }
     }
