@@ -105,7 +105,7 @@ function bc_resolve_from_name($from, $headers)
     return bc_sanitize_from_name($name);
 }
 
-function customBCMailSender($from,$to,$subject,$message,$headers, $background = true){
+function customBCMailSender($from,$to,$subject,$message,$headers, $background = true, $platform_only = false){
     global $connection_server;
     require_once __DIR__ . '/email-design.php';
     $message = mailDesignTemplate($subject, $message, array(), true);
@@ -127,7 +127,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
          $vid = resolveVendorID();
          $smtp_config = null;
 
-          if ($vid > 0) {
+          if (!$platform_only && $vid > 0) {
               $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
               if ($q && ($r = mysqli_fetch_assoc($q))) {
                   if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
@@ -140,6 +140,8 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
                   if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
               }
           }
+
+        if ($platform_only && (!$smtp_config || !filter_var($smtp_config['smtp_user']??'',FILTER_VALIDATE_EMAIL))) return false;
 
 		 //Server settings
 		$smtp_host = $smtp_config['smtp_host'] ?? 'mail.cheaperdata.com.ng';
@@ -204,6 +206,8 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 		$smtpMAIL->AltBody = strip_tags($message);
 		$sent = $smtpMAIL->send();
 	} catch (\Throwable $e) {
+        if ($platform_only) { bc_mail_log_error('Platform verification SMTP delivery failed.'); return false; }
+
         // Log the real failure so server-side SMTP problems are visible (previously the
         // exception was swallowed silently and mail() was used with no way to see why).
         // \Throwable, not the PHPMailer\PHPMailer\Exception alias alone: with the library missing

@@ -2853,7 +2853,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-paid-gateways-1');
+gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-vendor-registration-1');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);
@@ -2871,7 +2871,7 @@ $insert_match = [];
 preg_match('/INSERT INTO sas_pending_vendors \(([^)]*)\) VALUES/', $reg_src, $insert_match);
 $insert_cols = array_map('trim', explode(',', $insert_match[1] ?? ''));
 // Only the columns the migration is responsible for; the rest are created with the table.
-$migration_cols = ['app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
+$migration_cols = ['email_verified_at','business_name','business_registration_no','compliance_review','app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
                    'domain_registration_fee', 'total_amount', 'whmp_domain_id'];
 $missing_from_migration = array_values(array_diff($insert_cols, $migration_cols));
 $missing_from_migration = array_values(array_filter($missing_from_migration, function ($c) {
