@@ -12,6 +12,8 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 }
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
+require_once __DIR__.'/../func/bc-service-request-idempotency.php';
+$svc_form_key=bc_svc_form_key($_POST['request_key']??null);
 
 if(!isServiceEnabled('intl_transfer')){
     header("Location: Dashboard.php");
@@ -38,11 +40,12 @@ if (isset($_POST['send_transfer'])) {
         $notice = 'Please complete the recipient name, account and a valid amount.';
         $notice_type = 'danger';
     } else {
-        $ref = bc_svc_request_create($vid, $svc_user, 'intl_transfer', $provider, $payload);
+        $svc_result=bc_svc_request_once($vid,$svc_user,'intl_transfer',$provider,$payload,$_POST['request_key']??null);
+        $ref=$svc_result['reference'];
         // §26: indicative LIVE quote from the active provider (read-only — a
         // quote moves no money; settlement still follows the recorded request).
         $quote_note = '';
-        if ($ref !== '' && $provider === 'klasha' && function_exists('bc_klasha_fx_quote')) {
+        if ($ref !== '' && !$svc_result['replayed'] && $provider === 'klasha' && function_exists('bc_klasha_fx_quote')) {
             $q = bc_klasha_fx_quote($vid, [
                 'sourceCurrency' => 'USD',
                 'sourceAmount' => number_format($amount_usd, 2, '.', ''),
@@ -53,7 +56,7 @@ if (isset($_POST['send_transfer'])) {
             if (!empty($q['ok']) && isset($qd['destinationAmount']) && is_numeric($qd['destinationAmount'])) {
                 $quote_note = ' Indicative live quote: $' . number_format($amount_usd, 2) . ' ≈ ' . number_format((float)$qd['destinationAmount'], 2) . ' ' . $payload['currency'] . (isset($qd['rate']) ? ' at rate ' . $qd['rate'] : '') . ' (fees confirmed at settlement).';
             }
-        } elseif ($ref !== '' && $provider === 'flutterwave' && function_exists('bc_flw_endpoint')) {
+        } elseif ($ref !== '' && !$svc_result['replayed'] && $provider === 'flutterwave' && function_exists('bc_flw_endpoint')) {
             $q = bc_flw_endpoint($vid, 'transfer_rates', 'GET', [
                 'source_currency' => 'USD',
                 'destination_currency' => $payload['currency'],
@@ -66,10 +69,11 @@ if (isset($_POST['send_transfer'])) {
         }
         $notice = $ref !== ''
             ? "Transfer request received ($ref). This is a request only; no payout or wallet movement has occurred." . $quote_note
-            : 'We could not record your request. Please try again.';
+            : bc_svc_retry_message($svc_result);
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
 }
+if(isset($svc_result)&&$svc_result['ok']&&$svc_result['replayed'])$notice='Existing request recovered; no new request was created. '.$notice;
 $my_requests = bc_svc_requests_for_user($vid, (int)$svc_user['id'], 'intl_transfer');
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Send Money Abroad | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -114,7 +118,7 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
             <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
                 <h6 class="fw-bold mb-3">New transfer request</h6>
                 <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-                <?php if($provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($provider,ENT_QUOTES,'UTF-8'); ?>">
+                <?php if($provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><input type="hidden" name="request_key" value="<?php echo htmlspecialchars($svc_form_key,ENT_QUOTES,'UTF-8'); ?>"><p class="small">Keep this form unchanged when retrying an unconfirmed submission. <a href="IntlTransfer.php">Start a new request</a> only for a separate request.</p><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($provider,ENT_QUOTES,'UTF-8'); ?>">
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label small fw-bold">Service</label>
                             <select name="service" class="form-select">

@@ -10,6 +10,8 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 }
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
+require_once __DIR__.'/../func/bc-service-request-idempotency.php';
+$svc_form_key=bc_svc_form_key($_POST['request_key']??null);
 require_once __DIR__.'/../func/bc-service-provider-routing.php';
 $route_provider = bc_service_route_provider($vid,'pos_request');
 
@@ -32,11 +34,13 @@ if (isset($_POST['request_pos'])) {
         $notice = 'Business name and delivery address are required.';
         $notice_type = 'danger';
     } else {
-        $ref = $route_provider === '' ? '' : bc_svc_request_create($vid, $svc_user, 'pos', $route_provider, $payload);
-        $notice = $ref !== '' ? "POS request received ($ref). Our team will verify your business and arrange delivery." : 'We could not record your request. Please try again.';
+        $svc_result=bc_svc_request_once($vid,$svc_user,'pos',$route_provider,$payload,$_POST['request_key']??null);
+        $ref=$svc_result['reference'];
+        $notice = $ref !== '' ? "POS request received ($ref). Our team will verify your business and arrange delivery." : bc_svc_retry_message($svc_result);
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
 }
+if(isset($svc_result)&&$svc_result['ok']&&$svc_result['replayed'])$notice='Existing request recovered; no new request was created. '.$notice;
 $my_requests = bc_svc_requests_for_user($vid, (int)$svc_user['id'], 'pos');
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Request POS Device | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -52,7 +56,7 @@ bc_app_topbar(array("title" => "REQUEST POS DEVICE", "crumb" => "Home / POS"));
     <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
         <h6 class="fw-bold mb-3">Request a POS device</h6>
         <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-        <?php if($route_provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($route_provider,ENT_QUOTES,'UTF-8'); ?>">
+        <?php if($route_provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><input type="hidden" name="request_key" value="<?php echo htmlspecialchars($svc_form_key,ENT_QUOTES,'UTF-8'); ?>"><p class="small">Keep this form unchanged when retrying an unconfirmed submission. <a href="POSRequest.php">Start a new request</a> only for a separate request.</p><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($route_provider,ENT_QUOTES,'UTF-8'); ?>">
             <div class="row g-3">
                 <div class="col-md-6"><label class="form-label small fw-bold">Business name</label><input type="text" name="business_name" class="form-control" required></div>
                 <div class="col-md-6"><label class="form-label small fw-bold">Contact phone</label><input type="text" name="contact_phone" class="form-control"></div>

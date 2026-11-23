@@ -10,6 +10,8 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 }
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
+require_once __DIR__.'/../func/bc-service-request-idempotency.php';
+$svc_form_key=bc_svc_form_key($_POST['request_key']??null);
 
 if(!isServiceEnabled('esim')){
     header("Location: Dashboard.php");
@@ -52,6 +54,7 @@ if (function_exists('bc_fintech_provider_configured') && bc_fintech_provider_con
 }
 $notice = ''; $notice_type = 'info';
 if (isset($_POST['order_esim'])) {
+    bc_validate_csrf();
     $is_live = isset($_POST['plan_id']) && trim((string)$_POST['plan_id']) !== '';
     $payload = [
         'plan' => $is_live ? trim(strip_tags($_POST['plan_id'])) : trim(strip_tags($_POST['plan'] ?? '')),
@@ -62,11 +65,13 @@ if (isset($_POST['order_esim'])) {
         $notice = 'Choose a plan and enter a valid email for QR delivery.';
         $notice_type = 'danger';
     } else {
-        $ref = bc_svc_request_create($vid, $svc_user, 'esim', $is_live ? 'platnova' : '1global', $payload);
-        $notice = $ref !== '' ? "eSIM order received ($ref). Your QR code and SM-DP+ activation details will be delivered to your email." : 'We could not record your order. Please try again.';
+        $svc_result=bc_svc_request_once($vid,$svc_user,'esim',$is_live?'platnova':'1global',$payload,$_POST['request_key']??null);
+        $ref=$svc_result['reference'];
+        $notice = $ref !== '' ? "eSIM order received ($ref). This records a review request only; no provisioning or delivery is confirmed." : bc_svc_retry_message($svc_result);
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
 }
+if(isset($svc_result)&&$svc_result['ok']&&$svc_result['replayed'])$notice='Existing request recovered; no new request was created. '.$notice;
 $my_requests = bc_svc_requests_for_user($vid, (int)$svc_user['id'], 'esim');
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("eSIM | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -87,7 +92,7 @@ bc_app_topbar(array("title" => "ESIM", "crumb" => "Home / eSIM"));
     <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
         <h6 class="fw-bold mb-3">Order an eSIM</h6>
         <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-        <form method="post">
+        <form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="request_key" value="<?php echo htmlspecialchars($svc_form_key,ENT_QUOTES,'UTF-8'); ?>"><p class="small">Keep this form unchanged when retrying an unconfirmed submission. <a href="ESIM.php">Start a new request</a> only for a separate request.</p>
             <div class="row g-3">
                 <?php if ($live_plans): ?>
                 <?php foreach ($live_plans as $i => $plan): ?>
