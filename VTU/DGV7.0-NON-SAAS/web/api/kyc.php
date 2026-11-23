@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/../../func/bc-live-capture.php";
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-Requested-With, X-App-Source");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
@@ -124,9 +125,9 @@ if ($action === 'upload_document') {
     // app sends camera images for the ID and never a PDF for the selfie.
     $kinds = [
         'govt_id'          => ['govt_id_card',     ['jpg', 'jpeg', 'png', 'webp'], 8],
-        'selfie'           => ['kyc_face_image',   ['jpg', 'jpeg', 'png', 'webp'], 8],
+        'selfie'           => ['kyc_face_image',   ['jpg'], 0.5],
         'proof_of_address' => ['proof_of_address', ['jpg', 'jpeg', 'png', 'webp'], 8],
-        'liveliness_video' => ['liveliness_video', ['mp4', 'mov', 'webm', 'mkv'], 25],
+        'liveliness_video' => ['liveliness_video', ['mp4', 'webm'], 3],
     ];
 
     foreach ($kinds as $input_name => $spec) {
@@ -135,6 +136,7 @@ if ($action === 'upload_document') {
         if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
         $tmp = $_FILES[$input_name]['tmp_name'];
         if (!is_uploaded_file($tmp)) continue;
+        if (in_array($input_name, ['selfie','liveliness_video'], true) && !bc_live_media_prepare($tmp, $input_name)) continue;
         if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
 
         $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
@@ -151,6 +153,8 @@ if ($action === 'upload_document') {
     }
 
     if (!empty($updates)) {
+        // Replaced evidence is a new review, never grandfather an earlier approval.
+        $updates[] = "kyc_status=0";
         $doc_type = (string)($_POST['doc_type'] ?? '');
         if (in_array($doc_type, ['BVN', 'NIN', 'Passport', "Driver's Licence", "Voter's Card", 'National ID'], true)) {
             $updates[] = "kyc_id_type='" . mysqli_real_escape_string($connection_server, $doc_type) . "'";

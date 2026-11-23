@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/../func/bc-live-capture.php";
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-config.php");
@@ -89,9 +90,9 @@ if (isset($_POST['submit_media'])) {
     // taken with the camera, and a PDF cannot be one.
     $kinds = [
         'govt_id'          => ['govt_id_card',     ['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
-        'selfie'           => ['kyc_face_image',   ['jpg', 'jpeg', 'png', 'webp'], 8],
+        'selfie'           => ['kyc_face_image',   ['jpg'], 0.5],
         'proof_of_address' => ['proof_of_address', ['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
-        'liveliness_video' => ['liveliness_video', ['mp4', 'mov', 'webm', 'mkv'], 25],
+        'liveliness_video' => ['liveliness_video', ['mp4', 'webm'], 3],
     ];
 
     foreach ($kinds as $input_name => $spec) {
@@ -100,6 +101,7 @@ if (isset($_POST['submit_media'])) {
         if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
         $tmp = $_FILES[$input_name]['tmp_name'];
         if (!is_uploaded_file($tmp)) continue;
+        if (in_array($input_name, ['selfie','liveliness_video'], true) && !bc_live_media_prepare($tmp, $input_name)) continue;
         if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
 
         $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
@@ -117,6 +119,8 @@ if (isset($_POST['submit_media'])) {
     }
 
     if (!empty($updates)) {
+        // Replaced evidence is a new review, never grandfather an earlier approval.
+        $updates[] = "kyc_status=0";
         // What the user says the document is (passport, licence, ...): the manual flow must accept IDs
         // that carry no BVN/NIN number.
         $doc_type = (string)($_POST['doc_type'] ?? '');
@@ -130,7 +134,7 @@ if (isset($_POST['submit_media'])) {
         if (in_array('proof_of_address', $uploaded, true)) $updates[] = "kyc_address_ok = 1";
         // A selfie captured live in the browser is mirrored into the purpose-built liveliness column, so
         // the reviewer can tell a live capture from an uploaded photo without guessing.
-        if (!empty($_POST['selfie_live']) && $selfie_filename !== '') {
+        if ($selfie_filename !== '') {
             $updates[] = "liveliness_picture = '" . mysqli_real_escape_string($connection_server, $selfie_filename) . "'";
         }
         $updates[] = "kyc_reject_reason = NULL"; // a new submission clears the previous rejection
@@ -427,23 +431,8 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
 
                                     <?php if (in_array('liveliness_picture', $manual_checks, true)): ?>
                                     <div class="mt-3">
-                                        <label class="form-label small fw-bold">Take a live photo of yourself now</label>
-                                        <input type="hidden" name="selfie_live" id="selfie_live" value="0">
-                                        <div id="liveSelfieBox" class="border rounded-3 p-2 d-none" style="max-width:340px;background:#000;">
-                                            <video id="liveSelfieVideo" autoplay playsinline muted class="w-100 rounded-2" style="max-height:240px;"></video>
-                                            <canvas id="liveSelfieCanvas" class="d-none"></canvas>
-                                            <img id="liveSelfieShot" class="w-100 rounded-2 d-none" alt="Captured selfie" style="max-height:240px;object-fit:cover;">
-                                        </div>
-                                        <div class="d-flex flex-wrap gap-2 mt-2">
-                                            <button type="button" id="liveSelfieStart" class="btn btn-outline-primary btn-sm rounded-pill">Start camera</button>
-                                            <button type="button" id="liveSelfieCapture" class="btn btn-primary btn-sm rounded-pill d-none">Capture photo</button>
-                                            <button type="button" id="liveSelfieRetake" class="btn btn-outline-secondary btn-sm rounded-pill d-none">Retake</button>
-                                        </div>
-                                        <div id="liveSelfieMsg" class="form-text"></div>
-                                        <div class="mt-2">
-                                            <input type="file" name="selfie" id="selfieFile" accept="image/*" capture="user" class="form-control rounded-3 shadow-sm">
-                                            <div class="form-text">No camera here, or prefer to upload? Use the box above. A screenshot or a photo of a photo is not a live photo.</div>
-                                        </div>
+                                        <label class="form-label small fw-bold">Take a live photo of yourself now (camera only, max 512 KB)</label>
+                                        <?php bc_live_capture_widget('selfie'); ?>
                                     </div>
                                     <?php endif; ?>
 
@@ -457,8 +446,7 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                     <?php if (in_array('liveliness_video', $manual_checks, true)): ?>
                                     <div class="mt-3">
                                         <label class="form-label small fw-bold">Short video - say your full name and today's date</label>
-                                        <input type="file" name="liveliness_video" accept="video/*" capture="user" class="form-control rounded-3 shadow-sm">
-                                        <div class="form-text">MP4/MOV/WebM, max 25 MB.</div>
+                                        <?php bc_live_capture_widget('liveliness_video', true); ?>
                                     </div>
                                     <?php endif; ?>
 
@@ -570,90 +558,6 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
         </div>
     </div>
 
-    <script>
-    // Live selfie capture. getUserMedia needs a secure context and a camera, so on an http host (or an
-    // unsupported browser) the capture buttons explain themselves and stay out of the way - the plain
-    // file input above is always rendered and still works.
-    (function () {
-        var startBtn = document.getElementById('liveSelfieStart');
-        if (!startBtn) return;
 
-        var video      = document.getElementById('liveSelfieVideo');
-        var canvas     = document.getElementById('liveSelfieCanvas');
-        var shot       = document.getElementById('liveSelfieShot');
-        var box        = document.getElementById('liveSelfieBox');
-        var capBtn     = document.getElementById('liveSelfieCapture');
-        var retakeBtn  = document.getElementById('liveSelfieRetake');
-        var msg        = document.getElementById('liveSelfieMsg');
-        var fileInput  = document.getElementById('selfieFile');
-        var liveFlag   = document.getElementById('selfie_live');
-        var stream     = null;
-
-        function stopStream() {
-            if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
-            video.srcObject = null;
-        }
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) {
-            startBtn.classList.add('d-none');
-            msg.textContent = 'Live capture is not available here (it needs https and a camera). Please upload a photo instead.';
-            return;
-        }
-
-        startBtn.addEventListener('click', function () {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 720 } }, audio: false })
-                .then(function (s) {
-                    stream = s;
-                    video.srcObject = s;
-                    box.classList.remove('d-none');
-                    startBtn.classList.add('d-none');
-                    capBtn.classList.remove('d-none');
-                    msg.textContent = 'Look straight at the camera, then press Capture photo.';
-                })
-                .catch(function () {
-                    msg.textContent = 'Camera permission was refused. Please upload a photo instead.';
-                });
-        });
-
-        capBtn.addEventListener('click', function () {
-            var w = video.videoWidth, h = video.videoHeight;
-            if (!w || !h) { msg.textContent = 'The camera is still starting - try again in a second.'; return; }
-            canvas.width = w;
-            canvas.height = h;
-            canvas.getContext('2d').drawImage(video, 0, 0, w, h);
-            canvas.toBlob(function (blob) {
-                if (!blob) { msg.textContent = 'Could not capture the frame. Please upload a photo instead.'; return; }
-                var file = new File([blob], 'selfie_live_' + Date.now() + '.jpg', { type: 'image/jpeg' });
-                try {
-                    var dt = new DataTransfer();
-                    dt.items.add(file);
-                    fileInput.files = dt.files;
-                } catch (e) {
-                    msg.textContent = 'This browser cannot attach the captured photo. Please upload a file instead.';
-                    return;
-                }
-                shot.src = URL.createObjectURL(blob);
-                shot.classList.remove('d-none');
-                video.classList.add('d-none');
-                if (liveFlag) liveFlag.value = '1';
-                capBtn.classList.add('d-none');
-                retakeBtn.classList.remove('d-none');
-                msg.textContent = 'Captured. Press Retake if you blinked or moved.';
-                stopStream();
-            }, 'image/jpeg', 0.92);
-        });
-
-        retakeBtn.addEventListener('click', function () {
-            if (liveFlag) liveFlag.value = '0';
-            fileInput.value = '';
-            shot.classList.add('d-none');
-            video.classList.remove('d-none');
-            retakeBtn.classList.add('d-none');
-            startBtn.classList.remove('d-none');
-            msg.textContent = '';
-            stopStream();
-        });
-    })();
-    </script>
 
 <?php bc_app_foot(); ?>
