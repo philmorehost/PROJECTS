@@ -83,7 +83,7 @@ foreach(['DGV7.0-SAAS','DGV7.0-NON-SAAS'] as $edition){
         enrollment_check(strpos(file_get_contents($root.'/'.$area.'/AccountSettings.php'),'Your administrator requires Google Authenticator')!==false,'self-disable blocked under mandate');
     }
     $gate=file_get_contents($root.'/func/bc-fintech-gate.php');
-    enrollment_check(strpos($gate,'if ($owner) bc_enrollment_api_guard($owner)')!==false,'merchant key policy enforced');
+    enrollment_check(strpos($gate,'bc_enrollment_api_guard($owner);')!==false && strpos($gate,'bc_enrollment_api_guard($owner);')<strpos($gate,'return $provided_api_key;'),'merchant key policy enforced');
     enrollment_check(strpos(file_get_contents($root.'/func/bc-app-token.php'),'bc_enrollment_api_guard($user)')!==false,'all bearer resolvers enforce requirement');
     enrollment_check(strpos(file_get_contents($root.'/bc-admin/AccountSettings.php'),'bc_enrollment_policy_save(false,')!==false,'tenant policy fresh-code handler installed');
 }

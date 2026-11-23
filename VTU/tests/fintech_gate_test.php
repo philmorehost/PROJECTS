@@ -118,6 +118,7 @@ function fake_mysqli_rollback($db) { $GLOBALS['db']['settlement_claims']=$GLOBAL
 function fake_mysqli_query($db, $sql) { return fake_result(fake_mysqli_query_raw($db, $sql)); }
 
 function bc_q_row($sql, $params=array()) {
+    if(strpos($sql,'FROM sas_users WHERE vendor_id=? AND api_key=?')!==false){if(!empty($GLOBALS['db']['auth_unavailable']))throw new RuntimeException('db offline');foreach($GLOBALS['db']['users'] as $row)if((int)$row['vendor_id']===(int)$params[0]&&($row['api_key']??'')===$params[1])return $row;return null;}
     if (strpos($sql, 'FROM sas_secure_payment_intents') !== false) return $GLOBALS['db']['secure_intents'][$params[0].':'.$params[1]] ?? null;
     throw new RuntimeException('Unexpected prepared lookup in fixture: '.$sql);
 }
@@ -872,6 +873,8 @@ $connection_server = new FakeDb();
 
 // The real denial helper exits the process. Replace it BEFORE the gate is loaded (every gate
 // function is guarded by function_exists) so refusals can be asserted instead of ending the run.
+function bc_api_key_is_expired($row){$exp=$row['api_key_expires_at']??'';return $exp!==''&&strtotime($exp)<=time();}
+function bc_enrollment_api_guard($row){$GLOBALS['legacy_enrollment_actor']=$row;}
 function bc_fintech_send_app_denial(array $decision) {
     $GLOBALS['bc_denial'] = $decision;
     throw new RuntimeException('APP_DENIAL');
@@ -1158,9 +1161,28 @@ $key_user = bc_app_token_issue($personal, 7, 'android');
 unset($_SERVER['HTTP_AUTHORIZATION'], $_SERVER['HTTP_X_APP_TOKEN']);
 $_POST = [];
 
-// Branch 1: no token -> the legacy api_key passes through (existing apps + merchants).
-gcheck('no token: legacy api_key passes through', bc_fintech_api_credential('legacy-key-123', 7), 'legacy-key-123');
-gcheck('no token: auth mode stays api_key', $GLOBALS['bc_api_auth_mode'], 'api_key');
+// No bearer: only active Business integrations may use developer keys.
+$merchant=$personal;$merchant['id']=90;$merchant['account_type']='business';$merchant['api_key']='merchant-live';
+$GLOBALS['db']['users'][90]=$merchant;
+gcheck('Business key remains usable',bc_fintech_api_credential('merchant-live',7),'merchant-live');
+gcheck('developer mode preserved',$GLOBALS['bc_api_auth_mode'],'api_key');
+gcheck('Business account reaches enrollment guard',$GLOBALS['legacy_enrollment_actor']['id'],90);
+foreach(['personal-legacy-key'=>'APP_SIGNIN_REQUIRED','unknown-key'=>'API_KEY_INVALID'] as $key=>$code){
+ try{bc_fintech_api_credential($key,7);throw new RuntimeException('unexpected authorization');}catch(RuntimeException $e){if($e->getMessage()!=='APP_DENIAL')throw $e;}
+ gcheck('legacy key refusal '.$key,$GLOBALS['bc_denial']['code'],$code);
+}
+foreach(['status'=>0,'is_blocked'=>1,'api_key_expires_at'=>'2001-01-01 00:00:00'] as $field=>$value){
+ $GLOBALS['db']['users'][90]=$merchant;$GLOBALS['db']['users'][90][$field]=$value;
+ try{bc_fintech_api_credential('merchant-live',7);throw new RuntimeException('unexpected authorization');}catch(RuntimeException $e){if($e->getMessage()!=='APP_DENIAL')throw $e;}
+ gcheck('invalid Business key '.$field,$GLOBALS['bc_denial']['code'],$field==='api_key_expires_at'?'API_KEY_EXPIRED':'API_KEY_INVALID');
+}
+$GLOBALS['db']['users'][90]=$merchant;
+try{bc_fintech_api_credential('merchant-live',8);throw new RuntimeException('unexpected authorization');}catch(RuntimeException $e){if($e->getMessage()!=='APP_DENIAL')throw $e;}
+gcheck('Business key tenant isolation',$GLOBALS['bc_denial']['code'],'API_KEY_INVALID');
+$GLOBALS['db']['auth_unavailable']=true;
+try{bc_fintech_api_credential('merchant-live',7);throw new RuntimeException('unexpected authorization');}catch(RuntimeException $e){if($e->getMessage()!=='APP_DENIAL')throw $e;}
+gcheck('lookup failure is not passthrough',$GLOBALS['bc_denial']['code'],'API_AUTH_UNAVAILABLE');
+$GLOBALS['db']['auth_unavailable']=false;
 
 // Branch 2: valid token -> the owner's own api_key is substituted, so the untouched
 // `WHERE api_key='...'` lookup resolves to the token owner rather than the posted key.
