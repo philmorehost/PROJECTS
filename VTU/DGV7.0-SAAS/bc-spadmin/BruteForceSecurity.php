@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'logout_all_sessions');
 include_once(__DIR__ . "/../func/bc-plate-admin.php"); // §42: bc_adm_head/sidebar/topbar/foot live here - this page used them without ever loading the plate (fatal on open)
 
 // §33: platform-wide "logout all sessions". Bumps the session epoch (every
@@ -21,7 +23,7 @@ if (isset($_POST["sec33_send_code"])) {
 
 if (isset($_POST["logout-all-sessions"])) {
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-    $sec33_input = array(
+    $sec33_input = array('factor_method'=>(string)($_POST['factor_method']??'auto'),
         'pin'       => (string)($_POST['sec33_pin'] ?? ''),
         'otp_code'  => (string)($_POST['sec33_factor'] ?? ''),
         'totp_code' => (string)($_POST['sec33_factor'] ?? ''),
@@ -115,3 +117,5 @@ if (!empty($_SESSION["product_purchase_response"])) {
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
 </body>
 </html>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

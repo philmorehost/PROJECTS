@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'api_request_decision');
 
 // §33/§10: API access decisions are POST + CSRF + step-up only — approvals need the
 // full Security PIN + authenticator/email code; rejections need the PIN.
@@ -21,9 +23,9 @@ if (isset($_POST['sec33_action']) && isset($_POST['sec33_id'])) {
     $sec33_action = (string)$_POST['sec33_action'];
     $sec33_factor = (string)($_POST['sec_factor'] ?? '');
     if ($sec33_action === 'approve') {
-        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        $sec33_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
     } else {
-        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
+        $sec33_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
     }
     $sec33_err = function_exists('bc_stepup_admin_verify')
             ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'api_request_decision')
@@ -179,3 +181,5 @@ bc_adm_head("API Access Requests | Admin", array("area" => "admin"));
     </script>
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

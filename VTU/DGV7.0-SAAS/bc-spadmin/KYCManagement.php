@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'kyc_decision');
 
 // KYC status model - identical to web/api/kyc.php, the app and the vendor console:
 //   0 = Unverified, 1 = Under review (pending), 2 = Verified, 3 = Rejected.
@@ -46,8 +48,8 @@ if (isset($_POST['kyc_decision'])) {
         // full PIN + authenticator/email code; other decisions need the PIN.
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         $sec33_input = ((int)$decision['status'] === 2)
-            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
-            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
+            ? ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
+            : ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         $sec33_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'kyc_decision')
             : 'Verification is unavailable.';
@@ -404,3 +406,5 @@ bc_adm_head("Global KYC Management | Super Admin", array("area" => "spadmin"));
 
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>
