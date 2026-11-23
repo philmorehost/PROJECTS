@@ -1,4 +1,5 @@
 <?php
+set_exception_handler(function($e){echo '::error::'.str_replace(["\n","\r",'%'],[' ',' ','pct'],$e->getMessage()).' at line '.$e->getLine()."\n";exit(1);});
 if(getenv('BC_APP_UPDATE_CI')!=='1')throw new RuntimeException('Disposable CI only.');
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('Invalid edition.');
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
