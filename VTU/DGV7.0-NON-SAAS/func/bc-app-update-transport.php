@@ -75,4 +75,3 @@
 
         return ['code' => $http_code, 'body' => json_decode($resp, true)];
     }
-
