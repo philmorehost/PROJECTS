@@ -2,6 +2,7 @@
 /** Server-side authority boundary for platform custody UI; never accept a posted actor/role. */
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
 require_once __DIR__.'/bc-crypto-bybit-identity.php';
+require_once __DIR__.'/bc-crypto-bybit-parent-read.php';
 require_once __DIR__.'/bc-crypto-bybit-address-read.php';
 require_once __DIR__.'/bc-crypto-bybit-deposit-read.php';
 require_once __DIR__.'/bc-crypto-routes.php';
@@ -24,7 +25,7 @@ function bc_crypto_custody_manage($session_id,$input) {
     $authority=bc_crypto_custody_authorize($session_id,$input);
     $env=bc_crypto_gov_environment($input['environment']??null);
     $action=$input['action']??null;
-    if (!in_array($action,['recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    if (!in_array($action,['verify_parent','recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
     $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
     if ($identity==='') {
         if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
@@ -34,6 +35,35 @@ function bc_crypto_custody_manage($session_id,$input) {
         bc_crypto_custody_digest($identity);
         $account=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$identity]);
         if (!$account||$account['environment']!==$env) throw new RuntimeException('crypto_custody_proposal_required');
+    }
+    if ($action==='verify_parent') {
+        if((int)$account['revision']!==($revision=bc_crypto_gov_uint($input['revision']??null,1000000000)))throw new RuntimeException('crypto_custody_edit_conflict');
+        $parent=bc_crypto_custody_digest($input['parent_custody_account']??null);
+        if(hash_equals($parent,$identity))throw new RuntimeException('crypto_parent_distinct_required');
+        $parentRevision=bc_crypto_gov_uint($input['parent_revision']??null,1000000000);
+        $parentRow=bc_q_row('SELECT environment,revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$parent]);
+        if(!$parentRow||$parentRow['environment']!==$env||(int)$parentRow['revision']!==$parentRevision)throw new RuntimeException('crypto_parent_registry_conflict');
+        $subSource=bc_crypto_gov_uint($input['source_vendor_id']??null,1000000000);
+        $masterSource=bc_crypto_gov_uint($input['master_source_vendor_id']??null,1000000000);
+        if($subSource===$masterSource)throw new RuntimeException('crypto_parent_distinct_required');
+        foreach([$subSource,$masterSource] as $source){
+            $v=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? LIMIT 1',[$source]);
+            if(!$source||!$v||(int)$v['status']!==1||!empty($v['is_blocked']))throw new RuntimeException('crypto_custody_vendor_inactive');
+        }
+        bc_crypto_custody_evidence_engines();
+        bc_crypto_custody_evidence_key(getenv('BC_CRYPTO_CUSTODY_EVIDENCE_ACTIVE_KEY')?:'V1');
+        if(!bc_sec_audit(0,'spadmin',(string)$authority['id'],'crypto_parent_requested',$identity,'Explicit read-only parent relationship evidence requested; no allocation.'))throw new RuntimeException('crypto_bybit_audit_unavailable');
+        $snapshot=bc_crypto_bybit_read_parent($subSource,$masterSource,$env,$identity,$parent);
+        foreach([$subSource,$masterSource] as $source){
+            $v=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? LIMIT 1',[$source]);
+            if(!$v||(int)$v['status']!==1||!empty($v['is_blocked']))throw new RuntimeException('crypto_custody_vendor_inactive');
+        }
+        $currentParent=bc_q_row('SELECT environment,revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$parent]);
+        if(!$currentParent||$currentParent['environment']!==$env||(int)$currentParent['revision']!==$parentRevision)throw new RuntimeException('crypto_parent_registry_conflict');
+        $snapshot['registry_revision']=$revision;$snapshot['parent_registry_revision']=$parentRevision;$snapshot['verified_by_actor']=$authority['id'];
+        // Storage locks and compares the child revision again; parent revision is point-in-time evidence, not a grant.
+        $hash=bc_crypto_custody_evidence_store($authority,$identity,$env,bc_crypto_gov_json($snapshot),$revision);
+        return ['custody_account'=>$identity,'evidence_hash'=>$hash,'parent_relationship_compared'=>true,'live_enabled'=>false];
     }
     if ($action==='store_evidence') {
         $hash=bc_crypto_custody_evidence_store($authority,$identity,$env,$input['evidence_text']??null);
