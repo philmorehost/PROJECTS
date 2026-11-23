@@ -8,6 +8,7 @@ require_once __DIR__.'/bc-crypto-bybit-sub-address-read.php';
 require_once __DIR__.'/bc-crypto-bybit-address-read.php';
 require_once __DIR__.'/bc-crypto-bybit-deposit-read.php';
 require_once __DIR__.'/bc-crypto-routes.php';
+require_once __DIR__.'/bc-crypto-route-readiness.php';
 require_once __DIR__.'/bc-crypto-poll-operator.php';
 require_once __DIR__.'/bc-crypto-poll-worker.php';
 require_once __DIR__.'/bc-crypto-poll-recovery.php';
@@ -27,7 +28,7 @@ function bc_crypto_custody_manage($session_id,$input) {
     $authority=bc_crypto_custody_authorize($session_id,$input);
     $env=bc_crypto_gov_environment($input['environment']??null);
     $action=$input['action']??null;
-    if (!in_array($action,['propose_bound_route','inspect_bound_sub_address','renew_customer_binding','propose_customer_binding','review_customer_binding','revoke_customer_binding','verify_parent','recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    if (!in_array($action,['inspect_route_readiness','propose_bound_route','inspect_bound_sub_address','renew_customer_binding','propose_customer_binding','review_customer_binding','revoke_customer_binding','verify_parent','recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
     $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
     if ($identity==='') {
         if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
@@ -101,6 +102,13 @@ function bc_crypto_custody_manage($session_id,$input) {
         if ((int)$account['revision']!==$revision)throw new RuntimeException('crypto_custody_edit_conflict');
         $poll=bc_crypto_poll_manage($authority,$env,$identity,$revision,$action,$input);
         $poll['custody_account']=$identity;$poll['poll_updated']=true;return $poll;
+    }
+    if($action==='inspect_route_readiness'){
+        foreach(['vendor_id','user_id','address','tag','asset_network','scale','evidence_hash'] as $field)if(array_key_exists($field,$input))throw new RuntimeException('crypto_bound_address_override_forbidden');
+        $candidateId=bc_crypto_gov_uint($input['candidate_id']??null,1000000000);$candidateRevision=bc_crypto_gov_uint($input['candidate_revision']??null,1000000000);
+        if(!bc_sec_audit(0,'spadmin',(string)$authority['id'],'crypto_route_preflight',$identity,'Protected local candidate preflight requested; no provider calls or activation.'))throw new RuntimeException('crypto_bybit_audit_unavailable');
+        $report=bc_crypto_route_readiness($authority,$env,$identity,$revision,$candidateId,$candidateRevision);
+        return ['custody_account'=>$identity,'text'=>bc_crypto_gov_json($report),'live_enabled'=>false];
     }
     if($action==='propose_bound_route'){
         foreach(['vendor_id','user_id','address','tag','asset_network','scale'] as $field)if(array_key_exists($field,$input))throw new RuntimeException('crypto_bound_address_override_forbidden');
