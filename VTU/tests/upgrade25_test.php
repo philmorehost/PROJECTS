@@ -60,9 +60,9 @@ foreach ($editions as $ed) {
     u25(strpos($svc, "'pos_request'") !== false, "$ed Flutterwave catalogue includes POS requests");
     u25(strpos($svc, "'btc_swap' => false") !== false, "$ed Klasha/Flutterwave BTC swap checked: not offered, pairs hidden");
     u25(strpos($svc, "bc_referral_record_volume") !== false && strpos($svc, "'crypto', 'intl_transfer'") !== false || strpos($svc, "return ['crypto', 'intl_transfer'];") !== false, "$ed referral volume counts Crypto & International Transfer only");
-    // §34: the threshold/reward are vendor settings now; the historical $100/$10
-    // survive as the defaults in bc_referral_settings().
-    u25(strpos($svc, 'qualifying_usd') !== false && strpos($svc, "'qualifying_usd' => 100.0") !== false && strpos($svc, "'reward_usd' => 10.0") !== false, "$ed referral threshold defaults to \$100 / \$10");
+    // Referral coins supersede the old cash-dollar reward; qualification stays $100.
+    $coins = src($b . '/func/bc-referral-coins.php');
+    u25(strpos($coins, "'qualifying_usd'=>100.0") !== false && strpos($coins, "'reward_coins'=>1000") !== false && strpos($coins, "'reward_usd'=>0.0") !== false, "$ed referral defaults to 1000 coins after verified $100 volume");
     u25(strpos($svc, 'sas_creator_applications') !== false, "$ed creator/influencer applications are stored");
 
     // ── New pages ──
@@ -73,7 +73,7 @@ foreach ($editions as $ed) {
     }
     $ref = src($b . '/web/Referral.php');
     // §34: the diagram renders the admin-configured reward for both sides.
-    u25(strpos($ref, 'You get $<?php echo $ref_reward_fmt; ?>. Your friend gets $<?php echo $ref_reward_fmt; ?>.') !== false, "$ed Referral page shows the configured reward diagram copy");
+    u25(strpos($ref, 'Earn <?php echo $ref_reward_fmt; ?> coins per friend.') !== false, "$ed Referral page shows the configured coin reward");
     u25(strpos($ref, 'apply_creator') !== false, "$ed Referral page has the creator application form");
     $intl = src($b . '/web/IntlTransfer.php');
     u25(strpos($intl, 'Payout to China in 3 steps') !== false, "$ed IntlTransfer visualises the 3-step China workflow");
@@ -96,7 +96,13 @@ foreach ($editions as $ed) {
         $s = src($b . '/' . $f);
         u25(strpos($s, 'bsicards.php') === false && strpos($s, 'BSICards(') === false && strpos($s, 'issueVirtualCardBSICards') === false, "$ed $f has no BSICards integration left");
         u25(strpos($s, 'issueVirtualCard(') === false && strpos($s, 'fundVirtualCardV2(') === false, "$ed $f calls no retired card adapter");
-        u25(strpos($s, 'bc-virtualcard-flutterwave.php') !== false, "$ed $f loads the Flutterwave card adapter");
+        if ($f === 'web/virtual-card-ajax.php' || $f === 'web/api/virtual-card.php') {
+            $code = $f === 'web/virtual-card-ajax.php' ? 'LEGACY_CARD_ROUTE_RETIRED' : 'CARD_SECURITY_HOLD';
+            u25(strpos($s, $code) !== false && strpos($s, 'http_response_code(') !== false && strpos($s, 'no-store') !== false, "$ed $f refuses legacy/held operations");
+            u25(strpos($s, 'require') === false && strpos($s, 'include') === false && strpos($s, 'bc-virtualcard-flutterwave.php') === false, "$ed $f cannot bootstrap a card operation");
+        } else {
+            u25(strpos($s, 'bc-virtualcard-flutterwave.php') !== false, "$ed $f loads the Flutterwave card adapter");
+        }
     }
     u25(!file_exists($b . '/func/api-gateway/bsicards.php'), "$ed BSICards gateway file removed");
     u25(!file_exists($b . '/includes/BSICardsBridge.php'), "$ed BSICards bridge removed");

@@ -307,8 +307,17 @@ foreach (array($saas, $nons) as $ed) {
 // The shells must ship the newer icon font, and the action must stay wired.
 foreach (array('/func/bc-plate-admin.php', '/func/bc-plate-app.php', '/func/bc-installer-shell.php') as $shell) {
     foreach (array($saas, $nons) as $ed) {
-        rchk(strpos(rsrc($ed . $shell), 'bootstrap-icons/1.11.3') !== false,
-            basename($ed) . $shell . ' loads Bootstrap Icons 1.11.3 (bi-ban exists)');
+        $shellSource = rsrc($ed . $shell);
+        if ($shell === '/func/bc-plate-app.php') {
+            rchk(strpos($shellSource, '/assets-2/vendor/bootstrap-icons/bootstrap-icons.min.css') !== false,
+                basename($ed) . $shell . ' loads vendored Bootstrap Icons');
+            $icons = rsrc($ed . '/assets-2/vendor/bootstrap-icons/bootstrap-icons.min.css');
+            rchk(strpos($icons, 'Bootstrap Icons v1.11.3') !== false && strpos($icons, '.bi-ban::before') !== false,
+                basename($ed) . ' vendored icon stylesheet includes bi-ban');
+        } else {
+            rchk(strpos($shellSource, 'bootstrap-icons/1.11.3') !== false,
+                basename($ed) . $shell . ' loads Bootstrap Icons 1.11.3 (bi-ban exists)');
+        }
     }
 }
 rchk(strpos(rsrc($saas . '/func/bc-spadmin-config.php'), 'bootstrap-icons/1.11.3') !== false,

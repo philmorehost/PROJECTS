@@ -65,6 +65,13 @@ function getVendorOption($vendor_id, $name, $default = '') {
     return $GLOBALS['db']['options'][(int)$vendor_id . ':' . $name] ?? $default;
 }
 
+// Explicit entitlement/storage boundaries for the adapter-only fixture.
+// Real entitlement SQL and encrypted storage have separate native MySQL tests.
+$GLOBALS['live_klasha_entitled'] = false;
+$GLOBALS['live_klasha_saved'] = null;
+function bc_gateway_api_entitled($db,$vendor,$slug) { return $slug === 'klasha' && $GLOBALS['live_klasha_entitled']; }
+function bc_gateway_api_read($db,$vendor,$slug) { return $GLOBALS['live_klasha_saved']; }
+
 /** Loads one shipped source with the fake DB (see the note above). */
 function live_load($path) {
     $source = file_get_contents($path);
@@ -162,6 +169,14 @@ $GLOBALS['bc_fintech_http_transport'] = function ($provider, $method, $url, $hea
     return ['ok' => true, 'status' => 200, 'body' => '{}', 'json' => ['data' => ['id' => 472]], 'error' => ''];
 };
 unset($GLOBALS['bc_klasha_bearer_tokens']);
+lcheck('unentitled Klasha refuses login', bc_klasha_bearer_token(8), '');
+lcheck('unentitled Klasha makes no HTTP calls', count($calls), 0);
+$GLOBALS['live_klasha_saved'] = ['public_key'=>'sealed-public-fixture','secret_key'=>'sealed-secret-fixture'];
+lfalse('unentitled Klasha cannot expose saved credentials', bc_fintech_provider_credentials(8,'klasha')['found']);
+$GLOBALS['live_klasha_entitled'] = true;
+lcheck('entitled Klasha prefers encrypted storage boundary', bc_fintech_provider_credentials(8,'klasha')['public_key'], 'sealed-public-fixture');
+lcheck('entitled Klasha marks encrypted credential source', bc_fintech_provider_credentials(8,'klasha')['source'], 'sas_gateway_api_credentials');
+$GLOBALS['live_klasha_saved'] = null; // Exercise the entitled legacy-credential compatibility path below.
 lcheck('klasha login exchanges email + password for a token', bc_klasha_bearer_token(8), 'eyJfresh');
 lcheck('the login token is cached per request', bc_klasha_bearer_token(8), 'eyJfresh');
 lcheck('exactly one login call was made', count($calls), 1);
@@ -266,7 +281,7 @@ $GLOBALS['db']['gateways']['sas_payment_gateways:8:flutterwave'] = [
     'secret_key' => 'sk', 'encrypt_key' => 'hash', 'status' => 1,
 ];
 $card = bc_vc_flw_call(8, 'virtual_cards', 'POST', ['currency' => 'USD']);
-lcheck('flutterwave virtual cards still refuse (not in current official docs)', $card['reason'], 'endpoint_not_configured');
+lcheck('flutterwave virtual cards remain held for secure settlement', $card['reason'], 'security_review_required');
 $pos = bc_flw_request_pos(8, ['business' => 'Shop']);
 lcheck('flutterwave POS requests still refuse (not documented)', $pos['reason'], 'endpoint_not_configured');
 
