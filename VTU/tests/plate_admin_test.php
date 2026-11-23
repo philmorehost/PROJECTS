@@ -242,6 +242,7 @@ achk(strpos(file_get_contents($shell), "</body>\n</html>") !== false, 'admin foo
 // ---------------------------------------------------------------- legacy widgets
 // The retired bc-admin-header.php injected the admin AI assistant and the forced
 // PIN setup modal; bc_adm_widgets() must keep both, with the same AJAX contract.
+if(!function_exists('bc_generate_csrf_token')){function bc_generate_csrf_token(){return 'csrf-fixture';}}
 $GLOBALS['bc_admin_needs_pin'] = true;
 $GLOBALS['get_logged_admin_details'] = array('username' => 'adaobi', 'firstname' => 'Ada', 'ai_status' => 1, 'ai_token_balance' => 42);
 $_SERVER['PHP_SELF'] = '/bc-admin/Users.php';

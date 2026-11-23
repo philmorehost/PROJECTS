@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include ("../func/bc-admin-config.php");
+require_once __DIR__.'/../func/bc-admin-pin-setup.php';
+bc_admin_pin_setup_handle($get_logged_admin_details);
 require_once __DIR__.'/../func/bc-totp-setup.php';
 bc_totp_setup_handle('sas_vendors', $get_logged_admin_details);
 
@@ -33,28 +35,6 @@ if (isset($_POST['demo-relock-session'])) {
     $_SESSION["product_purchase_response"] = 'Demo editing locked again for this session.';
     header('Location: ' . ($_SERVER['REQUEST_URI'] ?? 'AccountSettings.php'));
     exit;
-}
-
-// AJAX: quick PIN-only save for the forced-setup modal (func/bc-plate-admin.php).
-// Deliberately touches ONLY security_pin — the full "update-security-settings"
-// handler further down also writes SMTP/2FA/SSO fields together in one UPDATE,
-// which would blank those out if fired from a PIN-only modal submission.
-if (isset($_POST['action']) && $_POST['action'] === 'quick_set_pin') {
-    header('Content-Type: application/json');
-    $new_pin = trim($_POST['admin_pin'] ?? '');
-    $con_pin = trim($_POST['admin_pin_con'] ?? '');
-    if (!preg_match('/^\d{4}$/', $new_pin)) {
-        echo json_encode(['ok' => false, 'msg' => 'PIN must be exactly 4 digits.']);
-        exit();
-    }
-    if ($new_pin !== $con_pin) {
-        echo json_encode(['ok' => false, 'msg' => 'PIN and Confirm PIN do not match.']);
-        exit();
-    }
-    $hashed_pin_esc = mysqli_real_escape_string($connection_server, password_hash($new_pin, PASSWORD_DEFAULT));
-    mysqli_query($connection_server, "UPDATE sas_vendors SET security_pin='$hashed_pin_esc' WHERE id='" . $get_logged_admin_details["id"] . "'");
-    echo json_encode(['ok' => true, 'msg' => 'Security PIN set successfully!']);
-    exit();
 }
 
 if (isset($_POST['set-mail-batch-size'])) {

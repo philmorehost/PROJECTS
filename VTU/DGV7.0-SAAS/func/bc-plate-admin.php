@@ -871,7 +871,7 @@ if (!function_exists('bc_adm_widgets')) {
           <h5 style="font-weight:800; margin:0 0 6px;">Set Your Security PIN</h5>
           <p class="pk-app__crumb" style="margin:0;">You'll need this 4-digit PIN to unblock your own account if our anti-brute-force system ever locks you out. It only takes a second.</p>
         </div>
-        <div id="forcePinError" class="alert alert-danger" style="display:none; margin-bottom:14px;"></div>
+        <div id="forcePinError" role="alert" aria-live="polite" class="alert alert-danger" style="display:none; margin-bottom:14px;"></div>
         <div style="margin-bottom:14px;">
           <label class="pk-app__crumb" for="forcePinInput" style="display:block; font-weight:700; margin-bottom:6px;">NEW 4-DIGIT PIN</label>
           <input type="password" id="forcePinInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="****" style="width:100%; text-align:center; font-weight:700; letter-spacing:10px; padding:12px; border:1px solid var(--line); border-radius:12px;">
@@ -908,27 +908,34 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!/^\d{4}$/.test(pin)) { showErr('PIN must be exactly 4 digits.'); return; }
         if (pin !== con) { showErr('PIN and Confirm PIN do not match.'); return; }
 
+        if (submitBtn.disabled) return;
         submitBtn.disabled = true;
         submitBtn.textContent = 'Saving…';
 
-        fetch('AccountSettings.php', {
+        fetch('/bc-admin/AccountSettings.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'quick_set_pin', admin_pin: pin, admin_pin_con: con })
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: new URLSearchParams({ action: 'quick_set_pin', admin_pin: pin, admin_pin_con: con, _csrf_token: <?php echo json_encode(bc_generate_csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?> })
         })
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            if (r.redirected) throw new Error('Your session or security requirements changed. Refresh this page and sign in again if requested.');
+            var type = r.headers.get('Content-Type') || '';
+            if (type.indexOf('application/json') === -1) throw new Error('The server did not return a PIN-save response. Refresh this page or contact support.');
+            return r.json().catch(function () { throw new Error('The server returned an unreadable response. Refresh this page or contact support.'); });
+        })
         .then(function (data) {
-            if (data.ok) {
+            if (data && data.ok === true && data.code === 'saved') {
                 modalEl.classList.remove('show');
                 modalEl.style.display = 'none';
             } else {
-                showErr(data.msg || 'Could not save PIN. Please try again.');
+                showErr((data && (data.msg || data.message)) || 'Could not save PIN. Please try again.');
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Save PIN & Continue';
             }
         })
-        .catch(function () {
-            showErr('Network error — please try again.');
+        .catch(function (error) {
+            showErr(error instanceof TypeError ? 'Unable to reach the server. Check your connection and try again.' : (error.message || 'Could not save PIN. Please refresh and try again.'));
             submitBtn.disabled = false;
             submitBtn.textContent = 'Save PIN & Continue';
         });

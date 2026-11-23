@@ -1,0 +1,9 @@
+# Forced bc-admin PIN setup save
+
+The supplied screenshot's “Network error” is consistent with two source-level defects: the modal omitted `_csrf_token`, and AccountSettings dispatched the general settings unlock gate before the first-time PIN handler. A redirect/HTML response then failed JSON parsing and was misleadingly shown as a network outage. No production request trace was available; the exact deployed response still needs verification.
+
+Both editions now dispatch the narrowly scoped first-time PIN handler immediately after the authenticated admin bootstrap and before unrelated settings gates/side effects. This is not a general settings exemption: it writes only `security_pin` on an owner-authenticated, active, unblocked, non-reset vendor with no existing PIN. It rejects impersonation, missing/malformed CSRF, demo-locked edits, bad input and throttled attempts. A fresh row is checked and a prepared conditional UPDATE binds owner email/password/status and the still-empty PIN. Only one affected row is success. Existing PIN changes remain on the verified settings flow; no SMTP/SSO/TOTP fields are cleared.
+
+The modal posts CSRF to the same-origin admin route with credentials. Only an explicit `saved` acknowledgement dismisses it. It distinguishes redirects/session changes, non-JSON responses, bad JSON, server validation errors and actual fetch failure. Failed saves preserve the PIN fields and re-enable retry; double submissions are suppressed. No PIN is logged or returned.
+
+Tests: helper boundary checks, UI cases for both editions, and disposable native MySQL checks for independent connection competition, hashes including leading-zero PIN, unrelated-secret/owner preservation, repeated initialization refusal and injected database failure. Boundary/UI tests use explicit doubles, not production provider verification. No deployment or live database changes performed. All existing financial holds remain.
