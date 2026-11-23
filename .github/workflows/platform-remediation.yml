@@ -173,6 +173,8 @@ jobs:
           php VTU/tests/compliance_policy_test.php
           php VTU/tests/kyc_fresh_policy_test.php
           php VTU/tests/kyb_review_ticket_test.php
+          php VTU/tests/public_template_selection_test.php
+          php VTU/tests/public_home_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
