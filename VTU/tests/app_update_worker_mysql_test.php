@@ -5,14 +5,17 @@ $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SA
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
 $db=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);$name='bc_worker_ci_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-app-update-worker.php';
-function bc_enrollment_reason($actor,$role){return !empty($actor['setup_required'])?'AUTHENTICATOR_SETUP_REQUIRED':'';}
-function bc_stepup_open_secret($raw){return $raw;}
+require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-enrollment-policy.php';
+require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-stepup.php';
+$connection_server=$db;
 $n=0;function worker_check($v,$m){global $n;if(!$v)throw new RuntimeException($m);$n++;}
 $root=sys_get_temp_dir().'/bc_worker_'.bin2hex(random_bytes(6));mkdir($root);mkdir($root.'/apk');file_put_contents($root.'/apk/app.apk','fixture apk bytes');
 $token_calls=0;$message_calls=0;
 $token=function($account)use(&$token_calls){$token_calls++;return 'test-token';};
 $message=function($project,$token,$topic,$payload)use(&$message_calls){$message_calls++;worker_check($project==='example-project' && $topic==='app_updates' && $payload['store_url']==='https://vendor.example.test/apk/','correct approved host/project/topic');return ['code'=>200,'body'=>['name'=>'projects/example-project/messages/test']];};
 try{
+ $db->query("CREATE TABLE sas_super_admin_options (option_name VARCHAR(225),option_value VARCHAR(225)) ENGINE=InnoDB");
+ $db->query("INSERT INTO sas_super_admin_options VALUES ('force_vendor_totp','0')");
  $db->query("CREATE TABLE sas_vendors (id INT PRIMARY KEY,status INT,is_blocked INT,force_password_change INT,setup_required INT,website_url VARCHAR(225),expiry_date VARCHAR(20)) ENGINE=InnoDB");
  $db->query("INSERT INTO sas_vendors VALUES (7,1,0,0,0,'vendor.example.test','2099-12-31')");
  $db->query("CREATE TABLE sas_settings (vendor_id INT,setting_name VARCHAR(225),setting_value VARCHAR(225),UNIQUE KEY idx_vendor_setting(vendor_id,setting_name)) ENGINE=InnoDB");
@@ -32,13 +35,16 @@ try{
  worker_check(bc_app_update_run_approved($db,7,$root,false,$token,$message)==='ready_dry_run' && $token_calls===0 && $message_calls===0,'dry run never calls providers');
  putenv('BC_APP_UPDATE_WORKER_ENABLED');worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='disabled' && $message_calls===0,'server send switch mandatory');
  putenv('BC_APP_UPDATE_WORKER_ENABLED=1');
- foreach(['status'=>2,'is_blocked'=>1,'force_password_change'=>1,'setup_required'=>1] as $field=>$value){$db->query("UPDATE sas_vendors SET $field=$value WHERE id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='unavailable' && $message_calls===0,'restricted vendor cannot send: '.$field);$restore=$field==='status'?1:0;$db->query("UPDATE sas_vendors SET $field=$restore WHERE id=7");}
+ foreach(['status'=>2,'is_blocked'=>1,'force_password_change'=>1] as $field=>$value){$db->query("UPDATE sas_vendors SET $field=$value WHERE id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='unavailable' && $message_calls===0,'restricted vendor cannot send: '.$field);$restore=$field==='status'?1:0;$db->query("UPDATE sas_vendors SET $field=$restore WHERE id=7");}
  $db->query("UPDATE sas_vendors SET expiry_date='2000-01-01' WHERE id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='unavailable','expired subscription cannot send');$db->query("UPDATE sas_vendors SET expiry_date='2099-12-31' WHERE id=7");
  $db->query("UPDATE sas_app_update_settings SET changelog='Changed' WHERE vendor_id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='needs_review','changed release invalidates approval');$db->query("UPDATE sas_app_update_settings SET changelog='Fixes' WHERE vendor_id=7");
  file_put_contents($root.'/apk/app.apk','changed apk bytes');worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='needs_review','changed APK invalidates approval');file_put_contents($root.'/apk/app.apk','fixture apk bytes');
  $db->query("UPDATE sas_vendors SET website_url='other.example.test' WHERE id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='needs_review','changed host invalidates approval');$db->query("UPDATE sas_vendors SET website_url='vendor.example.test' WHERE id=7");
  $rotated=$db->real_escape_string($raw."\n");$db->query("UPDATE sas_fcm_settings SET service_account_json='$rotated' WHERE vendor_id=7");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='needs_review','changed stored credentials invalidate approval');$db->query("UPDATE sas_fcm_settings SET service_account_json='$escaped' WHERE vendor_id=7");
  $db->query("INSERT INTO sas_fcm_settings VALUES (8,'example-project','$escaped')");worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='unavailable','shared-project refuses sending');$db->query('DELETE FROM sas_fcm_settings WHERE vendor_id=8');
+ $policy_change=function($account)use($db){$db->query("UPDATE sas_super_admin_options SET option_value='1' WHERE option_name='force_vendor_totp'");return 'test-token';};
+ worker_check(bc_app_update_run_approved($db,7,$root,true,$policy_change,$message)==='unavailable' && $message_calls===0,'fresh enrollment policy after OAuth prevents send');
+ $db->query("UPDATE sas_super_admin_options SET option_value='0' WHERE option_name='force_vendor_totp'");
  $revoke=function($account)use($db){bc_app_update_approval_write($db,7,'');return 'test-token';};worker_check(bc_app_update_run_approved($db,7,$root,true,$revoke,$message)==='needs_review' && $message_calls===0,'approval revoked during OAuth prevents send');
  bc_app_update_approval_write($db,7,bc_app_update_approval_token($snap));
  worker_check(bc_app_update_run_approved($db,7,$root,true,$token,$message)==='accepted' && $message_calls===1,'approved worker sends once');

@@ -42,7 +42,7 @@ function bc_app_update_snapshot($db,$vendor,$root) {
     };
     $actor=$load('sas_vendors');
     if((int)($actor['status']??0)!==1 || !empty($actor['is_blocked']) || !empty($actor['force_password_change']) || bc_vendor_subscription_expired($actor))throw new RuntimeException('vendor_restricted');
-    if(!function_exists('bc_enrollment_reason') || bc_enrollment_reason($actor,'vendor')!=='')throw new RuntimeException('vendor_setup_required');
+    if(!function_exists('bc_enrollment_reason') || bc_enrollment_reason($actor,'vendor',true)!=='')throw new RuntimeException('vendor_setup_required');
     $host=strtolower(trim((string)($actor['website_url']??'')));
     if(strlen($host)>253 || strpos($host,'.')===false || !filter_var($host,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME))throw new RuntimeException('vendor_host_invalid');
     $settings=$load('sas_app_update_settings');$release=bc_app_update_release($settings);
