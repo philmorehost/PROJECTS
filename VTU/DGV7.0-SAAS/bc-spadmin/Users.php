@@ -104,6 +104,7 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
             $_GET['vid'] = $_POST['vid'] ?? '';
         } elseif ($sec33_mode === 'api') {
             $_GET['account-api-status'] = $sec33_status;
+            $_GET['account-user-id'] = $_POST['account-user-id'] ?? '';
             $_GET['account-username'] = $_POST['account-username'] ?? '';
             $_GET['vid'] = $_POST['vid'] ?? '';
         } elseif ($sec33_mode === 'log') {
@@ -125,10 +126,17 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
         $vid = (int)$_GET["vid"];
         $column = isset($_GET["account-status"]) ? "status" : "api_status";
 
-        if(mysqli_query($connection_server, "UPDATE sas_users SET $column='$status' WHERE vendor_id='$vid' && username='$account_user'")){
-            $_SESSION["product_purchase_response"] = "User ".ucwords($account_user)." updated successfully";
+        $api_error='';
+        if ($column === 'api_status') {
+            require_once __DIR__ . '/../func/bc-user-api-status.php';
+            $saved=bc_user_api_status_save($connection_server,$vid,(int)($_GET['account-user-id']??0),$_GET['account-username']??'',$status,$api_error);
         } else {
-            $_SESSION["product_purchase_response"] = "Error: user update failed. Please try again.";
+            $saved=mysqli_query($connection_server, "UPDATE sas_users SET $column='$status' WHERE vendor_id='$vid' && username='$account_user'");
+        }
+        if($saved){
+            $_SESSION["product_purchase_response"] = $column === 'api_status' ? "API status confirmed saved. Existing KYC, tenant service and API-key expiry policies still apply." : "User ".ucwords($account_user)." updated successfully";
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: ".($api_error !== '' ? $api_error : "User update failed. Please try again.");
         }
         header("Location: Users.php" . (isset($_GET['vid']) && is_numeric($_GET['vid']) ? "?vid=".(int)$_GET['vid'] : ""));
         exit();

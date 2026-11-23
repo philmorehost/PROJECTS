@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-user-api-status.php'
+      - 'VTU/**/bc-admin/Users.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/Users.php'
       - 'VTU/**/func/bc-marketplace-catalog.php'
       - 'VTU/**/func/bc-price-input.php'
       - 'VTU/**/func/bc-float-services.php'
@@ -22,6 +25,9 @@ on:
   pull_request:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-user-api-status.php'
+      - 'VTU/**/bc-admin/Users.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/Users.php'
       - 'VTU/**/func/bc-marketplace-catalog.php'
       - 'VTU/**/func/bc-price-input.php'
       - 'VTU/**/func/bc-float-services.php'
@@ -75,3 +81,33 @@ jobs:
           php -l VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/CreateAPI.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php
+
+  api-status-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        edition: [SAAS, NON-SAAS]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-ci-only
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pdisposable-ci-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Persist and independently read back API status in disposable MySQL
+        env:
+          BC_API_STATUS_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/user_api_status_mysql_test.php
