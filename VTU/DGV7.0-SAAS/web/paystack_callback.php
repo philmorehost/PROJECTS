@@ -7,10 +7,13 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     include_once("../func/whmp-func.php");
     require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
+    require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
+    header('Cache-Control: no-store, private');
     $page_title = "Payment Verification";
     $error_message = "Transaction could not be verified. Please contact support.";
 
     if(isset($_GET['reference'])) {
+        if(!is_string($_GET['reference'])||!preg_match('/\A[A-Za-z0-9_-]{8,120}\z/D',$_GET['reference'])){http_response_code(400);exit('Invalid reference.');}
         $reference = mysqli_real_escape_string($connection_server, $_GET['reference']);
 
         // Fetch Paystack secret key
@@ -34,6 +37,7 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
             ));
 
             $response = curl_exec($curl);
+            $verify_http=(int)curl_getinfo($curl,CURLINFO_HTTP_CODE);
             $err = curl_error($curl);
             curl_close($curl);
 
@@ -41,52 +45,15 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                 $error_message = "Payment gateway error. Please contact support.";
             } else {
                 $result = json_decode($response, true);
-                if ($result['status'] == true && $result['data']['status'] == 'success') {
+                if (($result['status']??false) === true && is_array($result['data']??null) && ($result['data']['status']??'') === 'success' && is_array($result['data']['metadata']??null)) {
                     $metadata = $result['data']['metadata'];
                     $payment_ref = $result['data']['reference'];
                     $type = $metadata['type'] ?? '';
 
                     if ($type == 'vendor_subscription') {
-                        // Handle new registration
-                        $pending_vendor_id = $metadata['pending_vendor_id'];
-                        if($pending_vendor_id) {
-                            $update_sql = "UPDATE sas_pending_vendors SET payment_status='paid', paystack_reference='$payment_ref' WHERE id='$pending_vendor_id'";
-                            if(mysqli_query($connection_server, $update_sql)) {
-                                // ─── WHMP Domain Registration ────────────────────────────────────────
-                                $domain_registration_msg = '';
-                                $pending_q = mysqli_query($connection_server, "SELECT app_base_url, domain_option, domain_registration_fee FROM sas_pending_vendors WHERE id='$pending_vendor_id'");
-                                $pending_row = mysqli_fetch_assoc($pending_q);
-
-                                if ($pending_row && ($pending_row['domain_option'] ?? '') == 'register' && !empty($pending_row['app_base_url'])) {
-                                    if (whmp_is_configured()) {
-                                        // Register domain via WHMP
-                                        $reg_result = whmp_register_domain($pending_row['app_base_url']);
-                                        if ($reg_result['status'] === 'success') {
-                                            $domain_registration_msg = " Domain " . htmlspecialchars($pending_row['app_base_url']) . " has been registered successfully.";
-                                            // Store WHMP domain reference
-                                            $whmp_ref = isset($reg_result['data']['domain_id']) ? $reg_result['data']['domain_id'] : '';
-                                            if ($whmp_ref) {
-                                                mysqli_query($connection_server, "UPDATE sas_pending_vendors SET whmp_domain_id='" . mysqli_real_escape_string($connection_server, $whmp_ref) . "' WHERE id='$pending_vendor_id'");
-                                            }
-                                        } else {
-                                            // Domain registration failed - log it but don't block the registration
-                                            $domain_registration_msg = " Note: Domain " . htmlspecialchars($pending_row['app_base_url']) . " registration will be completed manually. Our team will register it as soon as your account is approved.";
-                                            error_log('[WHMP] Domain registration failed for ' . $pending_row['app_base_url'] . ': ' . ($reg_result['message'] ?? 'Unknown error'));
-                                        }
-                                    } else {
-                                        // WHMP not configured - note for manual processing
-                                        $domain_registration_msg = " Note: Domain " . htmlspecialchars($pending_row['app_base_url']) . " will be registered manually once your account is approved.";
-                                    }
-                                }
-
-                                $page_title = "Payment Successful";
-                                $success_message = "Your payment was successful! Your registration is now pending final approval from our administrators. You will be notified by email once your account is activated." . $domain_registration_msg;
-                            } else {
-                                 $error_message = "Could not update your registration status. Please contact support with reference: $payment_ref";
-                            }
-                        } else {
-                            $error_message = "Transaction metadata is missing. Please contact support.";
-                        }
+                        if($verify_http===200&&bc_vreg_online_receipt($result['data'],$reference)){
+                            $page_title='Payment verified';$success_message='Your payment matches the registration invoice. Activation still requires platform approval and applicable KYC/KYB.';
+                        }else{$error_message='Payment does not match a trusted registration invoice. No account has been activated; contact support.';}
                     } elseif ($type == 'vendor_renewal') {
                         // Handle subscription renewal
                         $vendor_id = $metadata['vendor_id'];

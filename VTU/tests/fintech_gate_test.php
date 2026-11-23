@@ -2646,7 +2646,7 @@ function bc_run_vendor_registration($path, $post, $reset = true) {
     $end = strpos($src, "\n}\n", $start);
     if ($end === false) $end = strlen($src);
     $block = substr($src, $start, $end - $start + 3);
-    $block = str_replace(['exit();', 'mysqli_'], ['return;', 'fake_mysqli_'], $block);
+    $block = str_replace(['exit();', 'exit;', 'mysqli_'], ['return;', 'return;', 'fake_mysqli_'], $block);
     // The extension selector is built before the handler; seed the two variables it sets so the
     // handler's validation still has a real extension list to check the domain against.
     $GLOBALS['__vendor_exts'] = array_keys($GLOBALS['db']['domain_extensions']) ?: ['.com', '.ng', '.com.ng', '.org', '.net'];
@@ -2689,6 +2689,13 @@ function bc_run_vendor_registration($path, $post, $reset = true) {
     if (!function_exists('whmp_get_domain_price')) { eval('function whmp_get_domain_price($e){ return 12.0; }'); }
     if (!function_exists('whmp_get_usd_to_ngn_rate')) { eval('function whmp_get_usd_to_ngn_rate(){ return 1500.0; }'); }
     if (!function_exists('whmp_convert_usd_to_ngn')) { eval('function whmp_convert_usd_to_ngn($u,$r){ return $u * $r; }'); }
+    // These old domain-normalization fixtures isolate the handler only. Security/commerce
+    // are exercised by vendor_registration{,_commerce}_test and disposable MySQL, not these doubles.
+    if(!function_exists('bc_vreg_existing_domain')){function bc_vreg_existing_domain($domain){return true;}}
+    if(!function_exists('bc_vreg_quote')){function bc_vreg_quote($input,$domain){return ['total'=>10000,'addons'=>''];}}
+    if(!function_exists('bc_vreg_decimal')){function bc_vreg_decimal($amount){return number_format($amount/100,2,'.','');}}
+    if(!function_exists('bc_vreg_insert_application')){function bc_vreg_insert_application($sql,$email,$phone,$device,$policy){return fake_mysqli_query($GLOBALS['connection_server'],$sql);}}
+    $vreg_email=$post['email'];$normalized_phone=$post['phone'];$vreg_device='fixture';$vreg_policy=[];
     $GLOBALS['db']['email_templates_sent'] = 0;
     $valid_exts = $GLOBALS['__vendor_exts'];
     $domain_extension_options = array_map(function ($ext) {
@@ -2853,7 +2860,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-vendor-registration-1');
+gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-vendor-commerce-2');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);
@@ -2871,7 +2878,7 @@ $insert_match = [];
 preg_match('/INSERT INTO sas_pending_vendors \(([^)]*)\) VALUES/', $reg_src, $insert_match);
 $insert_cols = array_map('trim', explode(',', $insert_match[1] ?? ''));
 // Only the columns the migration is responsible for; the rest are created with the table.
-$migration_cols = ['email_verified_at','business_name','business_registration_no','compliance_review','app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
+$migration_cols = ['price_snapshot','payment_evidence','email_verified_at','business_name','business_registration_no','compliance_review','app_base_url', 'order_apk', 'order_ios', 'order_playstore', 'order_sms_bridge',
                    'domain_registration_fee', 'total_amount', 'whmp_domain_id'];
 $missing_from_migration = array_values(array_diff($insert_cols, $migration_cols));
 $missing_from_migration = array_values(array_filter($missing_from_migration, function ($c) {

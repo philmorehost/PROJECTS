@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-vendor-registration-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-vendor-commerce-2');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -262,6 +262,8 @@ if ($check_pending_cols) {
     // columns never received them - and the add-vendor INSERT, which names every column,
     // then failed with an unknown-column error while the pre-checks still passed.
     $pending_column_ddl = [
+        'price_snapshot' => "ALTER TABLE sas_pending_vendors ADD COLUMN price_snapshot TEXT NULL",
+        'payment_evidence' => "ALTER TABLE sas_pending_vendors ADD COLUMN payment_evidence TEXT NULL",
         'email_verified_at' => "ALTER TABLE sas_pending_vendors ADD COLUMN email_verified_at DATETIME NULL",
         'business_name' => "ALTER TABLE sas_pending_vendors ADD COLUMN business_name VARCHAR(190) DEFAULT NULL",
         'business_registration_no' => "ALTER TABLE sas_pending_vendors ADD COLUMN business_registration_no VARCHAR(100) DEFAULT NULL",
@@ -2374,8 +2376,13 @@ if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_gateway_ap
 mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_challenges (
  token CHAR(64) PRIMARY KEY,email VARCHAR(225) NOT NULL,code_hash VARCHAR(255) NOT NULL,
  binding CHAR(64) NOT NULL,epoch VARCHAR(64) NOT NULL,attempts INT NOT NULL DEFAULT 0,
- expires_at DATETIME NOT NULL,consumed_at DATETIME NULL,KEY binding_idx(binding),KEY expiry_idx(expires_at)
+ expires_at DATETIME NOT NULL,consumed_at DATETIME NULL,application_used_at DATETIME NULL,KEY binding_idx(binding),KEY expiry_idx(expires_at)
 ) ENGINE=InnoDB");
+
+$vreg_cols=mysqli_query($connection_server,"SHOW COLUMNS FROM sas_vendor_signup_challenges LIKE 'application_used_at'");
+if($vreg_cols&&mysqli_num_rows($vreg_cols)===0)mysqli_query($connection_server,"ALTER TABLE sas_vendor_signup_challenges ADD COLUMN application_used_at DATETIME NULL");
+mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_daily(identity_hash CHAR(64) PRIMARY KEY,until_at DATETIME NOT NULL) ENGINE=InnoDB");
+mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_receipts(reference VARCHAR(150) PRIMARY KEY,pending_id INT NOT NULL UNIQUE) ENGINE=InnoDB");
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
 // Deliberately DELETE + INSERT rather than an upsert: not every variant of sas_super_admin_options has

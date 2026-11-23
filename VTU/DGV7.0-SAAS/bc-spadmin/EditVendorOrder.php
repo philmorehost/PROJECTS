@@ -20,6 +20,7 @@ if (!$pv) {
 // Handle Save
 if (isset($_POST['save_order'])) {
     bc_validate_csrf();
+    if(!empty($pv['price_snapshot'])){http_response_code(409);exit('Server-priced registration invoices are immutable. Do not edit paid or quoted orders; contact the platform owner for controlled reconciliation.');}
 
     $package_id = mysqli_real_escape_string($connection_server, $_POST['package_id']);
     $domain_fee = (float)$_POST['domain_fee'];

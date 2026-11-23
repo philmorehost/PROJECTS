@@ -8,7 +8,7 @@ function bc_demo_edits_allowed($db){return true;}
 function bc_security_ensure_schema(){}
 function bc_ensure_security_tables(){}
 function bc_validate_csrf(){if(!is_string($_POST['_csrf_token']??null)||!hash_equals($_SESSION['_csrf_token']??'',$_POST['_csrf_token']))throw new RuntimeException('csrf');}
-require $root.'bc-stepup.php';require $root.'bc-paid-security.php';require $root.'bc-vendor-registration.php';
+require $root.'bc-stepup.php';require $root.'bc-paid-security.php';require $root.'bc-vendor-registration.php';require $root.'bc-vendor-registration-commerce.php';
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
 $db=$connection_server=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);
 $_SERVER['REQUEST_METHOD']='POST';$_SERVER['REMOTE_ADDR']='192.0.2.7';$_SESSION=['spadmin_session'=>'owner@example.test','_csrf_token'=>'token'];$_POST=['_csrf_token'=>'token'];
@@ -71,6 +71,29 @@ try{
  $_POST['_csrf_token']='wrong';try{bc_vreg_settings_save(['id'=>1],$input);vm_check(false,'csrf');}catch(RuntimeException $e){vm_check($e->getMessage()==='csrf','settings csrf');}$_POST['_csrf_token']='token';
  $prior=bc_vreg_policy();$db->query("CREATE TRIGGER policy_write_failure BEFORE INSERT ON sas_super_admin_options FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected policy write failure'");
  $input['vendor_registration_enabled']='0';vm_check(bc_vreg_settings_save(['id'=>1],$input)!==''&&bc_vreg_policy()===$prior,'failed settings write rolls back policy and epoch');$db->query('DROP TRIGGER policy_write_failure');
+
+ // Integer invoice, durable daily limits, OTP-first application and payment-evidence integration.
+ foreach(['sas_vendor_signup_daily','sas_vendor_signup_receipts'] as $table){if(!preg_match('/CREATE TABLE IF NOT EXISTS '.$table.'\(.*?\) ENGINE=InnoDB/s',$source,$definition))throw new RuntimeException('commerce DDL');$db->query($definition[0]);}
+ $db->query('CREATE TABLE sas_billing_packages(id INT PRIMARY KEY,price DECIMAL(12,2),duration_days INT) ENGINE=InnoDB');$db->query('INSERT INTO sas_billing_packages VALUES(1,5000,30)');
+ $db->query('CREATE TABLE sas_billing_addons(id INT PRIMARY KEY,price DECIMAL(12,2)) ENGINE=InnoDB');$db->query('INSERT INTO sas_billing_addons VALUES(2,250.50)');
+ vm_policy('apk_development_price','1000.00');
+ $quote=bc_vreg_quote(['billing_package_id'=>'1','order_apk'=>'1','addons'=>['2'],'total_amount'=>'-100'],'0.00');vm_check($quote['total']===625050,'SQL prices ignore negative browser total and include options');
+ $snapshot=json_encode($quote,JSON_THROW_ON_ERROR);$escaped=mysqli_real_escape_string($db,$snapshot);
+ $application_sql="INSERT INTO sas_pending_vendors(website_url,email,password,firstname,lastname,phone_number,home_address,billing_package_id,payment_method,email_verified_at,price_snapshot,total_amount,domain_registration_fee,selected_addons,order_apk) VALUES('fixture-owned.com','application@example.com','fixture-hash','Ada','Okafor','+2348031234567','12 Example Street',1,'paystack',NOW(),'$escaped','6250.50',0,'2',1)";
+ unset($_SESSION['vreg_verified_token']);vm_check(bc_vreg_insert_application($application_sql,'application@example.com','+2348031234567','device-A',bc_vreg_policy())===false,'cannot insert before OTP verification');
+ $db->query('DELETE FROM sas_rate_limits');bc_vreg_send('application@example.com',bc_vreg_policy(),$deliver);vm_check(bc_vreg_consume('application@example.com',$sent_code,bc_vreg_policy()),'mailbox verified before application');
+ $application_id=bc_vreg_insert_application($application_sql,'application@example.com','+2348031234567','device-A',bc_vreg_policy());vm_check(is_int($application_id)&&$application_id>0,'application and quotas committed together');vm_check(bc_vreg_verified_mailbox(bc_vreg_policy())===null,'application consumes verified proof');
+ foreach([['application@example.com','+2348039999998','device-B'],['other@example.com','+2348031234567','device-B'],['other@example.com','+2348039999998','device-A']] as [$email,$phone,$device]){$db->begin_transaction();try{bc_vreg_daily_claim($email,$phone,$device);vm_check(false,'daily duplicate');}catch(RuntimeException $e){$db->rollback();vm_check(true,'daily email/phone/browser rule independent of IP');}}
+ $reference='vendor_reg_fixture_'.bin2hex(random_bytes(16));bc_q('UPDATE sas_pending_vendors SET paystack_reference=? WHERE id=?',[$reference,$application_id]);
+ $payment=['status'=>'success','reference'=>$reference,'amount'=>625050,'currency'=>'NGN','customer'=>['email'=>'application@example.com'],'metadata'=>['type'=>'vendor_subscription','pending_vendor_id'=>$application_id]];
+ foreach(['amount'=>1,'currency'=>'USD','reference'=>'other-reference'] as $field=>$bad){$attempt=$payment;$attempt[$field]=$bad;vm_check(!bc_vreg_online_receipt($attempt,$reference),'reject mismatched verified payment '.$field);}
+ $attempt=$payment;$attempt['customer']['email']='someone@example.com';vm_check(!bc_vreg_online_receipt($attempt,$reference),'wrong payer email');$attempt=$payment;$attempt['metadata']['pending_vendor_id']=999;vm_check(!bc_vreg_online_receipt($attempt,$reference),'metadata cannot redirect receipt');
+ vm_check(bc_vreg_online_receipt($payment,$reference),'exact verified receipt accepted');vm_check(bc_vreg_online_receipt($payment,$reference),'verified replay is idempotent');
+ $paid=bc_q_row('SELECT * FROM sas_pending_vendors WHERE id=?',[$application_id]);vm_check(bc_vreg_receipt_matches($paid),'persisted matching payment evidence');
+ bc_q("UPDATE sas_pending_vendors SET payment_method='bank_deposit',payment_status='pending',payment_evidence=NULL WHERE id=?",[$application_id]);$manual=['deposit_amount'=>'6250.50','deposit_reference'=>'bank-statement-fixture','deposit_confirmed'=>'1'];
+ try{bc_vreg_manual_receipt($application_id,['id'=>1],$manual);vm_check(false,'bare manual action');}catch(RuntimeException $e){vm_check(true,'bare manual action refused');}
+ $GLOBALS['bc_vreg_verified_payment_actor']=['actor'=>1,'pending'=>$application_id];try{bc_vreg_manual_receipt($application_id,['id'=>1],$manual);vm_check(false,'online-only manual attempt');}catch(RuntimeException $e){vm_check(true,'online-only policy refuses manual deposits');}
+ vm_policy('vendor_registration_payment_mode','both');$db->query('DELETE FROM sas_vendor_signup_receipts');$GLOBALS['bc_vreg_verified_payment_actor']=['actor'=>1,'pending'=>$application_id];bc_vreg_manual_receipt($application_id,['id'=>1],$manual);$paid=bc_q_row('SELECT * FROM sas_pending_vendors WHERE id=?',[$application_id]);vm_check(bc_vreg_receipt_matches($paid),'manual exact amount and statement reference audited and bound');
  // Exercise the exact production activation INSERT (not external hosting/payment side effects).
  $approval=file_get_contents(__DIR__.'/../DGV7.0-SAAS/bc-spadmin/VendorRegistrations.php');
  if(!preg_match('/\$insert_sql = "(INSERT INTO sas_vendors.*?)";/s',$approval,$insert))throw new RuntimeException('activation SQL missing');
