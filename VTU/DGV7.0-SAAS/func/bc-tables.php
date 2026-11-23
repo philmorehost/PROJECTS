@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-paid-gateways-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-vendor-registration-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -87,6 +87,8 @@ if ($create_vendor_table) {
         "ussd_access" => "TINYINT(1) NOT NULL DEFAULT 0",
         "support_whatsapp" => "VARCHAR(20) DEFAULT ''",
         "kyc_status" => "INT DEFAULT 0",
+        "email_verified_at" => "DATETIME NULL",
+        "onboarding_compliance_review" => "TEXT NULL",
         "identity_api_enabled" => "TINYINT(1) DEFAULT 0",
         // NULL = inherit the super-admin global default; 1 = this vendor forces login OTP on;
         // 0 = this vendor has opted out (their own account only).
@@ -218,6 +220,27 @@ if ($create_vendor_table) {
     }
 }
 
+//Create Pending Vendors Table
+$create_pending_vendors_table = mysqli_query($connection_server, "
+CREATE TABLE IF NOT EXISTS sas_pending_vendors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    website_url VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    firstname VARCHAR(255) NOT NULL,
+    lastname VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50) NOT NULL,
+    home_address TEXT NOT NULL,
+    billing_package_id INT NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- Added here
+    paystack_reference VARCHAR(255) NULL,
+    status INT NOT NULL DEFAULT 0,
+    reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email),
+    UNIQUE (website_url)) ENGINE=InnoDB");
+
+
 // Add columns to pending vendors as well
 $check_pending_cols = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_pending_vendors");
 if ($check_pending_cols) {
@@ -239,6 +262,11 @@ if ($check_pending_cols) {
     // columns never received them - and the add-vendor INSERT, which names every column,
     // then failed with an unknown-column error while the pre-checks still passed.
     $pending_column_ddl = [
+        'email_verified_at' => "ALTER TABLE sas_pending_vendors ADD COLUMN email_verified_at DATETIME NULL",
+        'business_name' => "ALTER TABLE sas_pending_vendors ADD COLUMN business_name VARCHAR(190) DEFAULT NULL",
+        'business_registration_no' => "ALTER TABLE sas_pending_vendors ADD COLUMN business_registration_no VARCHAR(100) DEFAULT NULL",
+        'compliance_review' => "ALTER TABLE sas_pending_vendors ADD COLUMN compliance_review TEXT NULL",
+
         'app_base_url' => "ALTER TABLE sas_pending_vendors ADD COLUMN app_base_url VARCHAR(255) DEFAULT NULL",
         'order_apk' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_apk TINYINT(1) DEFAULT 0",
         'order_ios' => "ALTER TABLE sas_pending_vendors ADD COLUMN order_ios TINYINT(1) DEFAULT 0",
@@ -338,26 +366,6 @@ if ($create_domain_extensions_table) {
         mysqli_query($connection_server, "ALTER TABLE `sas_domain_extensions` ADD COLUMN promo_price DECIMAL(10,2) DEFAULT 0.00 AFTER price");
     }
 }
-
-//Create Pending Vendors Table
-$create_pending_vendors_table = mysqli_query($connection_server, "
-CREATE TABLE IF NOT EXISTS sas_pending_vendors (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    website_url VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    firstname VARCHAR(255) NOT NULL,
-    lastname VARCHAR(255) NOT NULL,
-    phone_number VARCHAR(50) NOT NULL,
-    home_address TEXT NOT NULL,
-    billing_package_id INT NOT NULL,
-    payment_method VARCHAR(50) NOT NULL,
-    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- Added here
-    paystack_reference VARCHAR(255) NULL,
-    status INT NOT NULL DEFAULT 0,
-    reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (email),
-    UNIQUE (website_url))");
 
 if ($create_pending_vendors_table) {
     $check_pv_addons = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_pending_vendors LIKE 'selected_addons'");
@@ -2361,6 +2369,13 @@ if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_gateway_ap
  sealed_config LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  PRIMARY KEY (vendor_id,gateway_slug)
 ) ENGINE=InnoDB")) { error_log('Gateway configuration migration failed; credential saves fail closed.'); return; }
+
+// Vendor signup proofs are short-lived, browser-bound, hashed and never an active vendor account.
+mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_challenges (
+ token CHAR(64) PRIMARY KEY,email VARCHAR(225) NOT NULL,code_hash VARCHAR(255) NOT NULL,
+ binding CHAR(64) NOT NULL,epoch VARCHAR(64) NOT NULL,attempts INT NOT NULL DEFAULT 0,
+ expires_at DATETIME NOT NULL,consumed_at DATETIME NULL,KEY binding_idx(binding),KEY expiry_idx(expires_at)
+) ENGINE=InnoDB");
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
 // Deliberately DELETE + INSERT rather than an upsert: not every variant of sas_super_admin_options has

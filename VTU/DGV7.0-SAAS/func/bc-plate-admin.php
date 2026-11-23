@@ -324,6 +324,7 @@ if (!function_exists('bc_adm_menu')) {
                         array('label' => 'Add Vendor',            'href' => 'VendorReg.php',            'match' => array('VendorReg.php')),
                         array('label' => 'View Vendors',          'href' => 'Vendors.php',              'match' => array('Vendors.php')),
                         array('label' => 'Pending Registrations', 'href' => 'VendorRegistrations.php',  'match' => array('VendorRegistrations.php')),
+                        array('label' => 'Vendor Signup Security', 'href' => 'VendorRegistrationSettings.php', 'match' => array('VendorRegistrationSettings.php')),
                         array('label' => 'Unblock Requests',      'href' => 'UnblockRequests.php',      'match' => array('UnblockRequests.php')),
                         array('label' => 'Domain Settings',       'href' => 'DomainSettings.php',       'match' => array('DomainSettings.php')),
                         array('label' => 'Domain Requests',       'href' => 'DomainChangeRequests.php', 'match' => array('DomainChangeRequests.php')),

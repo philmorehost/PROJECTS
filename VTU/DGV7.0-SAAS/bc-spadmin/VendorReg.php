@@ -15,6 +15,43 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     // order died with "Call to undefined function bc_hash_password()" on line ~86.
     include_once("../func/bc-security.php");
 
+
+    require_once __DIR__.'/../func/bc-vendor-registration.php';
+    header('Cache-Control: no-store, private');header('Referrer-Policy: no-referrer');header('X-Content-Type-Options: nosniff');
+    try{
+        $vreg_policy=bc_vreg_policy();
+        if(!$vreg_policy['enabled']){http_response_code(503);exit('Vendor registration is currently closed. Please contact platform support.');}
+        if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
+            if(!is_string($_POST['_csrf_token']??null))throw new RuntimeException('Invalid form token. Reload and try again.');
+            bc_validate_csrf();
+            bc_vreg_limit('request_ip',(string)($_SERVER['REMOTE_ADDR']??'unknown'),30,900);
+            $policy_lock=bc_q_row("SELECT GET_LOCK('bc_vendor_registration_settings',2) AS acquired");
+            if((int)($policy_lock['acquired']??0)!==1)throw new RuntimeException('Registration is busy. Please try later.');
+            register_shutdown_function(function(){bc_q_row("SELECT RELEASE_LOCK('bc_vendor_registration_settings') AS released");});
+            $vreg_policy=bc_vreg_policy();
+            if(!$vreg_policy['enabled'])throw new RuntimeException('Vendor registration is currently closed.');
+            $vreg_email=bc_vreg_email($_POST['email']??null,$vreg_policy);
+            if($vreg_email==='')throw new RuntimeException('Use a valid, mail-capable email address. Temporary or blocked domains are not accepted.');
+            if(isset($_POST['send-vendor-code'])){
+                bc_vreg_send($vreg_email,$vreg_policy);
+                $_SESSION['product_purchase_response']='A verification code has been sent. Use it with the same email address in the registration form within 10 minutes.';
+                header('Location: VendorReg.php');exit;
+            }
+            if(!isset($_POST['create-profile']))throw new RuntimeException('Invalid registration action.');
+            $input_error=bc_vreg_input($_POST);if($input_error!=='')throw new RuntimeException($input_error);
+            if(!empty($_POST['company_fax']))throw new RuntimeException('Registration could not be completed.');
+            if($vreg_policy['kyb']&&(strlen(trim($_POST['business_name']??''))<2||strlen(trim($_POST['business_registration_no']??''))<3))throw new RuntimeException('Enter your registered business name and registration number for KYB review.');
+            if(!bc_vreg_consume($vreg_email,$_POST['vendor_email_code']??null,bc_vreg_policy()))throw new RuntimeException('Email verification failed or expired. Request a new code and try again.');
+            $_POST['email']=$vreg_email;
+        }
+    }catch(Throwable $e){
+        if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
+            $_SESSION['product_purchase_response']=$e instanceof mysqli_sql_exception?'Registration is temporarily unavailable. Please contact support.':$e->getMessage();
+            header('Location: VendorReg.php');exit;
+        }
+        http_response_code(503);exit('Registration is temporarily unavailable. Please contact support.');
+    }
+
     // Fetch domain settings
     $nameservers = '';
     $nameservers = '';
@@ -181,13 +218,15 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                     $check_vendor_details_with_url = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE website_url='$website_url'");
                     $check_pending_vendor_details_with_url = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE website_url='$website_url'");
                     if(mysqli_num_rows($check_vendor_details_with_url) == 0 && mysqli_num_rows($check_pending_vendor_details_with_url) == 0){
-                        $md5_pass = bc_hash_password($pass); // stored as password_hash(); the login path also accepts legacy md5
+                        $md5_pass = bc_hash_password($_POST['pass']); // stored as password_hash(); the login path also accepts legacy md5
                         
                         $def_min = getSuperAdminOption('default_min_withdrawal', '1000');
                         $def_max = getSuperAdminOption('default_max_withdrawal', '50000');
                         $def_limit = getSuperAdminOption('default_daily_payout_limit', '10');
 
-                        $sql = "INSERT INTO sas_pending_vendors (website_url, email, password, firstname, lastname, phone_number, home_address, billing_package_id, payment_method, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, order_apk, order_ios, order_playstore, order_sms_bridge, selected_addons, domain_registration_fee, total_amount) VALUES ('$website_url', '$email', '$md5_pass', '$first', '$last', '$phone', '$address', '$billing_package_id', '$payment_method', '0', '$def_min', '$def_max', '$def_limit', '$app_base_url', '$order_apk', '$order_ios', '$order_playstore', '$order_sms_bridge', '$selected_addons_str', '$domain_fee', '$total_amount')";
+                        $business_name=mysqli_real_escape_string($connection_server,trim($_POST['business_name']??''));
+                        $business_registration_no=mysqli_real_escape_string($connection_server,trim($_POST['business_registration_no']??''));
+                        $sql = "INSERT INTO sas_pending_vendors (email_verified_at,business_name,business_registration_no,website_url, email, password, firstname, lastname, phone_number, home_address, billing_package_id, payment_method, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, order_apk, order_ios, order_playstore, order_sms_bridge, selected_addons, domain_registration_fee, total_amount) VALUES (NOW(),'$business_name','$business_registration_no','$website_url', '$email', '$md5_pass', '$first', '$last', '$phone', '$address', '$billing_package_id', '$payment_method', '0', '$def_min', '$def_max', '$def_limit', '$app_base_url', '$order_apk', '$order_ios', '$order_playstore', '$order_sms_bridge', '$selected_addons_str', '$domain_fee', '$total_amount')";
                         if(mysqli_query($connection_server, $sql)) {
                             $pending_id = mysqli_insert_id($connection_server);
 
@@ -299,7 +338,7 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                             if (strpos((string)$register_error, 'Duplicate entry') !== false) {
                                 $_SESSION["product_purchase_response"] = "Could not save this vendor: that email or domain is already registered. Delete the pending registration first.";
                             } elseif ((string)$register_error !== '') {
-                                $_SESSION["product_purchase_response"] = "Could not save this vendor: " . $register_error;
+                                $_SESSION["product_purchase_response"] = "Could not save your registration. Please contact support.";
                             } else {
                                 $_SESSION["product_purchase_response"] = "Could not save your registration. Please try again.";
                             }
@@ -557,7 +596,14 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
 
     <div class="container py-4 py-lg-5">
 
+        <div class="alert alert-info">Mailbox verification is mandatory. <?php echo $vreg_policy['kyc']?'Platform KYC review is required before approval. ':'';echo $vreg_policy['kyb']?'Business KYB review is required before approval.':''; ?>Payment alone does not approve your registration.</div>
+        <form method="post" class="card p-3 mb-3"><?php echo bc_csrf_field(); ?><label class="form-label" for="verify-vendor-email">Verify your email first</label><input id="verify-vendor-email" type="email" name="email" class="form-control" maxlength="225" required autocomplete="email"><button class="btn btn-outline-primary mt-2" name="send-vendor-code" value="1">Send verification code</button></form>
         <form method="post" action="" id="reg-form">
+            <?php echo bc_csrf_field(); ?>
+            <div class="card p-3 mb-3"><label for="vendor-email-code">Email verification code</label><input class="form-control" id="vendor-email-code" name="vendor_email_code" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code" inputmode="numeric"><p class="small">Use the same email below. Codes expire in 10 minutes and can be used once.</p>
+            <label>Registered business name<input class="form-control" name="business_name" maxlength="190" <?php echo $vreg_policy['kyb']?'required':''; ?>></label><label>Business registration number<input class="form-control" name="business_registration_no" maxlength="100" <?php echo $vreg_policy['kyb']?'required':''; ?>></label></div>
+            <div hidden aria-hidden="true"><label>Leave blank<input name="company_fax" tabindex="-1" autocomplete="off"></label></div>
+
             <div class="row g-4">
                 <div class="col-lg-8">
                     <!-- Basic Info -->
@@ -810,7 +856,7 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
 
                         <div class="mb-4">
                             <label class="form-label text-uppercase small fw-bold">Account Password</label>
-                            <input type="password" name="pass" class="form-control bg-light border-0 py-3" placeholder="Set password" required>
+                            <input type="password" name="pass" minlength="12" maxlength="72" class="form-control bg-light border-0 py-3" placeholder="Set password" required>
                         </div>
 
                         <input type="hidden" name="total_amount" id="total_amount_input" value="0">

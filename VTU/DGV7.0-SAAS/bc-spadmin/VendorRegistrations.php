@@ -5,6 +5,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registration_action');
     include_once("../func/whmp-func.php");
+require_once __DIR__.'/../func/bc-vendor-registration.php';
 
     // §33/§9: vendor registration actions (verify payment / approve /
     // decline) are POST + CSRF + step-up only. Approving a new vendor and
@@ -52,6 +53,14 @@ bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registrati
     if(isset($_GET['action']) && isset($_GET['id'])) {
         $action = $_GET['action'];
         $pending_id = mysqli_real_escape_string($connection_server, $_GET['id']);
+        if(!in_array($action,['approve','decline','mark_paid','review_compliance'],true)){http_response_code(400);exit('Invalid action.');}
+        // Serialize decisions and policy changes before reading the applicant or compliance requirements.
+        foreach(['bc_vendor_registration_settings','bc_vreg_pending_'.(int)$pending_id] as $decision_lock){
+            $acquired=bc_q_row('SELECT GET_LOCK(?,2) AS acquired',[$decision_lock]);
+            if((int)($acquired['acquired']??0)!==1){http_response_code(409);exit('Registration review is busy. Refresh before retrying.');}
+            register_shutdown_function(function()use($decision_lock){bc_q_row('SELECT RELEASE_LOCK(?) AS released',[$decision_lock]);});
+        }
+
 
         // Mark as Paid for manual deposit
         if($action == 'mark_paid') {
@@ -74,7 +83,38 @@ bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registrati
         if(mysqli_num_rows($result) > 0) {
             $pending_vendor = mysqli_fetch_assoc($result);
 
+
+            if($action === 'review_compliance'){
+                try{
+                    $policy=bc_vreg_policy();
+                    if(empty($pending_vendor['email_verified_at']))throw new RuntimeException('Mailbox must be verified before compliance review. Legacy applications must be resubmitted.');
+                    if(!is_string($_POST['review_snapshot']??null)||!hash_equals(bc_vreg_compliance_digest($pending_vendor,$policy),$_POST['review_snapshot']))throw new RuntimeException('Applicant details or policy changed. Refresh and review again.');
+                    $proof=['digest'=>bc_vreg_compliance_digest($pending_vendor,$policy),'reviewer'=>(int)$get_logged_spadmin_details['id'],'at'=>gmdate('c')];
+                    foreach(['kyc','kyb'] as $type){
+                        $ref=$_POST[$type.'_case_reference']??'';
+                        if(!is_string($ref)||strlen($ref)>190||(($policy[$type]||$ref!=='')&&!preg_match('/\A[A-Za-z0-9][A-Za-z0-9 ._:\/-]{7,189}\z/D',$ref)))throw new RuntimeException('Supply the completed verification case reference for each required check.');
+                        $proof[$type]=$ref;
+                    }
+                    if($policy['kyb']&&(empty($pending_vendor['business_name'])||empty($pending_vendor['business_registration_no'])))throw new RuntimeException('Applicant business details are missing. Request a complete application.');
+                    if(empty($_POST['compliance_confirmed']))throw new RuntimeException('Confirm you reviewed the required evidence.');
+                    // Bind review to the exact identity snapshot; any identity edit invalidates it.
+                    $encoded=json_encode($proof,JSON_THROW_ON_ERROR);
+                    bc_security_ensure_schema();
+                    $review_engine=bc_q_row("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sas_pending_vendors'");
+                    if(strtolower($review_engine['ENGINE']??'')!=='innodb')throw new RuntimeException('Compliance review requires InnoDB storage.');
+                    $connection_server->begin_transaction();
+                    if(bc_q('UPDATE sas_pending_vendors SET compliance_review=? WHERE id=?',[$encoded,(int)$pending_id])!==true)throw new RuntimeException('Review could not be saved.');
+                    if(!bc_sec_audit(0,'spadmin',(string)$get_logged_spadmin_details['id'],'vendor_compliance_review','pending#'.(int)$pending_id,'snapshot='.$proof['digest'].';kyc='.$proof['kyc'].';kyb='.$proof['kyb']))throw new RuntimeException('Review audit unavailable.');
+                    $connection_server->commit();
+                    $_SESSION['page_alert']='Compliance review recorded. Approval still requires verified payment and the current policy checks.';
+                }catch(Throwable $e){$connection_server->rollback();$_SESSION['page_alert']='Review not confirmed. Refresh, check the evidence references and retry.';}
+                header('Location: VendorRegistrations.php');exit;
+            }
             if($action == 'approve') {
+                try{$approval_error=bc_vreg_approval_error($pending_vendor,bc_vreg_policy());}
+                catch(Throwable $e){$approval_error='Registration compliance policy unavailable. Approval refused.';}
+                if($approval_error!==''){$_SESSION['page_alert']=$approval_error;header('Location: VendorRegistrations.php');exit;}
+
                 if(trim($pending_vendor['payment_status']) == 'paid') {
                     // 1. Get package details
                     $package_id = $pending_vendor['billing_package_id'];
@@ -105,8 +145,10 @@ bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registrati
                     // Generate unique access hash for the order portal
                     $access_hash = bin2hex(random_bytes(32));
 
-                    $insert_sql = "INSERT INTO sas_vendors (email, access_hash, password, firstname, lastname, phone_number, website_url, home_address, balance, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, apk_ordered, ios_ordered, playstore_ordered, sms_bridge_ordered, selected_addons)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '0.00', '1', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $insert_sql = "INSERT INTO sas_vendors (email_verified_at,onboarding_compliance_review,kyc_status,email, access_hash, password, firstname, lastname, phone_number, website_url, home_address, balance, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, apk_ordered, ios_ordered, playstore_ordered, sms_bridge_ordered, selected_addons)
+                                   VALUES (NOW(),?,?,?, ?, ?, ?, ?, ?, ?, ?, '0.00', '1', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $onboarding_proof=json_encode(['review'=>json_decode($pending_vendor['compliance_review']??'',true),'business_name'=>$pending_vendor['business_name']??'','business_registration_no'=>$pending_vendor['business_registration_no']??'','pending_id'=>(int)$pending_id],JSON_THROW_ON_ERROR);
+                    $onboarding_kyc=bc_vreg_policy()['kyc']?'2':'0';
                     $insert_stmt = mysqli_prepare($connection_server, $insert_sql);
                     if (!$insert_stmt) {
                         error_log("[VendorReg] Could not prepare vendor insert: " . mysqli_error($connection_server));
@@ -116,8 +158,8 @@ bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registrati
                     }
                     mysqli_stmt_bind_param(
                         $insert_stmt,
-                        "sssssssssssssssss",
-                        $email, $access_hash, $password, $firstname, $lastname, $phone_number, $website_url, $home_address,
+                        "sssssssssssssssssss",
+                        $onboarding_proof,$onboarding_kyc,$email, $access_hash, $password, $firstname, $lastname, $phone_number, $website_url, $home_address,
                         $min_with, $max_with, $payout_limit, $app_base_url, $apk_ordered, $ios_ordered, $playstore_ordered,
                         $sms_bridge_ordered, $selected_addons
                     );
@@ -290,7 +332,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                 <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
                     <div class="card-header bg-white py-4 border-0">
                         <h5 class="fw-bold mb-0 text-primary">Pending Vendor Approvals</h5>
-                        <p class="text-muted small mb-0">Review and authorize new vendor registration requests</p>
+                        <p class="text-muted small mb-0">Review and authorize new vendor registration requests</p><a href="VendorRegistrationSettings.php">Vendor registration ON/OFF &amp; security</a>
                     </div>
                     <div class="card-body p-0">
                         <?php if(isset($_SESSION['page_alert'])): ?>
@@ -388,6 +430,17 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                         <td class="small text-muted"><?php echo date('M d, Y', strtotime($row['reg_date'])); ?></td>
                                         <td class="text-end pe-4">
                                             <div class="d-flex flex-column gap-1 align-items-end">
+                                                <span class="small"><?php echo empty($row['email_verified_at'])?'Email: NOT VERIFIED':'Email ownership verified'; ?></span>
+                                                <span class="small"><?php echo htmlspecialchars(($row['business_name']??'').' / '.($row['business_registration_no']??''),ENT_QUOTES,'UTF-8'); ?></span>
+                                                <details class="text-start"><summary>KYC / KYB review</summary><form method="post" class="border p-3">
+                                                <?php echo bc_csrf_field(); ?><input type="hidden" name="vr_action" value="review_compliance"><input type="hidden" name="vr_id" value="<?php echo (int)$row['id']; ?>">
+                                                <input type="hidden" name="review_snapshot" value="<?php try{echo bc_vreg_compliance_digest($row,bc_vreg_policy());}catch(Throwable $e){echo 'unavailable';} ?>">
+                                                <p>Complete the platform-required checks using the approved secure verification process first. Record case references only, not raw ID numbers or documents. A payment receipt is not compliance evidence.</p>
+                                                <label>KYC verification case reference<input class="form-control" name="kyc_case_reference" maxlength="190"></label><label>KYB verification case reference<input class="form-control" name="kyb_case_reference" maxlength="190"></label>
+                                                <label><input type="checkbox" name="compliance_confirmed" value="1" required> I reviewed the applicant identity and all currently required evidence and approved the required checks.</label>
+                                                <label>Security PIN<input name="sec_pin" type="password" class="form-control" required autocomplete="off"></label><label>Authenticator / email code<input name="sec_factor" class="form-control" inputmode="numeric" pattern="[0-9]{6}"></label><button name="sec33_send_code" value="1" class="btn btn-link" type="submit" formnovalidate>Email me a code</button>
+                                                <button class="btn btn-outline-primary" type="submit">Record completed compliance review</button></form></details>
+
                                                 <?php if(($row['payment_method'] == 'bank_deposit' || $row['payment_method'] == 'paystack') && trim($row['payment_status']) != 'paid'): ?>
                                                     <button type="button" class="btn btn-info btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="sec33VrAction('mark_paid', <?php echo (int)$row['id']; ?>, 'Verify payment?', 'Confirm receipt of manual payment for this vendor. This needs your PIN + authenticator code and is audited.', 'Verify Payment')">Verify Payment</button>
                                                 <?php endif; ?>

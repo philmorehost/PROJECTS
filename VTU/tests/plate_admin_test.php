@@ -87,7 +87,7 @@ foreach (array('Dashboard', 'Global Service Control', 'AI Manager', 'Manage Vend
 }
 $mv = null;
 foreach ($sp as $block) { foreach ((array)$block['items'] as $item) { if ($item['label'] === 'Manage Vendors') $mv = $item; } }
-achk(is_array($mv) && count($mv['children']) === 6, 'Manage Vendors keeps its 6 children');
+achk(is_array($mv) && count($mv['children']) === 7, 'Manage Vendors includes the vendor signup security child');
 
 // ---------------------------------------------------------------- service gate
 $GLOBALS['__services']['ai_suite'] = 1;

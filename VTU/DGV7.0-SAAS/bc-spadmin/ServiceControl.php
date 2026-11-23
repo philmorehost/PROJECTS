@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
+// Separate vendor signup switch; customer registration control below is unchanged.
+
 
 // Migration: Create table if not exists (redundant but safe)
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_global_service_control (
@@ -168,7 +170,8 @@ bc_adm_head("Global Service Control | Super Admin", array("area" => "spadmin"));
 <?php bc_adm_topbar(array("area" => "spadmin", "title" => "GLOBAL SERVICE CONTROL", "crumb" => "Home / Global Service Control")); ?>
 
     <section class="section dashboard">
-        <div class="row mb-4">
+        <p><a class="btn btn-outline-primary" href="VendorRegistrationSettings.php">Vendor registration ON/OFF &amp; security</a></p>
+<div class="row mb-4">
             <div class="col-12">
                 <div class="card bg-primary bg-opacity-10 border-primary border-start border-4 rounded-4 shadow-sm">
                     <div class="card-body py-3 d-flex align-items-center">

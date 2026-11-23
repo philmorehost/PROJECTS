@@ -4,6 +4,12 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-vendor-registration.php'
+      - 'VTU/**/func/bc-mailer.php'
+      - 'VTU/**/func/bc-tables.php'
+      - 'VTU/**/bc-spadmin/Vendor*.php'
+      - 'VTU/**/bc-spadmin/ServiceControl.php'
+      - 'VTU/**/web/WebsiteOrderRequest.php'
       - 'VTU/**/func/bc-fintech-services.php'
       - 'VTU/**/bc-admin/ServiceControl.php'
       - 'VTU/**/web/IntlTransfer.php'
@@ -90,6 +96,12 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-vendor-registration.php'
+      - 'VTU/**/func/bc-mailer.php'
+      - 'VTU/**/func/bc-tables.php'
+      - 'VTU/**/bc-spadmin/Vendor*.php'
+      - 'VTU/**/bc-spadmin/ServiceControl.php'
+      - 'VTU/**/web/WebsiteOrderRequest.php'
       - 'VTU/**/func/bc-fintech-services.php'
       - 'VTU/**/bc-admin/ServiceControl.php'
       - 'VTU/**/web/IntlTransfer.php'
@@ -223,6 +235,7 @@ jobs:
           php VTU/tests/public_home_test.php
           php VTU/tests/admin_pin_setup_test.php
           php VTU/tests/service_provider_routing_test.php
+          php VTU/tests/vendor_registration_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
@@ -382,3 +395,9 @@ jobs:
           BC_SERVICE_ROUTE_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/service_provider_routing_mysql_test.php
+
+      - name: Vendor signup mailbox policy race and abuse limits in disposable MySQL
+        env:
+          BC_VENDOR_REG_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/vendor_registration_mysql_test.php
