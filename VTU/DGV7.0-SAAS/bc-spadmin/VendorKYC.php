@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_kyc_decision');
 include_once(__DIR__ . "/../func/bc-plate-admin.php"); // §42: bc_adm_head/sidebar/topbar/foot live here - this page used them without ever loading the plate (fatal on open)
 
 // §33: vendor compliance review. Vendors submit BVN/NIN + documents from
@@ -62,9 +64,9 @@ if (isset($_POST['vendor_kyc_decision'])) {
         $_SESSION['product_purchase_response'] = 'Error: a rejection needs a reason, so the vendor knows what to fix.';
     } else {
         if ($decision === 'approve') {
-            $step_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $factor, 'totp_code' => $factor];
+            $step_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'),'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $factor, 'totp_code' => $factor];
         } else {
-            $step_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
+            $step_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'),'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         }
         $step_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $step_input, 'vendor_kyc_decision')
@@ -207,3 +209,5 @@ if (!empty($_SESSION['product_purchase_response'])) {
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
 </body>
 </html>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

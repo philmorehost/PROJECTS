@@ -13,6 +13,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     require_once __DIR__.'/../func/bc-paid-entitlements.php';
     require_once __DIR__.'/../func/bc-paid-security.php';
     bc_paid_otp_dispatch($get_logged_admin_details,'admin',['paid_level_admin']);
+    require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+    bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'user_personal_conversion');
+    if(isset($_POST['send-personal-code'])){$_POST['sec33_send_code']='1';bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'user_personal_conversion');}
     if (isset($_POST['convert-personal']) || isset($_POST['send-personal-code'])) {
         if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification unavailable.'); }
         bc_validate_csrf();
@@ -23,7 +26,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $result = $result === '' ? 'Verification code sent to your email.' : $result;
             } else {
                 $factor=(string)($_POST['conversion_factor'] ?? '');
-                $error=bc_stepup_admin_verify($get_logged_admin_details, ['pin'=>(string)($_POST['conversion_pin'] ?? ''), 'totp_code'=>$factor, 'otp_code'=>$factor], 'user_personal_conversion');
+                $error=bc_stepup_admin_verify($get_logged_admin_details, ['factor_method'=>(string)($_POST['factor_method']??'auto'),'pin'=>(string)($_POST['conversion_pin'] ?? ''), 'totp_code'=>$factor, 'otp_code'=>$factor], 'user_personal_conversion');
                 $result=$error === '' ? bc_admin_convert_user_to_personal((int)$get_logged_admin_details['id'], (int)$get_user_details['id'], (string)$get_logged_admin_details['email']) : $error;
                 if ($result === true) $result='Account converted to Personal. Developer API disabled; pricing level and wallet unchanged. Personal app eligibility now applies; normal account and KYC checks still apply.';
             }
@@ -117,10 +120,11 @@ bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]
                             <p class="small">This disables developer API access and signs out existing app sessions. Wallet, pricing level, KYC and account blocks remain unchanged. Any pending KYB review is cancelled; historical documents are retained.</p>
                             <label for="conversion-pin" class="form-label">Security PIN</label>
                             <input id="conversion-pin" class="form-control mb-3" type="password" name="conversion_pin" required autocomplete="off">
-                            <?php $conversion_totp = ($get_logged_admin_details['two_factor_type'] ?? '') === 'totp' && !empty($get_logged_admin_details['totp_secret']); ?>
+                            <?php $conversion_channels=bc_action_channels('sas_vendors',$get_logged_admin_details); $conversion_totp=bc_gauth_enrolled($get_logged_admin_details) && $conversion_channels['google']; ?>
                             <label for="conversion-factor" class="form-label"><?php echo $conversion_totp ? 'Google Authenticator code' : 'Email OTP'; ?></label>
-                            <input id="conversion-factor" class="form-control mb-3" name="conversion_factor" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code">
-                            <?php if (!$conversion_totp): ?><button type="submit" class="btn btn-outline-primary mb-3" name="send-personal-code" value="1" formnovalidate>Email me a code</button><?php endif; ?>
+                            <input id="conversion-factor" class="form-control mb-3" name="conversion_factor" <?php echo ($conversion_channels['google']||$conversion_channels['email'])?'required':''; ?> inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code">
+                            <?php if ($conversion_totp && $conversion_channels['email']): ?><select class="form-select" name="factor_method"><option value="auto">Google Authenticator</option><option value="email">Email OTP</option></select><?php endif; ?>
+                            <?php if ($conversion_channels['email']): ?><button type="button" class="btn btn-outline-primary mb-3" name="sec33_send_code" value="1" formnovalidate>Email me a code</button><?php endif; ?>
                             <button type="submit" class="btn btn-warning w-100" name="convert-personal" value="1">Confirm conversion to Personal</button>
                         </form>
                         <?php endif; ?>
@@ -146,3 +150,5 @@ bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]
 
 
 <?php bc_paid_otp_script(); bc_adm_foot(array("area" => "admin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

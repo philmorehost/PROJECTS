@@ -10,6 +10,11 @@ on:
       - 'VTU/**/func/bc-admin-wallet-adjustment.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-admin-inline-otp.php'
+      - 'VTU/**/func/bc-login-resend.php'
+      - 'VTU/**/asset/bc-login-resend.js'
+      - 'VTU/**/bc-spadmin/VendorKYC.php'
+      - 'VTU/**/bc-admin/Withdrawals.php'
+      - 'VTU/**/web/Login.php'
       - 'VTU/**/func/bc-complimentary-upgrade.php'
       - 'VTU/**/asset/bc-admin-inline-otp.js'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/UserUpgrade.php'
@@ -55,6 +60,11 @@ on:
       - 'VTU/**/func/bc-admin-wallet-adjustment.php'
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-admin-inline-otp.php'
+      - 'VTU/**/func/bc-login-resend.php'
+      - 'VTU/**/asset/bc-login-resend.js'
+      - 'VTU/**/bc-spadmin/VendorKYC.php'
+      - 'VTU/**/bc-admin/Withdrawals.php'
+      - 'VTU/**/web/Login.php'
       - 'VTU/**/func/bc-complimentary-upgrade.php'
       - 'VTU/**/asset/bc-admin-inline-otp.js'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/UserUpgrade.php'
@@ -111,7 +121,10 @@ jobs:
         run: |
           php VTU/tests/complimentary_upgrade_test.php
           php VTU/tests/admin_inline_otp_test.php
+          php VTU/tests/login_resend_test.php
+          php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
+          node VTU/tests/harness/login-resend-ui-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e
