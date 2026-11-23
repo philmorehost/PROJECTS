@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-app-credential-binding.php';
 /**
  * DGV7 first-party mobile app sessions.
  *
@@ -12,7 +13,8 @@
  *   chooses it. So app sessions get their own opaque, expiring, revocable bearer token.
  *
  * DESIGN
- *   - 32 random bytes, base64url-encoded: the app stores it, we store only SHA-256.
+ *   - Versioned opaque credential: 32 random bytes plus a credential-bound HMAC tag.
+ *     The app stores it; the database still stores only SHA-256 of the whole token.
  *   - Lookup is by hash, so a leaked database does not hand out live sessions.
  *   - Every lookup re-reads the account row and re-applies the policy: an account that
  *     upgrades to Business loses its app sessions on the next request.
@@ -86,14 +88,15 @@ function bc_app_token_issue($user, $vendor_id, $platform = 'android', $label = n
     if (!bc_fintech_mobile_app_allowed($user)) return null;
 
     $row = bc_app_token_user_row($user_id, $vendor_id);
-    if (!$row || (int)$row['status'] !== 1) return null;
+    if (!$row || (int)$row['status'] !== 1 || !empty($row['is_blocked'])) return null;
     if (!bc_fintech_mobile_app_allowed($row)) return null;
 
     $platform = strtolower(trim((string)$platform));
     if (!in_array($platform, ['android', 'ios', 'web'], true)) $platform = 'android';
     $label = $label === null ? null : substr(trim((string)$label), 0, 120);
 
-    $token = rtrim(strtr(base64_encode(random_bytes(BC_APP_TOKEN_BYTES)), '+/', '-_'), '=');
+    $token = bc_app_credential_token($row);
+    if($token===null)return null;
     $hash  = bc_app_token_hash($token);
     // §29: app sessions are daily. The app exchanges its token for a fresh one
     // (bc_app_token_exchange / web/api/refresh-token.php) instead of holding a
@@ -158,7 +161,9 @@ function bc_app_session_user($token, $vendor_id) {
 
     $user = bc_app_token_user_row((int)$session['user_id'], $vendor_id);
     if (!$user) return null;
-    if ((int)$user['status'] !== 1) return null;
+    if ((int)$user['status'] !== 1 || !empty($user['is_blocked'])) return null;
+    // Old/unbound tokens cannot be upgraded by refreshing them; sign in again.
+    if(!bc_app_credential_token_valid(trim($token),$user))return null;
     // Re-apply the account policy on every use: an upgrade to Business must revoke access.
     if (!bc_fintech_mobile_app_allowed($user)) {
         bc_app_token_revoke_all((int)$session['user_id'], $vendor_id, 'account_type');

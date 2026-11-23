@@ -863,6 +863,7 @@ function load_edition($root, $edition, $files) {
 $global_behaviour_files = [
     'func/bc-fintech-policy.php',
     'func/bc-fintech-schema.php',
+    'func/bc-app-credential-binding.php',
     'func/bc-app-token.php',
     'func/bc-fintech-gate.php',
 ];
@@ -947,6 +948,16 @@ gcheck('business account cannot be issued a token', bc_app_token_issue($business
 gcheck('unknown tier cannot be issued a token', bc_app_token_issue(['id' => 9, 'username' => 'x'], 7), null);
 gcheck('wrong vendor cannot be issued a token', bc_app_token_issue($personal, 8), null);
 
+$binding_original=$GLOBALS['db']['users'][1];
+foreach(['password'=>'changed-password-hash','security_pin'=>'changed-pin-hash','transaction_pin'=>'5678'] as $field=>$value){
+    $GLOBALS['db']['users'][1][$field]=$value;
+    gcheck('persisted token refused after credential change '.$field,bc_app_session_user($issued['token'],7),null);
+    $GLOBALS['db']['users'][1]=$binding_original;
+}
+$stored_hash=$GLOBALS['db']['app_tokens'][1]['token_hash'];
+$legacy_token=str_repeat('L',43);$GLOBALS['db']['app_tokens'][1]['token_hash']=hash('sha256',$legacy_token);
+gcheck('persisted legacy token cannot bypass credential binding',bc_app_session_user($legacy_token,7),null);
+$GLOBALS['db']['app_tokens'][1]['token_hash']=$stored_hash;
 $session = bc_app_session_user($issued['token'], 7);
 gtrue('valid token resolves to the account', is_array($session) && $session['username'] === 'smart');
 gtrue('resolved user carries its session id', !empty($session['_app_token_id']));
@@ -1410,6 +1421,7 @@ $GLOBALS['db']['users'] = [
 ];
 $GLOBALS['db']['app_tokens'] = [];
 
+$GLOBALS['db']['users'][20]['password']='synthetic-applicant-hash';
 $applicant = $GLOBALS['db']['users'][20];
 $good = ['business_name' => 'Acme Payments Ltd', 'registration_no' => 'RC1234567', 'category' => 'limited_co', 'document' => 'kyb_20_abc123.pdf'];
 
