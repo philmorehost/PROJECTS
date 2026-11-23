@@ -48,6 +48,7 @@ require_once __DIR__.'/bc-plate-admin.php';
 bc_adm_head('Crypto asset and network policies',['area'=>$area]);bc_adm_sidebar(['area'=>$area]);bc_adm_topbar(['area'=>$area,'title'=>'CRYPTO POLICIES','crumb'=>'Crypto / Asset approvals']);
 ?>
 <section class="section p-4">
+<p><a href="CryptoOverview.php">Crypto operations overview</a></p>
 <h1 class="h3">Crypto asset/network approvals and emergency stop</h1>
 <p><a href="CryptoCustody.php"><?php echo $platform?'Custody accounts and protected evidence reviews':'Custody review requirements'; ?></a></p>
 <div class="alert alert-warning">Governance only: live deposits, trading and withdrawals remain disconnected. Nothing here changes reconciliation status, legacy withdrawals, customer balances or existing holds. Missing policies/controls, stale catalogues and expired approvals fail closed.</div>

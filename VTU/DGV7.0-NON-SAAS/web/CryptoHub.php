@@ -74,11 +74,12 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
 </style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "CRYPTO", "crumb" => "Home / Crypto")); ?>
+<p><a href="CryptoOverview.php">View local crypto ledger and deposit review overview</a></p>
 <?php if ($crypto_provider_mode): ?>
 <div class="alert alert-info border-0 rounded-4 shadow-sm d-flex align-items-center gap-3">
     <i class="bi bi-diagram-3 fs-4"></i>
     <div><strong>Crypto Services</strong><br>
-    <span class="small">Showing exactly the crypto services enabled on this platform: <?php echo htmlspecialchars(implode(', ', bc_svc_provider_assets($vid))); ?>. Where a swap pair is not offered, it is hidden. Trades activate as soon as the service connection is configured by admin.</span></div>
+    <span class="small">Showing exactly the crypto services enabled on this platform: <?php echo htmlspecialchars(implode(', ', bc_svc_provider_assets($vid))); ?>. Where a swap pair is not offered, it is hidden. Configuration alone does not activate live trading. Customer allocation, security, reconciliation and settlement checks must pass separately.</span></div>
 </div>
 <?php endif; ?>
 
