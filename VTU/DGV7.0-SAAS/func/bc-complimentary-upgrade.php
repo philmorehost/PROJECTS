@@ -7,7 +7,7 @@ function bc_complimentary_upgrade($actor,$uid,$input) {
     if(!$fresh||(int)($fresh['status']??0)!==1||!empty($fresh['is_blocked'])||!empty($fresh['force_password_change']))return 'Platform account restricted.';
     $token=is_string($input['upgrade_nonce']??null)?$input['upgrade_nonce']:'';
     $bound=$_SESSION['complimentary_upgrades'][$token]??null;
-    $levels=['smart'=>1,'agent'=>2,'api'=>3];$level=$levels[$input['upgrade-type']??'']??0;
+    $levels=['smart'=>1,'agent'=>2,'api'=>3];$type=is_string($input['upgrade-type']??null)?$input['upgrade-type']:'';$level=$levels[$type]??0;
     if(!$bound||$bound['expires']<time()||$bound['uid']!==(int)$uid||$bound['actor']!==(int)$fresh['id']||!$level)return 'Invalid or expired upgrade request. Refresh first.';
     $factor=(string)($input['sec_factor']??'');
     $error=bc_stepup_spadmin_verify($fresh,['pin'=>(string)($input['sec_pin']??''),'totp_code'=>$factor,'otp_code'=>$factor,'factor_method'=>(string)($input['factor_method']??'auto')],'complimentary_upgrade');
