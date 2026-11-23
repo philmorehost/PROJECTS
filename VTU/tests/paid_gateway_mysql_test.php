@@ -19,7 +19,7 @@ try{
  $db->query('CREATE TABLE sas_vendors (id INT PRIMARY KEY,balance DECIMAL(30,8),status INT,is_blocked INT,force_password_change INT) ENGINE=InnoDB');
  $db->query('INSERT INTO sas_vendors VALUES (7,500000,1,0,0),(8,500000,1,0,0)');
  $db->query("CREATE TABLE sas_users (id INT PRIMARY KEY,vendor_id INT,username VARCHAR(225),balance DECIMAL(30,8),status INT,is_blocked INT,force_password_change INT,account_level INT,account_type VARCHAR(225),api_status INT,kyb_status INT,tx_lock_reason VARCHAR(225)) ENGINE=InnoDB");
- $db->query("INSERT INTO sas_users VALUES (2,7,'customer',10000,1,0,0,1,'personal',2,0,''),(3,8,'other',10000,1,0,0,1,'personal',2,0,'')");
+ $db->query("INSERT INTO sas_users VALUES (2,7,'customer',10000,1,0,0,1,NULL,2,0,''),(3,8,'other',10000,1,0,0,1,'personal',2,0,'')");
  $db->query('CREATE TABLE sas_user_upgrade_price (vendor_id INT,account_type VARCHAR(225),price VARCHAR(225)) ENGINE=InnoDB');
  $db->query("INSERT INTO sas_user_upgrade_price VALUES (7,'1','9999'),(7,'2','500'),(7,'3','0')");
  $db->query('CREATE TABLE sas_settings (vendor_id INT,setting_name VARCHAR(225),setting_value VARCHAR(225),UNIQUE KEY idx_vendor_setting(vendor_id,setting_name)) ENGINE=InnoDB');
@@ -36,7 +36,7 @@ try{
  $GLOBALS['bc_paid_action_verified']=['role'=>'admin','actor'=>['id'=>7]];
  paid_check(bc_paid_level_change($db,7,2,'agent','500',1)==='success' && (float)paid_balance($db,'sas_users',2)===9500.0,'atomic paid upgrade');
  paid_check(bc_paid_level_change($db,7,2,'agent','500',1)==='already_active' && (float)paid_balance($db,'sas_users',2)===9500.0,'repeat never bills twice');
- $row=$db->query('SELECT * FROM sas_users WHERE id=2')->fetch_assoc();paid_check($row['account_type']==='personal' && (int)$row['api_status']===2 && (int)$row['kyb_status']===0,'pricing cannot self-promote business or API');
+ $row=$db->query('SELECT * FROM sas_users WHERE id=2')->fetch_assoc();paid_check($row['account_type']==='personal' && (int)$row['api_status']===2 && (int)$row['kyb_status']===0,'legacy inferred Personal type materialized; pricing cannot self-promote Business or API');
  paid_check(bc_paid_level_change($db,7,2,'api','0',2)==='success' && (float)paid_balance($db,'sas_users',2)===9500.0,'zero configured price accepted');
  paid_check(bc_paid_level_change($db,7,2,'smart','0',3)==='success','Smart always free despite stale configured fee');
  paid_check(bc_paid_level_change($db,7,2,'agent','499',1)==='price_changed','stale price refused');

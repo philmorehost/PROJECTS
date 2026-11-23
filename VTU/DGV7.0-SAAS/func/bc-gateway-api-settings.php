@@ -32,6 +32,7 @@ function bc_gateway_api_save($db,$actor,$slug,$input) {
         if(!mysqli_begin_transaction($db))throw new RuntimeException('transaction_failed');$begun=true;
         $row=mysqli_fetch_assoc(bc_paid_query($db,"SELECT * FROM sas_vendors WHERE id=$vid LIMIT 1 FOR UPDATE"));
         if(!$row || (int)$row['status']!==1 || !empty($row['is_blocked']) || !empty($row['force_password_change']))throw new RuntimeException('restricted');
+        if(function_exists('bc_enrollment_reason') && bc_enrollment_reason($row,'vendor',true)!=='')throw new RuntimeException('restricted');
         // Bind the action to the security identity that completed step-up.
         foreach(['security_pin','password','totp_secret','two_factor_type'] as $field)if(($row[$field]??'')!==($actor[$field]??''))throw new RuntimeException('identity_changed');
         $old=bc_gateway_api_read($db,$vid,$slug)??[];
@@ -91,7 +92,7 @@ function bc_gateway_prices_save($db,$actor,$input) {
         foreach(['sas_super_admin','sas_super_admin_options'] as $t){$r=mysqli_fetch_assoc(bc_paid_query($db,"SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$t'"));if(!$r || strtoupper($r['ENGINE'])!=='INNODB')throw new RuntimeException('schema_unavailable');}
         if(!mysqli_begin_transaction($db))throw new RuntimeException('transaction_failed');$begun=true;$id=(int)$actor['id'];
         $row=mysqli_fetch_assoc(bc_paid_query($db,"SELECT * FROM sas_super_admin WHERE id=$id LIMIT 1 FOR UPDATE"));
-        if(!$row || (int)$row['status']!==1 || !empty($row['is_blocked']))throw new RuntimeException('restricted');
+        if(!$row || (int)$row['status']!==1 || !empty($row['is_blocked']) || !empty($row['force_password_change']))throw new RuntimeException('restricted');
         foreach(['security_pin','password','totp_secret','two_factor_type'] as $field)if(($row[$field]??'')!==($actor[$field]??''))throw new RuntimeException('identity_changed');
         foreach($prices as $slug=>$price){
             $name='fintech_api_price_'.$slug;

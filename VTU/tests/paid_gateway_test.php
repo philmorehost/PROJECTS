@@ -12,7 +12,7 @@ foreach(['SAAS','NON-SAAS'] as $ed){
  paid_source_check(strpos($page,'bc_paid_verify(')<strpos($page,'bc_paid_module_purchase('),'verification precedes purchase');
  $core=file_get_contents($root.'/func/bc-paid-entitlements.php');
  paid_source_check(strpos($core,'FOR UPDATE')!==false && strpos($core,'mysqli_rollback')!==false && strpos($core,'INNODB')!==false,'locked rollback-safe transactional core');
- paid_source_check(strpos($core,'SET account_level=$target WHERE')!==false && strpos($core,'SET account_type=')===false,'pricing only never promotes account type');
+ paid_source_check(strpos($core,'$type=bc_fintech_account_type($row);')!==false && strpos($core,"account_type='\$type'")!==false,'pricing preserves pre-change explicit or inferred type');
  $cards=file_get_contents($root.'/func/bc-gateway-api-settings.php');
  paid_source_check(strpos($cards,"['klasha'=>'Klasha','bybit'=>'Bybit']")!==false,'both provider cards');
  paid_source_check(strpos($cards,"value=\"\"")!==false && strpos($cards,"'gcm:'")!==false,'secrets write-only and encrypted');

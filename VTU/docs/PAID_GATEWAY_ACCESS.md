@@ -65,7 +65,8 @@ Smart Earner is always free, including when an obsolete price row is nonzero.
 Configured zero-price higher-level upgrades work; downgrades have no charge/refund,
 matching the existing admin policy. Missing/invalid paid prices fail closed.
 
-Pricing changes never modify Personal/Business type, KYB status, API eligibility,
+Pricing changes preserve the pre-change Personal/Business type (materializing its
+existing inferred value on legacy NULL rows), KYB status, API eligibility,
 KYC or balances except the authorized fee. Business approval/conversion remains a
 separate free compliance-controlled flow. User incident transaction locks are
 conservatively respected (no auto-unlock here). Existing super-admin complimentary

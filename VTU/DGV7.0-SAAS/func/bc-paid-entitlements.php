@@ -3,6 +3,7 @@
  * No DDL, remote calls, nested transactions or asynchronous grants.
  */
 require_once __DIR__.'/bc-fintech-api-access.php';
+require_once __DIR__.'/bc-fintech-policy.php';
 function bc_paid_money($value) {
     if(!is_string($value) && !is_int($value))throw new RuntimeException('invalid_price');
     if(!preg_match('/\A[0-9]{1,9}(?:\.[0-9]{1,2})?\z/D',(string)$value))throw new RuntimeException('invalid_price');
@@ -48,6 +49,7 @@ function bc_paid_purchase($db,$vendor,$user_id,$product,$quote,$decide,$grant,$e
         $identity=$auth['role']==='admin'?$vendor_row:$row;
         if(!in_array($auth['role'],['admin','user'],true) || ($auth['role']==='user' && ($is_vendor || (int)$auth['actor']['id']!==$uid || (int)$auth['actor']['vendor_id']!==$vid)) || ($auth['role']==='admin' && (int)$auth['actor']['id']!==$vid))throw new RuntimeException('verification_required');
         foreach(['password','security_pin','transaction_pin','totp_secret','two_factor_type'] as $field)if(($identity[$field]??'')!==($auth['actor'][$field]??''))throw new RuntimeException('identity_changed');
+        if(function_exists('bc_enrollment_reason') && bc_enrollment_reason($identity,$auth['role']==='admin'?'vendor':'user',true)!=='')throw new RuntimeException('account_restricted');
         $price=$decide($db,$row); // reads current price/state under the same transaction
         if($price===null){mysqli_rollback($db);return 'already_active';}
         $price=bc_paid_money($price);
@@ -99,13 +101,17 @@ function bc_paid_level_change($db,$vendor,$uid,$level,$quote,$expected_level) {
         if((int)$row['account_level']===$target)return null;
         if((int)$row['account_level']!==(int)$expected_level)throw new RuntimeException('price_changed');
         // Never promote account_type/API eligibility. Business approval remains a separate KYB flow.
-        if(!in_array((string)$row['account_type'],['personal','business'],true))throw new RuntimeException('account_restricted');
+        if(!in_array(bc_fintech_account_type($row),['personal','business'],true))throw new RuntimeException('account_restricted');
         if($target===1 || $target<(int)$row['account_level'])return '0.00';
         $q=bc_paid_query($db,"SELECT price FROM sas_user_upgrade_price WHERE vendor_id=$vid AND account_type='$target' LIMIT 2 FOR UPDATE");
         if(mysqli_num_rows($q)!==1)throw new RuntimeException('price_unavailable');
         return (string)mysqli_fetch_assoc($q)['price'];
     },function($db,$row,$ref)use($vid,$uid,$target){
-        bc_paid_query($db,"UPDATE sas_users SET account_level=$target WHERE vendor_id=$vid AND id=$uid");
+        // Materialize the pre-change inferred type on legacy NULL rows, so level 3
+        // cannot accidentally turn a Personal account into Business via fallback.
+        $type=bc_fintech_account_type($row);
+        if(!in_array($type,['personal','business'],true))throw new RuntimeException('invalid_type');
+        bc_paid_query($db,"UPDATE sas_users SET account_level=$target, account_type='$type' WHERE vendor_id=$vid AND id=$uid");
         if(mysqli_affected_rows($db)!==1)throw new RuntimeException('grant_failed');
     },['sas_vendors','sas_user_upgrade_price']);
 }
