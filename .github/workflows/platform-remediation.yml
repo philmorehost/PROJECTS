@@ -15,6 +15,9 @@ on:
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
       - 'VTU/**/func/bc-feature-action-security.php'
+      - 'VTU/**/func/bc-giftcard-func.php'
+      - 'VTU/**/func/bc-giftcard-safety.php'
+      - 'VTU/**/web/api/gift-card.php'
       - 'VTU/**/asset/bc-feature-action.js'
       - 'VTU/**/asset/bc-feature-email-otp.js'
       - 'VTU/**/web/SendFund.php'
@@ -80,6 +83,9 @@ on:
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
       - 'VTU/**/func/bc-feature-action-security.php'
+      - 'VTU/**/func/bc-giftcard-func.php'
+      - 'VTU/**/func/bc-giftcard-safety.php'
+      - 'VTU/**/web/api/gift-card.php'
       - 'VTU/**/asset/bc-feature-action.js'
       - 'VTU/**/asset/bc-feature-email-otp.js'
       - 'VTU/**/web/SendFund.php'
@@ -156,6 +162,8 @@ jobs:
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
+          BC_TEST_EDITION=SAAS php VTU/tests/giftcard_settlement_hold_test.php
+          BC_TEST_EDITION=NON-SAAS php VTU/tests/giftcard_settlement_hold_test.php
           php VTU/tests/recovery_reply_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
