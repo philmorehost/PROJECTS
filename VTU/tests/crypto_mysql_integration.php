@@ -5,7 +5,7 @@ if (PHP_SAPI !== 'cli' || getenv('BC_CRYPTO_TEST_MYSQL') !== 'DISPOSABLE_ONLY') 
 }
 set_exception_handler(function(Throwable $e) {
     // GitHub annotation keeps failures inspectable without downloading external log archives.
-    fwrite(STDERR, '::error::'.str_replace(["\r","\n"], ' ', $e->getMessage().' at '.basename($e->getFile()).':'.$e->getLine())."\n"); exit(1);
+    fwrite(STDERR, '::error::'.str_replace(["\r","\n"], ' ', $e->getMessage().' at '.basename($e->getFile()).':'.$e->getLine().' via '.implode(' > ',array_map(fn($f)=>($f['function']??'?').'@'.basename($f['file']??'?').':'.($f['line']??0),$e->getTrace())))."\n"); exit(1);
 });
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $edition=getenv('BC_CRYPTO_TEST_EDITION') ?: 'SAAS';
@@ -192,15 +192,7 @@ try {
     require __DIR__.'/crypto_custody_mysql_cases.php';
     require __DIR__.'/crypto_custody_evidence_mysql_cases.php';
     require __DIR__.'/crypto_routes_mysql_cases.php';
-    require __DIR__.'/crypto_poll_mysql_cases.php';
-    require __DIR__.'/crypto_poll_operator_mysql_cases.php';
-    require __DIR__.'/crypto_poll_overlap_mysql_cases.php';
-    require __DIR__.'/crypto_poll_review_mysql_cases.php';
-    require __DIR__.'/crypto_poll_alert_mysql_cases.php';
-    require __DIR__.'/crypto_poll_worker_mysql_cases.php';
-    require __DIR__.'/crypto_poll_recovery_mysql_cases.php';
-    require __DIR__.'/crypto_poll_delivery_mysql_cases.php';
-    require __DIR__.'/crypto_poll_receiver_mysql_cases.php';
+    require __DIR__.'/crypto_poll_retirement_mysql_cases.php';
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     require __DIR__.'/crypto_dashboard_mysql_cases.php';
