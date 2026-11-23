@@ -54,5 +54,30 @@ try{
  route_check(bc_service_route_save($actor,$input)!==''&&getVendorOption(7,'fintech_route_tuition',null)===null,'failed first insert never acknowledged');$db->query('DROP TRIGGER route_insert_failure');
  route_check(bc_service_route_save($actor,$input)==='','retry after failure saves');
  $actor=['id'=>8];route_check(bc_service_route_save($actor,$input)!==''&&getVendorOption(8,'fintech_route_tuition')==='','session owner cannot write another tenant');
+
+ $db->query('CREATE TABLE sas_users(id INT PRIMARY KEY,vendor_id INT,username VARCHAR(191),status INT,is_blocked INT,force_password_change INT,balance DECIMAL(20,2)) ENGINE=InnoDB');
+ $db->query("INSERT INTO sas_users VALUES(2,7,'actual-owner',1,0,0,1000),(3,8,'other-tenant',1,0,0,1000)");
+ $customer=['id'=>2,'vendor_id'=>7,'username'=>'forged-name'];
+ $payload=['university'=>'Fixture University','student_id'=>'fixture','amount_usd'=>10];
+ $first=bc_svc_request_create(7,$customer,'tuition','platnova',$payload);
+ route_check($first!==''&&preg_match('/\ASVC-TUI-[a-f0-9]{32}\z/',$first)===1,'random durable request reference');
+ $second=bc_svc_request_create(7,$customer,'tuition','platnova',$payload);
+ route_check($second!==''&&$second!==$first,'same-second independent requests have distinct references (not idempotency)');
+ $records=$reader->query('SELECT * FROM sas_service_requests ORDER BY id')->fetch_all(MYSQLI_ASSOC);
+ route_check(count($records)===2&&$records[0]['username']==='actual-owner'&&$records[0]['provider']==='platnova'&&$records[0]['status']==='pending','committed record uses database identity and pinned provider');
+ route_check(json_decode($records[0]['payload'],true)===$payload,'stored payload round trip');
+ route_check(bc_svc_request_create(8,$customer,'tuition','platnova',$payload)==='','actor tenant mismatch');
+ route_check(bc_svc_request_create(7,['id'=>3,'vendor_id'=>7],'tuition','platnova',$payload)==='','database tenant mismatch despite forged actor');
+ foreach(['is_blocked','force_password_change'] as $column){$db->query("UPDATE sas_users SET $column=1 WHERE id=2");route_check(bc_svc_request_create(7,$customer,'tuition','platnova',$payload)==='','fresh customer restriction '.$column);$db->query("UPDATE sas_users SET $column=0 WHERE id=2");}
+ $db->query('UPDATE sas_users SET status=0 WHERE id=2');route_check(bc_svc_request_create(7,$customer,'tuition','platnova',$payload)==='','inactive customer refused');$db->query('UPDATE sas_users SET status=1 WHERE id=2');
+ route_check(bc_svc_request_create(7,$customer,'tuition','flutterwave',$payload)==='','unsupported provider refused at persistence');
+ route_check(bc_svc_request_create(7,$customer,'unknown','platnova',$payload)==='','unknown request type refused');
+ setVendorOption(7,'fintech_route_tuition','');route_check(bc_svc_request_create(7,$customer,'tuition','platnova',$payload)==='','disabled route refused at persistence');setVendorOption(7,'fintech_route_tuition','platnova');
+ route_check(bc_svc_request_create(7,$customer,'tuition','platnova',['invalid'=>"\xB1"])==='','invalid UTF8 cannot become empty payload');
+ route_check(bc_svc_request_create(7,$customer,'tuition','platnova',['oversize'=>str_repeat('a',60001)])==='','oversize refused without truncation');
+ $db->query("CREATE TRIGGER request_insert_failure BEFORE INSERT ON sas_service_requests FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected request failure'");
+ route_check(bc_svc_request_create(7,$customer,'tuition','platnova',$payload)==='','failed request insert never acknowledged');$db->query('DROP TRIGGER request_insert_failure');
+ route_check((int)$db->query('SELECT COUNT(*) n FROM sas_service_requests')->fetch_assoc()['n']===2,'all denied/failed requests leave records unchanged');
+ route_check((float)$db->query('SELECT balance FROM sas_users WHERE id=2')->fetch_assoc()['balance']===1000.0,'request intake never changes wallet');
  $reader->close();echo "$n $edition real MySQL request-route persistence checks passed; factor/rate/demo doubled; no provider calls\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}
