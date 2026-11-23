@@ -136,9 +136,9 @@ bc_totp_setup_handle('sas_users', $get_logged_user_details);
                             // any forced-change flag and audit the event.
                             $sec29_hash = function_exists('bc_hash_password') ? bc_hash_password($new_pass) : $md5_new_pass;
                             if (function_exists('bc_q')) {
-                                bc_q("UPDATE sas_users SET password=?, force_password_change=0 WHERE vendor_id=? AND username=?", array($sec29_hash, (int)$get_logged_user_details["vendor_id"], (string)$get_logged_user_details["username"]));
+                                bc_q("UPDATE sas_users SET password=? WHERE vendor_id=? AND username=?", array($sec29_hash, (int)$get_logged_user_details["vendor_id"], (string)$get_logged_user_details["username"]));
                             } else {
-                                mysqli_query($connection_server, "UPDATE sas_users SET password='" . mysqli_real_escape_string($connection_server, $sec29_hash) . "', force_password_change=0 WHERE vendor_id='" . (int)$get_logged_user_details["vendor_id"] . "' && username='" . mysqli_real_escape_string($connection_server, (string)$get_logged_user_details["username"]) . "'");
+                                mysqli_query($connection_server, "UPDATE sas_users SET password='" . mysqli_real_escape_string($connection_server, $sec29_hash) . "' WHERE vendor_id='" . (int)$get_logged_user_details["vendor_id"] . "' && username='" . mysqli_real_escape_string($connection_server, (string)$get_logged_user_details["username"]) . "'");
                             }
                             if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_user_details["vendor_id"], 'user', (string)$get_logged_user_details["username"], 'password_changed', (string)$get_logged_user_details["username"], !empty($get_logged_user_details['force_password_change']) ? 'Forced password change completed' : 'Password changed in settings');
                             // Email Beginning

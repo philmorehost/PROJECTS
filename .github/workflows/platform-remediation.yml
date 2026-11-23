@@ -299,3 +299,9 @@ jobs:
           BC_LEGACY_API_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/legacy_api_mysql_test.php
+
+      - name: Forced password and PIN snapshot updates on disposable MySQL
+        env:
+          BC_ENROLLMENT_PASSWORD_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/enrollment_password_mysql_test.php

@@ -593,7 +593,7 @@ if (isset($_POST["change-password"])) {
                     if ($new_pass_matches_confirm) {
                         $new_vendor_pass_hash = mysqli_real_escape_string($connection_server, bc_hash_password($new_pass));
                         // §29: also clear any forced-change flag and audit.
-                        mysqli_query($connection_server, "UPDATE sas_vendors SET password='$new_vendor_pass_hash', force_password_change=0 WHERE id='" . (int)$get_logged_admin_details["id"] . "'");
+                        mysqli_query($connection_server, "UPDATE sas_vendors SET password='$new_vendor_pass_hash' WHERE id='" . (int)$get_logged_admin_details["id"] . "'");
                         if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'password_changed', (string)$get_logged_admin_details["email"], !empty($get_logged_admin_details['force_password_change']) ? 'Forced admin password change completed' : 'Admin password changed in settings');
                         // Email Beginning
                         $log_template_encoded_text_array = array("{firstname}" => $get_logged_admin_details["firstname"], "{lastname}" => $get_logged_admin_details["lastname"]);
