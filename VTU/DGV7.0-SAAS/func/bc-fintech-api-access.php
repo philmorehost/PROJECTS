@@ -1,11 +1,11 @@
 <?php
 /**
- * DGV7 §28 — commercialised fintech API access (Flutterwave / Klasha / Bybit / Platnova).
+ * DGV7 §28 — commercialised fintech API access (Flutterwave / Klasha / Platnova).
  *
  * Business rule from the site owner:
  *   - NON-SAAS (single owner): these APIs are included by default.
  *   - SAAS (multi-vendor): each API is a paid add-on. The super admin sets the
- *     price in bc-spadmin → Payment Gateway (Bybit default ₦150,000, others ₦50,000); a vendor
+ *     price in bc-spadmin → Payment Gateway (default ₦50,000); a vendor
  *     buys access from bc-admin → Payment Gateway, charged to the vendor wallet.
  *     Until then the API cannot be selected as the active provider and its
  *     credentials cannot be saved.
@@ -26,7 +26,6 @@ if (!function_exists('bc_fintech_api_providers')) {
         return [
             'flutterwave' => ['default_price'=>50000, 'label' => 'Flutterwave', 'powers' => 'Global payments, transfers, bills, virtual accounts & POS requests'],
             'klasha'      => ['default_price'=>50000, 'label' => 'Klasha',      'powers' => 'Payout to China, wire transfers, multi-currency & stablecoin wallets'],
-            'bybit'       => ['default_price'=>150000, 'label'=>'Bybit', 'powers'=>'Crypto API configuration; live activation remains paused'],
             'platnova'    => ['default_price'=>50000, 'label' => 'Platnova',    'powers' => 'Tuition worldwide, cards, payments & partner eSIM'],
         ];
     }

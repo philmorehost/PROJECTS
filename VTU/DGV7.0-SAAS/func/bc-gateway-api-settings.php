@@ -7,7 +7,7 @@ function bc_gateway_api_entitled($db,$vid,$slug) {
     return $price==='0.00' || bc_paid_option($db,'sas_settings','fintech_api_access_'.$slug,(int)$vid)!=='';
 }
 function bc_gateway_api_read($db,$vid,$slug) {
-    if(!in_array($slug,['klasha','bybit'],true))throw new RuntimeException('invalid_gateway');
+    if(!in_array($slug,['klasha'],true))throw new RuntimeException('invalid_gateway');
     if(!bc_gateway_api_entitled($db,$vid,$slug))throw new RuntimeException('purchase_required');
     $vid=(int)$vid;
     $q=bc_paid_query($db,"SELECT sealed_config FROM sas_gateway_api_credentials WHERE vendor_id=$vid AND gateway_slug='$slug' LIMIT 2");
@@ -19,7 +19,7 @@ function bc_gateway_api_read($db,$vid,$slug) {
 }
 function bc_gateway_api_save($db,$actor,$slug,$input) {
     if(empty($GLOBALS['bc_paid_action_verified']))return 'verification_required';
-    if(!in_array($slug,['klasha','bybit'],true))return 'invalid_gateway';
+    if(!in_array($slug,['klasha'],true))return 'invalid_gateway';
     $vid=(int)$actor['id'];$begun=false;
     try{
         if(empty($GLOBALS['mySqlPass']) || !function_exists('openssl_encrypt'))throw new RuntimeException('encryption_unavailable');
@@ -37,22 +37,14 @@ function bc_gateway_api_save($db,$actor,$slug,$input) {
         foreach(['security_pin','password','totp_secret','two_factor_type'] as $field)if(($row[$field]??'')!==($actor[$field]??''))throw new RuntimeException('identity_changed');
         $old=bc_gateway_api_read($db,$vid,$slug)??[];
         $doc=['vendor_id'=>$vid,'gateway'=>$slug];
-        $fields=$slug==='bybit'?['key','secret','expected_ips','environment']:['public_key','secret_key','encrypt_key','login_email','business_id'];
+        $fields=['public_key','secret_key','encrypt_key','login_email','business_id'];
         foreach($fields as $key){
             $value=$input['gateway_'.$key]??'';
             if(!is_string($value))throw new RuntimeException('invalid_fields');
             if(strlen($value)>2048 || preg_match('/[\x00-\x1f\x7f]/',$value))throw new RuntimeException('invalid_fields');
             $doc[$key]=$value!==''?$value:(string)($old[$key]??'');
         }
-        if($slug==='bybit'){
-            if(!preg_match('/\A[A-Za-z0-9_-]{8,256}\z/D',$doc['key']) || strlen($doc['secret'])<16 || strlen($doc['secret'])>512 || preg_match('/\s/',$doc['secret']) || !in_array($doc['environment'],['testnet','mainnet'],true))throw new RuntimeException('invalid_fields');
-            $ips=array_values(array_unique(array_map('trim',explode(',',$doc['expected_ips']))));
-            if(!$ips || count($ips)>32)throw new RuntimeException('invalid_fields');
-            foreach($ips as $ip)if(!filter_var($ip,FILTER_VALIDATE_IP))throw new RuntimeException('invalid_fields');
-            $doc['expected_ips']=implode(',',$ips);
-        }else{
-            if($doc['public_key']==='' || $doc['secret_key']==='' || $doc['encrypt_key']==='' || !filter_var($doc['login_email'],FILTER_VALIDATE_EMAIL))throw new RuntimeException('invalid_fields');
-        }
+        if($doc['public_key']==='' || $doc['secret_key']==='' || $doc['encrypt_key']==='' || !filter_var($doc['login_email'],FILTER_VALIDATE_EMAIL))throw new RuntimeException('invalid_fields');
         $sealed=bc_stepup_seal_secret(json_encode($doc,JSON_THROW_ON_ERROR));
         if(strpos($sealed,'gcm:')!==0)throw new RuntimeException('encryption_unavailable');
         $value=mysqli_real_escape_string($db,$sealed);
@@ -63,18 +55,15 @@ function bc_gateway_api_save($db,$actor,$slug,$input) {
     }catch(Throwable $e){if($begun)mysqli_rollback($db);return $e->getMessage()==='purchase_required'?'purchase_required':'unavailable';}
 }
 function bc_gateway_api_cards($db,$actor) {
-    foreach(['klasha'=>'Klasha','bybit'=>'Bybit'] as $slug=>$label){
+    foreach(['klasha'=>'Klasha'] as $slug=>$label){
         $ready=false;$access=false;try{$access=bc_gateway_api_entitled($db,(int)$actor['id'],$slug);if($access)$ready=bc_gateway_api_read($db,(int)$actor['id'],$slug)!==null;}catch(Throwable $ignored){}
         ?>
         <div class="card p-4 mb-4" id="gateway-<?php echo $slug; ?>"><h5><?php echo $label; ?> API Settings</h5>
         <p><?php echo $ready?'Encrypted configuration saved.':'No encrypted configuration saved.'; ?> Blank fields retain the previously saved values. Keys are never sent back to this form.</p>
-        <?php if($slug==='bybit'): ?><p class="alert alert-warning">Configuration only. Crypto staging and live activation remain paused. Purchase does not enable deposits, withdrawals, polling or settlement. Use a read-only, IP-bound API key. No provider request is made when saving.</p><?php else: ?><p>Merchant public key, account password/token, encryption key and login email. Saving does not enable withdrawals or bypass Service Control, compliance or financial holds. Existing legacy credentials remain available until replaced here.</p><?php endif; ?>
+        <p>Saving configuration does not enable withdrawals or bypass compliance, Service Control or financial holds. Crypto staging and live activation remain paused.</p>
         <?php if(!$access): ?><p>Purchase <?php echo $label; ?> access in <a href="#fintech-api-access">Fintech API Access</a> before saving keys.</p><?php else: ?>
         <form method="post" autocomplete="off" data-paid-save>
-        <?php if($slug==='bybit'): ?>
-          <label class="d-block">Environment<select name="gateway_environment" class="form-select"><option value="">Keep saved environment (choose for first save)</option><option value="testnet">Testnet</option><option value="mainnet">Mainnet configuration only — not activation</option></select></label>
-          <?php $fields=['key'=>'API Key','secret'=>'API Secret','expected_ips'=>'Expected server IPs (comma separated)']; ?>
-        <?php else: $fields=['public_key'=>'Merchant Public Key','secret_key'=>'Account Password / Token','encrypt_key'=>'Encryption Key','login_email'=>'Login Email','business_id'=>'Business ID (optional)']; endif; ?>
+        <?php $fields=['public_key'=>'Merchant Public Key','secret_key'=>'Account Password / Token','encrypt_key'=>'Encryption Key','login_email'=>'Login Email','business_id'=>'Business ID (optional)']; ?>
         <?php foreach($fields as $key=>$title): ?><label class="d-block my-2"><?php echo $title; ?><input class="form-control" name="gateway_<?php echo $key; ?>" type="password" value="" autocomplete="new-password" maxlength="2048"></label><?php endforeach; ?>
         <?php bc_paid_fields($actor,'paid_gateway_'.$slug); ?>
         <button class="btn btn-primary" name="save-paid-gateway" value="<?php echo $slug; ?>">Save <?php echo $label; ?> API Settings</button>

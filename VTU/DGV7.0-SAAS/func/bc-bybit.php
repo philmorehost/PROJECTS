@@ -1,28 +1,7 @@
 <?php
 /** Phase 1: isolated, read-only Bybit V5 discovery. No ledger or money-moving endpoints. */
-function bc_bybit_config($vendor_id) {
-    $id = (int)$vendor_id;
-    if ($id <= 0) throw new RuntimeException('bybit_vendor_required');
-    $prefix = 'BC_BYBIT_VENDOR_' . $id . '_';
-    $saved=null;
-    if(isset($GLOBALS['connection_server']) && $GLOBALS['connection_server'] instanceof mysqli){
-        require_once __DIR__.'/bc-gateway-api-settings.php';
-        if(!bc_gateway_api_entitled($GLOBALS['connection_server'],$id,'bybit'))throw new RuntimeException('bybit_access_required');
-        if(!getenv($prefix.'KEY') && !getenv($prefix.'SECRET'))$saved=bc_gateway_api_read($GLOBALS['connection_server'],$id,'bybit');
-    }
-    $environment = $saved['environment'] ?? (getenv($prefix . 'ENV') ?: 'testnet');
-    $hosts = ['testnet' => 'https://api-testnet.bybit.com', 'mainnet' => 'https://api.bybit.com'];
-    if (!isset($hosts[$environment])) throw new RuntimeException('bybit_environment_invalid');
-    $key = $saved['key'] ?? (string)getenv($prefix . 'KEY');
-    $secret = $saved['secret'] ?? (string)getenv($prefix . 'SECRET');
-    if (!preg_match('/^[A-Za-z0-9_-]{8,256}$/D', $key) || strlen($secret) < 16 || strlen($secret) > 512 || preg_match('/[\x00-\x20\x7f]/', $secret)) {
-        throw new RuntimeException('bybit_credentials_not_configured');
-    }
-    $ips = array_values(array_unique(array_filter(array_map('trim', explode(',', ($saved['expected_ips'] ?? (string)getenv($prefix . 'EXPECTED_IPS')))))));
-    if (!$ips) throw new RuntimeException('bybit_expected_ips_required');
-    foreach ($ips as $ip) if (!filter_var($ip, FILTER_VALIDATE_IP)) throw new RuntimeException('bybit_expected_ips_invalid');
-    return ['vendor_id'=>$id, 'environment'=>$environment, 'base_url'=>$hosts[$environment], 'key'=>$key, 'secret'=>$secret, 'expected_ips'=>$ips];
-}
+/** Compatibility tombstone: old callers must fail, never load saved/environment keys. */
+function bc_bybit_config($vendor_id) { throw new RuntimeException('bybit_retired'); }
 function bc_bybit_signature($timestamp, $key, $secret, $query, $window = '5000') {
     return hash_hmac('sha256', (string)$timestamp . $key . $window . $query, $secret);
 }
@@ -67,24 +46,8 @@ function bc_bybit_decode($status, $body) {
     if (!is_array($json) || !array_key_exists('retCode', $json) || $json['retCode'] !== 0 || !isset($json['result']) || !is_array($json['result'])) throw new RuntimeException('bybit_response_rejected');
     return $json['result'];
 }
-function bc_bybit_get($config, $operation, $params = []) {
-    if (!function_exists('curl_init')) throw new RuntimeException('bybit_transport_unavailable');
-    $spec = bc_bybit_request_spec($config, $operation, $params, sprintf('%.0f', floor(microtime(true) * 1000)));
-    $body = '';
-    $ch = curl_init($spec['url']);
-    curl_setopt_array($ch, [CURLOPT_HTTPHEADER=>$spec['headers'], CURLOPT_FOLLOWLOCATION=>false,
-        CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2, CURLOPT_SSLVERSION=>CURL_SSLVERSION_TLSv1_2,
-        CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS, CURLOPT_CONNECTTIMEOUT=>3, CURLOPT_TIMEOUT=>8,
-        CURLOPT_WRITEFUNCTION=>function($curl, $chunk) use (&$body) {
-            if (strlen($body) + strlen($chunk) > 2097152) return 0;
-            $body .= $chunk; return strlen($chunk);
-        }]);
-    $ok = curl_exec($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($ok === false) throw new RuntimeException('bybit_transport_failed');
-    return bc_bybit_decode($status, $body);
-}
+/** Transport removed. No cURL, HTTP, signing or fallback is performed. */
+function bc_bybit_get($config, $operation, $params = []) { throw new RuntimeException('bybit_retired'); }
 function bc_bybit_key_readiness($result, $expected_ips) {
     if (($result['readOnly'] ?? null) !== 1) throw new RuntimeException('bybit_read_only_key_required');
     $actual = $result['ips'] ?? null;

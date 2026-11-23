@@ -2478,7 +2478,7 @@ foreach ($editions as $edition) {
 
     // The new credential screen must offer Klasha.
     $pg = file_get_contents($root . '/' . $edition . '/bc-admin/PaymentGateway.php');
-    gtrue("$edition gateway screen offers klasha credentials", strpos($pg,'bc_gateway_api_cards(')!==false && strpos(file_get_contents($root.'/'.$edition.'/func/bc-gateway-api-settings.php'),"['klasha'=>'Klasha','bybit'=>'Bybit']")!==false);
+    gtrue("$edition gateway screen offers klasha credentials", strpos($pg,'bc_gateway_api_cards(')!==false && strpos(file_get_contents($root.'/'.$edition.'/func/bc-gateway-api-settings.php'),"['klasha'=>'Klasha']")!==false);
 }
 
 // The sidebar is grouped, and regrouping must never drop a service link.
