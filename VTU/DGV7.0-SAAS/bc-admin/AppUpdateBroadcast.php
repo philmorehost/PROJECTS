@@ -21,83 +21,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $actions=array_intersect(array_keys(bc_app_update_contexts()),array_keys($_POST));
         $error=count($actions)===1 ? bc_app_update_stepup($get_logged_admin_details,bc_app_update_contexts()[reset($actions)],$_POST) : 'Choose one update action.';
         if($error!==''){$_SESSION['product_purchase_response']='Error: '.$error;header('Location: AppUpdateBroadcast.php');exit;}
+        $GLOBALS['app_update_approval_verified']=true;
     }
 
-    // ── Helper: generate a Google OAuth2 JWT for FCM v1 API ───────────────
-    function _fcm_base64url($data) {
-        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
-    }
-
-    function generateFcmAccessToken($service_account_json) {
-        $sa = json_decode($service_account_json, true);
-        if (empty($sa['client_email']) || empty($sa['private_key'])) {
-            return null;
-        }
-
-        $now     = time();
-        $header  = _fcm_base64url(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
-        $payload = _fcm_base64url(json_encode([
-            'iss'   => $sa['client_email'],
-            'sub'   => $sa['client_email'],
-            'aud'   => 'https://oauth2.googleapis.com/token',
-            'iat'   => $now,
-            'exp'   => $now + 3600,
-            'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
-        ]));
-
-        $signing_input = "$header.$payload";
-        $private_key   = openssl_pkey_get_private($sa['private_key']);
-        if (!$private_key) return null;
-
-        if (!openssl_sign($signing_input, $signature, $private_key, 'SHA256')) return null;
-        $jwt = $signing_input . '.' . _fcm_base64url($signature);
-
-        // Exchange JWT for access token
-        $ch = curl_init('https://oauth2.googleapis.com/token');
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => http_build_query([
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion'  => $jwt,
-            ]),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT        => 15,
-        ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($code !== 200) return null;
-
-        $data = json_decode($resp, true);
-        return $data['access_token'] ?? null;
-    }
-
-    function sendFcmTopicMessage($project_id, $access_token, $topic, $data_payload) {
-        $body = json_encode([
-            'message' => [
-                'topic' => $topic,
-                'data'  => $data_payload,
-            ],
-        ]);
-        $ch = curl_init("https://fcm.googleapis.com/v1/projects/{$project_id}/messages:send");
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => [
-                'Content-Type: application/json',
-                "Authorization: Bearer $access_token",
-            ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT        => 20,
-        ]);
-        $resp      = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        return ['code' => $http_code, 'body' => json_decode($resp, true)];
-    }
+    require_once __DIR__ . '/../func/bc-app-update-transport.php';
+    require_once __DIR__ . '/../func/bc-app-update-worker.php';
 
     // ── Load saved FCM settings ────────────────────────────────────────────
     $vendor_id  = (int) $get_logged_admin_details["id"];
@@ -133,9 +61,19 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $__update_host       = function_exists("bc_safe_host") ? bc_safe_host() : ($_SERVER["HTTP_HOST"] ?? "localhost");
 
     // ── Handle Save App Update Settings ───────────────────────────────────
+    if (isset($_POST['disable-update-automation'])) {
+        try {
+            bc_app_update_approval_write($connection_server,$vendor_id,'');
+            $_SESSION['product_purchase_response']='Automatic release approval removed. A send already in flight may finish; existing send claims are retained.';
+        } catch(Throwable $e) { $_SESSION['product_purchase_response']='Could not confirm approval removal. Stop the CLI worker/server switch and contact support before retrying.'; }
+        header('Location: AppUpdateBroadcast.php');exit;
+    }
+
     if (isset($_POST["save-update-settings"])) {
         try {
             $release=bc_app_update_release($_POST);
+            // Revoke old approval BEFORE changing release settings; failed saves stay safe.
+            bc_app_update_approval_write($connection_server,$vendor_id,'');
             $source_in=$release['source'];$play_url_in=$release['url'];$version_code_in=$release['code'];
             $version_name_in=$release['name'];$apk_file_in=$release['file'];$changelog_in=$release['changelog'];
             $stmt = $connection_server->prepare(
@@ -152,15 +90,22 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $saved=$stmt->execute();
                 $stmt->close();
                 if (!$saved) throw new RuntimeException("save_failed");
+                if (isset($_POST['approve-auto-update'])) {
+                    $approved=bc_app_update_snapshot($connection_server,$vendor_id,dirname(__DIR__));
+                    if($approved['release']!==$release || !hash_equals($approved['security_hash'],bc_app_update_actor_hash($get_logged_admin_details)) || !$fcm_row || $approved['project']!==$fcm_row['project_id'] || !hash_equals($approved['credential_hash'],hash('sha256',(string)$fcm_row['service_account_json'])) || $approved['host']!==strtolower(trim((string)$get_logged_admin_details['website_url']))) throw new RuntimeException('configuration_changed');
+                    bc_app_update_approval_write($connection_server,$vendor_id,bc_app_update_approval_token($approved));
+                }
+
                 $_SESSION["product_purchase_response"] = ($source_in === "play")
                     ? "App update source saved: Google Play Store."
                     : "App update source saved: local host (directory).";
+                $_SESSION['product_purchase_response'].= isset($_POST['approve-auto-update']) ? ' This exact release is approved for the optional CLI worker; approval alone does not start sending.' : ' Automatic approval is off for this release.';
             } else {
                 $_SESSION["product_purchase_response"] = "Error: could not save app update settings.";
             }
         }
         catch (InvalidArgumentException $e) { $_SESSION['product_purchase_response']='Error: '.$e->getMessage(); }
-        catch (Throwable $e) { $_SESSION['product_purchase_response']='Error: Could not confirm settings saved. Refresh before retrying.'; }
+        catch (Throwable $e) { $_SESSION['product_purchase_response']='Error: Release settings or automatic approval could not be confirmed. Refresh before retrying; approval may have been removed.'; }
         header("Location: AppUpdateBroadcast.php");
         exit;
     }
@@ -175,6 +120,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             } else {
                 $normalized=bc_app_update_fcm_account($project_id,$raw);
                 if (empty($GLOBALS['mySqlPass']) || !function_exists('bc_stepup_seal_secret')) throw new RuntimeException('secure_storage_unavailable');
+                bc_app_update_approval_write($connection_server,$vendor_id,'');
                 $sealed=bc_stepup_seal_secret($normalized);
                 if (strpos($sealed,'gcm:')!==0) throw new RuntimeException('secure_storage_unavailable');
                 $stmt=$connection_server->prepare("INSERT INTO sas_fcm_settings (vendor_id,project_id,service_account_json) VALUES (?,?,?) ON DUPLICATE KEY UPDATE project_id=VALUES(project_id),service_account_json=VALUES(service_account_json)");
@@ -275,7 +221,7 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
 
         <div class="col-12 mb-3"><div class="card p-3">
           <h5>Recent release send attempts</h5>
-          <p>One local attempt per Android version. Accepted means Firebase accepted it, not that every device received it. Dispatching may mean the request ended unexpectedly; it is not automatically retried. Changing the URL or Firebase project does not reset an attempt. Automatic scheduling remains off.</p>
+          <p>One local attempt per Android version. Accepted means Firebase accepted it, not that every device received it. Dispatching may mean the request ended unexpectedly; it is not automatically retried. Changing the URL or Firebase project does not reset an attempt. Automatic sending requires exact-release approval and an explicitly enabled CLI worker.</p>
           <?php
           try {
               $attempts=mysqli_query($connection_server,"SELECT version_code,state,created_at,updated_at FROM sas_app_update_dispatches WHERE vendor_id='$vendor_id' ORDER BY created_at DESC LIMIT 10");
@@ -285,6 +231,12 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
               echo '</ul>';
           } catch(Throwable $e) { echo '<p role="status">Send history unavailable. Install the database migration before broadcasting; sending fails closed without durable claim storage.</p>'; }
           ?>
+        </div></div>
+        <div class="col-12"><div class="card p-3">
+          <h5>Optional automatic notification worker</h5>
+          <p>No worker is installed or enabled by saving this page. Approve the exact release below, then ask your server operator to follow <code>VTU/docs/APP_UPDATE_WORKER.md</code>. Dry-run is the default. Manual and automatic sends share the same non-retryable release claim.</p>
+          <p><?php try { echo bc_app_update_approval_read($connection_server,$vendor_id)===''?'No automatic release approval.':'A release approval record exists. The worker revalidates it before any send.'; } catch(Throwable $e) { echo 'Approval status unavailable; automatic sending fails closed.'; } ?></p>
+          <form method="post"><?php bc_app_update_security_fields($get_logged_admin_details,'app_auto_disable'); ?><button class="btn btn-outline-danger" name="disable-update-automation" value="1">Remove automatic approval</button></form>
         </div></div>
         <!-- Broadcast card -->
         <div class="col-12 col-md-6">
@@ -418,6 +370,10 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
               <div class="mb-3">
                 <label class="form-label">Changelog (optional, shown in the update dialog)</label>
                 <textarea name="changelog" class="form-control" rows="3"><?php echo htmlspecialchars($update_changelog); ?></textarea>
+              </div>
+              <div class="border rounded p-3 my-3">
+                <label><input type="checkbox" name="approve-auto-update" value="1"> Approve one automatic notification for this exact Android release</label>
+                <p class="small">Off unless explicitly checked on this save. Approval expires after seven days. Binds the current release, website host, Firebase key/project, and (for local releases) APK contents. Changes require fresh approval. Requires a dedicated project, active/unrestricted vendor, and separately installed/enabled CLI worker. No credentials are shown or copied into approval records.</p>
               </div>
                 <?php bc_app_update_security_fields($get_logged_admin_details,'app_release_save'); ?>
               <button name="save-update-settings" type="submit" class="btn btn-primary col-12">

@@ -1,5 +1,5 @@
 <?php
-function bc_app_update_contexts() { return ['save-update-settings'=>'app_release_save','save-fcm-settings'=>'app_fcm_save','broadcast-update'=>'app_release_broadcast']; }
+function bc_app_update_contexts() { return ['save-update-settings'=>'app_release_save','save-fcm-settings'=>'app_fcm_save','broadcast-update'=>'app_release_broadcast','disable-update-automation'=>'app_auto_disable']; }
 function bc_app_update_stepup($actor,$context,$input) {
     if(!in_array($context,array_values(bc_app_update_contexts()),true))return 'Invalid update action.';
     if(!is_array($actor) || empty($actor['id']) || (int)($actor['status']??0)!==1 || !empty($actor['is_blocked']))return 'This account cannot change update settings.';
