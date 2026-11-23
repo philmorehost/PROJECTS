@@ -145,3 +145,39 @@ This is inventory evidence, not a verified allocation, exclusive-route proof,
 provider support certification, receipt of funds or funding authorization. No
 schema changes or provider writes are introduced by this follow-up. No live
 provider verification or deployment has occurred.
+
+## Evidence-derived disabled route candidates
+
+`propose_bound_route` is an explicit platform POST/CSRF/fresh-step-up action. It
+accepts only the stored address-evidence digest and expected customer-binding
+revision in addition to the normal custody context. Address, memo, asset/scale,
+tenant and customer overrides are rejected. The server derives these from the
+exact encrypted bound-address evidence and immutable current binding.
+
+Bound-address evidence now carries a separate domain-separated server HMAC;
+manual JSON and old unattested address evidence cannot enter this path. Re-run
+the protected address inspection for old evidence. Both proposal and review
+revalidate the attestation, original expiry, exact relationship digest,
+child/parent registry revisions, current reviewed binding, source configurations,
+customer/KYC, custody/tenant eligibility and policy/catalogue gates. TRON Base58Check
+and empty-memo restrictions are rechecked; TRX and USDT on TRON use scale six.
+Each actor must have fresh audited views of relationship and address evidence;
+the independent reviewer must additionally open the exact candidate manifest.
+The manifest pins the source digest and binding revision. Renewal/revocation
+invalidates review eligibility of any still-pending candidate on the old binding.
+
+The existing candidate workflow is reused; no active deposit-route row is
+created, even after independent review. Review expiry cannot exceed the address,
+binding/custody or policy/catalogue ceilings. Candidate metadata is not proof of
+current eligibility after later changes; there is no funding-address publication.
+Exact addresses/memos remain encrypted, not listed in dashboard tables.
+
+Candidate proposals and reviews now reject a matching canonical
+(environment, asset/network, exact address/memo routing hash) in any custody
+account's candidates or deposit routes. Revoked/expired reservations also block
+reuse. Existing route_guard locks the global environment control row before
+these global conflict checks, serializing admitted application candidate writers.
+This is not a cross-asset ownership check, a repair for existing duplicate rows,
+or protection against out-of-band SQL writers; no application path here writes
+enabled routes. All future active-route writers must enforce compatible global
+exclusivity/locking before live use. No DDL or live data cleanup is performed.

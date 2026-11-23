@@ -103,6 +103,9 @@ function bc_crypto_binding_address_checkpoint($authority,$identity,$env,$revisio
             $snapshot['vendor_id']=(int)$b['vendor_id'];$snapshot['user_id']=(int)$b['user_id'];
             $snapshot['relationship_evidence_hash']=$b['evidence_hash'];$snapshot['verified_by_actor']=$actor;
             $snapshot['expires_at']=min($snapshot['expires_at'],(int)$b['valid_until_epoch']);
+            // Domain-separated server proof; manual evidence JSON cannot impersonate this read.
+            require_once __DIR__.'/bc-crypto-bound-address.php';
+            $snapshot=bc_crypto_bound_address_attest($snapshot);
             $sealed=bc_crypto_custody_evidence_seal($identity,$env,bc_crypto_gov_json($snapshot));$hash=$sealed['hash'];
             bc_crypto_custody_must('INSERT INTO sas_crypto_v2_custody_evidence(custody_account,evidence_hash,environment,sealed_document,stored_by) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE evidence_hash=evidence_hash',[$identity,$hash,$env,$sealed['sealed'],$actor]);
             bc_crypto_custody_must("INSERT INTO sas_crypto_v2_custody_evidence_events(custody_account,evidence_hash,actor_id,revision,action,occurred_at_epoch) VALUES(?,?,?,?,'stored',?)",[$identity,$hash,$actor,$revision,time()]);

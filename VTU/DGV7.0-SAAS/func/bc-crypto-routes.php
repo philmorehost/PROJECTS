@@ -2,6 +2,7 @@
 /** Internal candidate workflow only; never writes sas_crypto_v2_deposit_routes or a wallet. */
 require_once __DIR__.'/bc-crypto-deposits.php';
 require_once __DIR__.'/bc-crypto-custody-evidence.php';
+require_once __DIR__.'/bc-crypto-bound-address.php';
 function bc_crypto_route_normalize($input) {
     foreach(['vendor_id','user_id'] as $field) if (!is_int($input[$field]??null)||$input[$field]<=0) throw new InvalidArgumentException('crypto_route_scope_invalid');
     $asset=bc_crypto_gov_asset($input['asset_network']??null);$scale=bc_crypto_scale($input['scale']??null);
@@ -51,18 +52,23 @@ function bc_crypto_route_save($authority,$env,$identity,$custody_revision,$actio
     global $connection_server;
     $actor=bc_crypto_custody_actor($authority);bc_crypto_gov_environment($env);bc_crypto_custody_digest($identity);
     if (!is_int($custody_revision)||$custody_revision<0) throw new InvalidArgumentException('crypto_custody_revision_invalid');
-    if (!in_array($action,['propose','review','revoke'],true)) throw new InvalidArgumentException('crypto_route_action_invalid');
+    if (!in_array($action,['propose_bound','propose','review','revoke'],true)) throw new InvalidArgumentException('crypto_route_action_invalid');
     if ($action==='propose') $scope=bc_crypto_route_normalize($input);
-    else foreach(['candidate_id','revision'] as $field) if (!is_int($input[$field]??null)||$input[$field]<=0) throw new InvalidArgumentException('crypto_route_revision_invalid');
+    elseif($action!=='propose_bound') foreach(['candidate_id','revision'] as $field) if (!is_int($input[$field]??null)||$input[$field]<=0) throw new InvalidArgumentException('crypto_route_revision_invalid');
     if (!bc_crypto_transaction_ready()) throw new RuntimeException('crypto_transaction_unavailable');
     bc_crypto_route_engines();
     if (!mysqli_begin_transaction($connection_server)) throw new RuntimeException('crypto_transaction_unavailable');
     try {
         $custody=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=? FOR UPDATE',[$identity]);
         if (!$custody||$custody['environment']!==$env||(int)$custody['revision']!==$custody_revision) throw new RuntimeException('crypto_custody_edit_conflict');
-        if ($action==='propose') {
+        if($action==='propose_bound'){
+            foreach(['vendor_id','user_id','address','tag','asset_network','scale'] as $field)if(array_key_exists($field,$input))throw new RuntimeException('crypto_bound_address_override_forbidden');
+            $scope=bc_crypto_bound_address_scope($custody,$identity,$env,$custody_revision,$actor,$input['evidence_hash']??null,bc_crypto_gov_uint($input['binding_revision']??null,1000000000));
+        }
+        if (in_array($action,['propose','propose_bound'],true)) {
             bc_crypto_route_guard($custody,$env,$scope);
-            $legacy=bc_q_row('SELECT id FROM sas_crypto_v2_deposit_routes WHERE environment=? AND custody_account=? AND asset_network=? AND routing_hash=? FOR UPDATE',[$env,$identity,$scope['asset_network'],$scope['routing_hash']]);
+            bc_crypto_route_conflicts($env,$scope['asset_network'],$scope['routing_hash']);
+            $legacy=null;
             if ($legacy) throw new RuntimeException('crypto_route_already_reserved');
             $manifest=['type'=>'deposit_route_candidate','environment'=>$env,'custody_account'=>$identity,'custody_revision'=>$custody_revision,'route'=>$scope,'live_enabled'=>false];
             $sealed=bc_crypto_custody_evidence_seal($identity,$env,bc_crypto_gov_json($manifest));
@@ -84,6 +90,15 @@ function bc_crypto_route_save($authority,$env,$identity,$custody_revision,$actio
                 if ((int)$candidate['custody_revision']!==$custody_revision) throw new RuntimeException('crypto_route_custody_changed');
                 $ceiling=bc_crypto_route_guard($custody,$env,$candidate);
                 bc_crypto_custody_evidence_require($identity,$env,$candidate['evidence_hash'],$actor,$custody_revision,true);
+                $manifestRow=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evidence WHERE custody_account=? AND environment=? AND evidence_hash=?',[$identity,$env,$candidate['evidence_hash']]);
+                $manifest=json_decode(bc_crypto_custody_evidence_open($identity,$env,$candidate['evidence_hash'],$manifestRow['sealed_document']),true);
+                if(isset($manifest['route']['bound_address_evidence_hash'])){
+                    $scope=bc_crypto_bound_address_scope($custody,$identity,$env,$custody_revision,$actor,$manifest['route']['bound_address_evidence_hash'],(int)$manifest['route']['binding_revision']);
+                    foreach(['vendor_id','user_id','scale'] as $field)if((int)$candidate[$field]!==$scope[$field])throw new RuntimeException('crypto_bound_address_context_invalid');
+                    if($candidate['asset_network']!==$scope['asset_network']||$candidate['routing_hash']!==$scope['routing_hash'])throw new RuntimeException('crypto_bound_address_context_invalid');
+                    $ceiling=min($ceiling,$scope['evidence_expires_at']);
+                }
+                bc_crypto_route_conflicts($env,$candidate['asset_network'],$candidate['routing_hash'],(int)$candidate['id']);
                 // Existing enabled/inactive route records may not be superseded by local candidate review.
                 if (bc_q_row('SELECT id FROM sas_crypto_v2_deposit_routes WHERE environment=? AND custody_account=? AND asset_network=? AND routing_hash=? FOR UPDATE',[$env,$identity,$candidate['asset_network'],$candidate['routing_hash']])) throw new RuntimeException('crypto_route_already_reserved');
             }
@@ -95,4 +110,9 @@ function bc_crypto_route_save($authority,$env,$identity,$custody_revision,$actio
         if (!mysqli_commit($connection_server)) throw new RuntimeException('crypto_route_commit_failed');
         return ['candidate_id'=>(int)$candidate['id'],'revision'=>(int)$next['revision'],'evidence_hash'=>$candidate['evidence_hash'],'state'=>$next['state'],'live_enabled'=>false];
     } catch(Throwable $e) {mysqli_rollback($connection_server);if ($e instanceof mysqli_sql_exception && (int)$e->getCode()===1062) throw new RuntimeException('crypto_route_already_reserved');throw $e;}
+}
+
+/** Global policy row is locked by route_guard before this check, serializing candidate writers. */
+function bc_crypto_route_conflicts($env,$asset,$hash,$exclude=0){
+    if(bc_q_row('SELECT id FROM sas_crypto_v2_route_candidates WHERE environment=? AND asset_network=? AND routing_hash=? AND id<>? LIMIT 1 FOR UPDATE',[$env,$asset,$hash,$exclude])||bc_q_row('SELECT id FROM sas_crypto_v2_deposit_routes WHERE environment=? AND asset_network=? AND routing_hash=? LIMIT 1 FOR UPDATE',[$env,$asset,$hash]))throw new RuntimeException('crypto_route_already_reserved');
 }
