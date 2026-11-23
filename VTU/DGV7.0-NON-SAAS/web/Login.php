@@ -24,7 +24,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     // and the hash was valid for the whole day. This version is random, expires in two
     // minutes and is burned on first use.
     if (isset($_GET['logAsToken'])) {
-        $impersonated_user = bc_consume_login_token((string)$_GET['logAsToken'], 'impersonate');
+        $impersonated_user = function_exists('bc_consume_login_token') ? bc_consume_login_token((string)$_GET['logAsToken'], 'impersonate') : null;
         if ($impersonated_user) {
             session_regenerate_id(true);
             $_SESSION["user_session"] = strtolower($impersonated_user['username']);

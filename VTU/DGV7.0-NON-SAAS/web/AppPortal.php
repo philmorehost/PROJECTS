@@ -8,7 +8,7 @@ header('Referrer-Policy: no-referrer');
 require_once __DIR__.'/../func/bc-connect.php';
 require_once __DIR__.'/../func/bc-mobile-catalogue.php';
 if(($_SERVER['REQUEST_METHOD']??'')!=='POST') { http_response_code(405); exit('Open this service from the mobile app.'); }
-$user=bc_consume_login_token((string)($_POST['token']??''),'mobile_portal');
+$user=function_exists('bc_consume_login_token')?bc_consume_login_token((string)($_POST['token']??''),'mobile_portal'):null;
 $vid=(int)resolveVendorID();
 if(!$user || (int)$user['vendor_id']!==$vid || (int)$user['status']!==1 || !empty($user['is_blocked'])
     || !bc_fintech_mobile_app_allowed($user) || isIPBlocked($_SERVER['REMOTE_ADDR']??'',$vid) || isAccountLocked($user['username'],$vid)) {
