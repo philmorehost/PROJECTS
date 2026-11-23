@@ -42,4 +42,9 @@ $events=[];$count=0;$overlap=function()use($db,$payload,&$count,$ok){
 dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$payload,$overlap)==='accepted' && $count===1,'first overlapping sender completes');
 $bad=$payload;$bad['version_code']='3';$sent=0;dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$bad,$ok)==='unavailable' && $sent===0,'version/payload mismatch cannot send');
 dispatch_check(file_get_contents(__DIR__.'/../DGV7.0-SAAS/func/bc-app-update-dispatch.php')===file_get_contents(__DIR__.'/../DGV7.0-NON-SAAS/func/bc-app-update-dispatch.php'),'edition parity');
+$schema=file_get_contents(__DIR__.'/../DGV7.0-SAAS/func/bc-tables.php');
+$start=strpos($schema,'CREATE TABLE IF NOT EXISTS sas_app_update_dispatches (');
+$end=strpos($schema,'\");',$start);$ddl=substr($schema,$start,$end-$start);
+dispatch_check(strpos($ddl,'UNIQUE KEY uniq_vendor_release (vendor_id,version_code)')!==false,'DDL enforces vendor/release uniqueness');
+dispatch_check(strpos($ddl,'ENGINE=InnoDB')!==false,'durable storage engine explicit');
 echo "$n update dispatch checks passed\n";
