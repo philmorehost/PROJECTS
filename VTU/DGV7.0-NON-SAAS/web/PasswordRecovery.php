@@ -22,8 +22,13 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
         }
     }
     
+    require_once __DIR__.'/../func/bc-recovery-inline.php';
+    bc_recovery_post_guard();
     if(isset($_POST["send-code"])){
+        if(time()-(int)($_SESSION['recovery_send_at']??0)<60){bc_recovery_reply(false,'Please wait a minute before requesting another code.');$_SESSION['product_purchase_response']='Please wait a minute before requesting another code.';header('Location: PasswordRecovery.php');exit;}
+        $_SESSION['recovery_send_at']=time();
         if ($reset_blocked_msg) {
+            bc_recovery_reply(false,$reset_blocked_msg);
             $_SESSION["product_purchase_response"] = $reset_blocked_msg;
             header("Location: ".$_SERVER["REQUEST_URI"]);
             exit();
@@ -35,7 +40,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     		if(mysqli_num_rows($get_user_details) == 1){
     			$get_user_personal_details = mysqli_fetch_array($get_user_details);
 				$_SESSION["user-recovery-username"] = $get_user_personal_details["username"];
-				$_SESSION["user-recovery-code"] = substr(str_shuffle("12345678901234567890"), 0, 6);
+				$_SESSION["user-recovery-code"] = (string)random_int(100000,999999);
 				// Email Beginning
 				$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"], "{recovery_code}" => $_SESSION["user-recovery-code"]);
 				$raw_log_template_subject = getUserEmailTemplate('user-account-recovery','subject');
@@ -46,12 +51,13 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 				}
 				// §46: lead with the code so it can be copied from the inbox list without opening the mail.
 				$raw_log_template_subject = (string)($_SESSION["user-recovery-code"]) . " is your password reset code" . ($raw_log_template_subject !== '' ? ' — ' . $raw_log_template_subject : '');
-				sendVendorEmail($get_user_personal_details["email"], $raw_log_template_subject, $raw_log_template_body);
+				$recovery_mail_sent=sendVendorEmail($get_user_personal_details["email"], $raw_log_template_subject, $raw_log_template_body);
+				bc_recovery_mail_state('user',(int)resolveVendorID(),(bool)$recovery_mail_sent);
 				// Email End
 				// Record the reset request — repeated requests for the same account lock it out.
 				bc_handle_password_reset_attempt($user, $reset_user_ip, 0, $vendor_id, 'request');
 				//Recovery Code Emailed Successfully
-				$json_response_array = array("desc" => "Recovery Code Emailed Successfully");
+				$json_response_array = array("desc" => !empty($recovery_mail_sent)?"Recovery Code Emailed Successfully":"Could not send recovery code. Try again later.");
 				$json_response_encode = json_encode($json_response_array,true);
     		}else{
     			if(mysqli_num_rows($get_user_details) > 1){
@@ -74,8 +80,9 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     	}
 		
         $json_response_decode = json_decode($json_response_encode,true);
+        bc_recovery_reply($json_response_decode['desc']==='Recovery Code Emailed Successfully',$json_response_decode['desc']);
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-        header("Location: ".$_SERVER["REQUEST_URI"]);
+        header("Location: ".$_SERVER["REQUEST_URI"]);exit;
     }
 
 	if(isset($_POST["verify-code"])){
@@ -91,12 +98,14 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 		$vendor_id = resolveVendorID();
 		$get_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && username='".$_SESSION["user-recovery-username"]."'");
     		if(mysqli_num_rows($get_user_details) == 1){
-				if($_SESSION["user-recovery-code"] == $recovery_code){
+				if(bc_recovery_code_valid('user',(int)resolveVendorID(),$recovery_code)){
 					if($pass == $confirm_pass){
+                        bc_recovery_consume('user');
 						// §29: bcrypt at rest; recovery does not clear the mandatory password-and-PIN setup gate.
 						$md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
 						$get_user_personal_details = mysqli_fetch_array($get_user_details);
 						$get_user_details = mysqli_query($connection_server, "UPDATE sas_users SET password='$md5_pass' WHERE vendor_id='".$get_user_personal_details["vendor_id"]."' && username='".$get_user_personal_details["username"]."'");
+                        if($get_user_details!==true){$_SESSION['product_purchase_response']='Password change could not be confirmed. Restart recovery before retrying.';header('Location: PasswordRecovery.php');exit;}
 						// Email Beginning
 						$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"]);
 						$raw_log_template_subject = getUserEmailTemplate('user-pass-update','subject');
@@ -205,8 +214,9 @@ bc_plate_auth_top(array(
                 <a class="pk-auth__link" href="Login.php">Back to login</a>
             </p>
         <?php else: ?>
-            <form method="post" action="">
-                <?php if(!isset($_SESSION["user-recovery-username"]) || empty($_SESSION["user-recovery-username"])){ ?>
+            <form data-recovery-form method="post" action="">
+                <?php echo bc_csrf_field(); ?>
+                        <?php if(!isset($_SESSION["user-recovery-username"]) || empty($_SESSION["user-recovery-username"])){ ?>
                     <div class="pk-auth__field">
                         <label class="pk-auth__label" for="user">Enter username</label>
                         <input id="user" name="user" type="text" class="pk-auth__input" placeholder="e.g. johndoe"
@@ -259,7 +269,7 @@ bc_plate_auth_top(array(
                         <button name="verify-code" type="submit" class="pk-auth__btn">Reset password</button>
                     </div>
                     <div class="pk-auth__field">
-                        <button name="reset-recovery" type="submit" class="pk-auth__btn pk-auth__btn--ghost">Restart recovery</button>
+                        <button name="reset-recovery" type="submit" formnovalidate class="pk-auth__btn pk-auth__btn--ghost">Restart recovery</button>
                     </div>
                 <?php } ?>
 
@@ -340,3 +350,5 @@ function togglePasswordVisibility(fieldId, toggleElement) {
 <?php
 bc_plate_auth_end();
 ?>
+
+<script src="../asset/bc-recovery-inline.js" defer></script>
