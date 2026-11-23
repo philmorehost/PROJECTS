@@ -33,7 +33,7 @@ foreach(['SAAS','NON-SAAS'] as $ed){
  update_check(strpos($page,'$saved=$stmt->execute()')!==false,'save result checked');
  update_check(strpos($page,"strpos(\$sealed,'gcm:')!==0")!==false,'new key persistence rejects plaintext fallback');
  update_check(strpos($page,"bc_stepup_open_secret(\$fcm_row['service_account_json'])")!==false,'sealed and legacy keys readable by transport');
- update_check(substr_count($page,'bc_app_update_security_fields($get_logged_admin_details,')===3,'all three forms have security gate fields');
+ update_check(substr_count($page,'bc_app_update_security_fields($get_logged_admin_details,')===4,'all four forms have security gate fields');
  update_check(strpos($page,"AND vendor_id<>'\$vendor_id' LIMIT 1")!==false,'known shared-project topic broadcast refused');
  update_check(strpos($page,'bc_validate_csrf();')!==false,'POSTs require CSRF');
  update_check(strpos($page,'Delivery to every device is not guaranteed')!==false,'FCM acceptance not overstated');

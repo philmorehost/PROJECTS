@@ -1,10 +1,10 @@
 <?php
 /** Immediate, request-local security policy. No session/TTL policy cache or remote calls. */
-function bc_enrollment_policy($vendor_id) {
+function bc_enrollment_policy($vendor_id,$refresh=false) {
     global $connection_server;
     static $cache=[];
     $vid=(int)$vendor_id;
-    if(isset($cache[$vid]))return $cache[$vid];
+    if(!$refresh && isset($cache[$vid]))return $cache[$vid];
     $q=mysqli_query($connection_server,"SELECT option_name AS name, option_value AS value FROM sas_super_admin_options WHERE option_name IN ('force_vendor_totp','force_user_totp') UNION ALL SELECT setting_name AS name, setting_value AS value FROM sas_settings WHERE vendor_id='$vid' AND setting_name='require_user_totp'");
     if(!$q)throw new RuntimeException('Security policy is unavailable.');
     $p=['vendor'=>false,'user'=>false,'tenant'=>false];
@@ -16,9 +16,9 @@ function bc_enrollment_policy($vendor_id) {
     $p['user']=$p['user']||$p['tenant'];
     return $cache[$vid]=$p;
 }
-function bc_enrollment_reason($row,$role) {
+function bc_enrollment_reason($row,$role,$refresh=false) {
     if(!empty($row['force_password_change']))return 'PASSWORD_CHANGE_REQUIRED';
-    $p=bc_enrollment_policy($role==='vendor' ? (int)$row['id'] : (int)$row['vendor_id']);
+    $p=bc_enrollment_policy($role==='vendor' ? (int)$row['id'] : (int)$row['vendor_id'],$refresh);
     if(!empty($p[$role]) && !bc_gauth_enrolled($row))return 'AUTHENTICATOR_SETUP_REQUIRED';
     return '';
 }

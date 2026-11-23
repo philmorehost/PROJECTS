@@ -257,3 +257,35 @@ staging paused. Remaining requests outside this scoped configuration repair stay
 
 Automatic scheduling/outbox/worker remains off and unfinished. No provider credentials,
 financial holds or crypto flags changed; no deployment or destructive live cleanup.
+
+
+## Exact-release automatic notification worker implementation
+
+- Added explicit seven-day, exact-release opt-in in the existing step-up-protected
+  release form and an independently verified approval-removal action. Approval is
+  stored in the existing tenant settings table; no new schema migration is needed.
+  Old approval is removed BEFORE saving release or replacement Firebase credentials.
+  Failed saves/approval grants do not silently carry old approval into a new release.
+- Approval binds normalized release, persisted vendor host, Firebase project/stored
+  credential digest, local APK digest, and vendor password/PIN/authenticator hashes.
+  Modified settings/files/keys, expired/future approval and restricted vendors fail closed.
+  This is point-in-time revalidation, not an immutable APK hosting/signature guarantee.
+- Added CLI-only `cron/process_app_updates.php --vendor=ID`, dry-run by default.
+  Sending requires BOTH `--send` and `BC_APP_UPDATE_WORKER_ENABLED=1`. The disabled
+  send path exits before database/bootstrap/credential/provider use. No HTTP trigger,
+  auto-installed cron, environment file, global tenant sweep or schema cleanup.
+- Fixed-endpoint Google transport extracted from the admin page for shared reuse.
+  One vendor per invocation, bounded transports, pre-send freshness checks, active/
+  subscription/enrollment validation, and repeated snapshot/approval checks around
+  OAuth and at the message-send boundary. Already-attempted releases avoid OAuth too.
+- Worker reuses manual sends' durable at-most-one release claim. Uncertainty is never
+  automatically retried. Callback aborts after a claim remain uncertain/nonretryable.
+- Added source/approval tests, disabled-CLI tests and real MySQL fixture tests using
+  generated disposable RSA keys and MOCKED provider callbacks. No real Firebase call,
+  production configuration, deployment, scheduler installation or enablement performed.
+
+Operator guide: `VTU/docs/APP_UPDATE_WORKER.md`. Approval alone does not enable
+sending. Runtime deployment/preflight/provider delivery verification remains a
+separate operator step; do not mark actual production automation as enabled.
+Other billing, Bybit and site-wide OTP/compliance work remains open. Crypto staging
+stays paused and NON-SAAS Marketplace is untouched.
