@@ -54,6 +54,8 @@ $bc_review_message = '';
 $bc_review_type = 'info';
 
 if (isset($_POST['kyb_decision'])) {
+    bc_validate_csrf();
+    if(bc_is_rate_limited('kyb_review',(string)$vid,30,300)){http_response_code(429);exit('Too many review attempts. Please wait.');}
     $uid = (int)($_POST['uid'] ?? 0);
     $decision = (string)($_POST['kyb_decision'] ?? '');
     $reason = (string)($_POST['kyb_reason'] ?? '');
@@ -157,7 +159,7 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                             </td>
                             <td class="small text-muted"><?php echo htmlspecialchars((string)($row['kyb_submitted_at'] ?? '')); ?></td>
                             <td class="pe-4 text-end">
-                                <form method="post" action="" class="d-inline">
+                                <form method="post" action="" class="d-inline"><?php echo bc_csrf_field(); ?>
                                     <input type="hidden" name="uid" value="<?php echo $uid; ?>">
                                     <button name="kyb_decision" value="approve" class="btn btn-sm btn-success rounded-pill px-3"
                                             onclick="return confirm('Approve this business and revoke its app sessions?');">
@@ -169,7 +171,7 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                                     Reject
                                 </button>
                                 <div class="collapse mt-2" id="reject-<?php echo $uid; ?>">
-                                    <form method="post" action="">
+                                    <form method="post" action=""><?php echo bc_csrf_field(); ?>
                                         <input type="hidden" name="uid" value="<?php echo $uid; ?>">
                                         <textarea name="kyb_reason" rows="2" required class="form-control form-control-sm mb-2"
                                                   placeholder="Reason shown to the applicant"></textarea>

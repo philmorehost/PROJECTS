@@ -15,6 +15,7 @@
  */
 
 require_once __DIR__ . '/bc-gateway-policy.php';
+require_once __DIR__ . '/bc-compliance-policy.php';
 
 /** Service slugs that may be gated per tier. Kept stable: these strings are in the database. */
 if (!function_exists('bc_fintech_matrix_services')) {
@@ -212,6 +213,16 @@ if (!function_exists('bc_fintech_kyb_categories')) {
     }
 }
 
+/** Null-safe snapshot predicates for trusted, fixed column names only. */
+function bc_fintech_kyb_snapshot_sql($row,$fields){
+    global $connection_server;
+    $sql='';foreach($fields as $field){
+        if(!in_array($field,['kyb_reference','kyb_document','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked'],true))throw new InvalidArgumentException('Invalid KYB snapshot field.');
+        $value=$row[$field]??null;
+        $sql.=" AND `$field` <=> ".($value===null?'NULL':"'".mysqli_real_escape_string($connection_server,(string)$value)."'");
+    }return $sql;
+}
+
 if (!function_exists('bc_fintech_kyb_submit')) {
     /**
      * Records a business upgrade request. Does NOT change account_type: approval does that.
@@ -266,8 +277,8 @@ if (!function_exists('bc_fintech_kyb_submit')) {
             kyb_submitted_at=NOW(),
             kyb_reviewed_at=NULL,
             kyb_reviewed_by=NULL
-            WHERE id='$user_id' AND vendor_id='$vendor_id'");
-        return $ok ? true : 'Could not save the request.';
+            WHERE id='$user_id' AND vendor_id='$vendor_id' AND kyb_status IN (0,3) AND status=1 AND (is_blocked=0 OR is_blocked IS NULL) AND (account_type='personal' OR ((account_type IS NULL OR account_type='') AND account_level IN (1,2)))");
+        return ($ok && mysqli_affected_rows($connection_server)===1) ? true : 'Could not save the request.';
     }
 }
 
@@ -293,12 +304,15 @@ if (!function_exists('bc_fintech_kyb_approve')) {
         if (!$q || mysqli_num_rows($q) !== 1) return 'Account not found.';
         $row = mysqli_fetch_assoc($q);
         if ((int)$row['kyb_status'] !== 1) return 'This request is not awaiting review.';
+        if ((int)($row['status']??0)!==1 || !empty($row['is_blocked']))return 'This account cannot be approved.';
+        if (!bc_kyc_approval_current($row))return 'Current approved KYC is required before Business approval.';
+        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked']);
 
         $rev = mysqli_real_escape_string($connection_server, $reviewer);
         $ok = mysqli_query($connection_server, "UPDATE sas_users SET
             account_type='business', account_type_source='kyb_approved', account_type_at=NOW(),
             kyb_status=2, kyb_reviewed_at=NOW(), kyb_reviewed_by='$rev'
-            WHERE id='$user_id' AND vendor_id='$vendor_id' AND kyb_status=1");
+            WHERE id='$user_id' AND vendor_id='$vendor_id' AND kyb_status=1$snapshot");
         if (!$ok || mysqli_affected_rows($connection_server) < 1) return 'Could not approve the request.';
 
         // Business is web-only: kill app sessions in the same operation.
@@ -318,15 +332,17 @@ if (!function_exists('bc_fintech_kyb_reject')) {
         if ($user_id <= 0 || $vendor_id <= 0) return 'Invalid account.';
         if ($reviewer === '') return 'Reviewer is required.';
 
-        $q = mysqli_query($connection_server, "SELECT kyb_status FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
+        $q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
         if (!$q || mysqli_num_rows($q) !== 1) return 'Account not found.';
-        if ((int)mysqli_fetch_assoc($q)['kyb_status'] !== 1) return 'This request is not awaiting review.';
+        $row=mysqli_fetch_assoc($q);
+        if ((int)$row['kyb_status'] !== 1) return 'This request is not awaiting review.';
 
+        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document']);
         $rev = mysqli_real_escape_string($connection_server, $reviewer);
         $note = mysqli_real_escape_string($connection_server, substr(trim((string)$reason), 0, 2000));
         $ok = mysqli_query($connection_server, "UPDATE sas_users SET
             kyb_status=3, kyb_note='$note', kyb_reviewed_at=NOW(), kyb_reviewed_by='$rev'
-            WHERE id='$user_id' AND vendor_id='$vendor_id' AND kyb_status=1");
+            WHERE id='$user_id' AND vendor_id='$vendor_id' AND kyb_status=1$snapshot");
         return ($ok && mysqli_affected_rows($connection_server) > 0) ? true : 'Could not reject the request.';
     }
 }
