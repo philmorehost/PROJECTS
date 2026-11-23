@@ -39,9 +39,5 @@ function bc_crypto_bybit_identity_normalize($config,$result,$expected,$now) {
 }
 /** Explicit step-up action only. One bounded existing allowlisted GET, no retries or new endpoints. */
 function bc_crypto_bybit_verify_identity($vendor,$env,$expected) {
-    if (!is_int($vendor)||$vendor<=0) throw new RuntimeException('crypto_scope_invalid');
-    bc_crypto_gov_environment($env);bc_crypto_custody_digest($expected);
-    $config=bc_bybit_config($vendor);
-    if ($config['environment']!==$env) throw new RuntimeException('crypto_bybit_environment_mismatch');
-    return bc_crypto_bybit_identity_normalize($config,bc_bybit_get($config,'key_info'),$expected,time());
+    throw new RuntimeException('bybit_retired');
 }

@@ -45,19 +45,21 @@ Consolidated from the standing project requirements, remediation tracker, securi
 - Keep withdrawals, suspected-vendor restrictions and other financial holds until separately reviewed and explicitly authorized.
 - Personal↔Business switching must remain free; pricing-level upgrades are separate. Verify zero/default Smart Earner prices and atomic/idempotent charging for any paid pricing-level changes.
 
-## 6. Crypto — staging paused, not a release task to activate now
+## 6. Replacement crypto Buy/Sell — retired-provider staging cancelled
 
-- Complete independent custody/account-model/region/product eligibility evidence and provider review.
-- Complete approved staging/operator checks, customer allocation/address correctness, deposit dedup/finality/risk checks, durable accounting/reconciliation, polling/retry/overlap recovery and fault tests.
-- Verify secured webhook/worker ingress, monitoring and operator recovery using the documented controlled-staging checklist.
-- Customer addresses, credits, trading and withdrawals remain non-live. Source configuration/gateway cards or local preflight success do not authorize activation. Any staging resumption requires explicit approval.
+- **Bybit staging is cancelled by the user's latest instruction.** Do not resume, deploy or require completion of the old Bybit staging programme or its operator drills. Historical staging documents are records, not active release prerequisites.
+- Finish removal of the retired provider's dependencies, obsolete tooling and visible controls without deleting transaction/evidence history or automatically refunding uncertain orders.
+- Complete the replacement tenant-safe A2P/P2A order/ledger integration: two-minute buy quotes, wallet reservation/debit, secure isolated signing and send, unique sell deposit allocation, finality/risk checks, Naira credit and sweep, durable reconciliation and manual review for late/over/uncertain/stuck cases.
+- Route Klasha, Platnova and Flutterwave independently according to verified capabilities; do not substitute one provider for another after an uncertain transaction.
+- Verify custody/signing, provider/product/region eligibility, callback/worker ingress, monitoring, idempotency and recovery for the replacement architecture before activation. This is replacement-service verification, not a revival of Bybit staging.
+- No live trades, seed generation, hot-wallet funding, blockchain broadcasts or deployment are authorized by cancellation of the old staging programme. Existing financial holds remain until separately reviewed and authorized.
 
 ## 7. Marketplace, gateways and platform administration — final acceptance
 
 - Finish inventory/acceptance of all real bundled adapters and their category/listing controls, beyond the VTU/SMS discovery subset. SAAS new entries inactive/private; explicit free/zero price must not auto-activate services.
 - Leave NON-SAAS marketplace/free behavior untouched.
 - Verify SAAS System Update remains platform-admin only; update/clone/privilege routes cannot bypass permissions.
-- Verify Bybit/Klasha gateway-card display, configurable SAAS commercial defaults and entitlement/storage rules without implying live crypto readiness.
+- Verify Klasha/Platnova/Flutterwave provider configuration and service routing, configurable SAAS commercial defaults and entitlement/storage rules. Bybit purchase/configuration and transport are retired; remaining cleanup must not restore them.
 - Re-test user API-enable persistence/effective policy notices and the enabled-service/account-pricing controls. Several source fixes have landed; full UI/device/provider acceptance remains distinct.
 - Validate app-update broadcasts/worker delivery, duplicate prevention, failure notices and operator recovery.
 
@@ -69,8 +71,8 @@ Consolidated from the standing project requirements, remediation tracker, securi
 
 ## 9. Test-suite and quality debt — release blocker
 
-- Investigate and correct known broad fintech CoinConversion body-baseline failure; do not silently rebaseline without proving expected behavior.
-- Replace obsolete Google-recovery and authenticator/QR source assertions with tests of current secure behavior. Do not restore removed insecure mechanisms to make old tests pass.
+- Migration/body-baseline and follow-on referral/card/credential regression debt was reconciled in PR262 with current boundary contracts; maintain those checks and investigate any newly exposed failures.
+- Obsolete Google-recovery approval assertions were reconciled in PR264; keep scoped recovery-proof behavior tests. Complete any remaining authenticator/QR test inventory without restoring insecure mechanisms.
 - Run the complete suite, not only workflows triggered by changed paths, plus both-edition disposable MySQL, concurrent/fault-injection tests and browser no-reload/redirect tests.
 - Add end-to-end tests for the remaining role/account/policy matrix; review security-sensitive logs and data leaks, loading performance and accessibility/error handling.
 - Merged focused checks do not establish that the entire project is green.
@@ -81,13 +83,20 @@ Consolidated from the standing project requirements, remediation tracker, securi
 - Coordinate app/server rollout: legacy browser sessions, unbound tokens and personal-key clients require fresh sign-in/updated builds. Already-open nonce/ticket forms need reload.
 - Validate live mail, Google, KYC, payments/FX and service-provider credentials/callbacks in an authorized nonproduction environment; no production/provider success is claimed by repository tests.
 - Prepare backup/restore, migrations, secrets, worker/cron configuration, monitoring, alerts, rollback, incident response and reconciliation runbooks. Do not perform destructive live cleanup without separate authorization.
-- Obtain explicit deployment and held-service/staging approvals; merge is not deployment. Perform post-deployment smoke checks and reconciliation only under the approved release plan.
+- Obtain explicit deployment and held-service activation approvals; merge is not deployment. Perform post-deployment smoke checks and reconciliation only under the approved release plan.
 
 ## Recommended order
 
 1. Close security/compliance/alternate-route audit and obsolete-test debt.
 2. Finish inline security UX and full web/app feature/history/receipt acceptance.
-3. Complete held financial implementations and authorized provider/staging validation without releasing holds early.
+3. Complete held financial implementations and authorized replacement-provider verification without releasing holds early.
 4. Rebuild/device-test apps, approve release plan, then deploy in controlled stages.
 
 A project-wide completion declaration requires evidence for every applicable item above, not just another merged security batch.
+
+## 11. Homepage, templates and product identity — incomplete
+
+- Finish exact supplied-homepage visual and interaction acceptance. PR263 implements accessible responsive navigation in both editions, tested in Chromium at nine widths; this is not full visual/device sign-off.
+- Preserve distinct designs for every BC-STYLE-TEMPLATE selection and tenant-specific theme/logo/title behavior.
+- Complete FINTECHFLOW DGV7.0 neutral branding and equivalent-image audit. Supplier/demo MZEEVTU assets are references only, not vendor defaults.
+- Forced bc-admin first-time PIN save is repaired in PR264 with CSRF, fresh owner checks, atomic no-overwrite save and accurate response errors; verify the deployed installation separately after authorized rollout.

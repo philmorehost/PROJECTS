@@ -2,7 +2,7 @@
 
 ## New direction (supersedes earlier Bybit feature requirements)
 
-The user requests complete removal of Bybit from the distributed application, vendor-neutral FINTECHFLOW DGV7.0 product branding, independent Klasha/Platnova/Flutterwave service routing, an admin-to-user/user-to-admin crypto Buy/Sell experience, the exact supplied home-page design with responsive navigation, and distinct BC-STYLE-TEMPLATE designs. Existing financial/crypto holds and the staging pause remain in effect. This request is not authorization to fund a hot wallet, execute sample trades, broadcast transactions or deploy.
+The user requests complete removal of Bybit from the distributed application, vendor-neutral FINTECHFLOW DGV7.0 product branding, independent Klasha/Platnova/Flutterwave service routing, an admin-to-user/user-to-admin crypto Buy/Sell experience, the exact supplied home-page design with responsive navigation, and distinct BC-STYLE-TEMPLATE designs. Existing financial/crypto holds remain in effect. The user has cancelled the Bybit staging programme; its completion or resumption is no longer required. This request is not authorization to fund a hot wallet, execute sample trades, broadcast transactions or deploy.
 
 ## Intake history: inputs initially missing
 
@@ -33,7 +33,7 @@ Existing adapters do not prove that Klasha, Platnova or Flutterwave supports eve
 - Payout states distinguish never-attempted, definitively rejected-before-broadcast, broadcast, confirmed, and unknown. Timeout is NOT proof of failure. Refund only when provably safe with an exactly-once ledger claim; otherwise review/reconcile.
 - Sell deposit mapping and confirmation/finality rules per chain; token contract/network/decimals validation, reorg/dedup handling and immutable attribution. An address prefix alone is not full validation or proof of network correctness.
 - Late/over/under/duplicate/unconfirmed/wrong-network deposits and provider uncertainty require explicit review rules. Sweeps/gas funding are separate tracked financial operations, not an unaccounted side effect.
-- TRON resource costs and BTC confirmation/fee assumptions from the proposal are not guaranteed constants; validate current network/provider behavior before approved staging.
+- TRON resource costs and BTC confirmation/fee assumptions from the proposal are not guaranteed constants; validate current network/provider behavior before any authorized activation of the replacement architecture.
 - Independent review/auditing, key backup/recovery, bounded hot-wallet liquidity, alerts, kill switch, tenant isolation and abuse protection.
 - Disposable DB concurrent/fault tests, chain-adapter simulations and independently authorized network/device/provider testing. Simulations and PHP syntax checks are necessary but insufficient.
 - Confirm regulatory/provider eligibility with qualified advisers before launch; no legal approval is implied.
@@ -44,7 +44,7 @@ Existing adapters do not prove that Klasha, Platnova or Flutterwave supports eve
 2. Complete Bybit retirement inventory and remove runtime/visible integration safely without releasing holds.
 3. Review provider capability matrix and select custody/signing architecture before financial implementation.
 4. Reproduce the reference homepage and verify responsive navigation; audit each selectable template and baked-in brand artwork separately. Keep tenant branding dynamic; do not globally replace legitimate configured vendor names or historical records.
-5. Implement held Buy/Sell source and durable accounting tests; request separate authorization for staging/deployment/live trades.
+5. Implement held Buy/Sell source and durable accounting tests; verify the replacement architecture and request separate authorization for deployment/live trades. Bybit staging is cancelled, not a prerequisite.
 
 ## Reference intake completed
 
