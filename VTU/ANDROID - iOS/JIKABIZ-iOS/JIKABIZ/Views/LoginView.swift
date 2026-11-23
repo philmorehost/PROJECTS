@@ -127,7 +127,11 @@ struct LoginView: View {
 
     func finishLogin(_ response: LoginResponse) {
         if response.status == "success", let data = response.data {
-            AppNetworkService.shared.apiKey = data.api_key
+            guard let session = data.app_token, !session.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                errorMessage = "App session was not issued. Please sign in again or update the server."
+                return
+            }
+            AppNetworkService.shared.apiKey = session
             AppNetworkService.shared.pinSet = data.security_pin_set ?? false
             AppNetworkService.shared.pinRequired = data.pin_required ?? false
             UserDefaults.standard.set(data.username, forKey: "saved_username")
@@ -149,7 +153,7 @@ struct LoginResponse: Codable {
 
 struct UserData: Codable {
     let username: String
-    let api_key: String
+    let app_token: String?
     // Optional so an older API build that does not send these still decodes.
     let security_pin_set: Bool?
     let pin_required: Bool?

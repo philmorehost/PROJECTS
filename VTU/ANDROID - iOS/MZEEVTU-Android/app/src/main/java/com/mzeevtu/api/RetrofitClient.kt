@@ -21,6 +21,9 @@ object TransactionPin {
 }
 
 object RetrofitClient {
+    @Volatile private var sessionContext: android.content.Context? = null
+    fun install(context: android.content.Context) { sessionContext = context.applicationContext }
+
 
     @Volatile private var retrofit: Retrofit? = null
 
@@ -55,6 +58,11 @@ object RetrofitClient {
                 var builder = original.newBuilder()
                     .addHeader("X-App-Source", Constants.APP_SOURCE_HEADER)
                     .addHeader("Accept", "application/json")
+
+                // Resolve the current secure session for EVERY call (login/logout can rotate it).
+                val token = sessionContext?.let { com.mzeevtu.util.PreferenceManager(it).getApiKey() }
+                val publicAuth = original.url.encodedPath.substringAfterLast('/') in setOf("login.php", "login-otp.php", "register.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php")
+                if (!publicAuth && !token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
 
                 val pin = TransactionPin.current
                 val body = original.body

@@ -21,8 +21,8 @@ class ServicesRepository(private val context: Context) {
                     @Suppress("UNCHECKED_CAST")
                     val data = body["data"] as? Map<String, Any> ?: emptyMap()
                     // Refresh balance in prefs
-                    val bal = (data["balance"] as? String)?.toDoubleOrNull() ?: 0.0
-                    prefs.saveDouble(com.jikabiz.app.util.Constants.KEY_BALANCE, bal)
+                    val bal = data["balance"]?.toString()?.toDoubleOrNull()
+                    if (bal != null) prefs.saveDouble(com.jikabiz.app.util.Constants.KEY_BALANCE, bal)
                     ApiResult.Success(data)
                 } else {
                     ApiResult.Error(body["message"] as? String ?: "Failed")
@@ -38,8 +38,9 @@ class ServicesRepository(private val context: Context) {
             val response = api.getTransactions(mapOf("api_key" to apiKey, "limit" to limit, "offset" to offset))
             if (response.isSuccessful) {
                 val body = response.body() ?: return ApiResult.Error("Empty response")
+                if (body["status"] != "success") return ApiResult.Error(body["message"] as? String ?: body["desc"] as? String ?: "Unable to load history")
                 @Suppress("UNCHECKED_CAST")
-                val data = body["data"] as? List<*> ?: emptyList<Any>()
+                val data = body["data"] as? List<*> ?: return ApiResult.Error("Invalid history response")
                 ApiResult.Success(data)
             } else ApiResult.Error("Server error: ${response.code()}")
         } catch (e: Exception) {

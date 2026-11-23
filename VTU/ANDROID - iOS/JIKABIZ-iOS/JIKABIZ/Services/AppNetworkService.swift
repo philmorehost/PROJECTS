@@ -29,7 +29,7 @@ class AppNetworkService {
         get {
             UserDefaults.standard.removeObject(forKey: "user_api_key")
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: "platform.app-session", kSecAttrAccount as String: "bearer",
+                kSecAttrService as String: "platform.app-session.v2", kSecAttrAccount as String: "bearer",
                 kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
             var result: CFTypeRef?
             guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
@@ -39,7 +39,7 @@ class AppNetworkService {
         set {
             UserDefaults.standard.removeObject(forKey: "user_api_key")
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: "platform.app-session", kSecAttrAccount as String: "bearer"]
+                kSecAttrService as String: "platform.app-session.v2", kSecAttrAccount as String: "bearer"]
             SecItemDelete(query as CFDictionary)
             if let token = newValue, let data = token.data(using: .utf8) {
                 var item = query
@@ -65,6 +65,11 @@ class AppNetworkService {
         set { UserDefaults.standard.set(newValue, forKey: "pin_required") }
     }
 
+    private func isPublicAuth(_ endpoint: String) -> Bool {
+        let name = endpoint.components(separatedBy: "/").last ?? endpoint
+        return ["login.php", "login-otp.php", "register.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php"].contains(name)
+    }
+
     func request<T: Decodable>(_ endpoint: String, params: [String: Any], completion: @escaping (Result<T, Error>) -> Void) {
         guard let url = URL(string: baseURL + "web/api/" + endpoint) else {
             completion(.failure(NSError(domain: "Invalid URL", code: 0, userInfo: nil)))
@@ -75,8 +80,10 @@ class AppNetworkService {
         request.httpMethod = "POST"
 
         var finalParams = params
-        if let apiKey = self.apiKey {
-            finalParams["api_key"] = apiKey
+        if !isPublicAuth(endpoint), let apiKey = self.apiKey {
+            finalParams.removeValue(forKey: "api_key")
+            finalParams["app_token"] = apiKey
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
         var components = URLComponents()
@@ -178,8 +185,10 @@ class AppNetworkService {
         request.httpMethod = "POST"
 
         var finalParams = params
-        if let apiKey = self.apiKey {
-            finalParams["api_key"] = apiKey
+        if !isPublicAuth(endpoint), let apiKey = self.apiKey {
+            finalParams.removeValue(forKey: "api_key")
+            finalParams["app_token"] = apiKey
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
         var components = URLComponents()
