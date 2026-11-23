@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-security-2');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-update-dispatch-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -1904,6 +1904,20 @@ mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_app_update_sett
     PRIMARY KEY (id),
     UNIQUE KEY uniq_vendor (vendor_id)
 )");
+
+
+// Durable app-update send claims: a version is never automatically retried after uncertainty.
+mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_app_update_dispatches (
+    event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    vendor_id INT UNSIGNED NOT NULL,
+    version_code INT UNSIGNED NOT NULL,
+    payload_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    state VARCHAR(20) NOT NULL,
+    provider_receipt_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_key), UNIQUE KEY uniq_vendor_release (vendor_id,version_code)
+) ENGINE=InnoDB");
 
 // Cleanup Archaic Tables
 mysqli_query($connection_server, "DROP TABLE IF EXISTS `sas_virtualcard_holders` ");

@@ -4,6 +4,7 @@ on:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-update-*.php'
+      - 'VTU/**/func/bc-tables.php'
       - 'VTU/**/bc-admin/AppUpdateBroadcast.php'
       - 'VTU/**/web/api/app-update.php'
       - 'VTU/**/asset/bc-app-update-otp.js'
@@ -31,6 +32,7 @@ on:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-update-*.php'
+      - 'VTU/**/func/bc-tables.php'
       - 'VTU/**/bc-admin/AppUpdateBroadcast.php'
       - 'VTU/**/web/api/app-update.php'
       - 'VTU/**/asset/bc-app-update-otp.js'
@@ -74,6 +76,8 @@ jobs:
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e
+          exec > >(tee "$RUNNER_TEMP/remediation.log") 2>&1
+          trap 'echo "::error::Regression command failed: $BASH_COMMAND"' ERR
           php -n VTU/tests/remediation_pricing_catalog_test.php
           php -n VTU/tests/float_services_test.php
           php -n VTU/tests/receipt_utility_test.php
@@ -88,9 +92,10 @@ jobs:
           php -n VTU/tests/user_api_status_test.php
           php -n -r 'if (!function_exists("openssl_pkey_new")) { fwrite(STDERR, "OpenSSL required for credential tests\n"); exit(1); }'
           php -n VTU/tests/app_update_settings_test.php
+          php -n VTU/tests/app_update_dispatch_test.php
           node VTU/tests/harness/app-update-otp-ui-test.mjs
           for edition in SAAS NON-SAAS; do
-            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php bc-admin/AppUpdateBroadcast.php func/bc-app-update-validation.php func/bc-app-update-security.php web/api/app-update.php web/PasswordRecovery.php web/api/transactions.php func/bc-transaction-receipt.php; do
+            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php bc-admin/AppUpdateBroadcast.php func/bc-app-update-validation.php func/bc-app-update-security.php func/bc-app-update-dispatch.php func/bc-tables.php web/api/app-update.php web/PasswordRecovery.php web/api/transactions.php func/bc-transaction-receipt.php; do
               php -l "VTU/DGV7.0-$edition/$file"
             done
           done
@@ -98,6 +103,18 @@ jobs:
           php -l VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/CreateAPI.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php
+
+      - name: Surface regression failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          log=Path(os.environ['RUNNER_TEMP'])/'remediation.log'
+          if log.exists():
+              lines=[line for line in log.read_text(errors='replace').splitlines() if 'Fatal error' in line or 'Uncaught' in line or 'FAIL:' in line or 'AssertionError' in line]
+              for line in lines[:10]:
+                  print('::error::'+line.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
 
   api-status-mysql:
     runs-on: ubuntu-latest
@@ -128,3 +145,9 @@ jobs:
           BC_API_STATUS_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/user_api_status_mysql_test.php
+
+      - name: At-most-one release send attempt on two independent MySQL connections
+        env:
+          BC_APP_UPDATE_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/app_update_dispatch_mysql_test.php

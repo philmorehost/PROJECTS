@@ -228,3 +228,32 @@ Other remaining remediation work stays open, no deployment, crypto staging pause
 
 SAAS System Update remains platform-only; NON-SAAS Marketplace untouched; crypto
 staging paused. Remaining requests outside this scoped configuration repair stay open.
+
+
+## App-update duplicate-attempt protection continuation
+
+- Manual topic sends now require a durable InnoDB claim uniquely keyed by vendor
+  and Android version code BEFORE invoking the Firebase message-send transport.
+  Schema version bumped and an additive `sas_app_update_dispatches` table introduced.
+  No production migration has been executed by this agent.
+- Repeated/overlapping requests, changed URLs or changed Firebase projects cannot
+  reset the same version's claim. No delete/reset/reclaim/automatic retry path added.
+- Autocommit-off, active outer transactions, absent/non-InnoDB claim storage and
+  failed claim inserts block sends. OAuth may still run before the claim, but message
+  sending cannot run without it. The claim has no credentials or device tokens.
+- Accepted provider responses require the expected project/message name; only its
+  digest is retained. Provider failure/exception or failed finalization is unconfirmed
+  and cannot trigger a resend. A crashed request can remain `dispatching`; this is
+  intentionally treated as uncertain rather than stale/retryable.
+- The settings page shows the last 10 tenant-owned attempts and explanatory states.
+  Operators must inspect Firebase logs for uncertainty. Version-code increments are
+  for actual new releases, NOT an approved workaround to blindly repeat an unknown send.
+- This is **at-most-one local transport attempt**, not exactly-once device delivery.
+  Firebase/client duplicate delivery, project exclusivity outside this installation,
+  disaster restore/loss of claim records and actual live delivery are not proven.
+- Fixture tests plus disposable MySQL two-connection tests cover visibility of the
+  committed claim before sending, overlap, idempotency, lost responses, finalization
+  failure, unavailable schema and outer transactions. No live Firebase calls.
+
+Automatic scheduling/outbox/worker remains off and unfinished. No provider credentials,
+financial holds or crypto flags changed; no deployment or destructive live cleanup.

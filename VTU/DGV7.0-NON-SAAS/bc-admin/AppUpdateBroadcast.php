@@ -6,6 +6,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     header('Cache-Control: no-store, private');
     require_once __DIR__ . '/../func/bc-app-update-validation.php';
     require_once __DIR__ . '/../func/bc-app-update-security.php';
+    require_once __DIR__ . '/../func/bc-app-update-dispatch.php';
     if (($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
         bc_validate_csrf();
         if (isset($_POST['app_update_send_code'])) {
@@ -213,23 +214,21 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 // Tell the app which link the update comes from, so a Play-distributed build can open
                 // the store listing while a self-hosted build keeps using the local /apk directory.
                 $local_apk_dir_url = "https://" . $__update_host . "/apk/";
-                $result = sendFcmTopicMessage(
-                    $fcm_row["project_id"],
-                    $access_token,
-                    "app_updates",
-                    [
-                        "type"          => "app_update",
-                        "update_source" => $update_source,
-                        "store_url"     => ($update_source === "play" ? $play_store_url : $local_apk_dir_url),
-                        "version_code"  => (string) $update_version_code,
-                        "version_name"  => (string) $update_version_name,
-                    ]
-                );
-                if ($result["code"] === 200 && !empty($result['body']['name'])) {
-                    $_SESSION["product_purchase_response"] = "Firebase accepted the update notification. Delivery to every device is not guaranteed." . ($update_source === "play" ? " (source: Google Play Store)" : " (source: local host directory)");
-                } else {
-                    $_SESSION["product_purchase_response"] = "Firebase delivery was not confirmed. Check Firebase delivery logs before retrying to avoid duplicate notifications.";
-                }
+                $payload=[
+                    'type'=>'app_update','update_source'=>$update_source,
+                    'store_url'=>$update_source==='play'?$play_store_url:$local_apk_dir_url,
+                    'version_code'=>(string)$update_version_code,'version_name'=>(string)$update_version_name,
+                ];
+                $outcome=bc_app_update_dispatch($connection_server,$vendor_id,$update_version_code,$fcm_row['project_id'],$payload,function() use ($fcm_row,$access_token,$payload) {
+                    return sendFcmTopicMessage($fcm_row['project_id'],$access_token,'app_updates',$payload);
+                });
+                $messages=[
+                    'accepted'=>'Firebase accepted the update notification. Delivery to every device is not guaranteed.',
+                    'already_attempted'=>'This release already has a send attempt. It was not resent. Check the delivery state and Firebase logs; do not reuse its version code.',
+                    'unknown'=>'Delivery is unconfirmed. The attempt is locked against resend. Check Firebase logs before publishing another release.',
+                    'unavailable'=>'Broadcast was not started because a durable send claim could not be confirmed. Check database migration/transaction configuration before retrying.',
+                ];
+                $_SESSION['product_purchase_response']=$messages[$outcome]??$messages['unknown'];
             }
         }
         header("Location: " . $_SERVER["REQUEST_URI"]);
@@ -274,6 +273,19 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
     <section class="section">
       <div class="row">
 
+        <div class="col-12 mb-3"><div class="card p-3">
+          <h5>Recent release send attempts</h5>
+          <p>One local attempt per Android version. Accepted means Firebase accepted it, not that every device received it. Dispatching may mean the request ended unexpectedly; it is not automatically retried. Changing the URL or Firebase project does not reset an attempt. Automatic scheduling remains off.</p>
+          <?php
+          try {
+              $attempts=mysqli_query($connection_server,"SELECT version_code,state,created_at,updated_at FROM sas_app_update_dispatches WHERE vendor_id='$vendor_id' ORDER BY created_at DESC LIMIT 10");
+              if(!$attempts)throw new RuntimeException('history_unavailable');
+              echo '<ul>';
+              while($attempt=mysqli_fetch_assoc($attempts))echo '<li>Version '.(int)$attempt['version_code'].' — '.htmlspecialchars($attempt['state'],ENT_QUOTES,'UTF-8').' — '.htmlspecialchars($attempt['updated_at'],ENT_QUOTES,'UTF-8').'</li>';
+              echo '</ul>';
+          } catch(Throwable $e) { echo '<p role="status">Send history unavailable. Install the database migration before broadcasting; sending fails closed without durable claim storage.</p>'; }
+          ?>
+        </div></div>
         <!-- Broadcast card -->
         <div class="col-12 col-md-6">
           <div class="card info-card px-4 py-4">
