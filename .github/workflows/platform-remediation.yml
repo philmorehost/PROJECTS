@@ -76,6 +76,8 @@ jobs:
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e
+          exec > >(tee "$RUNNER_TEMP/remediation.log") 2>&1
+          trap 'echo "::error::Regression command failed: $BASH_COMMAND"' ERR
           php -n VTU/tests/remediation_pricing_catalog_test.php
           php -n VTU/tests/float_services_test.php
           php -n VTU/tests/receipt_utility_test.php
@@ -101,6 +103,18 @@ jobs:
           php -l VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/CreateAPI.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php
+
+      - name: Surface regression failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          log=Path(os.environ['RUNNER_TEMP'])/'remediation.log'
+          if log.exists():
+              lines=[line for line in log.read_text(errors='replace').splitlines() if 'Fatal error' in line or 'Uncaught' in line or 'FAIL:' in line or 'AssertionError' in line]
+              for line in lines[:10]:
+                  print('::error::'+line.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
 
   api-status-mysql:
     runs-on: ubuntu-latest
