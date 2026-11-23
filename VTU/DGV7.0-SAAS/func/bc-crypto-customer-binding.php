@@ -69,17 +69,17 @@ function bc_crypto_customer_binding_save($authority,$identity,$env,$custodyRevis
 
 function bc_crypto_binding_context_locked($c,$next,$actor,$identity,$env,$custodyRevision){
     $vendor=(int)$next['vendor_id'];$user=(int)$next['user_id'];$hash=$next['evidence_hash'];
-            if((int)$next['custody_revision']!==$custodyRevision)throw new RuntimeException('crypto_binding_context_changed');
-            $v=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? FOR UPDATE',[$vendor]);
-            $u=bc_q_row('SELECT id,status,is_blocked,force_password_change,kyc_status FROM sas_users WHERE vendor_id=? AND id=? FOR UPDATE',[$vendor,$user]);
-            if(!$v||(int)$v['status']!==1||!empty($v['is_blocked'])||!$u||(int)$u['status']!==1||!empty($u['is_blocked'])||!empty($u['force_password_change'])||(int)$u['kyc_status']!==2)throw new RuntimeException('crypto_binding_customer_restricted');
-            $doc=bc_crypto_gov_decode($c);if(($doc['model']??null)!=='dedicated_subaccount'||!bc_crypto_custody_eligible($doc,$vendor,time()))throw new RuntimeException('crypto_binding_custody_unapproved');
-            bc_crypto_custody_evidence_require($identity,$env,$hash,$actor,$custodyRevision,true);
-            $e=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evidence WHERE custody_account=? AND environment=? AND evidence_hash=?',[$identity,$env,$hash]);
-            $m=bc_crypto_binding_evidence_validate(json_decode(bc_crypto_custody_evidence_open($identity,$env,$hash,$e['sealed_document']),true),$identity,$env,$custodyRevision,time());
-            $parent=bc_q_row('SELECT environment,revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=? FOR UPDATE',[$m['reported_parent_account']]);
-            if(!$parent||$parent['environment']!==$env||(int)$parent['revision']!==$m['parent_registry_revision'])throw new RuntimeException('crypto_binding_context_changed');
-            foreach(['sub','master'] as $kind){$source=bc_q_row('SELECT status,is_blocked FROM sas_vendors WHERE id=? FOR UPDATE',[$m[$kind.'_source_vendor_id']]);if(!$source||(int)$source['status']!==1||!empty($source['is_blocked']))throw new RuntimeException('crypto_binding_customer_restricted');}
+    if((int)$next['custody_revision']!==$custodyRevision)throw new RuntimeException('crypto_binding_context_changed');
+    $v=bc_q_row('SELECT id,status,is_blocked FROM sas_vendors WHERE id=? FOR UPDATE',[$vendor]);
+    $u=bc_q_row('SELECT id,status,is_blocked,force_password_change,kyc_status FROM sas_users WHERE vendor_id=? AND id=? FOR UPDATE',[$vendor,$user]);
+    if(!$v||(int)$v['status']!==1||!empty($v['is_blocked'])||!$u||(int)$u['status']!==1||!empty($u['is_blocked'])||!empty($u['force_password_change'])||(int)$u['kyc_status']!==2)throw new RuntimeException('crypto_binding_customer_restricted');
+    $doc=bc_crypto_gov_decode($c);if(($doc['model']??null)!=='dedicated_subaccount'||!bc_crypto_custody_eligible($doc,$vendor,time()))throw new RuntimeException('crypto_binding_custody_unapproved');
+    bc_crypto_custody_evidence_require($identity,$env,$hash,$actor,$custodyRevision,true);
+    $e=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evidence WHERE custody_account=? AND environment=? AND evidence_hash=?',[$identity,$env,$hash]);
+    $m=bc_crypto_binding_evidence_validate(json_decode(bc_crypto_custody_evidence_open($identity,$env,$hash,$e['sealed_document']),true),$identity,$env,$custodyRevision,time());
+    $parent=bc_q_row('SELECT environment,revision FROM sas_crypto_v2_custody_accounts WHERE custody_account=? FOR UPDATE',[$m['reported_parent_account']]);
+    if(!$parent||$parent['environment']!==$env||(int)$parent['revision']!==$m['parent_registry_revision'])throw new RuntimeException('crypto_binding_context_changed');
+    foreach(['sub','master'] as $kind){$source=bc_q_row('SELECT status,is_blocked FROM sas_vendors WHERE id=? FOR UPDATE',[$m[$kind.'_source_vendor_id']]);if(!$source||(int)$source['status']!==1||!empty($source['is_blocked']))throw new RuntimeException('crypto_binding_customer_restricted');}
     return ['relationship'=>$m,'custody'=>$doc];
 }
 /** Short transaction before/after network, never keep DB locks across provider reads. */

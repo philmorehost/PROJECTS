@@ -34,9 +34,10 @@ The last six contract characters are not token-contract verification.
 
 ## Still blocked / not implemented here
 
-No network transport for this sub-address endpoint, subaccount creation, customer
-binding approval, provider write-key expansion, active route publication, address
-presentation, risk clearance, financial posting or receipt of settled funds.
+Subaccount creation, provider write-key expansion, active route publication,
+customer funding-address presentation, risk clearance, financial posting and
+receipt of settled funds remain blocked. Protected read-only transport and local
+customer-binding review/renewal are implemented as described below.
 No claim of live Bybit eligibility or testing. Customer service gate and existing
 session/enrollment controls continue to apply. No automatic migration or deploy.
 

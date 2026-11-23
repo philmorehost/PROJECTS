@@ -33,6 +33,11 @@ $row=bc_q_row('SELECT * FROM sas_crypto_v2_customer_bindings WHERE custody_accou
 reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'1']),'crypto_binding_edit_conflict');
 $checkpoint=bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2);
 $fakeSnapshot=['provider'=>'bybit','evidence_kind'=>'bound_sub_address_inventory_v1','address'=>'SyntheticEncryptedAddressOnly','expires_at'=>time()+900,'live_enabled'=>false];
+$evidenceCount=scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_custody_evidence');
+$connection_server->query("CREATE TRIGGER fail_bound_address_event BEFORE INSERT ON sas_crypto_v2_custody_evidence_events FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected address evidence audit failure'");
+try{bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2,$checkpoint,$fakeSnapshot);throw new RuntimeException('Expected address event failure');}catch(mysqli_sql_exception $e){}
+check_db(scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_custody_evidence')===$evidenceCount,'address event failure rolls back encrypted evidence storage');
+$connection_server->query('DROP TRIGGER fail_bound_address_event');
 $addressHash=bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2,$checkpoint,$fakeSnapshot);
 $addressEvidence=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evidence WHERE custody_account=? AND evidence_hash=?',[$bi,$addressHash]);
 check_db(strpos($addressEvidence['sealed_document'],'SyntheticEncryptedAddressOnly')===false,'address evidence stored encrypted only');
