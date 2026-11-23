@@ -47,5 +47,16 @@ function bc_crypto_dashboard_load($identity,$env) {
     $out['operations']=bc_crypto_dashboard_rows('SELECT id,asset_network,reference,kind,units,created_at FROM sas_crypto_v2_operations WHERE '.$personal.' ORDER BY id DESC LIMIT 51',$personalParams,50);
     if($role==='user')$out['balances']=bc_crypto_dashboard_rows('SELECT asset_network,scale,bucket,units FROM sas_crypto_v2_accounts WHERE '.$personal.' ORDER BY asset_network,bucket LIMIT 101',$personalParams,100);
     else $out['streams']=bc_crypto_dashboard_rows('SELECT stream_id,vendor_id,state,page_count,revision,valid_until_epoch FROM sas_crypto_v2_poll_streams WHERE '.$where.' ORDER BY created_at DESC,stream_id LIMIT 21',$params,20);
+    if($role!=='user')$out['candidates']=bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,asset_network,scale,state,revision,valid_until_epoch FROM sas_crypto_v2_route_candidates WHERE '.$where.' ORDER BY id DESC LIMIT 51',$params,50);
     return $out;
+}
+
+/** A local observation receipt, never a settlement receipt. Scope is bound before lookup. */
+function bc_crypto_dashboard_receipt($identity,$env,$depositId) {
+    if(!in_array($env,['testnet','mainnet'],true))throw new RuntimeException('crypto_dashboard_environment_invalid');
+    if(!is_string($depositId)||!preg_match('/^[1-9][0-9]{0,19}$/D',$depositId))throw new RuntimeException('crypto_dashboard_receipt_invalid');
+    $where='environment=? AND id=?';$params=[$env,$depositId];
+    if($identity['role']!=='platform'){$where.=' AND vendor_id=?';$params[]=$identity['vendor_id'];}
+    if($identity['role']==='user'){$where.=' AND user_id=?';$params[]=$identity['id'];}
+    return bc_crypto_dashboard_rows('SELECT id,asset_network,scale,units,state,reason,confirmations,revision,created_at,updated_at FROM sas_crypto_v2_deposits WHERE '.$where.' LIMIT 1',$params,1);
 }

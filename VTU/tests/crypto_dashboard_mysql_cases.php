@@ -28,3 +28,17 @@ reject_db(fn()=>bc_crypto_dashboard_identity('user',['id'=>11,'vendor_id'=>8]),'
 for($i=0;$i<51;$i++)bc_q("INSERT INTO sas_crypto_v2_operations(vendor_id,user_id,environment,reference,asset_network,kind,units,payload_hash) VALUES(7,11,'mainnet',?,'DASH:TRX','reserve',1,?)",['dash-limit-'.$i,str_repeat('b',64)]);
 $m=bc_crypto_dashboard_load($u,'mainnet');check_db(count($m['operations']['rows'])===50&&$m['operations']['truncated'],'bounded user history advertises omitted rows');
 check_db(bc_q_row('SELECT COUNT(*) AS n,SUM(units) AS total FROM sas_crypto_v2_accounts')===$before&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_operations')===$ops+55&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposits')===$dep&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_poll_streams')===$streams,'only explicit fixture writes, dashboard reads leave balances/holds/deposits/streams/journal unchanged');
+// Observation receipts bind the same tenant/customer/environment before fetching an ID.
+$receiptIds=[];
+foreach([[7,11,'mainnet'],[7,902,'mainnet'],[8,901,'mainnet'],[7,11,'testnet']] as $i=>$scope){
+    bc_q("INSERT INTO sas_crypto_v2_deposits(vendor_id,user_id,environment,custody_account,provider_record_id,asset_network,scale,units,identity_hash,last_observation_hash,state,reason) VALUES(?,?,?, ?,?,'DASH:TRX',6,1234567,?,?,'quarantined','attribution_unapproved')",array_merge($scope,[str_repeat('c',64),'receipt-fixture-'.$i,str_repeat('d',64),str_repeat('e',64)]));
+    $receiptIds[]=(string)$connection_server->insert_id;
+}
+$r=bc_crypto_dashboard_receipt($u,'mainnet',$receiptIds[0]);check_db($r['available']&&count($r['rows'])===1&&$r['rows'][0]['state']==='quarantined','receipt shows real review status, not settlement');
+foreach(array_slice($receiptIds,1) as $rid)check_db(bc_crypto_dashboard_receipt($u,'mainnet',$rid)['rows']===[],'receipt hides other customer/tenant/environment');
+check_db(count(bc_crypto_dashboard_receipt($v,'mainnet',$receiptIds[1])['rows'])===1,'vendor can inspect own customer observation');
+check_db(bc_crypto_dashboard_receipt($v,'mainnet',$receiptIds[2])['rows']===[],'vendor cannot inspect foreign tenant observation');
+check_db(count(bc_crypto_dashboard_receipt($p,'mainnet',$receiptIds[2])['rows'])===1,'platform can inspect scoped environment observation');
+foreach(['0','01','-1','1 OR 1=1',[],1] as $rid)reject_db(fn()=>bc_crypto_dashboard_receipt($u,'mainnet',$rid),'crypto_dashboard_receipt_invalid');
+foreach(['user','vendor','platform'] as $role){$id=$role==='user'?$u:($role==='vendor'?$v:$p);$m=bc_crypto_dashboard_load($id,'testnet');if($role==='user')check_db(!isset($m['candidates']),'customer cannot enumerate attribution candidates');else{check_db($m['candidates']['available'],'route review queue uses actual schema');foreach($m['candidates']['rows'] as $c)if($role==='vendor')check_db((int)$c['vendor_id']===7,'candidate metadata tenant isolated');}}
+check_db(bc_q_row('SELECT COUNT(*) AS n,SUM(units) AS total FROM sas_crypto_v2_accounts')===$before,'receipt and candidate views preserve exact bucket units and holds');
