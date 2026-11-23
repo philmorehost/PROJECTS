@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/bc-action-channels.php';
 /**
  * DGV7 §29 — step-up authentication, TOTP, API-key lifecycle, force-password-change
  * and the security audit log.
@@ -332,7 +333,14 @@ if (!function_exists('bc_stepup_actor_second_factor')) {
         if ($actor_id <= 0 || ($table !== 'sas_super_admin' && $vendor_id <= 0)) return 'Step-up verification is unavailable.';
 
         $enrolled = (($actor_row['two_factor_type'] ?? 'none') === 'totp') && !empty($actor_row['totp_secret']);
-        if ($enrolled) {
+        try {
+            // Policy changes themselves always use an existing factor, even in PIN-only mode.
+            $p=($context==='action_channel_policy' || $context==='enrollment_policy')?['google'=>true,'email'=>true]:bc_action_channels($table,$actor_row);
+            $choice=bc_action_channel_choice($p,$enrolled,(string)($input['factor_method']??''));
+        }catch(Throwable $e){return 'Security policy is unavailable. No action was authorized.';}
+        if($choice==='invalid')return 'Choose an enabled verification method; enrol Google Authenticator if required.';
+        if($choice==='none')return ''; // PIN is verified by the caller before this function.
+        if ($choice==='google') {
             $secret = bc_stepup_open_secret((string)$actor_row['totp_secret']);
             // Either field may carry the code (some forms have a single code box).
             $code = (string)($input['totp_code'] ?? '');

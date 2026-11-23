@@ -6,6 +6,11 @@ on:
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
       - 'VTU/**/func/bc-paid-*.php'
+      - 'VTU/**/func/bc-action-*.php'
+      - 'VTU/**/func/bc-admin-wallet-adjustment.php'
+      - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/bc-admin/ShareFund.php'
+      - 'VTU/**/bc-spadmin/ShareFund.php'
       - 'VTU/**/func/bc-gateway-api-settings.php'
       - 'VTU/**/func/bc-fintech-api-access.php'
       - 'VTU/**/bc-admin/PaymentGateway.php'
@@ -41,6 +46,11 @@ on:
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
       - 'VTU/**/func/bc-paid-*.php'
+      - 'VTU/**/func/bc-action-*.php'
+      - 'VTU/**/func/bc-admin-wallet-adjustment.php'
+      - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/bc-admin/ShareFund.php'
+      - 'VTU/**/bc-spadmin/ShareFund.php'
       - 'VTU/**/func/bc-gateway-api-settings.php'
       - 'VTU/**/func/bc-fintech-api-access.php'
       - 'VTU/**/bc-admin/PaymentGateway.php'
@@ -109,6 +119,7 @@ jobs:
           php -n VTU/tests/app_update_dispatch_test.php
           php -n VTU/tests/app_update_worker_test.php
           php -n VTU/tests/paid_gateway_test.php
+          php -n VTU/tests/action_channels_test.php
           php VTU/DGV7.0-SAAS/cron/process_app_updates.php --help
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-NON-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
@@ -183,3 +194,9 @@ jobs:
           BC_PAID_GATEWAY_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/paid_gateway_mysql_test.php
+
+      - name: Administrative wallet credits debits refunds and tenant verification policies
+        env:
+          BC_ADMIN_WALLET_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/admin_wallet_mysql_test.php

@@ -3,60 +3,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
          
-    // §30: platform funding moves other people's money — it now takes CSRF +
-    // the super admin's Security PIN + authenticator/email code (step-up).
-    if(isset($_POST["send_stepup_code"])){
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-        $send_err = function_exists('bc_stepup_send_email_otp')
-            ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'share_fund', 'Platform Funding')
-            : 'Verification is unavailable.';
-        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
-        header("Location: ShareFund.php");
-        exit();
-    }
-
-    if(isset($_POST["share-fund"])){
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-        $sec30_err = function_exists('bc_stepup_spadmin_verify')
-            ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $_POST, 'share_fund')
-            : 'Verification is unavailable.';
-        if ($sec30_err !== '') {
-            $_SESSION["product_purchase_response"] = "Error: " . $sec30_err;
-            header("Location: ShareFund.php");
-            exit();
-        }
-        $target = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["target"] ?? "vendor")));
-        $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["type"]))));
-        $amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/","",trim(strip_tags($_POST["amount"]))));
-        $vid = isset($_POST["vid"]) ? (int)$_POST["vid"] : 0;
-        $identifier = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["identifier"]))));
-
-        $discounted_amount = $amount;
-        $reference = substr(str_shuffle("12345678901234567890"), 0, 15);
-        $description = ucwords("account ".$type."ed by super admin");
-        $transType = (in_array($type, array("debit"))) ? "debit" : "credit";
-        
-        $response = "failed";
-
-        if($target === "user" && $vid > 0){
-            // Super Admin Funding a Vendor's User
-            // We need to bypass resolveVendorID() check or set a global override
-            $GLOBALS['vendor_id'] = $vid;
-            $response = chargeOtherUser($identifier, $transType, $identifier, ucwords("wallet ".$type), $reference, "", $amount, $discounted_amount, $description, "WEB", $_SERVER["HTTP_HOST"], "1");
-        } else {
-            // Funding a Vendor
-            $response = chargeOtherVendor($identifier, $transType, $identifier, ucwords("wallet ".$type), $reference, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"], "1");
-        }
-
-        if($response === "success"){
-            if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'wallet_' . $transType, (string)$identifier, ucwords($type) . ' of N' . $amount . ' to ' . $target . ($target === "user" ? ' (vendor #' . $vid . ')' : '') . ' (ref ' . $reference . ')');
-            $_SESSION["product_purchase_response"] = ucwords($identifier." ".$type."ed with N".$amount." successfully");
-        } else {
-            $_SESSION["product_purchase_response"] = "Transaction Failed: Check balance or account status.";
-        }
-        header("Location: ".$_SERVER["REQUEST_URI"]);
-        exit();
-    }
+    require_once __DIR__.'/../func/bc-admin-wallet-adjustment.php';
+    bc_admin_wallet_handle('spadmin',$get_logged_spadmin_details);
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
@@ -88,8 +36,9 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
                     <p class="text-muted small">Inject or withdraw funds from any account across the platform</p>
                 </div>
                 <div class="card-body p-4 p-md-5 pt-0">
-                    <form method="post">
+                    <form method="post" data-admin-wallet>
                         <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                        <?php bc_admin_wallet_fields(); ?>
                         <div class="row g-3 mb-4 bg-light p-3 rounded-4 border">
                             <div class="col-md-12">
                                 <label class="form-label small fw-bold text-muted text-uppercase">Target Account Type</label>
@@ -153,7 +102,7 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
                                 <div class="input-group input-group-lg">
                                     <input name="otp_code" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6-digit code" class="form-control rounded-start-3 text-center fw-bold" />
                                     <input type="hidden" name="totp_code" value="" />
-                                    <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-outline-primary fw-bold">Email code</button>
+                                    <button type="button" data-security-send="send_stepup_code" class="btn btn-outline-primary fw-bold">Email code</button>
                                 </div>
                             </div>
                             <p class="small text-muted mb-0">Every execution needs your PIN plus an authenticator code (or an emailed code). Set both up in Account Settings.</p>
@@ -222,4 +171,5 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
     });
     </script>
 
+<script src="../asset/bc-admin-wallet.js"></script>
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
