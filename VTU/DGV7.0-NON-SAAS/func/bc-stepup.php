@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bc-action-channels.php';
+require_once __DIR__ . '/bc-action-settings-unlock.php';
 /**
  * DGV7 §29 — step-up authentication, TOTP, API-key lifecycle, force-password-change
  * and the security audit log.
@@ -792,9 +793,10 @@ if (!function_exists('bc_gauth_verify_unlock')) {
             if (function_exists('bc_log_security_event')) bc_log_security_event('GAUTH_SETTINGS_UNLOCK_FAILED', (string)$scope, (string)($actor_row['email'] ?? ''), 'Wrong authenticator code');
             return 'The authenticator code is incorrect or has already been used.';
         }
-        if ($connection_server instanceof mysqli) {
-            bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=?", array((int)$step, (int)$actor_row['id']));
-        }
+        if (!($connection_server instanceof mysqli) || !in_array($table,['sas_vendors','sas_super_admin'],true)) return 'Verification is unavailable.';
+        $claimed=null;
+        $saved=bc_q("UPDATE `$table` SET totp_last_step=? WHERE id=? AND (totp_last_step IS NULL OR totp_last_step < ?)",[(int)$step,(int)$actor_row['id'],(int)$step],$claimed);
+        if($saved!==true || $claimed!==1)return 'Authenticator code already used or could not be claimed. Wait for a fresh code.';
         $_SESSION['bc_gauth_unlock'][(string)$scope] = time() + 600;
         if (function_exists('bc_log_security_event')) bc_log_security_event('GAUTH_SETTINGS_UNLOCKED', (string)$scope, (string)($actor_row['email'] ?? ''), 'Settings unlocked for 10 minutes');
         return '';
@@ -811,6 +813,7 @@ if (!function_exists('bc_gauth_settings_gate')) {
      * POST-redirect-GET, so a blocked save never reaches a handler.
      */
     function bc_gauth_settings_gate($scope, $table, $actor_row, $exempt) {
+        if(bc_action_settings_gate($scope,$table,$actor_row,$exempt))return;
         $self = (string)($_SERVER['REQUEST_URI'] ?? '');
         if (isset($_POST['gauth-unlock'])) {
             if (function_exists('bc_validate_csrf')) bc_validate_csrf();
@@ -820,12 +823,14 @@ if (!function_exists('bc_gauth_settings_gate')) {
             exit();
         }
         if (isset($_POST['gauth-lock'])) {
+            bc_validate_csrf();
             unset($_SESSION['bc_gauth_unlock'][(string)$scope]);
             $_SESSION['product_purchase_response'] = 'Settings locked. Enter a Google Authenticator code to save changes again.';
             header('Location: ' . $self);
             exit();
         }
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') return;
+        bc_validate_csrf();
         foreach ((array)$exempt as $key) {
             if (isset($_POST[$key])) return;
         }
@@ -841,6 +846,7 @@ if (!function_exists('bc_gauth_settings_gate')) {
 if (!function_exists('bc_gauth_settings_banner')) {
     /** Lock-state banner + unlock form; echo above the settings forms. */
     function bc_gauth_settings_banner($scope, $actor_row) {
+        $alternative=bc_action_settings_banner($scope,$actor_row);if($alternative!==null)return $alternative;
         $csrf = function_exists('bc_csrf_field') ? bc_csrf_field() : '';
         if (!bc_gauth_enrolled($actor_row)) {
             return '<div class="alert alert-warning rounded-4 mb-4"><i class="bi bi-shield-lock-fill me-2"></i><strong>Settings are locked.</strong> '

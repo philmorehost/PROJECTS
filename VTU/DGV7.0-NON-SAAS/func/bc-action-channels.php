@@ -8,6 +8,7 @@ function bc_action_channel_decode($raw) {
 }
 function bc_action_channels($table,$actor) {
     global $connection_server;
+    if(!in_array($table,['sas_super_admin','sas_vendors','sas_users'],true))throw new RuntimeException('Invalid security scope.');
     $default=['google'=>true,'email'=>true];
     if(!isset($connection_server) || !($connection_server instanceof mysqli))return $default;
     $q=mysqli_query($connection_server,"SELECT option_value FROM sas_super_admin_options WHERE option_name='action_security_channels' LIMIT 2");

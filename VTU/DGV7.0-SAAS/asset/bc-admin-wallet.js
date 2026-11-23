@@ -1,3 +1,5 @@
+(function(){
+if(window.bcAdminWalletLoaded)return;window.bcAdminWalletLoaded=true;
 /* Inline privileged actions: OTP requests carry only CSRF and purpose. */
 document.addEventListener('click', async function(event) {
  const button=event.target.closest('[data-security-send]');if(!button||button.disabled)return;
@@ -27,3 +29,5 @@ document.addEventListener('submit',async function(event){
  }catch(error){status.textContent='Result uncertain. Check transaction history before retrying; do not start a new request blindly.';}
  finally{form.dataset.busy='0';button.disabled=button.dataset.complete==='1';}
 });
+
+})();

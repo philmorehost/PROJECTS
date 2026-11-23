@@ -4,6 +4,8 @@ set_exception_handler(function($e){echo '::error::'.str_replace(["\n","\r"],' ',
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-admin-wallet-adjustment.php';
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-stepup.php';
+function verifyUserPIN($pin,$actor){return password_verify($pin,$actor['security_pin']);}
+function bc_verify_otp($purpose,$identity,$vid,$code){return $purpose==='stepup_wallet_probe' && $identity==='vendor@example.test' && $vid===7 && $code==='654321';}
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
 $db=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);$connection_server=$db;$name='bc_admin_wallet_ci_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);
 $n=0;function wallet_check($v,$m){global $n;if(!$v)throw new RuntimeException($m);$n++;}
@@ -41,5 +43,18 @@ try{
  $db->query("INSERT INTO sas_settings VALUES (7,'action_security_channels','{\"google\":true,\"email\":false}')");
  wallet_check(bc_action_channels('sas_vendors',['id'=>7])===['google'=>true,'email'=>false] && bc_action_channels('sas_vendors',['id'=>8])===['google'=>false,'email'=>true],'tenant policy independent');
  wallet_check(bc_action_channels('sas_super_admin',['id'=>1])===['google'=>false,'email'=>true],'platform admin own channel scope');
+ $db->query('ALTER TABLE sas_vendors ADD security_pin VARCHAR(255),ADD two_factor_type VARCHAR(20),ADD totp_secret VARCHAR(255),ADD totp_last_step BIGINT DEFAULT 0');
+ $pin=$db->real_escape_string(password_hash('9362',PASSWORD_DEFAULT));
+ $db->query("UPDATE sas_vendors SET security_pin='$pin',two_factor_type='totp',totp_secret='JBSWY3DPEHPK3PXP' WHERE id=7");
+ $actor=$db->query('SELECT * FROM sas_vendors WHERE id=7')->fetch_assoc();
+ $code=bc_totp_code('JBSWY3DPEHPK3PXP',time());
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362','totp_code'=>$code,'factor_method'=>'google'],'wallet_probe')==='','Google code verifies and is claimed');
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362','totp_code'=>$code,'factor_method'=>'google'],'wallet_probe')!=='','Google replay rejected');
+ $db->query("UPDATE sas_settings SET setting_value='{\"google\":true,\"email\":true}' WHERE vendor_id=7 AND setting_name='action_security_channels'");
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362','otp_code'=>'654321','factor_method'=>'email'],'wallet_probe')==='','explicit email works even when Google enrolled');
+ $db->query("UPDATE sas_settings SET setting_value='{\"google\":false,\"email\":false}' WHERE vendor_id=7 AND setting_name='action_security_channels'");
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362'],'wallet_probe')==='','explicit PIN-only policy works');
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'bad'],'wallet_probe')!=='','PIN-only never bypasses PIN');
+ wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362'],'action_channel_policy')!=='','policy change still requires existing factor in PIN-only mode');
  echo "$n $edition admin wallet and channel policy MySQL checks passed\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}
