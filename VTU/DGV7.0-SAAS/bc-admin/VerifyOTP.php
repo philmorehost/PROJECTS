@@ -12,6 +12,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $vendor_id = resolveVendorID();
     $admin_detail = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND email='$email' LIMIT 1"));
 
+    // Retired pending states without an authentication-time binding cannot create sessions.
+    if(!is_string($_SESSION['temp_auth_credential_binding']['vendor']??null)||!hash_equals($_SESSION['temp_auth_credential_binding']['vendor'],bc_browser_binding_fingerprint('vendor',$admin_detail)??'')){header('Location: Login.php');exit;}
+
     if(isset($_POST["verify-otp"])){
         $otp = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["otp"])));
 
@@ -20,6 +23,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $error = "Verification code has expired. Please request a new one.";
             } elseif($otp === $_SESSION["auth_otp"]){
                 $_SESSION["admin_session"] = $email;
+                session_regenerate_id(true);bc_browser_binding_stamp('vendor',$admin_detail);bc_auth_epoch_stamp();
                 unset($_SESSION["temp_admin_session"]);
                 unset($_SESSION["auth_otp"]);
                 unset($_SESSION["auth_otp_time"]);

@@ -49,9 +49,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 } else {
                     if (empty($bc_g_admin['google_id'])) {
                         mysqli_query($connection_server, "UPDATE sas_vendors SET google_id='$bc_g_sub' WHERE id='".(int)$bc_g_admin["id"]."'");
+                        $bc_g_admin = mysqli_fetch_assoc(mysqli_query($connection_server,"SELECT * FROM sas_vendors WHERE id='".(int)$bc_g_admin["id"]."' LIMIT 1"));
                     }
                     recordLoginAttempt($bc_g_admin["email"], $bc_g_ip, 1, $bc_g_vendor_id);
                     $_SESSION["admin_session"] = strtolower($bc_g_admin["email"]);
+            bc_browser_binding_stamp('vendor',$bc_g_admin);
                     if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // session epoch
                     $_SESSION["product_purchase_response"] = "Welcome Back, ".ucwords($bc_g_admin["firstname"]);
                     header("Location: ".$_SERVER["REQUEST_URI"]);
@@ -102,6 +104,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
 
 							$_SESSION["admin_session"] = strtolower($admin_detail["email"]);
+            bc_browser_binding_stamp('vendor',$admin_detail);
 							if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
 							// Email Beginning
 							$log_template_encoded_text_array = array("{firstname}" => $admin_detail["firstname"], "{lastname}" => $admin_detail["lastname"], "{email}" => $admin_detail["email"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);

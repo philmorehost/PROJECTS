@@ -74,6 +74,7 @@ unset($_SESSION['reg_pending'], $_SESSION['reg_otp'], $_SESSION['reg_otp_expires
 
 // Log the new user in
 $_SESSION["user_session"] = $user;
+        bc_browser_binding_new_user($vendor_id,stripslashes($user));
 
 echo json_encode(["status" => "success", "message" => "Account created successfully!", "redirect" => "SecurityPIN.php"]);
 exit;

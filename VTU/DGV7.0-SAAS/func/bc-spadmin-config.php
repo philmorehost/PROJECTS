@@ -326,6 +326,7 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 			$get_logged_spadmin_query = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$email'");
 			if(mysqli_num_rows($get_logged_spadmin_query) == 1){
 				$get_logged_spadmin_details = mysqli_fetch_array($get_logged_spadmin_query);
+                bc_browser_binding_enforce('spadmin',$get_logged_spadmin_details);
 				// §33: platform "logout all sessions" epoch check.
 				if (function_exists('bc_auth_epoch_session_ok') && !bc_auth_epoch_session_ok()) {
 					session_destroy();

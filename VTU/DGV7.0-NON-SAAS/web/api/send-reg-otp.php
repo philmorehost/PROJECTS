@@ -127,6 +127,7 @@ if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 0) {
         // Log user in
         session_regenerate_id(true);
         $_SESSION["user_session"] = $user;
+        bc_browser_binding_new_user($vendor_id,stripslashes($user));
 
         echo json_encode(["status" => "immediate", "message" => "Account created successfully!", "redirect" => "SecurityPIN.php"]);
         exit;

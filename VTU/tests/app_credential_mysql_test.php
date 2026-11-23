@@ -3,6 +3,7 @@ if(getenv('BC_APP_CREDENTIAL_CI')!=='1')throw new RuntimeException('Disposable C
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-fintech-policy.php';
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-app-token.php';
+require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-browser-binding.php';
 function bc_fintech_schema_ready(){return true;} // Fixture creates only required tables; no installation migrations.
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
 $db=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);$connection_server=$db;$name='bc_app_credential_ci_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);
@@ -13,6 +14,11 @@ try{
  $db->query('ALTER TABLE sas_users ADD is_blocked INT DEFAULT 0');
  $db->query('CREATE TABLE sas_app_tokens(id INT AUTO_INCREMENT PRIMARY KEY,vendor_id INT,user_id INT,username VARCHAR(225),token_hash CHAR(64) UNIQUE,platform VARCHAR(20),device_label VARCHAR(120),issued_at DATETIME,expires_at DATETIME,last_used_at DATETIME NULL,revoked_at DATETIME NULL,revoke_reason VARCHAR(80) NULL) ENGINE=InnoDB');
  $row=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();$other=$db->query('SELECT * FROM sas_users WHERE id=12')->fetch_assoc();
+ $_SESSION=[];
+ foreach(['user','vendor','spadmin'] as $role){
+  cb_mysql(!bc_browser_binding_valid($role,$row),'legacy browser session refused');
+  cb_mysql(bc_browser_binding_stamp($role,$row),'fresh browser authentication');
+ }
  $a=bc_app_token_issue($row,7);$b=bc_app_token_issue($row,7);$o=bc_app_token_issue($other,8);
  cb_mysql($a&&$b&&$o,'issue isolated device sessions');
  cb_mysql(bc_app_session_user($a['token'],7)!==null,'live persisted token resolves');
@@ -21,6 +27,11 @@ try{
  cb_mysql(bc_app_session_user($a['token'],7)===null && bc_app_session_user($b['token'],7)===null,'password reset invalidates all old device tokens');
  cb_mysql(bc_app_token_exchange($a['token'],7)===null,'stale token cannot refresh');
  cb_mysql(bc_app_session_user($o['token'],8)!==null,'other tenant remains signed in');
+ $changed=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();
+ foreach(['user','vendor','spadmin'] as $role){
+  cb_mysql(!bc_browser_binding_valid($role,$changed),'persisted reset revokes browser binding');
+  cb_mysql(bc_browser_binding_stamp($role,$changed)&&bc_browser_binding_valid($role,$changed),'fresh browser login after reset');
+ }
  $fresh=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();$new=bc_app_token_issue($fresh,7);
  cb_mysql($new&&bc_app_session_user($new['token'],7)!==null,'fresh authenticated issuance works after change');
  $db->query("UPDATE sas_users SET security_pin='new-pin' WHERE id=11");

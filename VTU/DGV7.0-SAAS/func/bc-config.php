@@ -456,6 +456,7 @@ if ($connection_server) {
                 if (!empty($bc_fresh_actor['is_blocked']) || ($bc_fresh_actor && (string)$bc_fresh_actor['username'] !== (string)$_SESSION['user_session'])) $bc_fresh_actor = null;
                 $get_logged_user_details = $bc_fresh_actor ?: bc_q_row("SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' LIMIT 1");
                 if ($get_logged_user_details) {
+                    bc_browser_binding_enforce('user',$get_logged_user_details);
 
         // §29: a forced password change confines the web session to Account
         // Settings until a new password is set.

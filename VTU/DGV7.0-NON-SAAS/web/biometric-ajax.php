@@ -126,6 +126,8 @@ if ($action === 'get_authentication_options') {
 }
 
 if ($action === 'verify_authentication') {
+    http_response_code(503);header('Cache-Control: no-store');
+    echo json_encode(['status'=>'error','code'=>'WEBAUTHN_VERIFICATION_REQUIRED','message'=>'Biometric sign-in is unavailable until server-side signature verification is implemented. Use password sign-in.']);exit;
     $data = json_decode(file_get_contents('php://input'), true);
     $credential_id = isset($data['id']) ? $data['id'] : '';
 

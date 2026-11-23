@@ -20,6 +20,7 @@ if(!$destination) { http_response_code(403); exit('This service is unavailable.'
 $_SESSION=array();
 session_regenerate_id(true);
 $_SESSION['user_session']=strtolower($user['username']);
+bc_browser_binding_stamp('user',$user);
 $_SESSION['bc_mobile_portal']=array('vendor_id'=>$vid,'user_id'=>(int)$user['id'],'expires'=>time()+1800);
 bc_auth_epoch_stamp();
 header('Location: '.$destination,true,303); exit;

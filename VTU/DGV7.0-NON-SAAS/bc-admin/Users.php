@@ -521,6 +521,7 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
                 if(mysqli_num_rows($get_logged_user_query) == 1){
                     $get_user_info = mysqli_fetch_array($get_logged_user_query);
                     $_SESSION["user_session"] = $get_user_info["username"];
+                    session_regenerate_id(true);bc_browser_binding_stamp('user',$get_user_info);bc_auth_epoch_stamp();
                     $_SESSION["admin_to_user_redirect"] = true;
                 }else{
                     if(mysqli_num_rows($get_logged_user_query) < 1){
