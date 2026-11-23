@@ -313,3 +313,9 @@ jobs:
           BC_COMPLIANCE_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/compliance_mysql_test.php
+
+      - name: Business KYB evidence and KYC approval gates on disposable MySQL
+        env:
+          BC_KYB_REVIEW_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/kyb_review_mysql_test.php

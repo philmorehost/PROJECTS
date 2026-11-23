@@ -39,6 +39,8 @@ $bc_message_type = 'info';
 $bc_old = ['business_name' => '', 'registration_no' => '', 'category' => ''];
 
 if (isset($_POST['submit_business_kyb'])) {
+    bc_validate_csrf();
+    if(bc_is_rate_limited('kyb_submit',(int)$bc_upgrade_vendor.':'.(int)$bc_upgrade_uid,5,300)){http_response_code(429);exit('Too many submission attempts. Please wait.');}
     if ($bc_current_type === 'business') {
         $bc_message = 'This account is not eligible for a business upgrade.';
         $bc_message_type = 'danger';
@@ -231,7 +233,7 @@ bc_app_head("Business Upgrade | " . ($get_all_site_details["site_title"] ?? 'Acc
         <?php endif; ?>
 
         <?php if ($bc_show_form): ?>
-          <form method="post" action="" enctype="multipart/form-data" class="mt-2">
+          <form method="post" action="" enctype="multipart/form-data" class="mt-2"><?php echo bc_csrf_field(); ?>
             <div class="row g-3">
               <div class="col-md-7">
                 <label class="form-label" for="business_name">REGISTERED BUSINESS NAME</label>
