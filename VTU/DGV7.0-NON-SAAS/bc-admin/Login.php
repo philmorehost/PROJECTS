@@ -25,9 +25,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $bc_g_client_id = trim((string)($bc_g_vendor["google_client_id"] ?? ""));
         $bc_g_payload = ($bc_g_client_id !== "" && function_exists('verifyGoogleToken')) ? verifyGoogleToken(trim((string)$_POST["google_token"])) : null;
         $bc_g_fail = "";
+        $bc_g_nonce_ok=bc_google_signin_consume('vendor:'.(int)resolveVendorID(),$bc_g_payload);
         if ($bc_g_client_id === "") {
             $bc_g_fail = "Google sign-in is not configured for this admin account.";
-        } elseif (!bc_google_payload_valid($bc_g_payload, $bc_g_client_id)) {
+        } elseif (!$bc_g_nonce_ok || !bc_google_payload_valid($bc_g_payload, $bc_g_client_id)) {
             $bc_g_fail = "Google Authentication Failed.";
         } else {
             $bc_g_email = mysqli_real_escape_string($connection_server, strtolower($bc_g_payload['email']));
@@ -178,7 +179,7 @@ bc_plate_auth_top(array(
 ?>
                     <?php if (!empty($select_vendor_table['google_client_id'])): ?>
                     <script src="https://accounts.google.com/gsi/client" async defer></script>
-                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)$select_vendor_table['google_client_id'], ENT_QUOTES, 'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
+                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)$select_vendor_table['google_client_id'], ENT_QUOTES, 'UTF-8'); ?>" data-nonce="<?php echo htmlspecialchars(bc_google_signin_nonce('vendor:'.(int)resolveVendorID()),ENT_QUOTES,'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
                     <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" style="margin-bottom:14px;"></div>
                     <form id="google-login-form" method="post" action="" style="display:none;"><input type="hidden" name="google_token" id="google_token"></form>
                     <script>function bcGoogleLogin(r){document.getElementById('google_token').value=r.credential;document.getElementById('google-login-form').submit();}</script>

@@ -138,7 +138,12 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
         $id_token = $_POST['google_token'];
         $payload = verifyGoogleToken($id_token);
 
-        if ($payload && isset($payload['email'])) {
+        $google_vid=(int)resolveVendorID();
+        $google_vq=mysqli_query($connection_server,"SELECT google_client_id FROM sas_vendors WHERE id='$google_vid' AND status=1 LIMIT 1");
+        $google_vendor=$google_vq?mysqli_fetch_assoc($google_vq):null;
+        $google_client=(string)($google_vendor['google_client_id']??'');
+        $google_nonce_ok=bc_google_signin_consume('user:'.(int)resolveVendorID(),$payload);
+        if (bc_google_payload_valid($payload,$google_client) && $google_nonce_ok) {
             $email = mysqli_real_escape_string($connection_server, strtolower($payload['email']));
             $google_id = mysqli_real_escape_string($connection_server, $payload['sub']);
 
@@ -379,8 +384,8 @@ bc_plate_auth_top(array(
 <?php if(!empty($select_vendor_table['google_client_id']) && empty($_SESSION['login_otp_pending'])): ?>
                     <script src="https://accounts.google.com/gsi/client" async defer></script>
                     <div id="g_id_onload"
-                        data-client_id="<?php echo $select_vendor_table['google_client_id']; ?>"
-                        data-callback="handleCredentialResponse"
+                        data-client_id="<?php echo htmlspecialchars((string)$select_vendor_table['google_client_id'],ENT_QUOTES,'UTF-8'); ?>"
+                        data-nonce="<?php echo htmlspecialchars(bc_google_signin_nonce('user:'.(int)resolveVendorID()),ENT_QUOTES,'UTF-8'); ?>" data-callback="handleCredentialResponse"
                         data-auto_prompt="false">
                     </div>
                     <div class="g_id_signin mb-4" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" data-width="100%"></div>

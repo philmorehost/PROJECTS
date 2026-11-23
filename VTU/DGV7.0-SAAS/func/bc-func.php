@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-google-signin.php';
 require_once __DIR__ . "/bc-incident-wallet.php";
 
 /**
@@ -6080,16 +6081,22 @@ function isIPWhitelisted($ip, $vendor_id) {
 }
 
 function verifyGoogleToken($id_token) {
-    $url = "https://oauth2.googleapis.com/tokeninfo?id_token=" . $id_token;
+    if(!is_string($id_token)||strlen($id_token)>16384||!preg_match('/\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/D',$id_token))return null;
+    $url = "https://oauth2.googleapis.com/tokeninfo?id_token=" . rawurlencode($id_token);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
     $response = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    return json_decode($response, true);
+    if($status!==200||!is_string($response))return null;
+    $payload=json_decode($response,true);
+    return is_array($payload)&&!isset($payload['error'])?$payload:null;
 }
 
 /**
@@ -6100,13 +6107,14 @@ function verifyGoogleToken($id_token) {
  */
 function bc_google_payload_valid($payload, $client_id) {
     if (!is_array($payload) || trim((string)$client_id) === '') return false;
-    if (empty($payload['sub']) || empty($payload['email'])) return false;
+    if (!is_string($payload['sub']??null) || $payload['sub']==='' || !is_string($payload['email']??null) || !filter_var($payload['email'],FILTER_VALIDATE_EMAIL)) return false;
     $iss = (string)($payload['iss'] ?? '');
     if ($iss !== 'accounts.google.com' && $iss !== 'https://accounts.google.com') return false;
-    if (!isset($payload['aud']) || !hash_equals(trim((string)$client_id), (string)$payload['aud'])) return false;
+    if (!is_string($payload['aud']??null) || !hash_equals(trim((string)$client_id), (string)$payload['aud'])) return false;
     $verified = $payload['email_verified'] ?? false;
     if ($verified !== true && $verified !== 'true' && $verified !== 1 && $verified !== '1') return false;
-    if (isset($payload['exp']) && (int)$payload['exp'] < time()) return false;
+    if ((!is_int($payload['exp']??null) && !(is_string($payload['exp']??null)&&preg_match('/\A[0-9]+\z/D',$payload['exp'])===1)) || (int)$payload['exp'] <= time()) return false;
+    if (isset($payload['azp']) && (!is_string($payload['azp']) || !hash_equals(trim((string)$client_id),$payload['azp']))) return false;
     return true;
 }
 
