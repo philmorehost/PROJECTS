@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-app-token.php'
+      - 'VTU/**/func/bc-app-credential-binding.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
       - 'VTU/**/func/bc-paid-*.php'
@@ -72,6 +74,8 @@ on:
   pull_request:
     paths:
       - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-app-token.php'
+      - 'VTU/**/func/bc-app-credential-binding.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
       - 'VTU/**/func/bc-paid-*.php'
@@ -162,6 +166,7 @@ jobs:
           php VTU/tests/login_resend_test.php
           php VTU/tests/recovery_inline_test.php
           php VTU/tests/google_recovery_test.php
+          php VTU/tests/app_credential_binding_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
@@ -279,3 +284,9 @@ jobs:
           BC_ADMIN_WALLET_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/admin_wallet_mysql_test.php
+
+      - name: Credential-bound first-party app sessions on disposable MySQL
+        env:
+          BC_APP_CREDENTIAL_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/app_credential_mysql_test.php
