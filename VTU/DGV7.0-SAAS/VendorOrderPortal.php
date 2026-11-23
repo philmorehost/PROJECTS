@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/func/bc-secure-session.php';
  bc_secure_session_start();
+header('Cache-Control: no-store, private');
+header('Referrer-Policy: no-referrer');
+header('X-Robots-Tag: noindex, nofollow');
 include("func/bc-connect.php");
 include_once("func/bc-tables.php");
 include_once("func/bc-func.php");
@@ -44,14 +47,21 @@ $platform_url = !empty($vendor['app_base_url']) ? $vendor['app_base_url'] : $ven
 $renewal_response = null;
 
 if (isset($_POST['tmp_login'])) {
+    if (!isset($_POST['domain_csrf'], $_SESSION['domain_csrf']) || !is_string($_POST['domain_csrf']) || !hash_equals($_SESSION['domain_csrf'], $_POST['domain_csrf'])) {
+        http_response_code(403); exit('Your form session expired. Reload the secure portal and try again.');
+    }
+    if ((int)($vendor['status'] ?? 0) !== 1 || !empty($vendor['is_blocked'])) {
+        http_response_code(403); exit('This vendor account is not permitted to start a session.');
+    }
     $expiry_days = max(1, min(30, (int)getSuperAdminOption('tmp_url_expiry_days', '3')));
     $reg_time = strtotime($vendor['reg_date']);
     $current_time = time();
-    if (($current_time - $reg_time) > ($expiry_days * 86400)) {
+    if ($reg_time === false || $reg_time > $current_time || $current_time >= $reg_time + ($expiry_days * 86400)) {
         $renewal_response = ['status' => 'error', 'message' => 'Temporary access has expired.'];
     } else {
         session_regenerate_id(true);
         $_SESSION['tmp_vendor_override'] = $vendor['id'];
+        $_SESSION['tmp_vendor_token_digest'] = hash('sha256', (string)$vendor['access_hash']);
         $_SESSION['tmp_vendor_host'] = bc_normalize_vendor_host($temporary_domain);
         $_SESSION['admin_session'] = $vendor['email'];
         header("Location: /bc-admin/Dashboard.php");
@@ -494,6 +504,9 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                     <div class="card-body p-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
                         <div>
                             <h4 class="fw-bold mb-1"><i class="bi bi-rocket-takeoff me-2"></i> Temporary Admin Access</h4>
+                            <label class="d-block mt-3">Your secure portal link (keep private)
+                                <input class="form-control" type="url" readonly value="<?php echo htmlspecialchars(bc_temporary_vendor_portal_url((string)$vendor['access_hash']), ENT_QUOTES, 'UTF-8'); ?>" onclick="this.select()">
+                            </label>
                             <p class="mb-0 opacity-75 small">This is a temporary website for <strong><?php echo htmlspecialchars($vendor['website_url'], ENT_QUOTES, 'UTF-8'); ?></strong>. Changes you save here are saved for your website and will appear as soon as your domain is accessible.</p>
                         </div>
                         <?php
@@ -504,6 +517,7 @@ $package_download_link = $has_package_dl ? getOrCreateDownloadToken($vendor['id'
                         ?>
                         <?php if($days_left > 0): ?>
                         <form method="post" class="m-0">
+                            <input type="hidden" name="domain_csrf" value="<?php echo htmlspecialchars($domain_csrf, ENT_QUOTES, 'UTF-8'); ?>">
                             <button name="tmp_login" type="submit" class="btn btn-light text-primary fw-bold px-4 py-2 rounded-pill shadow-sm">
                                 Open Dashboard <i class="bi bi-arrow-right-short ms-1"></i>
                             </button>

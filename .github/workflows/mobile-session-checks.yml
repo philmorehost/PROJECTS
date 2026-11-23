@@ -1,0 +1,55 @@
+name: Mobile sessions and inline user-action OTP
+on:
+  push:
+    paths:
+      - 'VTU/ANDROID - iOS/**'
+      - 'VTU/**/web/api/mobile-home.php'
+      - 'VTU/**/func/bc-user-action-confirm.php'
+      - 'VTU/**/asset/bc-user-action-otp.js'
+      - 'VTU/**/bc-admin/Users.php'
+      - 'VTU/**/bc-spadmin/Users.php'
+      - 'VTU/tests/harness/user-action-otp-ui-test.mjs'
+      - '.github/workflows/mobile-session-checks.yml'
+  pull_request:
+    paths:
+      - 'VTU/ANDROID - iOS/**'
+      - 'VTU/**/web/api/mobile-home.php'
+      - 'VTU/**/func/bc-user-action-confirm.php'
+      - 'VTU/**/asset/bc-user-action-otp.js'
+      - 'VTU/**/bc-admin/Users.php'
+      - 'VTU/**/bc-spadmin/Users.php'
+      - 'VTU/tests/harness/user-action-otp-ui-test.mjs'
+      - '.github/workflows/mobile-session-checks.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Mobile source and OTP client contracts (not native compilation)
+        run: |
+          python3 "VTU/ANDROID - iOS/tools/check-mobile-session.py"
+          python3 "VTU/ANDROID - iOS/tools/check-mobile-redesign.py"
+          python3 VTU/DGV7.0-SAAS/tests/user_login_otp_clients_test.py
+          node VTU/tests/harness/user-action-otp-ui-test.mjs
+      - name: Backend session and protected action contracts
+        run: |
+          php -n -d extension=tokenizer VTU/tests/fintech_gate_test.php
+          php -n -d extension=tokenizer VTU/tests/user_action_gate_test.php
+          for edition in SAAS NON-SAAS; do
+            php -l "VTU/DGV7.0-$edition/web/api/mobile-home.php"
+            php -l "VTU/DGV7.0-$edition/func/bc-user-action-confirm.php"
+            php -l "VTU/DGV7.0-$edition/bc-admin/Users.php"
+          done
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/Users.php

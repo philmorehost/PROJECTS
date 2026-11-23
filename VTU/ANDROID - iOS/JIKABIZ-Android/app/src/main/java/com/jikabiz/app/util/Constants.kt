@@ -6,7 +6,7 @@ object Constants {
 
     // Shared Prefs keys
     const val PREF_NAME = "jikabiz_secure_prefs"
-    const val KEY_API_KEY = "api_key"
+    const val KEY_API_KEY = "app_session_token_v2"
     const val KEY_IS_LOGGED_IN = "is_logged_in"
     const val KEY_USERNAME = "username"
     const val KEY_FIRSTNAME = "firstname"

@@ -1,5 +1,13 @@
 <?php
 /** Standalone presentation only. All mutations stay in Users.php's existing step-up gate. */
+/** Called only AFTER authenticated CSRF-checked OTP dispatch. No mutation is authorized here. */
+function bc_user_action_otp_ajax($error) {
+    if (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'xmlhttprequest') return;
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store, private');
+    echo json_encode(['status' => $error === '' ? 'success' : 'error', 'message' => $error === '' ? 'OTP SENT' : (string)$error]);
+    exit;
+}
 function bc_user_action_confirmation_url($fields) {
     return 'UserAction.php?' . http_build_query([
         'mode'=>(string)($fields['sec33_user_action'] ?? ''),
@@ -52,7 +60,7 @@ input[type=hidden]{display:none}button,a{font:inherit}button{min-height:44px;cur
 <?php endif; ?>
 <p>Confirm this action for <strong>@<?php echo $esc($username); ?></strong>. Nothing changes until your verification succeeds.</p>
 <?php if ($mode === 'permanent'): ?><p><strong>This permanently removes an archived account and cannot be undone.</strong></p><?php endif; ?>
-<form method="post" action="Users.php" autocomplete="off">
+<form method="post" action="Users.php" autocomplete="off" data-inline-user-otp>
 <?php echo bc_csrf_field(); ?>
 <input type="hidden" name="sec33_user_action" value="<?php echo $esc($mode); ?>">
 <input type="hidden" name="sec33_status" value="<?php echo $esc($status); ?>">
@@ -65,7 +73,8 @@ input[type=hidden]{display:none}button,a{font:inherit}button{min-height:44px;cur
 <?php if (!$enrolled): ?><button class="email" type="submit" name="sec33_send_code" value="1" formnovalidate>Email me a code</button>
 <?php else: ?><small>Use a fresh Google Authenticator code. Email cannot bypass your enrolled authenticator.</small><?php endif; ?>
 <small>Verification is checked on the server. PINs and codes are sent only by POST and are never added to the URL.</small>
+<p role="status" aria-live="polite" data-otp-status></p>
 <div class="actions"><button type="submit"><?php echo $esc($title); ?></button><a href="Users.php">Cancel</a></div>
-</form></main></body></html>
+</form></main><script src="../asset/bc-user-action-otp.js" defer></script></body></html>
 <?php
 }

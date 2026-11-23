@@ -9,15 +9,23 @@ $n=0;function pw_check($ok,$label){global $n;if(!$ok)throw new RuntimeException(
 foreach(['sas_users','sas_vendors'] as $table){
  foreach([md5('OldPassword123!'),bc_hash_password('OldPassword123!')] as $hash){
     $actor=['id'=>5,'password'=>$hash,'force_password_change'=>1];
-    $input=['old_password'=>'OldPassword123!','new_password'=>'NewPassword456!','confirm_password'=>'NewPassword456!'];
+    $input=['old_password'=>'OldPassword123!','new_password'=>'NewPassword456!','confirm_password'=>'NewPassword456!','new_pin'=>'2859','confirm_pin'=>'2859'];
     pw_check(bc_enrollment_change_password($table,$actor,$input)==='','correct password can complete forced reset');
+    pw_check(password_verify('2859',$saved[1][1]),'new PIN stored as a hash');
     pw_check(bc_verify_password('NewPassword456!',$saved[1][0]),'new password stored as valid modern hash');
     pw_check(strpos($saved[0],'force_password_change=0')!==false && strpos($saved[0],'AND password=? AND force_password_change=1')!==false,'flag clear is atomic and old-hash bound');
     foreach([
-       ['old_password'=>'wrong'],['new_password'=>'short','confirm_password'=>'short'],
+       ['new_pin'=>''],['new_pin'=>'1234','confirm_pin'=>'1234'],['confirm_pin'=>'2858'],['old_password'=>'wrong'],['new_password'=>'short','confirm_password'=>'short'],
        ['new_password'=>'OldPassword123!','confirm_password'=>'OldPassword123!'],
        ['confirm_password'=>'different'],['new_password'=>str_repeat('a',73),'confirm_password'=>str_repeat('a',73)]
     ] as $bad){$saved=[];pw_check(bc_enrollment_change_password($table,$actor,array_merge($input,$bad))!=='','bad, unchanged, weak or mismatched passwords rejected');pw_check($saved===[],'rejected input never writes or clears flag');}
+    $saved=[];
+    $same_pin_actor=$actor;$same_pin_actor['security_pin']=password_hash('2859',PASSWORD_DEFAULT);
+    pw_check(bc_enrollment_change_password($table,$same_pin_actor,$input)!=='','previous hashed PIN cannot be reused');
+    pw_check($saved===[],'PIN reuse rejection never writes');
+    $same_pin_actor=$actor;$same_pin_actor['transaction_pin']='2859';
+    pw_check(bc_enrollment_change_password($table,$same_pin_actor,$input)!=='','previous legacy PIN cannot be reused');
+    pw_check($saved===[],'legacy PIN reuse never writes');
     $write_ok=false;pw_check(bc_enrollment_change_password($table,$actor,$input)!=='','DB error not reported as successful reset');$write_ok=true;
     $changed=0;pw_check(bc_enrollment_change_password($table,$actor,$input)!=='','concurrent/stale reset not reported as success');$changed=1;
  }

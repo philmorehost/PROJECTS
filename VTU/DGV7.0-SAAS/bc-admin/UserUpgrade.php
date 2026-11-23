@@ -59,7 +59,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                             $get_upgrade_price = mysqli_query($connection_server, "SELECT * FROM sas_user_upgrade_price WHERE vendor_id='".$get_logged_admin_details["id"]."' && account_type='".$account_level_upgrade_array[$upgrade_type]."'");
                             if(mysqli_num_rows($get_upgrade_price) == 1){
                                 $upgrade_price = mysqli_fetch_array($get_upgrade_price);
-                                if(!empty($upgrade_price["price"]) && is_numeric($upgrade_price["price"]) && ($upgrade_price["price"] > 0)){
+                                if(is_numeric($upgrade_price["price"]) && is_finite((float)$upgrade_price["price"]) && ($upgrade_price["price"] >= 0)){
                                     $transType = "debit";
                                     $userID = strtolower($get_user_info["username"]);
                                     $purchase_method = "WEB";
@@ -70,7 +70,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                                     $description = ucwords(accountLevel($account_level_upgrade_array[$upgrade_type])." Upgrade charges By Admin");
                                     $status = 1;
                                     
-                                    $debit_other_user = chargeOtherUser($userID, $transType, ucwords(accountLevel($account_level_upgrade_array[$upgrade_type])), $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
+                                    $debit_other_user = (float)$amount === 0.0 ? "success" : chargeOtherUser($userID, $transType, ucwords(accountLevel($account_level_upgrade_array[$upgrade_type])), $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
                                     if(in_array($debit_other_user, array("success"))){
                                         $upgrade_signal = true;
                                         $json_response_array = array("desc" => ucwords($get_user_info["username"])."`s Account Upgraded Successfully");

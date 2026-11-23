@@ -126,14 +126,17 @@ class AuthRepository(private val context: Context) {
     }
 
     private fun persistLogin(data: Map<String, Any>) {
+        // Never use the developer API key as a first-party login credential.
+        val session = (data["app_token"] as? String)?.trim().orEmpty()
+        require(session.isNotEmpty()) { "App session was not issued. Please sign in again or update the server." }
         prefs.saveLoginData(
-            apiKey = data["api_key"] as? String ?: "",
+            apiKey = session,
             username = data["username"] as? String ?: "",
             firstname = data["firstname"] as? String ?: "",
             lastname = data["lastname"] as? String ?: "",
             email = data["email"] as? String ?: "",
             phone = data["phone"] as? String ?: "",
-            balance = (data["balance"] as? String)?.toDoubleOrNull() ?: 0.0,
+            balance = data["balance"]?.toString()?.toDoubleOrNull() ?: 0.0,
             accountLevel = (data["account_level"] as? Double)?.toInt() ?: 1,
             pinSet = data["security_pin_set"] as? Boolean ?: false
         )

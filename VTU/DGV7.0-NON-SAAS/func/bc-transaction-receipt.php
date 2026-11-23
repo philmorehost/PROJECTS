@@ -49,6 +49,21 @@ if (!function_exists('bc_receipt_payload')) {
             'balance_after' => isset($row['balance_after']) ? number_format((float)$row['balance_after'], 2) : null,
         );
 
+        // Only allowlisted, customer-facing utility details; never a raw provider body.
+        $utility = $row['utility_purchase'] ?? null;
+        if (is_array($utility)) {
+            $prepaid = strtolower(trim((string)($utility['meter_type'] ?? ''))) === 'prepaid';
+            $payload['utility'] = [
+                'customer_name' => (string)($utility['meter_owner_name'] ?? ''),
+                'customer_address' => (string)($utility['meter_owner_address'] ?? ''),
+                'meter_number' => (string)($utility['meter_number'] ?? $payload['recipient']),
+                'meter_type' => (string)($utility['meter_type'] ?? ''),
+                // Suppress even a stale upstream token on postpaid/unknown/failed purchases.
+                'token' => $prepaid && $status_code === 1 ? (string)($utility['meter_token'] ?? '') : '',
+                'units' => $prepaid && $status_code === 1 ? (string)($utility['token_unit'] ?? '') : '',
+            ];
+        }
+
         if ($admin) {
             // Investigation fields — staff only, never sent to customer payloads.
             $payload['username'] = (string)($row['username'] ?? '');
@@ -80,6 +95,13 @@ if (!function_exists('bc_receipt_fetch')) {
             return null;
         }
         $row = mysqli_fetch_assoc($q);
+        if ($row) {
+            // Scope utility lookup to the SAME fetched transaction owner and tenant.
+            $vid=(int)$row['vendor_id'];
+            $uname=mysqli_real_escape_string($connection_server,(string)$row['username']);
+            $utility=mysqli_query($connection_server,"SELECT * FROM sas_electric_purchaseds WHERE vendor_id='$vid' AND username='$uname' AND reference='$ref' ORDER BY id DESC LIMIT 1");
+            if ($utility && ($detail=mysqli_fetch_assoc($utility))) $row['utility_purchase']=$detail;
+        }
         return $row ?: null;
     }
 }

@@ -170,7 +170,7 @@ struct DashboardView: View {
                 Button("Points history") { open("points") }
                 Button("Update PIN and security") { open("pin") }
                 Button("Account settings and support chat") { open("settings") }
-                NavigationLink("AI assistant", destination: AIChatView())
+                NavigationLink("AI assistant", destination: AIAssistantView())
             }
             Section(header: Text("Device security")) {
                 Button(UserDefaults.standard.bool(forKey: "mobile_biometric_lock") ? "Disable biometric lock" : "Enable biometric lock") { authenticate(enable: true) }

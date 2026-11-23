@@ -73,6 +73,7 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
         $sec33_send_err = function_exists('bc_stepup_send_email_otp')
             ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'user_account_action', 'User Account Action')
             : 'Verification is unavailable.';
+        bc_user_action_otp_ajax($sec33_send_err);
         $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
         header("Location: " . bc_user_action_confirmation_url($_POST));
         exit();

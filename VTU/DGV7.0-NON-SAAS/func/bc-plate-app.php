@@ -1542,6 +1542,8 @@ if (!function_exists('bc_app_foot')) {
         // Page-level widgets the old chrome injected (AI assistant, referral modal,
         // support chat) — still inside the wrap so the shell's modal CSS applies.
         bc_app_widgets();
+        require_once __DIR__ . '/bc-float-services.php';
+        bc_float_services_render();
         // 'bare' is for pages that own their own layout (print targets, full-screen terminals):
         // they still get the flash dialog and the shell script, but not the wrapper-closing tags.
         if (empty($opts['bare'])): ?></div>
@@ -1590,12 +1592,20 @@ if (!function_exists('bc_app_foot')) {
             + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.14em;margin-top:2px;">Transaction Receipt</div></div>'
             + '<div style="text-align:center;margin:14px 0;"><span style="display:inline-block;padding:5px 16px;border-radius:999px;font-size:12px;font-weight:800;color:' + color + ';background:' + tint + ';border:1px solid ' + color + ';">' + esc(String(d.status_label).toUpperCase()) + '</span></div>'
             + row('Service', d.service)
-            + (d.recipient ? row('Recipient', d.recipient) : '')
+            + (d.recipient ? row('Credited number / destination', d.recipient) : '')
             + row('Amount Paid', '\u20A6' + d.amount)
             + (d.face_amount && d.face_amount !== d.amount ? row('Face Value', '\u20A6' + d.face_amount) : '')
             + row('Reference', d.reference)
             + row('Date', d.date)
             + (d.balance_after != null ? row('Wallet Balance', '\u20A6' + d.balance_after) : '');
+        if (d.utility) {
+            h += row('Customer name', d.utility.customer_name || 'Not supplied');
+            h += row('Customer address', d.utility.customer_address || 'Not supplied');
+            h += row('Meter number', d.utility.meter_number || d.recipient || 'Not supplied');
+            h += row('Meter type', d.utility.meter_type || 'Not supplied');
+            if (d.utility.token) h += row('Prepaid token', d.utility.token);
+            if (d.utility.units) h += row('Units', d.utility.units);
+        }
         if (d.admin) {
             if (d.username) h += row('Customer', d.username);
             if (d.provider_site) h += row('Provider', d.provider_site);

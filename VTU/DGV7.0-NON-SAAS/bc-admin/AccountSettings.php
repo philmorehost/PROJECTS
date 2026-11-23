@@ -1083,14 +1083,25 @@ if (isset($_POST["update-security-settings"])) {
 }
 
 if (isset($_POST["update-upgrade-details"])) {
-    $level_id = $_POST["level-id"];
-    $level_percent = $_POST["level-price"];
+    require_once __DIR__ . '/../func/bc-price-input.php';
+    $level_id = $_POST["level-id"] ?? [];
+    $level_percent = $_POST["level-price"] ?? [];
+    if (!is_array($level_id) || !is_array($level_percent) || count($level_id)!==count($level_percent) || array_filter($level_percent, function($price){ return bc_price_input($price) === null; })) {
+        $level_id=[]; $level_percent=[];
+        $json_response_encode=json_encode(['desc'=>'Invalid upgrade prices. Enter zero or a positive amount with at most two decimals.']);
+    }
     $referral_level_array = array(1, 2, 3);
 
     if ((count($level_id) > 0) && (count($level_percent) > 0) && (count($level_id) == count($level_percent))) {
         foreach ($level_id as $index => $id) {
             $each_level_id = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($level_id[$index]))));
-            $each_level_percent = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/", "", trim(strip_tags($level_percent[$index]))));
+            $each_level_percent = bc_price_input($level_percent[$index] ?? null);
+            if ($each_level_percent === null) {
+                $json_response_encode = json_encode(['desc' => 'Invalid upgrade price. Enter zero or a positive amount with at most two decimals.']);
+                break;
+            }
+            // Smart Earner is always free, independent of submitted configuration.
+            if ((string)$each_level_id === '1') $each_level_percent = '0';
             if (in_array($each_level_id, $referral_level_array)) {
                 $get_referral_percent_details = mysqli_query($connection_server, "SELECT * FROM sas_user_upgrade_price WHERE vendor_id='" . $get_logged_admin_details["id"] . "' && account_type='$each_level_id'");
                 if (mysqli_num_rows($get_referral_percent_details) == 1) {

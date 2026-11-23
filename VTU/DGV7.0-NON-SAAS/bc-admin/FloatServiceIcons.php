@@ -20,14 +20,21 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     ];
 
     if(isset($_POST["save-float-icons"])){
-        mysqli_query($connection_server, "DELETE FROM sas_float_services WHERE vendor_id='".$get_logged_admin_details["id"]."'");
-        if(isset($_POST["enabled_services"]) && is_array($_POST["enabled_services"])){
-            foreach($_POST["enabled_services"] as $service_name){
-                $service_name = mysqli_real_escape_string($connection_server, $service_name);
-                mysqli_query($connection_server, "INSERT INTO sas_float_services (vendor_id, service_name, status) VALUES ('".$get_logged_admin_details["id"]."', '$service_name', 1)");
+        bc_validate_csrf();
+        $vid=(int)$get_logged_admin_details['id'];
+        $selection=$_POST['enabled_services']??[];
+        $ok=is_array($selection);
+        if($ok)foreach($selection as $name)if(!is_string($name) || !isset($services_list[$name])){$ok=false;break;}
+        if($ok && mysqli_begin_transaction($connection_server)) {
+            $ok=(bool)mysqli_query($connection_server,"DELETE FROM sas_float_services WHERE vendor_id='$vid'");
+            foreach(array_unique($selection) as $name) {
+                $name=mysqli_real_escape_string($connection_server,$name);
+                if(!mysqli_query($connection_server,"INSERT INTO sas_float_services (vendor_id,service_name,status) VALUES ('$vid','$name',1)"))$ok=false;
             }
-        }
-        $_SESSION["product_purchase_response"] = "Floating icons configuration saved.";
+            if($ok)$ok=mysqli_commit($connection_server);
+            if(!$ok)mysqli_rollback($connection_server);
+        } else $ok=false;
+        $_SESSION['product_purchase_response']=$ok?'Floating icons configuration saved.':'Could not save floating icons. Please retry.';
         header("Location: FloatServiceIcons.php");
         exit();
     }
@@ -47,7 +54,7 @@ bc_adm_head("Float Service Icons | " . ($get_all_super_admin_site_details["site_
                 <p class="small text-muted mb-0">Choose which services appear in the floating quick-action menu</p>
             </div>
             <div class="card-body p-4 p-md-5">
-                <form method="post">
+                <form method="post"><?php echo bc_csrf_field(); ?>
                     <div class="row g-3">
                         <?php
                             $enabled_services = [];

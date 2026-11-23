@@ -15,7 +15,7 @@ $key=mysqli_real_escape_string($connection_server,$key);
 $q=mysqli_query($connection_server,"SELECT * FROM sas_users WHERE vendor_id=$vid AND api_key='$key' LIMIT 1");
 $u=$q?mysqli_fetch_assoc($q):null;
 if(!$u || (int)$u['status']!==1 || !empty($u['is_blocked']) || !bc_fintech_mobile_app_allowed($u)
-    || (function_exists('bc_api_key_is_expired') && bc_api_key_is_expired($u))) {
+    || (($GLOBALS['bc_api_auth_mode']??'api_key')!=='app_token' && function_exists('bc_api_key_is_expired') && bc_api_key_is_expired($u))) {
     http_response_code(401); echo json_encode(array('status'=>'error','message'=>'Please sign in with an active personal account.')); exit;
 }
 if(isIPBlocked($_SERVER['REMOTE_ADDR']??'', $vid) || isAccountLocked($u['username'],$vid)) {

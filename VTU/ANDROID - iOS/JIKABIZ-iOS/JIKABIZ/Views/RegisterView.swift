@@ -139,10 +139,10 @@ struct RegisterView: View {
                     return
                 }
 
-                // register.php hands back the new account's api_key, so log in immediately — the
-                // website does the same with $_SESSION["user_session"].
+                // Only a server-issued revocable app session may establish app login.
+                // Without one the caller returns to the normal password/email-OTP flow.
                 let data = bcDict(json["data"])
-                let key = bcString(data["api_key"])
+                let key = bcString(data["app_token"])
                 if !key.isEmpty {
                     AppNetworkService.shared.apiKey = key
                 }
@@ -153,7 +153,8 @@ struct RegisterView: View {
                 AppNetworkService.shared.pinSet = false
 
                 dismiss()
-                onRegistered()
+                // Do not open the authenticated dashboard without an issued session.
+                if !key.isEmpty { onRegistered() }
 
             case .failure(let error):
                 errorMessage = error.localizedDescription

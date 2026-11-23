@@ -32,7 +32,7 @@ class PreferenceManager(context: Context) {
     fun saveLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()
     fun getLong(key: String, default: Long = 0L) = prefs.getLong(key, default)
 
-    fun isLoggedIn() = getBoolean(Constants.KEY_IS_LOGGED_IN, false)
+    fun isLoggedIn() = getBoolean(Constants.KEY_IS_LOGGED_IN, false) && getApiKey().isNotBlank()
     fun getApiKey() = getString(Constants.KEY_API_KEY)
 
     fun saveLoginData(
