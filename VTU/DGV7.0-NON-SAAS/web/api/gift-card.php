@@ -28,6 +28,7 @@ $user_id = $user['id'];
 $username = $user['username'];
 
 $action = $input['action'] ?? 'list_products';
+if(bc_giftcard_action_held($action))bc_giftcard_safety_reply();
 
 
 if ($action === 'list_products') {

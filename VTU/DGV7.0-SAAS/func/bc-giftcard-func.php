@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-giftcard-safety.php';
 /**
  * Reloadly Gift Card API Implementation
  */
@@ -109,38 +110,8 @@ function fetchReloadlyCategories($accessToken) {
 }
 
 function placeReloadlyOrder($accessToken, $productId, $amount, $quantity = 1, $recipientEmail = '') {
-    if (!$accessToken) {
-        return [
-            "status" => "FAILED",
-            "message" => "Invalid or missing API credentials."
-        ];
-    }
-
-    $url = "https://giftcards.reloadly.com/orders";
-
-    $data = [
-        "productId" => $productId,
-        "amount" => $amount,
-        "quantity" => $quantity,
-        "recipientEmail" => $recipientEmail,
-        "customIdentifier" => "GC_" . time()
-    ];
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Authorization: Bearer $accessToken",
-        "Content-Type: application/json",
-        "Accept: application/com.reloadly.giftcards-v1+json"
-    ]);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    return json_decode($response, true);
+    $hold=bc_giftcard_safety_response();
+    return ['status'=>'FAILED','code'=>$hold['code'],'message'=>$hold['message']];
 }
 
 function getLiveExchangeRate($from_currency, $to_currency = 'NGN', $vendor_id = 0, $product_type = 'generic') {
@@ -244,71 +215,13 @@ function getLiveUSDToNGNRate($vendor_id) {
  * Escrow Engine: Hold Funds
  */
 function holdP2PFunds($username, $amount) {
-    global $connection_server;
-    $u = mysqli_real_escape_string($connection_server, $username);
-    $amt = (float)$amount;
-
-    // Check balance
-    $q = mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE username='$u' LIMIT 1");
-    $r = mysqli_fetch_assoc($q);
-    if($r && $r['balance'] >= $amt){
-        // Move to escrow
-        mysqli_query($connection_server, "UPDATE sas_users SET balance = balance - $amt, pending_escrow = pending_escrow + $amt WHERE username='$u'");
-        return true;
-    }
+    // Never execute the old username-only debit or create new escrow obligations.
+    $GLOBALS['bc_giftcard_failure_code']='GIFTCARD_SETTLEMENT_HOLD';
     return false;
 }
 
-/**
- * Escrow Engine: Release Funds
- */
+/** Existing funded trades require reconciliation, not an automatic release/refund. */
 function releaseP2PFunds($tradeId) {
-    global $connection_server;
-    $tid = (int)$tradeId;
-
-    $q = mysqli_query($connection_server, "SELECT * FROM sas_p2p_trades WHERE id = '$tid' AND status = 'funded'");
-    $trade = mysqli_fetch_assoc($q);
-
-    if ($trade) {
-        $amount = (float)$trade['amount_ngn'];
-        $seller_id = (int)$trade['seller_id'];
-        $buyer_id = (int)$trade['buyer_id'];
-        $card_id = (int)$trade['card_id'];
-        $vid = (int)$trade['vendor_id'];
-
-        // Get Usernames
-        $qs = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE id='$seller_id' LIMIT 1");
-        $qb = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE id='$buyer_id' LIMIT 1");
-        $seller_user = mysqli_fetch_assoc($qs)['username'] ?? "";
-        $buyer_user = mysqli_fetch_assoc($qb)['username'] ?? "";
-
-        // Fee was already calculated and stored in sas_p2p_trades during buy_p2p action
-        $fee = (float)$trade['fee_ngn'];
-        $total_buyer_cost = $amount + $fee;
-
-        // 1. Debit Buyer's Escrow
-        mysqli_query($connection_server, "UPDATE sas_users SET pending_escrow = pending_escrow - $total_buyer_cost WHERE id = '$buyer_id'");
-
-        // 2. Credit Seller's Wallet (using ledger)
-        $finalSellerAmount = $amount;
-        chargeOtherUser($seller_user, "credit", "p2p_sale", "P2P Gift Card Sale", "TRD_".$tid, "INTERNAL", $amount, $finalSellerAmount, "Sale of Gift Card via P2P (Trade ID: $tid)", "WEB", $_SERVER["HTTP_HOST"], 1);
-
-        // 3. Credit Vendor for the Fee
-        mysqli_query($connection_server, "UPDATE sas_vendors SET balance = balance + $fee WHERE id = '$vid'");
-        mysqli_query($connection_server, "INSERT INTO sas_vendor_transactions (vendor_id, product_unique_id, type_alternative, reference, amount, discounted_amount, balance_before, balance_after, description, api_website, status)
-            SELECT '$vid', 'p2p_fee', 'P2P Trade Commission', 'FEE_$tid', '$fee', '$fee', balance - $fee, balance, 'Commission from P2P Gift Card Trade #$tid', '".bc_safe_host_sql($connection_server)."', '1' FROM sas_vendors WHERE id='$vid'");
-
-        // Record Profit for Platform (Super Admin tracking)
-        mysqli_query($connection_server, "INSERT INTO sas_platform_earnings (vendor_id, amount, source, reference) VALUES ('$vid', '$fee', 'P2P_Giftcard', '$tid')");
-
-        // 4. Transfer Card Ownership
-        mysqli_query($connection_server, "UPDATE sas_giftcard_inventory SET current_owner_id = '$buyer_id', is_for_sale = 0 WHERE id = '$card_id'");
-
-        // 5. Update Trade Status
-        mysqli_query($connection_server, "UPDATE sas_p2p_trades SET status = 'released', released_at = CURRENT_TIMESTAMP WHERE id = '$tid'");
-
-        return true;
-    }
+    $GLOBALS['bc_giftcard_failure_code']='GIFTCARD_SETTLEMENT_HOLD';
     return false;
 }
-?>

@@ -26,6 +26,7 @@ if(!isServiceEnabled('gift_card')){
 // Handle AJAX Actions
 if (isset($_POST['action'])) {
     $action = $_POST['action'];
+    if(bc_giftcard_action_held($action))bc_giftcard_safety_reply();
     $response = ['status' => 'error', 'message' => 'Unknown action'];
 
     if ($action == 'purchase_card') {
@@ -238,6 +239,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
 
         @media (max-width: 768px) { .balance-hero { padding: 2rem 1.5rem; } }
     </style>
+<div class="alert alert-warning m-3" role="status">Gift-card purchases and P2P settlement are temporarily paused for safety. Existing cards and history remain available. Do not retry or manually refund existing trades.</div>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "GIFT CARD HUB", "crumb" => "Home / Gift Card")); ?>
 
@@ -308,7 +310,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                          data-name="<?php echo htmlspecialchars(strtolower($p['product_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                          data-country="<?php echo htmlspecialchars(strtolower($c_name), ENT_QUOTES, 'UTF-8'); ?>"
                          data-currency="<?php echo htmlspecialchars(strtolower($p['currency_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                        <div class="card card-modern h-100 shadow-sm border-0 p-3" onclick='openPurchaseModal(<?php echo htmlspecialchars(json_encode($p, JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP), ENT_QUOTES, "UTF-8"); ?>)'>
+                        <div class="card card-modern h-100 shadow-sm border-0 p-3" title="Purchases are paused">
                             <div class="text-center mb-3">
                                 <img src="func/giftcard-image.php?id=<?php echo $p['reloadly_product_id']; ?>"
                                      class="img-fluid rounded-4" style="height: 140px; object-fit: contain;"
@@ -320,7 +322,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                     <span class="badge bg-light text-dark border"><?php echo $p['currency_code'] ?: 'USD'; ?></span>
                                     <small class="text-muted fw-bold">Fee: <?php echo (float)$p['vendor_markup']; ?>%</small>
                                 </div>
-                                <button class="btn btn-primary btn-modern w-100 rounded-pill" data-no-lock>Buy Now</button>
+                                <button class="btn btn-primary btn-modern w-100 rounded-pill" data-no-lock disabled>Purchases paused</button>
                             </div>
                         </div>
                     </div>
@@ -407,7 +409,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                     <td class="text-center fw-bold"><?php echo $l['currency_code'] . ' ' . (float)$l['face_value']; ?></td>
                                     <td class="text-end fw-bold text-success">₦<?php echo number_format($l['sale_price_ngn'], 2); ?></td>
                                     <td class="px-4 text-end">
-                                        <button class="btn btn-primary btn-sm rounded-pill px-4 fw-bold" data-no-lock onclick='buyP2P(<?php echo (int)$l["id"]; ?>, <?php echo (float)$l["sale_price_ngn"]; ?>, <?php echo htmlspecialchars(json_encode($l["product_name"], JSON_HEX_APOS), ENT_QUOTES); ?>)'>Buy Now</button>
+                                        <button class="btn btn-primary btn-sm rounded-pill px-4 fw-bold" data-no-lock disabled title="P2P settlement is paused">P2P paused</button>
                                     </td>
                                 </tr>
                                 <?php endwhile; else: ?>
@@ -445,12 +447,12 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                 <label class="form-label small fw-bold text-muted text-uppercase">Email OTP</label>
                                 <div class="input-group">
                                     <input type="text" name="otp" class="form-control form-control-lg rounded-start-4 border-2 text-center" placeholder="6-digit" required>
-                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" data-feature-otp="giftcard" data-otp-endpoint="GiftCard.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">Get</button>
+                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" disabled title="Gift-card purchases are paused" data-feature-otp="giftcard" data-otp-endpoint="GiftCard.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">Get</button>
                                 </div>
                             </div>
                         </div>
                         <div id="calcDisplay"></div>
-                        <button type="submit" class="btn btn-primary w-100 btn-modern py-3 shadow-sm mt-4" data-no-lock>Process Purchase</button>
+                        <button type="submit" class="btn btn-primary w-100 btn-modern py-3 shadow-sm mt-4" data-no-lock disabled>Purchase paused</button>
                     </form>
                 </div>
             </div>
