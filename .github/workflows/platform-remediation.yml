@@ -14,6 +14,8 @@ on:
       - 'VTU/**/func/bc-recovery-inline.php'
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
+      - 'VTU/**/func/bc-feature-action-security.php'
+      - 'VTU/**/asset/bc-feature-action.js'
       - 'VTU/**/asset/bc-feature-email-otp.js'
       - 'VTU/**/web/SendFund.php'
       - 'VTU/**/web/GiftCard.php'
@@ -77,6 +79,8 @@ on:
       - 'VTU/**/func/bc-recovery-inline.php'
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
+      - 'VTU/**/func/bc-feature-action-security.php'
+      - 'VTU/**/asset/bc-feature-action.js'
       - 'VTU/**/asset/bc-feature-email-otp.js'
       - 'VTU/**/web/SendFund.php'
       - 'VTU/**/web/GiftCard.php'
@@ -151,6 +155,7 @@ jobs:
           php VTU/tests/recovery_inline_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
+          php VTU/tests/feature_action_security_test.php
           php VTU/tests/recovery_reply_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
@@ -158,6 +163,7 @@ jobs:
           node VTU/tests/harness/recovery-inline-ui-test.mjs
           node VTU/tests/harness/registration-otp-ui-test.mjs
           node VTU/tests/harness/feature-email-otp-ui-test.mjs
+          node VTU/tests/harness/feature-action-body-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e
