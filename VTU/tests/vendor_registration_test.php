@@ -27,4 +27,5 @@ vr_check(strpos(file_get_contents($root.'web/WebsiteOrderRequest.php'),'INSERT I
 vr_check(strpos(file_get_contents(__DIR__.'/../DGV7.0-NON-SAAS/web/WebsiteOrderRequest.php'),'http_response_code(410)')!==false,'single-owner public signup closed');
 vr_check(strpos(file_get_contents($root.'bc-spadmin/VendorRegistrationSettings.php'),'bc_paid_fields(')!==false,'settings action verification UI');
 vr_check(file_get_contents($root.'func/bc-vendor-registration.php')===file_get_contents(__DIR__.'/../DGV7.0-NON-SAAS/func/bc-vendor-registration.php'),'shared helper parity');
+foreach(['SAAS','NON-SAAS'] as $edition){$schema=file_get_contents(__DIR__.'/../DGV7.0-'.$edition.'/func/bc-tables.php');vr_check(strpos($schema,'CREATE TABLE IF NOT EXISTS sas_pending_vendors')<strpos($schema,'// Add columns to pending vendors as well'),'fresh pending table exists before additive migration');}
 echo "$n vendor registration boundary checks passed\n";

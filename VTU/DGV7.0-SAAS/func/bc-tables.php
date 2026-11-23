@@ -220,6 +220,27 @@ if ($create_vendor_table) {
     }
 }
 
+//Create Pending Vendors Table
+$create_pending_vendors_table = mysqli_query($connection_server, "
+CREATE TABLE IF NOT EXISTS sas_pending_vendors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    website_url VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    firstname VARCHAR(255) NOT NULL,
+    lastname VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50) NOT NULL,
+    home_address TEXT NOT NULL,
+    billing_package_id INT NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- Added here
+    paystack_reference VARCHAR(255) NULL,
+    status INT NOT NULL DEFAULT 0,
+    reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email),
+    UNIQUE (website_url)) ENGINE=InnoDB");
+
+
 // Add columns to pending vendors as well
 $check_pending_cols = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_pending_vendors");
 if ($check_pending_cols) {
@@ -345,26 +366,6 @@ if ($create_domain_extensions_table) {
         mysqli_query($connection_server, "ALTER TABLE `sas_domain_extensions` ADD COLUMN promo_price DECIMAL(10,2) DEFAULT 0.00 AFTER price");
     }
 }
-
-//Create Pending Vendors Table
-$create_pending_vendors_table = mysqli_query($connection_server, "
-CREATE TABLE IF NOT EXISTS sas_pending_vendors (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    website_url VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    firstname VARCHAR(255) NOT NULL,
-    lastname VARCHAR(255) NOT NULL,
-    phone_number VARCHAR(50) NOT NULL,
-    home_address TEXT NOT NULL,
-    billing_package_id INT NOT NULL,
-    payment_method VARCHAR(50) NOT NULL,
-    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- Added here
-    paystack_reference VARCHAR(255) NULL,
-    status INT NOT NULL DEFAULT 0,
-    reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (email),
-    UNIQUE (website_url))");
 
 if ($create_pending_vendors_table) {
     $check_pv_addons = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_pending_vendors LIKE 'selected_addons'");

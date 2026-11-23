@@ -28,6 +28,12 @@ try{
  $db->query('CREATE TABLE sas_rate_limits(action VARCHAR(100),rate_key VARCHAR(150),attempted_at DATETIME,KEY lookup_idx(action,rate_key,attempted_at)) ENGINE=InnoDB');
  $db->query('CREATE TABLE sas_security_audit_log(vendor_id INT,actor_type VARCHAR(20),actor_ref VARCHAR(190),action VARCHAR(80),subject VARCHAR(190),details VARCHAR(500),ip VARCHAR(64)) ENGINE=InnoDB');
  $source=file_get_contents($root.'bc-tables.php');if(!preg_match('/CREATE TABLE IF NOT EXISTS sas_vendor_signup_challenges \(.*?\) ENGINE=InnoDB/s',$source,$ddl))throw new RuntimeException('challenge DDL missing');$db->query($ddl[0]);
+
+ // Actual pending DDL followed by its production additive migration declarations (fresh install).
+ if(!preg_match('/CREATE TABLE IF NOT EXISTS sas_pending_vendors \(.*?\) ENGINE=InnoDB/s',$source,$pending_ddl))throw new RuntimeException('pending DDL missing');$db->query($pending_ddl[0]);
+ preg_match_all('/ALTER TABLE sas_pending_vendors ADD COLUMN ([a-z_]+) ([^"\n]+)/',$source,$pending_alters,PREG_SET_ORDER);
+ foreach($pending_alters as $alter){$column=$alter[1];if(!$db->query("SHOW COLUMNS FROM sas_pending_vendors LIKE '$column'")->num_rows)$db->query('ALTER TABLE sas_pending_vendors ADD COLUMN '.$column.' '.$alter[2]);}
+ foreach(['email_verified_at','business_name','business_registration_no','compliance_review'] as $column)vm_check($db->query("SHOW COLUMNS FROM sas_pending_vendors LIKE '$column'")->num_rows===1,'fresh schema '.$column);
  vm_check(bc_vreg_policy()['enabled']===true,'compatibility default enabled with mandatory mailbox proof');
  $p=bc_vreg_policy();bc_vreg_send('ada@example.com',$p,$deliver);$code=$sent_code;$token=$_SESSION['vreg_challenge'];
  $stored=bc_q_row('SELECT * FROM sas_vendor_signup_challenges WHERE token=?',[$token]);vm_check($stored['code_hash']!==$code&&password_verify($code,$stored['code_hash']),'code hashed at rest');
