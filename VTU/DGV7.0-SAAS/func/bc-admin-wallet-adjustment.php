@@ -25,6 +25,7 @@ function bc_admin_wallet_apply($db,$request,$reference) {
     }else $q=mysqli_query($db,"SELECT * FROM sas_users WHERE vendor_id=$vid AND username='$identifier' LIMIT 2");
     if(!$q || mysqli_num_rows($q)!==1)return ['ok'=>false,'message'=>'Recipient not uniquely found in the selected scope.'];
     $row=mysqli_fetch_assoc($q);
+    if(isset($request['recipient_id']) && (int)$request['recipient_id']!==(int)$row['id'])return ['ok'=>false,'message'=>'Recipient identity changed. Refresh before creating a new request.'];
     if((int)$row['status']!==1 || !empty($row['is_blocked']))return ['ok'=>false,'message'=>'Recipient account is restricted.'];
     $is_vendor=$request['target']==='vendor';if($is_vendor)$vid=(int)$row['id'];
     if(!$is_vendor){
@@ -63,6 +64,13 @@ function bc_admin_wallet_handle($role,$actor) {
     }
     try{
         $request=bc_admin_wallet_request($role,$actor,$_POST);
+        global $connection_server;
+        $lookup=mysqli_real_escape_string($connection_server,$request['identifier']);$scope=(int)$request['vendor_id'];
+        $sql=$request['target']==='vendor'?"SELECT id FROM sas_vendors WHERE email='$lookup' LIMIT 2":"SELECT id FROM sas_users WHERE vendor_id=$scope AND username='$lookup' LIMIT 2";
+        $q=mysqli_query($connection_server,$sql);
+        if(!$q || mysqli_num_rows($q)!==1)throw new RuntimeException('Recipient not uniquely found in the selected scope.');
+        $request['recipient_id']=(int)mysqli_fetch_assoc($q)['id'];
+
         $nonce=$_POST['wallet_request']??'';
         if(!is_string($nonce) || !isset($_SESSION['admin_wallet_requests'][$nonce]) || !preg_match('/\A[a-f0-9]{32}\z/D',$nonce))throw new RuntimeException('Refresh the form to start a new wallet request.');
         $hash=hash('sha256',json_encode([$role,(int)$actor['id'],$request]));$old=$_SESSION['admin_wallet_requests'][$nonce];

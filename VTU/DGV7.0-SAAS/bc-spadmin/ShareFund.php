@@ -63,7 +63,7 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
                                     $vs = mysqli_query($connection_server, "SELECT id, website_url FROM sas_vendors WHERE status=1 ORDER BY website_url ASC");
                                     while($vrow = mysqli_fetch_assoc($vs)){
                                         $selected = (isset($_GET["vid"]) && $_GET["vid"] == $vrow['id']) ? 'selected' : '';
-                                        echo '<option value="'.$vrow['id'].'" '.$selected.'>'.$vrow['website_url'].'</option>';
+                                        echo '<option value="'.(int)$vrow['id'].'" '.$selected.'>'.htmlspecialchars($vrow['website_url'],ENT_QUOTES,'UTF-8').'</option>';
                                     }
                                 ?>
                             </select>
@@ -144,12 +144,15 @@ bc_adm_head("Super Fund Management | Super Admin", array("area" => "spadmin"));
             fetch(`ajax-suggestions.php?q=${encodeURIComponent(query)}&target=${target}&vid=${vid}`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data.length > 0) {
-                        list.innerHTML = data.map(s => `
-                            <button type="button" class="list-group-item list-group-item-action py-2" onclick="selectSuggestion('${s.value}')">
-                                ${s.label}
-                            </button>
-                        `).join('');
+                    list.textContent = '';
+                    if (Array.isArray(data) && data.length > 0) {
+                        data.forEach(s => {
+                            if(typeof s.value !== 'string' || typeof s.label !== 'string')return;
+                            const button=document.createElement('button');button.type='button';
+                            button.className='list-group-item list-group-item-action py-2';
+                            button.textContent=s.label;button.addEventListener('click',()=>selectSuggestion(s.value));
+                            list.appendChild(button);
+                        });
                         list.classList.remove('d-none');
                     } else {
                         list.classList.add('d-none');

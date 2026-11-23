@@ -23,6 +23,7 @@ try{
  $request=bc_admin_wallet_request('spadmin',['id'=>1],['target'=>'vendor','identifier'=>'vendor@example.test','type'=>'credit','amount'=>'100']);
  wallet_check(bc_admin_wallet_apply($db,$request,'vendor-credit')['ok'] && wallet_bal($db,'sas_vendors','id=7')===1100.0,'vendor EMAIL resolves to numeric wallet id');
  wallet_check(bc_admin_wallet_apply($db,$request,'vendor-credit')['ok'] && wallet_bal($db,'sas_vendors','id=7')===1100.0,'same credit replay never duplicates');
+ $changed=$request;$changed['recipient_id']=8;wallet_check(!bc_admin_wallet_apply($db,$changed,'changed-identity')['ok'],'recipient identity change cannot reuse an authorized request');
  $request['type']='debit';wallet_check(bc_admin_wallet_apply($db,$request,'vendor-debit')['ok'] && wallet_bal($db,'sas_vendors','id=7')===1000.0,'vendor debit');
  $request['type']='refund';$request['original']='vendor-debit';wallet_check(bc_admin_wallet_apply($db,$request,'vendor-refund')['ok'] && wallet_bal($db,'sas_vendors','id=7')===1100.0,'vendor refund matched debit');
  wallet_check(bc_admin_wallet_apply($db,$request,'vendor-refund-other-form')['ok'] && wallet_bal($db,'sas_vendors','id=7')===1100.0,'same debit cannot be refunded twice');
