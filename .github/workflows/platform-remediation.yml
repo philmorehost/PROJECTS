@@ -9,6 +9,11 @@ on:
       - 'VTU/**/func/bc-action-*.php'
       - 'VTU/**/func/bc-admin-wallet-adjustment.php'
       - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/func/bc-admin-inline-otp.php'
+      - 'VTU/**/func/bc-complimentary-upgrade.php'
+      - 'VTU/**/asset/bc-admin-inline-otp.js'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/UserUpgrade.php'
+      - 'VTU/**/api/app-backend/clone/upgrade-user.php'
       - 'VTU/**/bc-admin/ShareFund.php'
       - 'VTU/**/bc-spadmin/ShareFund.php'
       - 'VTU/**/func/bc-gateway-api-settings.php'
@@ -49,6 +54,11 @@ on:
       - 'VTU/**/func/bc-action-*.php'
       - 'VTU/**/func/bc-admin-wallet-adjustment.php'
       - 'VTU/**/func/bc-stepup.php'
+      - 'VTU/**/func/bc-admin-inline-otp.php'
+      - 'VTU/**/func/bc-complimentary-upgrade.php'
+      - 'VTU/**/asset/bc-admin-inline-otp.js'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/UserUpgrade.php'
+      - 'VTU/**/api/app-backend/clone/upgrade-user.php'
       - 'VTU/**/bc-admin/ShareFund.php'
       - 'VTU/**/bc-spadmin/ShareFund.php'
       - 'VTU/**/func/bc-gateway-api-settings.php'
@@ -97,6 +107,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Complimentary upgrade and administrative inline OTP contracts
+        run: |
+          php VTU/tests/complimentary_upgrade_test.php
+          php VTU/tests/admin_inline_otp_test.php
+          node VTU/tests/harness/admin-inline-otp-ui-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e

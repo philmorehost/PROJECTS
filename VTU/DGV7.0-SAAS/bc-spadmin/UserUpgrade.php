@@ -3,26 +3,20 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
 
-    $user_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_GET["userID"]))));
+    $user_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags(($_GET["userID"] ?? "")))));
     $select_user = mysqli_query($connection_server, "SELECT u.*, v.website_url FROM sas_users u LEFT JOIN sas_vendors v ON u.vendor_id = v.id WHERE u.id='$user_id_number'");
     if($select_user && mysqli_num_rows($select_user) > 0){
         $get_user_details = mysqli_fetch_array($select_user);
     }
 
-    if(isset($_POST["upgrade-level"])){
-	$account_level_upgrade_array = array("smart" => 1, "agent" => 2, "api" => 3);
-        $upgrade_type = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["upgrade-type"])));
-
-        if(!empty($upgrade_type) && in_array($upgrade_type, array_keys($account_level_upgrade_array))){
-            $new_level = $account_level_upgrade_array[$upgrade_type];
-            mysqli_query($connection_server, "UPDATE sas_users SET account_level='$new_level' WHERE id='$user_id_number'");
-            $_SESSION["product_purchase_response"] = "Account Upgraded to ".accountLevel($new_level)." Successfully";
-        }else{
-            $_SESSION["product_purchase_response"] = "Invalid Upgrade Level";
-        }
-        header("Location: ".$_SERVER["REQUEST_URI"]);
-        exit();
+    require_once __DIR__.'/../func/bc-complimentary-upgrade.php';
+    require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+    bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'complimentary_upgrade');
+    if(isset($_POST['upgrade-level'])){
+        $_SESSION['product_purchase_response']=bc_complimentary_upgrade($get_logged_spadmin_details,(int)$user_id_number,$_POST);
+        header('Location: UserUpgrade.php?userID='.(int)$user_id_number);exit;
     }
+
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Upgrade User | Super Admin", array("area" => "spadmin"));
@@ -44,6 +38,12 @@ bc_adm_head("Upgrade User | Super Admin", array("area" => "spadmin"));
                     </div>
 
                     <form method="post">
+                        <?php echo bc_csrf_field(); $nonce=bc_complimentary_nonce($get_logged_spadmin_details,$get_user_details); ?>
+                        <input type="hidden" name="upgrade_nonce" value="<?php echo htmlspecialchars($nonce,ENT_QUOTES,'UTF-8'); ?>">
+                        <label>Security PIN<input class="form-control" type="password" name="sec_pin" required autocomplete="off"></label>
+                        <label>Verification code<input class="form-control" name="sec_factor" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"></label>
+                        <select class="form-select" name="factor_method"><option value="auto">Preferred enabled factor</option><option value="email">Email OTP</option></select>
+                        <button type="button" name="sec33_send_code" class="btn btn-outline-secondary my-2">Send code</button>
                         <div class="mb-4">
                             <label class="form-label small fw-bold text-muted text-uppercase mb-2">Target Account Level</label>
                             <select name="upgrade-type" class="form-select" required>
@@ -75,3 +75,5 @@ bc_adm_head("Upgrade User | Super Admin", array("area" => "spadmin"));
 
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

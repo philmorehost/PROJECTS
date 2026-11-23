@@ -81,5 +81,25 @@ try{
  wallet_check($run_policy('bad')['status']==='error' && bc_action_channels('sas_vendors',['id'=>7])['google']===true,'wrong password cannot change channel policy');
  wallet_check($run_policy('good')['status']==='success' && bc_action_channels('sas_vendors',['id'=>7])===['google'=>false,'email'=>false],'verified policy form commits PIN-only choice with acknowledgement');
  wallet_check(bc_action_channels('sas_vendors',['id'=>8])===['google'=>false,'email'=>true],'saving tenant override does not alter another tenant');
+ if($edition==='SAAS'){
+  require __DIR__.'/../DGV7.0-SAAS/func/bc-complimentary-upgrade.php';
+  $db->query('CREATE TABLE sas_super_admin LIKE sas_vendors');
+  $db->query("INSERT INTO sas_super_admin (id,email,status,is_blocked,security_pin) VALUES (1,'platform@example.test',1,0,'$pin')");
+  $db->query("UPDATE sas_super_admin_options SET option_value='{\"google\":false,\"email\":false}' WHERE option_name='action_security_channels'");
+  $db->query('ALTER TABLE sas_users ADD account_level INT DEFAULT 1,ADD api_status INT DEFAULT 2,ADD force_password_change INT DEFAULT 1');
+  $_SESSION=[];$_POST=['_csrf_token'=>'fixture-csrf'];
+  $sp=$db->query('SELECT * FROM sas_super_admin WHERE id=1')->fetch_assoc();$user=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();
+  $p=['upgrade_nonce'=>bc_complimentary_nonce($sp,$user),'upgrade-type'=>'api','sec_pin'=>'9362'];
+  wallet_check(strpos(bc_complimentary_upgrade($sp,11,$p),'Pricing level changed')===0,'native verified complimentary upgrade');
+  $after=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();
+  wallet_check((int)$after['account_level']===3 && (int)$after['api_status']===2 && (int)$after['force_password_change']===1 && $after['balance']===$user['balance'],'complimentary grant changes pricing only');
+  wallet_check(strpos(bc_complimentary_upgrade($sp,11,$p),'Invalid')!==false,'native nonce replay rejected');
+  $p['upgrade_nonce']=bc_complimentary_nonce($sp,$user);
+  wallet_check(strpos(bc_complimentary_upgrade($sp,11,$p),'No change')===0,'native stale level cannot change recipient');
+  $p['upgrade_nonce']=bc_complimentary_nonce($sp,$after);$p['upgrade-type']='agent';
+  wallet_check(strpos(bc_complimentary_upgrade($sp,12,$p),'Invalid')!==false,'native token cannot cross recipient tenant');
+  $db->query('UPDATE sas_super_admin SET is_blocked=1 WHERE id=1');
+  wallet_check(strpos(bc_complimentary_upgrade($sp,11,$p),'restricted')!==false,'fresh blocked platform actor rejected');
+ }
  echo "$n $edition admin wallet and channel policy MySQL checks passed\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}

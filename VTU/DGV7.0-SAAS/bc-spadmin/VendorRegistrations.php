@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registration_action');
     include_once("../func/whmp-func.php");
 
     // §33/§9: vendor registration actions (verify payment / approve /
@@ -23,9 +25,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $sec33_action = (string)$_POST['vr_action'];
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         if ($sec33_action === 'decline') {
-            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
+            $sec33_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         } else {
-            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+            $sec33_input = ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
         }
         $sec33_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'vendor_registration_action')
@@ -489,3 +491,5 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
     </script>
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

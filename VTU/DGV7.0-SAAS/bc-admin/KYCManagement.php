@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'kyc_decision');
 // AI KYC Compliance Engine: show AI analysis results in the review console
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 
@@ -66,8 +68,8 @@ if (isset($_POST['kyc_decision'])) {
         // full PIN + authenticator/email code; other decisions need the PIN.
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
         $sec33_input = ((int)$decision['status'] === 2)
-            ? ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
-            : ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
+            ? ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor]
+            : ['factor_method'=>(string)($_POST['factor_method']??'auto'), 'pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         $sec33_err = function_exists('bc_stepup_admin_verify')
             ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'kyc_decision')
             : 'Verification is unavailable.';
@@ -739,3 +741,5 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
 
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>

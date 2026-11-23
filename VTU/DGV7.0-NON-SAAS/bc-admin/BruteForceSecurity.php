@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
+require_once __DIR__.'/../func/bc-admin-inline-otp.php';
+bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'logout_all_sessions');
 
 if (isset($_POST["sec33_send_code"])) {
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
@@ -16,7 +18,7 @@ if (isset($_POST["sec33_send_code"])) {
 if (isset($_POST["logout-all-sessions"])) {
     // §33: site-wide session revocation — CSRF + step-up (PIN + authenticator/email OTP).
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-    $sec33_input = array(
+    $sec33_input = array('factor_method'=>(string)($_POST['factor_method']??'auto'),
         'pin'       => (string)($_POST['sec33_pin'] ?? ''),
         'otp_code'  => (string)($_POST['sec33_factor'] ?? ''),
         'totp_code' => (string)($_POST['sec33_factor'] ?? ''),
@@ -447,3 +449,5 @@ bc_adm_head("Brute Force Security | " . ($get_all_super_admin_site_details["site
 
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
+
+<script src="../asset/bc-admin-inline-otp.js" defer></script>
