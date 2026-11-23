@@ -1,0 +1,9 @@
+# Google browser sign-in verification
+
+Both editions' user/vendor login pages and SAAS platform-admin login now require a session-local, role/tenant-scoped Google nonce. GSI receives it as data-nonce. Every callback attempt consumes the nonce; expired, wrong-session, cross-role/tenant or replayed callbacks must reload/restart sign-in. Nonces expire after ten minutes and are separate from Google recovery approvals. Existing pending OTP/login policy remains in force.
+
+End-user login now applies the shared validator with the authoritative active vendor's OAuth client ID, not just presence of email. User and administrator validation requires Google's issuer, exact audience, verified valid email, subject and mandatory unexpired numeric exp. If azp is supplied it must match the client. Missing/malformed expiry is refused, including recovery callers using the same shared validator.
+
+The existing Google tokeninfo transport remains the verifier (not a local JWT decode). Requests accept only bounded compact JWT input, URL-encode it, verify TLS peer/host, disable redirects, require HTTP200 and a non-error JSON object. Timeouts remain bounded. No external provider call was verified from this sandbox, whose outbound host allowlist does not include Google. Browser/provider production verification is still required. This is not a claim of a complete Google account-linking audit or replacement with a locally cached JWKS verifier.
+
+Tests: google_signin_test.php exercises actual extracted payload validators for both editions, nonce behavior and integration/transport source contracts; google_recovery_test.php preserves recovery regression coverage. No schema change, deployment, API-key rotation or financial/crypto activation. Already-open Google login forms must reload after deployment to receive a nonce. Legacy API-key migration and remaining forced-password/PIN/enrollment/KYC work remain separate scope.

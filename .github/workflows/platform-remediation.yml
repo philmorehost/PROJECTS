@@ -169,6 +169,7 @@ jobs:
           php VTU/tests/app_credential_binding_test.php
           php VTU/tests/browser_binding_test.php
           php VTU/tests/login_binding_test.php
+          php VTU/tests/google_signin_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
