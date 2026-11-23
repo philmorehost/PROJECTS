@@ -349,6 +349,7 @@ if (!function_exists('bc_adm_menu')) {
                     )),
                 )),
                 array('items' => array(
+                    array('label' => 'Crypto operations', 'href' => 'CryptoOverview.php', 'icon' => 'currency-bitcoin', 'match' => array('CryptoOverview.php')),
                     array('label' => 'Payment Gateway', 'href' => 'PaymentGateway.php',     'icon' => 'credit-card',  'match' => array('PaymentGateway.php')),
                     array('label' => 'Fund Vendor',     'href' => 'ShareFund.php',          'icon' => 'cash-stack',   'match' => array('ShareFund.php')),
                     array('label' => 'Transactions',    'href' => 'Transactions.php',       'icon' => 'list-check',   'match' => array('Transactions.php')),
@@ -411,6 +412,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Payment Gateway',      'href' => 'PaymentGateway.php',      'match' => array('PaymentGateway.php')),
                     array('label' => 'Loyalty Settings',     'href' => 'LoyaltySettings.php',     'match' => array('LoyaltySettings.php')),
                     array('label' => 'Coin Conversions',     'href' => 'CoinConversions.php',     'match' => array('CoinConversions.php')),
+                    array('label' => 'Crypto operations', 'href' => 'CryptoOverview.php', 'icon' => 'currency-bitcoin', 'match' => array('CryptoOverview.php')),
                     array('label' => 'Crypto',               'href' => 'CryptoHub.php',           'match' => array('CryptoHub.php')),
                     array('label' => 'Float Service Icons',  'href' => 'FloatServiceIcons.php',   'match' => array('FloatServiceIcons.php')),
                     array('label' => 'KYC Management',       'href' => 'KYCManagement.php',       'match' => array('KYCManagement.php')),

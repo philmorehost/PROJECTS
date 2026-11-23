@@ -69,7 +69,7 @@ $e=function($s){return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8');};
 $area=$platform?'spadmin':'admin';
 require_once __DIR__.'/bc-plate-admin.php';bc_adm_head('Crypto custody reviews',['area'=>$area]);bc_adm_sidebar(['area'=>$area]);bc_adm_topbar(['area'=>$area,'title'=>'CRYPTO CUSTODY REVIEWS','crumb'=>'Crypto / Custody']);
 ?>
-<section class="section p-4"><h1 class="h3">Crypto custody accounts and protected evidence</h1>
+<section class="section p-4"><p><a href="CryptoOverview.php">Crypto operations overview</a></p><h1 class="h3">Crypto custody accounts and protected evidence</h1>
 <div class="alert alert-warning">Local review only. No provider ownership/eligibility verification, routes, deposits, withdrawals or trading are activated here. Balances and financial holds are unchanged. A manually supplied UID or evidence note is not provider proof.</div>
 <?php if($notice!==''):?><div role="alert" class="alert alert-info"><?php echo $e($notice);?></div><?php endif;?>
 <?php if(!$platform):?><p>Custody provisioning requires two independent platform reviewers. Vendor/self-approval is unavailable in this edition. No registry records or evidence are exposed here.</p><?php else:?>

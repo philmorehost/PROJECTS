@@ -189,6 +189,7 @@ if (!function_exists('bc_app_menu')) {
                     array('label' => 'Convert Coins', 'href' => 'CoinConversion.php', 'icon' => 'arrow-left-right', 'service' => 'vtu_coins'),
                     array('label' => 'Virtual Card', 'href' => 'VirtualCard.php', 'icon' => 'credit-card', 'service' => 'virtual_card'),
                     array('label' => 'Gift Card', 'href' => 'GiftCard.php', 'icon' => 'gift', 'service' => 'gift_card'),
+                    array('label' => 'Crypto overview', 'href' => 'CryptoOverview.php', 'icon' => 'shield-check', 'service' => 'crypto_hub'),
                     array('label' => 'Crypto', 'href' => 'CryptoHub.php', 'icon' => 'currency-bitcoin', 'service' => 'crypto_hub'),
                     array('label' => 'Send Money Abroad', 'href' => 'IntlTransfer.php', 'icon' => 'globe', 'service' => 'intl_transfer'),
                     array('label' => 'Pay Tuition Worldwide', 'href' => 'Tuition.php', 'icon' => 'mortarboard', 'service' => 'tuition'),
