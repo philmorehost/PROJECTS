@@ -5,6 +5,7 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     $fingerprint=hash('sha256',json_encode([$p,$actor['password']??'',$actor['security_pin']??'',$actor['totp_secret']??'']));
     if(isset($_SESSION['bc_action_unlock_policy'][$scope]) && !hash_equals($_SESSION['bc_action_unlock_policy'][$scope],$fingerprint))unset($_SESSION['bc_gauth_unlock'][$scope]);
     if($p['google'])return false;
+    if(!isset($_SESSION['bc_action_unlock_policy'][$scope]))unset($_SESSION['bc_gauth_unlock'][$scope]);
     $reply=function($ok,$message){header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     if(isset($_POST['send_settings_code'])){
         bc_validate_csrf();if(!$p['email'])$reply(false,'Email OTP is disabled.');
