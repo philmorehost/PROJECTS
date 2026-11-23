@@ -9,3 +9,7 @@ The new navigation assets have no storage/session/API/provider or wallet calls. 
 Automated verification: actual server-rendered PHP fixture via PHP-WASM, Chromium at320/375/390/600/768/800/801/1024/1440px, page overflow, visible mobile link bounds/targets, keyboard/Escape, focus on breakpoint change, no-JS fallback, reduced motion and edition asset parity. External resources and financial/provider calls are blocked in this browser test; it does not verify external rate feeds. CI runs the browser check alongside native PHP public-page contracts.
 
 Remaining: exact-reference visual comparison across sections, remaining reference interactions/artwork review, all other template design requirements, native-device checks and the separately tracked financial completion scope. Browser layout tests are not real-device or provider verification. Production serving is PHP plus static CSS/JS; Node is used only for development/CI tests, not required on the vendor's PHP host.
+
+## Breakpoint focus race follow-up
+
+A later CI run reproduced a Chromium ordering race: CSS could hide the desktop link and reset focus to body before matchMedia's change handler examined activeElement. The navigation now remembers the last focused link (cleared on deliberate outside pointer/focus actions) and handles the no-target focusout as well as the breakpoint callback. This restores focus to the visible menu button without relying on browser event order. The browser regression now crosses the desktop/mobile breakpoint ten times without weakening the focus assertion.
