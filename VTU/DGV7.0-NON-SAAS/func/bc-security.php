@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-compliance-policy.php';
 require_once __DIR__ . '/bc-secure-session.php';
 
 /**
@@ -901,7 +902,7 @@ if (!function_exists('bc_kyc_app_confinement_required')) {
     {
         global $connection_server;
         if (!is_array($user) || !($connection_server instanceof mysqli)) return false;
-        if ((int)($user['kyc_status'] ?? 0) === 2) return false;
+        if (bc_kyc_approval_current($user)) return false;
         $vendor_id = (int)($user['vendor_id'] ?? 0);
         if ($vendor_id <= 0) return false;
         if (!function_exists('isKYCEnforced') || !isKYCEnforced($vendor_id)) return false;

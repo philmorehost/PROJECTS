@@ -862,6 +862,7 @@ function load_edition($root, $edition, $files) {
 // Simpler: load the SAAS edition for behaviour and byte-compare the other edition.
 
 $global_behaviour_files = [
+    'func/bc-compliance-policy.php',
     'func/bc-fintech-policy.php',
     'func/bc-fintech-schema.php',
     'func/bc-app-credential-binding.php',
@@ -874,6 +875,7 @@ $connection_server = new FakeDb();
 // The real denial helper exits the process. Replace it BEFORE the gate is loaded (every gate
 // function is guarded by function_exists) so refusals can be asserted instead of ending the run.
 function bc_api_key_is_expired($row){$exp=$row['api_key_expires_at']??'';return $exp!==''&&strtotime($exp)<=time();}
+function bc_kyc_app_confinement_required($row){return !empty($GLOBALS['test_kyc_confined']);}
 function bc_enrollment_api_guard($row){$GLOBALS['legacy_enrollment_actor']=$row;}
 function bc_fintech_send_app_denial(array $decision) {
     $GLOBALS['bc_denial'] = $decision;
@@ -1194,6 +1196,23 @@ gcheck('valid token: resolved user is the token owner', $GLOBALS['bc_api_auth_us
 // Vendor may be unknown at call time; the session row supplies it.
 gcheck('valid token without a known vendor still authenticates', bc_fintech_api_credential('', 0), 'personal-legacy-key');
 unset($_SERVER['HTTP_AUTHORIZATION']);
+
+// Both first-party authenticators apply the same compliance route policy.
+$_SERVER['HTTP_AUTHORIZATION']='Bearer '.$key_user['token'];
+$GLOBALS['test_kyc_confined']=true;
+foreach(['/web/api/mobile-home.php','/other/kyc.php',''] as $script){
+ $_SERVER['SCRIPT_NAME']=$script;
+ foreach(['bridge','dedicated'] as $auth){
+  try{if($auth==='bridge')bc_fintech_api_credential('',7);else bc_fintech_require_app_account(7);throw new RuntimeException('unexpected compliance access');}catch(RuntimeException $e){if($e->getMessage()!=='APP_DENIAL')throw $e;}
+  gcheck('confined '.$auth.' refuses '.$script,$GLOBALS['bc_denial']['code'],'KYC_REQUIRED');
+ }
+}
+foreach(['/web/api/kyc.php','/web/api/profile.php','/web/api/logout.php'] as $script){
+ $_SERVER['SCRIPT_NAME']=$script;
+ gcheck('compliance bridge allows '.$script,bc_fintech_api_credential('',7),'personal-legacy-key');
+ gcheck('dedicated compliance access '.$script,bc_fintech_require_app_account(7)['id'],1);
+}
+$GLOBALS['test_kyc_confined']=false;unset($_SERVER['SCRIPT_NAME'],$_SERVER['HTTP_AUTHORIZATION']);
 
 // Branch 3: a presented-but-dead token must never fall back to api_key.
 $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . str_repeat('Z', 43);

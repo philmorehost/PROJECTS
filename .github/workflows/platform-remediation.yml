@@ -170,6 +170,7 @@ jobs:
           php VTU/tests/browser_binding_test.php
           php VTU/tests/login_binding_test.php
           php VTU/tests/google_signin_test.php
+          php VTU/tests/compliance_policy_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
@@ -305,3 +306,9 @@ jobs:
           BC_ENROLLMENT_PASSWORD_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/enrollment_password_mysql_test.php
+
+      - name: Persisted KYC expiry and renewal confinement on disposable MySQL
+        env:
+          BC_COMPLIANCE_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/compliance_mysql_test.php
