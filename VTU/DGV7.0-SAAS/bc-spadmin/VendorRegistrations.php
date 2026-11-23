@@ -92,14 +92,17 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
                     $proof=['digest'=>bc_vreg_compliance_digest($pending_vendor,$policy),'reviewer'=>(int)$get_logged_spadmin_details['id'],'at'=>gmdate('c')];
                     foreach(['kyc','kyb'] as $type){
                         $ref=$_POST[$type.'_case_reference']??'';
-                        if(!is_string($ref)||strlen($ref)>190||($policy[$type]&&!preg_match('/\A[A-Za-z0-9][A-Za-z0-9 ._:\/-]{7,189}\z/D',$ref)))throw new RuntimeException('Supply the completed verification case reference for each required check.');
+                        if(!is_string($ref)||strlen($ref)>190||(($policy[$type]||$ref!=='')&&!preg_match('/\A[A-Za-z0-9][A-Za-z0-9 ._:\/-]{7,189}\z/D',$ref)))throw new RuntimeException('Supply the completed verification case reference for each required check.');
                         $proof[$type]=$ref;
                     }
                     if($policy['kyb']&&(empty($pending_vendor['business_name'])||empty($pending_vendor['business_registration_no'])))throw new RuntimeException('Applicant business details are missing. Request a complete application.');
                     if(empty($_POST['compliance_confirmed']))throw new RuntimeException('Confirm you reviewed the required evidence.');
                     // Bind review to the exact identity snapshot; any identity edit invalidates it.
                     $encoded=json_encode($proof,JSON_THROW_ON_ERROR);
-                    bc_security_ensure_schema();$connection_server->begin_transaction();
+                    bc_security_ensure_schema();
+                    $review_engine=bc_q_row("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sas_pending_vendors'");
+                    if(strtolower($review_engine['ENGINE']??'')!=='innodb')throw new RuntimeException('Compliance review requires InnoDB storage.');
+                    $connection_server->begin_transaction();
                     if(bc_q('UPDATE sas_pending_vendors SET compliance_review=? WHERE id=?',[$encoded,(int)$pending_id])!==true)throw new RuntimeException('Review could not be saved.');
                     if(!bc_sec_audit(0,'spadmin',(string)$get_logged_spadmin_details['id'],'vendor_compliance_review','pending#'.(int)$pending_id,'snapshot='.$proof['digest'].';kyc='.$proof['kyc'].';kyb='.$proof['kyb']))throw new RuntimeException('Review audit unavailable.');
                     $connection_server->commit();

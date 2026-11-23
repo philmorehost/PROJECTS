@@ -149,6 +149,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
         $smtp_pass = $smtp_config['smtp_pass'] ?? '';
         $smtp_port = (int)($smtp_config['smtp_port'] ?? 25);
         $smtp_sec = $smtp_config['smtp_sec'] ?? 'tls';
+        if ($platform_only && !in_array($smtp_sec,['tls','ssl'],true)) return false;
 
         // GUARANTEE a valid From address (see bc_resolve_safe_from_address). Using the raw
         // DB value here let a bad smtp_user poison both the SMTP path AND the mail() fallback.

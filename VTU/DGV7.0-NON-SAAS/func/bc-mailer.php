@@ -45,6 +45,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
         $smtp_pass = $smtp_config['smtp_pass'] ?? '';
         $smtp_port = (int)($smtp_config['smtp_port'] ?? 25);
         $smtp_sec = $smtp_config['smtp_sec'] ?? 'tls';
+        if ($platform_only && !in_array($smtp_sec,['tls','ssl'],true)) return false;
 
 		$smtpMAIL->isSMTP();
 		$smtpMAIL->Host = $smtp_host;
