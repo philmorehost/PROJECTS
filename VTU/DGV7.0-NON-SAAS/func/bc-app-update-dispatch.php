@@ -25,7 +25,7 @@ function bc_app_update_dispatch($db,$vendor,$version,$project,$payload,$send) {
     try {
         $result=$send();
         $name=$result['body']['name']??null;
-        $accepted=($result['code']??0)===200 && is_string($name) && strpos($name,'projects/'.$project.'/messages/')===0 && strlen($name)<=1024;
+        $accepted=($result['code']??0)===200 && is_string($name) && strpos($name,'projects/'.$project.'/messages/')===0 && strlen($name)>strlen('projects/'.$project.'/messages/') && strlen($name)<=1024;
         if($accepted)$receipt=hash('sha256',$name);
     } catch(Throwable $e) { /* Provider may have accepted before connection loss. */ }
     $state=$accepted?'accepted':'unknown';

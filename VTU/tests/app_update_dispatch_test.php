@@ -31,7 +31,7 @@ dispatch_check(bc_app_update_dispatch($db,7,2,'other-project',$changed,$ok)==='a
 $events=[];$sent=0;$mode='finish_error';
 dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$payload,$ok)==='unknown' && $sent===1,'accepted provider plus DB failure unconfirmed');
 $mode='normal';dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$payload,$ok)==='already_attempted' && $sent===1,'finalization failure cannot resend');
-foreach([function(){throw new RuntimeException('PRIVATE transport error');},function(){return ['code'=>0,'body'=>null];},function(){return ['code'=>200,'body'=>['name'=>'wrong-project']];}] as $failure){
+foreach([function(){throw new RuntimeException('PRIVATE transport error');},function(){return ['code'=>0,'body'=>null];},function(){return ['code'=>200,'body'=>['name'=>'wrong-project']];},function(){return ['code'=>200,'body'=>['name'=>'projects/example-project/messages/']];}] as $failure){
  $events=[];dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$payload,$failure)==='unknown','ambiguous/invalid result retained as unknown');
  dispatch_check(bc_app_update_dispatch($db,7,2,'example-project',$payload,$ok)==='already_attempted','unknown outcome cannot retry');
 }
