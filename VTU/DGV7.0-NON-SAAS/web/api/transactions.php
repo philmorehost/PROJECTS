@@ -23,10 +23,10 @@ if (mysqli_num_rows($check_user) != 1) {
     return;
 }
 $user = mysqli_fetch_assoc($check_user);
-$username = $user['username'];
+$username = mysqli_real_escape_string($connection_server, (string)$user['username']);
 
-$limit = (int)($input['limit'] ?? 50);
-$offset = (int)($input['offset'] ?? 0);
+$limit = max(1, min(100, (int)($input['limit'] ?? 50)));
+$offset = max(0, (int)($input['offset'] ?? 0));
 
 $status = $input['status'] ?? '';
 $type = $input['type'] ?? '';
@@ -51,15 +51,44 @@ if ($start_date !== '' && $end_date !== '') {
 $transactions = [];
 $q = mysqli_query($connection_server, "SELECT * FROM sas_transactions $where_clause ORDER BY date DESC LIMIT $limit OFFSET $offset");
 
+if (!$q) {
+    http_response_code(503);
+    echo json_encode(['status'=>'error','message'=>'Transaction history is temporarily unavailable.']);
+    return;
+}
+require_once __DIR__ . '/../../func/bc-transaction-receipt.php';
+$rows=[];$references=[];
 while ($r = mysqli_fetch_assoc($q)) {
+    $rows[]=$r;
+    $references[]="'".mysqli_real_escape_string($connection_server,(string)$r['reference'])."'";
+}
+$utilities=[];
+if ($references) {
+    // ONE bounded lookup per page, not a query for every history row; same owner/tenant.
+    $uq=mysqli_query($connection_server,"SELECT * FROM sas_electric_purchaseds WHERE vendor_id='$vendor_id' AND username='$username' AND reference IN (".implode(',',array_unique($references)).") ORDER BY id DESC");
+    if (!$uq) {
+        http_response_code(503);
+        echo json_encode(['status'=>'error','message'=>'Receipt details are temporarily unavailable.']);
+        return;
+    }
+    while($utility=mysqli_fetch_assoc($uq)) {
+        if(!isset($utilities[$utility['reference']]))$utilities[$utility['reference']]=$utility;
+    }
+}
+foreach ($rows as $r) {
+    if (isset($utilities[$r['reference']])) $r['utility_purchase']=$utilities[$r['reference']];
+    $receipt=bc_receipt_payload($r,false,'');
+
     $transactions[] = [
         "reference" => $r['reference'],
+        "recipient" => (string)$r['product_unique_id'],
+        "receipt_details" => bc_receipt_detail_lines($receipt),
         "type" => ucwords($r['type_alternative']),
         "amount" => (float)$r['amount'],
         "discounted_amount" => (float)$r['discounted_amount'],
         "balance_before" => (float)$r['balance_before'],
         "balance_after" => (float)$r['balance_after'],
-        "description" => $r['description'],
+        "description" => $receipt['service'],
         "status" => (int)$r['status'],
         "status_name" => tranStatus($r['status']),
         "mode" => $r['mode'],

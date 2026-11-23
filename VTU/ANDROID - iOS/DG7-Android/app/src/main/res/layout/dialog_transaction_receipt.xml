@@ -146,7 +146,7 @@
                         android:layout_width="0dp" android:layout_height="wrap_content"
                         android:layout_weight="2" android:text="—"
                         android:textColor="@color/text_primary" android:textSize="13sp"
-                        android:gravity="end" android:maxLines="3"  android:tag="brand:text=on_surface" />
+                        android:gravity="end"  android:tag="brand:text=on_surface" />
                 </LinearLayout>
 
                 <!-- Amount Paid -->

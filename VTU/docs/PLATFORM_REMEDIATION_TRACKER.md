@@ -143,3 +143,32 @@ the current vendor token, so link rotation/revocation also rejects old sessions.
 Existing temporary sessions must reopen their valid secure portal link once.
 13 mocked session/expiry/rotation/portal-source checks added. Actual configured
 DNS, queued email delivery and browser access are not production-verified.
+
+
+## Native history and receipt continuation
+
+- Both editions' transactions API now includes allowlisted `receipt_details` label /
+  value lines and the credited destination. It uses one bounded, owner/tenant-scoped
+  utility lookup per page, caps page size at 100 and rejects database failures rather
+  than claiming a successful empty history. Existing NON-SAAS filters are retained.
+- Raw upstream transaction descriptions are replaced by the friendly service name in
+  customer history responses, avoiding postpaid token leaks through raw descriptions.
+  Stored transaction descriptions remain unchanged for staff investigation.
+- All three Android brands parse details in dashboard and full-history paths; receipt
+  screens/images include individual fields, and PDF text wraps into an appropriately
+  sized receipt page instead of clipping long identity/token fields.
+- DG7/JIKABIZ iOS history previously expected `transactions`/string statuses/int IDs
+  instead of the actual `data`/numeric-status/reference response. It now consumes the
+  actual contract, surfaces errors, supports paging/refresh and opens shared receipts.
+  MZEEVTU's existing history filters and CSV export are retained, with receipt opening
+  and explicit failed-response handling added. All three iOS receipt exports measure
+  actual text height rather than clipping a fixed-height page.
+- Source/fixture tests added for endpoint scope, two-query pagination, leading-zero
+  destinations, prepaid token inclusion, postpaid/raw-text suppression, failure states
+  and native receipt wiring. Native compilation and device rendering are separate.
+
+This does NOT complete the entire original request. Missing historic customer
+name/address cannot be invented; legacy standalone receipt templates, API-enable
+persistence, remaining billing/upgrade paths, broadcasts, Bybit backend settings,
+site-wide OTP UX and the complete compliance/service audit remain outstanding.
+Crypto staging remains paused; no financial integration is activated or deployed.

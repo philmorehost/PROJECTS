@@ -8,6 +8,7 @@ on:
       - 'VTU/**/func/bc-float-services.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-transaction-receipt.php'
+      - 'VTU/**/web/api/transactions.php'
       - 'VTU/**/bc-admin/AccountSettings.php'
       - 'VTU/**/bc-admin/FloatServiceIcons.php'
       - 'VTU/**/bc-admin/UserUpgrade.php'
@@ -26,6 +27,7 @@ on:
       - 'VTU/**/func/bc-float-services.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-transaction-receipt.php'
+      - 'VTU/**/web/api/transactions.php'
       - 'VTU/**/bc-admin/AccountSettings.php'
       - 'VTU/**/bc-admin/FloatServiceIcons.php'
       - 'VTU/**/bc-admin/UserUpgrade.php'
@@ -56,6 +58,7 @@ jobs:
           php -n VTU/tests/remediation_pricing_catalog_test.php
           php -n VTU/tests/float_services_test.php
           php -n VTU/tests/receipt_utility_test.php
+          php -n VTU/tests/mobile_history_receipt_test.php
           php -n VTU/tests/temporary_vendor_access_test.php
           php -n VTU/tests/plate_app_test.php
           php -n VTU/tests/gateway_verdict_test.php
@@ -64,7 +67,7 @@ jobs:
           php -n -d extension=tokenizer VTU/tests/fintech_gate_test.php
           php -n -d extension=tokenizer VTU/tests/user_action_gate_test.php
           for edition in SAAS NON-SAAS; do
-            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php web/PasswordRecovery.php; do
+            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php web/PasswordRecovery.php web/api/transactions.php func/bc-transaction-receipt.php; do
               php -l "VTU/DGV7.0-$edition/$file"
             done
           done
