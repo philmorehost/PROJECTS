@@ -19,6 +19,7 @@ on:
       - 'VTU/tests/crypto_routes*.php'
       - 'VTU/tests/crypto_poll*.php'
       - 'VTU/tests/crypto_dashboard*.php'
+      - 'VTU/tests/crypto_bybit_sub_address_test.php'
       - 'VTU/**/CryptoOverview.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-plate-admin.php'
@@ -45,6 +46,7 @@ on:
       - 'VTU/tests/crypto_routes*.php'
       - 'VTU/tests/crypto_poll*.php'
       - 'VTU/tests/crypto_dashboard*.php'
+      - 'VTU/tests/crypto_bybit_sub_address_test.php'
       - 'VTU/**/CryptoOverview.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-plate-admin.php'
@@ -101,6 +103,7 @@ jobs:
       - name: Deposit route candidate contracts
         run: |
           php VTU/tests/crypto_routes_test.php
+          php VTU/tests/crypto_bybit_sub_address_test.php
           php VTU/tests/crypto_dashboard_test.php
           php VTU/tests/crypto_poll_test.php
           php VTU/tests/crypto_poll_operator_test.php
