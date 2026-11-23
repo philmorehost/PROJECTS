@@ -172,3 +172,28 @@ name/address cannot be invented; legacy standalone receipt templates, API-enable
 persistence, remaining billing/upgrade paths, broadcasts, Bybit backend settings,
 site-wide OTP UX and the complete compliance/service audit remain outstanding.
 Crypto staging remains paused; no financial integration is activated or deployed.
+
+
+## User API status persistence continuation
+
+- Tenant and platform user API switches now share a tenant+primary-key scoped writer
+  called only after existing CSRF/PIN/second-factor verification. Platform confirmation
+  carries the row ID; username fallback is escaped and rejects ambiguous matches.
+- Enabling is Business-only and requires an active/unblocked account. Personal pricing
+  level 3 cannot bypass explicit Personal account type. Disabling remains possible for
+  restricted users. This changes neither account type/pricing nor wallet balances.
+- Enable writes compare account type/level/status/block snapshots to avoid racing a
+  type conversion/suspension. A successful UPDATE alone no longer means success:
+  the row is independently read back and eligibility checked before success/email.
+- Read/write/readback errors and policy restrictions are explicit rather than silent.
+  A readback failure is an **unconfirmed outcome**, not a promise of database rollback;
+  administrators are told to refresh before retrying. No raw DB exceptions are shown.
+- 48 fixture checks added for wrong scope, denied policy, suppressed writes, idempotent
+  saves, errors, quoted usernames and concurrency snapshot SQL. Disposable MySQL CI
+  also checks actual persistence, zero-affected-row idempotency, nullable legacy
+  account fields and a trigger-suppressed write in both editions.
+
+This hardens/validates status persistence; it does not certify every downstream legacy
+API-docs/level check or production database installation. Existing API-key expiry,
+Business/tenant service/compliance policies still apply after the flag is enabled.
+Other remaining remediation work stays open, no deployment, crypto staging paused.

@@ -67,6 +67,10 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
             return false;
         }
 
+        if ($column === 'api_status') {
+            require_once __DIR__ . '/../func/bc-user-api-status.php';
+            return bc_user_api_status_save($connection_server,$vendor_id,$user_id,'',$value,$error);
+        }
         $value = (int) $value;
         $update = mysqli_query($connection_server, "UPDATE sas_users SET $column='$value' WHERE vendor_id='$vendor_id' && id='$user_id'");
         if (!$update) {
@@ -476,9 +480,9 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
                     $account_update_error = "";
                     if(bc_admin_set_user_column($get_user_details["id"], "api_status", $status, $account_update_error)){
                         $send_mail_to_user = true;
-                        $json_response_array = array("desc" => ucwords($account_user." account status ".strtolower($statusArrayValue[$status])." successfully"));
+                        $json_response_array = array("desc" => ucwords($account_user." API access ".strtolower($statusArrayValue[$status])." and confirmed saved. Existing KYC, tenant service and API-key expiry policies still apply."));
                     }else{
-                        $json_response_array = array("desc" => ucwords($account_user." account status cannot be ".strtolower($statusArrayValue[$status])).($account_update_error !== "" ? " - ".$account_update_error : ""));
+                        $json_response_array = array("desc" => ucwords($account_user." API access cannot be ".strtolower($statusArrayValue[$status])).($account_update_error !== "" ? " - ".$account_update_error : ""));
                     }
 
                     if($send_mail_to_user == true){
