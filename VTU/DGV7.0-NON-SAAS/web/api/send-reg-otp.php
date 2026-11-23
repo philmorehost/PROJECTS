@@ -10,6 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+bc_validate_csrf(true);
+header('Cache-Control: no-store');
+$current_reg_vendor=(int)resolveVendorID();
+$reg_vendor_query=mysqli_query($connection_server,"SELECT id FROM sas_vendors WHERE id=$current_reg_vendor AND status=1 LIMIT 1");
+if(!$reg_vendor_query || mysqli_num_rows($reg_vendor_query)!==1){echo json_encode(['status'=>'error','message'=>'Registration is unavailable.']);exit;}
+
+if($current_reg_vendor<1 || !bc_registration_enabled($current_reg_vendor)){echo json_encode(['status'=>'error','message'=>'Registration is unavailable.']);exit;}
 $vendor_id        = resolveVendorID();
 $select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 $user     = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["user"]   ?? ""))));
@@ -59,7 +66,7 @@ if (mysqli_num_rows($check_email) > 0) {
 // Rate-limit: one OTP per 60 seconds per email
 $otp_last_sent  = $_SESSION['reg_otp_last_sent'] ?? 0;
 $otp_email_for  = $_SESSION['reg_otp_email']     ?? '';
-if ($email === $otp_email_for && (time() - $otp_last_sent) < 60) {
+if ((time() - $otp_last_sent) < 60) {
     echo json_encode(["status" => "error", "message" => "Please wait 60 seconds before requesting another OTP"]);
     exit;
 }
@@ -82,6 +89,7 @@ $_SESSION['reg_pending'] = [
     'referral'  => $referral,
     'api_key'   => substr(str_shuffle("abdcefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"), 0, 50),
 ];
+$_SESSION['reg_otp_attempts'] = 0;
 $_SESSION['reg_otp']          = $otp;
 $_SESSION['reg_otp_expires']  = $otp_expires;
 $_SESSION['reg_otp_email']    = $email;
@@ -117,6 +125,7 @@ if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 0) {
         unset($_SESSION['reg_pending'], $_SESSION['reg_otp'], $_SESSION['reg_otp_expires'], $_SESSION['reg_otp_email']);
 
         // Log user in
+        session_regenerate_id(true);
         $_SESSION["user_session"] = $user;
 
         echo json_encode(["status" => "immediate", "message" => "Account created successfully!", "redirect" => "SecurityPIN.php"]);
@@ -139,7 +148,10 @@ $body    = $otp_mail ? $otp_mail['body']
     . "</div><br>"
     . "This code expires in <strong>10 minutes</strong>.<br><br>"
     . "If you did not attempt to register, please ignore this email.";
-sendVendorEmail($email, $subject, $body);
+if(!sendVendorEmail($email, $subject, $body)){
+    unset($_SESSION['reg_pending'],$_SESSION['reg_otp'],$_SESSION['reg_otp_expires']);
+    echo json_encode(['status'=>'error','message'=>'Could not send the verification code. Please wait before retrying.']);exit;
+}
 
 echo json_encode(["status" => "success", "message" => "Verification code sent to " . htmlspecialchars($email)]);
 exit;
