@@ -1,7 +1,13 @@
 <?php
 require_once __DIR__.'/bc-app-update-validation.php';
 require_once __DIR__.'/bc-app-update-dispatch.php';
-require_once __DIR__.'/bc-vendor-expiry.php';
+/** Read-only eligibility check; NON-SAAS has no web subscription middleware. */
+function bc_app_update_subscription_expired($actor) {
+    $date=trim((string)($actor['expiry_date']??''));
+    if($date==='' || $date==='0000-00-00')return false;
+    $expiry=DateTimeImmutable::createFromFormat('!Y-m-d',$date,new DateTimeZone('Africa/Lagos'));
+    return !$expiry || $expiry->format('Y-m-d')!==$date || time()>=$expiry->modify('+1 day')->getTimestamp();
+}
 function bc_app_update_actor_hash($actor) {
     return hash('sha256',json_encode([(string)($actor['password']??''),(string)($actor['security_pin']??''),(string)($actor['totp_secret']??''),(string)($actor['two_factor_type']??'')],JSON_THROW_ON_ERROR));
 }
@@ -41,7 +47,7 @@ function bc_app_update_snapshot($db,$vendor,$root) {
         return mysqli_fetch_assoc($q);
     };
     $actor=$load('sas_vendors');
-    if((int)($actor['status']??0)!==1 || !empty($actor['is_blocked']) || !empty($actor['force_password_change']) || bc_vendor_subscription_expired($actor))throw new RuntimeException('vendor_restricted');
+    if((int)($actor['status']??0)!==1 || !empty($actor['is_blocked']) || !empty($actor['force_password_change']) || bc_app_update_subscription_expired($actor))throw new RuntimeException('vendor_restricted');
     if(!function_exists('bc_enrollment_reason') || bc_enrollment_reason($actor,'vendor',true)!=='')throw new RuntimeException('vendor_setup_required');
     $host=strtolower(trim((string)($actor['website_url']??'')));
     if(strlen($host)>253 || strpos($host,'.')===false || !filter_var($host,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME))throw new RuntimeException('vendor_host_invalid');
