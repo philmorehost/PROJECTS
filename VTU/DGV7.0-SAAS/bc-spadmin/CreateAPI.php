@@ -3,18 +3,20 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     
+    require_once __DIR__ . '/../func/bc-price-input.php';
     $product_type_array = array("airtime", "shared-data", "sme-data", "cg-data", "dd-data", "betting", "datacard", "rechargecard", "electric", "cable", "exam", "bulk-sms", "finance-hub", "gift-card", "identity-verification", "esim", "virtual-card", "intl-transfer", "payment-gateway");
     $api_status_array = array(1 => "Public", 2 => "Private");
 
     if(isset($_POST["create-api"])){
+        bc_validate_csrf();
         $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["type"]))));
         $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["status"])));
         $desc = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["desc"])));
-        $price = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/","",trim(strip_tags(strtolower($_POST["price"])))));
+        $price = bc_price_input($_POST['price'] ?? null);
         $unrefined_website_url = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["website-url"]))));
         $refined_website_url = trim(str_replace(["https","http",":/","/","www."," "],"",$unrefined_website_url));
         $website_url = $refined_website_url;
-        if(in_array($type, $product_type_array) && in_array($status, array_keys($api_status_array)) && !empty($type) && in_array($type, $product_type_array) && !empty($status) && in_array($status, array_keys($api_status_array)) && !empty($price) && is_numeric($price) && !empty($website_url)){
+        if(in_array($type, $product_type_array) && in_array($status, array_keys($api_status_array)) && !empty($type) && in_array($type, $product_type_array) && !empty($status) && in_array($status, array_keys($api_status_array)) && $price !== null && !empty($website_url)){
             $check_api_details = mysqli_query($connection_server, "SELECT * FROM sas_api_marketplace_listings WHERE api_website='$website_url' && api_type='$type'");
 
             if(mysqli_num_rows($check_api_details) == 0){
@@ -66,7 +68,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                                     $json_response_array = array("desc" => "Invalid API Status");
                                     $json_response_encode = json_encode($json_response_array,true);
                                 }else{
-                                    if(empty($price)){
+                                    if($price === null){
                                         //Price Field Empty
                                         $json_response_array = array("desc" => "Price Field Empty");
                                         $json_response_encode = json_encode($json_response_array,true);
@@ -117,7 +119,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <p class="text-muted small">List a new API gateway for vendors to purchase</p>
                 </div>
                 <div class="card-body p-4 p-md-5">
-                    <form method="post">
+                    <form method="post"><?php echo bc_csrf_field(); ?>
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-muted text-uppercase">API Service Type</label>

@@ -36,7 +36,9 @@ for brand, package in [('DG7-Android', 'com.datagifting.app'), ('JIKABIZ-Android
 for brand, folder in [('DG7-iOS', 'DG6-iOS'), ('JIKABIZ-iOS', 'JIKABIZ'), ('MZEEVTU-iOS', 'MZEEVTU-iOS')]:
     base = root / brand / folder
     home = (base / 'Views/DashboardView.swift').read_text()
-    for feature in ['KYCView()', 'AIChatView()', 'TransactionHistoryView()', 'mobile_biometric_lock', 'mobile-home.php', 'nonPersistent()', 'request.httpMethod="POST"']:
+    assistant = 'AIAssistantView()' if brand == 'MZEEVTU-iOS' else 'AIChatView()'
+    check(('struct ' + assistant[:-2] + ': View') in (base / ('Views/' + assistant[:-2] + '.swift')).read_text(), f'{brand}: assistant destination exists')
+    for feature in ['KYCView()', assistant, 'TransactionHistoryView()', 'mobile_biometric_lock', 'mobile-home.php', 'nonPersistent()', 'request.httpMethod="POST"']:
         check(feature in home, f'{brand}: missing {feature}')
     receipt = (base / 'Views/MobileReceipt.swift').read_text()
     check('UIGraphicsPDFRenderer' in receipt and '.pngData()' in receipt and 'BCShareSheet' in receipt, f'{brand}: PDF and image sharing')

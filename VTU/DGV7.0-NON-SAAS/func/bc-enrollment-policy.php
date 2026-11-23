@@ -28,7 +28,7 @@ function bc_enrollment_api_guard($row,$role='user') {
     $reason=bc_enrollment_reason($row,$role);
     if($reason!=='') {
         http_response_code(403);header('Content-Type: application/json');
-        echo json_encode(['status'=>'error','code'=>$reason,'message'=>$reason==='PASSWORD_CHANGE_REQUIRED'?'Change your password on the website before continuing.':'Complete Google Authenticator setup on the website before continuing.','setup_url'=>bc_enrollment_url($role)]);exit;
+        echo json_encode(['status'=>'error','code'=>$reason,'message'=>$reason==='PASSWORD_CHANGE_REQUIRED'?'Change your password and security PIN on the website before continuing.':'Complete Google Authenticator setup on the website before continuing.','setup_url'=>bc_enrollment_url($role)]);exit;
     }
 }
 function bc_enrollment_route_allowed($path,$role) {
@@ -64,9 +64,17 @@ function bc_enrollment_change_password($table,$actor,$input) {
     $old=(string)($input['old_password']??'');$new=(string)($input['new_password']??'');
     if(!bc_verify_password($old,$actor['password']))return 'Current password is incorrect.';
     if(strlen($new)<12 || strlen($new)>72 || $new!==($input['confirm_password']??'') || bc_verify_password($new,$actor['password']))return 'Use a different password of 12–72 characters and confirm it exactly.';
+    $pin=(string)($input['new_pin']??'');
+    if (!preg_match('/\A[0-9]{4}\z/D',$pin) || $pin!==($input['confirm_pin']??'') || in_array($pin,['0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321'],true)) return 'Choose and confirm a new, nontrivial four-digit security PIN.';
+    if ((!empty($actor['security_pin']) && (password_verify($pin,(string)$actor['security_pin']) || password_verify((string)(int)$pin,(string)$actor['security_pin']))) || (!empty($actor['transaction_pin']) && (int)$actor['transaction_pin']===(int)$pin)) return 'Choose a different security PIN from your previous PIN.';
     $changed=null;
-    $saved=bc_q("UPDATE `$table` SET password=?,force_password_change=0 WHERE id=? AND password=? AND force_password_change=1",[bc_hash_password($new),(int)$actor['id'],(string)$actor['password']],$changed);
-    return $saved===true && $changed===1 ? '' : 'Could not save your password. Refresh and try again.';
+    $pin_sql=$table==='sas_users' ? ',transaction_pin=?' : '';
+    $params=[bc_hash_password($new),password_hash($pin,PASSWORD_DEFAULT)];
+    if($table==='sas_users')$params[]=$pin;
+    $params[]=(int)$actor['id'];$params[]=(string)$actor['password'];
+    // Password, PIN and clearing the restriction succeed or fail in ONE compare-and-set.
+    $saved=bc_q("UPDATE `$table` SET password=?,security_pin=?$pin_sql,force_password_change=0 WHERE id=? AND password=? AND force_password_change=1",$params,$changed);
+    return $saved===true && $changed===1 ? '' : 'Could not save your password and PIN. Refresh and try again.';
 }
 function bc_enrollment_setup_page($role,$actor) {
     global $connection_server;
@@ -81,7 +89,7 @@ function bc_enrollment_setup_page($role,$actor) {
         $action=(string)($_POST['setup_action']??'');
         if($action==='password' && !empty($actor['force_password_change'])) {
             $error=bc_enrollment_change_password($table,$actor,$_POST);
-            if($error==='') {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'password_changed',(string)$actor['id'],'Forced password change completed');header('Location: '.bc_enrollment_url($role));exit;}
+            if($error==='') {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'password_changed',(string)$actor['id'],'Forced password and PIN change completed');header('Location: '.bc_enrollment_url($role));exit;}
         } else $error='Complete the required security step first.';
     }
     $reason=bc_enrollment_reason($actor,$role);
@@ -92,7 +100,7 @@ function bc_enrollment_setup_page($role,$actor) {
     if($error!=='')echo '<p class="error">'.$e($error).'</p>';
     echo '<form method="post">'.bc_csrf_field();
     if($reason==='PASSWORD_CHANGE_REQUIRED') {
-        echo '<h2>Change your password</h2><input type="hidden" name="setup_action" value="password"><label>Current password<input name="old_password" type="password" autocomplete="current-password" required></label><label>New password (12–72 characters)<input name="new_password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" required></label><button>Save new password</button>';
+        echo '<h2>Change your password and security PIN</h2><input type="hidden" name="setup_action" value="password"><label>Current password<input name="old_password" type="password" autocomplete="current-password" required></label><label>New password (12–72 characters)<input name="new_password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" required></label><label>New security PIN<input name="new_pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" required></label><label>Confirm new security PIN<input name="confirm_pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" required></label><button>Save new password and PIN</button>';
     } else {
         echo '</form>';
         bc_totp_setup_widget();

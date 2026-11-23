@@ -3,9 +3,14 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
     
+    require_once __DIR__ . '/../func/bc-marketplace-catalog.php';
+    $catalog_synced = bc_marketplace_sync_bundled($connection_server);
+
     // Handle Delete Action
-    if (isset($_GET['deleteID']) && is_numeric($_GET['deleteID'])) {
-        $did = (int)$_GET['deleteID'];
+    if (isset($_POST['deleteID']) && is_numeric($_POST['deleteID'])) {
+        if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification unavailable.'); }
+        bc_validate_csrf();
+        $did = (int)$_POST['deleteID'];
         if (mysqli_query($connection_server, "DELETE FROM sas_api_marketplace_listings WHERE id='$did'")) {
             $_SESSION['product_purchase_response'] = "Marketplace listing removed successfully.";
         } else {
@@ -56,6 +61,8 @@ bc_adm_head('', array("area" => "spadmin"));
                         <div class="row align-items-center g-3">
                             <div class="col-md-4">
                                 <h5 class="fw-bold mb-0 text-primary">Marketplace Management</h5>
+                                <p class="small">Bundled API adapters are automatically discovered by category, Private by default. Set Public and a price (0 = free) to offer one. This never activates vendor services.</p>
+                                <?php if (!$catalog_synced) { ?><p role="alert" class="text-danger">Catalogue sync unavailable. Existing listings remain unchanged; retry or check database access.</p><?php } ?>
                                 <p class="text-muted small mb-0">Overview of all service modules for vendors</p>
                             </div>
                             <div class="col-md-5">
@@ -99,7 +106,10 @@ bc_adm_head('', array("area" => "spadmin"));
                                         <a href="/bc-spadmin/ApiEdit.php?apiID=<?php echo $listing['id']; ?>" class="btn btn-primary flex-grow-1 rounded-pill fw-bold small"><i class="bi bi-pencil me-1"></i>EDIT</a>
                                         <a href="/bc-spadmin/ApiUpload.php?apiID=<?php echo $listing['id']; ?>" class="btn btn-outline-info flex-grow-1 rounded-pill fw-bold small"><i class="bi bi-upload me-1"></i>FILES</a>
                                     </div>
-                                    <button class="btn btn-outline-danger w-100 rounded-pill fw-bold small" onclick="if(confirm('Are you sure you want to delete this listing?')) window.location.href='MarketPlace.php?deleteID=<?php echo $listing['id']; ?>'"><i class="bi bi-trash me-1"></i>DELETE</button>
+                                    <form method="post" action="MarketPlace.php" onsubmit="return confirm('Remove listing? Bundled adapters are rediscovered automatically; use Private to keep them inactive.');">
+                                        <?php echo bc_csrf_field(); ?>
+                                        <button name="deleteID" value="<?php echo (int)$listing['id']; ?>" class="btn btn-outline-danger w-100 rounded-pill fw-bold small">DELETE</button>
+                                    </form>
                                 </div>
                             </div>
                         </div>

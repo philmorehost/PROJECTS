@@ -1,0 +1,64 @@
+name: Platform remediation regression checks
+on:
+  push:
+    paths:
+      - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-marketplace-catalog.php'
+      - 'VTU/**/func/bc-price-input.php'
+      - 'VTU/**/func/bc-float-services.php'
+      - 'VTU/**/func/bc-plate-app.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/**/bc-admin/FloatServiceIcons.php'
+      - 'VTU/**/bc-admin/UserUpgrade.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/*API.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php'
+      - 'VTU/tests/*test.php'
+      - '.github/workflows/platform-remediation.yml'
+  pull_request:
+    paths:
+      - 'VTU/**/func/bc-enrollment-policy.php'
+      - 'VTU/**/func/bc-marketplace-catalog.php'
+      - 'VTU/**/func/bc-price-input.php'
+      - 'VTU/**/func/bc-float-services.php'
+      - 'VTU/**/func/bc-plate-app.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/**/bc-admin/FloatServiceIcons.php'
+      - 'VTU/**/bc-admin/UserUpgrade.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/*API.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php'
+      - 'VTU/tests/*test.php'
+      - '.github/workflows/platform-remediation.yml'
+permissions:
+  contents: read
+jobs:
+  remediation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          coverage: none
+      - name: Pricing, inventory, security-reset and shortcut regressions
+        run: |
+          set -e
+          php -n VTU/tests/remediation_pricing_catalog_test.php
+          php -n VTU/tests/float_services_test.php
+          php -n VTU/tests/enrollment_password_test.php
+          php -n VTU/tests/enrollment_policy_test.php
+          php -n -d extension=tokenizer VTU/tests/fintech_gate_test.php
+          php -n -d extension=tokenizer VTU/tests/user_action_gate_test.php
+          for edition in SAAS NON-SAAS; do
+            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php web/PasswordRecovery.php; do
+              php -l "VTU/DGV7.0-$edition/$file"
+            done
+          done
+          php -l VTU/DGV7.0-SAAS/func/bc-marketplace-catalog.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/CreateAPI.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php

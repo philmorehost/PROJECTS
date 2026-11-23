@@ -79,3 +79,38 @@ provider, navigation target or compliance path.
     KYC, required PIN/authenticator enrollment, biometric/idle lock and website
     handoff must have ordered recoverable transitions, no loops, omitted params,
     stale-token fallback or accidental bypass. Real device testing remains needed.
+
+
+## Batch 2: source implemented, validation in progress
+
+- SAAS bundled **VTU/SMS** adapter discovery now deduplicates transport variants,
+  categorizes the real files, excludes retired providers/local dispatchers, and
+  inserts only missing listings as **Private**, price zero. Existing prices,
+  visibility and descriptions are not overwritten. No tenant API/entitlement is
+  activated. This is NOT yet a complete inventory of every fintech integration.
+- SAAS Create/Edit accepts explicit zero; malformed and negative prices are rejected
+  instead of stripped into different values. Mutation forms and marketplace deletion
+  use CSRF-checked POST. Bundled inventory is rediscovered if removed; keep it Private
+  instead of deleting to leave it inactive.
+- Both editions' upgrade-price settings accept zero, reject malformed prices and
+  persist Smart Earner price as zero. Admin-selected free pricing-level upgrades
+  skip wallet debit. Legacy user-level charging and financial atomicity still need
+  separate remediation; this does NOT certify the complete account-switch request.
+- Required setup in both editions now verifies the old password and requires BOTH
+  a different new password and a different, confirmed nontrivial PIN before one
+  compare-and-set writes both and clears force_password_change. Password-only
+  recovery no longer clears the mandatory setup flag. Vendor and user gates remain
+  in place, followed by mandated authenticator enrollment. API/device end-to-end
+  compliance testing remains outstanding.
+- Floating shortcuts now render in the customer shell from saved tenant selection,
+  intersected with actual navigation visibility and existing routes. Admin save is
+  CSRF-checked, allowlisted and transactional, with failure messaging. Financial
+  routes keep their normal independent authorization. No provider is enabled.
+- Mobile structural regression now checks MZEEVTU's actual AIAssistantView destination
+  rather than requiring another brand's AIChatView symbol.
+
+Tests added/expanded: strict-price/catalog source/inventory regression, floating
+shortcut rendering behavior, forced reset atomicity/weak or reused PIN rejection.
+Native PHP 8.2/8.3 CI is wired in platform-remediation.yml. Native builds/devices,
+real database migrations and production provider behavior are not proven locally.
+All remaining Batch 1 scope limits still apply unless explicitly superseded above.

@@ -1542,6 +1542,8 @@ if (!function_exists('bc_app_foot')) {
         // Page-level widgets the old chrome injected (AI assistant, referral modal,
         // support chat) — still inside the wrap so the shell's modal CSS applies.
         bc_app_widgets();
+        require_once __DIR__ . '/bc-float-services.php';
+        bc_float_services_render();
         // 'bare' is for pages that own their own layout (print targets, full-screen terminals):
         // they still get the flash dialog and the shell script, but not the wrapper-closing tags.
         if (empty($opts['bare'])): ?></div>
