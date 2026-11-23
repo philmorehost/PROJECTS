@@ -1,6 +1,6 @@
 <?php
 // ─────────────────────────────────────────────────────────────────────────
-// Mzeevtu crypto bridge — configuration
+// FINTECHFLOW DGV7.0 crypto bridge — configuration
 // Put secrets in environment variables (or a file outside public_html).
 // ─────────────────────────────────────────────────────────────────────────
 return [

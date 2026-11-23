@@ -93,8 +93,9 @@ function mz_require_csrf(): void
 /** ⚠️ ADAPT: block users who haven't completed KYC / are suspended. */
 function mz_user_can_trade(int $uid): bool
 {
-    // Example: return (bool) mz_db()->query("SELECT kyc_verified FROM users WHERE id = $uid")->fetchColumn();
-    return true;
+    // No placeholder identity or KYC approval may authorize a FINTECHFLOW trade.
+    // Replace only as part of reviewed tenant-scoped integration; keep the entry-point hold.
+    return false;
 }
 
 /** Simple per-user rate limit (requests per minute) using the session. */

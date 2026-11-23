@@ -43,7 +43,7 @@ export function loadConfig(env = process.env) {
   const cfg = {
     host: env.HOST || '127.0.0.1',
     port: num(env.PORT, 8787),
-    dbPath: env.DB_PATH || './data/mzeevtu-crypto.db',
+    dbPath: env.DB_PATH || './data/fintechflow-crypto-prototype.db',
     mnemonic: env.MNEMONIC.trim(),
     apiSecret: secret(env, 'API_SECRET'),
     adminSecret: secret(env, 'ADMIN_SECRET'),

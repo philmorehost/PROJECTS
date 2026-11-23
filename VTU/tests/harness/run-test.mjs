@@ -48,6 +48,7 @@ function collect() {
   };
   for (const ed of ['DGV7.0-SAAS', 'DGV7.0-NON-SAAS']) walk(path.join(VTU, ed), ed);
   walk(path.join(VTU, 'tests'), 'tests');
+  walk(path.join(VTU, 'cryptocurrency-idea'), 'cryptocurrency-idea');
   walk(path.join(VTU, 'staging', 'crypto-alert-receiver'), 'staging/crypto-alert-receiver');
   // The License Manager lives outside VTU/ but its edition guard is tested too.
   walk(path.join(REPO, 'LM'), 'LM');
@@ -73,7 +74,8 @@ async function mirror() {
     const isHtaccess = f.rel.endsWith('.htaccess');
     // The Pay Bills automation library is asserted against the pages that call it.
     const isJs = f.rel.endsWith('.js') && (f.rel.includes('/jsfile/') || f.rel.endsWith('/asset/bc-admin-wallet.js'));
-    if (!isPhp && !isDoc && !isHtaccess && !isJs) continue;
+    const isCryptoPrototypeSource = f.rel.startsWith('cryptocurrency-idea/') && !f.rel.endsWith('/home-page.html') && /\.(js|json|html)$/.test(f.rel);
+    if (!isPhp && !isDoc && !isHtaccess && !isJs && !isCryptoPrototypeSource) continue;
     const dest = '/host/' + f.rel;
     // mkdir on an existing directory fails in this FS, so create each segment once.
     const parts = path.dirname(f.rel).split('/').filter((p) => p && p !== '.');

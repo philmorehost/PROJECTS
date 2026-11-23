@@ -1,7 +1,7 @@
 {
-  "name": "mzeevtu-crypto-service",
+  "name": "fintechflow-crypto-prototype",
   "version": "1.0.0",
-  "description": "Mzeevtu crypto buy/sell wallet service (custodial hot wallet, quotes, payouts, deposit detection)",
+  "description": "FINTECHFLOW DGV7.0 crypto buy/sell wallet service (custodial hot wallet, quotes, payouts, deposit detection)",
   "type": "module",
   "private": true,
   "engines": {

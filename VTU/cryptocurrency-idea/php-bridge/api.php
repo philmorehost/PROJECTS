@@ -7,6 +7,7 @@
 //   GET  api.php?action=status&ref=...  → live order status
 //   GET  api.php?action=history         → user's last 20 orders
 declare(strict_types=1);
+require __DIR__ . '/prototype-hold.php';
 require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
