@@ -197,3 +197,34 @@ This hardens/validates status persistence; it does not certify every downstream 
 API-docs/level check or production database installation. Existing API-key expiry,
 Business/tenant service/compliance policies still apply after the flag is enabled.
 Other remaining remediation work stays open, no deployment, crypto staging paused.
+
+
+## App-update configuration security continuation (not automation completion)
+
+- Both editions' AppUpdateBroadcast mutations now require CSRF + purpose-bound
+  PIN/second-factor verification. Email OTP sends in-place with inline status,
+  preserving form values and never including the Firebase key/PIN in the send request.
+- Strict release validation: positive Android version code, bounded version/changelog,
+  safe APK basename and canonical official HTTPS Google Play app-details URL. The
+  public update endpoint also rejects unsafe legacy configuration instead of returning
+  arbitrary links/files. Existing public response contract otherwise remains intact.
+- Saved Firebase private keys are no longer printed into HTML. Blank retains the key;
+  replacement requires a valid matching-project service account and RSA >=2048-bit key.
+  New replacements must seal as GCM with a server secret; no plaintext fallback save.
+  Existing plaintext rows remain readable for compatibility until explicitly rotated.
+  Do not interpret this as a completed migration of all existing stored keys.
+- Database execution failures no longer produce a success message. FCM requests have
+  bounded connect/overall timeouts, fixed Google endpoints and validated credentials.
+  Accepted sends require a message ID; ambiguous/failed sends tell admins to inspect
+  Firebase logs before retrying, rather than promising delivery to every device.
+- Because existing Android apps subscribe to a project-wide topic, broadcasts refuse
+  known Firebase projects shared by multiple tenant settings. This is not proof that a
+  project is exclusive across other installations; operators must use dedicated projects.
+- No automatic broadcasts, provider calls during page load, scheduler changes, or
+  claims of production FCM delivery. Automated notification outbox/idempotency/worker
+  remains outstanding and must be designed before switching automation on.
+- Local release/security/source and inline OTP behavior tests added; RSA/OpenSSL tests
+  run in native PHP8.2/8.3 CI. No real key, live Firebase call or deployment used.
+
+SAAS System Update remains platform-only; NON-SAAS Marketplace untouched; crypto
+staging paused. Remaining requests outside this scoped configuration repair stay open.
