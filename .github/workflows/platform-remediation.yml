@@ -221,6 +221,7 @@ jobs:
         run: |
           node VTU/tests/harness/public-navigation-browser.test.mjs
           node VTU/tests/harness/admin-pin-setup-ui-test.mjs
+          node VTU/tests/harness/live-capture-ui-test.mjs
   remediation:
     runs-on: ubuntu-latest
     strategy:
@@ -238,6 +239,9 @@ jobs:
           node-version: '22'
       - name: Complimentary upgrade and administrative inline OTP contracts
         run: |
+          set -e
+          exec > >(tee "$RUNNER_TEMP/remediation.log") 2>&1
+          trap 'echo "::error::Regression command failed: $BASH_COMMAND"' ERR
           php VTU/tests/complimentary_upgrade_test.php
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
@@ -258,7 +262,6 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/vendor_compliance_review_test.php
-          node VTU/tests/harness/live-capture-ui-test.mjs
           php VTU/tests/vendor_registration_test.php
           php VTU/tests/vendor_registration_commerce_test.php
           php VTU/tests/registration_guard_test.php
