@@ -13,6 +13,11 @@ on:
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
       - 'VTU/**/func/bc-registration-guard.php'
+      - 'VTU/**/func/bc-feature-email-otp.php'
+      - 'VTU/**/asset/bc-feature-email-otp.js'
+      - 'VTU/**/web/SendFund.php'
+      - 'VTU/**/web/GiftCard.php'
+      - 'VTU/**/web/CryptoHub.php'
       - 'VTU/**/asset/bc-registration-otp.js'
       - 'VTU/**/web/Register.php'
       - 'VTU/**/web/api/*reg-otp.php'
@@ -71,6 +76,11 @@ on:
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
       - 'VTU/**/func/bc-registration-guard.php'
+      - 'VTU/**/func/bc-feature-email-otp.php'
+      - 'VTU/**/asset/bc-feature-email-otp.js'
+      - 'VTU/**/web/SendFund.php'
+      - 'VTU/**/web/GiftCard.php'
+      - 'VTU/**/web/CryptoHub.php'
       - 'VTU/**/asset/bc-registration-otp.js'
       - 'VTU/**/web/Register.php'
       - 'VTU/**/web/api/*reg-otp.php'
@@ -140,12 +150,14 @@ jobs:
           php VTU/tests/login_resend_test.php
           php VTU/tests/recovery_inline_test.php
           php VTU/tests/registration_guard_test.php
+          php VTU/tests/feature_email_otp_test.php
           php VTU/tests/recovery_reply_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
           node VTU/tests/harness/login-resend-ui-test.mjs
           node VTU/tests/harness/recovery-inline-ui-test.mjs
           node VTU/tests/harness/registration-otp-ui-test.mjs
+          node VTU/tests/harness/feature-email-otp-ui-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e

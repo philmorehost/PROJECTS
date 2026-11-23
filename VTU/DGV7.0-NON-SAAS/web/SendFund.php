@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-config.php");
+require_once __DIR__.'/../func/bc-feature-email-otp.php';
 
 // Wallet to Bank service toggle (Service Control Center)
 if (!isServiceEnabled('withdraw')) {
@@ -41,7 +42,7 @@ if (isset($_POST["initiate-transfer"]) || isset($_POST["process-transfer"])) {
     }
 
     // Verify OTP
-    if (empty($_SESSION["withdrawal_otp"]) || $otp !== $_SESSION["withdrawal_otp"]) {
+    if (!bc_feature_email_otp_scope($get_logged_user_details,'withdrawal') || empty($_SESSION["withdrawal_otp"]) || $otp !== $_SESSION["withdrawal_otp"]) {
         $error_data = [
             "status" => "error",
             "title" => "Verification Failed",
@@ -195,16 +196,9 @@ if (isset($_POST["verify-bank"])) {
 
 // Handle OTP Sending
 if (isset($_POST["send_otp"])) {
-    $otp = generateOTP();
-    $_SESSION["withdrawal_otp"] = $otp;
-    $_SESSION["withdrawal_otp_time"] = time();
-
-    $subject = "Withdrawal Verification Code";
-    $body = "Your verification code for withdrawal is: <b>$otp</b>. This code expires in 10 minutes.";
-    sendVendorEmail($get_logged_user_details["email"], $subject, $body);
-
-    echo json_encode(['status' => 'success', 'message' => 'OTP sent to your email']);
-    exit();
+    require_once __DIR__.'/../func/bc-feature-email-otp.php';
+    header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+    echo json_encode(bc_feature_email_otp($get_logged_user_details,'withdrawal'));exit;
 }
 
 // Handle AJAX Beneficiary Deletion
@@ -491,7 +485,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-envelope-at me-2"></i>Email OTP Verification</label>
                                 <div class="input-group">
                                     <input type="text" name="otp" class="form-control form-control-lg modern-input" style="border-radius: 0.75rem 0 0 0.75rem !important;" placeholder="Enter 6-digit code" required />
-                                    <button type="button" class="btn btn-dark px-4 fw-bold" style="border-radius: 0 0.75rem 0.75rem 0 !important;" onclick="sendWithdrawalOTP(this)">GET CODE</button>
+                                    <button type="button" class="btn btn-dark px-4 fw-bold" style="border-radius: 0 0.75rem 0.75rem 0 !important;" data-feature-otp="withdrawal" data-otp-endpoint="SendFund.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">GET CODE</button>
                                 </div>
                                 <small class="text-muted mt-2 d-block"><i class="bi bi-info-circle me-1"></i> Check your registered email for the code.</small>
                             </div>
@@ -959,42 +953,7 @@ if ($sf_result !== null) unset($_SESSION["transfer_result"]);
         });
     }
 
-    function sendWithdrawalOTP(btn) {
-        const originalText = btn.innerHTML;
-        btn.innerHTML = 'Sending...';
-        btn.disabled = true;
-
-        const formData = new URLSearchParams();
-        formData.append('send_otp', '1');
-
-        fetch('SendFund.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: formData.toString()
-        }).then(r => r.json()).then(res => {
-            if(res.status == 'success') {
-                Swal.fire({
-                    title: 'Code Sent!',
-                    text: 'A verification code has been sent to your email. It may take a minute to arrive. Please check your Inbox and Spam folder.',
-                    icon: 'success',
-                    confirmButtonColor: '#287bff'
-                });
-
-                let count = 60;
-                const timer = setInterval(() => {
-                    btn.innerHTML = `Resend in ${count}s`;
-                    count--;
-                    if(count < 0) {
-                        clearInterval(timer);
-                        btn.innerHTML = 'Get Code';
-                        btn.disabled = false;
-                    }
-                }, 1000);
-            } else {
-                btn.innerHTML = 'Get Code';
-                btn.disabled = false;
-            }
-        });
-    }
     </script>
 	<?php bc_app_foot(); ?>
+
+<script src="../asset/bc-feature-email-otp.js" defer></script>
