@@ -131,6 +131,7 @@ jobs:
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
           php VTU/tests/recovery_inline_test.php
+          php VTU/tests/recovery_reply_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
           node VTU/tests/harness/login-resend-ui-test.mjs
