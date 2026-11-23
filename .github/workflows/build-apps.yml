@@ -70,7 +70,21 @@ jobs:
 
       - name: Build debug APK
         working-directory: ${{ matrix.app.project }}
-        run: bash ./gradlew --no-daemon --stacktrace :app:assembleDebug
+        run: |
+          set -o pipefail
+          bash ./gradlew --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee "$RUNNER_TEMP/android-debug.log"
+
+      - name: Surface Android compiler diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          log = Path(os.environ['RUNNER_TEMP']) / 'android-debug.log'
+          if log.exists():
+              errors = [line for line in log.read_text(errors='replace').splitlines() if line.startswith('e: ') or 'error: ' in line or line.startswith('Execution failed for task')]
+              for line in errors[:20]:
+                  print('::error::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
