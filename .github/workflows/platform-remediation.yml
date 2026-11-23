@@ -14,6 +14,8 @@ on:
       - 'VTU/DGV7.0-SAAS/bc-spadmin/*API.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php'
+      - 'VTU/DGV7.0-SAAS/VendorOrderPortal.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-func.php'
       - 'VTU/tests/*test.php'
       - '.github/workflows/platform-remediation.yml'
   pull_request:
@@ -30,6 +32,8 @@ on:
       - 'VTU/DGV7.0-SAAS/bc-spadmin/*API.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php'
+      - 'VTU/DGV7.0-SAAS/VendorOrderPortal.php'
+      - 'VTU/DGV7.0-SAAS/func/bc-func.php'
       - 'VTU/tests/*test.php'
       - '.github/workflows/platform-remediation.yml'
 permissions:
@@ -52,6 +56,7 @@ jobs:
           php -n VTU/tests/remediation_pricing_catalog_test.php
           php -n VTU/tests/float_services_test.php
           php -n VTU/tests/receipt_utility_test.php
+          php -n VTU/tests/temporary_vendor_access_test.php
           php -n VTU/tests/plate_app_test.php
           php -n VTU/tests/gateway_verdict_test.php
           php -n VTU/tests/enrollment_password_test.php

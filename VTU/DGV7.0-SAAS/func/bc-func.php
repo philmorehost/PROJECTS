@@ -344,13 +344,15 @@ function bc_temporary_vendor_admin_session_is_valid() {
     }
 
     $email_esc = mysqli_real_escape_string($connection_server, $email);
-    $vendor_query = mysqli_query($connection_server, "SELECT id, email, status, is_blocked, reg_date FROM sas_vendors WHERE id='$vendor_id' AND email='$email_esc' LIMIT 1");
+    $vendor_query = mysqli_query($connection_server, "SELECT id, email, status, is_blocked, reg_date, access_hash FROM sas_vendors WHERE id='$vendor_id' AND email='$email_esc' LIMIT 1");
     if (!$vendor_query || !($vendor = mysqli_fetch_assoc($vendor_query))) return false;
     if ((int)$vendor['status'] !== 1 || (int)($vendor['is_blocked'] ?? 0) !== 0) return false;
+    $token_digest=(string)($_SESSION['tmp_vendor_token_digest'] ?? '');
+    if ($token_digest === '' || !bc_is_valid_vendor_access_hash((string)($vendor['access_hash'] ?? '')) || !hash_equals(hash('sha256',(string)$vendor['access_hash']), $token_digest)) return false;
 
     $expiry_days = max(1, min(30, (int)getSuperAdminOption('tmp_url_expiry_days', '3')));
     $registered_at = strtotime((string)($vendor['reg_date'] ?? ''));
-    return $registered_at !== false && time() <= $registered_at + ($expiry_days * 86400);
+    return $registered_at !== false && $registered_at <= time() && time() < $registered_at + ($expiry_days * 86400);
 }
 
 function bc_render_temporary_vendor_block_page($message) {

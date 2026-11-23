@@ -129,3 +129,17 @@ same card exported to PDF/image. Credited number/destination has its own row.
 This does not yet populate missing customer identity in historic/provider records,
 update every legacy dedicated receipt template, or extend native receipt models.
 The full site-wide/app receipt request is therefore still **partial**.
+
+
+## Temporary vendor portal follow-up
+
+Restored the vendor's own tokenized secure portal URL as a selectable read-only
+field in the portal. Existing approval emails already substitute/append that URL;
+no duplicate welcome emails are sent automatically. Portal responses are no-store,
+noindex and no-referrer. Temporary dashboard login now requires CSRF and an active,
+unblocked vendor. It rejects invalid/future registration timestamps and expiry at
+the exact configured-day boundary. Temporary admin sessions bind a token digest to
+the current vendor token, so link rotation/revocation also rejects old sessions.
+Existing temporary sessions must reopen their valid secure portal link once.
+13 mocked session/expiry/rotation/portal-source checks added. Actual configured
+DNS, queued email delivery and browser access are not production-verified.
