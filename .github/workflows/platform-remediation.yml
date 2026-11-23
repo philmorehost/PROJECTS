@@ -3,6 +3,11 @@ on:
   push:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/asset/bc-public-navigation.css'
+      - 'VTU/**/jsfile/bc-public-navigation.js'
+      - 'VTU/tests/public_navigation_render.php'
+      - 'VTU/tests/harness/public-navigation-browser.test.mjs'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
@@ -75,6 +80,11 @@ on:
   pull_request:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/asset/bc-public-navigation.css'
+      - 'VTU/**/jsfile/bc-public-navigation.js'
+      - 'VTU/tests/public_navigation_render.php'
+      - 'VTU/tests/harness/public-navigation-browser.test.mjs'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
@@ -147,6 +157,18 @@ on:
 permissions:
   contents: read
 jobs:
+  public-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test dependencies
+        run: npm ci --prefix VTU/tests/harness
+      - name: Homepage browser layout and accessible navigation
+        run: node VTU/tests/harness/public-navigation-browser.test.mjs
   remediation:
     runs-on: ubuntu-latest
     strategy:
