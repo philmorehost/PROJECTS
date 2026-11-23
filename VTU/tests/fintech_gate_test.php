@@ -863,6 +863,7 @@ function load_edition($root, $edition, $files) {
 
 $global_behaviour_files = [
     'func/bc-compliance-policy.php',
+    'func/bc-kyb-review-ticket.php',
     'func/bc-fintech-policy.php',
     'func/bc-fintech-schema.php',
     'func/bc-app-credential-binding.php',
