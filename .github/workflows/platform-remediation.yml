@@ -374,3 +374,9 @@ jobs:
           BC_ADMIN_PIN_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/admin_pin_setup_mysql_test.php
+
+      - name: Independent service routes and write-failure refusal on disposable MySQL
+        env:
+          BC_SERVICE_ROUTE_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/service_provider_routing_mysql_test.php
