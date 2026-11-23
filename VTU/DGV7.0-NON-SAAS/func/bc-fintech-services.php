@@ -7,8 +7,8 @@
  *   - A catalogue lists what a provider COULD support. It is not consent and it is
  *     not configuration: live calls still go through the provider registry seam and
  *     fail closed while endpoints/credentials are unset.
- *   - The frontend renders EXACTLY the active provider's services. Switching the
- *     active provider in bc-admin → Service Control changes what users see; no
+ *   - Legacy pages render the active provider's services. Switching the
+ *     active provider in bc-admin → Service Control affects legacy defaults; no
  *     other provider's services leak into the page.
  *   - BTC swap: none of the current providers offers a BTC swap rail, so BTC
  *     pairs are hidden rather than silently routed elsewhere (§28: the legacy

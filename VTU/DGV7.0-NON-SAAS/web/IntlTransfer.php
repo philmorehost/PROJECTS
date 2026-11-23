@@ -17,11 +17,14 @@ if(!isServiceEnabled('intl_transfer')){
     header("Location: Dashboard.php");
     exit();
 }
-$provider = bc_svc_active_provider($vid);
+require_once __DIR__.'/../func/bc-service-provider-routing.php';
+$provider = bc_service_route_provider($vid,'intl_transfer');
 $provider_label = bc_svc_provider_label($provider);
-$services = bc_svc_provider_services($vid);
+$services = bc_service_route_services($vid,'intl_transfer',$provider);
 $notice = ''; $notice_type = 'info';
 if (isset($_POST['send_transfer'])) {
+    bc_validate_csrf();
+    if(!is_string($_POST['route_snapshot']??null)||!hash_equals($provider,$_POST['route_snapshot'])){http_response_code(409);exit('Service routing changed. Reload this page before submitting a new request.');}
     $amount_usd = (float)($_POST['amount_usd'] ?? 0);
     $payload = [
         'recipient_name' => trim(strip_tags($_POST['recipient_name'] ?? '')),
@@ -31,7 +34,7 @@ if (isset($_POST['send_transfer'])) {
         'amount_usd' => $amount_usd,
         'service' => trim(strip_tags($_POST['service'] ?? 'global_transfer')),
     ];
-    if ($amount_usd <= 0 || $payload['recipient_name'] === '' || $payload['recipient_account'] === '') {
+    if ($provider === '' || !isset($services[$payload['service']]) || $amount_usd <= 0 || $payload['recipient_name'] === '' || $payload['recipient_account'] === '') {
         $notice = 'Please complete the recipient name, account and a valid amount.';
         $notice_type = 'danger';
     } else {
@@ -62,7 +65,7 @@ if (isset($_POST['send_transfer'])) {
             }
         }
         $notice = $ref !== ''
-            ? "Transfer request received ($ref). We will confirm the live rate and complete your payout shortly." . $quote_note
+            ? "Transfer request received ($ref). This is a request only; no payout or wallet movement has occurred." . $quote_note
             : 'We could not record your request. Please try again.';
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
@@ -111,7 +114,7 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
             <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
                 <h6 class="fw-bold mb-3">New transfer request</h6>
                 <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-                <form method="post">
+                <?php if($provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($provider,ENT_QUOTES,'UTF-8'); ?>">
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label small fw-bold">Service</label>
                             <select name="service" class="form-select">
@@ -123,7 +126,7 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
                         <div class="col-md-6"><label class="form-label small fw-bold">Recipient account / wallet</label><input type="text" name="recipient_account" class="form-control" required></div>
                         <div class="col-md-6"><label class="form-label small fw-bold">Payout currency</label><input type="text" name="currency" class="form-control" value="USD"></div>
                     </div>
-                    <button type="submit" name="send_transfer" class="btn btn-primary rounded-pill px-4 fw-bold mt-4">Submit Transfer Request</button>
+                    <button type="submit" name="send_transfer" <?php echo $provider===''?'disabled':''; ?> class="btn btn-primary rounded-pill px-4 fw-bold mt-4">Submit Transfer Request</button>
                     <p class="small text-muted mt-3 mb-0">Rates are locked at live FX before settlement. Completed Crypto &amp; International Transfer volume counts toward referral rewards.</p>
                 </form>
             </div></div>

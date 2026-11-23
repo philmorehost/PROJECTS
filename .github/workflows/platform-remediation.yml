@@ -3,6 +3,11 @@ on:
   push:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/bc-admin/ServiceControl.php'
+      - 'VTU/**/web/IntlTransfer.php'
+      - 'VTU/**/web/Tuition.php'
+      - 'VTU/**/web/POSRequest.php'
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
@@ -83,6 +88,11 @@ on:
   pull_request:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/bc-admin/ServiceControl.php'
+      - 'VTU/**/web/IntlTransfer.php'
+      - 'VTU/**/web/Tuition.php'
+      - 'VTU/**/web/POSRequest.php'
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
@@ -210,6 +220,7 @@ jobs:
           php VTU/tests/public_template_selection_test.php
           php VTU/tests/public_home_test.php
           php VTU/tests/admin_pin_setup_test.php
+          php VTU/tests/service_provider_routing_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php

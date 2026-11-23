@@ -77,7 +77,7 @@ foreach ($editions as $ed) {
     u25(strpos($ref, 'apply_creator') !== false, "$ed Referral page has the creator application form");
     $intl = src($b . '/web/IntlTransfer.php');
     u25(strpos($intl, 'Payout to China in 3 steps') !== false, "$ed IntlTransfer visualises the 3-step China workflow");
-    u25(strpos($intl, 'bc_svc_provider_services') !== false, "$ed IntlTransfer renders exactly the active provider's services");
+    u25(strpos($intl, "bc_service_route_services(\$vid,'intl_transfer',\$provider)") !== false && strpos($intl, "bc_service_route_provider(\$vid,'intl_transfer')") !== false, "$ed IntlTransfer renders only its independently routed service catalogue");
 
     // ── Crypto adapts to the active provider ──
     $crypto = src($b . '/web/CryptoHub.php');

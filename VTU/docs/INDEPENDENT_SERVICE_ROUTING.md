@@ -1,0 +1,13 @@
+# Independent provider request routes — first integration
+
+Both editions now support separate vendor settings for international-transfer, tuition and POS **request intake**. Service Control exposes one independently saved route per service with PIN and configured Google/email action verification, CSRF, fresh owner checks, rate limits, demo restrictions and impersonation refusal. OTP sends use the existing purpose-bound inline component and send no PIN/factor/route payload.
+
+Each route is limited to a currently entitled provider whose existing catalogue includes the destination page. An explicit disabled, invalid, unsupported or revoked setting fails closed; it never substitutes another provider. When no independent setting exists, international transfers retain the legacy active-provider default; tuition retains Platnova and POS retains Flutterwave, subject to current entitlement/support checks. Changing the legacy default cannot overwrite independent settings.
+
+The three customer request pages now use those server-selected routes, not a posted provider. International-transfer services are filtered to that page, so card/crypto/POS catalogue entries do not appear as transfer request types. Submitted service slugs are validated. CSRF is explicit, and a rendered route snapshot must still match at submission; a route change returns409 instead of silently redirecting an open form to a different provider. Existing request records remain pinned to their stored provider.
+
+This increment does **not** claim completed automatic payment settlement, device provisioning, student validation or crypto custody. These existing pages record review requests; they now explicitly say that no wallet debit, executed payment or provider acceptance is confirmed. Disabled routing is visible and cannot submit. Existing transfer indicative-quote calls are unchanged and never trigger provider failover. Catalogue support is not proof of live provider/product eligibility.
+
+Crypto, cards, withdrawals, eSIM and other services are not redirected through this request-routing map. Financial/security holds remain. Replacement Buy/Sell still needs its own durable orders/accounting/custody and real-provider verification. No activation, deployment or live provider call was performed by this change. Vendor PHP hosting does not need Node.
+
+Automated coverage: independent settings/default compatibility, tenant/entitlement isolation, revoked/disabled/unsupported refusal, no silent fallback, page-specific catalogue, fresh actor/step-up/demo/CSRF/rate gates, persistence acknowledgement and both-edition page/snapshot guards. These boundary tests use explicit doubles and do not certify live provider behavior or production rollout.
