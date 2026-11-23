@@ -1,6 +1,12 @@
-# Mzeevtu — Buy & Sell Crypto
+> **REFERENCE PROTOTYPE — NOT DEPLOYABLE.** The PHP API and callback are deliberately held with HTTP503 before dependencies or financial work. No integration with FINTECHFLOW's tenant, authentication, KYC or ledger model has been completed. The setup instructions below are historical prototype instructions, NOT permission to deploy, migrate, fund wallets, generate production seeds or trade. Crypto staging remains paused.
+>
+> The supplied `home-page.html` and screenshots are design references containing demo branding. They must never be installed as vendor-facing pages or seed data unchanged. Runtime integration must use the authenticated/resolved vendor's name/logo; default product identity is FINTECHFLOW DGV7.0. Internal `mz_`/`X-Mz-` protocol identifiers are retained only for prototype compatibility, not as a vendor identity.
+>
+> The prototype database filename is now `fintechflow-crypto-prototype.db`. Never rename/migrate an existing database or start with empty order state as a rollout shortcut. Any existing prototype state needs an independently reviewed migration/reconciliation plan.
 
-Users buy crypto from your stock, or sell their crypto to you. Naira moves through their existing **Mzeevtu (DGV7.0) wallet balance**.
+# FINTECHFLOW DGV7.0 — Buy & Sell Crypto
+
+Users buy crypto from your stock, or sell their crypto to you. Naira moves through their existing **FINTECHFLOW DGV7.0 wallet balance**.
 
 ```
 Browser widget ──► /crypto/api.php (PHP, your site) ──signed──► Node wallet service ──► Blockchain

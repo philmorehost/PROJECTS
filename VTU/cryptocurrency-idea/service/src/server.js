@@ -86,7 +86,7 @@ loop('sweeps', 60_000, () => svc.tickSweeps());
 loop('callbacks', 10_000, () => svc.tickOutbox(sendCallback));
 
 server.listen(config.port, config.host, () => {
-  console.log(`Mzeevtu crypto service on http://${config.host}:${config.port}`);
+  console.log(`FINTECHFLOW DGV7.0 crypto service on http://${config.host}:${config.port}`);
   for (const c of Object.values(config.registry.chains)) {
     console.log(`Hot wallet on ${c.name} (fund this): ${chain.hotAddress(c.key)}`);
   }

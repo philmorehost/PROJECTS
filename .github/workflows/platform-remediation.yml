@@ -2,6 +2,7 @@ name: Platform remediation regression checks
 on:
   push:
     paths:
+      - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
@@ -73,6 +74,7 @@ on:
       - '.github/workflows/platform-remediation.yml'
   pull_request:
     paths:
+      - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
@@ -173,6 +175,8 @@ jobs:
           php VTU/tests/compliance_policy_test.php
           php VTU/tests/kyc_fresh_policy_test.php
           php VTU/tests/kyb_review_ticket_test.php
+          php VTU/tests/crypto_prototype_boundary_test.php
+          npm test --prefix VTU/cryptocurrency-idea/service
           php VTU/tests/public_template_selection_test.php
           php VTU/tests/public_home_test.php
           php VTU/tests/registration_guard_test.php

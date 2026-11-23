@@ -2,6 +2,7 @@
 // Called ONLY by the Node service (signed). Credits / refunds user wallets.
 // Events: sell.credit, buy.refund, buy.completed. Each event is applied exactly once.
 declare(strict_types=1);
+require __DIR__ . '/prototype-hold.php';
 require __DIR__ . '/lib.php';
 
 $raw = file_get_contents('php://input') ?: '';

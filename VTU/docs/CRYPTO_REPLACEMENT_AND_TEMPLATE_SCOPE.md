@@ -4,7 +4,7 @@
 
 The user requests complete removal of Bybit from the distributed application, vendor-neutral FINTECHFLOW DGV7.0 product branding, independent Klasha/Platnova/Flutterwave service routing, an admin-to-user/user-to-admin crypto Buy/Sell experience, the exact supplied home-page design with responsive navigation, and distinct BC-STYLE-TEMPLATE designs. Existing financial/crypto holds and the staging pause remain in effect. This request is not authorization to fund a hot wallet, execute sample trades, broadcast transactions or deploy.
 
-## Inputs missing in this checkout
+## Intake history: inputs initially missing
 
 At intake, VTU/home-page.html, VTU/cryptocurrency-idea and widget-idea-1.jpeg/widget-idea-2.jpeg could not be found by filesystem search or tracked-file lookup. They must be uploaded/synced before source review or exact design reproduction. The quoted description and simulated-test claims are design input, not verified implementation or security evidence.
 
@@ -40,8 +40,12 @@ Existing adapters do not prove that Klasha, Platnova or Flutterwave supports eve
 
 ## Next steps
 
-1. Obtain the missing reference files and inspect the supplied implementation/dependencies/assets.
+1. Reference files are now available under VTU/cryptocurrency-idea (including home-page.html and both widget JPEGs); review the supplied implementation/dependencies/assets.
 2. Complete Bybit retirement inventory and remove runtime/visible integration safely without releasing holds.
 3. Review provider capability matrix and select custody/signing architecture before financial implementation.
 4. Reproduce the reference homepage and verify responsive navigation; audit each selectable template and baked-in brand artwork separately. Keep tenant branding dynamic; do not globally replace legitimate configured vendor names or historical records.
 5. Implement held Buy/Sell source and durable accounting tests; request separate authorization for staging/deployment/live trades.
+
+## Reference intake completed
+
+The proposal arrived on main in commit2978408 and was brought onto the current working branch. Node22 simulated tests reproduce20 passes without live-chain execution. The PHP bridge uses unscoped placeholder users/wallet_balance/user_id state and originally allowed all KYC by default; it is not a tenant-safe FINTECHFLOW integration. Both PHP entry points now return503 before loading financial code, and the placeholder KYC hook refuses. Prototype application/package/log/default-state branding is product-neutral; original homepage/screenshot branding remains only in reference artwork and must not be seeded/copied into runtime views. Internal mz protocol/table identifiers are compatibility names, not vendor identity. No migrations, signers, seeds, RPCs or funded trades were run.
