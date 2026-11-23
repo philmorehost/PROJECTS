@@ -279,7 +279,8 @@ bc_adm_head("App Update Broadcast | " . ($get_all_super_admin_site_details["site
           <div class="card info-card px-4 py-4">
             <h5 class="card-title">📣 Broadcast Update Notification</h5>
             <p class="text-muted">
-              Sends a push notification to all users who have your app installed.
+              Requires a dedicated Firebase project for this vendor. The existing app-update topic is project-wide; do not reuse another vendor's project.
+              Sends a push notification to subscribed app instances.
               Compatible online apps check the saved release when Firebase delivers the message. Delivery and installation are not guaranteed.
             </p>
             <p>
