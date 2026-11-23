@@ -32,6 +32,9 @@ function bc_user_action_confirmation($actor, $super = false) {
     $id = max(0, (int)($_GET['id'] ?? 0));
     $vid = max(0, (int)($_GET['vid'] ?? 0));
     $enrolled = ($actor['two_factor_type'] ?? '') === 'totp' && !empty($actor['totp_secret']);
+    try{$channels=bc_action_channels($super?'sas_super_admin':'sas_vendors',$actor);}catch(Throwable $e){http_response_code(503);echo 'Security policy unavailable.';return;}
+    $enrolled=$enrolled && $channels['google'];
+    $factor_required=$channels['google']||$channels['email'];
     $titles = ['status'=>['1'=>'Activate account','2'=>'Block account','3'=>'Archive account'],
         'api'=>['1'=>'Enable API access','2'=>'Disable API access']];
     $title = $titles[$mode][$status] ?? ($mode === 'permanent' ? 'Permanently delete account' : 'Sign in as user');
@@ -69,9 +72,10 @@ input[type=hidden]{display:none}button,a{font:inherit}button{min-height:44px;cur
 <?php if ($super): ?><input type="hidden" name="vid" value="<?php echo $vid; ?>"><?php endif; ?>
 <label for="action-pin">Security PIN</label><input id="action-pin" type="password" name="sec_pin" required>
 <label for="action-factor"><?php echo $enrolled ? 'Google Authenticator code' : 'Email OTP'; ?></label>
-<input id="action-factor" name="sec_factor" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="6-digit code">
-<?php if (!$enrolled): ?><button class="email" type="submit" name="sec33_send_code" value="1" formnovalidate>Email me a code</button>
-<?php else: ?><small>Use a fresh Google Authenticator code. Email cannot bypass your enrolled authenticator.</small><?php endif; ?>
+<input id="action-factor" name="sec_factor" <?php echo $factor_required?'required':''; ?> inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="6-digit code">
+<?php if($channels['email']): ?><button class="email" type="submit" name="sec33_send_code" value="1" formnovalidate>Send code</button><?php endif; ?>
+<?php if($enrolled && $channels['email']): ?><label>Verification method<select name="factor_method"><option value="auto">Google Authenticator</option><option value="email">Email OTP</option></select></label><?php endif; ?>
+<?php if(!$factor_required): ?><small>PIN-only action verification is selected. No second-factor code is required.</small><?php endif; ?>
 <small>Verification is checked on the server. PINs and codes are sent only by POST and are never added to the URL.</small>
 <p role="status" aria-live="polite" data-otp-status></p>
 <div class="actions"><button type="submit"><?php echo $esc($title); ?></button><a href="Users.php">Cancel</a></div>

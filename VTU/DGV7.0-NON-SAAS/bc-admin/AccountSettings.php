@@ -5,6 +5,8 @@ include ("../func/bc-admin-config.php");
 require_once __DIR__.'/../func/bc-totp-setup.php';
 bc_totp_setup_handle('sas_vendors', $get_logged_admin_details);
 
+require_once __DIR__.'/../func/bc-action-policy-settings.php';
+bc_action_policy_handle(false,$get_logged_admin_details);
 bc_enrollment_policy_save(false, $get_logged_admin_details);
 include_once(__DIR__ . "/../func/bc-integrity.php");
 
@@ -1368,9 +1370,9 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
           </div>
         </div>
         <?php if ($demo_edit_open): ?>
-          <form method="post" class="m-0"><button name="demo-relock-session" class="btn btn-sm btn-outline-secondary fw-bold"><i class="bi bi-lock me-1"></i>Lock again</button></form>
+          <form method="post" class="m-0"><?php echo bc_csrf_field(); ?><button name="demo-relock-session" class="btn btn-sm btn-outline-secondary fw-bold"><i class="bi bi-lock me-1"></i>Lock again</button></form>
         <?php else: ?>
-          <form method="post" class="d-flex align-items-center gap-2 m-0">
+          <form method="post" class="d-flex align-items-center gap-2 m-0"><?php echo bc_csrf_field(); ?>
             <input type="password" name="demo_unlock_key" class="form-control form-control-sm" minlength="10" style="width:220px" placeholder="Super Admin Demo lock key" required />
             <button name="demo-unlock-session" class="btn btn-sm btn-warning text-dark fw-bold"><i class="bi bi-unlock me-1"></i>Unlock editing</button>
           </form>
@@ -1419,7 +1421,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Branding & Theme</h5></div>
                         <div class="card-body p-4">
-                            <form method="post" enctype="multipart/form-data">
+                            <form method="post" enctype="multipart/form-data"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-4 align-items-center mb-4">
                                     <div class="col-md-3 text-center">
                                         <?php if(file_exists("../uploaded-image/".str_replace([".",":"],"-",$_SERVER["HTTP_HOST"])."_logo.png")): ?>
@@ -1436,7 +1438,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 </div>
                             </form>
                             <hr class="my-4 opacity-50">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <?php
                                     $q = mysqli_query($connection_server, "SELECT * FROM sas_vendor_style_templates WHERE vendor_id='".$get_logged_admin_details["id"]."'");
                                     $current_theme = mysqli_fetch_assoc($q);
@@ -1465,7 +1467,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Max Daily Tx Per ID (Service Abuse Limits)</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">MAX DAILY PER PHONE (AIRTIME/DATA)</label>
@@ -1492,7 +1494,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Site Meta Information</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold text-muted">SITE TITLE</label>
                                     <input name="site-title" type="text" value="<?php echo htmlspecialchars($get_site_details['site_title']); ?>" class="form-control" required />
@@ -1551,7 +1553,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">User Account Upgrade Prices</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <?php
                                     $account_type_array = array(1 => "Smart User", 2 => "Smart Reseller", 3 => "Smart API");
@@ -1578,7 +1580,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Personal Information</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">First Name</label>
@@ -1605,7 +1607,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                             </form>
                             <hr class="my-5">
                             <h5 class="fw-bold mb-3">Change Account Password</h5>
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-4"><input name="old-pass" type="password" placeholder="Old Password" class="form-control" required /></div>
                                     <div class="col-md-4"><input name="new-pass" type="password" placeholder="New Password" class="form-control" required /></div>
@@ -1625,7 +1627,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                             ?>
                             <?php if ($sec29_state === 'totp'): ?>
                                 <p class="small text-success fw-bold">Enabled — approvals require this code with your Security PIN.</p>
-                                <form method="post" class="row g-2 align-items-end">
+                                <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
                                     <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                                     <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
                                     <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
@@ -1652,7 +1654,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 <i class="bi bi-info-circle-fill fs-3 me-3"></i>
                                 <div class="small">Charges: BVN Verification (₦30), NIN Verification (₦100). Uses your active Monnify payment gateway credentials when Monnify is selected. Name matching is applied on verification.</div>
                             </div>
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3 mb-4">
                                     <?php if ($admin_identity_provider === 'monnify'): ?>
                                     <div class="col-md-6" id="bank-code-wrap">
@@ -1730,7 +1732,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 <?php endforeach; ?>
                             </ul>
                             <?php endif; ?>
-                            <form method="post" enctype="multipart/form-data">
+                            <form method="post" enctype="multipart/form-data"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)</label>
@@ -1803,7 +1805,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 </div>
                                 <span class="badge bg-<?php echo $license_status_class; ?> py-2 px-3 fw-semibold"><?php echo $license_status_label; ?></span>
                             </div>
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3 mb-4">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">License Code</label>
@@ -1835,7 +1837,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Payment Order Limits</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">MINIMUM FUNDING (₦)</label>
@@ -1854,7 +1856,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Withdrawal Settings</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <?php $global_min = 100; // Minimal default ?>
                                 <div class="row g-3">
                                     <div class="col-md-4">
@@ -1880,7 +1882,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Manual Funding Bank Details</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">ACCOUNT NAME</label>
@@ -1912,6 +1914,8 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
                     <?php bc_enrollment_policy_form(false, (int)$get_logged_admin_details['id']); ?>
+                    <?php bc_action_policy_form(false,$get_logged_admin_details); ?>
+                    <script src="../asset/bc-admin-wallet.js"></script>
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-info-circle me-2"></i>Google Client ID Setup Guide</h5></div>
                         <div class="card-body p-4">
@@ -1966,7 +1970,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Platform Security Settings</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-4">
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" name="force-pin" id="forcePin" <?php echo $get_logged_admin_details['force_security_pin'] ? 'checked' : ''; ?>>
@@ -2078,13 +2082,13 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                     <p class="text-muted small">Demo mode snapshots the locked site settings, APIs, service controls, vendor settings and templates. Testers may change them temporarily; switching back to Production restores the snapshot.</p>
                                     <?php if (!bc_demo_has_lock_key($connection_server)): ?>
                                         <div class="alert alert-warning small">Set the security lock key before changing Demo/Production mode. This key is separate from your login password and is required to restore Production.</div>
-                                        <form method="post" class="row g-2">
+                                        <form method="post" class="row g-2"><?php echo bc_csrf_field(); ?>
                                             <div class="col-md-5"><input type="password" name="demo_lock_key" class="form-control" minlength="10" placeholder="New security lock key" required></div>
                                             <div class="col-md-5"><input type="password" name="demo_lock_key_confirm" class="form-control" minlength="10" placeholder="Confirm lock key" required></div>
                                             <div class="col-md-2"><button name="set-demo-lock-key" class="btn btn-warning w-100 fw-bold">Save Key</button></div>
                                         </form>
                                     <?php else: ?>
-                                        <form method="post" class="row g-2 align-items-end">
+                                        <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
                                             <div class="col-md-3"><label class="form-label small fw-bold">CURRENT MODE</label><div class="form-control bg-light fw-bold text-uppercase"><?php echo htmlspecialchars($demo_state['mode']); ?></div></div>
                                             <div class="col-md-3"><label class="form-label small fw-bold">CHANGE TO</label><select name="demo_mode" class="form-select"><option value="demo" <?php echo $demo_state['mode'] === 'demo' ? 'selected' : ''; ?>>Demo</option><option value="production" <?php echo $demo_state['mode'] === 'production' ? 'selected' : ''; ?>>Production</option></select></div>
                                             <div class="col-md-4"><label class="form-label small fw-bold">SECURITY LOCK KEY</label><input type="password" name="demo_lock_key" class="form-control" placeholder="Enter lock key" required></div>
@@ -2173,7 +2177,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 </div>
                                 <div class="small text-muted mt-1">This key is auto-generated and unique to your platform — keep it private; anyone with it could trigger your outbound mail queue.</div>
 
-                                <form method="post" class="d-flex align-items-end gap-2 mt-3" style="max-width: 320px;">
+                                <form method="post" class="d-flex align-items-end gap-2 mt-3" style="max-width: 320px;"><?php echo bc_csrf_field(); ?>
                                     <div class="flex-grow-1">
                                         <label class="form-label small fw-bold text-muted text-uppercase mb-1">Emails Per Run</label>
                                         <input type="number" name="mail_queue_batch_size" min="1" max="100" value="<?php echo (int)$mail_queue_batch_size; ?>" class="form-control form-control-sm" />

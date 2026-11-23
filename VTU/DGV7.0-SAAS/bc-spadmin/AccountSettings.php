@@ -5,6 +5,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 require_once __DIR__.'/../func/bc-totp-setup.php';
 bc_totp_setup_handle('sas_super_admin', $get_logged_spadmin_details);
 
+require_once __DIR__.'/../func/bc-action-policy-settings.php';
+bc_action_policy_handle(true,$get_logged_spadmin_details);
 bc_enrollment_policy_save(true, $get_logged_spadmin_details);
 
     // Demo-mode blocked feature notice
@@ -971,7 +973,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Website Branding</h5></div>
                         <div class="card-body p-4 text-center">
-                            <form method="post" enctype="multipart/form-data">
+                            <form method="post" enctype="multipart/form-data"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-4">
                                     <?php if(file_exists("../uploaded-image/sp-logo.png")): ?>
                                         <img src="<?php echo $web_http_host; ?>/uploaded-image/sp-logo.png" class="img-fluid rounded border p-2 bg-light mb-3" style="max-height: 100px;"/>
@@ -991,7 +993,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                 </div>
                             </form>
                             <hr class="my-4 opacity-50">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-4">
                                     <div class="col-md-8">
                                         <label class="form-label small fw-bold text-muted text-uppercase">Landing Page Template</label>
@@ -1020,7 +1022,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Global Withdrawal Defaults (For Vendors)</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <?php
                                     $q_min = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='default_min_withdrawal'");
                                     $def_min = mysqli_fetch_assoc($q_min)['option_value'] ?? '1000';
@@ -1058,7 +1060,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Personal Information</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold text-muted">FIRST NAME</label>
@@ -1093,7 +1095,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Change Account Password</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-12">
                                         <label class="form-label small fw-bold text-muted">OLD PASSWORD</label>
@@ -1119,7 +1121,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Super Admin Bank Details</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold text-muted">ACCOUNT NAME</label>
@@ -1150,7 +1152,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Payment Order Limits</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold text-muted">MINIMUM ORDER (₦)</label>
@@ -1172,10 +1174,12 @@ bc_adm_head('', array("area" => "spadmin"));
                     <p><a class="btn btn-outline-primary" href="CryptoCustody.php">Crypto custody accounts and protected evidence</a></p>
                     <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto platform asset ceilings and emergency stop</a></p>
                     <?php bc_enrollment_policy_form(true, 0); ?>
+                    <?php bc_action_policy_form(true,$get_logged_spadmin_details); ?>
+                    <script src="../asset/bc-admin-wallet.js"></script>
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Global Security Policy</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <?php
                                 $opt_q = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='force_vendor_pin'");
                                 $force_vendor_pin = mysqli_fetch_assoc($opt_q)['option_value'] ?? '0';
@@ -1254,7 +1258,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                         ?>
                                         <?php if ($sec30_state === 'totp'): ?>
                                             <p class="small text-success fw-bold mb-2">Enabled — funding and approvals require this code with your PIN.</p>
-                                            <form method="post" class="row g-2 align-items-end">
+                                            <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
                                                 <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                                                 <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
                                                 <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
@@ -1327,13 +1331,13 @@ bc_adm_head('', array("area" => "spadmin"));
                                     <p class="text-muted small">Demo mode snapshots the locked site settings, APIs, service controls, vendor settings and templates. Testers may change them temporarily; switching back to Production restores the snapshot.</p>
                                     <?php if (!bc_demo_has_lock_key($connection_server)): ?>
                                         <div class="alert alert-warning small">Set the security lock key before changing Demo/Production mode. This key is separate from your login password and is required to restore Production.</div>
-                                        <form method="post" class="row g-2">
+                                        <form method="post" class="row g-2"><?php echo bc_csrf_field(); ?>
                                             <div class="col-md-5"><input type="password" name="demo_lock_key" class="form-control" minlength="10" placeholder="New security lock key" required></div>
                                             <div class="col-md-5"><input type="password" name="demo_lock_key_confirm" class="form-control" minlength="10" placeholder="Confirm lock key" required></div>
                                             <div class="col-md-2"><button name="set-demo-lock-key" class="btn btn-warning w-100 fw-bold">Save Key</button></div>
                                         </form>
                                     <?php else: ?>
-                                        <form method="post" class="row g-2 align-items-end">
+                                        <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
                                             <div class="col-md-3"><label class="form-label small fw-bold">CURRENT MODE</label><div class="form-control bg-light fw-bold text-uppercase"><?php echo htmlspecialchars($demo_state['mode']); ?></div></div>
                                             <div class="col-md-3"><label class="form-label small fw-bold">CHANGE TO</label><select name="demo_mode" class="form-select"><option value="demo" <?php echo $demo_state['mode'] === 'demo' ? 'selected' : ''; ?>>Demo</option><option value="production" <?php echo $demo_state['mode'] === 'production' ? 'selected' : ''; ?>>Production</option></select></div>
                                             <div class="col-md-4"><label class="form-label small fw-bold">SECURITY LOCK KEY</label><input type="password" name="demo_lock_key" class="form-control" placeholder="Enter lock key" required></div>
@@ -1351,7 +1355,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Global Site Settings</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold text-muted text-uppercase">Site Title</label>
                                     <input name="site-title" type="text" value="<?php echo $get_site_details['site_title'] ?? ''; ?>" class="form-control rounded-3" required />
@@ -1374,7 +1378,7 @@ bc_adm_head('', array("area" => "spadmin"));
                             <div class="alert alert-info border-0 rounded-4 p-3 mb-4 small">
                                 <i class="bi bi-info-circle-fill me-2"></i> This integration allows automatic Addon Domain creation when a vendor's website domain is approved or changed. Ensure your cPanel API token has the necessary privileges.
                             </div>
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <?php
                                 $cp_host = getSuperAdminOption('cpanel_host');
                                 $cp_user = getSuperAdminOption('cpanel_username');
@@ -1418,7 +1422,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                         <button class="btn btn-outline-primary" type="button" onclick="copyText('Webhook URL Copied', document.getElementById('webhookUrl').value)"><i class="bi bi-clipboard"></i></button>
                                     </div>
                                 </div>
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-4">
                                     <label class="small fw-bold text-muted text-uppercase mb-1">Print Hub Secret Token</label>
                                     <div class="input-group">
@@ -1457,7 +1461,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Temporary Vendor Access</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold text-muted">TEMPORARY VENDOR DOMAIN</label>
                                     <input name="temporary_vendor_domain" type="text" value="<?php echo htmlspecialchars(getSuperAdminOption('temporary_vendor_domain', ''), ENT_QUOTES, 'UTF-8'); ?>" class="form-control rounded-3" placeholder="temporary.example.com" />
@@ -1476,7 +1480,7 @@ bc_adm_head('', array("area" => "spadmin"));
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">App Service Pricing (Optional Add-ons)</h5></div>
                         <div class="card-body p-4">
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3 mb-4">
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold text-muted">ANDROID APK PRICE (₦)</label>
@@ -1563,7 +1567,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                 </button>
                             </div>
 
-                            <form method="post">
+                            <form method="post"><?php echo bc_csrf_field(); ?>
                                 <div class="row g-3 mb-4">
                                     <div class="col-md-12">
                                         <label class="form-label small fw-bold text-muted text-uppercase mb-1">License Activation Key</label>

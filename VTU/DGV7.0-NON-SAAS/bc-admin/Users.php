@@ -201,7 +201,8 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
     if (isset($_POST['sec33_send_code'])) {
         if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification is unavailable.'); }
         bc_validate_csrf();
-        $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        try{$channels=bc_action_channels('sas_vendors',$get_logged_admin_details);}catch(Throwable $e){$channels=['email'=>false];}
+        $sec33_send_err = !empty($channels['email']) && function_exists('bc_stepup_send_email_otp')
             ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'user_account_action', 'User Account Action')
             : 'Verification is unavailable.';
         bc_user_action_otp_ajax($sec33_send_err);
@@ -215,7 +216,7 @@ require_once __DIR__ . '/../func/bc-user-action-confirm.php';
         $sec33_mode = (string)$_POST['sec33_user_action'];
         $sec33_status = (string)($_POST['sec33_status'] ?? '');
         $sec33_factor = (string)($_POST['sec_factor'] ?? '');
-        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+        $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor, 'factor_method'=>(string)($_POST['factor_method']??'auto')];
         $sec33_err = function_exists('bc_stepup_admin_verify')
             ? bc_stepup_admin_verify($get_logged_admin_details, $sec33_input, 'user_account_action')
             : 'Verification is unavailable.';

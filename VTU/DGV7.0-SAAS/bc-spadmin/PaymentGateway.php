@@ -6,6 +6,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     require_once __DIR__.'/../func/bc-paid-security.php';
     require_once __DIR__.'/../func/bc-gateway-api-settings.php';
+    bc_paid_otp_dispatch($get_logged_spadmin_details,'spadmin',['paid_gateway_prices']);
     if(isset($_POST['save-fintech-prices'])){
         bc_validate_csrf();
         $error=bc_paid_verify($get_logged_spadmin_details,'spadmin','paid_gateway_prices',$_POST);

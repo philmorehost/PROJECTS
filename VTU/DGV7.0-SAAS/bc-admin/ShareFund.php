@@ -3,95 +3,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-admin-config.php");
         
-    // §30: crediting/debiting a user wallet takes the full step-up now —
-    // CSRF + Security PIN + authenticator/email code — not the PIN alone.
-    if(isset($_POST["send_stepup_code"])){
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-        $send_err = function_exists('bc_stepup_send_email_otp')
-            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'share_fund', 'Share Fund')
-            : 'Verification is unavailable.';
-        $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email." : "Error: $send_err";
-        header("Location: ShareFund.php");
-        exit();
-    }
-
-    if(isset($_POST["share-fund"])){
-        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-        if (empty($get_logged_admin_details['security_pin'])) {
-             $_SESSION['product_purchase_response'] = "Error: Please set your Security PIN in Account Settings first.";
-             header("Location: AccountSettings.php");
-             exit();
-        }
-
-        $sec30_input = array(
-            'pin'      => (string)($_POST['security_pin'] ?? ''),
-            'otp_code' => (string)($_POST['otp_code'] ?? ''),
-            'totp_code' => (string)($_POST['totp_code'] ?? ''),
-        );
-        $sec30_err = function_exists('bc_stepup_admin_verify')
-            ? bc_stepup_admin_verify($get_logged_admin_details, $sec30_input, 'share_fund')
-            : 'Verification is unavailable.';
-        if ($sec30_err !== '') {
-             $_SESSION['product_purchase_response'] = "Error: " . $sec30_err;
-             header("Location: ShareFund.php");
-             exit();
-        }
-
-        $purchase_method = "web";
-        $purchase_method = strtoupper($purchase_method);
-    	$purchase_method_array = array("WEB");
-    	if(in_array($purchase_method, $purchase_method_array)){
-        if($purchase_method === "WEB"){
-            $user = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["user"]))));
-            $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["type"]))));
-            $amount = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9.]+/","",trim(strip_tags($_POST["amount"]))));
-        }
-
-        $discounted_amount = $amount;
-        $type_alternative = ucwords("wallet ".$type);
-        $reference = substr(str_shuffle("12345678901234567890"), 0, 15);
-        $description = ucwords("account ".$type."ed by admin");
-        if(in_array($type, array("debit"))){
-        	$transType = "debit";
-        }
-        
-        if(in_array($type, array("credit","refund"))){
-        	$transType = "credit";
-        }
-        $get_logged_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && username='$user' LIMIT 1");
-		if(in_array($type, array("debit","credit","refund"))){
-			if(mysqli_num_rows($get_logged_user_query) == 1){
-				$credit_other_user = chargeOtherUser($user, $transType, $user, ucwords("wallet ".$type), $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], "1");
-				if(in_array($credit_other_user, array("success"))){
-					if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details["id"], 'admin', (string)$get_logged_admin_details["email"], 'user_wallet_' . $transType, (string)$user, ucwords($type) . ' of N' . $amount . ' (ref ' . $reference . ')');
-					$json_response_array = array("reference" => $reference, "status" => "success", "desc" => ucwords($user." ".$type."ed with N".$amount." successfully"));
-                	$json_response_encode = json_encode($json_response_array,true);
-				}
-                                                    
-            	if($credit_other_user == "failed"){
-					$json_response_array = array("desc" => "Transaction Failed");
-                	$json_response_encode = json_encode($json_response_array,true);
-             	}		
-			}else{
-				//User not exists
-				$json_response_array = array("desc" => "User not exists");
-				$json_response_encode = json_encode($json_response_array,true);
-			}
-		}else{
-			//Invalid Transaction Type
-			$json_response_array = array("desc" => "Invalid Transaction Type");
-			$json_response_encode = json_encode($json_response_array,true);
-		}
-    }else{
-        //Purchase Method Not specified
-        $json_response_array = array("desc" => "Purchase Method Not specified");
-        $json_response_encode = json_encode($json_response_array,true);
-    }
-        $json_response_decode = json_decode($json_response_encode,true);
-        $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-        header("Location: ".$_SERVER["REQUEST_URI"]);
-        exit;
-    }
+    require_once __DIR__.'/../func/bc-admin-wallet-adjustment.php';
+    bc_admin_wallet_handle('admin',$get_logged_admin_details);
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
@@ -127,8 +40,9 @@ bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]),
                     </div>
                 </div>
                 <div class="card-body p-4 p-md-5">
-                    <form method="post" action="">
+                    <form method="post" action="" data-admin-wallet>
                         <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+                        <?php bc_admin_wallet_fields(); ?>
                         <div class="mb-4">
                             <label class="form-label small fw-bold text-muted text-uppercase mb-2">Recipient Username</label>
                             <div class="input-group input-group-lg">
@@ -196,7 +110,7 @@ bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]),
                             <div class="input-group input-group-lg">
                                 <input name="otp_code" type="text" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6-digit code" class="form-control text-center fw-bold bg-light border-0" style="letter-spacing: 6px;"/>
                                 <input type="hidden" name="totp_code" value=""/>
-                                <button type="submit" name="send_stepup_code" value="1" formnovalidate class="btn btn-outline-danger fw-bold">Email me a code</button>
+                                <button type="button" data-security-send="send_stepup_code" class="btn btn-outline-danger fw-bold">Email me a code</button>
                             </div>
                             <div class="form-text text-center mt-2 small">Enter your authenticator code, or request an email code. Required with your PIN for every credit, debit and refund.</div>
                         </div>
@@ -217,4 +131,5 @@ bc_adm_head("Share Fund | " . ($get_all_super_admin_site_details["site_title"]),
 
 
 
+<script src="../asset/bc-admin-wallet.js"></script>
 <?php bc_adm_foot(array("area" => "admin")); ?>

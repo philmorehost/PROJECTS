@@ -11,9 +11,13 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $sec33_gate_ok = false;
     if (isset($_POST['sec33_send_code'])) {
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-        $sec33_send_err = function_exists('bc_stepup_send_email_otp')
+        try{$channels=bc_action_channels('sas_super_admin',$get_logged_spadmin_details);}catch(Throwable $e){$channels=['email'=>false];}
+        $sec33_send_err = !empty($channels['email']) && function_exists('bc_stepup_send_email_otp')
             ? bc_stepup_send_email_otp(0, (string)$get_logged_spadmin_details['email'], (string)$get_logged_spadmin_details['email'], 'vendor_account_action', 'Vendor Account Action')
             : 'Verification is unavailable.';
+        if(strtolower($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='xmlhttprequest'){
+            header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$sec33_send_err===''?'success':'error','message'=>$sec33_send_err===''?'SENT':$sec33_send_err]);exit;
+        }
         $_SESSION["product_purchase_response"] = $sec33_send_err === '' ? "Verification code sent to your email." : "Error: $sec33_send_err";
         header("Location: /bc-spadmin/Vendors.php");
         exit();
@@ -26,7 +30,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         if ($sec33_mode === 'status' && $sec33_status === '2') {
             $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => (string)($_POST['sec_factor'] ?? ''), 'totp_code' => (string)($_POST['sec_factor'] ?? '')];
         } else {
-            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor];
+            $sec33_input = ['pin' => (string)($_POST['sec_pin'] ?? ''), 'otp_code' => $sec33_factor, 'totp_code' => $sec33_factor, 'factor_method'=>(string)($_POST['factor_method']??'auto')];
         }
         $sec33_err = function_exists('bc_stepup_spadmin_verify')
             ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec33_input, 'vendor_account_action')
@@ -519,7 +523,7 @@ bc_adm_head('', array("area" => "spadmin"));
             <p class="text-muted small" id="sec33VendorModalText"></p>
             <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
             <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE <span class="fw-normal">(not needed to suspend)</span></label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
-            <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
+            <select name="factor_method" class="form-select"><option value="auto">Policy default</option><option value="email">Email OTP</option><option value="google">Google Authenticator</option></select><button type="button" data-security-send="sec33_send_code" class="btn btn-link btn-sm p-0">Send code</button><p data-wallet-status role="status" aria-live="polite"></p>
           </div>
           <div class="modal-footer border-0"><button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold" id="sec33VendorModalBtn">Confirm</button></div>
         </form>
@@ -583,4 +587,5 @@ bc_adm_head('', array("area" => "spadmin"));
     </script>
 
 
+<script src="../asset/bc-admin-wallet.js"></script>
 <?php bc_adm_foot(array("area" => "spadmin")); ?>

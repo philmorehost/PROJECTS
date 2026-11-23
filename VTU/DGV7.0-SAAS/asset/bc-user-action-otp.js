@@ -25,6 +25,8 @@
                 var data = await response.json();
                 if (!response.ok || data.status !== 'success') throw new Error(data.message || 'Could not send OTP. Please try again.');
                 status.textContent = 'OTP SENT';
+                button.textContent = 'SENT';
+                var method = form.elements.namedItem('factor_method');if(method)method.value='email';
                 var factor = form.elements.namedItem('sec_factor');
                 if (factor) factor.focus();
             } catch (error) {
