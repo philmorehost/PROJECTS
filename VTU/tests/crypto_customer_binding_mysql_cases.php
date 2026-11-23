@@ -31,6 +31,24 @@ check_db(bc_q_row('SELECT state FROM sas_crypto_v2_customer_bindings WHERE custo
 $r=bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']);check_db($r['binding_state']==='review_only'&&!$r['live_enabled'],'independent review never activates funding');
 $row=bc_q_row('SELECT * FROM sas_crypto_v2_customer_bindings WHERE custody_account=?',[$bi]);check_db((int)$row['valid_until_epoch']<=$m['expires_at'],'review cannot outlive relationship evidence');
 reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'1']),'crypto_binding_edit_conflict');
-bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'2']);
+$checkpoint=bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2);
+$fakeSnapshot=['provider'=>'bybit','evidence_kind'=>'bound_sub_address_inventory_v1','address'=>'SyntheticEncryptedAddressOnly','expires_at'=>time()+900,'live_enabled'=>false];
+$addressHash=bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2,$checkpoint,$fakeSnapshot);
+$addressEvidence=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evidence WHERE custody_account=? AND evidence_hash=?',[$bi,$addressHash]);
+check_db(strpos($addressEvidence['sealed_document'],'SyntheticEncryptedAddressOnly')===false,'address evidence stored encrypted only');
+$opened=json_decode(bc_crypto_custody_evidence_view($bb,$bi,'testnet',$addressHash,1),true);
+check_db($opened['user_id']===11&&$opened['vendor_id']===7&&$opened['binding_revision']===2&&$opened['expires_at']<=$m['expires_at'],'stored address evidence binds immutable customer and expiry');
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'renew',['binding_revision'=>'2','evidence_hash'=>$hash]),'crypto_binding_fresh_evidence_required');
+$m['verification_sequence']=2;$renewHash=bc_crypto_custody_evidence_store($ba,$bi,'testnet',bc_crypto_gov_json(bc_crypto_parent_attest($m)),1);
+bc_crypto_custody_evidence_view($ba,$bi,'testnet',$renewHash,1);
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'renew',['binding_revision'=>'2','evidence_hash'=>$renewHash,'user_id'=>'902']),'crypto_binding_reassignment_forbidden');
+bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'renew',['binding_revision'=>'2','evidence_hash'=>$renewHash]);
+$renewed=bc_q_row('SELECT * FROM sas_crypto_v2_customer_bindings WHERE custody_account=?',[$bi]);check_db($renewed['state']==='proposed'&&(int)$renewed['user_id']===11&&(int)$renewed['valid_until_epoch']===0&&(int)$renewed['reviewed_by']===0,'renewal preserves customer and removes old review authority');
+reject_db(fn()=>bc_crypto_binding_address_checkpoint($bb,$bi,'testnet',1,2,$checkpoint,$fakeSnapshot),'crypto_binding_address_unavailable');
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'review',['binding_revision'=>'3']),'crypto_binding_independent_review_required');
+bc_crypto_custody_evidence_view($bb,$bi,'testnet',$renewHash,1);bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'3']);
+bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'4']);
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'renew',['binding_revision'=>'5','evidence_hash'=>$hash]),'crypto_binding_revoked');
+
 reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',array_merge($input,['user_id'=>'902'])),'crypto_binding_already_reserved');
 check_db(bc_q_row('SELECT COUNT(*) AS n,SUM(units) AS total FROM sas_crypto_v2_accounts')===$funds&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes')===$routes,'binding workflow cannot change funds, holds or enabled routes');
