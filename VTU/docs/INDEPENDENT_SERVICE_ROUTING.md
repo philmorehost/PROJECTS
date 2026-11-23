@@ -11,3 +11,9 @@ This increment does **not** claim completed automatic payment settlement, device
 Crypto, cards, withdrawals, eSIM and other services are not redirected through this request-routing map. Financial/security holds remain. Replacement Buy/Sell still needs its own durable orders/accounting/custody and real-provider verification. No activation, deployment or live provider call was performed by this change. Vendor PHP hosting does not need Node.
 
 Automated coverage: independent settings/default compatibility, tenant/entitlement isolation, revoked/disabled/unsupported refusal, no silent fallback, page-specific catalogue, fresh actor/step-up/demo/CSRF/rate gates, persistence acknowledgement and both-edition page/snapshot guards. These boundary tests use explicit doubles and do not certify live provider behavior or production rollout.
+
+## Durable-storage verification
+
+`service_provider_routing_mysql_test.php` runs only against a disposable CI database for each edition. It exercises the production route resolver/save handler, actual settings helper implementations, prepared owner reads and edition-specific SQL entitlement checks. A second MySQL connection verifies committed readback. Injected INSERT/UPDATE trigger failures must return refusal, preserve any existing route and permit a later successful retry. Tenant settings/global default isolation and fresh blocked-owner refusal are checked.
+
+Factor verification, rate-limit and demo policy are explicit doubles in this storage test; actual security/component behavior remains separate coverage. It makes no external provider request, creates no financial transaction and does not establish live-product availability. No production database or credentials are used.
