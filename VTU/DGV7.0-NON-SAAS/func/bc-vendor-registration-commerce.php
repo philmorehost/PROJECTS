@@ -22,7 +22,7 @@ function bc_vreg_quote($input,$server_domain_fee){
  if(count(array_unique($ids))!==count($ids))throw new RuntimeException('Repeated add-on.');sort($ids);
  foreach($ids as $addon){$r=bc_q_row('SELECT id,price FROM sas_billing_addons WHERE id=?',[$addon]);if(!$r)throw new RuntimeException('Unknown add-on.');$items['addon_'.$addon]=bc_vreg_minor($r['price']);$total+=$items['addon_'.$addon];}
  $items['domain']=bc_vreg_minor($server_domain_fee);$total+=$items['domain'];
- if($total<=0||$total>100000000000)throw new RuntimeException('Registration total is invalid.');
+ if($total<=0||$total>9999999999)throw new RuntimeException('Registration total is invalid.');
  return ['version'=>1,'currency'=>'NGN','total'=>$total,'items'=>$items,'package_id'=>(int)$id,'duration_days'=>(int)$package['duration_days'],'flags'=>$flags,'addons'=>implode(',',$ids)];
 }
 function bc_vreg_invoice($row){

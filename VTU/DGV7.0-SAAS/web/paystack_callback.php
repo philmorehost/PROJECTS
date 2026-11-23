@@ -8,6 +8,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
     require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
+    require_once __DIR__.'/../func/bc-vendor-registration.php';
     header('Cache-Control: no-store, private');
     $page_title = "Payment Verification";
     $error_message = "Transaction could not be verified. Please contact support.";
@@ -15,6 +16,16 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     if(isset($_GET['reference'])) {
         if(!is_string($_GET['reference'])||!preg_match('/\A[A-Za-z0-9_-]{8,120}\z/D',$_GET['reference'])){http_response_code(400);exit('Invalid reference.');}
         $reference = mysqli_real_escape_string($connection_server, $_GET['reference']);
+
+        try{
+            bc_vreg_limit('payment_verify_ip',(string)($_SERVER['REMOTE_ADDR']??'unknown'),30,900);
+            bc_vreg_limit('payment_verify_ref',$reference,10,900);
+            if(strpos($reference,'vendor_reg_')===0){
+                $expected=bc_q_row('SELECT * FROM sas_pending_vendors WHERE paystack_reference=?',[$reference]);
+                if(!$expected||$expected['payment_method']!=='paystack')throw new RuntimeException('Unknown invoice.');
+                bc_vreg_invoice($expected);
+            }
+        }catch(Throwable $e){http_response_code(429);exit('Payment verification is unavailable or requires support review. Do not pay again.');}
 
         // Fetch Paystack secret key
         $gateway_res = mysqli_query($connection_server, "SELECT secret_key FROM sas_super_admin_payment_gateways WHERE gateway_name='paystack'");

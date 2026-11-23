@@ -48,7 +48,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             if(!$mailbox||!hash_equals($mailbox['email'],$vreg_email))throw new RuntimeException('Verify your email before accessing registration.');
             bc_vreg_limit('application_email',$vreg_email,10,86400);
             bc_vreg_limit('application_device',$vreg_device,10,86400);
-            if(($_POST['payment_method']??'')==='bank_deposit'&&$vreg_policy['payment_mode']!=='both')throw new RuntimeException('Manual registration deposits are disabled.');
+            if(($_POST['payment_method']??'')==='bank_deposit'){
+                if($vreg_policy['payment_mode']!=='both')throw new RuntimeException('Manual registration deposits are disabled.');
+                $bank=bc_q_row('SELECT bank_name,account_name,account_number FROM sas_super_admin_payments LIMIT 1');
+                if(!$bank||empty($bank['bank_name'])||empty($bank['account_name'])||!preg_match('/\A[0-9]{10}\z/D',(string)$bank['account_number']))throw new RuntimeException('Platform bank instructions are unavailable. Do not make a manual transfer.');
+            }
             if(!isset($_POST['create-profile']))throw new RuntimeException('Invalid registration action.');
             $input_error=bc_vreg_input($_POST);if($input_error!=='')throw new RuntimeException($input_error);
             if(!empty($_POST['company_fax']))throw new RuntimeException('Registration could not be completed.');
@@ -252,6 +256,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                         $business_registration_no=mysqli_real_escape_string($connection_server,trim($_POST['business_registration_no']??''));
                         $sql = "INSERT INTO sas_pending_vendors (price_snapshot,email_verified_at,business_name,business_registration_no,website_url, email, password, firstname, lastname, phone_number, home_address, billing_package_id, payment_method, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, order_apk, order_ios, order_playstore, order_sms_bridge, selected_addons, domain_registration_fee, total_amount) VALUES ('$price_snapshot',NOW(),'$business_name','$business_registration_no','$website_url', '$email', '$md5_pass', '$first', '$last', '$phone', '$address', '$billing_package_id', '$payment_method', '0', '$def_min', '$def_max', '$def_limit', '$app_base_url', '$order_apk', '$order_ios', '$order_playstore', '$order_sms_bridge', '$selected_addons_str', '$domain_fee', '$total_amount')";
                         if($pending_id=bc_vreg_insert_application($sql,$vreg_email,$normalized_phone,$vreg_device,$vreg_policy)) {
+                            $_SESSION['vreg_application']=['id'=>(int)$pending_id,'email_hash'=>hash('sha256',$vreg_email),'until'=>time()+86400];
 
                             // Send admin notification email
                             $get_super_admin = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin LIMIT 1"));
@@ -310,7 +315,7 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                                     curl_close($curl);
 
                                     if ($err) {
-                                        $_SESSION["product_purchase_response"] = "Payment gateway error. Please try again or contact support.";
+                                        $_SESSION["product_purchase_response"] = "Your application is saved, but payment initialization is unconfirmed. Contact support before retrying.";
                                     } else {
                                         $result = json_decode($response, true);
                                         if (($result['status']??false) === true && is_string($result['data']['authorization_url']??null) && strpos($result['data']['authorization_url'],'https://checkout.paystack.com/')===0) {
