@@ -24,6 +24,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
             if(!is_string($_POST['_csrf_token']??null))throw new RuntimeException('Invalid form token. Reload and try again.');
             bc_validate_csrf();
+            bc_vreg_limit('request_ip',(string)($_SERVER['REMOTE_ADDR']??'unknown'),30,900);
             $policy_lock=bc_q_row("SELECT GET_LOCK('bc_vendor_registration_settings',2) AS acquired");
             if((int)($policy_lock['acquired']??0)!==1)throw new RuntimeException('Registration is busy. Please try later.');
             register_shutdown_function(function(){bc_q_row("SELECT RELEASE_LOCK('bc_vendor_registration_settings') AS released");});

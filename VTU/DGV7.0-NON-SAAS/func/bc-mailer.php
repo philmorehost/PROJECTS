@@ -86,6 +86,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 		$smtpMAIL->AltBody = strip_tags($message);
 		$sent = $smtpMAIL->send();
 	} catch (Exception $e) {
+        if ($platform_only) return false;
         // Fallback to Inbuilt Mail Functions. Raw mail() applies no Content-Transfer-Encoding
         // at all, so a message with any long line (the full HTML template rendered onto one
         // line, or a long marketing paragraph with no manual line breaks) reproduces the exact

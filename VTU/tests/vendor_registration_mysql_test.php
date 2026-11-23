@@ -59,5 +59,20 @@ try{
  $db->query('DELETE FROM sas_rate_limits');try{bc_vreg_send('failed@example.com',bc_vreg_policy(),fn($email,$code)=>false);vm_check(false,'delivery failure');}catch(RuntimeException $e){vm_check((int)$db->query("SELECT COUNT(*) n FROM sas_vendor_signup_challenges WHERE email='failed@example.com'")->fetch_assoc()['n']===0,'failed mail leaves no usable challenge');}
  for($i=0;$i<3;$i++)bc_vreg_send('limited@example.com',bc_vreg_policy(),$deliver);
  try{bc_vreg_send('limited@example.com',bc_vreg_policy(),$deliver);vm_check(false,'mail flood');}catch(RuntimeException $e){vm_check(strpos($e->getMessage(),'Too many')!==false,'persistent email flood limit');}
+
+ $db->query('DELETE FROM sas_rate_limits');
+ $db->query('UPDATE sas_super_admin SET is_blocked=1 WHERE id=1');vm_check(bc_vreg_settings_save(['id'=>1],$input)!=='','fresh blocked platform owner refused');$db->query('UPDATE sas_super_admin SET is_blocked=0 WHERE id=1');
+ $_POST['_csrf_token']='wrong';try{bc_vreg_settings_save(['id'=>1],$input);vm_check(false,'csrf');}catch(RuntimeException $e){vm_check($e->getMessage()==='csrf','settings csrf');}$_POST['_csrf_token']='token';
+ $prior=bc_vreg_policy();$db->query("CREATE TRIGGER policy_write_failure BEFORE INSERT ON sas_super_admin_options FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected policy write failure'");
+ $input['vendor_registration_enabled']='0';vm_check(bc_vreg_settings_save(['id'=>1],$input)!==''&&bc_vreg_policy()===$prior,'failed settings write rolls back policy and epoch');$db->query('DROP TRIGGER policy_write_failure');
+ // Exercise the exact production activation INSERT (not external hosting/payment side effects).
+ $approval=file_get_contents(__DIR__.'/../DGV7.0-SAAS/bc-spadmin/VendorRegistrations.php');
+ if(!preg_match('/\$insert_sql = "(INSERT INTO sas_vendors.*?)";/s',$approval,$insert))throw new RuntimeException('activation SQL missing');
+ preg_match('/INSERT INTO sas_vendors \(([^)]*)\)/',$insert[1],$columns);$defs=[];foreach(explode(',',$columns[1]) as $column){$column=trim($column);$defs[]="`$column` ".($column==='onboarding_compliance_review'?'TEXT':'VARCHAR(255)');}
+ $db->query('CREATE TABLE sas_vendors(id INT AUTO_INCREMENT PRIMARY KEY,'.implode(',',$defs).') ENGINE=InnoDB');
+ $review=json_encode(['review'=>['kyc'=>'fixture-kyc-case','kyb'=>'fixture-kyb-case','reviewer'=>1]]);
+ $params=[$review,'2','ada@example.com',str_repeat('a',64),'fixture-hash','Ada','Okafor','08031234567','example.com','Example address','1000','50000','10','example.com','0','0','0','0',''];
+ vm_check(substr_count($insert[1],'?')===count($params)&&bc_q($insert[1],$params)===true,'actual activation INSERT binds all proof and identity fields');
+ $created=bc_q_row('SELECT * FROM sas_vendors LIMIT 1');vm_check($created['onboarding_compliance_review']===$review&&$created['kyc_status']==='2'&&!empty($created['email_verified_at']),'activation retains proof and completed KYC state');
  echo "$n $edition real MySQL vendor signup checks passed; no real mail/provider calls\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}
