@@ -24,7 +24,9 @@ repair_check(strpos($src,'INSERT INTO sas_apis')===false,'inventory never activa
 repair_check(!file_exists(__DIR__.'/../DGV7.0-NON-SAAS/func/bc-marketplace-catalog.php'),'NON-SAAS marketplace untouched');
 foreach(['SAAS','NON-SAAS'] as $ed){
  $src=file_get_contents(__DIR__.'/../DGV7.0-'.$ed.'/bc-admin/UserUpgrade.php');
- repair_check(strpos($src,'$debit_other_user = (float)$amount === 0.0 ? "success" : chargeOtherUser(')!==false,'free admin level upgrade skips wallet debit');
+ repair_check(strpos($src,'bc_paid_level_change(')!==false,'admin level upgrade uses atomic entitlement purchase');
+ $core=file_get_contents(__DIR__.'/../DGV7.0-'.$ed.'/func/bc-paid-entitlements.php');
+ repair_check(strpos($core,"if(\$price!=='0.00')")!==false,'free admin level upgrade skips wallet debit');
  $src=file_get_contents(__DIR__.'/../DGV7.0-'.$ed.'/bc-admin/AccountSettings.php');
  repair_check(strpos($src,"if ((string)\$each_level_id === '1') \$each_level_percent = '0';")!==false,'Smart Earner remains free');
 }

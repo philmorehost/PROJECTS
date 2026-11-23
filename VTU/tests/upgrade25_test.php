@@ -218,7 +218,7 @@ foreach ($editions as $ed) {
 
 // Super-admin surface (SAAS only): fintech API prices, no crypto console.
 $spg = src($root . '/DGV7.0-SAAS/bc-spadmin/PaymentGateway.php');
-u25(strpos($spg, 'fintech_api_price_$fintech_slug') !== false && strpos($spg, "'flutterwave', 'klasha', 'platnova'") !== false, 'spadmin prices all three fintech APIs');
+u25(strpos($spg, 'bc_fintech_api_providers() as $fintech_slug') !== false && strpos($spg, 'bc_gateway_prices_save(') !== false, 'spadmin prices the shared paid API catalogue');
 u25(strpos($spg, 'Fintech API Access Prices') !== false, 'spadmin shows fintech API price controls');
 u25(!file_exists($root . '/DGV7.0-SAAS/bc-spadmin/CryptoHub.php'), 'spadmin crypto console is deleted');
 u25(strpos(src($root . '/DGV7.0-SAAS/bc-spadmin/SiteMap.php'), "CryptoHub.php'") === false, 'spadmin sitemap drops the crypto console link');

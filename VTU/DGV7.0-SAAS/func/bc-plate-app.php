@@ -213,13 +213,14 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'Tools & API', 'icon' => 'building', 'id' => 'tools-api',
-                'match' => array('AI-Assistant.php', 'Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php'),
+                'match' => array('AI-Assistant.php', 'Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'handle_upgrade.php', 'BusinessUpgrade.php', 'APIDocs.php'),
                 'items' => array(
                     array('label' => 'Support', 'href' => 'AI-Assistant.php', 'icon' => 'chat-dots'),
                     array('label' => 'Refer & Earn', 'href' => 'Referral.php', 'icon' => 'gift', 'badge' => 'NEW', 'service' => 'referral'),
                     array('label' => 'Bulk SMS', 'href' => 'BulkSMS.php', 'icon' => 'chat-square-text', 'service' => 'bulk_sms'),
                     array('label' => 'Submit SMS ID', 'href' => 'SubmitSenderID.php', 'icon' => 'send-check', 'service' => 'bulk_sms'),
                     array('label' => 'Account Pricing', 'href' => 'Pricing.php', 'icon' => 'tags'),
+                    array('label' => 'Pricing Level', 'href' => 'handle_upgrade.php', 'icon' => 'arrow-up-circle'),
                     array('label' => 'Business Upgrade', 'href' => 'BusinessUpgrade.php', 'icon' => 'arrow-up-circle',
                           'when' => function ($user) {
                               $tier = function_exists('bc_fintech_account_type') ? bc_fintech_account_type($user) : 'personal';

@@ -6,35 +6,23 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 	// SAAS vendors buy each one here, charged to the vendor wallet. Prices are set
 	// by the super admin in bc-spadmin → Payment Gateway (default ₦50,000).
 	include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
-	if (isset($_POST["buy-fintech-api"])) {
-		$api_vid  = (int)$get_logged_admin_details['id'];
-		$api_slug = strtolower(trim(strip_tags((string)$_POST["buy-fintech-api"])));
-		$api_list = bc_fintech_api_providers();
-		if (!isset($api_list[$api_slug])) {
-			$_SESSION["product_purchase_response"] = "Unknown API selected.";
-		} elseif (bc_fintech_api_access($api_vid, $api_slug)) {
-			$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access is already active on your account.";
-		} else {
-			$api_price = bc_fintech_api_price($api_slug);
-			if ($api_price <= 0) {
-				bc_fintech_api_grant($api_vid, $api_slug, 'FREE');
-				$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access activated.";
-			} elseif ((float)($get_logged_admin_details['balance'] ?? 0) >= $api_price) {
-				$api_ref = "API_" . strtoupper($api_slug) . "_" . time();
-				$api_res = chargeVendor("debit", "fintech_api_access", "API Access", $api_ref, $api_price, $api_price, $api_list[$api_slug]['label'] . " API Access", $_SERVER['HTTP_HOST'], 1);
-				if ($api_res === "success") {
-					bc_fintech_api_grant($api_vid, $api_slug, $api_ref);
-					$_SESSION["product_purchase_response"] = $api_list[$api_slug]['label'] . " API access activated successfully.";
-				} else {
-					$_SESSION["product_purchase_response"] = "Error: Activation failed during billing.";
-				}
-			} else {
-				$_SESSION["product_purchase_response"] = "Error: Insufficient vendor wallet balance. You need NGN " . number_format($api_price, 2) . " for the " . $api_list[$api_slug]['label'] . " API.";
-			}
-		}
-		header("Location: " . $_SERVER["REQUEST_URI"]);
-		exit();
-	}
+    require_once __DIR__.'/../func/bc-paid-security.php';
+    require_once __DIR__.'/../func/bc-gateway-api-settings.php';
+    $paid_contexts=['paid_gateway_klasha','paid_gateway_bybit'];
+    foreach(array_keys(bc_fintech_api_providers()) as $slug)$paid_contexts[]='paid_module_'.$slug;
+    bc_paid_otp_dispatch($get_logged_admin_details,'admin',$paid_contexts);
+    if(isset($_POST['buy-fintech-api']) || isset($_POST['save-paid-gateway'])){
+        bc_validate_csrf();
+        $buy=isset($_POST['buy-fintech-api']);
+        $slug=$buy?$_POST['buy-fintech-api']:$_POST['save-paid-gateway'];
+        $context=is_string($slug)?($buy?'paid_module_':'paid_gateway_').$slug:'';
+        $error=in_array($context,$paid_contexts,true)?bc_paid_verify($get_logged_admin_details,'admin',$context,$_POST):'Invalid gateway.';
+        $result=$error;
+        if($error==='')$result=$buy?bc_paid_module_purchase($connection_server,(int)$get_logged_admin_details['id'],$slug,$_POST['paid_quote']??''):bc_gateway_api_save($connection_server,$get_logged_admin_details,$slug,$_POST);
+        $_SESSION['product_purchase_response']=in_array($result,['success','already_active'],true)?($buy?'API access confirmed. Service and compliance restrictions still apply.':'Encrypted API settings saved. No service was enabled and no provider call was made.'):'Not completed: '.$result.'. Refresh prices/settings before retrying.';
+        bc_paid_reply(in_array($result,['success','already_active'],true),$_SESSION['product_purchase_response']);
+        header('Location: PaymentGateway.php');exit;
+    }
 
 	
 	$kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
@@ -137,7 +125,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $public_key = $_POST["public-key"];
         $secret_key = $_POST["secret-key"];
         $encrypt_key = $_POST["encrypt-key"];
-        $withdrawal_gateway_array = array("payhub", "paystack", "klasha");
+        $withdrawal_gateway_array = array("payhub", "paystack");
         $withdrawal_gateway_warnings = array();
 
         if(count($gateway_name) > 0){
@@ -439,13 +427,8 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                         <form method="post">
                             <div class="row g-4">
                                 <?php
-                                // Klasha lives here too: sas_bank_transfer_gateways is the provider-key
-                                // table the adapter reads (func/bc-fintech-providers.php). §26 wired the
-                                // registry from the official Klasha docs: Public Key = merchant public
-                                // key (x-auth-token), Secret Key = account password (exchanged for a
-                                // Bearer token at login; a pasted Bearer token also works), Encrypt Key
-                                // = merchant encryption key. Set the login email under Service Control.
-                                $withdrawal_gateways = ["payhub", "paystack", "klasha"];
+                                // Klasha has an independent security-gated API card below.
+                                $withdrawal_gateways = ["payhub", "paystack"];
                                 foreach($withdrawal_gateways as $wg_name):
                                     // Same ordering as getWithdrawalGatewayDetails(), so the credentials shown
                                     // here are the ones the payout API will actually use.
@@ -556,7 +539,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                     <div class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3"><?php echo bc_is_saas_edition() ? 'Paid Add-ons' : 'Included'; ?></div>
                 </div>
                 <div class="card-body p-4">
-                    <p class="small text-muted mb-4">These APIs power the new fintech services (global payments, China payouts, tuition &amp; eSIM). <?php echo bc_is_saas_edition() ? 'Buy access once per API; you can then save its keys below and switch it on in Service Control.' : 'All three APIs are included with your script by default — just save your keys below.'; ?></p>
+                    <p class="small text-muted mb-4">These APIs power the new fintech services (global payments, China payouts, tuition &amp; eSIM). <?php echo bc_is_saas_edition() ? 'Buy access once per API; you can then save its keys below and switch it on in Service Control.' : 'These APIs are included with your script by default — just save your keys below.'; ?></p>
                     <div class="row g-4">
                         <?php foreach (bc_fintech_api_providers() as $api_slug => $api_meta):
                             $api_has_access = bc_fintech_api_access((int)$get_logged_admin_details['id'], $api_slug);
@@ -577,7 +560,9 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                 <p class="small text-muted flex-grow-1"><?php echo htmlspecialchars($api_meta['powers']); ?></p>
                                 <?php if (bc_is_saas_edition() && !$api_has_access): ?>
                                     <div class="h5 fw-bold text-primary mb-3">₦<?php echo number_format($api_price, 2); ?> <span class="small text-muted fw-normal">one-time</span></div>
-                                    <form method="post">
+                                    <form method="post" data-paid-save>
+                                        <input type="hidden" name="paid_quote" value="<?php echo htmlspecialchars(number_format($api_price,2,'.',''),ENT_QUOTES,'UTF-8'); ?>">
+                                        <?php bc_paid_fields($get_logged_admin_details,'paid_module_'.$api_slug); ?>
                                         <button type="submit" name="buy-fintech-api" value="<?php echo $api_slug; ?>" class="btn btn-primary rounded-pill w-100 fw-bold" onclick="return confirm('Charge ₦<?php echo number_format($api_price, 2); ?> from your vendor wallet for the <?php echo htmlspecialchars($api_meta['label']); ?> API?')">
                                             <i class="bi bi-unlock me-1"></i> Buy API Access
                                         </button>
@@ -592,6 +577,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                 </div>
             </div>
 
+            <?php bc_gateway_api_cards($connection_server,$get_logged_admin_details); ?>
             <!-- Payment Gateways Grid -->
             <div class="card shadow-sm border-0 rounded-4">
                 <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
@@ -689,4 +675,4 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
 </script>
 
 
-<?php bc_adm_foot(array("area" => "admin")); ?>
+<?php bc_paid_otp_script(); bc_adm_foot(array("area" => "admin")); ?>

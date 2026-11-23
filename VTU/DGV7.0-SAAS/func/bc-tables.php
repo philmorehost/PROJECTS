@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-update-dispatch-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-paid-gateways-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -2354,6 +2354,13 @@ if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_wallet_mut
  amount DECIMAL(30,8) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  INDEX wallet_event_lookup(vendor_id,reference)
 ) ENGINE=InnoDB")) { error_log('Wallet security migration failed; wallet writes will fail closed.'); return; }
+
+// Encrypted per-vendor API configuration; no service is activated by this storage.
+if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_gateway_api_credentials (
+ vendor_id INT UNSIGNED NOT NULL, gateway_slug VARCHAR(32) NOT NULL,
+ sealed_config LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ PRIMARY KEY (vendor_id,gateway_slug)
+) ENGINE=InnoDB")) { error_log('Gateway configuration migration failed; credential saves fail closed.'); return; }
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
 // Deliberately DELETE + INSERT rather than an upsert: not every variant of sas_super_admin_options has

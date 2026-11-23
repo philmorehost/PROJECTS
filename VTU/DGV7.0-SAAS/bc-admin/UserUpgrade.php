@@ -10,6 +10,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     }
 
     require_once __DIR__ . '/../func/bc-admin-user-tier.php';
+    require_once __DIR__.'/../func/bc-paid-entitlements.php';
+    require_once __DIR__.'/../func/bc-paid-security.php';
+    bc_paid_otp_dispatch($get_logged_admin_details,'admin',['paid_level_admin']);
     if (isset($_POST['convert-personal']) || isset($_POST['send-personal-code'])) {
         if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification unavailable.'); }
         bc_validate_csrf();
@@ -30,110 +33,15 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit;
     }
 
-    if(isset($_POST["upgrade-level"])){
-        if (!function_exists('bc_validate_csrf')) { http_response_code(503); exit('Verification unavailable.'); }
+    if(isset($_POST['upgrade-level'])){
         bc_validate_csrf();
-    	$account_level_upgrade_array = array("smart" => 1, "agent" => 2, "api" => 3);
-    	
-        $upgrade_type = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["upgrade-type"])));
-        
-        if(!empty($upgrade_type) && in_array($upgrade_type, array_keys($account_level_upgrade_array))){
-            $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
-            if(mysqli_num_rows($check_user_details) == 1){
-                $upgrade_signal = false;
-                $get_user_info = mysqli_fetch_array($check_user_details);
-                $preserved_type = bc_fintech_account_type($get_user_info);
-                if (!in_array($preserved_type, ['personal','business'], true)) {
-                    $_SESSION['product_purchase_response']='Resolve the account type before changing its pricing level.';
-                    header('Location: UserUpgrade.php?userID='.(int)$user_id_number); exit;
-                }
-
-                
-                if($get_user_info["account_level"] == $account_level_upgrade_array[$upgrade_type]){
-                    $upgrade_signal = true;
-                }else{
-                    if($get_user_info["account_level"] > $account_level_upgrade_array[$upgrade_type]){
-                        $upgrade_signal = true;
-                    }else{
-                        if($get_user_info["account_level"] < $account_level_upgrade_array[$upgrade_type]){
-                            $get_upgrade_price = mysqli_query($connection_server, "SELECT * FROM sas_user_upgrade_price WHERE vendor_id='".$get_logged_admin_details["id"]."' && account_type='".$account_level_upgrade_array[$upgrade_type]."'");
-                            if(mysqli_num_rows($get_upgrade_price) == 1){
-                                $upgrade_price = mysqli_fetch_array($get_upgrade_price);
-                                if(is_numeric($upgrade_price["price"]) && is_finite((float)$upgrade_price["price"]) && ($upgrade_price["price"] >= 0)){
-                                    $transType = "debit";
-                                    $userID = strtolower($get_user_info["username"]);
-                                    $purchase_method = "WEB";
-                                    $amount = $upgrade_price["price"];
-                                    $discounted_amount = $amount;
-                                    $type_alternative = ucwords("Account Upgrade");
-                                    $reference = substr(str_shuffle("12345678901234567890"), 0, 15);
-                                    $description = ucwords(accountLevel($account_level_upgrade_array[$upgrade_type])." Upgrade charges By Admin");
-                                    $status = 1;
-                                    
-                                    $debit_other_user = (float)$amount === 0.0 ? "success" : chargeOtherUser($userID, $transType, ucwords(accountLevel($account_level_upgrade_array[$upgrade_type])), $type_alternative, $reference, "", $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], $status);
-                                    if(in_array($debit_other_user, array("success"))){
-                                        $upgrade_signal = true;
-                                        $json_response_array = array("desc" => ucwords($get_user_info["username"])."`s Account Upgraded Successfully");
-                                        $json_response_encode = json_encode($json_response_array,true);
-                                    }
-                                                                        
-                                    if($debit_other_user == "failed"){
-                                        $upgrade_signal = false;
-                                        $json_response_array = array("desc" => "Upgrade Failed, Insufficient User Fund");
-                                        $json_response_encode = json_encode($json_response_array,true);
-                                    }		
-                                }else{
-                                    //Pricing Error, Contact Admin
-                                    $json_response_array = array("desc" => "Pricing Error, Contact Admin");
-                                    $json_response_encode = json_encode($json_response_array,true);
-                                }
-                            }else{
-                                //Error: Pricing Not Available, Contact Admin
-                                $json_response_array = array("desc" => "Error: Pricing Not Available, Contact Admin");
-                                $json_response_encode = json_encode($json_response_array,true);
-                            }
-                        }
-                    }
-                }
-
-                if($upgrade_signal == true){
-                    mysqli_query($connection_server, "UPDATE sas_users SET account_level='".$account_level_upgrade_array[$upgrade_type]."', account_type='".$preserved_type."' WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
-                    //Pricing Level Changed To ... Level Successfully
-                    $json_response_array = array("desc" => "Pricing Level Changed To ".accountLevel($account_level_upgrade_array[$upgrade_type])." Successfully");
-                    $json_response_encode = json_encode($json_response_array,true);
-                }
-            }else{
-                if(mysqli_num_rows($check_user_details) == 0){
-                    //User Not Exists
-                    $json_response_array = array("desc" => "User Not Exists");
-                    $json_response_encode = json_encode($json_response_array,true);
-                }else{
-                    if(mysqli_num_rows($check_user_details) > 1){
-                        //Duplicated Details, Contact Admin
-                        $json_response_array = array("desc" => "Duplicated Details, Contact Admin");
-                        $json_response_encode = json_encode($json_response_array,true);
-                    }
-                }
-            }
-        }else{
-            if(empty($upgrade_type)){
-                //Upgrade Field Empty
-                $json_response_array = array("desc" => "Upgrade Field Empty");
-                $json_response_encode = json_encode($json_response_array,true);
-            }else{
-                if(!in_array($upgrade_type, array_keys($account_level_upgrade_array))){
-                    //Invalid Upgrade Level Code
-                    $json_response_array = array("desc" => "Invalid Upgrade Level Code");
-                    $json_response_encode = json_encode($json_response_array,true);
-                }
-            }
-        }
-    
-        $json_response_decode = json_decode($json_response_encode,true);
-        $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-        header("Location: ".$_SERVER["REQUEST_URI"]);
-        exit;
-    }    
+        $error=bc_paid_verify($get_logged_admin_details,'admin','paid_level_admin',$_POST);
+        $result=$error;
+        if($error==='')$result=bc_paid_level_change($connection_server,(int)$get_logged_admin_details['id'],(int)$user_id_number,is_string($_POST['upgrade-type']??null)?$_POST['upgrade-type']:'',$_POST['paid_quote']??'',$_POST['expected_level']??-1);
+        $_SESSION['product_purchase_response']=in_array($result,['success','already_active'],true)?'Pricing level confirmed. Personal/Business type, KYC and developer API eligibility are unchanged.':'Pricing level was not changed: '.$result.'. Refresh before retrying.';
+        bc_paid_reply(in_array($result,['success','already_active'],true),$_SESSION['product_purchase_response']);
+        header('Location: UserUpgrade.php?userID='.(int)$user_id_number);exit;
+    }
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
@@ -159,20 +67,23 @@ bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]
                         <p class="small text-muted mb-0">Current Pricing Level: <span class="badge bg-light text-dark fw-bold border"><?php echo htmlspecialchars(([1=>'Smart Earner',2=>'Agent Vendor',3=>'API Vendor'][$get_user_details['account_level']] ?? 'Unknown').' (pricing level '.(int)$get_user_details['account_level'].')', ENT_QUOTES, 'UTF-8'); ?></span></p>
                     </div>
                     <div class="card-body p-4 p-md-5">
-                        <form method="post" action="">
+                        <form method="post" action="" data-paid-save>
                             <?php echo bc_csrf_field(); ?>
+                            <input type="hidden" name="expected_level" value="<?php echo (int)$get_user_details['account_level']; ?>">
+                            <input type="hidden" name="paid_quote" value="0.00">
                             <div class="mb-4">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-2">Target Pricing Level</label>
-                                <select name="upgrade-type" class="form-select form-select-lg bg-light border-0 py-3 rounded-3" required>
+                                <select onchange="this.form.elements.paid_quote.value=this.selectedOptions[0].dataset.quote" name="upgrade-type" class="form-select form-select-lg bg-light border-0 py-3 rounded-3" required>
                                     <option value="" default hidden selected>Select new level...</option>
                                     <?php
                                         $account_level_upgrade_array = array(1 => "smart", 2 => "agent", 3 => "api");
                                         foreach($account_level_upgrade_array as $index => $account_levels){
                                             $get_upgrade_price = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_user_upgrade_price WHERE vendor_id='".$get_logged_admin_details["id"]."' && account_type='".$index."' LIMIT 1"));
-                                            $price = toDecimal($get_upgrade_price["price"] ?? 0, 2);
+                                            $available=true;
+                                            try{$price=($index===1 || $index<=(int)$get_user_details['account_level'])?'0.00':bc_paid_money((string)($get_upgrade_price['price']??''));}catch(Throwable $e){$price='0.00';$available=false;}
                                             $selected = ($index == $get_user_details['account_level']) ? 'selected' : '';
 
-                                            echo '<option value="'.$account_levels.'" '.$selected.'>'.([1=>'Smart Earner',2=>'Agent Vendor',3=>'API Vendor'][$index]).' (₦'.$price.')</option>';
+                                            echo '<option data-quote="'.$price.'" value="'.$account_levels.'" '.$selected.' '.(!$available?'disabled':'').'>'.([1=>'Smart Earner',2=>'Agent Vendor',3=>'API Vendor'][$index]).' (₦'.$price.')</option>';
                                         }
                                     ?>
                                 </select>
@@ -191,6 +102,7 @@ bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]
                                  </div>
                             </div>
 
+                            <?php bc_paid_fields($get_logged_admin_details,'paid_level_admin'); ?>
                             <button name="upgrade-level" type="submit" class="btn btn-primary btn-lg w-100 rounded-4 py-3 fw-bold shadow-sm">
                                 <i class="bi bi-rocket-takeoff-fill me-2"></i>APPLY PRICING LEVEL
                             </button>
@@ -233,4 +145,4 @@ bc_adm_head("Upgrade User | " . ($get_all_super_admin_site_details["site_title"]
 
 
 
-<?php bc_adm_foot(array("area" => "admin")); ?>
+<?php bc_paid_otp_script(); bc_adm_foot(array("area" => "admin")); ?>
