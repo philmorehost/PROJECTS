@@ -12,6 +12,10 @@ on:
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/func/bc-registration-guard.php'
+      - 'VTU/**/asset/bc-registration-otp.js'
+      - 'VTU/**/web/Register.php'
+      - 'VTU/**/web/api/*reg-otp.php'
       - 'VTU/**/asset/bc-recovery-inline.js'
       - 'VTU/**/bc-admin/PasswordRecovery.php'
       - 'VTU/**/bc-spadmin/PasswordRecovery.php'
@@ -66,6 +70,10 @@ on:
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/func/bc-registration-guard.php'
+      - 'VTU/**/asset/bc-registration-otp.js'
+      - 'VTU/**/web/Register.php'
+      - 'VTU/**/web/api/*reg-otp.php'
       - 'VTU/**/asset/bc-recovery-inline.js'
       - 'VTU/**/bc-admin/PasswordRecovery.php'
       - 'VTU/**/bc-spadmin/PasswordRecovery.php'
@@ -131,11 +139,13 @@ jobs:
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
           php VTU/tests/recovery_inline_test.php
+          php VTU/tests/registration_guard_test.php
           php VTU/tests/recovery_reply_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
           node VTU/tests/harness/login-resend-ui-test.mjs
           node VTU/tests/harness/recovery-inline-ui-test.mjs
+          node VTU/tests/harness/registration-otp-ui-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e

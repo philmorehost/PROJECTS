@@ -15,6 +15,9 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     // Registration is now handled via AJAX + email OTP (send-reg-otp.php / verify-reg-otp.php).
     // The block below is kept as a no-JS fallback; it will only fire if JavaScript is disabled.
     if(isset($_POST["register"])){
+        bc_validate_csrf();
+        if((int)($select_vendor_table['reg_otp_enabled']??1)===1){$_SESSION['product_purchase_response']='Email verification is required. Enable JavaScript to complete registration.';header('Location: Register.php');exit;}
+
     	$user = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["user"]))));
     	$pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["pass"])));
         $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
@@ -169,6 +172,7 @@ bc_plate_auth_top(array(
 ));
 ?>
         <form method="post" action="">
+            <?php echo bc_csrf_field(); ?>
             <div class="pk-auth__row">
                 <div class="pk-auth__field">
                     <label class="pk-auth__label" for="user">Username</label>
@@ -350,244 +354,8 @@ bc_plate_auth_top(array(
 </div>
 <!-- ──────────────────────────────────────────────────────────────────────── -->
 
-<script>
-(function () {
-    // ── State ──────────────────────────────────────────────────────────────
-    var regForm        = document.querySelector('form[method="post"]');
-    var createBtn      = document.getElementById('btn-create-account');
-    var overlay        = document.getElementById('otp-overlay');
-    var digits         = Array.from(document.querySelectorAll('.otp-digit'));
-    var errBox         = document.getElementById('otp-error');
-    var successBox     = document.getElementById('otp-success');
-    var countdownEl    = document.getElementById('otp-countdown');
-    var verifyingEl    = document.getElementById('otp-verifying');
-    var resendBtn      = document.getElementById('otp-resend-btn');
-    var emailHint      = document.getElementById('otp-email-hint');
-    var countdownTimer = null;
-    var expiryTs       = 0;
-    var verifying      = false;
+<script src="../asset/bc-registration-otp.js" defer></script>
 
-    // ── Helpers ────────────────────────────────────────────────────────────
-    function showError(msg) {
-        errBox.textContent = msg;
-        errBox.style.display = 'block';
-        successBox.style.display = 'none';
-    }
-    function showSuccess(msg) {
-        successBox.textContent = msg;
-        successBox.style.display = 'block';
-        errBox.style.display = 'none';
-    }
-    function clearMessages() {
-        errBox.style.display = 'none';
-        successBox.style.display = 'none';
-    }
-    function getOTPValue() {
-        return digits.map(function(d){ return d.value; }).join('');
-    }
-    function clearDigits() {
-        digits.forEach(function(d){ d.value = ''; d.style.borderColor = '#dee2e6'; });
-    }
-    function startCountdown(seconds) {
-        clearInterval(countdownTimer);
-        expiryTs = Date.now() + seconds * 1000;
-        countdownTimer = setInterval(function() {
-            var remaining = Math.max(0, Math.round((expiryTs - Date.now()) / 1000));
-            var m = Math.floor(remaining / 60);
-            var s = remaining % 60;
-            countdownEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-            if (remaining <= 0) {
-                clearInterval(countdownTimer);
-                showError('Code expired. Please request a new one.');
-                digits.forEach(function(d){ d.disabled = true; });
-            }
-        }, 500);
-    }
-
-    // ── Open / close modal ─────────────────────────────────────────────────
-    window.closeOtpModal = function() {
-        overlay.style.display = 'none';
-        clearInterval(countdownTimer);
-        clearDigits();
-        clearMessages();
-        verifying = false;
-        verifyingEl.style.display = 'none';
-        digits.forEach(function(d){ d.disabled = false; });
-        createBtn.disabled = false;
-        createBtn.textContent = 'CREATE MY ACCOUNT';
-    };
-
-    function openOtpModal(email) {
-        emailHint.textContent = 'A 6-digit code has been sent to ' + email;
-        clearDigits();
-        clearMessages();
-        verifyingEl.style.display = 'none';
-        digits.forEach(function(d){ d.disabled = false; });
-        overlay.style.display = 'flex';
-        startCountdown(600);
-        setTimeout(function(){ digits[0].focus(); }, 150);
-    }
-
-    // ── Digit-box keyboard behaviour ──────────────────────────────────────
-    digits.forEach(function(box, i) {
-        box.addEventListener('keydown', function(e) {
-            // Allow backspace to move to previous box
-            if (e.key === 'Backspace' && box.value === '' && i > 0) {
-                digits[i - 1].focus();
-                digits[i - 1].value = '';
-            }
-        });
-        box.addEventListener('input', function(e) {
-            // Keep only last typed digit (handles mobile paste of single char)
-            var val = box.value.replace(/\D/g, '');
-            box.value = val ? val.slice(-1) : '';
-            box.style.borderColor = box.value ? '#4154f1' : '#dee2e6';
-            clearMessages();
-
-            if (box.value && i < digits.length - 1) {
-                digits[i + 1].focus();
-            }
-            // Auto-verify when all 6 digits entered
-            if (getOTPValue().length === 6) {
-                verifyOTP();
-            }
-        });
-        // Handle paste of full 6-digit code on first box
-        box.addEventListener('paste', function(e) {
-            var pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
-            if (pasted.length >= 6) {
-                e.preventDefault();
-                for (var j = 0; j < 6; j++) {
-                    digits[j].value = pasted[j] || '';
-                    digits[j].style.borderColor = digits[j].value ? '#4154f1' : '#dee2e6';
-                }
-                digits[5].focus();
-                verifyOTP();
-            }
-        });
-    });
-
-    // ── Send OTP (also called by Resend button) ────────────────────────────
-    window.sendOTP = function(isResend) {
-        var data = new FormData(regForm);
-        // Append referral if present in URL
-        var urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('referral')) data.append('referral', urlParams.get('referral'));
-
-        if (!isResend) {
-            createBtn.disabled = true;
-            createBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Sending code…';
-        } else {
-            resendBtn.disabled = true;
-            resendBtn.textContent = 'Sending…';
-            clearDigits();
-            clearMessages();
-            digits.forEach(function(d){ d.disabled = false; });
-        }
-
-        fetch('/web/api/send-reg-otp.php', { method: 'POST', body: data })
-            .then(function(r){ return r.json(); })
-            .then(function(res) {
-                if (isResend) {
-                    resendBtn.disabled = false;
-                    resendBtn.innerHTML = 'Didn\'t receive it? <strong>Resend OTP</strong>';
-                } else {
-                    createBtn.disabled = false;
-                    createBtn.textContent = 'CREATE MY ACCOUNT';
-                }
-
-                if (res.status === 'success') {
-                    var emailVal = document.querySelector('input[name="email"]').value.trim();
-                    openOtpModal(emailVal);
-                    if (isResend) {
-                        showSuccess('A new code has been sent.');
-                        startCountdown(600);
-                    }
-                } else if (res.status === 'immediate') {
-                    // Branch DG6.87: OTP disabled, account created immediately
-                    Swal.fire({
-                        title: 'Success!',
-                        text: res.message || 'Account created successfully!',
-                        icon: 'success',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
-                        window.location.href = res.redirect || 'SecurityPIN.php';
-                    });
-                } else {
-                    if (isResend) {
-                        showError(res.message || 'Failed to resend OTP.');
-                    } else {
-                        Swal.fire('Oops!', res.message || 'An error occurred.', 'error');
-                    }
-                }
-            })
-            .catch(function() {
-                if (isResend) {
-                    resendBtn.disabled = false;
-                    resendBtn.innerHTML = 'Didn\'t receive it? <strong>Resend OTP</strong>';
-                    showError('Network error. Please try again.');
-                } else {
-                    createBtn.disabled = false;
-                    createBtn.textContent = 'CREATE MY ACCOUNT';
-                    Swal.fire('Error', 'Network error. Please try again.', 'error');
-                }
-            });
-    };
-
-    // ── Verify OTP ────────────────────────────────────────────────────────
-    function verifyOTP() {
-        if (verifying) return;
-        var otp = getOTPValue();
-        if (otp.length !== 6) return;
-        verifying = true;
-        digits.forEach(function(d){ d.disabled = true; });
-        verifyingEl.style.display = 'block';
-        clearMessages();
-
-        var fd = new FormData();
-        fd.append('otp', otp);
-
-        fetch('/web/api/verify-reg-otp.php', { method: 'POST', body: fd })
-            .then(function(r){ return r.json(); })
-            .then(function(res) {
-                verifyingEl.style.display = 'none';
-                if (res.status === 'success') {
-                    // All digit boxes green, brief success message, then redirect
-                    digits.forEach(function(d){ d.style.borderColor = '#198754'; });
-                    showSuccess('✅ ' + (res.message || 'Account created!') + ' Redirecting…');
-                    clearInterval(countdownTimer);
-                    setTimeout(function(){
-                        window.location.href = res.redirect || 'SecurityPIN.php';
-                    }, 800);
-                } else {
-                    // Wrong OTP — shake boxes, clear, re-focus
-                    digits.forEach(function(d){
-                        d.style.borderColor = '#dc3545';
-                        d.disabled = false;
-                    });
-                    showError(res.message || 'Incorrect code. Please try again.');
-                    clearDigits();
-                    digits[0].focus();
-                    verifying = false;
-                }
-            })
-            .catch(function() {
-                verifyingEl.style.display = 'none';
-                digits.forEach(function(d){ d.disabled = false; });
-                showError('Network error. Please try again.');
-                verifying = false;
-            });
-    }
-
-    // ── Intercept form submit ──────────────────────────────────────────────
-    regForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        sendOTP(false);
-    });
-
-})();
-</script>
 <script src="../jsfile/bc-custom-all.js"></script>
 <script>
 function togglePasswordVisibility(fieldId, toggleElement) {

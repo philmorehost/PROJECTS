@@ -10,27 +10,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+bc_validate_csrf(true);
+header('Cache-Control: no-store');
+$current_reg_vendor=(int)resolveVendorID();
+$reg_vendor_query=mysqli_query($connection_server,"SELECT id FROM sas_vendors WHERE id=$current_reg_vendor AND status=1 LIMIT 1");
+if(!$reg_vendor_query || mysqli_num_rows($reg_vendor_query)!==1){echo json_encode(['status'=>'error','message'=>'Registration is unavailable.']);exit;}
+
+if($current_reg_vendor<1 || !bc_registration_enabled($current_reg_vendor)){echo json_encode(['status'=>'error','message'=>'Registration is unavailable.']);exit;}
 $entered_otp = trim($_POST["otp"] ?? "");
 
-// Session must contain pending registration data and OTP
-if (empty($_SESSION['reg_pending']) || empty($_SESSION['reg_otp'])) {
-    echo json_encode(["status" => "error", "message" => "Session expired. Please start registration again."]);
-    exit;
-}
-
-// Check OTP expiry
-if (time() > (int)($_SESSION['reg_otp_expires'] ?? 0)) {
-    unset($_SESSION['reg_pending'], $_SESSION['reg_otp'], $_SESSION['reg_otp_expires'],
-          $_SESSION['reg_otp_email'], $_SESSION['reg_otp_last_sent']);
-    echo json_encode(["status" => "error", "message" => "Verification code expired. Please register again."]);
-    exit;
-}
-
-// Validate OTP (constant-time comparison)
-if (!hash_equals($_SESSION['reg_otp'], $entered_otp)) {
-    echo json_encode(["status" => "error", "message" => "Incorrect code. Please try again."]);
-    exit;
-}
+require_once __DIR__.'/../../func/bc-registration-guard.php';
+$error=bc_registration_code_check($current_reg_vendor,$entered_otp);
+if($error!==''){echo json_encode(['status'=>'error','message'=>$error]);exit;}
 
 // ── OTP is valid — create the account ──────────────────────────────────────
 $d         = $_SESSION['reg_pending'];
@@ -59,8 +50,12 @@ $referral_edited = function_exists('bc_resolve_referral_id')
     ? bc_resolve_referral_id($connection_server, $vendor_id, $d['referral'] ?? '')
     : "";
 
+unset($_SESSION['reg_otp']); // Consumed before INSERT; failures require a fresh request.
 $last_login = date('Y-m-d H:i:s.u');
-mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')");
+$reg_inserted=mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1')");
+
+if(!$reg_inserted){unset($_SESSION['reg_pending']);echo json_encode(['status'=>'error','message'=>'Account creation could not be confirmed. Check sign-in before starting again.']);exit;}
+session_regenerate_id(true);
 
 // Send welcome email using the configured template
 $reg_tpl_vars = ["{firstname}" => $first, "{lastname}" => $last, "{username}" => $user,
