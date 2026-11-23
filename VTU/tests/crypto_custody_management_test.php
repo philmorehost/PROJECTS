@@ -66,4 +66,9 @@ mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($parentInput,['master_so
 $GLOBALS['vendor_row']['is_blocked']=1;mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'crypto_custody_vendor_inactive');$GLOBALS['vendor_row']['is_blocked']=0;
 $csrf=false;mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'test_csrf_denied');$csrf=true;
 $stepup='invalid';mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'crypto_custody_stepup_failed');$stepup='';
+$boundRead=['environment'=>'testnet','action'=>'inspect_bound_sub_address','custody_account'=>str_repeat('a',64),'revision'=>'4','binding_revision'=>'2','coin'=>'USDT','chain'=>'TRX'];
+foreach(['subMemberId','source_vendor_id','master_source_vendor_id','vendor_id','user_id','address','url'] as $field)mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($boundRead,[$field=>'posted'])),'crypto_binding_override_forbidden');
+mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($boundRead,['coin'=>'BTC'])),'crypto_address_network_unsupported');
+$csrf=false;mg_reject(fn()=>bc_crypto_custody_manage(11,$boundRead),'test_csrf_denied');$csrf=true;
+$stepup='bad';mg_reject(fn()=>bc_crypto_custody_manage(11,$boundRead),'crypto_custody_stepup_failed');$stepup='';
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";

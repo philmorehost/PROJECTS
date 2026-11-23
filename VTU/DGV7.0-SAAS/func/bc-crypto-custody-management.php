@@ -4,6 +4,7 @@ require_once __DIR__.'/bc-crypto-custody-evidence.php';
 require_once __DIR__.'/bc-crypto-bybit-identity.php';
 require_once __DIR__.'/bc-crypto-bybit-parent-read.php';
 require_once __DIR__.'/bc-crypto-customer-binding.php';
+require_once __DIR__.'/bc-crypto-bybit-sub-address-read.php';
 require_once __DIR__.'/bc-crypto-bybit-address-read.php';
 require_once __DIR__.'/bc-crypto-bybit-deposit-read.php';
 require_once __DIR__.'/bc-crypto-routes.php';
@@ -26,7 +27,7 @@ function bc_crypto_custody_manage($session_id,$input) {
     $authority=bc_crypto_custody_authorize($session_id,$input);
     $env=bc_crypto_gov_environment($input['environment']??null);
     $action=$input['action']??null;
-    if (!in_array($action,['propose_customer_binding','review_customer_binding','revoke_customer_binding','verify_parent','recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
+    if (!in_array($action,['inspect_bound_sub_address','renew_customer_binding','propose_customer_binding','review_customer_binding','revoke_customer_binding','verify_parent','recover_poll_worker','grant_poll_worker','revoke_poll_worker','ack_poll_alert','review_poll','create_poll','fetch_poll','stop_poll','propose_route','review_route','revoke_route','inspect_deposit_page','inspect_master_address','verify_provider','store_evidence','view_evidence','propose','review','suspend','propose_binding','review_binding','revoke_binding'],true)) throw new InvalidArgumentException('crypto_custody_action_invalid');
     $identity=$input['custody_account']??'';$uid=$input['uid']??'';$new=false;
     if ($identity==='') {
         if (!in_array($action,['store_evidence','propose'],true)) throw new RuntimeException('crypto_custody_proposal_required');
@@ -37,7 +38,20 @@ function bc_crypto_custody_manage($session_id,$input) {
         $account=bc_q_row('SELECT * FROM sas_crypto_v2_custody_accounts WHERE custody_account=?',[$identity]);
         if (!$account||$account['environment']!==$env) throw new RuntimeException('crypto_custody_proposal_required');
     }
-    if(in_array($action,['propose_customer_binding','review_customer_binding','revoke_customer_binding'],true))return bc_crypto_customer_binding_save($authority,$identity,$env,bc_crypto_gov_uint($input['revision']??null,1000000000),strstr($action,'_',true),$input);
+    if(in_array($action,['renew_customer_binding','propose_customer_binding','review_customer_binding','revoke_customer_binding'],true))return bc_crypto_customer_binding_save($authority,$identity,$env,bc_crypto_gov_uint($input['revision']??null,1000000000),strstr($action,'_',true),$input);
+    if($action==='inspect_bound_sub_address'){
+        // Browser-supplied UID/config/customer overrides are never used for this operation.
+        foreach(['uid','subMemberId','source_vendor_id','master_source_vendor_id','vendor_id','user_id','address','url'] as $key)if(array_key_exists($key,$input)&&$input[$key]!=='')throw new RuntimeException('crypto_binding_override_forbidden');
+        $revision=bc_crypto_gov_uint($input['revision']??null,1000000000);$bindingRevision=bc_crypto_gov_uint($input['binding_revision']??null,1000000000);
+        $coin=$input['coin']??null;$chain=$input['chain']??null;
+        if(!in_array($coin,['TRX','USDT'],true)||$chain!=='TRX')throw new RuntimeException('crypto_address_network_unsupported');
+        $context=bc_crypto_binding_address_checkpoint($authority,$identity,$env,$revision,$bindingRevision);
+        bc_crypto_custody_evidence_key(getenv('BC_CRYPTO_CUSTODY_EVIDENCE_ACTIVE_KEY')?:'V1');
+        if(!bc_sec_audit(0,'spadmin',(string)$authority['id'],'crypto_sub_address_requested',$identity,'Explicit bound subaccount address evidence read; no publication or activation.'))throw new RuntimeException('crypto_bybit_audit_unavailable');
+        $snapshot=bc_crypto_bybit_read_sub_address($context['relationship'],$identity,$env,$coin,$chain);
+        $hash=bc_crypto_binding_address_checkpoint($authority,$identity,$env,$revision,$bindingRevision,$context,$snapshot);
+        return ['custody_account'=>$identity,'evidence_hash'=>$hash,'bound_sub_address_inspected'=>true,'live_enabled'=>false];
+    }
     if ($action==='verify_parent') {
         if((int)$account['revision']!==($revision=bc_crypto_gov_uint($input['revision']??null,1000000000)))throw new RuntimeException('crypto_custody_edit_conflict');
         $parent=bc_crypto_custody_digest($input['parent_custody_account']??null);

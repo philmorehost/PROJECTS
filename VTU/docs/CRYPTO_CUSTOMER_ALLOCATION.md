@@ -34,9 +34,10 @@ The last six contract characters are not token-contract verification.
 
 ## Still blocked / not implemented here
 
-No network transport for this sub-address endpoint, subaccount creation, customer
-binding approval, provider write-key expansion, active route publication, address
-presentation, risk clearance, financial posting or receipt of settled funds.
+Subaccount creation, provider write-key expansion, active route publication,
+customer funding-address presentation, risk clearance, financial posting and
+receipt of settled funds remain blocked. Protected read-only transport and local
+customer-binding review/renewal are implemented as described below.
 No claim of live Bybit eligibility or testing. Customer service gate and existing
 session/enrollment controls continue to apply. No automatic migration or deploy.
 
@@ -97,9 +98,8 @@ Proposal reserves the subaccount permanently for the specified vendor/customer.
 Review must be by a different platform actor. Review expiry is capped by the
 relationship evidence's original 15-minute expiry and current custody/tenant
 expiry. Revocation is still available with stale/missing evidence. Revocation
-or expiry does not permit reassignment. Renewal/reproposal is intentionally not
-implemented; a controlled renewal design is still required before operational
-use. The stored review state is not a current eligibility or funding grant.
+or expiry does not permit reassignment. Renewal is now supported as a new independently reviewed proposal with fresh
+evidence; revoked reservations cannot be renewed. The stored review state is not a current eligibility or funding grant.
 
 All changes and audit rows commit together, under custody/reservation and
 customer/vendor locks. Nothing in this workflow queries an address, grants
@@ -107,3 +107,41 @@ custody, updates deposit routes, clears risk or posts money. Independent reviewe
 must inspect the exact vendor/customer mapping shown beside the evidence digest;
 provider parenthood does not itself establish customer ownership. Native tests
 use synthetic attestations in disposable databases, not real provider accounts.
+
+
+## Renewal and protected bound-address reads
+
+Renewal is a revision-checked proposal on the existing immutable vendor/customer
+mapping. It rejects revoked reservations, posted customer overrides and reuse of
+the exact prior evidence digest. Fresh server-attested relationship evidence and
+an audited evidence view are required. It resets review state/reviewer/expiry,
+records the renewing actor as proposer, and requires a different reviewer. A
+custody revision change can be adopted only through this complete re-review.
+
+The platform-only `inspect_bound_sub_address` action takes coin/network and
+expected registry/binding revisions, not customer IDs, UIDs, credentials or
+configuration selectors. Two short transactions validate current reviewed
+binding, custody/tenant context, KYC, sources, evidence and parent registry before
+and after network reads. No database locks are held across the network. A changed
+or expired context refuses storage. Exact evidence and its stored audit event
+commit in the post-read transaction; failures publish no successful result.
+
+The internal adapter uses subaccount and master configurations from the reviewed
+relationship evidence, authenticates both identities, then uses ONLY the master
+key for `/v5/asset/deposit/query-sub-member-address`. The requested sub UID comes
+from the authenticated subaccount key-info response, never the browser. It then
+checks both identities and captured configurations again: five bounded GETs,
+three-second connect/eight-second per-request timeouts, 45-second total freshness
+ceiling, no retries, redirects, writes or master-inventory fallback. A shorter
+PHP/web-server timeout may abort safely before a result is stored; it is not
+relaxed here. Unsupported/custodial account models fail closed.
+
+Only TRX/TRX and USDT/TRX are parsed. Raw UIDs/keys/IPs are not propagated to the
+stored manifest. Exact address and memo remain encrypted; UI returns only an
+evidence digest for protected review. The manifest records immutable customer,
+binding revision and source relationship digest, with expiry capped by binding
+expiry. The ordinary dashboard/customer funding screens receive no addresses.
+This is inventory evidence, not a verified allocation, exclusive-route proof,
+provider support certification, receipt of funds or funding authorization. No
+schema changes or provider writes are introduced by this follow-up. No live
+provider verification or deployment has occurred.

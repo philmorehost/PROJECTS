@@ -22,6 +22,7 @@ on:
       - 'VTU/tests/crypto_dashboard*.php'
       - 'VTU/tests/crypto_customer_binding*.php'
       - 'VTU/tests/crypto_bybit_sub_address_test.php'
+      - 'VTU/tests/crypto_bybit_sub_address_read_test.php'
       - 'VTU/**/CryptoOverview.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-plate-admin.php'
@@ -51,6 +52,7 @@ on:
       - 'VTU/tests/crypto_dashboard*.php'
       - 'VTU/tests/crypto_customer_binding*.php'
       - 'VTU/tests/crypto_bybit_sub_address_test.php'
+      - 'VTU/tests/crypto_bybit_sub_address_read_test.php'
       - 'VTU/**/CryptoOverview.php'
       - 'VTU/**/func/bc-plate-app.php'
       - 'VTU/**/func/bc-plate-admin.php'
@@ -103,6 +105,7 @@ jobs:
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_address_test.php
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_address_read_test.php
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_parent_read_test.php
+          php -n -d extension=tokenizer VTU/tests/crypto_bybit_sub_address_read_test.php
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_deposit_records_test.php
           php -n -d extension=tokenizer VTU/tests/crypto_bybit_deposit_read_test.php
       - name: Deposit route candidate contracts

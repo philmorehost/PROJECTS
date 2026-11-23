@@ -36,12 +36,13 @@ function bc_bybit_deposit_query($coin,$start,$end,$cursor,$now) {
     return $params;
 }
 function bc_bybit_request_spec($config, $operation, $params, $timestamp) {
-    $paths = ['key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info', 'master_deposit_address'=>'/v5/asset/deposit/query-address', 'deposit_records'=>'/v5/asset/deposit/query-record'];
+    $paths = ['sub_deposit_address'=>'/v5/asset/deposit/query-sub-member-address', 'key_info'=>'/v5/user/query-api', 'coins'=>'/v5/asset/coin/query-info', 'master_deposit_address'=>'/v5/asset/deposit/query-address', 'deposit_records'=>'/v5/asset/deposit/query-record'];
     $hosts = ['testnet'=>'https://api-testnet.bybit.com', 'mainnet'=>'https://api.bybit.com'];
     if (!isset($paths[$operation]) || ($hosts[$config['environment'] ?? ''] ?? '') !== ($config['base_url'] ?? '')) throw new RuntimeException('bybit_operation_not_allowed');
-    if (!is_array($params) || array_diff(array_keys($params), $operation === 'coins' ? ['coin'] : ($operation === 'master_deposit_address' ? ['coin','chainType'] : ($operation === 'deposit_records' ? ['coin','startTime','endTime','limit','cursor'] : [])))) throw new RuntimeException('bybit_parameters_invalid');
+    if (!is_array($params) || array_diff(array_keys($params), $operation === 'sub_deposit_address' ? ['coin','chainType','subMemberId'] : ($operation === 'coins' ? ['coin'] : ($operation === 'master_deposit_address' ? ['coin','chainType'] : ($operation === 'deposit_records' ? ['coin','startTime','endTime','limit','cursor'] : []))))) throw new RuntimeException('bybit_parameters_invalid');
     if (isset($params['coin']) && (!is_string($params['coin']) || !preg_match('/^[A-Z0-9]{1,24}$/D', $params['coin']))) throw new RuntimeException('bybit_coin_invalid');
     if ($operation === 'master_deposit_address' && (!in_array($params['coin'] ?? null, ['TRX','USDT'], true) || ($params['chainType'] ?? null) !== 'TRX')) throw new RuntimeException('bybit_address_scope_invalid');
+    if ($operation === 'sub_deposit_address' && (!in_array($params['coin']??null,['TRX','USDT'],true)||($params['chainType']??null)!=='TRX'||!is_string($params['subMemberId']??null)||!preg_match('/^[1-9][0-9]{0,19}$/D',$params['subMemberId']))) throw new RuntimeException('bybit_sub_address_scope_invalid');
     if (!preg_match('/^[0-9]{13}$/D', (string)$timestamp)) throw new RuntimeException('bybit_timestamp_invalid');
     if ($operation === 'deposit_records') {
         if (($params['limit']??null)!=='5') throw new RuntimeException('bybit_deposit_limit_invalid');
