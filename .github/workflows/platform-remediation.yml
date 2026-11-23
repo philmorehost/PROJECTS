@@ -113,8 +113,9 @@ jobs:
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-NON-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
           node VTU/tests/harness/app-update-otp-ui-test.mjs
+          node VTU/tests/harness/paid-gateway-ui-test.mjs
           for edition in SAAS NON-SAAS; do
-            for file in func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php bc-admin/AppUpdateBroadcast.php func/bc-app-update-validation.php func/bc-app-update-security.php func/bc-app-update-dispatch.php func/bc-app-update-worker.php func/bc-app-update-transport.php cron/process_app_updates.php func/bc-tables.php web/api/app-update.php web/PasswordRecovery.php web/api/transactions.php func/bc-transaction-receipt.php; do
+            for file in func/bc-paid-security.php func/bc-paid-entitlements.php func/bc-gateway-api-settings.php func/bc-bybit.php func/bc-fintech-api-access.php func/bc-fintech-klasha.php func/bc-fintech-providers.php bc-admin/PaymentGateway.php web/handle_upgrade.php func/bc-enrollment-policy.php func/bc-price-input.php func/bc-float-services.php func/bc-plate-app.php bc-admin/FloatServiceIcons.php bc-admin/AccountSettings.php bc-admin/UserUpgrade.php bc-admin/AppUpdateBroadcast.php func/bc-app-update-validation.php func/bc-app-update-security.php func/bc-app-update-dispatch.php func/bc-app-update-worker.php func/bc-app-update-transport.php cron/process_app_updates.php func/bc-tables.php web/api/app-update.php web/PasswordRecovery.php web/api/transactions.php func/bc-transaction-receipt.php; do
               php -l "VTU/DGV7.0-$edition/$file"
             done
           done
