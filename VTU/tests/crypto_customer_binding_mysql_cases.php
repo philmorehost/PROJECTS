@@ -43,6 +43,7 @@ $addressEvidence=bc_q_row('SELECT sealed_document FROM sas_crypto_v2_custody_evi
 check_db(strpos($addressEvidence['sealed_document'],'SyntheticEncryptedAddressOnly')===false,'address evidence stored encrypted only');
 $opened=json_decode(bc_crypto_custody_evidence_view($bb,$bi,'testnet',$addressHash,1),true);
 check_db($opened['user_id']===11&&$opened['vendor_id']===7&&$opened['binding_revision']===2&&$opened['expires_at']<=$m['expires_at'],'stored address evidence binds immutable customer and expiry');
+require __DIR__.'/crypto_bound_address_mysql_cases.php';
 reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'renew',['binding_revision'=>'2','evidence_hash'=>$hash]),'crypto_binding_fresh_evidence_required');
 $m['verification_sequence']=2;$renewHash=bc_crypto_custody_evidence_store($ba,$bi,'testnet',bc_crypto_gov_json(bc_crypto_parent_attest($m)),1);
 bc_crypto_custody_evidence_view($ba,$bi,'testnet',$renewHash,1);
