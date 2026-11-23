@@ -50,3 +50,29 @@ master address, infer customer identity from address alone, or silently expand
 key permissions. Custody/tenant/policy stops, attribution, risk/finality,
 idempotent balanced credits, reconciliation and operational readiness remain
 separate gates before live funding.
+
+## Authenticated relationship comparison follow-up
+
+The platform-only Custody page now offers `verify_parent` as an explicit
+POST/CSRF/rate-limited fresh authenticator step-up action. It requires existing
+child and master registry fingerprints and expected revisions, plus distinct
+server-side configuration IDs for the subaccount and master keys. Both source
+vendors must remain active/unblocked before and after the reads. No credentials
+or provider URLs are accepted from the browser.
+
+Four bounded existing `query-api` GETs compare sub/master/sub/master identity:
+read-only/IP-bound personal keys, matching UID fingerprints, subaccount-reported
+parent fingerprint, and master account kind. Both configurations and identity
+results must remain stable; evidence expires 15 minutes after start and overall
+completion must be within 30 seconds. No retries, new endpoint or expanded key
+permissions. Sanitized request audit precedes the reads; encrypted evidence
+storage checks the child revision again under lock. Parent revision is recorded
+as point-in-time context, not a lock-held authorization or durable binding.
+
+This is evidence of what the provider reported, not a guarantee of legal custody,
+subaccount product eligibility, ownership or customer allocation. Raw UIDs,
+keys, secrets and IPs are excluded from the evidence manifest. No address is
+queried or displayed. No candidate, active route, registry approval or balance is
+changed. Missing separate configurations or unsupported key/account models fail
+closed; do not create new keys or change their permissions merely to bypass a
+failure. This check has synthetic transport coverage, not live-provider proof.

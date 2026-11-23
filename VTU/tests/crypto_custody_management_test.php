@@ -57,4 +57,13 @@ foreach(['cursor','evidence','query','page','lease_token','stream_id'] as $field
 foreach(['cursor','evidence','query','page','lease_token','acknowledged_by','kind'] as $field){$try=$verify;$try['action']='ack_poll_alert';$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
 foreach(['grant_poll_worker','revoke_poll_worker'] as $action)foreach(['credential','credential_hash','worker_name','state','cursor','query','evidence','lease_token'] as $field){$try=$verify;$try['action']=$action;$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
 foreach(['cursor','query','evidence','lease_token','state','credential','outcome','recovered_by'] as $field){$try=$verify;$try['action']='recover_poll_worker';$try[$field]='posted';mg_reject(fn()=>bc_crypto_custody_manage(11,$try),'crypto_poll_override_forbidden');}
+$parentInput=array_merge($verify,['action'=>'verify_parent','parent_custody_account'=>str_repeat('b',64),'parent_revision'=>'4','master_source_vendor_id'=>'8']);
+$GLOBALS['account_row']['revision']=5;mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'crypto_custody_edit_conflict');
+$GLOBALS['account_row']['revision']=4;
+mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($parentInput,['parent_revision'=>'3'])),'crypto_parent_registry_conflict');
+mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($parentInput,['parent_custody_account'=>str_repeat('a',64)])),'crypto_parent_distinct_required');
+mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($parentInput,['master_source_vendor_id'=>'7'])),'crypto_parent_distinct_required');
+$GLOBALS['vendor_row']['is_blocked']=1;mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'crypto_custody_vendor_inactive');$GLOBALS['vendor_row']['is_blocked']=0;
+$csrf=false;mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'test_csrf_denied');$csrf=true;
+$stepup='invalid';mg_reject(fn()=>bc_crypto_custody_manage(11,$parentInput),'crypto_custody_stepup_failed');$stepup='';
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";
