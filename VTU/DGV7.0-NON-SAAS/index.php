@@ -63,12 +63,15 @@ if ($vendor_account_details) {
     }
 }
 
-// The home design is shared; preserve the previous freelancer content separately.
-$css_style_template_location = defined('BC_PUBLIC_FREELANCERS') && BC_PUBLIC_FREELANCERS
-    ? 'index-freelancers-template.php' : 'index-bc-style-template-home.php';
-
-// Pass both vendor data and any error message to the template
-include($css_style_template_location);
+// Respect the saved design rather than collapsing every selection into one homepage.
+require_once __DIR__.'/func/bc-public-template.php';
+$public_saved_template=null;
+if(!empty($vendor_account_details['id'])){
+    $public_style=bc_q_row('SELECT template_name FROM sas_vendor_style_templates WHERE vendor_id=? LIMIT 1',[(int)$vendor_account_details['id']]);
+    $public_saved_template=$public_style['template_name']??null;
+}
+$css_style_template_location=bc_public_template_file($public_saved_template,defined('BC_PUBLIC_FREELANCERS')&&BC_PUBLIC_FREELANCERS);
+include __DIR__.'/'.$css_style_template_location;
 
 // Soft "Prompt" mode: show a dismissible interstitial offering the app, remembered via
 // cookie for 30 days. Only for anonymous visitors when the vendor selected "prompt".

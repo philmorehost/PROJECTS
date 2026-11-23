@@ -41,7 +41,7 @@ foreach ($rendered as $page => $html) {
 foreach (array('DGV7.0-SAAS','DGV7.0-NON-SAAS') as $ed) {
     $r = $root.'/'.$ed;
     $index = file_get_contents($r.'/index.php');
-    public_check(strpos($index, "? 'index-freelancers-template.php' : 'index-bc-style-template-home.php'") !== false, "$ed explicit home/freelancers routing");
+    public_check(strpos($index,'bc_public_template_file(')!==false && strpos(file_get_contents($r.'/func/bc-public-template.php'),"if(\$freelancers)return 'index-freelancers-template.php';")!==false, "$ed explicit home/freelancers routing");
     public_check(strpos(file_get_contents($r.'/Freelancers.php'), "define('BC_PUBLIC_FREELANCERS', true)") !== false, "$ed freelancer entry point");
     public_check(strpos(file_get_contents($r.'/index-freelancers-template.php'), 'id="who"') !== false, "$ed original freelancer section retained");
     foreach (array('index-freelancers-template.php','index-bc-style-template-2.php','index-bc-style-template-3.php','index-bc-style-template-6.php','func/bc-landing-pages.php') as $p) public_check(strpos(file_get_contents($r.'/'.$p), 'bc_public_directory_html()') !== false, "$ed $p includes old and new links");
