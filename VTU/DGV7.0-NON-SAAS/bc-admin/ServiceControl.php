@@ -3,6 +3,16 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
 include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
+require_once __DIR__.'/../func/bc-service-provider-routing.php';
+require_once __DIR__.'/../func/bc-paid-security.php';
+bc_paid_otp_dispatch($get_logged_admin_details,'admin',['service_provider_route']);
+if(isset($_POST['save-service-route'])){
+    $error=bc_service_route_save($get_logged_admin_details,$_POST);
+    $message=$error===''?'Request route saved. Existing orders and financial holds are unchanged.':$error;
+    bc_paid_reply($error==='',$message);
+    $_SESSION['product_purchase_response']=$message;header('Location: ServiceControl.php');exit;
+}
+
 
 // Migration: Create table if not exists
 mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_control (
@@ -97,7 +107,7 @@ if (isset($_POST['save-active-provider'])) {
     $allowed = function_exists('bc_fintech_api_accessible_providers') ? bc_fintech_api_accessible_providers($vid) : ['flutterwave'];
     if (!in_array($provider, $allowed, true)) $provider = $allowed[0] ?? 'flutterwave';
     if (function_exists('setVendorOption')) setVendorOption($vid, 'fintech_active_provider', $provider);
-    $_SESSION["product_purchase_response"] = "Active provider switched. Customer pages now show exactly the selected provider's services.";
+    $_SESSION["product_purchase_response"] = "Active provider switched. Legacy default saved. Explicit independent service routes are unchanged.";
     header("Location: ServiceControl.php");
     exit();
 }
@@ -275,9 +285,14 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
             <?php include(__DIR__ . "/../func/bc-service-matrix-render.php"); ?>
             <?php include(__DIR__ . "/../func/bc-account-backfill-render.php"); ?>
 
+            <div class="col-12 mb-4"><div class="card p-4"><h5>Independent service request routes</h5><p>Choose each request destination independently. Access and catalogue support are rechecked on every request. This does not enable settlement, crypto custody, cards or withdrawals, and never reroutes an existing order. Disabled routes do not fall back.</p>
+<?php foreach(bc_service_route_catalogue() as $route_service=>$definition): $route_vid=(int)$get_logged_admin_details['id'];$route_current=bc_service_route_provider($route_vid,$route_service); ?>
+<form method="post" data-paid-save class="border rounded p-3 mb-3"><h6><?php echo htmlspecialchars($definition['label'],ENT_QUOTES,'UTF-8'); ?></h6><input type="hidden" name="route_service" value="<?php echo $route_service; ?>"><select name="route_provider" class="form-select"><option value="">Disabled / unavailable</option><?php foreach(bc_service_route_choices($route_vid,$route_service) as $slug=>$label): ?><option value="<?php echo $slug; ?>" <?php echo $route_current===$slug?'selected':''; ?>><?php echo htmlspecialchars($label,ENT_QUOTES,'UTF-8'); ?></option><?php endforeach; ?></select><?php bc_paid_fields($get_logged_admin_details,'service_provider_route'); ?><button name="save-service-route" value="1" class="btn btn-primary">Save request route</button></form>
+<?php endforeach; ?>
+</div></div>
             <div class="col-lg-6 mb-4"><div class="card shadow-sm border-0 rounded-4 mb-4"><div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h5></div>                    <div class="card-body border-top">
                         <h6 class="fw-bold mb-1"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h6>
-                        <p class="small text-muted">Customer pages (Crypto, Send Money Abroad, Tuition, eSIM, POS, Virtual Card) display exactly this provider's services. BTC swap is not offered by the new payment APIs, so BTC pairs hide automatically while one of them is active.</p>
+                        <p class="small text-muted">Legacy default for pages without an independent route. Saved per-service request routes above take precedence. BTC swap is not offered by the new payment APIs, so BTC pairs hide automatically while one of them is active.</p>
                         <form method="post" action="" class="d-flex flex-wrap gap-2 align-items-center">
                             <select name="fintech_active_provider" class="form-select" style="max-width:280px;">
                                 <?php $active_provider = function_exists('bc_svc_active_provider') ? bc_svc_active_provider((int)$get_logged_admin_details['id']) : (function_exists('getVendorOption') ? getVendorOption((int)$get_logged_admin_details['id'], 'fintech_active_provider', 'flutterwave') : 'flutterwave'); $provider_options = []; foreach (bc_fintech_api_accessible_providers((int)$get_logged_admin_details['id']) as $pv) { $provider_options[$pv] = bc_fintech_api_providers()[$pv]['label']; } if (!$provider_options) $provider_options = ['flutterwave' => 'Flutterwave']; foreach ($provider_options as $pv => $pl): ?>
@@ -494,5 +509,5 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
 
 
 
-<?php bc_adm_foot(array("area" => "admin")); ?>
+<?php bc_paid_otp_script();bc_adm_foot(array("area" => "admin")); ?>
                         

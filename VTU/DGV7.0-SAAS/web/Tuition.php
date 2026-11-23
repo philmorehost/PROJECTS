@@ -10,6 +10,8 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 }
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
+require_once __DIR__.'/../func/bc-service-provider-routing.php';
+$route_provider = bc_service_route_provider($vid,'tuition');
 
 if(!isServiceEnabled('tuition')){
     header("Location: Dashboard.php");
@@ -29,6 +31,8 @@ $universities = [
 ];
 $notice = ''; $notice_type = 'info';
 if (isset($_POST['pay_tuition'])) {
+    bc_validate_csrf();
+    if(!is_string($_POST['route_snapshot']??null)||!hash_equals($route_provider,$_POST['route_snapshot'])){http_response_code(409);exit('Service routing changed. Reload this page before submitting a new request.');}
     $payload = [
         'university' => trim(strip_tags($_POST['university'] ?? '')),
         'student_name' => trim(strip_tags($_POST['student_name'] ?? '')),
@@ -39,7 +43,7 @@ if (isset($_POST['pay_tuition'])) {
         $notice = 'Choose a university, enter the student ID and a valid amount. The student ID is validated before settlement.';
         $notice_type = 'danger';
     } else {
-        $ref = bc_svc_request_create($vid, $svc_user, 'tuition', 'platnova', $payload);
+        $ref = $route_provider === '' ? '' : bc_svc_request_create($vid, $svc_user, 'tuition', $route_provider, $payload);
         $notice = $ref !== '' ? "Tuition payment request received ($ref). Student ID validation runs before settlement." : 'We could not record your request. Please try again.';
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
@@ -61,7 +65,7 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
             <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
                 <h6 class="fw-bold mb-3">Tuition payment</h6>
                 <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-                <form method="post">
+                <?php if($route_provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($route_provider,ENT_QUOTES,'UTF-8'); ?>">
                     <div class="mb-3"><label class="form-label small fw-bold">University / Institution</label>
                         <input type="text" name="university" class="form-control" list="uniList" placeholder="Start typing to search 160+ institutions" required>
                         <datalist id="uniList"><?php foreach ($universities as $u): ?><option value="<?php echo htmlspecialchars($u); ?>"><?php endforeach; ?></datalist>
@@ -71,7 +75,7 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
                         <div class="col-md-6"><label class="form-label small fw-bold">Student ID</label><input type="text" name="student_id" class="form-control" required></div>
                         <div class="col-md-6"><label class="form-label small fw-bold">Amount (USD)</label><input type="number" step="0.01" min="1" name="amount_usd" class="form-control" required></div>
                     </div>
-                    <button type="submit" name="pay_tuition" class="btn btn-primary rounded-pill px-4 fw-bold mt-4">Validate &amp; Pay Tuition</button>
+                    <button type="submit" name="pay_tuition" <?php echo $route_provider===''?'disabled':''; ?> class="btn btn-primary rounded-pill px-4 fw-bold mt-4">Submit Tuition Request</button>
                 </form>
             </div></div>
         </div>
