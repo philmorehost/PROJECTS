@@ -87,7 +87,7 @@ object ReceiptHelper {
         view.findViewById<TextView>(R.id.tv_receipt_amount).text = tx.amount.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_reference).text = tx.reference.ifEmpty { "\u2014" }
         view.findViewById<TextView>(R.id.tv_receipt_type).text = tx.type.ifEmpty { "\u2014" }
-        view.findViewById<TextView>(R.id.tv_receipt_description).text = tx.description.ifEmpty { "\u2014" }
+        view.findViewById<TextView>(R.id.tv_receipt_description).text = receiptDescription(tx)
         view.findViewById<TextView>(R.id.tv_receipt_amount_paid).text = tx.discountedAmount.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_balance_before).text = tx.balanceBefore.toNaira()
         view.findViewById<TextView>(R.id.tv_receipt_balance_after).text = tx.balanceAfter.toNaira()
