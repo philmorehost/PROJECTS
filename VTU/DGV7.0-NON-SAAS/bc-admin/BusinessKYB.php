@@ -60,13 +60,17 @@ if (isset($_POST['kyb_decision'])) {
     $decision = (string)($_POST['kyb_decision'] ?? '');
     $reason = (string)($_POST['kyb_reason'] ?? '');
 
-    if ($decision === 'approve') {
-        $result = bc_fintech_kyb_approve($uid, $vid, $reviewer);
+    $target=bc_q_row('SELECT * FROM sas_users WHERE id=? AND vendor_id=? LIMIT 1',[$uid,$vid]);
+    $expected_review=bc_kyb_review_consume($_POST['review_ticket']??null,$target,$get_logged_admin_details);
+    if($expected_review===null){
+        $result='Review expired, account changed, or self-review is not permitted. Reload the queue; an independent administrator must review their own account.';
+    } elseif ($decision === 'approve') {
+        $result = bc_fintech_kyb_approve($uid, $vid, $reviewer, $expected_review);
     } elseif ($decision === 'reject') {
         if (trim($reason) === '') {
             $result = 'Give the applicant a reason before rejecting.';
         } else {
-            $result = bc_fintech_kyb_reject($uid, $vid, $reviewer, $reason);
+            $result = bc_fintech_kyb_reject($uid, $vid, $reviewer, $reason, $expected_review);
         }
     } else {
         $result = 'Unknown decision.';
@@ -159,7 +163,7 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                             </td>
                             <td class="small text-muted"><?php echo htmlspecialchars((string)($row['kyb_submitted_at'] ?? '')); ?></td>
                             <td class="pe-4 text-end">
-                                <form method="post" action="" class="d-inline"><?php echo bc_csrf_field(); ?>
+                                <?php $bc_review_ticket=bc_kyb_review_ticket($row,$get_logged_admin_details); ?><form method="post" action="" class="d-inline"><?php echo bc_csrf_field(); ?><input type="hidden" name="review_ticket" value="<?php echo htmlspecialchars($bc_review_ticket,ENT_QUOTES,'UTF-8'); ?>">
                                     <input type="hidden" name="uid" value="<?php echo $uid; ?>">
                                     <button name="kyb_decision" value="approve" class="btn btn-sm btn-success rounded-pill px-3"
                                             onclick="return confirm('Approve this business and revoke its app sessions?');">
@@ -171,7 +175,7 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                                     Reject
                                 </button>
                                 <div class="collapse mt-2" id="reject-<?php echo $uid; ?>">
-                                    <form method="post" action=""><?php echo bc_csrf_field(); ?>
+                                    <form method="post" action=""><?php echo bc_csrf_field(); ?><input type="hidden" name="review_ticket" value="<?php echo htmlspecialchars($bc_review_ticket,ENT_QUOTES,'UTF-8'); ?>">
                                         <input type="hidden" name="uid" value="<?php echo $uid; ?>">
                                         <textarea name="kyb_reason" rows="2" required class="form-control form-control-sm mb-2"
                                                   placeholder="Reason shown to the applicant"></textarea>

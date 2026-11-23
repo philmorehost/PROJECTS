@@ -7,7 +7,7 @@ function bc_app_token_revoke_all($id,$vid,$reason){$GLOBALS['revoked'][]=[$id,$v
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);$connection_server=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);$db=$connection_server;$name='bc_kyb_review_ci_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);
 $n=0;function kr_check($ok,$msg){$GLOBALS['n']++;if(!$ok)throw new RuntimeException($msg);}
 try{
- $db->query('CREATE TABLE sas_users(id INT PRIMARY KEY,vendor_id INT,username VARCHAR(100),status INT,is_blocked INT,account_level INT,account_type VARCHAR(30),account_type_source VARCHAR(60),account_type_at DATETIME NULL,kyb_status INT,kyb_business_name VARCHAR(200),kyb_registration_no VARCHAR(80),kyb_category VARCHAR(80),kyb_document VARCHAR(255),kyb_reference VARCHAR(120),kyb_submitted_at DATETIME NULL,kyb_reviewed_at DATETIME NULL,kyb_reviewed_by VARCHAR(120),kyb_note TEXT,kyc_status INT,kyc_refresh_required INT,kyc_id_expiry VARCHAR(100) NULL)');
+ $db->query('CREATE TABLE sas_users(id INT PRIMARY KEY,vendor_id INT,username VARCHAR(100),email VARCHAR(200) NULL,status INT,is_blocked INT,account_level INT,account_type VARCHAR(30),account_type_source VARCHAR(60),account_type_at DATETIME NULL,kyb_status INT,kyb_business_name VARCHAR(200),kyb_registration_no VARCHAR(80),kyb_category VARCHAR(80),kyb_document VARCHAR(255),kyb_reference VARCHAR(120),kyb_submitted_at DATETIME NULL,kyb_reviewed_at DATETIME NULL,kyb_reviewed_by VARCHAR(120),kyb_note TEXT,kyc_status INT,kyc_refresh_required INT,kyc_id_expiry VARCHAR(100) NULL)');
  $db->query("INSERT INTO sas_users(id,vendor_id,username,status,is_blocked,account_level,account_type,kyb_status,kyc_status,kyc_refresh_required) VALUES(11,7,'applicant',1,0,1,'personal',0,0,0)");
  $read=function()use($db){return $db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();};$actor=$read();
  $fields=['business_name'=>'Fixture Ltd','registration_no'=>'RC123','category'=>'limited_co','document'=>'kyb_fixture.pdf'];
@@ -18,6 +18,9 @@ try{
  $db->query("UPDATE sas_users SET kyc_id_expiry=NULL WHERE id=11");
  $snapshot=bc_fintech_kyb_snapshot_sql($read(),['kyb_reference','kyb_document']);$db->query("UPDATE sas_users SET kyb_reference='replacement' WHERE id=11");
  $db->query("UPDATE sas_users SET kyb_status=2 WHERE id=11 AND kyb_status=1$snapshot");kr_check($db->affected_rows===0,'stale evidence compare-and-set refuses write');
+ $stale=bc_kyb_review_fingerprint($read());$db->query("UPDATE sas_users SET kyb_reference='new-review-version' WHERE id=11");
+ kr_check(bc_fintech_kyb_approve(11,7,'admin',$stale)!==true,'stale rendered review refused');
+ kr_check(bc_fintech_kyb_reject(11,7,'admin','reason',$stale)!==true,'stale rejection refused');
  kr_check(bc_fintech_kyb_approve(11,7,'admin')===true,'current KYC approval succeeds');kr_check($read()['account_type']==='business','Business promotion');kr_check(count($GLOBALS['revoked']??[])===1,'revocation requested only after successful approval');
  kr_check(bc_fintech_kyb_approve(11,7,'admin')!==true,'approval replay refused');
  echo "$n $edition KYB review MySQL checks passed\n";

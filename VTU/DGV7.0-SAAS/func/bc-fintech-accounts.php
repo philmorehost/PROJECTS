@@ -16,6 +16,7 @@
 
 require_once __DIR__ . '/bc-gateway-policy.php';
 require_once __DIR__ . '/bc-compliance-policy.php';
+require_once __DIR__ . '/bc-kyb-review-ticket.php';
 
 /** Service slugs that may be gated per tier. Kept stable: these strings are in the database. */
 if (!function_exists('bc_fintech_matrix_services')) {
@@ -217,7 +218,7 @@ if (!function_exists('bc_fintech_kyb_categories')) {
 function bc_fintech_kyb_snapshot_sql($row,$fields){
     global $connection_server;
     $sql='';foreach($fields as $field){
-        if(!in_array($field,['kyb_reference','kyb_document','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked'],true))throw new InvalidArgumentException('Invalid KYB snapshot field.');
+        if(!in_array($field,['kyb_reference','kyb_document','kyb_business_name','kyb_registration_no','kyb_category','kyb_submitted_at','email','username','account_type','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked'],true))throw new InvalidArgumentException('Invalid KYB snapshot field.');
         $value=$row[$field]??null;
         $sql.=" AND `$field` <=> ".($value===null?'NULL':"'".mysqli_real_escape_string($connection_server,(string)$value)."'");
     }return $sql;
@@ -291,7 +292,7 @@ if (!function_exists('bc_fintech_kyb_approve')) {
      *
      * Returns true, or a string explaining the refusal.
      */
-    function bc_fintech_kyb_approve($user_id, $vendor_id, $reviewer) {
+    function bc_fintech_kyb_approve($user_id, $vendor_id, $reviewer, $expected_review = null) {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return 'Database unavailable.';
         $user_id = (int)$user_id;
@@ -303,10 +304,11 @@ if (!function_exists('bc_fintech_kyb_approve')) {
         $q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
         if (!$q || mysqli_num_rows($q) !== 1) return 'Account not found.';
         $row = mysqli_fetch_assoc($q);
+        if($expected_review!==null && !hash_equals($expected_review,bc_kyb_review_fingerprint($row)))return 'Request changed. Reload the review queue.';
         if ((int)$row['kyb_status'] !== 1) return 'This request is not awaiting review.';
         if ((int)($row['status']??0)!==1 || !empty($row['is_blocked']))return 'This account cannot be approved.';
         if (!bc_kyc_approval_current($row))return 'Current approved KYC is required before Business approval.';
-        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked']);
+        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document','kyb_business_name','kyb_registration_no','kyb_category','kyb_submitted_at','email','username','account_type','kyc_status','kyc_refresh_required','kyc_id_expiry','status','is_blocked']);
 
         $rev = mysqli_real_escape_string($connection_server, $reviewer);
         $ok = mysqli_query($connection_server, "UPDATE sas_users SET
@@ -323,7 +325,7 @@ if (!function_exists('bc_fintech_kyb_approve')) {
 
 if (!function_exists('bc_fintech_kyb_reject')) {
     /** Rejects a pending request. The account stays personal; the reason is kept for the user. */
-    function bc_fintech_kyb_reject($user_id, $vendor_id, $reviewer, $reason = '') {
+    function bc_fintech_kyb_reject($user_id, $vendor_id, $reviewer, $reason = '', $expected_review = null) {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return 'Database unavailable.';
         $user_id = (int)$user_id;
@@ -335,9 +337,10 @@ if (!function_exists('bc_fintech_kyb_reject')) {
         $q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
         if (!$q || mysqli_num_rows($q) !== 1) return 'Account not found.';
         $row=mysqli_fetch_assoc($q);
+        if($expected_review!==null && !hash_equals($expected_review,bc_kyb_review_fingerprint($row)))return 'Request changed. Reload the review queue.';
         if ((int)$row['kyb_status'] !== 1) return 'This request is not awaiting review.';
 
-        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document']);
+        $snapshot=bc_fintech_kyb_snapshot_sql($row,['kyb_reference','kyb_document','kyb_business_name','kyb_registration_no','kyb_category','kyb_submitted_at','email','username','account_type']);
         $rev = mysqli_real_escape_string($connection_server, $reviewer);
         $note = mysqli_real_escape_string($connection_server, substr(trim((string)$reason), 0, 2000));
         $ok = mysqli_query($connection_server, "UPDATE sas_users SET
