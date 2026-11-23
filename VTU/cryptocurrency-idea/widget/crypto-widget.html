@@ -1,0 +1,324 @@
+<!--
+  Mzeevtu Buy / Sell Crypto widget
+  Paste this whole block into your DGV7.0 dashboard page (or include it as a file).
+  It talks only to /crypto/api.php — change MZ_API below if you put the bridge elsewhere.
+-->
+<div id="mz-crypto" class="mzc">
+  <div class="mzc-head">
+    <div class="mzc-tabs" role="tablist">
+      <button class="mzc-tab is-on" data-side="buy" role="tab">Buy crypto</button>
+      <button class="mzc-tab" data-side="sell" role="tab">Sell crypto</button>
+    </div>
+    <div class="mzc-bal">Wallet: <b id="mzc-bal">—</b></div>
+  </div>
+
+  <!-- step 1: amount -->
+  <section class="mzc-step" data-step="amount">
+    <label class="mzc-label">Coin &amp; network</label>
+    <select id="mzc-asset" class="mzc-input"></select>
+    <div class="mzc-rate" id="mzc-rate">Loading rates…</div>
+
+    <label class="mzc-label" id="mzc-amount-label">Amount</label>
+    <div class="mzc-amount">
+      <input id="mzc-amount" class="mzc-input" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      <button id="mzc-unit" class="mzc-unit" type="button">NGN</button>
+    </div>
+    <div class="mzc-hint" id="mzc-estimate">&nbsp;</div>
+
+    <button id="mzc-quote" class="mzc-btn">Get price</button>
+  </section>
+
+  <!-- step 2: confirm -->
+  <section class="mzc-step" data-step="confirm" hidden>
+    <div class="mzc-summary">
+      <div><span id="mzc-s-you">You pay</span><b id="mzc-s-pay"></b></div>
+      <div><span id="mzc-s-get-l">You get</span><b id="mzc-s-get"></b></div>
+      <div><span>Rate</span><b id="mzc-s-rate"></b></div>
+      <div><span>Network</span><b id="mzc-s-net"></b></div>
+    </div>
+    <div class="mzc-timer">Price held for <b id="mzc-timer">2:00</b></div>
+
+    <div id="mzc-addr-wrap">
+      <label class="mzc-label">Your wallet address (receives the crypto)</label>
+      <input id="mzc-addr" class="mzc-input mzc-mono" placeholder="Wallet address" autocomplete="off" spellcheck="false">
+      <div class="mzc-warn" id="mzc-addr-warn"></div>
+    </div>
+
+    <div class="mzc-row">
+      <button class="mzc-btn mzc-ghost" data-back>Back</button>
+      <button id="mzc-confirm" class="mzc-btn">Confirm</button>
+    </div>
+  </section>
+
+  <!-- step 3: sell deposit -->
+  <section class="mzc-step" data-step="deposit" hidden>
+    <div class="mzc-warn mzc-warn-strong" id="mzc-d-warn"></div>
+    <label class="mzc-label">Send exactly</label>
+    <div class="mzc-copy"><b id="mzc-d-amount" class="mzc-big"></b><button data-copy="mzc-d-amount">Copy</button></div>
+    <label class="mzc-label">To this address</label>
+    <div class="mzc-copy"><code id="mzc-d-addr" class="mzc-mono"></code><button data-copy="mzc-d-addr">Copy</button></div>
+    <div class="mzc-summary">
+      <div><span>You'll receive</span><b id="mzc-d-fiat"></b></div>
+      <div><span>Send within</span><b id="mzc-d-timer"></b></div>
+    </div>
+    <div class="mzc-status"><span class="mzc-dot"></span><span id="mzc-d-status">Waiting for your deposit…</span></div>
+  </section>
+
+  <!-- step 4: result -->
+  <section class="mzc-step" data-step="result" hidden>
+    <div class="mzc-result-icon" id="mzc-r-icon">✓</div>
+    <h3 id="mzc-r-title">Done</h3>
+    <p id="mzc-r-text"></p>
+    <a id="mzc-r-link" class="mzc-link" target="_blank" rel="noopener" hidden>View on explorer ↗</a>
+    <div class="mzc-status" id="mzc-r-status-wrap" hidden><span class="mzc-dot"></span><span id="mzc-r-status"></span></div>
+    <button class="mzc-btn" data-restart>New trade</button>
+  </section>
+
+  <div class="mzc-error" id="mzc-error" hidden></div>
+</div>
+
+<style>
+  .mzc { --red:#E10600; --red-d:#B30500; --ink:#0B0B0B; --mute:#6B6B6B; --line:#E7E7E7; --soft:#FFF3F2;
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); background:#fff;
+    max-width: 440px; margin: 0 auto; border: 1px solid var(--line); border-radius: 20px; padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06); box-sizing: border-box; }
+  .mzc *, .mzc *::before, .mzc *::after { box-sizing: border-box; }
+  .mzc-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .mzc-tabs { display:flex; background:#F4F4F4; border-radius:999px; padding:4px; }
+  .mzc-tab { border:0; background:transparent; padding:9px 16px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; color:var(--mute); }
+  .mzc-tab.is-on { background:var(--ink); color:#fff; }
+  .mzc-bal { font-size:13px; color:var(--mute); }
+  .mzc-bal b { color:var(--ink); }
+  .mzc-label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  .mzc-input { width:100%; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; font-size:16px; background:#fff; color:var(--ink); outline:none; }
+  .mzc-input:focus { border-color:var(--ink); }
+  .mzc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:14px; word-break:break-all; }
+  .mzc-amount { display:flex; gap:8px; }
+  .mzc-unit { border:1.5px solid var(--ink); background:#fff; border-radius:12px; padding:0 14px; font-weight:700; cursor:pointer; min-width:84px; }
+  .mzc-rate, .mzc-hint { font-size:13px; color:var(--mute); margin-top:8px; }
+  .mzc-btn { width:100%; margin-top:18px; border:0; border-radius:14px; padding:14px; background:var(--red); color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
+  .mzc-btn:hover { background:var(--red-d); }
+  .mzc-btn:disabled { opacity:.55; cursor:not-allowed; }
+  .mzc-ghost { background:#fff; color:var(--ink); border:1.5px solid var(--line); }
+  .mzc-ghost:hover { background:#F7F7F7; }
+  .mzc-row { display:flex; gap:10px; }
+  .mzc-summary { border:1px solid var(--line); border-radius:14px; padding:6px 14px; margin-top:14px; }
+  .mzc-summary div { display:flex; justify-content:space-between; gap:12px; padding:9px 0; font-size:14px; border-bottom:1px dashed var(--line); }
+  .mzc-summary div:last-child { border-bottom:0; }
+  .mzc-summary span { color:var(--mute); }
+  .mzc-summary b { text-align:right; }
+  .mzc-timer { margin-top:10px; font-size:13px; color:var(--mute); text-align:center; }
+  .mzc-timer b { color:var(--red); }
+  .mzc-warn { font-size:13px; color:var(--red-d); margin-top:8px; }
+  .mzc-warn-strong { background:var(--soft); border:1px solid #F8C9C6; border-radius:12px; padding:12px 14px; margin:0 0 6px; font-weight:600; }
+  .mzc-copy { display:flex; align-items:center; gap:10px; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .mzc-copy > :first-child { flex:1; min-width:0; }
+  .mzc-copy button { border:0; background:var(--ink); color:#fff; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+  .mzc-big { font-size:20px; }
+  .mzc-status { display:flex; align-items:center; gap:10px; margin-top:16px; font-size:14px; font-weight:600; justify-content:center; }
+  .mzc-dot { width:10px; height:10px; border-radius:50%; background:var(--red); animation: mzc-pulse 1.2s infinite; }
+  @keyframes mzc-pulse { 50% { opacity:.25; } }
+  .mzc-step[data-step="result"] { text-align:center; }
+  .mzc-result-icon { width:56px; height:56px; margin:6px auto 4px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; font-size:28px; }
+  .mzc-result-icon.is-bad { background:var(--red); }
+  .mzc h3 { margin:10px 0 4px; font-size:20px; }
+  .mzc p { margin:0; color:var(--mute); font-size:14px; line-height:1.5; }
+  .mzc-link { display:inline-block; margin-top:12px; color:var(--red); font-weight:600; text-decoration:none; }
+  .mzc-error { margin-top:14px; background:var(--ink); color:#fff; border-radius:12px; padding:12px 14px; font-size:14px; }
+</style>
+
+<script>
+(() => {
+  const MZ_API = '/crypto/api.php';
+  const $ = (id) => document.getElementById(id);
+  const root = $('mz-crypto');
+  const S = { side: 'buy', unit: 'fiat', init: null, quote: null, order: null, timers: [] };
+  const fmt = (n, dp = 2) => Number(n).toLocaleString('en-NG', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  const money = (n) => `₦${fmt(n)}`;
+  const asset = () => S.init.assets.find((a) => a.asset === $('mzc-asset').value);
+  const ADDR = {
+    evm:  { re: /^0x[0-9a-fA-F]{40}$/, ph: '0x…', hint: 'starts with 0x, 42 characters' },
+    tron: { re: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, ph: 'T…', hint: 'starts with T, 34 characters' },
+    btc:  { re: /^(bc1[02-9ac-hj-np-z]{11,87}|BC1[02-9AC-HJ-NP-Z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/, ph: 'bc1… / 1… / 3…', hint: 'starts with bc1, 1 or 3' },
+  };
+
+  async function api(action, body, query = '') {
+    const res = await fetch(`${MZ_API}?action=${action}${query}`, {
+      method: body ? 'POST' : 'GET',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.init?.csrf || '' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ ok: false, error: 'Network error' }));
+    if (!data.ok) throw new Error(data.error || 'Something went wrong');
+    return data;
+  }
+
+  function showError(msg) { const e = $('mzc-error'); e.textContent = msg; e.hidden = !msg; }
+  function step(name) {
+    root.querySelectorAll('.mzc-step').forEach((s) => (s.hidden = s.dataset.step !== name));
+    showError('');
+  }
+  function clearTimers() { S.timers.forEach(clearInterval); S.timers = []; }
+  function countdown(el, until, onEnd) {
+    const tick = () => {
+      const s = Math.max(0, Math.round((until - Date.now()) / 1000));
+      el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (s === 0) { clearInterval(t); onEnd && onEnd(); }
+    };
+    const t = setInterval(tick, 1000); S.timers.push(t); tick();
+  }
+
+  function refreshAmountUI() {
+    const a = asset();
+    if (!a) return;
+    $('mzc-unit').textContent = S.unit === 'fiat' ? 'NGN' : a.symbol;
+    $('mzc-amount-label').textContent = S.side === 'buy'
+      ? (S.unit === 'fiat' ? 'How much do you want to spend?' : `How much ${a.symbol} do you want?`)
+      : (S.unit === 'fiat' ? 'How much Naira do you want to receive?' : `How much ${a.symbol} are you selling?`);
+    const r = a.rates?.[S.side];
+    $('mzc-rate').innerHTML = r
+      ? `1 ${a.symbol} = <b>${money(r)}</b> · ${a.network}`
+      : 'Rates unavailable right now';
+    $('mzc-quote').disabled = !r;
+    estimate();
+  }
+  function estimate() {
+    const a = asset(); const r = Number(a?.rates?.[S.side]); const v = Number($('mzc-amount').value.replace(/,/g, ''));
+    $('mzc-estimate').innerHTML = r && v > 0
+      ? (S.unit === 'fiat' ? `≈ ${fmt(v / r, a.displayDecimals)} ${a.symbol}` : `≈ ${money(v * r)}`)
+      : `Min ${money(S.init.minFiat)} · Max ${money(S.init.maxFiat)}`;
+  }
+
+  async function load() {
+    try {
+      S.init = await api('init');
+      $('mzc-bal').textContent = money(S.init.balance || 0);
+      $('mzc-asset').innerHTML = S.init.assets
+        .map((a) => `<option value="${a.asset}">${a.symbol} — ${a.network}</option>`).join('');
+      refreshAmountUI();
+    } catch (e) { $('mzc-rate').textContent = e.message; $('mzc-quote').disabled = true; }
+  }
+
+  root.querySelectorAll('.mzc-tab').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll('.mzc-tab').forEach((x) => x.classList.toggle('is-on', x === b));
+    S.side = b.dataset.side; clearTimers(); step('amount'); refreshAmountUI();
+  }));
+  $('mzc-asset').addEventListener('change', refreshAmountUI);
+  $('mzc-unit').addEventListener('click', () => { S.unit = S.unit === 'fiat' ? 'crypto' : 'fiat'; $('mzc-amount').value = ''; refreshAmountUI(); });
+  $('mzc-amount').addEventListener('input', estimate);
+  $('mzc-addr').addEventListener('input', () => showError(''));
+  root.querySelector('[data-back]').addEventListener('click', () => { clearTimers(); step('amount'); });
+  root.querySelector('[data-restart]').addEventListener('click', () => { clearTimers(); $('mzc-amount').value = ''; step('amount'); load(); });
+  root.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const txt = $(b.dataset.copy).dataset.raw || $(b.dataset.copy).textContent;
+    try { await navigator.clipboard.writeText(txt); b.textContent = 'Copied'; setTimeout(() => (b.textContent = 'Copy'), 1500); } catch {}
+  }));
+
+  $('mzc-quote').addEventListener('click', async () => {
+    const v = $('mzc-amount').value.replace(/,/g, '').trim();
+    if (!(Number(v) > 0)) return showError('Enter an amount');
+    const btn = $('mzc-quote'); btn.disabled = true; btn.textContent = 'Getting price…';
+    try {
+      const body = { side: S.side, asset: $('mzc-asset').value };
+      body[S.unit === 'fiat' ? 'fiatAmount' : 'cryptoAmount'] = v;
+      const { quote } = await api('quote', body);
+      S.quote = quote;
+      const coin = `${fmt(quote.cryptoAmount, asset().displayDecimals)} ${quote.symbol}`;
+      $('mzc-s-you').textContent = S.side === 'buy' ? 'You pay' : 'You send';
+      $('mzc-s-get-l').textContent = 'You get';
+      $('mzc-s-pay').textContent = S.side === 'buy' ? money(quote.fiatAmount) : coin;
+      $('mzc-s-get').textContent = S.side === 'buy' ? coin : money(quote.fiatAmount);
+      $('mzc-s-rate').textContent = `1 ${quote.symbol} = ${money(quote.rate)}`;
+      $('mzc-s-net').textContent = quote.network;
+      $('mzc-addr-wrap').hidden = S.side !== 'buy';
+      const at = ADDR[quote.addressType] || ADDR.evm;
+      $('mzc-addr').placeholder = at.ph;
+      $('mzc-addr').value = '';
+      $('mzc-addr-warn').textContent = `Only use a ${quote.symbol} address on ${quote.network}. Crypto sent to the wrong network can't be recovered.`;
+      $('mzc-confirm').textContent = S.side === 'buy' ? `Pay ${money(quote.fiatAmount)}` : 'Get deposit address';
+      $('mzc-confirm').disabled = false;
+      clearTimers();
+      countdown($('mzc-timer'), quote.expiresAt, () => { $('mzc-confirm').disabled = true; showError('Price expired — go back and get a new one.'); });
+      step('confirm');
+    } catch (e) { showError(e.message); }
+    finally { btn.disabled = false; btn.textContent = 'Get price'; }
+  });
+
+  $('mzc-confirm').addEventListener('click', async () => {
+    const btn = $('mzc-confirm'); btn.disabled = true;
+    try {
+      if (S.side === 'buy') {
+        const address = $('mzc-addr').value.trim();
+        const at = ADDR[S.quote.addressType] || ADDR.evm;
+        if (!at.re.test(address)) { btn.disabled = false; return showError(`Enter a valid ${S.quote.network} address (${at.hint})`); }
+        const { order } = await api('buy', { quoteId: S.quote.quoteId, address });
+        clearTimers(); showResult(order); poll(order.clientRef);
+      } else {
+        const { order } = await api('sell', { quoteId: S.quote.quoteId });
+        clearTimers(); showDeposit(order); poll(order.clientRef);
+      }
+    } catch (e) { showError(e.message); btn.disabled = false; }
+  });
+
+  function showDeposit(o) {
+    const a = asset();
+    $('mzc-d-warn').textContent = `Send only ${o.symbol} on ${o.network}. Other coins or networks will be lost.`;
+    $('mzc-d-amount').textContent = `${o.cryptoAmount} ${o.symbol}`;
+    $('mzc-d-amount').dataset.raw = o.cryptoAmount;
+    $('mzc-d-addr').textContent = o.depositAddress;
+    $('mzc-d-fiat').textContent = money(o.fiatAmount);
+    countdown($('mzc-d-timer'), o.expiresAt);
+    step('deposit');
+  }
+
+  const LABELS = {
+    queued: 'Sending your crypto…', signing: 'Sending your crypto…', broadcast_pending: 'Sending your crypto…',
+    broadcast: 'Sent — waiting for network confirmations…', processing: 'Processing…',
+    awaiting_deposit: 'Waiting for your deposit…', confirming: 'Deposit seen — confirming on the network…',
+    deposit_confirmed: 'Confirmed — crediting your wallet…', needs_review: 'Under review by our team — we’ll sort it out shortly.',
+  };
+
+  function showResult(o) {
+    const done = o.status === 'completed';
+    const bad = ['failed', 'expired', 'rejected'].includes(o.status);
+    $('mzc-r-icon').textContent = bad ? '!' : done ? '✓' : '…';
+    $('mzc-r-icon').classList.toggle('is-bad', bad);
+    if (o.side === 'sell' || S.side === 'sell') {
+      $('mzc-r-title').textContent = done ? 'Wallet credited' : bad ? 'Order closed' : 'Processing';
+      $('mzc-r-text').textContent = done ? `${money(o.fiatAmount)} has been added to your wallet.`
+        : o.status === 'expired' ? 'No deposit arrived in time. If you already sent it, contact support.' : '';
+    } else {
+      $('mzc-r-title').textContent = done ? 'Crypto delivered' : bad ? 'Purchase failed' : 'Order placed';
+      $('mzc-r-text').textContent = done ? `${o.cryptoAmount} ${o.symbol} is in your wallet.`
+        : bad ? 'We couldn’t send your crypto. Your wallet has been refunded.' : `We’re sending ${o.cryptoAmount || ''} ${o.symbol || ''} to your wallet.`;
+    }
+    $('mzc-r-link').hidden = !o.explorerUrl; if (o.explorerUrl) $('mzc-r-link').href = o.explorerUrl;
+    const pending = !done && !bad;
+    $('mzc-r-status-wrap').hidden = !pending;
+    $('mzc-r-status').textContent = LABELS[o.status] || o.status;
+    step('result');
+  }
+
+  function poll(ref) {
+    const t = setInterval(async () => {
+      try {
+        const { order } = await api('status', null, `&ref=${encodeURIComponent(ref)}`);
+        S.order = order;
+        if (order.side === 'sell' && ['awaiting_deposit', 'confirming'].includes(order.status)) {
+          $('mzc-d-status').textContent = LABELS[order.status];
+        } else {
+          showResult(order);
+          if (['completed', 'failed', 'expired', 'rejected'].includes(order.status)) {
+            clearInterval(t);
+            if (order.status === 'completed' || order.refunded) load();
+          }
+        }
+      } catch { /* keep polling */ }
+    }, 8000);
+    S.timers.push(t);
+  }
+
+  load();
+})();
+</script>
