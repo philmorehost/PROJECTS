@@ -4,6 +4,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 ob_start();
 bc_secure_session_start();
 include("../func/bc-config.php");
+require_once __DIR__.'/../func/bc-feature-email-otp.php';
 include("../func/bc-giftcard-func.php");
 
 if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
@@ -33,7 +34,7 @@ if (isset($_POST['action'])) {
 
         if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
-        } elseif (empty($_SESSION["giftcard_otp"]) || $otp !== $_SESSION["giftcard_otp"]) {
+        } elseif (!bc_feature_email_otp_scope($get_logged_user_details,'giftcard') || empty($_SESSION["giftcard_otp"]) || $otp !== $_SESSION["giftcard_otp"]) {
             $response = ['status' => 'error', 'message' => 'Invalid Email OTP'];
         } elseif (time() - $_SESSION["giftcard_otp_time"] > 600) {
             $response = ['status' => 'error', 'message' => 'OTP has expired'];
@@ -82,13 +83,9 @@ if (isset($_POST['action'])) {
             }
         }
     } elseif ($action == 'send_otp') {
-        $otp = generateOTP();
-        $_SESSION["giftcard_otp"] = $otp;
-        $_SESSION["giftcard_otp_time"] = time();
-        $subject = "Gift Card Purchase OTP";
-        $body = "Your verification code for gift card purchase is: <b>$otp</b>. Expires in 10 minutes.";
-        sendVendorEmail($get_logged_user_details["email"], $subject, $body);
-        $response = ['status' => 'success', 'message' => 'OTP sent to your email'];
+        require_once __DIR__.'/../func/bc-feature-email-otp.php';
+        header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+        echo json_encode(bc_feature_email_otp($get_logged_user_details,'giftcard'));exit;
     } elseif ($action == 'list_for_sale') {
         $card_id = (int)$_POST['card_id'];
         $price = (float)$_POST['price'];
@@ -444,7 +441,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                 <label class="form-label small fw-bold text-muted text-uppercase">Email OTP</label>
                                 <div class="input-group">
                                     <input type="text" name="otp" class="form-control form-control-lg rounded-start-4 border-2 text-center" placeholder="6-digit" required>
-                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" onclick="sendGCOTP(this)">Get</button>
+                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" data-feature-otp="giftcard" data-otp-endpoint="GiftCard.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">Get</button>
                                 </div>
                             </div>
                         </div>
@@ -583,17 +580,6 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
         `;
     }
 
-    function sendGCOTP(btn) {
-        btn.disabled = true; btn.innerText = '...';
-        fetch('GiftCard.php', { method: 'POST', body: 'action=send_otp', headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
-        .then(r => r.json()).then(res => {
-            alert(res.message);
-            if(res.status === 'success') {
-                let c = 60; const t = setInterval(() => { btn.innerText = c+'s'; c--; if(c<0){clearInterval(t); btn.innerText='Get'; btn.disabled=false;} }, 1000);
-            } else btn.disabled = false;
-        });
-    }
-
     function listCard(id, defPrice) {
         const price = prompt("Enter Selling Price (NGN):", defPrice);
         if(price) {
@@ -642,3 +628,5 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
     </script>
 </body>
 </html>
+
+<script src="../asset/bc-feature-email-otp.js" defer></script>

@@ -424,7 +424,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                             <label class="form-label small fw-bold">Email OTP</label>
                             <div class="input-group">
                                 <input type="text" name="otp" class="form-control" required>
-                                <button type="button" class="btn btn-outline-primary" onclick="sendWithdrawalOTP(this)">Get Code</button>
+                                <button type="button" class="btn btn-outline-primary" disabled title="Crypto services are not provisioned; no code will be sent">Unavailable</button>
                             </div>
                         </div>
                         <div class="mb-3">
@@ -637,35 +637,6 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         function openWithdrawModal(cid) {
             document.getElementById('withdrawCid').value = cid;
             new bootstrap.Modal(document.getElementById('withdrawModal')).show();
-        }
-
-        function sendWithdrawalOTP(btn) {
-            const originalText = btn.innerHTML;
-            btn.innerHTML = 'Sending...';
-            btn.disabled = true;
-
-            fetch('CryptoHub.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'action=send_otp'
-            }).then(r => r.json()).then(res => {
-                alert(res.message);
-                if(res.status == 'success') {
-                    let count = 60;
-                    const timer = setInterval(() => {
-                        btn.innerHTML = `Resend in ${count}s`;
-                        count--;
-                        if(count < 0) {
-                            clearInterval(timer);
-                            btn.innerHTML = 'Get Code';
-                            btn.disabled = false;
-                        }
-                    }, 1000);
-                } else {
-                    btn.innerHTML = 'Get Code';
-                    btn.disabled = false;
-                }
-            });
         }
 
         document.getElementById('withdrawForm').onsubmit = function(e) {
