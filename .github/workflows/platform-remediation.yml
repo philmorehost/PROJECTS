@@ -12,6 +12,7 @@ on:
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/func/bc-google-recovery.php'
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
       - 'VTU/**/func/bc-feature-action-security.php'
@@ -80,6 +81,7 @@ on:
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
       - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/func/bc-google-recovery.php'
       - 'VTU/**/func/bc-registration-guard.php'
       - 'VTU/**/func/bc-feature-email-otp.php'
       - 'VTU/**/func/bc-feature-action-security.php'
@@ -159,6 +161,7 @@ jobs:
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
           php VTU/tests/recovery_inline_test.php
+          php VTU/tests/google_recovery_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
