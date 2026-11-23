@@ -6,6 +6,7 @@ require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_registration_action');
     include_once("../func/whmp-func.php");
 require_once __DIR__.'/../func/bc-vendor-registration.php';
+require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
 
     // §33/§9: vendor registration actions (verify payment / approve /
     // decline) are POST + CSRF + step-up only. Approving a new vendor and
@@ -64,17 +65,15 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
 
         // Mark as Paid for manual deposit
         if($action == 'mark_paid') {
-            if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET payment_status='paid' WHERE id='$pending_id'")) {
-                error_log("[VendorReg] Error marking as paid: " . mysqli_error($connection_server));
-                $_SESSION["page_alert"] = "An error occurred. Please try again.";
-                header("Location: VendorRegistrations.php"); exit;
-            }
-            $_SESSION['page_alert'] = "Vendor marked as paid.";
-            header("Location: VendorRegistrations.php");
-            exit();
+            try{
+                $GLOBALS['bc_vreg_verified_payment_actor']=['actor'=>(int)$get_logged_spadmin_details['id'],'pending'=>(int)$pending_id];
+                bc_vreg_manual_receipt((int)$pending_id,$get_logged_spadmin_details,$_POST);
+                $_SESSION['page_alert']='Manual payment matched to the server invoice and audited. Approval is still required.';
+            }catch(Throwable $e){$_SESSION['page_alert']='Payment not confirmed: '.$e->getMessage();}
+            header('Location: VendorRegistrations.php');exit;
         }
 
-        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'");
+        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id' AND status=0");
         if (!$result) {
             error_log("[VendorReg] Error fetching pending vendor: " . mysqli_error($connection_server));
             $_SESSION["page_alert"] = "An error occurred. Please try again.";
@@ -121,7 +120,8 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
                     $package_result = mysqli_query($connection_server, "SELECT * FROM sas_billing_packages WHERE id='$package_id'");
                     if (!$package_result) { error_log("[VendorReg] Error fetching package: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
                     $package = mysqli_fetch_assoc($package_result);
-                    $duration_days = $package['duration_days'];
+                    $trusted_invoice=bc_vreg_invoice($pending_vendor);
+                    $duration_days = $trusted_invoice['duration_days'];
 
                     // 2. Insert into main vendors table
                     $email = $pending_vendor['email'];
@@ -147,7 +147,7 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
 
                     $insert_sql = "INSERT INTO sas_vendors (email_verified_at,onboarding_compliance_review,kyc_status,email, access_hash, password, firstname, lastname, phone_number, website_url, home_address, balance, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, apk_ordered, ios_ordered, playstore_ordered, sms_bridge_ordered, selected_addons)
                                    VALUES (NOW(),?,?,?, ?, ?, ?, ?, ?, ?, ?, '0.00', '1', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    $onboarding_proof=json_encode(['review'=>json_decode($pending_vendor['compliance_review']??'',true),'business_name'=>$pending_vendor['business_name']??'','business_registration_no'=>$pending_vendor['business_registration_no']??'','pending_id'=>(int)$pending_id],JSON_THROW_ON_ERROR);
+                    $onboarding_proof=json_encode(['price_snapshot'=>json_decode($pending_vendor['price_snapshot']??'',true),'payment_evidence'=>json_decode($pending_vendor['payment_evidence']??'',true),'mailbox_verified_at'=>$pending_vendor['email_verified_at']??null,'review'=>json_decode($pending_vendor['compliance_review']??'',true),'business_name'=>$pending_vendor['business_name']??'','business_registration_no'=>$pending_vendor['business_registration_no']??'','pending_id'=>(int)$pending_id],JSON_THROW_ON_ERROR);
                     $onboarding_kyc=bc_vreg_policy()['kyc']?'2':'0';
                     $insert_stmt = mysqli_prepare($connection_server, $insert_sql);
                     if (!$insert_stmt) {
@@ -196,13 +196,13 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
                         if (!mysqli_query($connection_server, $update_sql)) { error_log("[VendorReg] Error updating subscription: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                         // 5. Log this initial subscription to the history table
-                        $price = $package['price'];
+                        $price = bc_vreg_decimal($trusted_invoice['total']);
                         $purchase_date = date('Y-m-d H:i:s');
                         $log_sql = "INSERT INTO sas_vendor_subscriptions (vendor_id, package_id, purchase_date, expiry_date, amount_paid) VALUES ('$new_vendor_id', '$package_id', '$purchase_date', '$expiry_date', '$price')";
                         if (!mysqli_query($connection_server, $log_sql)) { error_log("[VendorReg] Error logging subscription: " . mysqli_error($connection_server)); }
 
-                        // 6. Delete from pending vendors
-                        if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
+                        // 6. Archive the application; retain invoice, identity and payment evidence.
+                        if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET status=1 WHERE id='$pending_id' AND status=0")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
 
                         // 6b. Add the platform's actual host (app_base_url), falling back to the
                         // legacy website_url only for older pending-vendor records.
@@ -296,7 +296,7 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
                 $firstname = $pending_vendor['firstname'];
                 $lastname = $pending_vendor['lastname'];
 
-                if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
+                if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET status=2 WHERE id='$pending_id' AND status=0")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                 // Send rejection email
                 $email_placeholders = array(
@@ -311,7 +311,7 @@ require_once __DIR__.'/../func/bc-vendor-registration.php';
                 }
                 sendVendorEmail($email, $email_subject, $email_body);
 
-                $_SESSION['page_alert'] = "Vendor registration declined.";
+                $_SESSION['page_alert'] = "Vendor registration declined and archived; evidence retained.";
             }
         } else {
             $_SESSION['page_alert'] = "Invalid registration ID.";
@@ -361,7 +361,8 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                     <?php
                                         $sql = "SELECT pv.*, bp.name as package_name
                                                 FROM sas_pending_vendors pv
-                                                JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
+                                                LEFT JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
+                                                WHERE pv.status=0
                                                 ORDER BY pv.reg_date DESC";
                                         $result = mysqli_query($connection_server, $sql);
                                         if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
@@ -407,7 +408,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                     ?>
                                                 </ul>
                                                 <div class="mt-2 pt-2 border-top">
-                                                    <strong class="text-primary">Total: ₦<?php echo number_format($row['total_amount'], 2); ?></strong>
+                                                    <strong class="text-primary">Total: ₦<?php echo number_format($row['total_amount'], 2); ?></strong><?php try{bc_vreg_invoice($row);}catch(Throwable $e){echo '<div class="text-danger small fw-bold">Untrusted / legacy invoice — approval blocked. Preserve evidence for review.</div>';} ?>
                                                 </div>
                                             </div>
                                         </td>
@@ -441,7 +442,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                 <label>Security PIN<input name="sec_pin" type="password" class="form-control" required autocomplete="off"></label><label>Authenticator / email code<input name="sec_factor" class="form-control" inputmode="numeric" pattern="[0-9]{6}"></label><button name="sec33_send_code" value="1" class="btn btn-link" type="submit" formnovalidate>Email me a code</button>
                                                 <button class="btn btn-outline-primary" type="submit">Record completed compliance review</button></form></details>
 
-                                                <?php if(($row['payment_method'] == 'bank_deposit' || $row['payment_method'] == 'paystack') && trim($row['payment_status']) != 'paid'): ?>
+                                                <?php if($row['payment_method'] === 'bank_deposit' && trim($row['payment_status']) !== 'paid'): ?>
                                                     <button type="button" class="btn btn-info btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="sec33VrAction('mark_paid', <?php echo (int)$row['id']; ?>, 'Verify payment?', 'Confirm receipt of manual payment for this vendor. This needs your PIN + authenticator code and is audited.', 'Verify Payment')">Verify Payment</button>
                                                 <?php endif; ?>
                                                 
@@ -455,8 +456,8 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                 </div>
 
                                                 <div class="btn-group btn-group-sm mt-1">
-                                                    <button type="button" class="btn btn-primary <?php if(trim($row['payment_status']) != 'paid') echo 'disabled'; ?> rounded-start-pill px-3 fw-bold" onclick="sec33VrAction('approve', <?php echo (int)$row['id']; ?>, 'Approve new vendor?', 'Approve and activate this vendor account? This needs your PIN + authenticator code and is audited.', 'Approve Vendor')">Approve</button>
-                                                    <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Reject and delete this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
+                                                    <button type="button" class="btn btn-primary rounded-start-pill px-3 fw-bold" <?php try{if(trim($row['payment_status'])!=='paid'||bc_vreg_approval_error($row,bc_vreg_policy())!=='')echo 'disabled aria-disabled="true"';}catch(Throwable $e){echo 'disabled aria-disabled="true"';} ?> onclick="sec33VrAction('approve', <?php echo (int)$row['id']; ?>, 'Approve new vendor?', 'Approve and activate this vendor account? This needs your PIN + authenticator code and is audited.', 'Approve Vendor')">Approve</button>
+                                                    <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Decline and archive this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
                                                 </div>
                                             </div>
                                         </td>
@@ -523,7 +524,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
             <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
             <input type="hidden" name="vr_action" id="sec33VrAction" value="">
             <input type="hidden" name="vr_id" id="sec33VrId" value="">
-            <p class="text-muted small" id="sec33VrText"></p>
+            <p class="text-muted small" id="sec33VrText"></p><div id="manual-deposit-fields" hidden><label>Amount actually received (NGN)<input class="form-control" name="deposit_amount" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,2})?"></label><label>Unique bank statement reference<input class="form-control" name="deposit_reference" maxlength="100"></label><label><input type="checkbox" name="deposit_confirmed" value="1"> I verified cleared funds on the platform bank statement, not only the applicant's screenshot.</label></div>
             <div class="mb-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required autocomplete="off"></div>
             <div class="mb-1"><label class="form-label small fw-bold text-muted">AUTHENTICATOR / EMAIL CODE <span class="fw-normal">(approve &amp; verify-payment)</span></label><input name="sec_factor" class="form-control rounded-3" placeholder="6-digit code"></div>
             <button type="submit" name="sec33_send_code" class="btn btn-link btn-sm p-0" formnovalidate>Email me a code instead</button>
@@ -534,6 +535,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
     </div>
     <script>
     function sec33VrAction(action, id, title, text, btn) {
+        document.getElementById('manual-deposit-fields').hidden=action!=='mark_paid';
         document.getElementById('sec33VrAction').value = action;
         document.getElementById('sec33VrId').value = id;
         document.getElementById('sec33VrTitle').textContent = title;

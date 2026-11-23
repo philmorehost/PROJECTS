@@ -17,6 +17,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
 
     require_once __DIR__.'/../func/bc-vendor-registration.php';
+    require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
+    $vreg_device=bc_vreg_device();
+    if(empty($_SESSION['vreg_domain_token']))$_SESSION['vreg_domain_token']=bin2hex(random_bytes(32));
     header('Cache-Control: no-store, private');header('Referrer-Policy: no-referrer');header('X-Content-Type-Options: nosniff');
     try{
         $vreg_policy=bc_vreg_policy();
@@ -37,11 +40,25 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $_SESSION['product_purchase_response']='A verification code has been sent. Use it with the same email address in the registration form within 10 minutes.';
                 header('Location: VendorReg.php');exit;
             }
+            if(isset($_POST['verify-vendor-code'])){
+                if(!bc_vreg_consume($vreg_email,$_POST['vendor_email_code']??null,$vreg_policy))throw new RuntimeException('Email code is invalid, expired or locked.');
+                header('Location: VendorReg.php');exit;
+            }
+            $mailbox=bc_vreg_verified_mailbox($vreg_policy);
+            if(!$mailbox||!hash_equals($mailbox['email'],$vreg_email))throw new RuntimeException('Verify your email before accessing registration.');
+            bc_vreg_limit('application_email',$vreg_email,10,86400);
+            bc_vreg_limit('application_device',$vreg_device,10,86400);
+            if(($_POST['payment_method']??'')==='bank_deposit'){
+                if($vreg_policy['payment_mode']!=='both')throw new RuntimeException('Manual registration deposits are disabled.');
+                $bank=bc_q_row('SELECT bank_name,account_name,account_number FROM sas_super_admin_payments LIMIT 1');
+                if(!$bank||empty($bank['bank_name'])||empty($bank['account_name'])||!preg_match('/\A[0-9]{10}\z/D',(string)$bank['account_number']))throw new RuntimeException('Platform bank instructions are unavailable. Do not make a manual transfer.');
+            }
             if(!isset($_POST['create-profile']))throw new RuntimeException('Invalid registration action.');
             $input_error=bc_vreg_input($_POST);if($input_error!=='')throw new RuntimeException($input_error);
             if(!empty($_POST['company_fax']))throw new RuntimeException('Registration could not be completed.');
             if($vreg_policy['kyb']&&(strlen(trim($_POST['business_name']??''))<2||strlen(trim($_POST['business_registration_no']??''))<3))throw new RuntimeException('Enter your registered business name and registration number for KYB review.');
-            if(!bc_vreg_consume($vreg_email,$_POST['vendor_email_code']??null,bc_vreg_policy()))throw new RuntimeException('Email verification failed or expired. Request a new code and try again.');
+            $normalized_phone=bc_vreg_phone($_POST['phone']??null);if($normalized_phone==='')throw new RuntimeException('Enter a valid mobile number: Nigerian local format or international +country code.');
+            $_POST['phone']=$normalized_phone;
             $_POST['email']=$vreg_email;
         }
     }catch(Throwable $e){
@@ -51,6 +68,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         }
         http_response_code(503);exit('Registration is temporarily unavailable. Please contact support.');
     }
+
+    $vreg_mailbox=bc_vreg_verified_mailbox($vreg_policy);
 
     // Fetch domain settings
     $nameservers = '';
@@ -127,9 +146,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         // Dynamic Addons
         $selected_addons_ids = $_POST['addons'] ?? [];
         $selected_addons_str = mysqli_real_escape_string($connection_server, implode(',', $selected_addons_ids));
-        $domain_fee = (float)($_POST['domain_fee'] ?? 0);
-        $total_amount = (float)($_POST['total_amount'] ?? 0);
+        $domain_fee = 0; // Never trust browser prices.
+        $total_amount = '0.00'; // Assigned only from the server invoice below.
         $domain_option = $_POST['domain_option'] ?? 'register';
+        if(!in_array($domain_option,['register','existing'],true)){http_response_code(400);exit('Invalid domain option.');}
 
         $unrefined_website_url = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["website-url"]))));
         $refined_website_url = trim(str_replace(["https","http",":/","/","www."," "],"",$unrefined_website_url));
@@ -210,6 +230,14 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             }
         }
 
+        try{
+            if($domain_option==='existing'&&!bc_vreg_existing_domain($website_url))throw new RuntimeException('Existing-domain ownership is unverified. Publish the displayed DNS TXT value and retry.');
+            $invoice=bc_vreg_quote($_POST,number_format((float)$domain_fee,2,'.',''));
+            $total_amount=bc_vreg_decimal($invoice['total']);
+            $selected_addons_str=mysqli_real_escape_string($connection_server,$invoice['addons']);
+            $price_snapshot=mysqli_real_escape_string($connection_server,json_encode($invoice,JSON_THROW_ON_ERROR));
+        }catch(Throwable $e){$_SESSION['product_purchase_response']=$e->getMessage();header('Location: VendorReg.php');exit;}
+
         if(!empty($first) && !empty($last) && !empty($address) && !empty($email) && !empty($pass) && !empty($phone) && !empty($website_url) && !empty($billing_package_id) && !empty($payment_method)){
             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
                 $check_vendor_details_with_email = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE email='$email'");
@@ -226,9 +254,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
                         $business_name=mysqli_real_escape_string($connection_server,trim($_POST['business_name']??''));
                         $business_registration_no=mysqli_real_escape_string($connection_server,trim($_POST['business_registration_no']??''));
-                        $sql = "INSERT INTO sas_pending_vendors (email_verified_at,business_name,business_registration_no,website_url, email, password, firstname, lastname, phone_number, home_address, billing_package_id, payment_method, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, order_apk, order_ios, order_playstore, order_sms_bridge, selected_addons, domain_registration_fee, total_amount) VALUES (NOW(),'$business_name','$business_registration_no','$website_url', '$email', '$md5_pass', '$first', '$last', '$phone', '$address', '$billing_package_id', '$payment_method', '0', '$def_min', '$def_max', '$def_limit', '$app_base_url', '$order_apk', '$order_ios', '$order_playstore', '$order_sms_bridge', '$selected_addons_str', '$domain_fee', '$total_amount')";
-                        if(mysqli_query($connection_server, $sql)) {
-                            $pending_id = mysqli_insert_id($connection_server);
+                        $sql = "INSERT INTO sas_pending_vendors (price_snapshot,email_verified_at,business_name,business_registration_no,website_url, email, password, firstname, lastname, phone_number, home_address, billing_package_id, payment_method, status, min_withdrawal_amount, max_withdrawal_amount, daily_payout_limit, app_base_url, order_apk, order_ios, order_playstore, order_sms_bridge, selected_addons, domain_registration_fee, total_amount) VALUES ('$price_snapshot',NOW(),'$business_name','$business_registration_no','$website_url', '$email', '$md5_pass', '$first', '$last', '$phone', '$address', '$billing_package_id', '$payment_method', '0', '$def_min', '$def_max', '$def_limit', '$app_base_url', '$order_apk', '$order_ios', '$order_playstore', '$order_sms_bridge', '$selected_addons_str', '$domain_fee', '$total_amount')";
+                        if($pending_id=bc_vreg_insert_application($sql,$vreg_email,$normalized_phone,$vreg_device,$vreg_policy)) {
+                            $_SESSION['vreg_application']=['id'=>(int)$pending_id,'email_hash'=>hash('sha256',$vreg_email),'until'=>time()+86400];
 
                             // Send admin notification email
                             $get_super_admin = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_super_admin LIMIT 1"));
@@ -250,33 +278,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                             }
 
                             if ($payment_method == 'paystack') {
-                                // Server-side Total Verification
-                                $v_package_id = mysqli_real_escape_string($connection_server, $billing_package_id);
-                                $v_pkg_res = mysqli_query($connection_server, "SELECT price FROM sas_billing_packages WHERE id='$v_package_id'");
-                                $v_pkg = mysqli_fetch_assoc($v_pkg_res);
-
-                                $calculated_total = (float)($v_pkg['price'] ?? 0);
-                                
-                                // Dynamic Addon Price Verification
-                                if(!empty($selected_addons_ids)) {
-                                    $addon_ids_clean = array_map(function($id) use ($connection_server) { return mysqli_real_escape_string($connection_server, $id); }, $selected_addons_ids);
-                                    $addon_ids_str = implode(',', $addon_ids_clean);
-                                    $addon_price_res = mysqli_query($connection_server, "SELECT SUM(price) as total_addon_price FROM sas_billing_addons WHERE id IN ($addon_ids_str)");
-                                    $addon_price_row = mysqli_fetch_assoc($addon_price_res);
-                                    $calculated_total += (float)($addon_price_row['total_addon_price'] ?? 0);
-                                }
-
-                                if ($domain_option === 'register') {
-                                    // The domain quote was verified server-side from WHMP above and
-                                    // converted using the super-admin's configured USD-to-NGN rate.
-                                    $calculated_total += $domain_fee;
-                                }
-
-                                $amount_in_kobo = $calculated_total * 100;
-
-                                if(abs($calculated_total - $total_amount) > 0.01) {
-                                    mysqli_query($connection_server, "UPDATE sas_pending_vendors SET total_amount='$calculated_total' WHERE id='$pending_id'");
-                                }
+                                $amount_in_kobo = $invoice['total']; // Integer server invoice, including every selected option.
 
                                 $gateway_res = mysqli_query($connection_server, "SELECT secret_key FROM sas_super_admin_payment_gateways WHERE gateway_name='paystack'");
                                 $gateway = mysqli_fetch_assoc($gateway_res);
@@ -284,7 +286,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
                                 if ($secret_key) {
                                     $callback_url = $web_http_host . '/web/paystack_callback.php';
-                                    $reference = 'vendor_reg_' . $pending_id . '_' . time();
+                                    $reference = 'vendor_reg_' . $pending_id . '_' . bin2hex(random_bytes(16));
+                                    if(bc_q('UPDATE sas_pending_vendors SET paystack_reference=? WHERE id=?',[$reference,(int)$pending_id])!==true){http_response_code(503);exit('Payment initialization unavailable. Contact support.');}
 
                                     $post_data = [
                                         'email' => $email,
@@ -312,10 +315,10 @@ curl_setopt($curl, CURLOPT_TIMEOUT, 30);
                                     curl_close($curl);
 
                                     if ($err) {
-                                        $_SESSION["product_purchase_response"] = "Payment gateway error. Please try again or contact support.";
+                                        $_SESSION["product_purchase_response"] = "Your application is saved, but payment initialization is unconfirmed. Contact support before retrying.";
                                     } else {
                                         $result = json_decode($response, true);
-                                        if ($result['status'] == true) {
+                                        if (($result['status']??false) === true && is_string($result['data']['authorization_url']??null) && strpos($result['data']['authorization_url'],'https://checkout.paystack.com/')===0) {
                                             mysqli_query($connection_server, "UPDATE sas_pending_vendors SET paystack_reference='$reference' WHERE id='$pending_id'");
                                             header('Location: ' . $result['data']['authorization_url']);
                                             exit();
@@ -598,9 +601,12 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
 
         <div class="alert alert-info">Mailbox verification is mandatory. <?php echo $vreg_policy['kyc']?'Platform KYC review is required before approval. ':'';echo $vreg_policy['kyb']?'Business KYB review is required before approval.':''; ?>Payment alone does not approve your registration.</div>
         <form method="post" class="card p-3 mb-3"><?php echo bc_csrf_field(); ?><label class="form-label" for="verify-vendor-email">Verify your email first</label><input id="verify-vendor-email" type="email" name="email" class="form-control" maxlength="225" required autocomplete="email"><button class="btn btn-outline-primary mt-2" name="send-vendor-code" value="1">Send verification code</button></form>
+        <form method="post" class="card p-3 mb-3"><?php echo bc_csrf_field(); ?><label>Email used for the code<input class="form-control" name="email" type="email" required></label><label>Email code<input class="form-control" name="vendor_email_code" pattern="[0-9]{6}" required inputmode="numeric" autocomplete="one-time-code"></label><button class="btn btn-primary" name="verify-vendor-code" value="1">Verify email and unlock registration</button></form>
+        <?php if($vreg_mailbox): ?>
         <form method="post" action="" id="reg-form">
             <?php echo bc_csrf_field(); ?>
-            <div class="card p-3 mb-3"><label for="vendor-email-code">Email verification code</label><input class="form-control" id="vendor-email-code" name="vendor_email_code" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code" inputmode="numeric"><p class="small">Use the same email below. Codes expire in 10 minutes and can be used once.</p>
+            <div class="card p-3 mb-3"><p>Email verified. Submit within 10 minutes of code issuance.</p>
+            <p>Using an existing domain? First publish a DNS TXT record at <code>_vendor-verification.yourdomain.com</code> with value <code><?php echo 'vendor-verify='.$_SESSION['vreg_domain_token']; ?></code>. New domains are checked and priced through the configured registrar.</p>
             <label>Registered business name<input class="form-control" name="business_name" maxlength="190" <?php echo $vreg_policy['kyb']?'required':''; ?>></label><label>Business registration number<input class="form-control" name="business_registration_no" maxlength="100" <?php echo $vreg_policy['kyb']?'required':''; ?>></label></div>
             <div hidden aria-hidden="true"><label>Leave blank<input name="company_fax" tabindex="-1" autocomplete="off"></label></div>
 
@@ -623,7 +629,7 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label text-uppercase small fw-bold">Email Address</label>
-                                    <input type="email" name="email" class="form-control" placeholder="vendor@example.com" required>
+                                    <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($vreg_mailbox['email'],ENT_QUOTES,'UTF-8'); ?>" readonly required>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label text-uppercase small fw-bold">Phone Number</label>
@@ -848,7 +854,7 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
                                     <label class="btn btn-outline-primary w-100 fw-bold py-2 shadow-sm" for="paystack">ONLINE</label>
                                 </div>
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="payment_method" id="bank_deposit" value="bank_deposit">
+                                    <input type="radio" class="btn-check" name="payment_method" id="bank_deposit" value="bank_deposit" <?php echo $vreg_policy['payment_mode']!=='both'?'disabled':''; ?>>
                                     <label class="btn btn-outline-primary w-100 fw-bold py-2 shadow-sm" for="bank_deposit">MANUAL</label>
                                 </div>
                             </div>
@@ -873,9 +879,11 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
                 </div>
             </div>
         </form>
+        <?php else: ?><p class="alert alert-warning">Verify mailbox ownership above before entering registration details.</p><?php endif; ?>
     </div>
 
 
+    <?php if($vreg_mailbox): ?>
     <script src="../assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script>
     let domainFee = 0;
@@ -1126,4 +1134,5 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
     }));
     updateDomainExtensionCatalog();
     </script>
+    <?php endif; ?>
 <?php if($is_admin_session) { bc_adm_foot(array("area" => "spadmin")); } else { echo '</main></body></html>'; } ?>
