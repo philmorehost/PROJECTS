@@ -6,6 +6,8 @@ require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_kyc_decision');
 include_once(__DIR__ . "/../func/bc-plate-admin.php"); // §42: bc_adm_head/sidebar/topbar/foot live here - this page used them without ever loading the plate (fatal on open)
 
+require_once __DIR__.'/../func/bc-vendor-compliance-review.php';
+
 // §33: vendor compliance review. Vendors submit BVN/NIN + documents from
 // bc-admin (Account Settings → Vendor KYC); nothing self-approves. A decision
 // here takes CSRF + step-up: approvals need Security PIN + authenticator /
@@ -14,7 +16,7 @@ if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema(
 
 $vkyc_labels = [0 => 'Unverified', 1 => 'Under review', 2 => 'Verified', 3 => 'Rejected'];
 $vkyc_badges = [0 => 'secondary', 1 => 'warning', 2 => 'success', 3 => 'danger'];
-$vkyc_check_labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo (selfie)', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address'];
+$vkyc_check_labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo (selfie)', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address', 'business_registration' => 'KYB: Business registration / CAC', 'beneficial_ownership' => 'KYB: Beneficial ownership'];
 
 // Stream one submitted document to the signed-in super admin only. The
 // upload directory denies direct HTTP access (.htaccess), so this
@@ -34,6 +36,8 @@ if (isset($_GET['doc'])) {
     header('Content-Type: ' . ($mimes[$ext] ?? 'application/octet-stream'));
     header('Content-Disposition: inline; filename="' . basename($path) . '"');
     header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: private, no-store');
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
     readfile($path);
     exit;
 }
@@ -76,9 +80,12 @@ if (isset($_POST['vendor_kyc_decision'])) {
         } else {
             $new_status = $decision === 'approve' ? 2 : 3;
             $reason_esc = mysqli_real_escape_string($connection_server, $reason);
-            mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status='$new_status', kyc_reject_reason=" . ($decision === 'reject' ? "'$reason_esc'" : "NULL") . " WHERE id='$vid'");
-            $doc_status = $decision === 'approve' ? 'approved' : 'rejected';
-            mysqli_query($connection_server, "UPDATE sas_vendor_kyc_documents SET status='$doc_status', reviewed_at=NOW(), reviewed_by='" . (int)$get_logged_spadmin_details['id'] . "', review_note='$reason_esc' WHERE vendor_id='$vid' AND status='pending'");
+            $expected=bc_vcr_consume($_POST['review_ticket']??null,$get_logged_spadmin_details);
+            $review_result=bc_vcr_decide($vid,$decision,$reason,$get_logged_spadmin_details,$expected);
+            if($review_result!==true){
+                $_SESSION['product_purchase_response']='Error: '.$review_result;
+                header('Location: VendorKYC.php?status='.(int)($_POST['return_status']??1));exit;
+            }
             if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details['email'], 'vendor_kyc_' . $decision, 'vendor#' . $vid, $decision === 'reject' ? $reason : 'Vendor compliance approved');
 
             $flash = 'Vendor KYC ' . ($decision === 'approve' ? 'approved' : 'rejected') . ' for ' . ($target['business_name'] ?? $target['email'] ?? ('#' . $vid)) . '.';
@@ -122,11 +129,11 @@ if (!empty($_SESSION['product_purchase_response'])) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<?php bc_adm_head("Vendor KYC Review | " . ($get_all_super_admin_site_details["site_title"] ?? 'VTU Platform'), array("area" => "spadmin")); ?>
+<?php bc_adm_head("Vendor KYC / KYB Review | " . ($get_all_super_admin_site_details["site_title"] ?? 'VTU Platform'), array("area" => "spadmin")); ?>
 </head>
 <body>
 <?php bc_adm_sidebar(array("area" => "spadmin")); ?>
-<?php bc_adm_topbar(array("area" => "spadmin", "title" => "VENDOR KYC REVIEW", "crumb" => "Home / Compliance / Vendor KYC")); ?>
+<?php bc_adm_topbar(array("area" => "spadmin", "title" => "VENDOR KYC / KYB REVIEW", "crumb" => "Home / Compliance / Vendor KYC")); ?>
 
     <section class="section dashboard">
       <div class="row g-4">
@@ -154,6 +161,7 @@ if (!empty($_SESSION['product_purchase_response'])) {
                   $docs = [];
                   $dq = mysqli_query($connection_server, "SELECT * FROM sas_vendor_kyc_documents WHERE vendor_id='$vid' ORDER BY submitted_at DESC");
                   while ($dq && ($dr = mysqli_fetch_assoc($dq))) $docs[] = $dr;
+                  $review_ticket=bc_vcr_ticket($vendor,$docs,$get_logged_spadmin_details);
               ?>
               <div class="border rounded-4 p-3 mb-3">
                 <div class="d-flex flex-wrap justify-content-between gap-2">
@@ -178,6 +186,7 @@ if (!empty($_SESSION['product_purchase_response'])) {
                 <?php if ((int)($vendor['kyc_status'] ?? 0) !== 2): ?>
                 <form method="post" class="row g-2 align-items-end mt-2">
                   <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                  <input type="hidden" name="review_ticket" value="<?php echo htmlspecialchars($review_ticket, ENT_QUOTES, 'UTF-8'); ?>">
                   <input type="hidden" name="vendor_id" value="<?php echo $vid; ?>">
                   <input type="hidden" name="return_status" value="<?php echo $status_filter; ?>">
                   <div class="col-md-3"><label class="form-label small fw-bold text-muted">SECURITY PIN</label><input type="password" name="sec_pin" class="form-control rounded-3" required></div>
@@ -192,6 +201,7 @@ if (!empty($_SESSION['product_purchase_response'])) {
                 <?php else: ?>
                 <form method="post" class="row g-2 align-items-end mt-2">
                   <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                  <input type="hidden" name="review_ticket" value="<?php echo htmlspecialchars($review_ticket, ENT_QUOTES, 'UTF-8'); ?>">
                   <input type="hidden" name="vendor_id" value="<?php echo $vid; ?>">
                   <input type="hidden" name="return_status" value="<?php echo $status_filter; ?>">
                   <div class="col-md-3"><label class="form-label small fw-bold text-muted">SECURITY PIN (to revoke)</label><input type="password" name="sec_pin" class="form-control rounded-3" required></div>

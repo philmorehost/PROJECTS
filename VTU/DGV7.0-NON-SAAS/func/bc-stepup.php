@@ -631,7 +631,7 @@ if (!function_exists('bc_vendor_kyc_ensure_schema')) {
             reviewed_by INT DEFAULT 0,
             review_note VARCHAR(255) NULL,
             KEY vendor_doc (vendor_id, doc_type)
-        )");
+        ) ENGINE=InnoDB");
         $cols = [];
         $q = @mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors");
         while ($q && ($r = mysqli_fetch_assoc($q))) $cols[] = (string)$r['Field'];

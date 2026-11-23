@@ -42,11 +42,75 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
         }
     }
 
-    private val pickSelfie = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            selfieUri = result.data?.data
-            binding.tvSelfieName.text = selfieUri?.lastPathSegment ?: "File selected"
+    private var pendingSelfie: File? = null
+    private val pickSelfie = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = pendingSelfie
+        if (success && file != null && file.exists()) {
+            try {
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(file.path, bounds)
+                val opts = android.graphics.BitmapFactory.Options()
+                while (maxOf(bounds.outWidth, bounds.outHeight) / opts.inSampleSize > 1920) opts.inSampleSize *= 2
+                var original = android.graphics.BitmapFactory.decodeFile(file.path, opts)
+                    ?: throw IllegalStateException("Camera image could not be read")
+                val orientation = android.media.ExifInterface(file.path).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)
+                val matrix = android.graphics.Matrix()
+                when (orientation) {
+                    2 -> matrix.setScale(-1f, 1f)
+                    3 -> matrix.setRotate(180f)
+                    4 -> matrix.setScale(1f, -1f)
+                    5 -> { matrix.setRotate(90f); matrix.postScale(-1f, 1f) }
+                    6 -> matrix.setRotate(90f)
+                    7 -> { matrix.setRotate(270f); matrix.postScale(-1f, 1f) }
+                    8 -> matrix.setRotate(270f)
+                }
+                if (!matrix.isIdentity) {
+                    val rotated = android.graphics.Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
+                    if (rotated !== original) original.recycle()
+                    original = rotated
+                }
+                val scale = minOf(1f, 960f / maxOf(original.width, original.height))
+                val bitmap = android.graphics.Bitmap.createScaledBitmap(original, (original.width * scale).toInt(), (original.height * scale).toInt(), true)
+                FileOutputStream(file).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, it) }
+                if (bitmap !== original) bitmap.recycle()
+                original.recycle()
+                if (file.length() > 512 * 1024) throw IllegalStateException("Photo too large; please retake")
+                selfieUri = Uri.fromFile(file)
+                _binding?.tvSelfieName?.text = "Camera photo ready (${file.length() / 1024} KB)"
+            } catch (e: Exception) {
+                file.delete(); selfieUri = null
+                if (_binding != null) snack(e.message ?: "Please retake your photo")
+            }
+        } else { file?.delete(); selfieUri = null }
+    }
+    private val selfieCameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) captureSelfie() else if (_binding != null) snack("Camera permission is required. Gallery selfies are not accepted.")
+    }
+    private fun captureSelfie() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            selfieCameraPermission.launch(android.Manifest.permission.CAMERA); return
         }
+        try {
+            pendingSelfie?.delete(); selfieUri = null
+            val dir = File(requireContext().cacheDir, "kyc").apply { mkdirs() }
+            val file = File.createTempFile("kyc_camera_", ".jpg", dir)
+            pendingSelfie = file
+            val uri = androidx.core.content.FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", file)
+            pickSelfie.launch(uri)
+        } catch (e: Exception) { if (_binding != null) snack("Live camera unavailable. Please use the secure website camera.") }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        savedInstanceState?.getString("kyc_camera_file")?.let { name ->
+            if (name.matches(Regex("kyc_camera_[A-Za-z0-9_-]+\\.jpg"))) {
+                pendingSelfie = File(File(requireContext().cacheDir, "kyc"), name)
+            }
+        }
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingSelfie?.let { outState.putString("kyc_camera_file", it.name) }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -63,10 +127,8 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
             val intent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             pickGovtId.launch(intent)
         }
-        binding.btnPickSelfie.setOnClickListener {
-            val intent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
-            pickSelfie.launch(intent)
-        }
+        binding.btnPickSelfie.text = "Take live selfie"
+        binding.btnPickSelfie.setOnClickListener { captureSelfie() }
         binding.btnUploadDocuments.setOnClickListener { uploadDocuments() }
         
         // VoveID Verification button

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/../func/bc-live-capture.php";
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include ("../func/bc-admin-config.php");
@@ -468,6 +469,7 @@ if (isset($_POST["update-verification"])) {
 
 // §33: enhanced vendor KYC — document submission for platform review.
 if (isset($_POST["upload-vendor-kyc-doc"])) {
+    bc_validate_csrf();
     if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema();
     $vid = (int)$get_logged_admin_details["id"];
     $upload_dir = $_SERVER['DOCUMENT_ROOT'] . "/uploads/kyc-vendor/";
@@ -477,10 +479,12 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         @file_put_contents($htaccess_file, "<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
     }
     $kinds = [
+        'business_registration' => [['jpg','jpeg','png','webp','pdf'], 8],
+        'beneficial_ownership' => [['jpg','jpeg','png','webp','pdf'], 8],
         'govt_id'          => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
-        'selfie'           => [['jpg', 'jpeg', 'png', 'webp'], 8],
+        'selfie'           => [['jpg'], 0.5],
         'proof_of_address' => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
-        'liveliness_video' => [['mp4', 'mov', 'webm', 'mkv'], 25],
+        'liveliness_video' => [['mp4', 'webm'], 3],
     ];
     $saved = [];
     foreach ($kinds as $input_name => $spec) {
@@ -489,6 +493,7 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
         $tmp = $_FILES[$input_name]['tmp_name'];
         if (!is_uploaded_file($tmp)) continue;
+        if (in_array($input_name, ['selfie','liveliness_video'], true) && !bc_live_media_prepare($tmp, $input_name)) continue;
         if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
         $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $exts, true)) continue;
@@ -501,6 +506,8 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         }
     }
     if ($saved) {
+        // Replacement evidence must be reviewed again; never retain an old approval.
+        mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status=1,kyc_reject_reason=NULL WHERE id='$vid'");
         $new_status = function_exists('bc_vendor_kyc_refresh_status') ? bc_vendor_kyc_refresh_status($vid) : 0;
         if ($new_status === 1) {
             $_SESSION["product_purchase_response"] = "KYC documents submitted. Every required item is provided — your compliance file is now waiting for super-admin review.";
@@ -1903,18 +1910,21 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                         <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3">
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Live Photo / Selfie (image, max 8 MB)</label>
-                                        <input type="file" name="selfie" accept="image/*" capture="user" class="form-control rounded-3">
+                                        <label class="form-label small fw-bold">Live Photo / Selfie (camera only, max 512 KB)</label>
+                                        <?php bc_live_capture_widget('selfie'); ?>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)</label>
                                         <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3">
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Liveliness Video (max 25 MB)</label>
-                                        <input type="file" name="liveliness_video" accept="video/*" capture="user" class="form-control rounded-3">
+                                        <label class="form-label small fw-bold">Live Video (camera only, max 3 MB)</label>
+                                        <?php bc_live_capture_widget('liveliness_video', true); ?>
                                     </div>
                                 </div>
+                                <div class="mt-3"><label class="form-label">KYB: Business registration / CAC (image or PDF, max 8 MB)</label><input type="file" name="business_registration" accept="image/*,application/pdf" class="form-control"></div>
+                                <div class="mt-3"><label class="form-label">KYB: Beneficial ownership document (image or PDF, max 8 MB)</label><input type="file" name="beneficial_ownership" accept="image/*,application/pdf" class="form-control"></div>
+                                <p class="small text-muted">Business evidence is reviewed by platform compliance. Uploading does not prove registration or grant financial product eligibility.</p>
                                 <button name="upload-vendor-kyc-doc" class="btn btn-outline-primary px-5 rounded-pill fw-bold mt-3">Upload Documents</button>
                             </form>
                             <?php if ($vkyc_docs): ?>

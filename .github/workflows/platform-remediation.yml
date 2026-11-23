@@ -5,6 +5,11 @@ on:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-vendor-compliance-review.php'
+      - 'VTU/**/asset/bc-live-capture.js'
+      - 'VTU/**/web/KYCVerification.php'
+      - 'VTU/**/web/api/kyc.php'
       - 'VTU/**/web/ESIM.php'
       - 'VTU/**/func/bc-vendor-registration*.php'
       - 'VTU/**/web/paystack_callback.php'
@@ -102,6 +107,11 @@ on:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-vendor-compliance-review.php'
+      - 'VTU/**/asset/bc-live-capture.js'
+      - 'VTU/**/web/KYCVerification.php'
+      - 'VTU/**/web/api/kyc.php'
       - 'VTU/**/web/ESIM.php'
       - 'VTU/**/func/bc-vendor-registration*.php'
       - 'VTU/**/web/paystack_callback.php'
@@ -211,6 +221,7 @@ jobs:
         run: |
           node VTU/tests/harness/public-navigation-browser.test.mjs
           node VTU/tests/harness/admin-pin-setup-ui-test.mjs
+          node VTU/tests/harness/live-capture-ui-test.mjs
   remediation:
     runs-on: ubuntu-latest
     strategy:
@@ -221,12 +232,16 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '${{ matrix.php }}'
+          extensions: gd, fileinfo
           coverage: none
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Complimentary upgrade and administrative inline OTP contracts
         run: |
+          set -e
+          exec > >(tee "$RUNNER_TEMP/remediation.log") 2>&1
+          trap 'echo "::error::Regression command failed: $BASH_COMMAND"' ERR
           php VTU/tests/complimentary_upgrade_test.php
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
@@ -246,6 +261,7 @@ jobs:
           php VTU/tests/admin_pin_setup_test.php
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
+          php VTU/tests/vendor_compliance_review_test.php
           php VTU/tests/vendor_registration_test.php
           php VTU/tests/vendor_registration_commerce_test.php
           php VTU/tests/registration_guard_test.php
@@ -419,3 +435,8 @@ jobs:
           BC_SERVICE_REQUEST_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/service_request_idempotency_mysql_test.php
+
+      - name: Vendor compliance evidence review atomicity in disposable MySQL
+        env:
+          BC_VENDOR_COMPLIANCE_CI: '1'
+        run: php VTU/tests/vendor_compliance_review_mysql_test.php
