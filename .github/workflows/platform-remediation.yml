@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/func/bc-admin-pin-setup.php'
+      - 'VTU/**/func/bc-plate-admin.php'
+      - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
       - 'VTU/**/index-bc-style-template-home.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
@@ -80,6 +83,9 @@ on:
   pull_request:
     paths:
       - 'VTU/cryptocurrency-idea/**'
+      - 'VTU/**/func/bc-admin-pin-setup.php'
+      - 'VTU/**/func/bc-plate-admin.php'
+      - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
       - 'VTU/**/index-bc-style-template-home.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
@@ -168,7 +174,9 @@ jobs:
       - name: Install isolated browser test dependencies
         run: npm ci --prefix VTU/tests/harness
       - name: Homepage browser layout and accessible navigation
-        run: node VTU/tests/harness/public-navigation-browser.test.mjs
+        run: |
+          node VTU/tests/harness/public-navigation-browser.test.mjs
+          node VTU/tests/harness/admin-pin-setup-ui-test.mjs
   remediation:
     runs-on: ubuntu-latest
     strategy:
@@ -201,6 +209,7 @@ jobs:
           npm test --prefix VTU/cryptocurrency-idea/service
           php VTU/tests/public_template_selection_test.php
           php VTU/tests/public_home_test.php
+          php VTU/tests/admin_pin_setup_test.php
           php VTU/tests/registration_guard_test.php
           php VTU/tests/feature_email_otp_test.php
           php VTU/tests/feature_action_security_test.php
@@ -348,3 +357,9 @@ jobs:
           BC_KYB_REVIEW_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/kyb_review_mysql_test.php
+
+      - name: First-time admin PIN durable save and concurrent refusal on disposable MySQL
+        env:
+          BC_ADMIN_PIN_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/admin_pin_setup_mysql_test.php

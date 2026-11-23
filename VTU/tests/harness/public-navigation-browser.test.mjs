@@ -1,3 +1,4 @@
+process.on('uncaughtException', error => { console.error('::error::' + String(error.stack || error).replace(/[\r\n]+/g, ' ')); process.exit(1); });
 // Real Chromium cascade regression. Requires npm ci in this harness directory.
 import chromium from '@sparticuz/chromium';
 import { chromium as playwright } from 'playwright-core';

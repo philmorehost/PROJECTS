@@ -43,8 +43,8 @@ foreach ($roots as $name => $root) {
 
     /* bc-admin recovery */
     $rec = file_get_contents($root . '/bc-admin/PasswordRecovery.php');
-    chk(strpos($rec, '$_SESSION["admin-recovery-google"] = 1;') !== false, "$name bc-admin Recovery: Google verification marks the session");
-    chk(strpos($rec, 'if($bc_google_verified || $_SESSION["admin-recovery-code"] == $recovery_code)') !== false, "$name bc-admin Recovery: emailed code waived only for Google-verified resets");
+    chk(strpos($rec, "bc_google_recovery_grant('admin',") !== false && strpos($rec, '$_SESSION["admin-recovery-google"] = 1;') === false, "$name bc-admin Recovery: scoped expiring grant replaces boolean approval");
+    chk(strpos($rec, "bc_google_recovery_matches('admin',") !== false && strpos($rec, "bc_recovery_code_valid('admin',") !== false && strpos($rec, '$_SESSION["admin-recovery-code"] == $recovery_code') === false, "$name bc-admin Recovery: current identity proof or verified email challenge required");
     chk(strpos($rec, '($bc_google_verified || (!empty($recovery_code)') !== false, "$name bc-admin Recovery: code format still enforced for email resets");
     chk(strpos($rec, 'g_id_onload') !== false && strpos($rec, 'empty($_SESSION["admin-recovery-username"])') !== false, "$name bc-admin Recovery: Google reset offered on step 1 only");
     chk(strpos($rec, 'unset($_SESSION["admin-recovery-google"]);') !== false, "$name bc-admin Recovery: google flag cleared after use");
@@ -60,8 +60,8 @@ chk(strpos($spLogin, "UPDATE sas_super_admin SET google_id=") !== false, 'spadmi
 chk(strpos($spLogin, 'g_id_onload') !== false, 'spadmin Login: GSI button rendered');
 
 $spRec = file_get_contents('DGV7.0-SAAS/bc-spadmin/PasswordRecovery.php');
-chk(strpos($spRec, '$_SESSION["spadmin-recovery-google"] = 1;') !== false, 'spadmin Recovery: Google verification marks the session');
-chk(strpos($spRec, 'if($bc_google_verified || $_SESSION["spadmin-recovery-code"] == $recovery_code)') !== false, 'spadmin Recovery: code waived only when Google-verified');
+chk(strpos($spRec, "bc_google_recovery_grant('spadmin',0,") !== false && strpos($spRec, '$_SESSION["spadmin-recovery-google"] = 1;') === false, 'spadmin Recovery: scoped grant replaces boolean approval');
+chk(strpos($spRec, "bc_google_recovery_matches('spadmin',0,") !== false && strpos($spRec, "bc_recovery_code_valid('spadmin',0,") !== false && strpos($spRec, '$_SESSION["spadmin-recovery-code"] == $recovery_code') === false, 'spadmin Recovery: current identity proof or verified email challenge required');
 chk(strpos($spRec, 'g_id_onload') !== false, 'spadmin Recovery: GSI button rendered');
 
 $spSet = file_get_contents('DGV7.0-SAAS/bc-spadmin/AccountSettings.php');
