@@ -1,5 +1,6 @@
 <?php
 if(getenv('BC_VENDOR_REG_CI')!=='1')throw new RuntimeException('Disposable CI only');
+set_exception_handler(function($e){echo '::error::'.str_replace(["\n","\r",'%'],[' ',' ','pct'],$e->getMessage()).' at line '.$e->getLine()."\n";exit(1);});
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 $root=__DIR__.'/../DGV7.0-'.$edition.'/func/';
 // Factor, demo, mail and security-DDL doubles only. Challenges, policy, locks, audit and rate storage are real SQL.

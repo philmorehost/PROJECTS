@@ -73,7 +73,7 @@ require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
             header('Location: VendorRegistrations.php');exit;
         }
 
-        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id'");
+        $result = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$pending_id' AND status=0");
         if (!$result) {
             error_log("[VendorReg] Error fetching pending vendor: " . mysqli_error($connection_server));
             $_SESSION["page_alert"] = "An error occurred. Please try again.";
@@ -201,8 +201,8 @@ require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
                         $log_sql = "INSERT INTO sas_vendor_subscriptions (vendor_id, package_id, purchase_date, expiry_date, amount_paid) VALUES ('$new_vendor_id', '$package_id', '$purchase_date', '$expiry_date', '$price')";
                         if (!mysqli_query($connection_server, $log_sql)) { error_log("[VendorReg] Error logging subscription: " . mysqli_error($connection_server)); }
 
-                        // 6. Delete from pending vendors
-                        if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
+                        // 6. Archive the application; retain invoice, identity and payment evidence.
+                        if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET status=1 WHERE id='$pending_id' AND status=0")) { error_log("[VendorReg] Error deleting pending vendor: " . mysqli_error($connection_server)); }
 
                         // 6b. Add the platform's actual host (app_base_url), falling back to the
                         // legacy website_url only for older pending-vendor records.
@@ -296,7 +296,7 @@ require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
                 $firstname = $pending_vendor['firstname'];
                 $lastname = $pending_vendor['lastname'];
 
-                if (!mysqli_query($connection_server, "DELETE FROM sas_pending_vendors WHERE id='$pending_id'")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
+                if (!mysqli_query($connection_server, "UPDATE sas_pending_vendors SET status=2 WHERE id='$pending_id' AND status=0")) { error_log("[VendorReg] Error declining vendor: " . mysqli_error($connection_server)); $_SESSION["page_alert"] = "An error occurred. Please try again."; header("Location: VendorRegistrations.php"); exit; }
 
                 // Send rejection email
                 $email_placeholders = array(
@@ -311,7 +311,7 @@ require_once __DIR__.'/../func/bc-vendor-registration-commerce.php';
                 }
                 sendVendorEmail($email, $email_subject, $email_body);
 
-                $_SESSION['page_alert'] = "Vendor registration declined.";
+                $_SESSION['page_alert'] = "Vendor registration declined and archived; evidence retained.";
             }
         } else {
             $_SESSION['page_alert'] = "Invalid registration ID.";
@@ -361,7 +361,8 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                     <?php
                                         $sql = "SELECT pv.*, bp.name as package_name
                                                 FROM sas_pending_vendors pv
-                                                JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
+                                                LEFT JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
+                                                WHERE pv.status=0
                                                 ORDER BY pv.reg_date DESC";
                                         $result = mysqli_query($connection_server, $sql);
                                         if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
@@ -456,7 +457,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
 
                                                 <div class="btn-group btn-group-sm mt-1">
                                                     <button type="button" class="btn btn-primary rounded-start-pill px-3 fw-bold" <?php try{if(trim($row['payment_status'])!=='paid'||bc_vreg_approval_error($row,bc_vreg_policy())!=='')echo 'disabled aria-disabled="true"';}catch(Throwable $e){echo 'disabled aria-disabled="true"';} ?> onclick="sec33VrAction('approve', <?php echo (int)$row['id']; ?>, 'Approve new vendor?', 'Approve and activate this vendor account? This needs your PIN + authenticator code and is audited.', 'Approve Vendor')">Approve</button>
-                                                    <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Reject and delete this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
+                                                    <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Decline and archive this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
                                                 </div>
                                             </div>
                                         </td>

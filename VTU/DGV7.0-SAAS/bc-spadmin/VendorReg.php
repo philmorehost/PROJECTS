@@ -46,6 +46,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             }
             $mailbox=bc_vreg_verified_mailbox($vreg_policy);
             if(!$mailbox||!hash_equals($mailbox['email'],$vreg_email))throw new RuntimeException('Verify your email before accessing registration.');
+            bc_vreg_limit('application_email',$vreg_email,10,86400);
+            bc_vreg_limit('application_device',$vreg_device,10,86400);
             if(($_POST['payment_method']??'')==='bank_deposit'&&$vreg_policy['payment_mode']!=='both')throw new RuntimeException('Manual registration deposits are disabled.');
             if(!isset($_POST['create-profile']))throw new RuntimeException('Invalid registration action.');
             $input_error=bc_vreg_input($_POST);if($input_error!=='')throw new RuntimeException($input_error);

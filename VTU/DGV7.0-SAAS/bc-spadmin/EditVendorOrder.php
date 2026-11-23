@@ -10,7 +10,7 @@ if (!isset($_GET['id'])) {
 }
 
 $id = mysqli_real_escape_string($connection_server, $_GET['id']);
-$pv_query = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$id'");
+$pv_query = mysqli_query($connection_server, "SELECT * FROM sas_pending_vendors WHERE id='$id' AND status=0");
 $pv = mysqli_fetch_assoc($pv_query);
 
 if (!$pv) {

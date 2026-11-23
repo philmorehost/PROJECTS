@@ -43,6 +43,7 @@ function bc_vreg_binding(){
 function bc_vreg_send($email,$policy,$deliver=null){
  global $connection_server;
  if(!$policy['enabled'])throw new RuntimeException('Vendor registration is currently closed.');
+ if(function_exists('bc_vreg_device'))bc_vreg_limit('mail_browser',bc_vreg_device(),5,900);
  $ip=(string)($_SERVER['REMOTE_ADDR']??'unknown');bc_vreg_limit('mail_ip',$ip,5,900);bc_vreg_limit('mail_address',$email,3,900);bc_vreg_limit('mail_global','platform',100,900);
  $token=bin2hex(random_bytes(32));$code=(string)random_int(100000,999999);$binding=bc_vreg_binding();
  bc_q('DELETE FROM sas_vendor_signup_challenges WHERE binding=? OR expires_at<NOW()',[$binding]);

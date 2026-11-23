@@ -43,7 +43,7 @@ function bc_vreg_online_receipt($data,$requested_reference){
  if(!is_array($data)||($data['status']??'')!=='success'||!is_string($data['reference']??null)||!hash_equals($requested_reference,$data['reference']))return false;
  $connection_server->begin_transaction();try{
   $row=bc_q_row('SELECT * FROM sas_pending_vendors WHERE paystack_reference=? FOR UPDATE',[$requested_reference]);
-  if(!$row||$row['payment_method']!=='paystack')throw new RuntimeException('Unknown registration payment.');$q=bc_vreg_invoice($row);
+  if(!$row||$row['payment_method']!=='paystack'||!in_array($row['payment_status'],['pending','paid'],true))throw new RuntimeException('Unknown registration payment.');$q=bc_vreg_invoice($row);
   if(($data['currency']??'')!=='NGN'||!is_int($data['amount']??null)||$data['amount']!==$q['total']||strtolower((string)($data['customer']['email']??''))!==strtolower($row['email'])||(string)($data['metadata']['pending_vendor_id']??'')!==(string)$row['id']||($data['metadata']['type']??'')!=='vendor_subscription')throw new RuntimeException('Payment mismatch.');
   if($row['payment_status']==='paid'){if(!bc_vreg_receipt_matches($row))throw new RuntimeException('Untrusted payment state.');$connection_server->commit();return true;}
   $p=['method'=>'paystack','amount'=>$q['total'],'currency'=>'NGN','invoice_hash'=>hash('sha256',$row['price_snapshot']),'reference'=>$requested_reference,'verified_at'=>gmdate('c')];
@@ -57,7 +57,7 @@ function bc_vreg_manual_receipt($id,$actor,$input){
  if((int)($verified['actor']??0)!==(int)($actor['id']??0)||(int)($verified['pending']??0)!==(int)$id)throw new RuntimeException('Verified platform-owner action required.');
  $policy=bc_vreg_policy();if(($policy['payment_mode']??'online')!=='both')throw new RuntimeException('Manual registration deposits are disabled.');
  bc_security_ensure_schema();$connection_server->begin_transaction();try{
-  $row=bc_q_row('SELECT * FROM sas_pending_vendors WHERE id=? FOR UPDATE',[(int)$id]);if(!$row||$row['payment_method']!=='bank_deposit'||$row['payment_status']==='paid')throw new RuntimeException('Invalid manual payment action.');$q=bc_vreg_invoice($row);
+  $row=bc_q_row('SELECT * FROM sas_pending_vendors WHERE id=? FOR UPDATE',[(int)$id]);if(!$row||(int)($row['status']??-1)!==0||$row['payment_method']!=='bank_deposit'||$row['payment_status']!=='pending')throw new RuntimeException('Invalid manual payment action.');$q=bc_vreg_invoice($row);
   $reference=$input['deposit_reference']??'';if(!is_string($reference)||!preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{7,99}\z/D',$reference)||bc_vreg_minor($input['deposit_amount']??'')!==$q['total']||($input['deposit_confirmed']??'')!=='1')throw new RuntimeException('Confirm the exact NGN amount and bank statement reference, not just an uploaded receipt.');
   $p=['method'=>'bank_deposit','amount'=>$q['total'],'currency'=>'NGN','invoice_hash'=>hash('sha256',$row['price_snapshot']),'reference'=>$reference,'reviewer'=>(int)$actor['id'],'verified_at'=>gmdate('c')];
   if(bc_q('INSERT INTO sas_vendor_signup_receipts(reference,pending_id) VALUES(?,?)',['bank:'.strtolower($reference),(int)$id])!==true||!bc_sec_audit(0,'spadmin',(string)$actor['id'],'vendor_manual_payment','pending#'.(int)$id,'NGN '.bc_vreg_decimal($q['total']).'; reference='.$reference)||bc_q("UPDATE sas_pending_vendors SET payment_status='paid',payment_evidence=? WHERE id=?",[json_encode($p,JSON_THROW_ON_ERROR),(int)$id])!==true)throw new RuntimeException('Payment record unavailable.');
@@ -66,7 +66,7 @@ function bc_vreg_manual_receipt($id,$actor,$input){
 }
 function bc_vreg_device(){
  $value=$_COOKIE['bc_vendor_device']??null;
- if(!is_string($value)||!preg_match('/\A[a-f0-9]{64}\z/D',$value)){$value=bin2hex(random_bytes(32));setcookie('bc_vendor_device',$value,['expires'=>time()+31536000,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);}
+ if(!is_string($value)||!preg_match('/\A[a-f0-9]{64}\z/D',$value)){$value=bin2hex(random_bytes(32));setcookie('bc_vendor_device',$value,['expires'=>time()+31536000,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);$_COOKIE['bc_vendor_device']=$value;}
  return hash('sha256',$value);
 }
 /** Called inside the pending-application INSERT transaction. All keys are locked in stable order. */
