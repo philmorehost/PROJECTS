@@ -18,8 +18,10 @@ require $base.'bc-crypto-reservations.php';
 require $base.'bc-crypto-v2-reconcile.php';
 require $base.'bc-crypto-deposit-schema.php';
 require $base.'bc-crypto-custody-schema.php';
+require $base.'bc-crypto-customer-binding-schema.php';
 require $base.'bc-crypto-custody-evidence-schema.php';
 require $base.'bc-crypto-custody-evidence.php';
+require $base.'bc-crypto-customer-binding.php';
 require $base.'bc-crypto-deposits.php';
 require $base.'bc-crypto-route-schema.php';
 require $base.'bc-crypto-routes.php';
@@ -109,10 +111,10 @@ try {
     // Minimal legacy fixture: never an application's sas_users or live balance table.
     bc_q('CREATE TABLE sas_users (id BIGINT UNSIGNED PRIMARY KEY,vendor_id BIGINT UNSIGNED,status INT,is_blocked INT,force_password_change INT,kyc_status INT) ENGINE=InnoDB');
     bc_q('INSERT INTO sas_users VALUES(11,7,1,0,0,2)');
-    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements(),bc_crypto_custody_schema_statements(),bc_crypto_custody_evidence_schema_statements(),bc_crypto_route_schema_statements(),bc_crypto_poll_schema_statements(),bc_crypto_poll_lease_schema_statements(),bc_crypto_poll_overlap_schema_statements(),bc_crypto_poll_review_schema_statements(),bc_crypto_poll_alert_schema_statements(),bc_crypto_poll_worker_schema_statements(),bc_crypto_poll_recovery_schema_statements(),bc_crypto_poll_delivery_schema_statements());
+    $ddl=array_merge(bc_crypto_v2_schema_statements(),bc_crypto_governance_schema_statements(),bc_crypto_deposit_schema_statements(),bc_crypto_custody_schema_statements(),bc_crypto_customer_binding_schema_statements(),bc_crypto_custody_evidence_schema_statements(),bc_crypto_route_schema_statements(),bc_crypto_poll_schema_statements(),bc_crypto_poll_lease_schema_statements(),bc_crypto_poll_overlap_schema_statements(),bc_crypto_poll_review_schema_statements(),bc_crypto_poll_alert_schema_statements(),bc_crypto_poll_worker_schema_statements(),bc_crypto_poll_recovery_schema_statements(),bc_crypto_poll_delivery_schema_statements());
     foreach($ddl as $sql) bc_q($sql);
     foreach($ddl as $sql) bc_q($sql); // Additive installer is repeatable, not a schema repair tool.
-    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===30,'twenty-nine production tables plus fixture are InnoDB; second install succeeds');
+    check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===32,'thirty-one production tables plus fixture are InnoDB; second install succeeds');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_asset_policies')===0,'migration creates no enabled policies');
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_catalogue_stale');
     $network=['asset_network'=>'USDT:TRX','platform_enabled'=>false,'provider_deposit_available'=>true,'provider_withdraw_available'=>true,'confirmations'=>'20','withdrawal_confirmations'=>'40'];
@@ -196,6 +198,7 @@ try {
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     require __DIR__.'/crypto_dashboard_mysql_cases.php';
+    require __DIR__.'/crypto_customer_binding_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
 } finally {
     $connection_server->rollback();

@@ -1,0 +1,36 @@
+<?php
+if(!isset($created,$name)||!$created||!preg_match('/^crypto_ci_[a-f0-9]{24}$/D',$name))throw new RuntimeException('Disposable runner required');
+$ba=['role'=>'spadmin','id'=>31];$bb=['role'=>'spadmin','id'=>32];$bi=bc_crypto_custody_identity('testnet','555123');$bp=bc_crypto_custody_identity('testnet','555999');
+$review=['state'=>'review_only','proposed_by'=>31,'reviewed_by'=>32,'valid_until'=>time()+3600,'evidence_hash'=>str_repeat('a',64)];
+$bd=$review+['model'=>'dedicated_subaccount','bindings'=>['7'=>$review]];
+foreach([$bi,$bp] as $id)bc_q("INSERT INTO sas_crypto_v2_custody_accounts VALUES(?,'bybit','testnet',1,?)",[$id,bc_crypto_gov_json($bd)]);
+$m=['provider'=>'bybit','evidence_kind'=>'parent_relationship_v1','custody_account'=>$bi,'reported_parent_account'=>$bp,'environment'=>'testnet','registry_revision'=>1,'parent_registry_revision'=>1,'reported_parent_relationship_compared'=>true,'authenticated_read_completed'=>true,'identity_checked_before_and_after'=>true,'live_enabled'=>false,'started_at'=>time(),'verified_at'=>time(),'expires_at'=>time()+900];
+foreach(['sub'=>71,'master'=>72] as $kind=>$source){foreach(['KEY'=>'synthetic-binding-'.$source,'SECRET'=>'synthetic-binding-secret-not-real','ENV'=>'testnet','EXPECTED_IPS'=>'192.0.2.1'] as $k=>$v)putenv('BC_BYBIT_VENDOR_'.$source.'_'.$k.'='.$v);$conf=bc_bybit_config($source);$m[$kind.'_source_vendor_id']=$source;$m[$kind.'_config_fingerprint']=hash('sha256',bc_crypto_gov_json([$source,'testnet',$conf['key'],$conf['expected_ips']]));}
+bc_q('INSERT INTO sas_vendors(id,status,is_blocked) VALUES(71,1,0),(72,1,0)');
+$funds=bc_q_row('SELECT COUNT(*) AS n,SUM(units) AS total FROM sas_crypto_v2_accounts');$routes=scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes');
+$plain=bc_crypto_custody_evidence_store($ba,$bi,'testnet',bc_crypto_gov_json($m),1);bc_crypto_custody_evidence_view($ba,$bi,'testnet',$plain,1);
+$input=['vendor_id'=>'7','user_id'=>'11','evidence_hash'=>$plain];
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',$input),'crypto_binding_attestation_required');
+$attested=bc_crypto_parent_attest($m);$bad=$attested;$bad['registry_revision']=2;
+reject_db(fn()=>bc_crypto_binding_evidence_validate($bad,$bi,'testnet',1,time()),'crypto_binding_attestation_invalid');
+reject_db(fn()=>bc_crypto_binding_evidence_validate($attested,$bi,'testnet',1,$m['expires_at']),'crypto_binding_evidence_stale');
+$hash=bc_crypto_custody_evidence_store($ba,$bi,'testnet',bc_crypto_gov_json($attested),1);$input['evidence_hash']=$hash;
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',$input),'crypto_evidence_fresh_view_required');
+bc_crypto_custody_evidence_view($ba,$bi,'testnet',$hash,1);
+bc_q('UPDATE sas_users SET kyc_status=0 WHERE id=11');reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',$input),'crypto_binding_customer_restricted');bc_q('UPDATE sas_users SET kyc_status=2 WHERE id=11');
+$r=bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',$input);check_db($r['binding_state']==='proposed'&&!$r['live_enabled'],'customer binding proposal is non-live');
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'review',['binding_revision'=>'1']),'crypto_binding_independent_review_required');
+reject_db(fn()=>bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']),'crypto_evidence_fresh_view_required');
+bc_crypto_custody_evidence_view($bb,$bi,'testnet',$hash,1);
+bc_q('UPDATE sas_crypto_v2_custody_accounts SET revision=2 WHERE custody_account=?',[$bp]);reject_db(fn()=>bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']),'crypto_binding_context_changed');bc_q('UPDATE sas_crypto_v2_custody_accounts SET revision=1 WHERE custody_account=?',[$bp]);
+bc_q('UPDATE sas_vendors SET is_blocked=1 WHERE id=72');reject_db(fn()=>bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']),'crypto_binding_customer_restricted');bc_q('UPDATE sas_vendors SET is_blocked=0 WHERE id=72');
+putenv('BC_BYBIT_VENDOR_71_KEY=synthetic-binding-rotated');reject_db(fn()=>bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']),'crypto_binding_config_changed');putenv('BC_BYBIT_VENDOR_71_KEY=synthetic-binding-71');
+$connection_server->query("CREATE TRIGGER fail_binding_audit BEFORE INSERT ON sas_crypto_v2_customer_binding_audit FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected binding audit failure'");
+try{bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']);throw new RuntimeException('Expected audit failure');}catch(mysqli_sql_exception $e){}
+check_db(bc_q_row('SELECT state FROM sas_crypto_v2_customer_bindings WHERE custody_account=?',[$bi])['state']==='proposed','failed audit rolls back binding transition');$connection_server->query('DROP TRIGGER fail_binding_audit');
+$r=bc_crypto_customer_binding_save($bb,$bi,'testnet',1,'review',['binding_revision'=>'1']);check_db($r['binding_state']==='review_only'&&!$r['live_enabled'],'independent review never activates funding');
+$row=bc_q_row('SELECT * FROM sas_crypto_v2_customer_bindings WHERE custody_account=?',[$bi]);check_db((int)$row['valid_until_epoch']<=$m['expires_at'],'review cannot outlive relationship evidence');
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'1']),'crypto_binding_edit_conflict');
+bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'revoke',['binding_revision'=>'2']);
+reject_db(fn()=>bc_crypto_customer_binding_save($ba,$bi,'testnet',1,'propose',array_merge($input,['user_id'=>'902'])),'crypto_binding_already_reserved');
+check_db(bc_q_row('SELECT COUNT(*) AS n,SUM(units) AS total FROM sas_crypto_v2_accounts')===$funds&&scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_deposit_routes')===$routes,'binding workflow cannot change funds, holds or enabled routes');

@@ -76,3 +76,34 @@ queried or displayed. No candidate, active route, registry approval or balance i
 changed. Missing separate configurations or unsupported key/account models fail
 closed; do not create new keys or change their permissions merely to bypass a
 failure. This check has synthetic transport coverage, not live-provider proof.
+
+## Customer/subaccount review reservations
+
+The platform Custody page supports proposing, independently reviewing and revoking
+one immutable customer reservation per subaccount fingerprint. Two new additive
+InnoDB tables hold reservations and revisioned audits; install only through the
+existing explicit reviewed CLI schema process. Requests perform no DDL.
+
+Before proposal or review, the workflow requires a fresh audited view of exact
+relationship evidence by that actor, approved dedicated-subaccount custody and
+tenant context, active vendor/customer and completed KYC, unchanged child/parent
+registry revisions, active source vendors and matching configured key/IP
+fingerprints. The relationship manifest must carry a domain-separated server
+HMAC attestation using the protected evidence key: manually stored JSON cannot
+assert that an authenticated provider comparison took place. Old unattested
+relationship evidence must be recollected; do not manually edit it.
+
+Proposal reserves the subaccount permanently for the specified vendor/customer.
+Review must be by a different platform actor. Review expiry is capped by the
+relationship evidence's original 15-minute expiry and current custody/tenant
+expiry. Revocation is still available with stale/missing evidence. Revocation
+or expiry does not permit reassignment. Renewal/reproposal is intentionally not
+implemented; a controlled renewal design is still required before operational
+use. The stored review state is not a current eligibility or funding grant.
+
+All changes and audit rows commit together, under custody/reservation and
+customer/vendor locks. Nothing in this workflow queries an address, grants
+custody, updates deposit routes, clears risk or posts money. Independent reviewers
+must inspect the exact vendor/customer mapping shown beside the evidence digest;
+provider parenthood does not itself establish customer ownership. Native tests
+use synthetic attestations in disposable databases, not real provider accounts.
