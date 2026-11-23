@@ -306,3 +306,22 @@ Operator guide: `PAID_GATEWAY_ACCESS.md`. Source only: no deployment, production
 migration, credential entry or provider calls. Super-admin complimentary overrides,
 isolated clone upgrade endpoint and the remaining site-wide OTP/KYC audit are not
 claimed complete by this batch. Crypto staging remains paused.
+
+
+## Administrative funding regression and independent action channels
+
+Restored explicit vendor-email-to-ID resolution and explicit tenant user funding;
+removed host/global resolver dependence from administrative wallet adjustments.
+Added strict positive amounts, per-form replay binding, source-bound full refunds,
+inline SENT email buttons and inline wallet outcomes without clearing inputs on
+error. Added independent platform-default/vendor action-channel preferences with
+explicit PIN-only acknowledgement, password+PIN+existing-factor protected policy
+changes, policy-aware settings unlock and CSRF on settings forms/POSTs. Common user,
+paid API and app-update confirmation components reflect enabled channels; vendor
+management OTP is now inline too. Existing enrolment/reset/compliance mandates,
+financial holds and specialist custody checks remain intact. Login/recovery checks
+are not disabled by action preferences. See `ADMIN_WALLET_AND_ACTION_SECURITY.md`.
+
+Source only, no deployment, production mutation or mail/provider calls. The broader
+web/app auth/KYC audit, isolated clone upgrade and complimentary platform upgrade
+route are not marked complete by this batch. Crypto staging stays paused.

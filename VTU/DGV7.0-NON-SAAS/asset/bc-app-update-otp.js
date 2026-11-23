@@ -20,6 +20,7 @@
                 var data = await response.json();
                 if (!response.ok || data.status !== 'success') throw new Error(data.message || 'OTP could not be sent. Please retry.');
                 status.textContent = 'OTP SENT';
+                button.textContent='SENT';if(form.elements.factor_method)form.elements.factor_method.value='email';
             } catch (error) {
                 status.textContent = error instanceof SyntaxError ? 'Verification unavailable. Your form values have been kept.' : error.message;
             } finally { button.disabled = false; }
