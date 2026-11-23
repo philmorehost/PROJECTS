@@ -62,6 +62,7 @@ function bc_enrollment_policy_verify($table,$actor,$input) {
 }
 function bc_enrollment_change_password($table,$actor,$input) {
     if (!in_array($table,['sas_users','sas_vendors'],true) || empty($actor['force_password_change'])) return 'Password change is not required.';
+    if ((isset($actor['status']) && (int)$actor['status']!==1) || !empty($actor['is_blocked']))return 'This account cannot complete setup.';
     $old=(string)($input['old_password']??'');$new=(string)($input['new_password']??'');
     if(!bc_verify_password($old,$actor['password']))return 'Current password is incorrect.';
     if(strlen($new)<12 || strlen($new)>72 || $new!==($input['confirm_password']??'') || bc_verify_password($new,$actor['password']))return 'Use a different password of 12–72 characters and confirm it exactly.';
@@ -73,9 +74,22 @@ function bc_enrollment_change_password($table,$actor,$input) {
     $params=[bc_hash_password($new),password_hash($pin,PASSWORD_DEFAULT)];
     if($table==='sas_users')$params[]=$pin;
     $params[]=(int)$actor['id'];$params[]=(string)$actor['password'];
+    // Reject stale credential, identity, account-status and tenant state, not only a stale password.
+    $snapshot='';
+    foreach(['vendor_id','email','google_id','security_pin','transaction_pin','status','is_blocked'] as $field) {
+        if(array_key_exists($field,$actor)){$snapshot.=" AND `$field` <=> ?";$params[]=$actor[$field];}
+    }
     // Password, PIN and clearing the restriction succeed or fail in ONE compare-and-set.
-    $saved=bc_q("UPDATE `$table` SET password=?,security_pin=?$pin_sql,force_password_change=0 WHERE id=? AND password=? AND force_password_change=1",$params,$changed);
+    $saved=bc_q("UPDATE `$table` SET password=?,security_pin=?$pin_sql,force_password_change=0 WHERE id=? AND password=? AND force_password_change=1$snapshot",$params,$changed);
     return $saved===true && $changed===1 ? '' : 'Could not save your password and PIN. Refresh and try again.';
+}
+/** Reset completion never upgrades or restamps the credential-changing session. */
+function bc_enrollment_reset_signout($role) {
+    $_SESSION=[];
+    if(session_status()===PHP_SESSION_ACTIVE)session_regenerate_id(true);
+    $_SESSION['product_purchase_response']='Password and security PIN saved. Sign in again to continue required security setup.';
+    header('Cache-Control: no-store');
+    header('Location: '.($role==='vendor'?'/bc-admin/Login.php':'/web/Login.php'));exit;
 }
 function bc_enrollment_setup_page($role,$actor) {
     global $connection_server;
@@ -90,7 +104,7 @@ function bc_enrollment_setup_page($role,$actor) {
         $action=(string)($_POST['setup_action']??'');
         if($action==='password' && !empty($actor['force_password_change'])) {
             $error=bc_enrollment_change_password($table,$actor,$_POST);
-            if($error==='') {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'password_changed',(string)$actor['id'],'Forced password and PIN change completed');header('Location: '.bc_enrollment_url($role));exit;}
+            if($error==='') {bc_sec_audit($role==='vendor'?(int)$actor['id']:(int)$actor['vendor_id'],$role,(string)($actor['username']??$actor['email']),'password_changed',(string)$actor['id'],'Forced password and PIN change completed');bc_enrollment_reset_signout($role);}
         } else $error='Complete the required security step first.';
     }
     $reason=bc_enrollment_reason($actor,$role);
