@@ -17,6 +17,12 @@ for brand, package in [('DG7-Android', 'com.datagifting.app'), ('JIKABIZ-Android
     for rel in ['AndroidManifest.xml', 'res/layout/activity_main.xml', 'res/drawable/bg_fintech_bottom.xml', 'res/color/fintech_bottom_color.xml']:
         ET.parse(main / rel)
         checks += 1
+    declared_styles = {node.attrib['name'] for f in (main / 'res').glob('values*/*.xml') for node in ET.parse(f).getroot().findall('style')}
+    manifest = ET.parse(main / 'AndroidManifest.xml').getroot()
+    for node in manifest.iter():
+        theme = node.attrib.get('{http://schemas.android.com/apk/res/android}theme', '')
+        if theme.startswith('@style/'):
+            check(theme[7:] in declared_styles, f'{brand}: undeclared manifest theme {theme}')
     nav = (main / 'res/navigation/nav_graph.xml').read_text()
     navigator = (java / 'ui/dashboard/MobileServiceNavigator.kt').read_text()
     for target in set(re.findall(r'R.id.(nav_\w+)', navigator)):

@@ -30,7 +30,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".util.RequiredSetupActivity" android:exported="false" android:theme="@style/Theme.DGV6.NoActionBar" />
+        <activity android:name=".util.RequiredSetupActivity" android:exported="false" android:theme="@style/Theme.JIKABIZ.NoActionBar" />
 
         <!-- Auth -->
         <activity
