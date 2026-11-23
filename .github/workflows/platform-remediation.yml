@@ -4,6 +4,7 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-fintech-services.php'
       - 'VTU/**/bc-admin/ServiceControl.php'
       - 'VTU/**/web/IntlTransfer.php'
       - 'VTU/**/web/Tuition.php'
@@ -89,6 +90,7 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-fintech-services.php'
       - 'VTU/**/bc-admin/ServiceControl.php'
       - 'VTU/**/web/IntlTransfer.php'
       - 'VTU/**/web/Tuition.php'

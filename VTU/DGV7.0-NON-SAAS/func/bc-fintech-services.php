@@ -138,7 +138,7 @@ if (!function_exists('bc_svc_ensure_schema')) {
     function bc_svc_ensure_schema() {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return false;
-        mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_requests (
+        $ok = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_service_requests (
             id INT NOT NULL AUTO_INCREMENT,
             vendor_id INT UNSIGNED NOT NULL,
             user_id INT UNSIGNED NOT NULL DEFAULT 0,
@@ -154,7 +154,7 @@ if (!function_exists('bc_svc_ensure_schema')) {
             KEY idx_vendor_user (vendor_id, user_id),
             KEY idx_vendor_type (vendor_id, type, status)
         )");
-        return true;
+        return $ok === true;
     }
 }
 
@@ -163,18 +163,35 @@ if (!function_exists('bc_svc_request_create')) {
     function bc_svc_request_create($vendor_id, $user, $type, $provider, array $payload) {
         global $connection_server;
         if (!($connection_server instanceof mysqli) || !is_array($user)) return '';
-        bc_svc_ensure_schema();
         $vendor_id = (int)$vendor_id;
         $user_id = (int)($user['id'] ?? 0);
-        $username = mysqli_real_escape_string($connection_server, (string)($user['username'] ?? ''));
-        $type_e = mysqli_real_escape_string($connection_server, substr((string)$type, 0, 32));
-        $provider_e = mysqli_real_escape_string($connection_server, substr((string)$provider, 0, 32));
-        $reference = 'SVC-' . strtoupper(substr((string)$type, 0, 3)) . '-' . date('ymdHis') . '-' . $user_id;
-        $payload_e = mysqli_real_escape_string($connection_server, json_encode($payload) ?: '{}');
-        $ok = mysqli_query($connection_server, "INSERT INTO sas_service_requests
-            (vendor_id, user_id, username, type, provider, reference, payload, status, created_at)
-            VALUES ('$vendor_id', '$user_id', '$username', '$type_e', '$provider_e', '$reference', '$payload_e', 'pending', NOW())");
-        return $ok ? $reference : '';
+        if($vendor_id<=0 || $user_id<=0 || (int)($user['vendor_id']??0)!==$vendor_id)return '';
+        $allowed=['intl_transfer'=>['klasha','flutterwave','platnova'],'tuition'=>['platnova'],'pos'=>['flutterwave'],'esim'=>['platnova','1global']];
+        if(!is_string($type)||!is_string($provider)||!in_array($provider,$allowed[$type]??[],true))return '';
+        try{
+            // Revalidate the selected request route at the storage boundary, not just in page code.
+            if($type!=='esim'){
+                require_once __DIR__.'/bc-service-provider-routing.php';
+                $service=$type==='pos'?'pos_request':$type;
+                if(bc_service_route_provider($vendor_id,$service)!==$provider)return '';
+                if($type==='intl_transfer' && (!is_string($payload['service']??null)||!isset(bc_service_route_services($vendor_id,$service,$provider)[$payload['service']])))return '';
+            }
+            $encoded=json_encode($payload,JSON_THROW_ON_ERROR);
+            if(strlen($encoded)>60000 || !bc_svc_ensure_schema())return '';
+            // Random references do not collide when a user submits twice within the same second.
+            // This is identification, NOT idempotency or permission to retry an unknown outcome.
+            $reference='SVC-'.strtoupper(substr($type,0,3)).'-'.bin2hex(random_bytes(16));
+            $stmt=$connection_server->prepare("INSERT INTO sas_service_requests
+                (vendor_id,user_id,username,type,provider,reference,payload,status,created_at)
+                SELECT vendor_id,id,username,?,?,?,?, 'pending',NOW() FROM sas_users
+                WHERE vendor_id=? AND id=? AND status=1 AND COALESCE(is_blocked,0)=0 AND COALESCE(force_password_change,0)=0");
+            if(!$stmt)return '';
+            try{
+                $stmt->bind_param('ssssii',$type,$provider,$reference,$encoded,$vendor_id,$user_id);
+                return $stmt->execute() && $stmt->affected_rows===1 ? $reference : '';
+            }finally{$stmt->close();}
+        }catch(Throwable $e){return '';}
+
     }
 }
 
