@@ -24,8 +24,13 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $bc_google_vendor_q = mysqli_query($connection_server, "SELECT google_client_id FROM sas_vendors WHERE id='" . (int)$reset_vendor_id . "' LIMIT 1");
     if ($bc_google_vendor_q) { $bc_google_vendor_row = mysqli_fetch_assoc($bc_google_vendor_q); $bc_google_client_id = trim((string)($bc_google_vendor_row['google_client_id'] ?? '')); }
 
+    require_once __DIR__.'/../func/bc-recovery-inline.php';
+    bc_recovery_post_guard();
     if(isset($_POST["send-code"])){
+        if(time()-(int)($_SESSION['recovery_send_at']??0)<60){bc_recovery_reply(false,'Please wait a minute before requesting another code.');$_SESSION['product_purchase_response']='Please wait a minute before requesting another code.';header('Location: PasswordRecovery.php');exit;}
+        $_SESSION['recovery_send_at']=time();
         if ($reset_blocked_msg) {
+            bc_recovery_reply(false,$reset_blocked_msg);
             $_SESSION["product_purchase_response"] = $reset_blocked_msg;
             header("Location: ".$_SERVER["REQUEST_URI"]);
             exit();
@@ -37,7 +42,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     		if(mysqli_num_rows($get_user_details) == 1){
     			$get_user_personal_details = mysqli_fetch_array($get_user_details);
 				$_SESSION["admin-recovery-username"] = $get_user_personal_details["email"];
-				$_SESSION["admin-recovery-code"] = substr(str_shuffle("12345678901234567890"), 0, 6);
+				$_SESSION["admin-recovery-code"] = (string)random_int(100000,999999);
 				// Email Beginning
 				$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"], "{recovery_code}" => $_SESSION["admin-recovery-code"]);
 				$raw_log_template_subject = getSuperAdminEmailTemplate('vendor-account-recovery','subject');
@@ -48,12 +53,13 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 				}
 				// §46: lead with the code so it can be copied from the inbox list without opening the mail.
 				$raw_log_template_subject = (string)($_SESSION["admin-recovery-code"]) . " is your password reset code" . ($raw_log_template_subject !== '' ? ' — ' . $raw_log_template_subject : '');
-				sendVendorEmail($get_user_personal_details["email"], $raw_log_template_subject, $raw_log_template_body);
+				$recovery_mail_sent=sendVendorEmail($get_user_personal_details["email"], $raw_log_template_subject, $raw_log_template_body);
+				bc_recovery_mail_state('admin',(int)resolveVendorID(),(bool)$recovery_mail_sent);
 				// Email End
 				// Record the reset request — repeated requests for the same admin account lock it out.
 				bc_handle_password_reset_attempt($email, $reset_user_ip, 0, $vendor_id, 'request');
 				//Recovery Code Emailed Successfully
-				$json_response_array = array("desc" => "Recovery Code Emailed Successfully");
+				$json_response_array = array("desc" => !empty($recovery_mail_sent)?"Recovery Code Emailed Successfully":"Could not send recovery code. Try again later.");
 				$json_response_encode = json_encode($json_response_array,true);
     		}else{
     			if(mysqli_num_rows($get_user_details) > 1){
@@ -76,6 +82,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     	}
 		
         $json_response_decode = json_decode($json_response_encode,true);
+        bc_recovery_reply($json_response_decode['desc']==='Recovery Code Emailed Successfully',$json_response_decode['desc']);
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
         header("Location: ".$_SERVER["REQUEST_URI"]);
         exit();
@@ -86,6 +93,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     // so the emailed code is waived and the admin goes straight to setting a new password.
     if(isset($_POST["google_token"])){
         if ($reset_blocked_msg) {
+            bc_recovery_reply(false,$reset_blocked_msg);
             $_SESSION["product_purchase_response"] = $reset_blocked_msg;
             header("Location: ".$_SERVER["REQUEST_URI"]);
             exit();
@@ -130,12 +138,14 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             $vendor_id = resolveVendorID();
 		$get_user_details = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' && email='".$_SESSION["admin-recovery-username"]."'");
     		if(mysqli_num_rows($get_user_details) == 1){
-				if($bc_google_verified || $_SESSION["admin-recovery-code"] == $recovery_code){
+				if($bc_google_verified || bc_recovery_code_valid('admin',(int)resolveVendorID(),$recovery_code)){
 					if($pass == $confirm_pass){
+                        bc_recovery_consume('admin');
 						// Stored as password_hash() (bcrypt); the login path still accepts legacy raw-MD5 rows.
 						$new_vendor_pass_hash = mysqli_real_escape_string($connection_server, bc_hash_password($pass));
 						$get_user_personal_details = mysqli_fetch_array($get_user_details);
 						$get_user_details = mysqli_query($connection_server, "UPDATE sas_vendors SET password='$new_vendor_pass_hash' WHERE id='".$get_user_personal_details["id"]."' && email='".$get_user_personal_details["email"]."'");
+                        if($get_user_details!==true){$_SESSION['product_purchase_response']='Password change could not be confirmed. Restart recovery before retrying.';header('Location: PasswordRecovery.php');exit;}
 						// Email Beginning
 						$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"]);
 						$raw_log_template_subject = getSuperAdminEmailTemplate('vendor-pass-update','subject');
@@ -253,7 +263,8 @@ bc_plate_auth_top(array(
                     <script>function bcGoogleLogin(r){document.getElementById('google_token').value=r.credential;document.getElementById('google-login-form').submit();}</script>
                     <p class="pk-auth__note" style="margin:0 0 16px;">&mdash; or continue with your password &mdash;</p>
                     <?php endif; ?>
-                    <form method="post" action="" <?php echo $reset_blocked_msg ? 'style="display:none"' : ''; ?>>
+                    <form data-recovery-form method="post" action="" <?php echo $reset_blocked_msg ? 'style="display:none"' : ''; ?>>
+                        <?php echo bc_csrf_field(); ?>
                         <?php if(!isset($_SESSION["admin-recovery-username"]) || empty($_SESSION["admin-recovery-username"])){ ?>
                             <div class="pk-auth__field">
                                 <label class="pk-auth__label" for="email">Admin Email</label>
@@ -309,7 +320,7 @@ bc_plate_auth_top(array(
                                 Update Password
                             </button>
 
-                            <button name="reset-recovery" type="submit" class="pk-auth__btn pk-auth__btn--ghost" style="margin-top:10px;">
+                            <button name="reset-recovery" type="submit" formnovalidate class="pk-auth__btn pk-auth__btn--ghost" style="margin-top:10px;">
                                 Cancel &amp; Restart
                             </button>
                         <?php } ?>
@@ -343,3 +354,5 @@ function togglePasswordVisibility(fieldId, toggleElement) {
 }
 </script>
 <?php bc_plate_auth_end(array('links' => array(array('href' => 'Login.php', 'label' => 'Back to sign in')))); ?>
+
+<script src="../asset/bc-recovery-inline.js" defer></script>

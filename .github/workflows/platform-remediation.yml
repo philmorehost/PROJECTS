@@ -11,6 +11,10 @@ on:
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
+      - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/asset/bc-recovery-inline.js'
+      - 'VTU/**/bc-admin/PasswordRecovery.php'
+      - 'VTU/**/bc-spadmin/PasswordRecovery.php'
       - 'VTU/**/asset/bc-login-resend.js'
       - 'VTU/**/bc-spadmin/VendorKYC.php'
       - 'VTU/**/bc-admin/Withdrawals.php'
@@ -61,6 +65,10 @@ on:
       - 'VTU/**/func/bc-stepup.php'
       - 'VTU/**/func/bc-admin-inline-otp.php'
       - 'VTU/**/func/bc-login-resend.php'
+      - 'VTU/**/func/bc-recovery-inline.php'
+      - 'VTU/**/asset/bc-recovery-inline.js'
+      - 'VTU/**/bc-admin/PasswordRecovery.php'
+      - 'VTU/**/bc-spadmin/PasswordRecovery.php'
       - 'VTU/**/asset/bc-login-resend.js'
       - 'VTU/**/bc-spadmin/VendorKYC.php'
       - 'VTU/**/bc-admin/Withdrawals.php'
@@ -122,9 +130,11 @@ jobs:
           php VTU/tests/complimentary_upgrade_test.php
           php VTU/tests/admin_inline_otp_test.php
           php VTU/tests/login_resend_test.php
+          php VTU/tests/recovery_inline_test.php
           php VTU/tests/otp_followup_test.php
           node VTU/tests/harness/admin-inline-otp-ui-test.mjs
           node VTU/tests/harness/login-resend-ui-test.mjs
+          node VTU/tests/harness/recovery-inline-ui-test.mjs
       - name: Pricing, inventory, security-reset and shortcut regressions
         run: |
           set -e
