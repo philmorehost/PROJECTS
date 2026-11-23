@@ -9,7 +9,7 @@ function bc_recovery_reply($ok,$message){
     echo json_encode(['status'=>$ok?'success':'error','message'=>$message,'form_html'=>$html]);exit;
 }
 function bc_recovery_post_guard(){
-    $actions=array_intersect(['send-code','verify-code','reset-recovery'],array_keys($_POST));
+    $actions=array_intersect(['send-code','verify-code','reset-recovery','google_token'],array_keys($_POST));
     if(!$actions)return;
     bc_validate_csrf(bc_recovery_ajax());
     if(count($actions)!==1){http_response_code(400);bc_recovery_reply(false,'Choose one recovery action.');exit('Invalid recovery action.');}

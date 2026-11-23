@@ -101,5 +101,15 @@ try{
   $db->query('UPDATE sas_super_admin SET is_blocked=1 WHERE id=1');
   wallet_check(strpos(bc_complimentary_upgrade($sp,11,$p),'restricted')!==false,'fresh blocked platform actor rejected');
  }
+ require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-google-recovery.php';
+ $db->query('ALTER TABLE sas_vendors ADD google_id VARCHAR(225), ADD force_password_change INT DEFAULT 1');
+ $original=$db->query('SELECT * FROM sas_vendors WHERE id=7')->fetch_assoc();
+ wallet_check(bc_google_recovery_password_update('sas_vendors',$original,'new-fixture-hash'),'native bound password write');
+ wallet_check(!bc_google_recovery_password_update('sas_vendors',$original,'stale-fixture-hash'),'native stale password cannot overwrite new reset');
+ $fresh=$db->query('SELECT * FROM sas_vendors WHERE id=7')->fetch_assoc();
+ wallet_check($fresh['password']==='new-fixture-hash' && (int)$fresh['force_password_change']===1,'reset leaves forced setup requirement');
+ $db->query('UPDATE sas_vendors SET security_pin=\'changed-pin\' WHERE id=7');
+ wallet_check(!bc_google_recovery_password_update('sas_vendors',$fresh,'blocked-hash'),'native PIN change invalidates reset write');
+ wallet_check($db->query('SELECT password FROM sas_vendors WHERE id=8')->fetch_assoc()['password']!=='new-fixture-hash','reset does not alter other tenant');
  echo "$n $edition admin wallet and channel policy MySQL checks passed\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}

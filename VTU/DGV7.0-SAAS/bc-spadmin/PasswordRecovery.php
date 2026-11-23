@@ -13,7 +13,12 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $bc_google_client_id = trim((string)getSuperAdminOption('spadmin_google_client_id', ''));
 
     require_once __DIR__.'/../func/bc-recovery-inline.php';
+    require_once __DIR__.'/../func/bc-google-recovery.php';
     bc_recovery_post_guard();
+    if(!isset($_POST['google_token']) && !empty($_SESSION['spadmin-recovery-google']) && !bc_google_recovery_valid('spadmin',0,$bc_google_client_id)){
+        bc_recovery_consume('spadmin');unset($_SESSION['spadmin-recovery-username']);
+        $_SESSION['product_purchase_response']='Google recovery approval expired or changed. Start recovery again.';
+    }
     if(isset($_POST["send-code"])){
         if(time()-(int)($_SESSION['recovery_send_at']??0)<60){bc_recovery_reply(false,'Please wait a minute before requesting another code.');$_SESSION['product_purchase_response']='Please wait a minute before requesting another code.';header('Location: PasswordRecovery.php');exit;}
         $_SESSION['recovery_send_at']=time();
@@ -81,21 +86,18 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             exit();
         }
         $bc_g_payload = ($bc_google_client_id !== "" && function_exists('verifyGoogleToken')) ? verifyGoogleToken(trim((string)$_POST["google_token"])) : null;
+        $bc_g_nonce_ok=bc_google_recovery_nonce_check('spadmin',0,$bc_g_payload);
         if ($bc_google_client_id === "") {
             $_SESSION["product_purchase_response"] = "Google sign-in is not configured for the Super Admin.";
-        } elseif (!bc_google_payload_valid($bc_g_payload, $bc_google_client_id)) {
+        } elseif (!$bc_g_nonce_ok || !bc_google_payload_valid($bc_g_payload, $bc_google_client_id)) {
             $_SESSION["product_purchase_response"] = "Google Authentication Failed.";
         } else {
             $bc_g_email = mysqli_real_escape_string($connection_server, strtolower($bc_g_payload['email']));
             $bc_g_sub = mysqli_real_escape_string($connection_server, (string)$bc_g_payload['sub']);
-            $bc_g_q = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$bc_g_email' OR google_id='$bc_g_sub' LIMIT 1");
-            $bc_g_admin = $bc_g_q ? mysqli_fetch_assoc($bc_g_q) : null;
-            if ($bc_g_admin) {
-                if (empty($bc_g_admin['google_id'])) {
-                    mysqli_query($connection_server, "UPDATE sas_super_admin SET google_id='$bc_g_sub' WHERE id='".(int)$bc_g_admin["id"]."'");
-                }
-                $_SESSION["spadmin-recovery-username"] = $bc_g_admin["email"];
-                $_SESSION["spadmin-recovery-google"] = 1;
+            $bc_g_q = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$bc_g_email' LIMIT 2");
+            $bc_g_admin = ($bc_g_q && mysqli_num_rows($bc_g_q)===1) ? mysqli_fetch_assoc($bc_g_q) : null;
+            if ($bc_g_admin && bc_google_recovery_grant('spadmin',0,$bc_g_payload,$bc_g_admin,$bc_google_client_id)) {
+                session_regenerate_id(true);
                 $_SESSION["product_purchase_response"] = "Google identity verified. Set your new password below.";
             } else {
                 $_SESSION["product_purchase_response"] = "No Super Admin account found with this Google email.";
@@ -114,18 +116,19 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     	$pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["pass"])));
     	$confirm_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["confirm-pass"])));
 		$recovery_code = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["code"] ?? ""))));
-		$bc_google_verified = !empty($_SESSION["spadmin-recovery-google"]);
+		$bc_google_verified = bc_google_recovery_valid('spadmin',0,$bc_google_client_id);
     	if(!empty($pass) && !empty($confirm_pass) && ($bc_google_verified || (!empty($recovery_code) && is_numeric($recovery_code) && (strlen($recovery_code) == "6")))){
     		$get_user_details = mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='".$_SESSION["spadmin-recovery-username"]."'");
     		if(mysqli_num_rows($get_user_details) == 1){
-				if($bc_google_verified || bc_recovery_code_valid('spadmin',0,$recovery_code)){
+                $bc_recovery_row=mysqli_fetch_assoc($get_user_details);mysqli_data_seek($get_user_details,0);
+				if(($bc_google_verified && bc_google_recovery_matches('spadmin',0,$bc_google_client_id,$bc_recovery_row)) || (!$bc_google_verified && bc_recovery_code_valid('spadmin',0,$recovery_code))){
 					if($pass == $confirm_pass){
                         bc_recovery_consume('spadmin');
 						// Stored as password_hash() (bcrypt). The login path still accepts legacy
 						// raw-MD5 rows, so nobody is locked out mid-migration.
-						$new_spadmin_pass_hash = mysqli_real_escape_string($connection_server, bc_hash_password($pass));
+						$new_spadmin_pass_hash = bc_hash_password($pass);
 						$get_user_personal_details = mysqli_fetch_array($get_user_details);
-						$get_user_details = mysqli_query($connection_server, "UPDATE sas_super_admin SET password='$new_spadmin_pass_hash' WHERE id='".$get_user_personal_details["id"]."' && email='".$get_user_personal_details["email"]."'");
+                        $get_user_details=bc_google_recovery_password_update('sas_super_admin',$bc_recovery_row,$new_spadmin_pass_hash);
                         if($get_user_details!==true){$_SESSION['product_purchase_response']='Password change could not be confirmed. Restart recovery before retrying.';header('Location: PasswordRecovery.php');exit;}
 						// Email Beginning
 						$log_template_encoded_text_array = array("{firstname}" => $get_user_personal_details["firstname"], "{lastname}" => $get_user_personal_details["lastname"]);
@@ -204,6 +207,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     }
 
 	if(isset($_POST["reset-recovery"])){
+        unset($_SESSION['google_recovery_nonces']['spadmin']);
 		unset($_SESSION["spadmin-recovery-username"]);
 		unset($_SESSION["spadmin-recovery-code"]);
 		unset($_SESSION["spadmin-recovery-google"]);
@@ -231,9 +235,9 @@ bc_plate_auth_top(array(
 
                     <?php if (!empty($bc_google_client_id) && empty($_SESSION["spadmin-recovery-username"])): ?>
                     <script src="https://accounts.google.com/gsi/client" async defer></script>
-                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)$bc_google_client_id, ENT_QUOTES, 'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
+                    <div id="g_id_onload" data-client_id="<?php echo htmlspecialchars((string)$bc_google_client_id, ENT_QUOTES, 'UTF-8'); ?>" data-nonce="<?php echo htmlspecialchars(bc_google_recovery_nonce('spadmin',0),ENT_QUOTES,'UTF-8'); ?>" data-callback="bcGoogleLogin" data-auto_prompt="false"></div>
                     <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="left" style="margin-bottom:14px;"></div>
-                    <form id="google-login-form" method="post" action="" style="display:none;"><input type="hidden" name="google_token" id="google_token"></form>
+                    <form id="google-login-form" method="post" action="" style="display:none;"><?php echo bc_csrf_field(); ?><input type="hidden" name="google_token" id="google_token"></form>
                     <script>function bcGoogleLogin(r){document.getElementById('google_token').value=r.credential;document.getElementById('google-login-form').submit();}</script>
                     <p class="pk-auth__note" style="margin:0 0 16px;">&mdash; or continue with your password &mdash;</p>
                     <?php endif; ?>
