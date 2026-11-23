@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-compliance-policy.php';
 /**
  * DGV7 phase 1B enforcement gate.
  *
@@ -182,6 +183,15 @@ if (!function_exists('bc_fintech_send_app_denial')) {
     }
 }
 
+if (!function_exists('bc_fintech_app_compliance_guard')) {
+    function bc_fintech_app_compliance_guard($user) {
+        if (function_exists('bc_kyc_app_confinement_required') && bc_kyc_app_confinement_required($user)
+            && !bc_kyc_app_route_allowed((string)($_SERVER['SCRIPT_NAME']??''))) {
+            bc_fintech_send_app_denial(['http'=>403,'code'=>'KYC_REQUIRED','message'=>'Complete or renew identity verification (KYC). Access returns after approval.']);
+        }
+    }
+}
+
 if (!function_exists('bc_fintech_require_app_account')) {
     /**
      * Authenticates a first-party app request using a bearer app token.
@@ -209,6 +219,7 @@ if (!function_exists('bc_fintech_require_app_account')) {
         }
         $decision = bc_fintech_app_access($user);
         if (!$decision['allowed']) bc_fintech_send_app_denial($decision);
+        bc_fintech_app_compliance_guard($user);
         return $user;
     }
 }
@@ -469,19 +480,7 @@ if (!function_exists('bc_fintech_api_credential')) {
         $decision = bc_fintech_app_access($user);
         if (!$decision['allowed']) bc_fintech_send_app_denial($decision);
 
-        // §33: KYC confinement for the mobile App. While forced KYC is on and
-        // the account is not approved, every token-authenticated endpoint is
-        // locked except the compliance flow itself (KYC status/submission,
-        // profile so the user can see their status, and sign-out).
-        if (function_exists('bc_kyc_app_confinement_required') && bc_kyc_app_confinement_required($user)) {
-            $sec33_script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-            if (!in_array($sec33_script, array('kyc.php', 'profile.php', 'logout.php'), true)) {
-                bc_fintech_send_app_denial(array(
-                    'http' => 403, 'code' => 'KYC_REQUIRED',
-                    'message' => 'Please complete your identity verification (KYC). Access returns after an admin approves your submission.',
-                ));
-            }
-        }
+        bc_fintech_app_compliance_guard($user);
 
         $GLOBALS['bc_api_auth_mode'] = 'app_token';
         $GLOBALS['bc_api_auth_user'] = $user;

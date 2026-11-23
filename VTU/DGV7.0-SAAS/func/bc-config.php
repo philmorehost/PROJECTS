@@ -621,7 +621,7 @@ if ($connection_server) {
 					// stays locked except the compliance flow itself. Accounts under
 					// review (1) remain locked while they wait for an admin decision.
 					$sec33_required_checks = function_exists('bc_kyc_enabled_checks') ? bc_kyc_enabled_checks($connection_server, $vendor_id) : [];
-					if ($master_force_kyc && !empty($sec33_required_checks) && (int)$get_logged_user_details["kyc_status"] !== 2) {
+					if ($master_force_kyc && !empty($sec33_required_checks) && !bc_kyc_approval_current($get_logged_user_details)) {
 						$sec33_uri = explode("?", trim($_SERVER["REQUEST_URI"] ?? ""))[0];
 						$sec33_allowed = array("/web/KYCVerification.php", "/web/AccountSettings.php", "/web/SecurityQuest.php", "/logout.php");
 						if (!in_array($sec33_uri, $sec33_allowed, true)) {
@@ -638,7 +638,7 @@ if ($connection_server) {
 							$min_funding_q = mysqli_query($connection_server, "SELECT min_amount FROM sas_user_minimum_funding WHERE vendor_id='$vendor_id' LIMIT 1");
 							$min_funding = ($row_mf = mysqli_fetch_assoc($min_funding_q)) ? (float)$row_mf['min_amount'] : 0;
 
-							if ($min_funding > 0) {
+							if ($min_funding > 0 && !($master_force_kyc && !empty($sec33_required_checks) && !bc_kyc_approval_current($get_logged_user_details))) {
 								// Branch DG6.7 Optimization: Cache total funding to prevent heavy SUM queries on every request
 								if (!isset($_SESSION['total_funding_cache']) || (time() - ($_SESSION['total_funding_time'] ?? 0) > 600)) {
 									$stmt_funding = mysqli_prepare($connection_server, "SELECT SUM(discounted_amount) as total FROM sas_transactions WHERE vendor_id = ? AND username = ? AND status=1 AND (type_alternative LIKE '%credit%' OR type_alternative LIKE '%received%' OR type_alternative LIKE '%commission%')");
