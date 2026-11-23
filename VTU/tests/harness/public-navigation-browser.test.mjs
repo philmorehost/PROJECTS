@@ -62,10 +62,13 @@ try {
  }
  // A breakpoint crossing must not hide the focused desktop link without moving focus.
  await page.setViewportSize({width:1024,height:900});await page.goto('https://public.example.test/');
- await page.locator('#public-menu-links a').first().focus();
- await page.setViewportSize({width:390,height:900});
- await page.waitForFunction(()=>document.activeElement.matches('.public-menu-toggle'));
- assert.equal(await page.locator('#public-menu-links').isVisible(),false);
+ for(let attempt=0;attempt<10;attempt++) {
+  await page.setViewportSize({width:1024,height:900});
+  await page.locator('#public-menu-links a').first().focus();
+  await page.setViewportSize({width:390,height:900});
+  await page.waitForFunction(()=>document.activeElement.matches('.public-menu-toggle'));
+  assert.equal(await page.locator('#public-menu-links').isVisible(),false);
+ }
  await page.emulateMedia({reducedMotion:'reduce'});
  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior),'auto');
  assert.deepEqual(errors,[]);

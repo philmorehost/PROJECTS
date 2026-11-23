@@ -7,6 +7,14 @@
     var links = nav.querySelector('#public-menu-links');
     if (!button || !links) return;
     var mobile = window.matchMedia('(max-width: 800px)');
+    var lastFocusedLink = null;
+    document.addEventListener('focusin', function (event) {
+        if (links.contains(event.target)) lastFocusedLink = event.target;
+        else if (event.target !== document.body) lastFocusedLink = null;
+    });
+    document.addEventListener('pointerdown', function (event) {
+        if (!links.contains(event.target)) lastFocusedLink = null;
+    });
     function close(restoreFocus) {
         nav.removeAttribute('data-menu-open');
         button.setAttribute('aria-expanded', 'false');
@@ -29,9 +37,16 @@
     document.addEventListener('click', function (event) {
         if (mobile.matches && !nav.contains(event.target)) close(false);
     });
+    // CSS can hide desktop links before the matchMedia change callback runs.
+    // In Chromium that blur has no related target and focus otherwise falls to body.
+    nav.addEventListener('focusout', function (event) {
+        if (mobile.matches && !nav.hasAttribute('data-menu-open') &&
+            links.contains(event.target) && !event.relatedTarget) button.focus();
+    });
     function resize() {
         // Never leave keyboard focus in a newly hidden link when entering mobile.
-        var focusInside = links.contains(document.activeElement);
+        var focusInside = links.contains(document.activeElement) ||
+            (document.activeElement === document.body && lastFocusedLink !== null);
         close(mobile.matches && focusInside);
     }
     if (mobile.addEventListener) mobile.addEventListener('change', resize);
