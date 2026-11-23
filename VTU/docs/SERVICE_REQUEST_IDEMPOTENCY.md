@@ -1,0 +1,19 @@
+# Durable service request intake — first safe-retry increment
+
+Both editions route IntlTransfer, Tuition, POSRequest and ESIM form submissions through `bc_svc_request_once`. Each rendered form carries a cryptographically random256-bit intent key, separate from CSRF. An unchanged form retry keeps that key; the explicit **Start a new request** GET creates another intent. After a successful response the form keeps its key so refresh/resubmission cannot accidentally create another request. Deliberately creating a new intent with identical details is allowed; this is not payload-based deduplication.
+
+The database scopes the hashed key to vendor+user. The digest binds request type, provider and recursively canonicalized payload; map ordering is normalized while list order remains meaningful. Same-key mismatches are refused. Tenant/active/unblocked/password-ready actor checks are read under a database row lock even for replays. Committed replays return the original pinned request reference after confirming the original row still exists. Retired or changed routes never silently fail over; existing page route-snapshot checks may refuse a changed-route resubmission with409, in which case use scoped request history to locate the original record.
+
+The key claim, canonical-owner request insert and reference association are one InnoDB transaction. Simultaneous unchanged submissions serialize to one committed request. Failed inserts roll back the claim; an unchanged retry can then create the request safely. If the response/commit acknowledgment is lost, do not assume failure: retry with the SAME key or inspect request history. Keys are retained without an automatic expiry/reset that could create a late duplicate. Do not delete keys to retry delivery.
+
+All DDL occurs BEFORE starting the wrapper transaction. The existing insert helper has a schema-ready internal path so it cannot implicitly commit a claim. Outer transactions and non-InnoDB request/key/user tables are refused, never silently committed or converted. Fresh request/key tables are InnoDB; older nontransactional installations require an operator-managed migration before this feature works. Existing historical records are untouched and are not retroactively assigned guessed keys.
+
+All four forms retain server-side CSRF checks (added explicitly on eSIM). Existing successful-replay messages distinguish recovery from a new request; transfer replays do not repeat indicative FX lookups. eSIM still performs its existing read-only catalogue loading, but records review requests only, not provider acceptance, provisioning or delivery. This increment does not make unsupported catalogue/product eligibility true.
+
+## Explicit boundary
+
+This is idempotent **request intake**, not exactly-once external execution, wallet reservation, settlement, refund or provider reconciliation. No execution worker or automatic financial retry is introduced. The older low-level insert helper remains for internal compatibility/tests; public request forms no longer call it directly. Provider transport needs its own durable dispatch/outcome state machine and verified capability/merchant approval before activation. All financial holds remain.
+
+## Evidence
+
+Boundary contracts cover canonicalization, key retention/new intent, tenant mismatch, all four page integrations/CSRF and edition parity. Disposable native MySQL tests in both editions race independent processes, verify one row/reference and replay recovery, reject payload/provider conflicts and fresh actor restrictions, isolate tenants, inject insertion failure, verify safe unchanged retries, refuse outer/nontransactional transactions and check unchanged wallets. These tests make no live provider calls; eSIM request intake is used as a no-transport fixture. Existing route/entitlement MySQL tests remain separate evidence.

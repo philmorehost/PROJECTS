@@ -153,14 +153,14 @@ if (!function_exists('bc_svc_ensure_schema')) {
             PRIMARY KEY (id),
             KEY idx_vendor_user (vendor_id, user_id),
             KEY idx_vendor_type (vendor_id, type, status)
-        )");
+        ) ENGINE=InnoDB");
         return $ok === true;
     }
 }
 
 if (!function_exists('bc_svc_request_create')) {
     /** Record a provider service request. Returns the reference or ''. */
-    function bc_svc_request_create($vendor_id, $user, $type, $provider, array $payload) {
+    function bc_svc_request_create($vendor_id, $user, $type, $provider, array $payload, $schema_ready = false) {
         global $connection_server;
         if (!($connection_server instanceof mysqli) || !is_array($user)) return '';
         $vendor_id = (int)$vendor_id;
@@ -177,7 +177,7 @@ if (!function_exists('bc_svc_request_create')) {
                 if($type==='intl_transfer' && (!is_string($payload['service']??null)||!isset(bc_service_route_services($vendor_id,$service,$provider)[$payload['service']])))return '';
             }
             $encoded=json_encode($payload,JSON_THROW_ON_ERROR);
-            if(strlen($encoded)>60000 || !bc_svc_ensure_schema())return '';
+            if(strlen($encoded)>60000 || (!$schema_ready && !bc_svc_ensure_schema()))return '';
             // Random references do not collide when a user submits twice within the same second.
             // This is identification, NOT idempotency or permission to retry an unknown outcome.
             $reference='SVC-'.strtoupper(substr($type,0,3)).'-'.bin2hex(random_bytes(16));

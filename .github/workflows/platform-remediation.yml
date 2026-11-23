@@ -4,6 +4,8 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/web/ESIM.php'
       - 'VTU/**/func/bc-vendor-registration*.php'
       - 'VTU/**/web/paystack_callback.php'
       - 'VTU/**/web/manual_payment.php'
@@ -99,6 +101,8 @@ on:
     paths:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
+      - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/web/ESIM.php'
       - 'VTU/**/func/bc-vendor-registration*.php'
       - 'VTU/**/web/paystack_callback.php'
       - 'VTU/**/web/manual_payment.php'
@@ -241,6 +245,7 @@ jobs:
           php VTU/tests/public_home_test.php
           php VTU/tests/admin_pin_setup_test.php
           php VTU/tests/service_provider_routing_test.php
+          php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/vendor_registration_test.php
           php VTU/tests/vendor_registration_commerce_test.php
           php VTU/tests/registration_guard_test.php
@@ -408,3 +413,9 @@ jobs:
           BC_VENDOR_REG_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/vendor_registration_mysql_test.php
+
+      - name: Concurrent service intake and safe unchanged retries in disposable MySQL
+        env:
+          BC_SERVICE_REQUEST_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/service_request_idempotency_mysql_test.php

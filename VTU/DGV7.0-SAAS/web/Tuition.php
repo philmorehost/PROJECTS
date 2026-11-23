@@ -10,6 +10,8 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 }
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
+require_once __DIR__.'/../func/bc-service-request-idempotency.php';
+$svc_form_key=bc_svc_form_key($_POST['request_key']??null);
 require_once __DIR__.'/../func/bc-service-provider-routing.php';
 $route_provider = bc_service_route_provider($vid,'tuition');
 
@@ -43,11 +45,13 @@ if (isset($_POST['pay_tuition'])) {
         $notice = 'Choose a university, enter the student ID and a valid amount. The student ID is validated before settlement.';
         $notice_type = 'danger';
     } else {
-        $ref = $route_provider === '' ? '' : bc_svc_request_create($vid, $svc_user, 'tuition', $route_provider, $payload);
-        $notice = $ref !== '' ? "Tuition payment request received ($ref). Student ID validation runs before settlement." : 'We could not record your request. Please try again.';
+        $svc_result=bc_svc_request_once($vid,$svc_user,'tuition',$route_provider,$payload,$_POST['request_key']??null);
+        $ref=$svc_result['reference'];
+        $notice = $ref !== '' ? "Tuition payment request received ($ref). Student ID validation runs before settlement." : bc_svc_retry_message($svc_result);
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }
 }
+if(isset($svc_result)&&$svc_result['ok']&&$svc_result['replayed'])$notice='Existing request recovered; no new request was created. '.$notice;
 $my_requests = bc_svc_requests_for_user($vid, (int)$svc_user['id'], 'tuition');
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Pay Tuition Worldwide | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -65,7 +69,7 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
             <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
                 <h6 class="fw-bold mb-3">Tuition payment</h6>
                 <?php if ($notice !== ''): ?><div class="alert alert-<?php echo $notice_type; ?> rounded-3 small"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-                <?php if($route_provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($route_provider,ENT_QUOTES,'UTF-8'); ?>">
+                <?php if($route_provider===''): ?><p class="alert alert-warning">Request routing is disabled or unavailable. No request can be submitted.</p><?php endif; ?><p class="small text-muted">Submitting records a request for review only. It does not debit a wallet, execute a payment or confirm provider acceptance.</p><form method="post"><input type="hidden" name="request_key" value="<?php echo htmlspecialchars($svc_form_key,ENT_QUOTES,'UTF-8'); ?>"><p class="small">Keep this form unchanged when retrying an unconfirmed submission. <a href="Tuition.php">Start a new request</a> only for a separate request.</p><?php echo bc_csrf_field(); ?><input type="hidden" name="route_snapshot" value="<?php echo htmlspecialchars($route_provider,ENT_QUOTES,'UTF-8'); ?>">
                     <div class="mb-3"><label class="form-label small fw-bold">University / Institution</label>
                         <input type="text" name="university" class="form-control" list="uniList" placeholder="Start typing to search 160+ institutions" required>
                         <datalist id="uniList"><?php foreach ($universities as $u): ?><option value="<?php echo htmlspecialchars($u); ?>"><?php endforeach; ?></datalist>
