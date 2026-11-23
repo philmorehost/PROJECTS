@@ -7,6 +7,7 @@ on:
       - 'VTU/**/func/bc-price-input.php'
       - 'VTU/**/func/bc-float-services.php'
       - 'VTU/**/func/bc-plate-app.php'
+      - 'VTU/**/func/bc-transaction-receipt.php'
       - 'VTU/**/bc-admin/AccountSettings.php'
       - 'VTU/**/bc-admin/FloatServiceIcons.php'
       - 'VTU/**/bc-admin/UserUpgrade.php'
@@ -22,6 +23,7 @@ on:
       - 'VTU/**/func/bc-price-input.php'
       - 'VTU/**/func/bc-float-services.php'
       - 'VTU/**/func/bc-plate-app.php'
+      - 'VTU/**/func/bc-transaction-receipt.php'
       - 'VTU/**/bc-admin/AccountSettings.php'
       - 'VTU/**/bc-admin/FloatServiceIcons.php'
       - 'VTU/**/bc-admin/UserUpgrade.php'
@@ -49,6 +51,9 @@ jobs:
           set -e
           php -n VTU/tests/remediation_pricing_catalog_test.php
           php -n VTU/tests/float_services_test.php
+          php -n VTU/tests/receipt_utility_test.php
+          php -n VTU/tests/plate_app_test.php
+          php -n VTU/tests/gateway_verdict_test.php
           php -n VTU/tests/enrollment_password_test.php
           php -n VTU/tests/enrollment_policy_test.php
           php -n -d extension=tokenizer VTU/tests/fintech_gate_test.php

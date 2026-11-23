@@ -2,6 +2,7 @@
 /** Presentation only: saved tenant shortcuts intersected with the real navigation gates. */
 function bc_float_services_render() {
     global $connection_server, $get_logged_user_details;
+    if (!function_exists('mysqli_query') || empty($connection_server)) return;
     if (!is_array($get_logged_user_details ?? null) || empty($get_logged_user_details['vendor_id'])) return;
     $vid=(int)$get_logged_user_details['vendor_id'];
     $q=mysqli_query($connection_server,"SELECT service_name FROM sas_float_services WHERE vendor_id='$vid' AND status=1");

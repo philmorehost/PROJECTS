@@ -114,3 +114,18 @@ shortcut rendering behavior, forced reset atomicity/weak or reused PIN rejection
 Native PHP 8.2/8.3 CI is wired in platform-remediation.yml. Native builds/devices,
 real database migrations and production provider behavior are not proven locally.
 All remaining Batch 1 scope limits still apply unless explicitly superseded above.
+
+
+## Shared web utility receipt follow-up (partial receipt request)
+
+The shared tenant/user/platform web receipt fetch now retrieves a matching stored
+utility purchase by transaction tenant + username + reference. Payloads expose
+separate allowlisted name/address/meter/type/token/units, not provider raw text.
+Missing stored customer identity is honestly shown as not supplied. Tokens/units
+are emitted only for successful prepaid purchases, never postpaid, unknown-type,
+pending or failed ones. The shared line-based receipt renders these fields in the
+same card exported to PDF/image. Credited number/destination has its own row.
+
+This does not yet populate missing customer identity in historic/provider records,
+update every legacy dedicated receipt template, or extend native receipt models.
+The full site-wide/app receipt request is therefore still **partial**.
