@@ -1,0 +1,18 @@
+/* Progressive enhancement: without JS every navigation link remains available. */
+[data-public-navigation] { box-sizing: border-box; }
+[data-public-navigation] > a { min-width: 0; max-width: 100%; }
+[data-public-navigation] .home-brand { white-space: normal; overflow-wrap: anywhere; }
+.public-menu-links { display: contents; }
+.public-menu-toggle { display: none; font: 700 15px/1.4 system-ui,sans-serif; padding: 10px 14px; border: 1px solid #dadadf; border-radius: 12px; background: #fff; color: #0b0b0d; cursor: pointer; min-height: 44px; }
+.public-menu-toggle:focus-visible { outline: 3px solid #d90012; outline-offset: 3px; }
+@media (max-width: 800px) {
+ [data-public-navigation] > a { flex: 1 1 180px; }
+ [data-public-navigation] .home-brand { font-size: clamp(18px,4.8vw,28px); }
+ [data-public-navigation] .home-brand img { max-width: 100%; height: auto; max-height: 48px; }
+ .public-menu-links { display: flex; flex: 1 0 100%; flex-direction: column; gap: 12px; min-width: 0; padding-top: 8px; }
+ .public-menu-links > div { flex-wrap: wrap; gap: 12px !important; }
+ .public-menu-links a { box-sizing: border-box; min-height: 44px; display: inline-flex; align-items: center; overflow-wrap: anywhere; }
+ [data-public-navigation][data-menu-ready] .public-menu-toggle:not([hidden]) { display: inline-flex; align-items: center; gap: 8px; }
+ [data-public-navigation][data-menu-ready]:not([data-menu-open]) .public-menu-links { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto !important; } }

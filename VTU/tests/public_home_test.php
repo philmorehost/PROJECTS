@@ -17,6 +17,8 @@ public_check(strpos($home, '1,950,000.00') === false, 'no frozen quoted conversi
 public_check(strpos($home, 'data-fx-enabled') === false, 'public reference converter independent of transaction FX settings');
 public_check(strpos($home, 'Illustrations show example balances') === false, 'requested top disclaimer removed');
 public_check(strpos($home, 'Open-source Currency API') !== false && strpos($home, 'mz-refresh') !== false, 'reference source and refresh available');
+public_check(strpos($home, 'data-public-navigation') !== false && strpos($home, 'aria-controls="public-menu-links"') !== false, 'homepage has a scoped accessible navigation control');
+public_check(strpos($home, '/asset/bc-public-navigation.css?v=1') !== false && strpos($home, '/jsfile/bc-public-navigation.js?v=1') !== false, 'homepage loads scoped navigation assets');
 $ctx = bc_landing_context();
 $rendered = array('home' => $home);
 foreach (bc_public_catalog() as $key => $p) {
