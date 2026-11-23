@@ -1359,6 +1359,7 @@ if (!function_exists('bc_kyc_effective_statuses')) {
         if (!$q) {
             // Unexpected schema: still collapse duplicates by name rather than return nothing.
             $q = @mysqli_query($connection_server, "SELECT verification_name, status FROM sas_kyc_verifications WHERE vendor_id='$vendor_id'");
+            if (!$q) throw new RuntimeException('KYC checks are unavailable.');
             while ($q && ($r = mysqli_fetch_assoc($q))) {
                 $name = (string)$r['verification_name'];
                 $on = ((int)$r['status'] === 1) ? 1 : 0;
@@ -1385,12 +1386,12 @@ if (!function_exists('bc_kyc_app_confinement_required')) {
     function bc_kyc_app_confinement_required($user)
     {
         global $connection_server;
-        if (!is_array($user) || !($connection_server instanceof mysqli)) return false;
+        if (!is_array($user) || !($connection_server instanceof mysqli)) throw new RuntimeException('KYC policy is unavailable.');
         if (bc_kyc_approval_current($user)) return false;
         $vendor_id = (int)($user['vendor_id'] ?? 0);
-        if ($vendor_id <= 0) return false;
-        if (!function_exists('isKYCEnforced') || !isKYCEnforced($vendor_id)) return false;
-        $checks = function_exists('bc_kyc_enabled_checks') ? bc_kyc_enabled_checks($connection_server, $vendor_id) : [];
+        if ($vendor_id <= 0 || !function_exists('isKYCEnforced')) throw new RuntimeException('KYC policy is unavailable.');
+        if (!isKYCEnforced($vendor_id)) return false;
+        $checks = bc_kyc_enabled_checks($connection_server, $vendor_id);
         return !empty($checks);
     }
 }

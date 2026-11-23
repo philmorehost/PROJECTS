@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-kyc-enforcement.php';
 require_once __DIR__.'/bc-google-signin.php';
 require_once __DIR__ . "/bc-incident-wallet.php";
 
@@ -509,54 +510,7 @@ function bc_get_app_redirect_info($vendor_id) {
 }
 
 function isKYCEnforced($v_id = null) {
-    global $connection_server;
-    static $kyc_enforced_cache = [];
-
-    if ($v_id === null) $v_id = resolveVendorID();
-    if ($v_id <= 0) return false;
-
-    // Check config page bypass
-    $current_uri = explode("?", trim($_SERVER["REQUEST_URI"] ?? ""))[0];
-    $is_config_page = in_array($current_uri, ["/web/AccountSettings.php", "/web/KYCVerification.php", "/web/SecurityQuest.php"]);
-
-    if (!$is_config_page && isset($kyc_enforced_cache[$v_id])) return $kyc_enforced_cache[$v_id];
-
-    // Branch DG6.7 Optimization: Session Cache with 30s TTL
-    if (!$is_config_page && isset($_SESSION['kyc_enforced_cache'][$v_id]) && isset($_SESSION['kyc_enforced_time'][$v_id]) && (time() - $_SESSION['kyc_enforced_time'][$v_id] < 30)) {
-        $kyc_enforced_cache[$v_id] = $_SESSION['kyc_enforced_cache'][$v_id];
-        return $kyc_enforced_cache[$v_id];
-    }
-
-    // Check Global Super Admin Toggle
-    $global_force_kyc = getSuperAdminOption('force_kyc', '0');
-    if ($global_force_kyc == 1) {
-        $kyc_enforced_cache[$v_id] = true;
-        if (isset($_SESSION)) {
-            $_SESSION['kyc_enforced_cache'][$v_id] = true;
-            $_SESSION['kyc_enforced_time'][$v_id] = time();
-        }
-        return true;
-    }
-
-    $v_id_esc = mysqli_real_escape_string($connection_server, $v_id);
-    $q_v = mysqli_query($connection_server, "SELECT force_kyc FROM sas_vendors WHERE id='$v_id_esc' LIMIT 1");
-    if ($q_v && $r = mysqli_fetch_assoc($q_v)) {
-        if ($r['force_kyc'] == 1) {
-            $kyc_enforced_cache[$v_id] = true;
-            if (isset($_SESSION)) {
-                $_SESSION['kyc_enforced_cache'][$v_id] = true;
-                $_SESSION['kyc_enforced_time'][$v_id] = time();
-            }
-            return true;
-        }
-    }
-
-    $kyc_enforced_cache[$v_id] = false;
-    if (isset($_SESSION)) {
-        $_SESSION['kyc_enforced_cache'][$v_id] = false;
-        $_SESSION['kyc_enforced_time'][$v_id] = time();
-    }
-    return false;
+    return bc_kyc_enforcement_current($v_id===null?resolveVendorID():$v_id);
 }
 
 function base64url_encode($data) {
