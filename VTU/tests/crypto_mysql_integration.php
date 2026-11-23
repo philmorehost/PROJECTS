@@ -204,7 +204,7 @@ try {
     require __DIR__.'/crypto_deposits_mysql_cases.php';
     require __DIR__.'/vtu_wallet_mysql_cases.php';
     require __DIR__.'/crypto_dashboard_mysql_cases.php';
-    require __DIR__.'/crypto_customer_binding_mysql_cases.php';
+    require __DIR__.'/crypto_retirement_mysql_cases.php';
     echo "$n real MySQL checks passed ($edition); no provider calls or application database used.\n";
 } finally {
     $connection_server->rollback();
