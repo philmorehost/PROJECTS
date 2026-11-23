@@ -4,6 +4,8 @@ on:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-bybit.php'
+      - 'VTU/**/func/crypto-poll-worker.php'
+      - 'VTU/**/func/crypto-poll-alert-deliver.php'
       - 'VTU/tests/bybit_discovery_test.php'
       - 'VTU/tests/crypto_bybit_identity_test.php'
       - 'VTU/tests/crypto_bybit_address_test.php'
@@ -36,6 +38,8 @@ on:
     paths:
       - 'VTU/**/func/bc-crypto-*.php'
       - 'VTU/**/func/bc-bybit.php'
+      - 'VTU/**/func/crypto-poll-worker.php'
+      - 'VTU/**/func/crypto-poll-alert-deliver.php'
       - 'VTU/tests/bybit_discovery_test.php'
       - 'VTU/tests/crypto_bybit_identity_test.php'
       - 'VTU/tests/crypto_bybit_address_test.php'
