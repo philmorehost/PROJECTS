@@ -27,7 +27,7 @@ try{
  $db->query('CREATE TABLE sas_super_admin (id INT PRIMARY KEY,status INT,is_blocked INT,totp_secret VARCHAR(225),two_factor_type VARCHAR(20)) ENGINE=InnoDB');
  $db->query("INSERT INTO sas_super_admin VALUES (1,1,0,'FIXTURE','totp')");
  $source=file_get_contents(__DIR__.'/../DGV7.0-'.$edition.'/func/bc-tables.php');
- foreach(['sas_wallet_mutation_events','sas_gateway_api_credentials'] as $table){$start=strpos($source,"CREATE TABLE IF NOT EXISTS $table (");$end=strpos($source,'");',$start);if($start===false||$end===false)throw new RuntimeException('ddl');$db->query(substr($source,$start,$end-$start));}
+ foreach(['sas_wallet_mutation_events','sas_gateway_api_credentials'] as $table){if(!preg_match('/CREATE TABLE IF NOT EXISTS '.preg_quote($table,'/').' \(.*?\) ENGINE=InnoDB/s',$source,$ddl))throw new RuntimeException('ddl');$db->query($ddl[0]);}
  $columns='vendor_id INT,product_unique_id VARCHAR(225),type_alternative VARCHAR(225),reference VARCHAR(225),amount DECIMAL(30,8),discounted_amount DECIMAL(30,8),balance_before DECIMAL(30,8),balance_after DECIMAL(30,8),description TEXT,api_website VARCHAR(225),status INT';
  $db->query("CREATE TABLE sas_vendor_transactions ($columns) ENGINE=InnoDB");
  $db->query("CREATE TABLE sas_transactions ($columns,username VARCHAR(225),api_reference VARCHAR(225),mode VARCHAR(50)) ENGINE=InnoDB");

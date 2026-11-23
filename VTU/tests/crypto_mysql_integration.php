@@ -116,6 +116,12 @@ try {
     foreach($ddl as $sql) bc_q($sql); // Additive installer is repeatable, not a schema repair tool.
     check_db((int)scalar_db("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB'")===32,'thirty-one production tables plus fixture are InnoDB; second install succeeds');
     check_db((int)scalar_db('SELECT COUNT(*) FROM sas_crypto_v2_asset_policies')===0,'migration creates no enabled policies');
+    // Synthetic commercial entitlement fixture for the isolated read-only Bybit adapter.
+    // Production no longer bypasses paid access when credentials come from environment.
+    bc_q('CREATE TABLE sas_super_admin_options (option_name VARCHAR(255) PRIMARY KEY,option_value TEXT) ENGINE=InnoDB');
+    bc_q("INSERT INTO sas_super_admin_options VALUES ('fintech_api_price_bybit','0')");
+    bc_q('CREATE TABLE sas_gateway_api_credentials (vendor_id INT,gateway_slug VARCHAR(32),sealed_config LONGTEXT,PRIMARY KEY(vendor_id,gateway_slug)) ENGINE=InnoDB');
+
     reject_db(fn()=>bc_crypto_v2_reservation($scope,'closed-first-001','1'),'crypto_catalogue_stale');
     $network=['asset_network'=>'USDT:TRX','platform_enabled'=>false,'provider_deposit_available'=>true,'provider_withdraw_available'=>true,'confirmations'=>'20','withdrawal_confirmations'=>'40'];
     bc_crypto_gov_store_snapshot(7,['provider'=>'bybit','environment'=>'testnet','security'=>['read_only'=>true,'ip_binding_verified'=>true],'networks'=>[$network]]);
