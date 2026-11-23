@@ -72,4 +72,5 @@ mg_reject(fn()=>bc_crypto_custody_manage(11,array_merge($boundRead,['coin'=>'BTC
 $csrf=false;mg_reject(fn()=>bc_crypto_custody_manage(11,$boundRead),'test_csrf_denied');$csrf=true;
 $stepup='bad';mg_reject(fn()=>bc_crypto_custody_manage(11,$boundRead),'crypto_custody_stepup_failed');$stepup='';
 foreach(['vendor_id','user_id','address','tag','asset_network','scale'] as $field)mg_reject(fn()=>bc_crypto_custody_manage(11,['environment'=>'testnet','action'=>'propose_bound_route','custody_account'=>str_repeat('a',64),'revision'=>'4',$field=>'posted']),'crypto_bound_address_override_forbidden');
+foreach(['vendor_id','user_id','address','tag','asset_network','scale','evidence_hash'] as $field)mg_reject(fn()=>bc_crypto_custody_manage(11,['environment'=>'testnet','action'=>'inspect_route_readiness','custody_account'=>str_repeat('a',64),'revision'=>'4',$field=>'posted']),'crypto_bound_address_override_forbidden');
 echo "$n custody management boundary checks passed; mocked authentication/storage only.\n";
