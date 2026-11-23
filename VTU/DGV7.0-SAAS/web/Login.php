@@ -71,25 +71,22 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
         exit();
     }
 
-    if (isset($_POST['resend-login-otp']) && is_array($login_otp_pending)) {
-        if (bc_is_rate_limited('web_login_otp', ((int)$login_otp_pending['vendor_id']) . ':' . strtolower((string)$login_otp_pending['username']), 6, 900)) {
-            $_SESSION["product_purchase_response"] = "Please wait a few minutes before requesting another code.";
-        } else {
-            $resend_user = mysqli_real_escape_string($connection_server, (string)$login_otp_pending['username']);
-            $resend_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . (int)$login_otp_pending['vendor_id'] . "' AND username='$resend_user' LIMIT 1");
-            $resend_row = ($resend_q && mysqli_num_rows($resend_q) === 1) ? mysqli_fetch_assoc($resend_q) : null;
-            if ($resend_row && bc_send_user_login_otp($resend_row, (int)$login_otp_pending['vendor_id']) !== '') {
-                $_SESSION["product_purchase_response"] = "A new verification code has been sent to your email.";
-            } else {
-                $_SESSION["product_purchase_response"] = "Could not send a new code. Please sign in again.";
-                unset($_SESSION['login_otp_pending']);
-            }
+    if (isset($_POST['resend-login-otp'])) {
+        require_once __DIR__.'/../func/bc-login-resend.php';
+        $resend_result=bc_login_resend($login_otp_pending,(int)($select_vendor_table['id']??0),function($vid,$username)use($connection_server){
+            $safe=mysqli_real_escape_string($connection_server,$username);
+            $query=mysqli_query($connection_server,"SELECT * FROM sas_users WHERE vendor_id=$vid AND username='$safe' LIMIT 1");
+            return $query?mysqli_fetch_assoc($query):null;
+        });
+        if(strtolower($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='xmlhttprequest'){
+            header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+            echo json_encode($resend_result);exit;
         }
-        header("Location: Login.php");
-        exit();
+        $_SESSION['product_purchase_response']=$resend_result['message'];header('Location: Login.php');exit;
     }
 
     if (isset($_POST['verify-login-otp']) && is_array($login_otp_pending)) {
+        bc_validate_csrf();
         $entered_login_otp = preg_replace('/\D/', '', (string)($_POST['login_otp'] ?? ''));
         $pending_vendor_id = (int)$login_otp_pending['vendor_id'];
         $pending_username  = (string)$login_otp_pending['username'];
@@ -354,6 +351,7 @@ bc_plate_auth_top(array(
                 <strong><?php echo htmlspecialchars(strtolower((string)$_SESSION['login_otp_pending']['username'])); ?></strong>'s address.
             </p>
             <form method="post" action="">
+                <?php echo bc_csrf_field(); ?>
                 <div class="pk-auth__field">
                     <label class="pk-auth__label" for="login_otp">Verification code</label>
                     <input id="login_otp" name="login_otp" type="text" inputmode="numeric" pattern="[0-9]{6}"
@@ -364,7 +362,7 @@ bc_plate_auth_top(array(
                     <button name="verify-login-otp" type="submit" class="pk-auth__btn">Verify &amp; sign in</button>
                 </div>
                 <div class="pk-auth__field">
-                    <button name="resend-login-otp" type="submit" class="pk-auth__btn pk-auth__btn--ghost">Resend code</button>
+                    <button name="resend-login-otp" type="submit" formnovalidate class="pk-auth__btn pk-auth__btn--ghost">Resend code</button>
                 </div>
                 <p class="pk-auth__note">
                     <a class="pk-auth__link" href="Login.php?cancel-login-otp=1">Use a different account</a>
@@ -602,3 +600,5 @@ bc_plate_auth_end(array(
     ),
 ));
 ?>
+
+<script src="../asset/bc-login-resend.js" defer></script>

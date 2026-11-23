@@ -432,7 +432,7 @@ bc_adm_head("Withdrawal Approvals | " . ($get_all_super_admin_site_details["site
                             <label class="form-label small fw-bold text-muted">OR EMAIL CODE</label>
                             <div class="input-group">
                                 <input type="text" name="otp_code" class="form-control rounded-3 text-center" maxlength="6" inputmode="numeric" placeholder="6-digit code">
-                                <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary rounded-3 ms-2" formnovalidate>Send code</button>
+                                <button type="submit" name="send_stepup_code" value="1" disabled title="Withdrawals and their verification actions are paused" class="btn btn-outline-primary rounded-3 ms-2" formnovalidate>Paused</button>
                             </div>
                         </div>
                     </div>
