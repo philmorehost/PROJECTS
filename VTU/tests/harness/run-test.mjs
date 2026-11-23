@@ -75,7 +75,8 @@ async function mirror() {
     // The Pay Bills automation library is asserted against the pages that call it.
     const isJs = f.rel.endsWith('.js') && (f.rel.includes('/jsfile/') || f.rel.endsWith('/asset/bc-admin-wallet.js'));
     const isCryptoPrototypeSource = f.rel.startsWith('cryptocurrency-idea/') && !f.rel.endsWith('/home-page.html') && /\.(js|json|html)$/.test(f.rel);
-    if (!isPhp && !isDoc && !isHtaccess && !isJs && !isCryptoPrototypeSource) continue;
+    const isIconCss = f.rel.endsWith('/assets-2/vendor/bootstrap-icons/bootstrap-icons.min.css');
+    if (!isPhp && !isDoc && !isHtaccess && !isJs && !isCryptoPrototypeSource && !isIconCss) continue;
     const dest = '/host/' + f.rel;
     // mkdir on an existing directory fails in this FS, so create each segment once.
     const parts = path.dirname(f.rel).split('/').filter((p) => p && p !== '.');

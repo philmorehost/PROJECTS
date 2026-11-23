@@ -414,12 +414,13 @@ jobs:
             cmp "VTU/DGV7.0-SAAS/web/${page}" "VTU/DGV7.0-NON-SAAS/web/${page}"
           done
           # Login/Register/SecurityPIN legitimately differ (the standalone edition lacks the
-          # SAAS hardening), but both editions must use the shell and drop assets-2.
+          # SAAS hardening), but both editions must use the shell. The pinned local
+          # SweetAlert dependency is not retired template chrome.
           for page in Login.php Register.php SecurityPIN.php; do
             for edition in DGV7.0-SAAS DGV7.0-NON-SAAS; do
               grep -q 'bc_plate_auth_head(' "VTU/${edition}/web/${page}"
               grep -q 'bc_plate_auth_end(' "VTU/${edition}/web/${page}"
-              if grep -q 'assets-2\|web-bg-image' "VTU/${edition}/web/${page}"; then
+              if grep -vF '<script src="../assets-2/vendor/sweetalert2/sweetalert2.all.min.js" defer></script>' "VTU/${edition}/web/${page}" | grep -q 'assets-2\|web-bg-image'; then
                 echo "${edition} ${page} still loads the retired template"; exit 1
               fi
             done
