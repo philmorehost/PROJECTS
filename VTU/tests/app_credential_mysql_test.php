@@ -14,11 +14,13 @@ try{
  $db->query('ALTER TABLE sas_users ADD is_blocked INT DEFAULT 0');
  $db->query('CREATE TABLE sas_app_tokens(id INT AUTO_INCREMENT PRIMARY KEY,vendor_id INT,user_id INT,username VARCHAR(225),token_hash CHAR(64) UNIQUE,platform VARCHAR(20),device_label VARCHAR(120),issued_at DATETIME,expires_at DATETIME,last_used_at DATETIME NULL,revoked_at DATETIME NULL,revoke_reason VARCHAR(80) NULL) ENGINE=InnoDB');
  $row=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();$other=$db->query('SELECT * FROM sas_users WHERE id=12')->fetch_assoc();
+ if($edition==='SAAS')require __DIR__.'/../DGV7.0-SAAS/func/bc-login-binding.php';
  $_SESSION=[];
  foreach(['user','vendor','spadmin'] as $role){
   cb_mysql(!bc_browser_binding_valid($role,$row),'legacy browser session refused');
   cb_mysql(bc_browser_binding_stamp($role,$row),'fresh browser authentication');
  }
+ $link=$edition==='SAAS'?bc_login_binding_issue('user',$row,'user_login'):null;
  $a=bc_app_token_issue($row,7);$b=bc_app_token_issue($row,7);$o=bc_app_token_issue($other,8);
  cb_mysql($a&&$b&&$o,'issue isolated device sessions');
  cb_mysql(bc_app_session_user($a['token'],7)!==null,'live persisted token resolves');
@@ -28,6 +30,7 @@ try{
  cb_mysql(bc_app_token_exchange($a['token'],7)===null,'stale token cannot refresh');
  cb_mysql(bc_app_session_user($o['token'],8)!==null,'other tenant remains signed in');
  $changed=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();
+ if($edition==='SAAS')cb_mysql(!bc_login_binding_valid($link,'user',$changed,'user_login'),'persisted password reset rejects pending app login challenge');
  foreach(['user','vendor','spadmin'] as $role){
   cb_mysql(!bc_browser_binding_valid($role,$changed),'persisted reset revokes browser binding');
   cb_mysql(bc_browser_binding_stamp($role,$changed)&&bc_browser_binding_valid($role,$changed),'fresh browser login after reset');

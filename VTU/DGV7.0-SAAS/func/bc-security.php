@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bc-secure-session.php';
+require_once __DIR__ . '/bc-login-binding.php';
 
 /**
  * bc-security.php — DGV6.90 AI Edition
@@ -848,7 +849,11 @@ function bc_create_login_token(string $username, int $vendor_id, string $purpose
     if (!$connection_server) return '';
     bc_ensure_security_tables();
 
-    $token = bin2hex(random_bytes(32));
+    $lookup = mysqli_real_escape_string($connection_server,$username);
+    $uq=mysqli_query($connection_server,"SELECT * FROM sas_users WHERE vendor_id='".(int)$vendor_id."' AND username='$lookup' LIMIT 1");
+    $account=$uq?mysqli_fetch_assoc($uq):null;
+    $token = bc_login_binding_issue('user',$account,$purpose);
+    if($token==='')return '';
     $hash  = hash('sha256', $token);
     $username_esc = mysqli_real_escape_string($connection_server, $username);
     $purpose_esc  = mysqli_real_escape_string($connection_server, $purpose);
@@ -872,20 +877,21 @@ function bc_create_vendor_login_token(int $vendor_id, string $created_by = ''): 
     if (!$connection_server || $vendor_id <= 0) return '';
     bc_ensure_security_tables();
 
-    $vq = mysqli_query($connection_server, "SELECT email FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
+    $vq = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
     if (!$vq || mysqli_num_rows($vq) !== 1) return '';
     $vrow = mysqli_fetch_assoc($vq);
 
-    $token = bin2hex(random_bytes(32));
+    $token = bc_login_binding_issue('vendor',$vrow,'vendor_admin');
+    if($token==='')return '';
     $hash  = hash('sha256', $token);
     $email_esc   = mysqli_real_escape_string($connection_server, (string)$vrow['email']);
     $created_esc = mysqli_real_escape_string($connection_server, $created_by);
     $ip_esc      = mysqli_real_escape_string($connection_server, $_SERVER['REMOTE_ADDR'] ?? '');
 
-    mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
+    $inserted = mysqli_query($connection_server, "INSERT INTO sas_login_tokens (token_hash, vendor_id, username, purpose, created_by, ip_address, expires_at)
         VALUES ('$hash', '" . (int)$vendor_id . "', '$email_esc', 'vendor_admin', '$created_esc', '$ip_esc', DATE_ADD(NOW(), INTERVAL 120 SECOND))");
 
-    return $token;
+    return $inserted ? $token : '';
 }
 
 /** Validates and burns a vendor one-time login token. Returns the sas_vendors row, or null. */
@@ -908,8 +914,10 @@ function bc_consume_vendor_login_token(string $token): ?array {
     $vq = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
     if (!$vq || mysqli_num_rows($vq) !== 1) return null;
 
+    $vendor=mysqli_fetch_assoc($vq);
+    if(!bc_login_binding_valid($token,'vendor',$vendor,'vendor_admin'))return null;
     bc_log_security_event('VENDOR_IMPERSONATION_LOGIN', 'vendor_admin', (string)$row['username'], 'By ' . (string)$row['created_by'] . ' from ' . (string)$row['ip_address']);
-    return mysqli_fetch_assoc($vq);
+    return $vendor;
 }
 
 /**
@@ -938,6 +946,7 @@ function bc_consume_login_token(string $token, string $purpose = 'impersonate'):
     if (!$u || mysqli_num_rows($u) !== 1) return null;
 
     $user = mysqli_fetch_assoc($u);
+    if(!bc_login_binding_valid($token,'user',$user,$purpose))return null;
     bc_log_security_event('IMPERSONATION_LOGIN', $purpose, (string)$user['username'], 'By ' . (string)$row['created_by'] . ' from ' . (string)$row['ip_address']);
     return $user;
 }
@@ -958,7 +967,12 @@ function bc_peek_login_token(string $token, string $purpose = 'user_login'): ?ar
     $q = mysqli_query($connection_server, "SELECT * FROM sas_login_tokens
         WHERE token_hash='$hash' AND purpose='$purpose_esc' AND used_at IS NULL AND expires_at > NOW() LIMIT 1");
     if (!$q || mysqli_num_rows($q) !== 1) return null;
-    return mysqli_fetch_assoc($q);
+    $row=mysqli_fetch_assoc($q);
+    $username=mysqli_real_escape_string($connection_server,(string)$row['username']);
+    $vid=(int)$row['vendor_id'];
+    $uq=mysqli_query($connection_server,"SELECT * FROM sas_users WHERE vendor_id='$vid' AND username='$username' LIMIT 1");
+    $user=$uq?mysqli_fetch_assoc($uq):null;
+    return bc_login_binding_valid($token,'user',$user,$purpose)?$row:null;
 }
 
 /** Marks a peeked login token as used. */
