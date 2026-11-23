@@ -216,7 +216,8 @@ if (!function_exists('bc_klasha_bearer_token')) {
             $GLOBALS['bc_klasha_bearer_tokens'][$vendor_id] = $secret;
             return $secret;
         }
-        $email = function_exists('getVendorOption') ? trim((string)getVendorOption($vendor_id, 'klasha_login_email', '')) : '';
+        $email = (string)($creds['login_email'] ?? '');
+        if($email==='')$email = function_exists('getVendorOption') ? trim((string)getVendorOption($vendor_id, 'klasha_login_email', '')) : '';
         if ($email === '') return '';
 
         $url = bc_fintech_provider_url('klasha', 'login', $vendor_id);
@@ -473,7 +474,9 @@ if (!function_exists('bc_klasha_cny_payout')) {
      */
     function bc_klasha_cny_payout($vendor_id, array $payload) {
         if (empty($payload['businessId']) && function_exists('getVendorOption')) {
-            $business_id = trim((string)getVendorOption((int)$vendor_id, 'klasha_business_id', ''));
+            $credentials=bc_fintech_provider_credentials((int)$vendor_id,'klasha');
+            $business_id=(string)($credentials['business_id']??'');
+            if($business_id==='')$business_id = trim((string)getVendorOption((int)$vendor_id, 'klasha_business_id', ''));
             if ($business_id !== '') $payload['businessId'] = $business_id;
         }
         return bc_klasha_api_request($vendor_id, 'cny_payout', 'POST', $payload);

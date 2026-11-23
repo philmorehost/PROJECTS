@@ -5,6 +5,12 @@ on:
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
+      - 'VTU/**/func/bc-paid-*.php'
+      - 'VTU/**/func/bc-gateway-api-settings.php'
+      - 'VTU/**/func/bc-fintech-api-access.php'
+      - 'VTU/**/bc-admin/PaymentGateway.php'
+      - 'VTU/**/bc-spadmin/PaymentGateway.php'
+      - 'VTU/**/web/handle_upgrade.php'
       - 'VTU/**/func/bc-tables.php'
       - 'VTU/**/bc-admin/AppUpdateBroadcast.php'
       - 'VTU/**/web/api/app-update.php'
@@ -34,6 +40,12 @@ on:
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
+      - 'VTU/**/func/bc-paid-*.php'
+      - 'VTU/**/func/bc-gateway-api-settings.php'
+      - 'VTU/**/func/bc-fintech-api-access.php'
+      - 'VTU/**/bc-admin/PaymentGateway.php'
+      - 'VTU/**/bc-spadmin/PaymentGateway.php'
+      - 'VTU/**/web/handle_upgrade.php'
       - 'VTU/**/func/bc-tables.php'
       - 'VTU/**/bc-admin/AppUpdateBroadcast.php'
       - 'VTU/**/web/api/app-update.php'
@@ -96,6 +108,7 @@ jobs:
           php -n VTU/tests/app_update_settings_test.php
           php -n VTU/tests/app_update_dispatch_test.php
           php -n VTU/tests/app_update_worker_test.php
+          php -n VTU/tests/paid_gateway_test.php
           php VTU/DGV7.0-SAAS/cron/process_app_updates.php --help
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-NON-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
@@ -163,3 +176,9 @@ jobs:
           BC_APP_UPDATE_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/app_update_worker_mysql_test.php
+
+      - name: Atomic account upgrades and paid gateway access with mocked credentials
+        env:
+          BC_PAID_GATEWAY_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/paid_gateway_mysql_test.php

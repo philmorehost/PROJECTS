@@ -3,6 +3,18 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
 
+
+    require_once __DIR__.'/../func/bc-paid-security.php';
+    require_once __DIR__.'/../func/bc-gateway-api-settings.php';
+    if(isset($_POST['save-fintech-prices'])){
+        bc_validate_csrf();
+        $error=bc_paid_verify($get_logged_spadmin_details,'spadmin','paid_gateway_prices',$_POST);
+        $ok=$error==='' && bc_gateway_prices_save($connection_server,$get_logged_spadmin_details,$_POST);
+        $_SESSION['product_purchase_response']=$ok?'Fintech API access prices saved.':($error!==''?$error:'Prices were not saved. Use nonnegative amounts with at most two decimal places; check transactional schema.');
+        bc_paid_reply($ok,$_SESSION['product_purchase_response']);
+        header('Location: PaymentGateway.php');exit;
+    }
+
     $kyc_verification_array = array("bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address");
     $payment_gateway_array = array("monnify", "flutterwave", "paystack", "payvessel", "payhub");
 	$payment_gateway_webhook_array = array("monnify" => $web_http_host . "/vendors-monnify.php", "flutterwave" => $web_http_host . "/vendors-flutterwave.php", "paystack" => $web_http_host . "/vendors-paystack.php", "payvessel" => $web_http_host . "/vendors-payvessel.php", "payhub" => $web_http_host . "/vendors-payhub.php");
@@ -16,11 +28,6 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $local_identity_min_balance = mysqli_real_escape_string($connection_server, (float)($_POST["local_identity_min_balance"] ?? 1000));
 
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('force_kyc', '$force_kyc') ON DUPLICATE KEY UPDATE option_value='$force_kyc'");
-        // §28: commercialised fintech API prices (vendors buy these in bc-admin → Payment Gateway).
-        foreach (array('flutterwave', 'klasha', 'platnova') as $fintech_slug) {
-            $fintech_price = mysqli_real_escape_string($connection_server, (float)($_POST["fintech_api_price_" . $fintech_slug] ?? 50000));
-            mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('fintech_api_price_$fintech_slug', '$fintech_price') ON DUPLICATE KEY UPDATE option_value='$fintech_price'");
-        }
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('nin_card_activation_fee', '$nin_card_fee') ON DUPLICATE KEY UPDATE option_value='$nin_card_fee'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('bvn_verify_activation_fee', '$bvn_verify_fee') ON DUPLICATE KEY UPDATE option_value='$bvn_verify_fee'");
         mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('identity_api_activation_fee', '$identity_api_fee') ON DUPLICATE KEY UPDATE option_value='$identity_api_fee'");
@@ -283,6 +290,19 @@ bc_adm_head('', array("area" => "spadmin"));
       <div class="row g-4 justify-content-center">
         <div class="col-lg-10">
 
+            <div class="card p-4 mb-4" id="fintech-api-prices">
+            <h5>Fintech API Access Prices (SAAS vendors)</h5>
+            <p>One-time vendor access purchases. Bybit defaults to ₦150,000; Klasha to ₦50,000. Zero is allowed. NON-SAAS includes access without purchase. Changing prices does not enable services or crypto staging.</p>
+            <form method="post" data-paid-save>
+            <?php foreach(bc_fintech_api_providers() as $fintech_slug=>$meta):
+              $fintech_price_val=bc_fintech_api_price($fintech_slug); ?>
+              <label class="d-block my-3"><?php echo htmlspecialchars($meta['label']); ?> API Price (NGN)
+              <input class="form-control" name="fintech_api_price_<?php echo $fintech_slug; ?>" type="number" step="0.01" min="0" max="999999999.99" required value="<?php echo htmlspecialchars(number_format($fintech_price_val,2,'.','')); ?>"></label>
+            <?php endforeach; ?>
+            <?php bc_paid_fields($get_logged_spadmin_details,'paid_gateway_prices'); ?>
+            <p>Google Authenticator enrolment is required to save platform prices.</p>
+            <button class="btn btn-primary" name="save-fintech-prices" value="1">Save API Access Prices</button>
+            </form></div>
             <!-- Vendor KYC Card -->
             <div class="card shadow-sm border-0 rounded-4 mb-4">
                 <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
@@ -336,24 +356,7 @@ bc_adm_head('', array("area" => "spadmin"));
                                 <h6 class="fw-bold text-dark mb-0 border-bottom pb-2"><i class="bi bi-cash-coin me-2"></i>Service Activation Fees</h6>
                             </div>
 
-                            <div class="col-12">
-                                <h6 class="fw-bold text-dark mb-0 border-bottom pb-2"><i class="bi bi-plug me-2"></i>Fintech API Access Prices (SAAS vendors)</h6>
-                                <p class="small text-muted mb-0">Vendors buy these APIs from their Payment Gateway page. NON-SAAS installs include all three by default. Set 0 to make an API free.</p>
-                            </div>
-                            <?php foreach (array('flutterwave' => 'Flutterwave', 'klasha' => 'Klasha', 'platnova' => 'Platnova') as $fintech_slug => $fintech_label):
-                                $q_fintech_price = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='fintech_api_price_$fintech_slug'");
-                                $fintech_price_val = ($q_fintech_price && mysqli_num_rows($q_fintech_price) > 0) ? mysqli_fetch_assoc($q_fintech_price)['option_value'] : '50000';
-                            ?>
-                            <div class="col-md-4">
-                                <div class="p-4 border rounded-4 bg-light shadow-sm">
-                                    <h6 class="fw-bold text-dark mb-2"><?php echo $fintech_label; ?> API Price (NGN)</h6>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-white border-0">₦</span>
-                                        <input name="fintech_api_price_<?php echo $fintech_slug; ?>" type="number" step="0.01" min="0" class="form-control form-control-lg border-0 bg-white" value="<?php echo htmlspecialchars($fintech_price_val); ?>" placeholder="50000.00">
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
+
 
                             <div class="col-md-12">
                                 <?php
@@ -675,4 +678,4 @@ bc_adm_head('', array("area" => "spadmin"));
     
 
 
-<?php bc_adm_foot(array("area" => "spadmin")); ?>
+<?php bc_paid_otp_script(); bc_adm_foot(array("area" => "spadmin")); ?>

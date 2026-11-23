@@ -123,6 +123,10 @@ function bc_q_row($sql, $params=array()) {
 }
 
 function fake_mysqli_query_raw($db, $sql) {
+    if(preg_match("/SELECT option_value AS value FROM sas_super_admin_options WHERE option_name='([^']+)' LIMIT 2 FOR UPDATE/",$sql,$m))return isset($GLOBALS['db']['options'][$m[1]])?[['value'=>$GLOBALS['db']['options'][$m[1]]]]:[];
+    if(preg_match("/SELECT setting_value AS value FROM sas_settings WHERE setting_name='([^']+)' AND vendor_id=([0-9]+) LIMIT 2 FOR UPDATE/",$sql,$m))return isset($GLOBALS['db']['paid_grants'][$m[2].':'.$m[1]])?[['value'=>$GLOBALS['db']['paid_grants'][$m[2].':'.$m[1]]]]:[];
+    if(strpos($sql,'SELECT sealed_config FROM sas_gateway_api_credentials')===0)return [];
+
     $GLOBALS['db']['affected'] = 0;
     // Real SQL is whitespace-insensitive, so the fake matches a collapsed copy. The
     // shipped statements are formatted for reading; without this every line break
@@ -1846,6 +1850,8 @@ foreach ([
     gcheck("edition parity: $file", md5_file($root . '/DGV7.0-SAAS/' . $file), md5_file($root . '/DGV7.0-NON-SAAS/' . $file));
 }
 
+load_edition($root,'DGV7.0-SAAS',['func/bc-edition.php','func/bc-fintech-api-access.php','func/bc-paid-entitlements.php','func/bc-gateway-api-settings.php']);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Phase 3 — provider adapters (Klasha & Flutterwave v3)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1857,6 +1863,7 @@ load_edition($root, 'DGV7.0-SAAS', [
     'func/bc-fintech-flutterwave.php',
 ]);
 
+$GLOBALS['db']['paid_grants']['7:fintech_api_access_klasha']='fixture-purchased';
 // ── 19. provider registry and configuration ────────────────────────────────
 $registry = bc_fintech_provider_registry();
 gtrue('registry lists klasha', isset($registry['klasha']));
@@ -2414,7 +2421,7 @@ foreach ($editions as $edition) {
 
     // The new credential screen must offer Klasha.
     $pg = file_get_contents($root . '/' . $edition . '/bc-admin/PaymentGateway.php');
-    gtrue("$edition gateway screen offers klasha credentials", strpos($pg, '"payhub", "paystack", "klasha"') !== false);
+    gtrue("$edition gateway screen offers klasha credentials", strpos($pg,'bc_gateway_api_cards(')!==false && strpos(file_get_contents($root.'/'.$edition.'/func/bc-gateway-api-settings.php'),"['klasha'=>'Klasha','bybit'=>'Bybit']")!==false);
 }
 
 // The sidebar is grouped, and regrouping must never drop a service link.
@@ -2789,7 +2796,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-update-dispatch-1');
+gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-paid-gateways-1');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);

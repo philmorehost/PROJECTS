@@ -318,6 +318,14 @@ if (!function_exists('bc_fintech_provider_credentials')) {
         if ($config === null || $vendor_id <= 0 || !($connection_server instanceof mysqli)) return $out;
 
         $slug = strtolower(trim((string)$provider));
+        if($slug==='klasha'){
+            require_once __DIR__.'/bc-gateway-api-settings.php';
+            try{
+                if(!bc_gateway_api_entitled($connection_server,$vendor_id,'klasha'))return $out;
+                $saved=bc_gateway_api_read($connection_server,$vendor_id,'klasha');
+                if($saved!==null)return array_merge($out,$saved,['found'=>true,'source'=>'sas_gateway_api_credentials','status'=>2]);
+            }catch(Throwable $e){return $out;}
+        }
         foreach ((array)($config['credential_tables'] ?? []) as $table) {
             if (!preg_match('/^[a-z0-9_]+$/', (string)$table)) continue;
             $q = mysqli_query($connection_server, "SELECT * FROM `$table` WHERE vendor_id='$vendor_id' AND gateway_name='" . mysqli_real_escape_string($connection_server, $slug) . "' LIMIT 1");

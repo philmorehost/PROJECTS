@@ -4,15 +4,21 @@ function bc_bybit_config($vendor_id) {
     $id = (int)$vendor_id;
     if ($id <= 0) throw new RuntimeException('bybit_vendor_required');
     $prefix = 'BC_BYBIT_VENDOR_' . $id . '_';
-    $environment = getenv($prefix . 'ENV') ?: 'testnet';
+    $saved=null;
+    if(isset($GLOBALS['connection_server']) && $GLOBALS['connection_server'] instanceof mysqli){
+        require_once __DIR__.'/bc-gateway-api-settings.php';
+        if(!bc_gateway_api_entitled($GLOBALS['connection_server'],$id,'bybit'))throw new RuntimeException('bybit_access_required');
+        if(!getenv($prefix.'KEY') && !getenv($prefix.'SECRET'))$saved=bc_gateway_api_read($GLOBALS['connection_server'],$id,'bybit');
+    }
+    $environment = $saved['environment'] ?? (getenv($prefix . 'ENV') ?: 'testnet');
     $hosts = ['testnet' => 'https://api-testnet.bybit.com', 'mainnet' => 'https://api.bybit.com'];
     if (!isset($hosts[$environment])) throw new RuntimeException('bybit_environment_invalid');
-    $key = (string)getenv($prefix . 'KEY');
-    $secret = (string)getenv($prefix . 'SECRET');
+    $key = $saved['key'] ?? (string)getenv($prefix . 'KEY');
+    $secret = $saved['secret'] ?? (string)getenv($prefix . 'SECRET');
     if (!preg_match('/^[A-Za-z0-9_-]{8,256}$/D', $key) || strlen($secret) < 16 || strlen($secret) > 512 || preg_match('/[\x00-\x20\x7f]/', $secret)) {
         throw new RuntimeException('bybit_credentials_not_configured');
     }
-    $ips = array_values(array_unique(array_filter(array_map('trim', explode(',', (string)getenv($prefix . 'EXPECTED_IPS'))))));
+    $ips = array_values(array_unique(array_filter(array_map('trim', explode(',', ($saved['expected_ips'] ?? (string)getenv($prefix . 'EXPECTED_IPS')))))));
     if (!$ips) throw new RuntimeException('bybit_expected_ips_required');
     foreach ($ips as $ip) if (!filter_var($ip, FILTER_VALIDATE_IP)) throw new RuntimeException('bybit_expected_ips_invalid');
     return ['vendor_id'=>$id, 'environment'=>$environment, 'base_url'=>$hosts[$environment], 'key'=>$key, 'secret'=>$secret, 'expected_ips'=>$ips];

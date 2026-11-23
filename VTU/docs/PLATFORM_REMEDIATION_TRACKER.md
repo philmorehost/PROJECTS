@@ -289,3 +289,20 @@ sending. Runtime deployment/preflight/provider delivery verification remains a
 separate operator step; do not mark actual production automation as enabled.
 Other billing, Bybit and site-wide OTP/compliance work remains open. Crypto staging
 stays paused and NON-SAAS Marketplace is untouched.
+
+
+## Paid gateway cards and atomic pricing-level billing
+
+Added dedicated Klasha/Bybit API configuration cards independent of withdrawal
+module visibility; SAAS catalogue defaults Klasha NGN50,000 and Bybit NGN150,000,
+with PIN+TOTP protected platform pricing and NON-SAAS included access. New vendor
+purchases and self/vendor-admin pricing-level changes commit wallet, receipt,
+replay event and entitlement together under row locks. Free Smart Earner and zero
+configured prices supported; account type/KYB/API eligibility never promoted by
+pricing changes. New API secrets encrypted, write-only in UI, tenant-bound and
+revalidated against commercial access. Existing Bybit staging/live gates untouched.
+Async OTP/purchase/settings feedback retains inputs and avoids reload/alerts.
+Operator guide: `PAID_GATEWAY_ACCESS.md`. Source only: no deployment, production
+migration, credential entry or provider calls. Super-admin complimentary overrides,
+isolated clone upgrade endpoint and the remaining site-wide OTP/KYC audit are not
+claimed complete by this batch. Crypto staging remains paused.
