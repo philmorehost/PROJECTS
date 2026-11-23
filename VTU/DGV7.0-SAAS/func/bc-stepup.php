@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/bc-browser-binding.php';
 require_once __DIR__ . '/bc-action-channels.php';
 require_once __DIR__ . '/bc-action-settings-unlock.php';
 /**

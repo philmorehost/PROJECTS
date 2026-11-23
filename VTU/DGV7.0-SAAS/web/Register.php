@@ -74,6 +74,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
                                     // Log the user in immediately
                                     $_SESSION["user_session"] = $user;
+        bc_browser_binding_new_user($vendor_id,stripslashes($user));
                                     if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                                     //Congratulations, Account Has Been Created Successfully.
                                     $json_response_array = array("desc" => "Congratulations, Account Has Been Created Successfully.");

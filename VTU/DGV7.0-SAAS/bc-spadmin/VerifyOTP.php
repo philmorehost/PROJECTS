@@ -11,6 +11,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     $email = $_SESSION["temp_spadmin_session"];
     $admin_detail = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_super_admin WHERE email='$email' LIMIT 1"));
 
+    // Retired pending states without an authentication-time binding cannot create sessions.
+    if(!is_string($_SESSION['temp_auth_credential_binding']['spadmin']??null)||!hash_equals($_SESSION['temp_auth_credential_binding']['spadmin'],bc_browser_binding_fingerprint('spadmin',$admin_detail)??'')){header('Location: Login.php');exit;}
+
     if(isset($_POST["verify-otp"])){
         $otp = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["otp"])));
 
@@ -19,6 +22,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $error = "Verification code has expired. Please request a new one.";
             } elseif($otp === $_SESSION["auth_otp"]){
                 $_SESSION["spadmin_session"] = $email;
+                session_regenerate_id(true);bc_browser_binding_stamp('spadmin',$admin_detail);bc_auth_epoch_stamp();
                 unset($_SESSION["temp_spadmin_session"]);
                 unset($_SESSION["auth_otp"]);
                 unset($_SESSION["auth_otp_time"]);

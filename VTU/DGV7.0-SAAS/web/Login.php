@@ -47,6 +47,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
         if ($impersonated_user) {
             session_regenerate_id(true);
             $_SESSION["user_session"] = strtolower($impersonated_user['username']);
+            bc_browser_binding_stamp('user',$impersonated_user);
             if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
             $_SESSION["admin_impersonation"] = true;
             $_SESSION["admin_impersonation_vendor"] = (int)$impersonated_user['vendor_id'];
@@ -100,13 +101,14 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
             $pending_user_sql = mysqli_real_escape_string($connection_server, $pending_username);
             $pending_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$pending_vendor_id' AND username='$pending_user_sql' LIMIT 1");
             $pending_row = ($pending_q && mysqli_num_rows($pending_q) === 1) ? mysqli_fetch_assoc($pending_q) : null;
-            if (!$pending_row || (int)$pending_row['status'] !== 1) {
+            if (!$pending_row || (int)$pending_row['status'] !== 1 || !is_string($login_otp_pending['credential_binding']??null) || !hash_equals($login_otp_pending['credential_binding'],bc_browser_binding_fingerprint('user',$pending_row)??'')) {
                 unset($_SESSION['login_otp_pending']);
                 $_SESSION["product_purchase_response"] = "This account cannot be signed in right now. Please contact support.";
             } else {
                 unset($_SESSION['login_otp_pending']);
                 session_regenerate_id(true);
                 $_SESSION["user_session"] = strtolower($pending_row["username"]);
+            bc_browser_binding_stamp('user',$pending_row);
                 if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                 recordLoginAttempt($pending_row["username"], $_SERVER['REMOTE_ADDR'] ?? '', 1, $pending_vendor_id);
 
@@ -155,6 +157,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                                 'username'  => strtolower($user_detail['username']),
                                 'vendor_id' => (int)$vendor_id,
                                 'created'   => time(),
+                                'credential_binding'=>bc_browser_binding_fingerprint('user',$user_detail),
                             );
                             $_SESSION["product_purchase_response"] = "A verification code has been sent to your email.";
                         } else {
@@ -163,12 +166,14 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                         header("Location: Login.php");
                         exit();
                     }
-                    $_SESSION["user_session"] = strtolower($user_detail["username"]);
-                    if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                     // Update google_id if not set
                     if (empty($user_detail['google_id'])) {
                         mysqli_query($connection_server, "UPDATE sas_users SET google_id='$google_id' WHERE id='".$user_detail['id']."'");
                     }
+                    $user_detail = mysqli_fetch_assoc(mysqli_query($connection_server,"SELECT * FROM sas_users WHERE id='".(int)$user_detail["id"]."' LIMIT 1"));
+                    $_SESSION["user_session"] = strtolower($user_detail["username"]);
+            bc_browser_binding_stamp('user',$user_detail);
+                    if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                     // DGV7: same post-authentication app routing as the password path.
                     bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
                     header("Location: Dashboard.php");
@@ -238,6 +243,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                                         'username'  => strtolower($user_detail['username']),
                                         'vendor_id' => (int)$vendor_id,
                                         'created'   => time(),
+                                'credential_binding'=>bc_browser_binding_fingerprint('user',$user_detail),
                                     );
                                     $json_response_array = array("desc" => "A verification code has been sent to your email.");
                                 } else {
@@ -256,6 +262,7 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                             }
 
     						$_SESSION["user_session"] = strtolower($user_detail["username"]);
+            bc_browser_binding_stamp('user',$user_detail);
     						if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
 							// Email Beginning
 							$log_template_encoded_text_array = array("{firstname}" => $user_detail["firstname"], "{lastname}" => $user_detail["lastname"], "{username}" => $user_detail["username"], "{ip_address}" => $_SERVER["REMOTE_ADDR"]);

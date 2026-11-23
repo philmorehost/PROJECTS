@@ -83,6 +83,7 @@ if ($connection_server) {
             if ($vendor_login_row) {
                 session_regenerate_id(true);
                 $_SESSION["admin_session"] = $vendor_login_row["email"];
+                bc_browser_binding_stamp('vendor',$vendor_login_row);bc_auth_epoch_stamp();
                 $_SESSION["spadmin_vendor_auth"] = true;
                 $getRedirectUrl = isset($_GET["redirectAdminTo"]) ? mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["redirectAdminTo"]))) : "";
                 if (!empty($getRedirectUrl)) {
@@ -125,6 +126,7 @@ if ($connection_server) {
                 if (!empty($bc_fresh_actor['is_blocked']) || ($bc_fresh_actor && (string)$bc_fresh_actor['email'] !== (string)$_SESSION['admin_session'])) $bc_fresh_actor = null;
                 $get_logged_admin_details = $bc_fresh_actor ?: bc_q_row("SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
                 if ($get_logged_admin_details) {
+                    bc_browser_binding_enforce('vendor',$get_logged_admin_details);
 
                     // An expired account has exactly one operational destination.
                     // Check the authenticated vendor too (including platform-host logins).

@@ -71,6 +71,7 @@ if ($connection_server) {
                 if (!empty($bc_fresh_actor['is_blocked']) || ($bc_fresh_actor && (string)$bc_fresh_actor['email'] !== (string)$_SESSION['admin_session'])) $bc_fresh_actor = null;
                 $get_logged_admin_details = $bc_fresh_actor ?: bc_q_row("SELECT * FROM sas_vendors WHERE id='$vid' && email='$email' LIMIT 1");
                 if ($get_logged_admin_details) {
+                    bc_browser_binding_enforce('vendor',$get_logged_admin_details);
 
                     // §29: a forced password change confines the admin session to
                     // Account Settings until a new password is set.

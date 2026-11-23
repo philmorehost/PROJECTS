@@ -46,6 +46,7 @@ function bc_enrollment_session_guard() {
         $row=bc_q_row('SELECT * FROM sas_users WHERE vendor_id=? AND username=? LIMIT 1',[(int)resolveVendorID(),(string)$_SESSION['user_session']]);
     }
     if(!$row)return;
+    bc_browser_binding_enforce($role,$row);
     $GLOBALS['bc_enrollment_actor']=$row;
     $GLOBALS['bc_enrollment_role']=$role;
     $reason=bc_enrollment_reason($row,$role);
