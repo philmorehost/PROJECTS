@@ -4,9 +4,20 @@ set_exception_handler(function($e){echo '::error::'.str_replace(["\n","\r"],' ',
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-admin-wallet-adjustment.php';
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-stepup.php';
+require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-action-policy-settings.php';
 function verifyUserPIN($pin,$actor){return password_verify($pin,$actor['security_pin']);}
+function bc_validate_csrf(){if(($_POST['_csrf_token']??'')!=='fixture-csrf')throw new RuntimeException('CSRF refused');}
+function bc_verify_password($plain,$hash){return password_verify($plain,$hash);}
+function bc_sec_audit(){return true;} // No schema or external audit transports in the fixture.
 function bc_verify_otp($purpose,$identity,$vid,$code){return $purpose==='stepup_wallet_probe' && $identity==='vendor@example.test' && $vid===7 && $code==='654321';}
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+if(($argv[1]??'')==='policy'){
+ $name=$argv[2]??'';if(!preg_match('/\Abc_admin_wallet_ci_[a-f0-9]{12}\z/D',$name))throw new RuntimeException('db scope');
+ $connection_server=new mysqli('127.0.0.1','root','disposable-ci-only',$name,3306);
+ $actor=$connection_server->query('SELECT * FROM sas_vendors WHERE id=7')->fetch_assoc();
+ $_POST=['save-action-channels'=>'1','_csrf_token'=>'fixture-csrf','current_password'=>($argv[3]??'')==='good'?'fixture-password':'incorrect','pin'=>'9362','otp_code'=>bc_totp_code('JBSWY3DPEHPK3PXP',time()),'ack_pin_only'=>'1'];
+ bc_action_policy_handle(false,$actor);exit(3);
+}
 $db=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);$connection_server=$db;$name='bc_admin_wallet_ci_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);
 $n=0;function wallet_check($v,$m){global $n;if(!$v)throw new RuntimeException($m);$n++;}
 function wallet_bal($db,$t,$where){return (float)$db->query("SELECT balance FROM $t WHERE $where")->fetch_assoc()['balance'];}
@@ -57,5 +68,18 @@ try{
  wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362'],'wallet_probe')==='','explicit PIN-only policy works');
  wallet_check(bc_stepup_admin_verify($actor,['pin'=>'bad'],'wallet_probe')!=='','PIN-only never bypasses PIN');
  wallet_check(bc_stepup_admin_verify($actor,['pin'=>'9362'],'action_channel_policy')!=='','policy change still requires existing factor in PIN-only mode');
+ $db->query('ALTER TABLE sas_vendors ADD password VARCHAR(255)');
+ $password=$db->real_escape_string(password_hash('fixture-password',PASSWORD_DEFAULT));
+ $db->query("UPDATE sas_vendors SET password='$password',totp_last_step=0 WHERE id=7");
+ $run_policy=function($mode)use($name){
+   $pipes=[];$p=proc_open([PHP_BINARY,__FILE__,'policy',$name,$mode],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);fclose($pipes[0]);
+   $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);if(proc_close($p)!==0)throw new RuntimeException('policy child '.$err);
+   return json_decode($out,true,512,JSON_THROW_ON_ERROR);
+ };
+ // Start with a strict tenant policy; policy edits still need the old enrolled factor.
+ $db->query("UPDATE sas_settings SET setting_value='{\"google\":true,\"email\":false}' WHERE vendor_id=7 AND setting_name='action_security_channels'");
+ wallet_check($run_policy('bad')['status']==='error' && bc_action_channels('sas_vendors',['id'=>7])['google']===true,'wrong password cannot change channel policy');
+ wallet_check($run_policy('good')['status']==='success' && bc_action_channels('sas_vendors',['id'=>7])===['google'=>false,'email'=>false],'verified policy form commits PIN-only choice with acknowledgement');
+ wallet_check(bc_action_channels('sas_vendors',['id'=>8])===['google'=>false,'email'=>true],'saving tenant override does not alter another tenant');
  echo "$n $edition admin wallet and channel policy MySQL checks passed\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}
