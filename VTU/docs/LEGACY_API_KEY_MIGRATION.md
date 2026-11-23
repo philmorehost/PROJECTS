@@ -1,0 +1,11 @@
+# Legacy API-key separation
+
+The shared web/API credential bridge in both editions now accepts an API key without an app bearer only when the authoritative key owner is an active, nonblocked Business account in the resolved tenant, the key has not expired, and the existing enrollment guard permits access. It no longer blindly returns a provided key when lookup fails. Lookup exceptions return API_AUTH_UNAVAILABLE (503); missing/unknown/inactive keys return API_KEY_INVALID (401).
+
+Personal-account developer keys are internal plumbing for the app-token bridge, not app sessions. A request presenting only such a key returns APP_SIGNIN_REQUIRED (401). Current Android/iOS source uses app bearer sessions. Old installed builds that still submit personal API keys must be rebuilt/updated and signed in again before server rollout. No claim of installed-device verification or app-store rollout is made.
+
+Active Business integration keys are not rotated, rewritten or exposed by this change. Their existing expiry window and unscheduled-key semantics are unchanged. Business integrations do not become app sessions, and personal bearer sessions still substitute their internal key only after credential-bound persisted-token validation. Invalid presented bearer tokens never fall back to an otherwise valid Business key.
+
+Scope: callers of bc_fintech_api_credential in both editions, not a claim that every repository credential consumer is audited. Business integration keys remain independent developer credentials: a password reset alone does not revoke them. Owner-authorized key rotation/revocation remains required for a compromised Business integration key. This change does not add a monotonic revocation epoch or bypass forced-password/PIN, authenticator, KYC, tenant/service or transaction checks.
+
+Validation: expanded fintech_gate_test.php executes the real shared bridge against fake DB fixtures; legacy_api_mysql_test.php executes it with real prepared lookups on disposable MySQL for both editions. Enrollment is observed through a test double there, with separate enrollment_policy_test.php regression coverage. No deployment, live cleanup, provider verification or financial/crypto activation.

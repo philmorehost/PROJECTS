@@ -293,3 +293,9 @@ jobs:
           BC_APP_CREDENTIAL_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/app_credential_mysql_test.php
+
+      - name: Legacy developer key separation on disposable MySQL
+        env:
+          BC_LEGACY_API_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/legacy_api_mysql_test.php

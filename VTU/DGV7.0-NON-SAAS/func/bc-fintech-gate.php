@@ -427,30 +427,27 @@ if (!function_exists('bc_fintech_api_credential')) {
 
         $token = bc_app_token_from_request($input);
         if ($token === '') {
-            // §29: a developer key that has passed its validity window (60 days
-            // for Business accounts) is dead. The legacy passthrough itself is
-            // unchanged for live keys; enforcement is a lookup of the key's
-            // owner, and any failure to look up falls through to the endpoint,
-            // which fails closed on its own user query.
-            if ((int)$vendor_id > 0 && function_exists('bc_api_key_is_expired') && ($connection_server instanceof mysqli)) {
-                try {
-                    $key_owner = bc_q_row("SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1",
-                        array((int)$vendor_id, $provided_api_key));
-                    if ($key_owner && bc_api_key_is_expired($key_owner)) {
-                        bc_fintech_send_app_denial(array(
-                            'http' => 401, 'code' => 'API_KEY_EXPIRED',
-                            'message' => 'Your API key has expired. Sign in to copy your new key, then update your integration.',
-                        ));
-                    }
-                } catch (Throwable $e) {
-                    // Never let the expiry probe break authentication itself.
+            // A personal account's internal bridge key is never a first-party session.
+            // Developer integrations retain their own Business key; no rotation is performed here.
+            $scope=(int)$vendor_id>0?(int)$vendor_id:(int)resolveVendorID();
+            $owner=null;
+            try {
+                if($scope>0 && $provided_api_key!=='') {
+                    $owner=bc_q_row('SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1',[$scope,$provided_api_key]);
                 }
+            } catch (Throwable $e) {
+                bc_fintech_send_app_denial(['http'=>503,'code'=>'API_AUTH_UNAVAILABLE','message'=>'Authentication is temporarily unavailable. Please try again.']);
             }
-            if ($provided_api_key !== '' && function_exists('bc_enrollment_api_guard') && $connection_server instanceof mysqli) {
-                $scope = (int)$vendor_id > 0 ? (int)$vendor_id : (int)resolveVendorID();
-                $owner = isset($key_owner) && is_array($key_owner) ? $key_owner : bc_q_row('SELECT * FROM sas_users WHERE vendor_id=? AND api_key=? LIMIT 1', [$scope,$provided_api_key]);
-                if ($owner) bc_enrollment_api_guard($owner);
+            if(!$owner || (int)($owner['status']??0)!==1 || !empty($owner['is_blocked'])) {
+                bc_fintech_send_app_denial(['http'=>401,'code'=>'API_KEY_INVALID','message'=>'An active integration credential is required.']);
             }
+            if(!bc_fintech_developer_api_allowed($owner)) {
+                bc_fintech_send_app_denial(['http'=>401,'code'=>'APP_SIGNIN_REQUIRED','message'=>'Update the app and sign in again. Personal API keys are not app sessions.']);
+            }
+            if(bc_api_key_is_expired($owner)) {
+                bc_fintech_send_app_denial(['http'=>401,'code'=>'API_KEY_EXPIRED','message'=>'Your API key has expired. Sign in to copy your new key, then update your integration.']);
+            }
+            bc_enrollment_api_guard($owner);
             return $provided_api_key;
         }
 
