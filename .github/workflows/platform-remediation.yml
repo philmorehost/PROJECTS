@@ -46,6 +46,11 @@ on:
       - 'VTU/**/func/bc-func.php'
       - 'VTU/migrations/20261118_payhub_deposits.sql'
       - 'VTU/tests/payhub*test.php'
+      - 'VTU/**/web/Fund.php'
+      - 'VTU/**/func/bc-wallet-funding-page.php'
+      - 'VTU/**/jsfile/bc-wallet-funding.js'
+      - 'VTU/tests/wallet_funding*php'
+      - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
       - 'PAYHUB/includes/functions.php'
       - 'PAYHUB/admin/webhooks.php'
       - 'PAYHUB/webhook-paystack.php'
@@ -172,6 +177,11 @@ on:
       - 'VTU/**/func/bc-func.php'
       - 'VTU/migrations/20261118_payhub_deposits.sql'
       - 'VTU/tests/payhub*test.php'
+      - 'VTU/**/web/Fund.php'
+      - 'VTU/**/func/bc-wallet-funding-page.php'
+      - 'VTU/**/jsfile/bc-wallet-funding.js'
+      - 'VTU/tests/wallet_funding*php'
+      - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
       - 'PAYHUB/includes/functions.php'
       - 'PAYHUB/admin/webhooks.php'
       - 'PAYHUB/webhook-paystack.php'
@@ -269,6 +279,7 @@ jobs:
         run: |
           node VTU/tests/harness/run-test.mjs tests/public_app_brand_test.php
           node VTU/tests/harness/public-navigation-browser.test.mjs
+          node VTU/tests/harness/wallet-funding-browser.test.mjs
           node VTU/tests/harness/admin-pin-setup-ui-test.mjs
           node VTU/tests/harness/live-capture-ui-test.mjs
   remediation:
@@ -315,6 +326,7 @@ jobs:
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php
           php -l PAYHUB/api/transaction/verify.php
+          php VTU/tests/wallet_funding_page_test.php
           php VTU/tests/payhub_deposits_test.php
           php VTU/tests/payhub_settlement_hold_test.php
           php VTU/tests/service_attempt_review_test.php

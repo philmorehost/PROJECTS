@@ -74,7 +74,7 @@ function bc_ph_fetch($base, $secret, $reference) {
     if (!is_array($v)) throw new RuntimeException('verification_unavailable');
     return $v;
 }
-function bc_ph_schema($db) {
+function bc_ph_storage_ready($db) {
     $tables=['sas_payhub_deposits','sas_users','sas_vendors','sas_user_banks','sas_vendor_banks','sas_transactions','sas_vendor_transactions','sas_wallet_mutation_events','sas_payment_gateways','sas_super_admin_payment_gateways'];
     $names="'".implode("','",$tables)."'";
     $q=bc_ph_query($db,"SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ($names)");
@@ -83,6 +83,9 @@ function bc_ph_schema($db) {
     $q=bc_ph_query($db,"SHOW INDEX FROM sas_payhub_deposits WHERE Key_name='PRIMARY'");
     $primary=$q->fetch_all(MYSQLI_ASSOC);
     if(count($primary)!==1 || $primary[0]['Column_name']!=='provider_reference' || (int)$primary[0]['Non_unique']!==0)throw new RuntimeException('transactional_schema_required');
+}
+function bc_ph_schema($db) {
+    bc_ph_storage_ready($db);
     $q=bc_ph_query($db,'SELECT @@session.autocommit AS ac');
     if((int)$q->fetch_assoc()['ac']!==1)throw new RuntimeException('transaction_unavailable');
     // Fails if caller already has a transaction; never commits caller-owned work.
