@@ -6,7 +6,7 @@ set_exception_handler(function($e){
     echo '::error file=PAYHUB/tests/webhook_retry_mysql_test.php,line='.$e->getLine().'::'.$message."\n";
     exit(1);
 });
-require __DIR__.'/../includes/webhook-initial.php';
+require __DIR__.'/../includes/webhook-recovery.php';
 function initialfixture($db,$id){$q=$db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=?');$q->execute([$id]);return $q->fetch(PDO::FETCH_ASSOC);}
 function initialbody($row){return json_encode(['event'=>'charge.success','data'=>['reference'=>$row['reference'],'domain'=>((int)$row['is_test']===1?'test':'live'),'amount'=>100]]);}
 function retrymigration($db,$file){
@@ -19,7 +19,7 @@ function retrydb($name='') {return new PDO('mysql:host=127.0.0.1;port=3306;dbnam
 if (($argv[1]??'')==='worker') {
     $name=$argv[2]??'';if(!preg_match('/\Apayhub_retry_ci_[a-f0-9]{12}\z/',$name))exit(2);
     $worker=retrydb($name);usleep(200000);
-    try {if(($argv[4]??'')==='initial'){$row=initialfixture($worker,(int)$argv[3]);payhub_claim_initial_webhook($worker,$row,initialbody($row));}else{payhub_claim_webhook_retry($worker,(int)$argv[3],true);}echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
+    try {if(($argv[4]??'')==='recovery'){$result=payhub_recover_outbox($worker,(int)$argv[3],true,function()use($worker){if($worker->inTransaction())throw new RuntimeException('HTTP inside DB transaction');$worker->exec('INSERT INTO recovery_fixture_sends(transaction_id) VALUES(70)');return [204,true];});echo $result==='acknowledged'?'claimed':'blocked';exit;}if(($argv[4]??'')==='initial'){$row=initialfixture($worker,(int)$argv[3]);payhub_claim_initial_webhook($worker,$row,initialbody($row));}else{payhub_claim_webhook_retry($worker,(int)$argv[3],true);}echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
 }
 $n=0;function retrycheck($ok,$label){global $n;if(!$ok)throw new RuntimeException($label);$n++;}
 function retryreject($f,$label){try{$f();}catch(Throwable $e){retrycheck(true,$label);return;}throw new RuntimeException('accepted '.$label);}
@@ -123,7 +123,7 @@ try {
     $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean initial worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','losing initial worker refused');}
     retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM webhook_logs WHERE transaction_id=23')->fetchColumn()===1,'concurrent generic initial sends reserve one exact payload');
     // Forwarded and generic initial deliveries share exactly the same transaction reservation.
-    $functions=file_get_contents(__DIR__.'/../includes/functions.php');$from=strpos($functions,'function to_minor_units(');$to=strpos($functions,"\n}",$from)+2;eval(substr($functions,$from,$to-$from));
+    $functions=file_get_contents(__DIR__.'/../includes/functions.php');
     $db->exec("ALTER TABLE transactions ADD amount DECIMAL(15,2) DEFAULT 100.00, ADD gateway_amount DECIMAL(15,2) DEFAULT 102.00, ADD fee_amount DECIMAL(15,2) DEFAULT 2.00, ADD settled_amount DECIMAL(15,2) DEFAULT 100.00, ADD currency VARCHAR(3) DEFAULT 'NGN', ADD receiving_account_number VARCHAR(10) NULL");
     $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(24,1,'forward-fixture','success',0)");
     $snapshot=initialfixture($db,24);
@@ -255,5 +255,28 @@ try {
         $source=file_get_contents(__DIR__.'/../'.$path);$producerAt=strpos($source,",'".$producer."');");$enqueue=strrpos(substr($source,0,$producerAt),'payhub_enqueue_generic_outbox(');$commit=strpos($source,'$db->commit();',$producerAt);$dispatch=strpos($source,'trigger_merchant_webhook(',$producerAt);
         retrycheck($producerAt!==false && $enqueue!==false && $enqueue<$commit && $commit<$dispatch,'real route orders enqueue before accounting commit and dispatch '.$producer);
     }
+    $makeRecovery=function($id)use($db){$db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES($id,1,'recover-$id','pending',0)");$db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_generic_outbox($db,$id,'api_verify');$db->commit();};
+    $makeRecovery(60);$sent=0;$transport=function($url,$body,$signature)use($other,&$sent){$sent++;retrycheck($other->query('SELECT state FROM webhook_retry_claims WHERE transaction_id=60')->fetchColumn()==='attempting','recovery reservation committed before HTTP seam');retrycheck($signature===hash_hmac('sha256',$body,'live-fixture'),'recovery signs exact queued bytes');return [204,true];};
+    putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED');
+    retrycheck(payhub_recover_outbox($db,60,false,$transport)==='ready_dry_run','recovery dry run ready');
+    retrycheck(payhub_recover_outbox($db,60,true,$transport)==='disabled' && $sent===0,'execute flag alone cannot send');
+    retrycheck((int)$other->query('SELECT COUNT(*) FROM webhook_retry_claims WHERE transaction_id=60')->fetchColumn()===0,'dry/disabled recovery creates no claims');
+    putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED=1');
+    retrycheck(payhub_recover_outbox($db,60,true,$transport)==='acknowledged' && $sent===1,'enabled recovery sends one queued notification');
+    retrycheck(payhub_recover_outbox($db,60,true,$transport)==='already_claimed' && $sent===1,'repeated recovery cannot duplicate');
+    foreach([[61,0,false],[62,503,true],[63,302,true],[64,200,false]] as [$id,$http,$ok]){$makeRecovery($id);$calls=0;$fake=function()use(&$calls,$http,$ok){$calls++;return [$http,$ok];};retrycheck(payhub_recover_outbox($db,$id,true,$fake)==='unknown','recovery nonacknowledged outcome unknown');retrycheck(payhub_recover_outbox($db,$id,true,$fake)==='already_claimed' && $calls===1,'unknown recovery never reclaimed');}
+    $makeRecovery(65);retrycheck(payhub_recover_outbox($db,65,true,function(){throw new RuntimeException('fixture interruption');})==='claimed_requires_reconciliation','recovery interruption leaves claim');retrycheck(payhub_recover_outbox($db,65,true,$transport)==='already_claimed','interrupted recovery cannot resend');
+    $makeRecovery(66);$db->exec("INSERT INTO webhook_logs(transaction_id,status,payload,response) VALUES(66,'failed','old-body','original evidence')");retrycheck(payhub_recover_outbox($db,66,true,$transport)==='existing_delivery_evidence','recovery never infers non-delivery from failed history');
+    $makeRecovery(67);$db->exec("UPDATE users SET webhook_url='https://changed.example.test/hook' WHERE id=1");retrycheck(payhub_recover_outbox($db,67,true,$transport)==='needs_review','recovery refuses retargeting');$db->exec("UPDATE users SET webhook_url='https://fixture.example.test/hook' WHERE id=1");
+    $db->exec("UPDATE users SET secret_key='rotated-fixture' WHERE id=1");retrycheck(payhub_recover_outbox($db,67,true,$transport)==='needs_review','recovery refuses key rebinding');$db->exec("UPDATE users SET secret_key='live-fixture' WHERE id=1");
+    $makeRecovery(68);$db->exec("UPDATE webhook_outbox SET payload='{}' WHERE transaction_id=68");retrycheck(payhub_recover_outbox($db,68,true,$transport)==='needs_review','recovery detects event-byte damage');
+    $makeRecovery(69);$db->exec("UPDATE webhook_outbox SET producer='unknown' WHERE transaction_id=69");retrycheck(payhub_recover_outbox($db,69,true,$transport)==='needs_review','recovery refuses unknown producer');
+    retrycheck((int)$db->query('SELECT COUNT(*) FROM webhook_retry_claims WHERE transaction_id IN(66,67,68,69)')->fetchColumn()===0,'recovery preflight refuses before claims');
+    retrycheck($sent===1,'rejected candidates never reach injected HTTP seam');
+    $makeRecovery(70);$db->exec('CREATE TABLE recovery_fixture_sends(id INT AUTO_INCREMENT PRIMARY KEY,transaction_id INT) ENGINE=InnoDB');$workers=[];
+    for($i=0;$i<6;$i++){$proc=proc_open([PHP_BINARY,__FILE__,'worker',$name,'70','recovery'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($proc))throw new RuntimeException('recovery worker failed');fclose($pipes[0]);$workers[]=[$proc,$pipes];}
+    $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean recovery worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','competing recovery blocked');}
+    retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM recovery_fixture_sends')->fetchColumn()===1,'one recovery transport invocation under real process concurrency');
+    putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}

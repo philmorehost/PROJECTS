@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/webhook-money.php';
 require_once __DIR__.'/webhook-retry.php';
 require_once __DIR__.'/webhook-outbox.php';
 
