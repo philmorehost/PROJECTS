@@ -13,10 +13,16 @@ on:
       - 'VTU/**/func/bc-payout-reservations.php'
       - 'VTU/migrations/20261118_payout_reservations.sql'
       - 'VTU/**/func/bc-giftcard-settlement.php'
+      - 'VTU/**/func/bc-giftcard-worker.php'
+      - 'VTU/**/cron/process_giftcard_orders.php'
       - 'VTU/migrations/20261118_giftcard_settlement.sql'
       - 'VTU/**/func/bc-virtualcard-settlement.php'
+      - 'VTU/**/func/bc-virtualcard-worker.php'
+      - 'VTU/**/cron/process_virtualcard_orders.php'
       - 'VTU/migrations/20261118_virtualcard_settlement.sql'
       - 'VTU/**/func/bc-checkout-intents.php'
+      - 'VTU/**/func/bc-checkout-intents-worker.php'
+      - 'VTU/**/cron/expire_checkout_intents.php'
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
@@ -180,10 +186,16 @@ on:
       - 'VTU/**/func/bc-payout-reservations.php'
       - 'VTU/migrations/20261118_payout_reservations.sql'
       - 'VTU/**/func/bc-giftcard-settlement.php'
+      - 'VTU/**/func/bc-giftcard-worker.php'
+      - 'VTU/**/cron/process_giftcard_orders.php'
       - 'VTU/migrations/20261118_giftcard_settlement.sql'
       - 'VTU/**/func/bc-virtualcard-settlement.php'
+      - 'VTU/**/func/bc-virtualcard-worker.php'
+      - 'VTU/**/cron/process_virtualcard_orders.php'
       - 'VTU/migrations/20261118_virtualcard_settlement.sql'
       - 'VTU/**/func/bc-checkout-intents.php'
+      - 'VTU/**/func/bc-checkout-intents-worker.php'
+      - 'VTU/**/cron/expire_checkout_intents.php'
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
@@ -403,6 +415,7 @@ jobs:
           php VTU/tests/crypto_buysell_worker_test.php
           php VTU/tests/crypto_buysell_widget_test.php
           php VTU/tests/held_workers_foundation_test.php
+          php VTU/tests/held_lifecycle_workers_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
           php -l PAYHUB/includes/functions.php
@@ -660,6 +673,11 @@ jobs:
         env:
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/held_workers_mysql_test.php
+
+      - name: Held checkout-expiry, virtual-card & gift-card workers in disposable MySQL
+        env:
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/held_lifecycle_workers_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest

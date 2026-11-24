@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-5",
+  "version": "2026.11.18-remediation-manifest-6",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -158,6 +158,18 @@
     {
       "name": "bc-crypto-buysell-widget.php",
       "sha256": "8e7d3f44e84af47558281c8cecc1fc5a878260e8f5c3ffdf183cab1d98763577"
+    },
+    {
+      "name": "bc-checkout-intents-worker.php",
+      "sha256": "1721a632d2e3a2eb9e31c2f0bb9ea55b76b7839b8330e94f015c1fd1e1b0a965"
+    },
+    {
+      "name": "bc-virtualcard-worker.php",
+      "sha256": "3bbcbfe077302134ecee97df81629bfb34c9074b311d43ef39b1533391afb6c1"
+    },
+    {
+      "name": "bc-giftcard-worker.php",
+      "sha256": "b4cfc0ffdcf5043dc083b5392320827e87de5435fb3b50a33f05e6c5a04f09ad"
     }
   ],
   "required_innodb_tables": [
