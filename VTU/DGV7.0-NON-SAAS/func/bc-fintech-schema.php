@@ -122,7 +122,7 @@ function bc_fintech_ensure_schema() {
         UNIQUE KEY uniq_token_hash (token_hash),
         KEY idx_user (vendor_id, user_id),
         KEY idx_expiry (expires_at)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 
@@ -141,7 +141,7 @@ function bc_fintech_ensure_schema() {
         PRIMARY KEY (id),
         UNIQUE KEY uniq_provider_event (provider, event_id),
         KEY idx_webhook_status (status, created_at)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 
@@ -165,7 +165,7 @@ function bc_fintech_ensure_schema() {
         KEY idx_ledger_user (vendor_id, username, currency_code),
         KEY idx_ledger_ref (reference),
         KEY idx_ledger_provider (provider, reference)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 

@@ -302,6 +302,10 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         }
 
         // 3) Durable claim. A retry is skipped, never re-applied.
+        if (function_exists('bc_fintech_schema_ready') && !bc_fintech_schema_ready()) {
+            bc_fintech_webhook_log($provider, $event_id, 'refused: schema not ready');
+            return bc_fintech_webhook_result($provider, $event_id, false, 503, 'schema_not_ready', 'Webhook storage unavailable.');
+        }
         $claim = bc_fintech_webhook_claim($provider, $event_id, $vendor_id);
         if ($claim === 'duplicate') {
             bc_fintech_webhook_log($provider, $event_id, 'duplicate delivery skipped');

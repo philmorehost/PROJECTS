@@ -301,6 +301,7 @@ on:
       - 'VTU/DGV7.0-NON-SAAS/web/virtual-card-ajax.php'
       - 'VTU/tests/upgrade25_test.php'
       - 'VTU/tests/provider_live_test.php'
+      - 'VTU/tests/fintech_ledger_mysql_test.php'
       - 'VTU/DGV7.0-SAAS/.htaccess'
       - 'VTU/DGV7.0-NON-SAAS/.htaccess'
       - '.github/workflows/fintech-policy.yml'
@@ -573,3 +574,36 @@ jobs:
           done
           # The smoke test must stay runnable without a database.
           php -n VTU/tests/provider_smoke.php | grep -q 'not configured'
+
+  fintech-ledger-mysql:
+    name: Fintech ledger MySQL (${{ matrix.edition }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        edition: ['SAAS', 'NON-SAAS']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-ci-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pdisposable-ci-only --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli
+          coverage: none
+      - name: Lint and run MySQL fintech ledger & webhook integration test
+        env:
+          BC_FINTECH_LEDGER_CI: '1'
+          BC_TEST_EDITION: ${{ matrix.edition }}
+        run: |
+          php -l VTU/tests/fintech_ledger_mysql_test.php
+          php VTU/tests/fintech_ledger_mysql_test.php
