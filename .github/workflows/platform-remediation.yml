@@ -421,8 +421,10 @@ jobs:
           php VTU/tests/held_lifecycle_workers_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
+          php VTU/tests/apply_migrations_test.php
           php VTU/tests/release_readiness_test.php
           php VTU/bin/verify-release-readiness.php > /dev/null
+          php VTU/bin/apply-migrations.php --dry-run > /dev/null
           php -l PAYHUB/includes/functions.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php

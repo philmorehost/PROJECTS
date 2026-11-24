@@ -2,6 +2,7 @@
 // php-version/includes/functions.php
 require_once __DIR__ . "/webhook-signing.php";
 require_once __DIR__ . "/webhook-initial.php";
+require_once __DIR__ . "/debug-log.php";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -832,9 +833,8 @@ function normalize_metadata_array($raw): array {
  * Ensures a customer has a virtual account and is registered locally.
  */
 function ensure_virtual_account($userId, $email, $customerData = [], $is_test = null, $metadata = '') {
-    $log_file = BASE_PATH . 'va_debug.log';
-    $log = function($msg) use ($log_file) {
-        file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] " . $msg . "\n", FILE_APPEND);
+    $log = function($msg) {
+        payhub_debug_log('va_debug', $msg);
     };
 
     try {
@@ -1062,7 +1062,7 @@ function paystack_payout($userId, $amount, $reason = "Merchant Payout", $customB
     ], $is_test);
 
     // Detailed Logging
-    file_put_contents(BASE_PATH . 'payout_debug.log', "[" . date('Y-m-d H:i:s') . "] Payout for user $userId: " . json_encode($transfer) . PHP_EOL, FILE_APPEND);
+    payhub_debug_log('payout_debug', "Payout for user $userId status=" . (!empty($transfer['status']) ? 'ok' : 'failed'));
 
     return $transfer;
 }
@@ -1979,13 +1979,11 @@ function trigger_merchant_webhook($transactionId) {
 
             if (isset($initialClaim)) payhub_finish_webhook_retry($db, $initialClaim, $code, $res !== false && $curlErr === '');
 
-            @file_put_contents(
-                BASE_PATH . 'webhook_debug.log',
-                '[' . date('Y-m-d H:i:s') . '] Outbound merchant webhook (trigger_merchant_webhook) tx='
+            payhub_debug_log(
+                'webhook_debug',
+                'Outbound merchant webhook (trigger_merchant_webhook) tx='
                 . ($tx['reference'] ?? $tx['id']) . ' url=' . $tx['webhook_url']
                 . ' algo=sha256 http=' . $code . ($curlErr !== '' ? ' curl_err=' . $curlErr : '')
-                . ' res=' . substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200) . PHP_EOL,
-                FILE_APPEND
             );
 
             // Exact payload/log and exclusive claim were committed before HTTP.

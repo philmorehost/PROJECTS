@@ -5,14 +5,6 @@ require_once 'includes/functions.php';
 $input = file_get_contents("php://input");
 $event = json_decode($input, true);
 
-// Start Logging for Debugging
-$log_payload = [
-    'time' => date('Y-m-d H:i:s'),
-    'event' => $event['event'] ?? 'unknown',
-    'full_input' => $event
-];
-file_put_contents('webhook_debug.log', json_encode($log_payload) . PHP_EOL, FILE_APPEND);
-
 if (!$event) {
     http_response_code(400);
     die('No input');
@@ -23,7 +15,7 @@ $paystack_ips = ['52.31.139.75', '52.49.173.169', '52.214.14.220'];
 $request_ip = $_SERVER['REMOTE_ADDR'] ?? '';
 
 if (!in_array($request_ip, $paystack_ips) && getConfig('webhook_ip_check', '0') === '1') {
-    file_put_contents('webhook_debug.log', "IP Verification Failed: " . $request_ip . PHP_EOL, FILE_APPEND);
+    payhub_debug_log('webhook_debug', "IP Verification Failed: " . $request_ip);
     http_response_code(403);
     die('Unauthorized IP address');
 }
@@ -48,10 +40,11 @@ if ($signature !== '' && $paystack_secret !== ''
 }
 
 if ($verified_with === null) {
-    file_put_contents('webhook_debug.log', "Signature Verification Failed" . PHP_EOL, FILE_APPEND);
+    payhub_debug_log('webhook_debug', "Signature Verification Failed");
     http_response_code(401);
     die('Invalid signature');
 }
+payhub_debug_log('webhook_debug', 'Verified Paystack event=' . (string)($event['event'] ?? 'unknown') . ' mode=' . $verified_with);
 
 // If one key is configured for both live and test, the signature cannot tell us
 // which mode the event belongs to. In that case mode agreement cannot be
@@ -203,9 +196,9 @@ if ($event_type === 'charge_success') {
                 $stmt->execute([$ref]);
                 $tx = $stmt->fetch();
 
-                file_put_contents('webhook_debug.log', "Matched Virtual Account: $acc_number for user " . $va['user_id'] . " (Test: ".($is_test_va?'Yes':'No').")" . PHP_EOL, FILE_APPEND);
+                payhub_debug_log('webhook_debug', "Matched Virtual Account: $acc_number for user " . $va['user_id'] . " (Test: ".($is_test_va?'Yes':'No').")");
             } else {
-                file_put_contents('webhook_debug.log', "Dedicated Account payment but NO MATCH in DB: $acc_number" . PHP_EOL, FILE_APPEND);
+                payhub_debug_log('webhook_debug', "Dedicated Account payment but NO MATCH in DB: $acc_number");
             }
         }
     }
@@ -225,7 +218,7 @@ if ($event_type === 'charge_success') {
          */
         if (!amount_covers($tx['amount'], $amount)) {
             $mismatch = flag_amount_mismatch($tx, $tx['amount'], $amount, 'paystack webhook');
-            file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] " . $mismatch . PHP_EOL, FILE_APPEND);
+            payhub_debug_log('webhook_debug', $mismatch);
             // Acknowledge so Paystack stops retrying a payload we will never accept.
             http_response_code(200);
             echo "Amount mismatch - transaction not fulfilled";
@@ -260,7 +253,7 @@ if ($event_type === 'charge_success') {
                    ->execute([$tx['id']]);
             } catch (\Throwable $e) { /* non-fatal */ }
             error_log('[PayHub] ' . $msg);
-            file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] " . $msg . PHP_EOL, FILE_APPEND);
+            payhub_debug_log('webhook_debug', $msg);
             http_response_code(200);
             echo "Signature/transaction mode mismatch - transaction not fulfilled";
             exit;
@@ -274,14 +267,14 @@ if ($event_type === 'charge_success') {
             // affect 0 rows, so the merchant wallet is never credited twice.
             if (!claim_transaction_for_fulfilment($tx['id'])) {
                 $db->rollBack();
-                file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] Tx ID " . $tx['id'] . " already fulfilled by another worker - not crediting again." . PHP_EOL, FILE_APPEND);
+                payhub_debug_log('webhook_debug', "Tx ID " . $tx['id'] . " already fulfilled by another worker - not crediting again.");
                 http_response_code(200);
                 echo "Already processed";
                 exit;
             }
 
             // Detailed Logging of fulfillment start
-            file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] Fulfilling Tx ID: " . $tx['id'] . " for Amount: " . $amount . PHP_EOL, FILE_APPEND);
+            payhub_debug_log('webhook_debug', "Fulfilling Tx ID: " . $tx['id'] . " for Amount: " . $amount);
 
             // Update transaction
             $stmt = $db->prepare("UPDATE transactions SET currency = ?, gateway_reference = ? WHERE id = ?");
@@ -432,14 +425,11 @@ if ($event_type === 'charge_success') {
                         }
                     }
 
-                    $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200));
-                    file_put_contents(
-                        'webhook_debug.log',
-                        "[" . date('Y-m-d H:i:s') . "] Forwarded webhook ref=$ref url=" . $m['webhook_url']
+                    payhub_debug_log(
+                        'webhook_debug',
+                        "Forwarded webhook ref=$ref url=" . $m['webhook_url']
                         . " algo=sha256 http=$code fee=$fee settled=$settled"
                         . ($curlErr !== '' ? " curl_err=$curlErr" : '')
-                        . ($resText !== '' ? " res=$resText" : '') . PHP_EOL,
-                        FILE_APPEND
                     );
 
                     // The exact payload and exclusive claim were committed before HTTP.
@@ -495,7 +485,7 @@ if ($event_type === 'charge_success') {
             $res = record_transaction_reversal($tx['id'], $dispute_ref, $credited, 'chargeback');
             $db->prepare("UPDATE disputes SET status = 'lost' WHERE transaction_id = ? AND status = 'open'")->execute([$tx['id']]);
             if (!$res['applied']) {
-                file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] Dispute loss reversal not applied for Ref: $ref (" . $res['reason'] . ")" . PHP_EOL, FILE_APPEND);
+                payhub_debug_log('webhook_debug', "Dispute loss reversal not applied for Ref: $ref (" . $res['reason'] . ")");
             }
         } else {
             // Never guess with money on an unrecognised resolution.
@@ -525,7 +515,7 @@ if ($event_type === 'charge_success') {
         $res = record_transaction_reversal($tx['id'], $reversal_ref, $event_amount, $kind);
         if (!$res['applied']) {
             // 'duplicate' / 'already_reversed' are the guards doing their job, not errors.
-            file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] $kind reversal not applied for Ref: $ref (" . $res['reason'] . ")" . PHP_EOL, FILE_APPEND);
+            payhub_debug_log('webhook_debug', "$kind reversal not applied for Ref: $ref (" . $res['reason'] . ")");
         }
     }
 } elseif ($event_type === 'refund_pending' || $event_type === 'refund_failed') {
@@ -543,7 +533,7 @@ if ($event_type === 'charge_success') {
 } else {
     // Unknown event: still 200 so Paystack does not retry forever, but leave a trace.
     if (!empty($event['event'])) {
-        file_put_contents('webhook_debug.log', "[" . date('Y-m-d H:i:s') . "] Unhandled event type: " . $event['event'] . PHP_EOL, FILE_APPEND);
+        payhub_debug_log('webhook_debug', "Unhandled event type: " . $event['event']);
     }
 }
 
