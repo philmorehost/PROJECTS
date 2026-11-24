@@ -170,8 +170,18 @@ if (!function_exists('bc_fintech_ledger_post')) {
         $payload_hash = hash('sha256', json_encode(array($username,$currency,$direction,$sql_amount)));
         if (!mysqli_begin_transaction($connection_server)) { $result['reason']='transaction_failed'; return $result; }
         try {
-            $claim = mysqli_query($connection_server, "INSERT INTO sas_provider_settlement_claims(settlement_key,payload_hash) VALUES('$settlement_key','$payload_hash')");
+            $claim = false;
+            $claim_errno = 0;
+            try {
+                $claim = (bool)mysqli_query($connection_server, "INSERT INTO sas_provider_settlement_claims(settlement_key,payload_hash) VALUES('$settlement_key','$payload_hash')");
+                if (!$claim) $claim_errno = (int)mysqli_errno($connection_server);
+            } catch (Throwable $claim_ex) {
+                $claim = false;
+                $claim_errno = (int)$claim_ex->getCode();
+                if ($claim_errno !== 1062) throw $claim_ex;
+            }
             if (!$claim) {
+                if ($claim_errno !== 1062) throw new Exception('settlement_claim_insert_failed');
                 $old_q = mysqli_query($connection_server, "SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='$settlement_key' LIMIT 1");
                 $old = $old_q ? mysqli_fetch_assoc($old_q) : null;
                 mysqli_rollback($connection_server);

@@ -150,8 +150,8 @@ function fake_mysqli_query_raw($db, $sql) {
         return $rows;
     }
     if (preg_match("/^INSERT INTO sas_provider_settlement_claims\\(settlement_key,payload_hash\\) VALUES\\('([a-f0-9]+)','([a-f0-9]+)'\\)$/", $sql, $m)) {
-        if (isset($GLOBALS['db']['settlement_claims'][$m[1]])) return false;
-        $GLOBALS['db']['settlement_claims'][$m[1]]=$m[2]; return true;
+        if (isset($GLOBALS['db']['settlement_claims'][$m[1]])) { $GLOBALS['db']['errno'] = 1062; return false; }
+        $GLOBALS['db']['errno'] = 0; $GLOBALS['db']['settlement_claims'][$m[1]]=$m[2]; return true;
     }
     if (preg_match("/^SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='([a-f0-9]+)' LIMIT 1$/", $sql, $m)) {
         return isset($GLOBALS['db']['settlement_claims'][$m[1]]) ? [['payload_hash'=>$GLOBALS['db']['settlement_claims'][$m[1]]]] : [];

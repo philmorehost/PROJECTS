@@ -126,13 +126,19 @@ if (!function_exists('bc_fintech_webhook_claim')) {
 
         $prov_esc = mysqli_real_escape_string($connection_server, $provider);
         $evt_esc  = mysqli_real_escape_string($connection_server, $event_id);
-        $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
-            (provider, event_id, vendor_id, status, created_at)
-            VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
-        if ($q) return 'new';
-        if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
-        error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
-        return 'error';
+        try {
+            $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
+                (provider, event_id, vendor_id, status, created_at)
+                VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
+            if ($q) return 'new';
+            if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
+            return 'error';
+        } catch (Throwable $e) {
+            if ((int)$e->getCode() === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . $e->getMessage());
+            return 'error';
+        }
     }
 }
 
