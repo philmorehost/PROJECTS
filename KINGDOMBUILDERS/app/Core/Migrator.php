@@ -40,7 +40,7 @@ final class Migrator {
             DB::run('INSERT IGNORE INTO schema_migrations(version,applied_at) VALUES (?,?)', [$version, now()]);
             $current = $version;
         }
-        if ($current < self::ASSESSMENT_DEFAULTS) self::applyAssessmentDefaults();
+        if (self::version() < self::ASSESSMENT_DEFAULTS) self::applyAssessmentDefaults();
     }
 
     /**
