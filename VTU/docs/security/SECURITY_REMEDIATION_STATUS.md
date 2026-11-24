@@ -18,7 +18,7 @@ Date: 2026-11-18. Applies to both PHP editions and six mobile source trees.
 | F10–F11 | Legacy wallet helper callers use guarded transactional writer | Real MySQL tests, historical reconciliation, complete caller regression |
 | F12 | Legacy virtual-card paths held | Replace unsafe implementation before reopening |
 | F13 | Transaction mutation helpers tenant/owner scoped | Role-matrix database tests for every caller |
-| F14 | GiftCardSetup bound search/escaping; marketplace escaping | Stored-XSS browser testing, catalogue authorization review |
+| F14 | GiftCardSetup bound search/escaping; marketplace escaping; internal held gift-card & P2P escrow settlement foundation (`bc-giftcard-settlement.php`) added | Stored-XSS browser testing, catalogue authorization review, live migration (`20261118_giftcard_settlement.sql`), historical escrow reconciliation, encrypted card-code key-management review, and Reloadly acceptance remain required (`GIFTCARD_SETTLEMENT_HOLD` stays active) |
 | F15 | Runtime TLS verification hardened | Valid CA bundle, endpoint compatibility, negative TLS tests |
 | F16 | Retired provider and purchase harness removal; development routes guarded | Verify deployed file deletion and rotate exposed credentials |
 | F17 | Unsafe transaction GET actions held; secure session bootstrap added | Full route-by-route CSRF and session review remains required |
