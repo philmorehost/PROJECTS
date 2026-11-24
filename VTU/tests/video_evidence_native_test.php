@@ -18,6 +18,12 @@ if(($argv[1]??'')==='missing'){
    $mime=(new finfo(FILEINFO_MIME_TYPE))->file($dir.'/'.$file);
    $p=proc_open(bc_video_evidence_command('/usr/bin/ffprobe',$mime,$dir.'/'.$file),[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
    fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$exit=proc_close($p);
+   if(!isset(json_decode($out,true)['format']['duration'])){
+    $p=proc_open(bc_video_evidence_command('/usr/bin/ffprobe',$mime,$dir.'/'.$file,true),[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+    fclose($pipes[0]);$clockout=stream_get_contents($pipes[1]);$clockerr=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$clockexit=proc_close($p);
+    $packets=json_decode($clockout,true)['packets']??[];
+    echo '::error::Synthetic clock diagnostic '.json_encode([$clockexit,$clockerr,count($packets),array_slice($packets,0,2),array_slice($packets,-2)])."\n";
+   }
    echo '::error::Synthetic fixture diagnostic '.json_encode([$file,$mime,$exit,strlen($out),bc_video_evidence_metadata_valid(json_decode($out,true)),json_decode($out,true)['format']??null,$err])."\n";
   }
   vn($ok,'valid AV accepted '.$file);

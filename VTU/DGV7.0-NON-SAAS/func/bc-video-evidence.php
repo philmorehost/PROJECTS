@@ -94,7 +94,7 @@ function bc_video_evidence_probe($args) {
 
 function bc_video_evidence_command($binary,$mime,$path,$packet_clock=false) {
     $args=[$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska'];
-    if($packet_clock)$args=array_merge($args,['-select_streams','v:0','-show_packets']);
+    if($packet_clock)$args=array_merge($args,['-fflags','+noparse+nofillin','-select_streams','v:0','-show_packets']);
     $entries=$packet_clock?'packet=pts_time,duration_time':'format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic';
     return array_merge($args,['-show_entries',$entries,'-of','json',$path]);
 }
