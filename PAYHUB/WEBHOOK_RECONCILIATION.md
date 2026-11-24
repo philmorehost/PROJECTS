@@ -43,6 +43,16 @@ Recording re-reads/locks evidence and compares the observation digest inside the
 
 Exit 0 means inspected/recorded/already-recorded as reported, NOT financially reconciled. Exit 2 means invalid/disabled request (before configuration/database access); exit 1 means unavailable/conflict/changed/uncertain outcome. Errors do not expose raw exceptions. No automated sender, scheduler, claim modification, recipient notification or ledger entry is attached.
 
+## Multi-party reconciliation resolution layer (`reconcile-webhook-outbox.php`)
+
+After investigation, `PAYHUB/install/20261118_webhook_reconciliations.sql`,
+`PAYHUB/includes/webhook-reconcile.php`, and `PAYHUB/bin/reconcile-webhook-outbox.php`
+provide an append-only dual-operator resolution layer (`PAYHUB_WEBHOOK_RECONCILE_ENABLED=1`
+required for `--record`):
+- Enforces distinct `preparer_ref !== approver_ref` operator assertions and stale-state refusal via `observation_sha256`.
+- Matches exact `merchant_id`, `reference`, `currency`, fixed-point 2-decimal `amount`, and `account_number` against `transactions`; mismatches can only be recorded as `mismatch_held`.
+- Never modifies `webhook_retry_claims`, `webhook_outbox.payload`, or account balances.
+
 ## Remaining reconciliation work
 
 - Authenticated multi-party case assignment/approval, externally verifiable evidence ingress and retention, independent audit validation.

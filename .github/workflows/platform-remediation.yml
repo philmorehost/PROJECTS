@@ -20,6 +20,8 @@ on:
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
+      - 'VTU/migrations/MANIFEST.json'
+      - 'VTU/bin/verify-schema-manifest.php'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -168,6 +170,8 @@ on:
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
+      - 'VTU/migrations/MANIFEST.json'
+      - 'VTU/bin/verify-schema-manifest.php'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -361,6 +365,7 @@ jobs:
           php VTU/tests/virtualcard_settlement_foundation_test.php
           php VTU/tests/checkout_intents_foundation_test.php
           php VTU/tests/service_dispatch_lease_foundation_test.php
+          php VTU/tests/schema_manifest_test.php
           php -l PAYHUB/includes/functions.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php
