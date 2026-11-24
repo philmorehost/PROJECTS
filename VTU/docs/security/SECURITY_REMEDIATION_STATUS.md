@@ -13,7 +13,7 @@ Date: 2026-11-18. Applies to both PHP editions and six mobile source trees.
 | F03 | Catalogue/setup search binding and escaping | Database and browser injection regression tests |
 | F04 | Simulated virtual-card wallet-credit routes fail closed | Genuine provider integration and reconciliation before reopening |
 | F05–F06 | Unsafe checkout creation paused; protected server intents bind beneficiary/provider/currency/gross amount | Review every remaining funding entry point; actual MySQL/provider integration |
-| F07–F08 | Withdrawal handler and unsafe approval routes paused | Durable payout reservations, unknown-outcome reconciliation, status transitions and concurrent worker tests |
+| F07–F08 | Withdrawal handler and unsafe approval routes remain paused; internal durable payout reservation & reconciliation foundation (`bc-payout-reservations.php`) added | Live migration (`20261118_payout_reservations.sql`), authorized dispatch worker, step-up approval wiring, historical reconciliation, and provider sandbox acceptance remain required |
 | F09 | NGN wallet mutation events and provider settlement-reference claims; fintech ledger now enforces InnoDB, outer-transaction, blocked-account, historical-duplicate, and SQL debit guards | Live schema engine inspection, provider sandbox, and historical reconciliation remain required |
 | F10–F11 | Legacy wallet helper callers use guarded transactional writer | Real MySQL tests, historical reconciliation, complete caller regression |
 | F12 | Legacy virtual-card paths held | Replace unsafe implementation before reopening |
