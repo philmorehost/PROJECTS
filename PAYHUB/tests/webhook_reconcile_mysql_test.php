@@ -27,6 +27,7 @@ try {
     foreach ([
         '20261118_webhook_outbox.sql',
         '20261118_webhook_retry_claims.sql',
+        '20261118_webhook_initial_claims.sql',
         '20261118_webhook_reviews.sql',
         '20261118_webhook_reconciliations.sql',
     ] as $sqlFile) {
@@ -77,7 +78,8 @@ try {
     rec_chk($threw, 'refuses changed request_id reuse');
 
     // 3. Stale observation refused when outbox/claim changes
-    $db->exec("INSERT INTO webhook_retry_claims(transaction_id, log_id, state, delivery_kind, payload_sha256, endpoint_sha256) VALUES(101, 1, 'claimed', 'manual', '$pSha', '$epSha')");
+    $claimTok = str_repeat('c', 64);
+    $db->exec("INSERT INTO webhook_retry_claims(transaction_id, log_id, claim_token, state, delivery_kind, payload_sha256, endpoint_sha256) VALUES(101, 1, '$claimTok', 'attempting', 'admin_retry', '$pSha', '$epSha')");
     $stale = $goodInput;
     $stale['request_id'] = 'recon-stale-0001';
     $threw = false;
@@ -86,7 +88,7 @@ try {
 
     // 4. Verify outbox & retry claim untouched
     $claimState = $db->query('SELECT state FROM webhook_retry_claims WHERE transaction_id=101')->fetchColumn();
-    rec_chk($claimState === 'claimed', 'retry claim never reset or modified');
+    rec_chk($claimState === 'attempting', 'retry claim never reset or modified');
 
     echo "PASS $n PayHub multi-party reconciliation MySQL checks\n";
 } finally {
