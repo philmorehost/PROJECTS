@@ -8,8 +8,8 @@ set_exception_handler(function ($e) {
 
 $edition = getenv('BC_TEST_EDITION') ?: (getenv('VTU_TEST_EDITION') ?: 'SAAS');
 if ($edition !== 'SAAS' && $edition !== 'NON-SAAS') throw new RuntimeException('Invalid edition');
-$helper = __DIR__ . '/../DGV7.0-' . $edition . '/func/bc-crypto-buysell.php';
-require_once $helper;
+require_once __DIR__ . '/../DGV7.0-' . $edition . '/func/bc-crypto-buysell-worker.php';
+require_once __DIR__ . '/../DGV7.0-' . $edition . '/func/bc-crypto-buysell-bridge.php';
 
 $host = getenv('DB_HOST') ?: '127.0.0.1';
 $user = getenv('DB_USER') ?: 'root';
@@ -99,6 +99,28 @@ try {
     $cr1 = bc_cbs_settle_sell_deposit($db, 1, $final['deposit_id'], 8000000);
     $cr2 = bc_cbs_settle_sell_deposit($db, 1, $final['deposit_id'], 8000000);
     cbs_chk($cr1['state'] === 'credited' && !$cr1['replayed'] && $cr2['replayed'], 'sell deposit credited once');
+
+    // 4b. Bridge hold check (503 when disabled) -> enabled signer worker confirms queued order
+    $heldResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], ['action' => 'quote']);
+    cbs_chk($heldResp['http_code'] === 503 && $heldResp['body']['code'] === 'CRYPTO_BUYSELL_HOLD', 'bridge returns 503 CRYPTO_BUYSELL_HOLD by default');
+
+    putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED=1');
+    $qResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'quote', 'request_id' => 'q-bridge-01', 'side' => 'buy', 'asset' => 'USDT', 'network' => 'TRON',
+        'fiat_currency' => 'NGN', 'crypto_units_1e8' => '1000000000', 'rate_fiat_minor' => 160000, 'margin_bps' => 50,
+        'fee_fiat_minor' => 50000, 'destination_address' => 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL',
+    ]);
+    cbs_chk($qResp['http_code'] === 200, 'bridge quote succeeds when enabled');
+    $bResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'execute_buy', 'quote_id' => $qResp['body']['quote']['quote_id'], 'request_id' => 'ord-bridge-01',
+    ]);
+    cbs_chk($bResp['http_code'] === 200 && $bResp['body']['order']['state'] === 'never_attempted', 'bridge buy enters never_attempted + queued_for_signer');
+
+    $wRes = bc_cbs_run_signer_worker($db, 1, fn($row) => [
+        'outcome' => 'confirmed', 'provider_ref' => 'SIG_1', 'tx_hash' => 'tron_tx_hash_01',
+    ]);
+    cbs_chk($wRes['ok'] && $wRes['processed'] === 1 && $wRes['results'][0]['state'] === 'confirmed', 'signer worker confirmed queued order');
+    putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED');
 
     // 5. MyISAM refusal on non-FK table
     $db->query("ALTER TABLE sas_users ENGINE=MyISAM");
