@@ -4,22 +4,62 @@ require_once __DIR__.'/bc-giftcard-safety.php';
  * Reloadly Gift Card API Implementation
  */
 
-function encryptGiftCode($data, $vendor_id) {
+function bc_giftcard_kms_key($vendor_id) {
     global $connection_server;
-    $q = mysqli_query($connection_server, "SELECT print_hub_secret FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-    $r = mysqli_fetch_assoc($q);
-    $key = $r['print_hub_secret'] ?? 'GIFT-DEFAULT-KEY';
+    $envKey = trim((string)(getenv('BC_GIFTCARD_KMS_KEY') ?: ''));
+    if ($envKey !== '' && strlen($envKey) >= 32) {
+        return hash('sha256', $envKey . '|vendor:' . (int)$vendor_id, true);
+    }
+    if ($connection_server instanceof mysqli) {
+        $q = mysqli_query($connection_server, "SELECT print_hub_secret FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
+        $r = $q ? mysqli_fetch_assoc($q) : null;
+        $vSecret = trim((string)($r['print_hub_secret'] ?? ''));
+        if ($vSecret !== '' && strlen($vSecret) >= 16) {
+            return hash('sha256', $vSecret, true);
+        }
+    }
+    return null;
+}
+
+function encryptGiftCode($data, $vendor_id) {
+    $rawKey = bc_giftcard_kms_key($vendor_id);
+    if ($rawKey !== null) {
+        $iv = random_bytes(12);
+        $tag = '';
+        $ct = openssl_encrypt((string)$data, 'aes-256-gcm', $rawKey, OPENSSL_RAW_DATA, $iv, $tag);
+        if ($ct !== false && strlen($tag) === 16) {
+            return 'v2:' . base64_encode($iv . $tag . $ct);
+        }
+    }
+    if (getenv('BC_GIFTCARD_WORKER_ENABLED') === '1') {
+        throw new RuntimeException('giftcard_kms_key_unconfigured');
+    }
     $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length('aes-256-cbc'));
-    $encrypted = openssl_encrypt($data, 'aes-256-cbc', $key, 0, $iv);
+    $encrypted = openssl_encrypt($data, 'aes-256-cbc', 'GIFT-DEFAULT-KEY', 0, $iv);
     return base64_encode($encrypted . '::' . $iv);
 }
 
 function decryptGiftCode($data, $vendor_id) {
     global $connection_server;
-    $q = mysqli_query($connection_server, "SELECT print_hub_secret FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-    $r = mysqli_fetch_assoc($q);
-    $key = $r['print_hub_secret'] ?? 'GIFT-DEFAULT-KEY';
-    $parts = explode('::', base64_decode($data));
+    $str = (string)$data;
+    if (strpos($str, 'v2:') === 0) {
+        $rawKey = bc_giftcard_kms_key($vendor_id);
+        if ($rawKey === null) return '';
+        $bin = base64_decode(substr($str, 3), true);
+        if (!is_string($bin) || strlen($bin) < 29) return '';
+        $iv = substr($bin, 0, 12);
+        $tag = substr($bin, 12, 16);
+        $ct = substr($bin, 28);
+        $pt = openssl_decrypt($ct, 'aes-256-gcm', $rawKey, OPENSSL_RAW_DATA, $iv, $tag);
+        return $pt === false ? '' : $pt;
+    }
+    $key = 'GIFT-DEFAULT-KEY';
+    if ($connection_server instanceof mysqli) {
+        $q = mysqli_query($connection_server, "SELECT print_hub_secret FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
+        $r = $q ? mysqli_fetch_assoc($q) : null;
+        if (!empty($r['print_hub_secret'])) $key = $r['print_hub_secret'];
+    }
+    $parts = explode('::', base64_decode($str));
     if (count($parts) === 2) {
         return openssl_decrypt($parts[0], 'aes-256-cbc', $key, 0, $parts[1]);
     }

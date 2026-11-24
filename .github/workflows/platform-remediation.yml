@@ -419,6 +419,7 @@ jobs:
           php VTU/tests/crypto_buysell_widget_test.php
           php VTU/tests/held_workers_foundation_test.php
           php VTU/tests/held_lifecycle_workers_test.php
+          php VTU/tests/execution_bridges_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
           php VTU/tests/schema_autoheal_test.php
@@ -693,6 +694,11 @@ jobs:
           BC_SCHEMA_AUTOHEAL_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/schema_autoheal_mysql_test.php
+
+      - name: Wired execution bridges & KMS integration DB tests
+        env:
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/execution_bridges_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest

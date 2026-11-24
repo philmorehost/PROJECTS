@@ -8,6 +8,7 @@ require_once __DIR__.'/../func/bc-feature-email-otp.php';
 require_once __DIR__.'/../func/bc-feature-action-security.php';
 bc_feature_action_post_guard('giftcard');
 include("../func/bc-giftcard-func.php");
+require_once __DIR__ . '/../func/bc-giftcard-execution.php';
 
 if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
     header("Location: Login.php");
@@ -43,47 +44,13 @@ if (isset($_POST['action'])) {
             $response=['status'=>'error','message'=>$email_error];
         } else {
             bc_feature_action_code_consume('giftcard');
-            $q_p = mysqli_query($connection_server, "SELECT * FROM `sas_vendor_giftcard_products` WHERE vendor_id='$vid' AND reloadly_product_id='$product_id' AND status=1 LIMIT 1");
-            $product = mysqli_fetch_assoc($q_p);
-
-            if (!$product) {
-                $response = ['status' => 'error', 'message' => 'Product not found or inactive.'];
+            $gcRes = bc_gc_execute_purchase((int)$vid, $get_logged_user_details, $product_id, $amount, (string)($_POST['request_key'] ?? ''));
+            if (!empty($gcRes['ok'])) {
+                unset($_SESSION["giftcard_otp"]);
+                $response = ['status' => 'success', 'message' => 'Gift card order queued (' . $gcRes['reference'] . '). Check "My Cards" once fulfilled.', 'reference' => $gcRes['reference']];
             } else {
-                $rate = getLiveExchangeRate($product['currency_code'] ?: 'USD', 'NGN', $vid, 'gift-card');
-                $qv = mysqli_query($connection_server, "SELECT giftcard_fee_percent FROM sas_vendors WHERE id='$vid' LIMIT 1");
-                $vendor_fee_percent = (float)(mysqli_fetch_assoc($qv)['giftcard_fee_percent'] ?? 0);
-
-                $cost_ngn = $amount * $rate;
-                $total_markup_percent = (float)$product['vendor_markup'] + $vendor_fee_percent;
-                $final_price_ngn = $cost_ngn + ($cost_ngn * ($total_markup_percent / 100));
-
-                if ($get_logged_user_details['balance'] < $final_price_ngn) {
-                    $response = ['status' => 'error', 'message' => 'Insufficient wallet balance.'];
-                } else {
-                    $token = getReloadlyAccessToken($vid);
-                    $order = placeReloadlyOrder($token, $product_id, $amount, 1, $get_logged_user_details['email']);
-
-                    if ($order && isset($order['status']) && $order['status'] == 'SUCCESSFUL') {
-                        $tx_id = mysqli_real_escape_string($connection_server, $order['transactionId']);
-                        $p_name = mysqli_real_escape_string($connection_server, $product['product_name']);
-                        $reference = "GC_" . time() . "_" . rand(100, 999);
-
-                        chargeUser("debit", "giftcard_".$product_id, "Gift Card Purchase", $reference, $tx_id, $final_price_ngn, $final_price_ngn, "Gift Card Purchase: " . $p_name, "WEB", $_SERVER["HTTP_HOST"], 1);
-
-                        $raw_code = $order['product']['code'] ?? 'CODE-' . rand(1000, 9999);
-                        $card_pin = mysqli_real_escape_string($connection_server, $order['product']['pin'] ?? '');
-                        $card_code = mysqli_real_escape_string($connection_server, encryptGiftCode($raw_code, $vid));
-
-                        mysqli_query($connection_server, "INSERT INTO `sas_giftcard_inventory`
-                            (vendor_id, reloadly_tx_id, reloadly_product_id, product_name, card_code, card_pin, face_value, currency_code, current_owner_id, source)
-                            VALUES ('$vid', '$tx_id', '$product_id', '$p_name', '$card_code', '$card_pin', '$amount', '".$product['currency_code']."', '$user_id', 'api')");
-
-                        unset($_SESSION["giftcard_otp"]);
-                        $response = ['status' => 'success', 'message' => 'Purchase successful! Check "My Cards" for your code.'];
-                    } else {
-                        $response = ['status' => 'error', 'message' => $order['message'] ?? 'API Error. Please try again later.'];
-                    }
-                }
+                $code = (string)($gcRes['code'] ?? 'unavailable');
+                $response = ['status' => 'error', 'code' => strtoupper($code), 'message' => 'Gift card purchase refused (' . $code . ').'];
             }
         }
     } elseif ($action == 'send_otp') {
@@ -127,27 +94,12 @@ if (isset($_POST['action'])) {
         if (!bc_verify_pin_secure($pin, $get_logged_user_details)) {
             $response = ['status' => 'error', 'message' => 'Invalid Transaction PIN'];
         } else {
-            $q_c = mysqli_query($connection_server, "SELECT * FROM `sas_giftcard_inventory` WHERE id='$card_id' AND is_for_sale=1 AND vendor_id='$vid' LIMIT 1");
-            $card = mysqli_fetch_assoc($q_c);
-
-            if (!$card || $card['current_owner_id'] == $user_id || !is_finite((float)$card['sale_price_ngn']) || (float)$card['sale_price_ngn']<=0) {
-                $response = ['status' => 'error', 'message' => 'Invalid trade.'];
+            $p2pRes = bc_gc_execute_p2p_buy((int)$vid, $get_logged_user_details, $card_id, (string)($_POST['request_key'] ?? ''));
+            if (!empty($p2pRes['ok'])) {
+                $response = ['status' => 'success', 'message' => 'P2P Trade completed! The card is now in your wallet.', 'reference' => $p2pRes['reference'] ?? ''];
             } else {
-                $qv = mysqli_query($connection_server, "SELECT giftcard_fee_percent FROM sas_vendors WHERE id='$vid' LIMIT 1");
-                $vendor_fee_percent = (float)(mysqli_fetch_assoc($qv)['giftcard_fee_percent'] ?? 0);
-                $total_buyer_cost_ngn = (float)$card['sale_price_ngn'] * (1 + ($vendor_fee_percent / 100));
-
-                if (holdP2PFunds($username, $total_buyer_cost_ngn)) {
-                    mysqli_query($connection_server, "INSERT INTO `sas_p2p_trades` (vendor_id, seller_id, buyer_id, card_id, amount_ngn, fee_ngn, status)
-                        VALUES ('$vid', '".$card['current_owner_id']."', '$user_id', '$card_id', '".$card['sale_price_ngn']."', '".($total_buyer_cost_ngn - $card['sale_price_ngn'])."', 'funded')");
-                    if (releaseP2PFunds(mysqli_insert_id($connection_server))) {
-                        $response = ['status' => 'success', 'message' => 'P2P Trade completed!'];
-                    } else {
-                        $response = ['status' => 'error', 'message' => 'Funds held but release failed.'];
-                    }
-                } else {
-                    $response = ['status' => 'error', 'message' => 'Insufficient balance.'];
-                }
+                $code = (string)($p2pRes['code'] ?? 'unavailable');
+                $response = ['status' => 'error', 'code' => strtoupper($code), 'message' => 'P2P trade failed (' . $code . ').'];
             }
         }
     }
@@ -409,7 +361,11 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                     <td class="text-center fw-bold"><?php echo $l['currency_code'] . ' ' . (float)$l['face_value']; ?></td>
                                     <td class="text-end fw-bold text-success">₦<?php echo number_format($l['sale_price_ngn'], 2); ?></td>
                                     <td class="px-4 text-end">
+                                        <?php if (bc_giftcard_execution_enabled()): ?>
+                                        <button class="btn btn-primary btn-sm rounded-pill px-4 fw-bold" onclick="buyP2PCard(<?php echo (int)$l['id']; ?>, <?php echo (float)$l['sale_price_ngn']; ?>)">Buy Now</button>
+                                        <?php else: ?>
                                         <button class="btn btn-primary btn-sm rounded-pill px-4 fw-bold" data-no-lock disabled title="P2P settlement is paused">P2P paused</button>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                                 <?php endwhile; else: ?>
@@ -447,12 +403,16 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
                                 <label class="form-label small fw-bold text-muted text-uppercase">Email OTP</label>
                                 <div class="input-group">
                                     <input type="text" name="otp" class="form-control form-control-lg rounded-start-4 border-2 text-center" placeholder="6-digit" required>
-                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" disabled title="Gift-card purchases are paused" data-feature-otp="giftcard" data-otp-endpoint="GiftCard.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">Get</button>
+                                    <button type="button" class="btn btn-outline-primary rounded-end-4 border-2" <?php echo bc_giftcard_execution_enabled() ? '' : 'disabled title="Gift-card purchases are paused"'; ?> data-feature-otp="giftcard" data-otp-endpoint="GiftCard.php" data-csrf="<?php echo htmlspecialchars(bc_generate_csrf_token(),ENT_QUOTES,'UTF-8'); ?>">Get</button>
                                 </div>
                             </div>
                         </div>
                         <div id="calcDisplay"></div>
+                        <?php if (bc_giftcard_execution_enabled()): ?>
+                        <button type="submit" class="btn btn-primary w-100 btn-modern py-3 shadow-sm mt-4">Complete Purchase</button>
+                        <?php else: ?>
                         <button type="submit" class="btn btn-primary w-100 btn-modern py-3 shadow-sm mt-4" data-no-lock disabled>Purchase paused</button>
+                        <?php endif; ?>
                     </form>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-11",
+  "version": "2026.11.18-remediation-manifest-12",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -129,7 +129,7 @@
     },
     {
       "name": "bc-giftcard-safety.php",
-      "sha256": "da4a9e4950fac307af0ca2eb293565296cb9ab968f3a03711d396da282aeb213"
+      "sha256": "e2b321a9ee18c8571c997b37e8ea226a5d434fbd3993237c2d33d3dad8dcbb93"
     },
     {
       "name": "bc-crypto-buysell.php",
@@ -178,6 +178,34 @@
     {
       "name": "bc-schema-autoheal.php",
       "sha256": "05c236ffa7808a78e24790772eba470805aa9e67f2648804fe916f0d8871969f"
+    },
+    {
+      "name": "bc-service-intake-bridge.php",
+      "sha256": "867004e08cb04ba1c97e777e71505ce0000161e29108c277e06b96f0b09b2fab"
+    },
+    {
+      "name": "bc-checkout-execution.php",
+      "sha256": "310f5296de69c4a9d329d49b7d108e37a14ebc96065af9a7f76367e9be49cbdc"
+    },
+    {
+      "name": "bc-payout-execution.php",
+      "sha256": "b48f17f8ff55479bb92083add17f9bc596e5d1fd33c33c5d661ed25f491cac90"
+    },
+    {
+      "name": "bc-virtualcard-execution.php",
+      "sha256": "abd6214344196f65cdda3e83d35e47a37821b0b95f3ba3cb03d89212b0633c2e"
+    },
+    {
+      "name": "bc-giftcard-execution.php",
+      "sha256": "5d5cbb0704275a40ad11b227bcf20125d40093c81521c69ab4f757cddd514548"
+    },
+    {
+      "name": "bc-virtualcard-flutterwave.php",
+      "sha256": "7ecc64718ed62c2cd61efe336782dd0b3300f33e616fccc455238b651b2a0be3"
+    },
+    {
+      "name": "bc-giftcard-func.php",
+      "sha256": "2afd8883fa97d88ffff759fdd0a494eb517578a36a2487e9c226ab6218fd2d53"
     }
   ],
   "required_innodb_tables": [

@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS counters (
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS cbs_signer_dispatches (
+  order_id INTEGER PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  payload_sha256 TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  provider_ref TEXT NOT NULL DEFAULT '',
+  tx_hash TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `;
 
 export function openDb(path) {
