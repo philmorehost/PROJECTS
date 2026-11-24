@@ -5,6 +5,9 @@ on:
       - 'PAYHUB/includes/**'
       - 'PAYHUB/tests/webhook_signing_test.php'
       - 'PAYHUB/tests/webhook_money_contract_test.php'
+      - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
+      - 'PAYHUB/install/20261118_webhook_log_compat.sql'
+      - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
       - 'PAYHUB/webhook-paystack.php'
       - 'PAYHUB/verify.php'
@@ -15,6 +18,9 @@ on:
       - 'PAYHUB/includes/**'
       - 'PAYHUB/tests/webhook_signing_test.php'
       - 'PAYHUB/tests/webhook_money_contract_test.php'
+      - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
+      - 'PAYHUB/install/20261118_webhook_log_compat.sql'
+      - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
       - 'PAYHUB/webhook-paystack.php'
       - 'PAYHUB/verify.php'
@@ -46,3 +52,29 @@ jobs:
         run: php PAYHUB/tests/webhook_signing_test.php
       - name: Additive money contract regression matrix (no network)
         run: php PAYHUB/tests/webhook_money_contract_test.php
+  log-schema:
+    name: PayHub delivery log schema MySQL
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-ci-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pdisposable-ci-only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Legacy/current/runtime/missing delivery schema preservation
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/webhook_log_schema_mysql_test.php
