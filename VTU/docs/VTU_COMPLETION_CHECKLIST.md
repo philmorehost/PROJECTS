@@ -65,7 +65,7 @@ A bounded operator CLI `PAYHUB/bin/monitor-webhook-outbox.php` now reports page-
 
 ### Monitoring-agent contract follow-up
 
-`PAYHUB/bin/check-webhook-outbox.php` now provides JSON plus explicit monitoring exit statuses and a bounded multi-page traversal. Page caps/unavailable observations return UNKNOWN, never green. `PAYHUB/OUTBOX_MONITORING.md` defines restricted agent integration and investigation without replay. Source-level local alert integration is implemented; installing/routing an approved alert sink, validating actual notifications, establishing capacity/SLA thresholds and monitoring stale jobs remain operator acceptance. This does not complete provider acceptance or uncertain-event reconciliation.
+`PAYHUB/bin/check-webhook-outbox.php` now provides JSON plus explicit monitoring exit statuses and a bounded multi-page traversal. Page caps/unavailable observations return UNKNOWN, never green. `PAYHUB/OUTBOX_MONITORING.md` defines restricted agent integration and investigation without replay. Source-level local alert integration and an opt-in, SSRF-safe alert sink dispatcher (`PAYHUB/includes/webhook-alert-sink.php`, `PAYHUB/bin/dispatch-webhook-alert.php`, `PAYHUB/tests/webhook_alert_sink_policy_test.php`, disabled unless `PAYHUB_ALERT_SINK_ENABLED=1`) are implemented; provisioning the target HTTPS sink endpoint, validating actual notifications, establishing capacity/SLA thresholds and monitoring stale jobs remain operator acceptance. This does not complete provider acceptance or uncertain-event reconciliation.
 
 ### Investigation-journal follow-up
 

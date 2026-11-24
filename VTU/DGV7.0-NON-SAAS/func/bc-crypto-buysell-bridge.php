@@ -106,5 +106,16 @@ function bc_cbs_bridge_handle(mysqli $db, array $sessionContext, array $payload)
         );
         return ['http_code' => 200, 'body' => ['status' => 'ok', 'order' => $ord]];
     }
+    if ($action === 'create_sell') {
+        $ord = bc_cbs_create_sell_order(
+            $db,
+            $vendorId,
+            $userId,
+            (int)($payload['quote_id'] ?? 0),
+            (string)($payload['request_id'] ?? ''),
+            (string)($payload['deposit_address'] ?? '')
+        );
+        return ['http_code' => 200, 'body' => ['status' => 'ok', 'order' => $ord]];
+    }
     return ['http_code' => 400, 'body' => ['status' => 'error', 'code' => 'INVALID_ACTION']];
 }

@@ -265,12 +265,13 @@ $cbsAssets     = bc_cbs_asset_catalogue();
             }
         }
         try {
+            const action = state.side === 'buy' ? 'execute_buy' : 'create_sell';
             const res = await fetch('api/crypto-buysell.php', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
                 body: JSON.stringify({
-                    action: 'execute_buy',
+                    action,
                     quote_id: state.quoteId,
                     request_id: 'cbs_ord_' + Date.now()
                 })
@@ -278,6 +279,13 @@ $cbsAssets     = bc_cbs_asset_catalogue();
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data.status !== 'ok') {
                 showErr(data.message || data.code || 'Order paused.');
+                return;
+            }
+            if (state.side === 'sell') {
+                const ord = data.order || {};
+                $('bccbs-d-warn').textContent = `Send only ${o.dataset.symbol} on ${o.dataset.networkLabel}. Other coins or networks will be lost.`;
+                $('bccbs-d-addr').textContent = ord.deposit_address || '—';
+                setStep('deposit');
                 return;
             }
             setStep('result');

@@ -129,6 +129,22 @@ try {
         'action' => 'order_status', 'request_id' => 'ord-bridge-01',
     ]);
     cbs_chk($stResp['http_code'] === 200 && $stResp['body']['order']['state'] === 'confirmed' && $stResp['body']['order']['tx_hash'] === 'tron_tx_hash_01', 'order_status returns confirmed tx_hash');
+
+    $sqResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'quote', 'request_id' => 'q-sell-bridge-01', 'side' => 'sell', 'asset' => 'USDT', 'network' => 'TRON',
+        'fiat_currency' => 'NGN', 'crypto_units_1e8' => '500000000', 'rate_fiat_minor' => 160000, 'margin_bps' => 50,
+        'fee_fiat_minor' => 0, 'destination_address' => '',
+    ]);
+    cbs_chk($sqResp['http_code'] === 200, 'sell quote via bridge succeeds');
+    $sOrd1 = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'create_sell', 'quote_id' => $sqResp['body']['quote']['quote_id'], 'request_id' => 'sell-ord-01',
+        'deposit_address' => 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL',
+    ]);
+    $sOrd2 = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'create_sell', 'quote_id' => $sqResp['body']['quote']['quote_id'], 'request_id' => 'sell-ord-01',
+        'deposit_address' => 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL',
+    ]);
+    cbs_chk($sOrd1['http_code'] === 200 && !$sOrd1['body']['order']['replayed'] && $sOrd2['body']['order']['replayed'], 'create_sell is idempotent on replay');
     putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED');
 
     // 5. MyISAM refusal on non-FK table

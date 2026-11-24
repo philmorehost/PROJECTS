@@ -294,6 +294,83 @@ function bc_cbs_execute_buy_order(mysqli $db, $vendorId, $userId, $quoteId, $req
     }
 }
 
+function bc_cbs_create_sell_order(mysqli $db, $vendorId, $userId, $quoteId, $requestId, $depositAddress) {
+    bc_cbs_assert_innodb($db);
+    $vendorId = (int)$vendorId; $userId = (int)$userId; $quoteId = (int)$quoteId;
+    $reqId = trim((string)$requestId);
+    $depAddr = trim((string)$depositAddress);
+    if ($vendorId < 1 || $userId < 1 || $quoteId < 1 || !preg_match('/\A[A-Za-z0-9_.:-]{8,80}\z/D', $reqId)) {
+        throw new InvalidArgumentException('Invalid sell order parameters.');
+    }
+
+    $db->begin_transaction();
+    try {
+        $oq = $db->prepare('SELECT id, quote_id, state, destination_address FROM sas_crypto_trade_orders WHERE vendor_id=? AND request_id=? LIMIT 1');
+        $oq->bind_param('is', $vendorId, $reqId);
+        $oq->execute();
+        $existing = $oq->get_result()->fetch_assoc();
+        $oq->close();
+        if ($existing) {
+            if ((int)$existing['quote_id'] !== $quoteId) throw new RuntimeException('Order request conflict.');
+            $db->commit();
+            return ['order_id' => (int)$existing['id'], 'state' => $existing['state'], 'deposit_address' => $existing['destination_address'], 'replayed' => true];
+        }
+
+        $uq = $db->prepare('SELECT id, is_blocked FROM sas_users WHERE id=? AND vendor_id=? LIMIT 1 FOR UPDATE');
+        $uq->bind_param('ii', $userId, $vendorId);
+        $uq->execute();
+        $user = $uq->get_result()->fetch_assoc();
+        $uq->close();
+        if (!$user || (int)$user['is_blocked'] === 1) throw new RuntimeException('User account blocked or unavailable.');
+
+        $qq = $db->prepare('SELECT id, side, asset, network, fiat_currency, crypto_units_1e8, total_fiat_minor, status, (expires_at < NOW()) AS is_expired FROM sas_crypto_quote_locks WHERE id=? AND vendor_id=? AND user_id=? LIMIT 1 FOR UPDATE');
+        $qq->bind_param('iii', $quoteId, $vendorId, $userId);
+        $qq->execute();
+        $quote = $qq->get_result()->fetch_assoc();
+        $qq->close();
+        if (!$quote || $quote['side'] !== 'sell') throw new RuntimeException('Sell quote unavailable.');
+        if ($quote['status'] !== 'open') throw new RuntimeException('Quote already used or closed.');
+        if ((int)$quote['is_expired'] === 1) {
+            $exp = $db->prepare("UPDATE sas_crypto_quote_locks SET status='expired' WHERE id=? AND status='open'");
+            $exp->bind_param('i', $quoteId);
+            $exp->execute();
+            $exp->close();
+            $db->commit();
+            throw new RuntimeException('Quote expired.');
+        }
+        if (!bc_cbs_validate_destination($quote['network'], $depAddr)) {
+            throw new InvalidArgumentException('Invalid custody deposit address for network.');
+        }
+
+        $uqUp = $db->prepare("UPDATE sas_crypto_quote_locks SET status='consumed' WHERE id=? AND status='open'");
+        $uqUp->bind_param('i', $quoteId);
+        $uqUp->execute();
+        $uqUp->close();
+
+        $ordState = bc_cbs_execution_enabled() ? 'never_attempted' : 'held';
+        $insOrd = $db->prepare('INSERT INTO sas_crypto_trade_orders(vendor_id, user_id, quote_id, request_id, side, asset, network, fiat_currency, crypto_units_1e8, fiat_minor, destination_address, state) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
+        $side = 'sell';
+        $units = (string)$quote['crypto_units_1e8'];
+        $fiatMinor = (int)$quote['total_fiat_minor'];
+        $insOrd->bind_param('iiissssssiss', $vendorId, $userId, $quoteId, $reqId, $side, $quote['asset'], $quote['network'], $quote['fiat_currency'], $units, $fiatMinor, $depAddr, $ordState);
+        $insOrd->execute();
+        $orderId = (int)$insOrd->insert_id;
+        $insOrd->close();
+
+        $ev = $db->prepare('INSERT INTO sas_crypto_trade_events(order_id, vendor_id, from_state, to_state, actor_ref, detail_json) VALUES(?,?,?,?,?,?)');
+        $from = 'new'; $actor = 'user_' . $userId; $djson = json_encode(['quote_id' => $quoteId, 'deposit_address' => $depAddr]);
+        $ev->bind_param('iissss', $orderId, $vendorId, $from, $ordState, $actor, $djson);
+        $ev->execute();
+        $ev->close();
+
+        $db->commit();
+        return ['order_id' => $orderId, 'state' => $ordState, 'deposit_address' => $depAddr, 'replayed' => false];
+    } catch (Throwable $e) {
+        $db->rollback();
+        throw $e;
+    }
+}
+
 function bc_cbs_observe_payout_outcome(mysqli $db, $vendorId, $orderId, $outcome, array $details = []) {
     bc_cbs_assert_innodb($db);
     $vendorId = (int)$vendorId; $orderId = (int)$orderId;
