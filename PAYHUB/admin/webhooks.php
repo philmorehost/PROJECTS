@@ -140,7 +140,7 @@ include '../includes/dashboard-head.php';
                                             </button>
                                         </form>
                                         <?php else: ?>
-                                            <span class="text-xs text-slate-500"><?php echo isset($retryStates[$l['transaction_id']]) ? (($retryStates[$l['transaction_id']] === 'succeeded') ? 'Retry acknowledged; blocked from replay' : 'Retry claimed; reconciliation required') : 'No retry'; ?></span>
+                                            <span class="text-xs text-slate-500"><?php echo isset($retryStates[$l['transaction_id']]) ? (($retryStates[$l['transaction_id']] === 'succeeded') ? 'Delivery acknowledged; blocked from replay' : 'Delivery claimed; reconciliation required') : 'No retry'; ?></span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

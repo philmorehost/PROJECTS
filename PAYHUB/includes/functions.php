@@ -1,6 +1,7 @@
 <?php
 // php-version/includes/functions.php
 require_once __DIR__ . "/webhook-signing.php";
+require_once __DIR__ . "/webhook-initial.php";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -1919,8 +1920,14 @@ function trigger_merchant_webhook($transactionId) {
                 $res = false; $code = 0;
                 $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
             } else {
+                $initialClaim = payhub_claim_initial_webhook($db, $tx, $body);
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+                curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_POST, true);
                 curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
@@ -1936,6 +1943,8 @@ function trigger_merchant_webhook($transactionId) {
                 curl_close($ch);
             }
 
+            if (isset($initialClaim)) payhub_finish_webhook_retry($db, $initialClaim, $code, $res !== false && $curlErr === '');
+
             @file_put_contents(
                 BASE_PATH . 'webhook_debug.log',
                 '[' . date('Y-m-d H:i:s') . '] Outbound merchant webhook (trigger_merchant_webhook) tx='
@@ -1945,26 +1954,12 @@ function trigger_merchant_webhook($transactionId) {
                 FILE_APPEND
             );
 
-            // Record the delivery attempt in the schema admin/webhooks.php reads
-            // (transaction_id, status, attempt_count, last_attempt_at, payload, response).
-            // This previously inserted (user_id, event_type, response_code) - columns that
-            // do not exist in webhook_logs - inside a swallowed catch, so *every* outbound
-            // merchant webhook went unlogged and the admin page was permanently empty.
-            try {
-                $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 180));
-                $logResponse = 'HTTP ' . $code . ($curlErr !== '' ? ' | ' . $curlErr : ($resText !== '' ? ' | ' . $resText : ''));
-                $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
-                $stmtLog->execute([
-                    $tx['id'],
-                    (($code >= 200 && $code < 300) ? 'success' : 'failed'),
-                    $body,
-                    $logResponse
-                ]);
-            } catch (\Throwable $t) {
-                error_log('[PayHub] webhook_logs write failed: ' . $t->getMessage());
-            }
+            // Exact payload/log and exclusive claim were committed before HTTP.
+
         }
-    } catch (\Throwable $e) {}
+    } catch (\Throwable $e) {
+        error_log('[PayHub] Generic merchant delivery unavailable; check required schema and durable claim state. No automatic replay.');
+    }
 }
 
 function log_ledger_entry($userId, $amount, $type, $category, $desc, $is_test = false) {
