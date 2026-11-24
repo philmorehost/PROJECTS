@@ -470,6 +470,12 @@ jobs:
           extensions: fileinfo
           coverage: none
       - name: Install media inspection dependency
-        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+        run: |
+          if ! test -x /usr/bin/ffprobe || ! command -v ffmpeg >/dev/null; then
+            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -qq
+            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y ffmpeg
+          fi
+          /usr/bin/ffprobe -version
+          ffmpeg -version
       - name: Inspect generated MP4 and browser-style WebM fixtures
         run: bash VTU/tests/run_video_evidence_native.sh
