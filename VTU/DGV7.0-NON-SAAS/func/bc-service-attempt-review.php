@@ -20,10 +20,10 @@ function bc_sar_snapshot($read) {
     try {
         $auto=bc_sar_select('SELECT @@autocommit AS enabled',[]);
         if((int)($auto[0]['enabled']??0)!==1)throw new RuntimeException('review_unavailable');
-        if(!$connection_server->query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'))throw new RuntimeException('review_unavailable');
         $engines=bc_sar_select("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('sas_service_attempts','sas_service_attempt_events','sas_service_requests')",[]);
         if(count($engines)!==3)throw new RuntimeException('review_unavailable');
         foreach($engines as $engine)if(strtolower($engine['ENGINE'])!=='innodb')throw new RuntimeException('review_unavailable');
+        if(!$connection_server->query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'))throw new RuntimeException('review_unavailable');
         if(!$connection_server->begin_transaction(MYSQLI_TRANS_START_READ_ONLY|MYSQLI_TRANS_START_WITH_CONSISTENT_SNAPSHOT))throw new RuntimeException('review_unavailable');
         $begun=true;$value=$read();
         if(!$connection_server->commit())throw new RuntimeException('review_unavailable');$begun=false;return $value;
