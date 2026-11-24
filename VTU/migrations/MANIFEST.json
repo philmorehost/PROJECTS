@@ -149,7 +149,7 @@
     },
     {
       "name": "bc-crypto-buysell-worker.php",
-      "sha256": "6895c2e1af49852212f77af85d94a3f53db12984f1d7456bd5bcb40e86c5e1c8"
+      "sha256": "104be4e10f986a59c0acf1fdaca3146328942c8bc267c5cc5b670f3b575251dc"
     },
     {
       "name": "bc-crypto-buysell-bridge.php",

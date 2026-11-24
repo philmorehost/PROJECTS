@@ -225,7 +225,7 @@ function bc_cbs_run_deposit_watcher(mysqli $db, $vendorId, callable $watcherTran
     }
     bc_cbs_assert_innodb($db);
 
-    $q = $db->prepare("SELECT id, vendor_id, user_id, request_id, asset, network, deposit_address, crypto_units_1e8, fiat_minor FROM sas_crypto_trade_orders WHERE vendor_id=? AND side='sell' AND state='awaiting_deposit' ORDER BY id ASC LIMIT ?");
+    $q = $db->prepare("SELECT id, vendor_id, user_id, request_id, asset, network, destination_address AS deposit_address, crypto_units_1e8, fiat_minor FROM sas_crypto_trade_orders WHERE vendor_id=? AND side='sell' AND state='never_attempted' ORDER BY id ASC LIMIT ?");
     $q->bind_param('ii', $vendorId, $limit);
     $q->execute();
     $orders = $q->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -241,9 +241,10 @@ function bc_cbs_run_deposit_watcher(mysqli $db, $vendorId, callable $watcherTran
             continue;
         }
         if (empty($obsResp['observed']) || empty($obsResp['tx_hash'])) {
-            $results[] = ['order_id' => $orderId, 'state' => 'awaiting_deposit'];
+            $results[] = ['order_id' => $orderId, 'state' => 'never_attempted'];
             continue;
         }
+        $txHash = (string)$obsResp['tx_hash'];
         $rec = bc_cbs_record_sell_deposit($db, [
             'vendor_id'              => $vendorId,
             'user_id'                => (int)$order['user_id'],
@@ -251,7 +252,7 @@ function bc_cbs_run_deposit_watcher(mysqli $db, $vendorId, callable $watcherTran
             'network'                => (string)($obsResp['network'] ?? $order['network']),
             'expected_network'       => (string)$order['network'],
             'asset'                  => (string)($obsResp['asset'] ?? $order['asset']),
-            'tx_hash'                => (string)$obsResp['tx_hash'],
+            'tx_hash'                => $txHash,
             'log_index'              => (int)($obsResp['log_index'] ?? 0),
             'deposit_address'        => (string)$order['deposit_address'],
             'expected_units_1e8'     => (string)$order['crypto_units_1e8'],
@@ -264,6 +265,12 @@ function bc_cbs_run_deposit_watcher(mysqli $db, $vendorId, callable $watcherTran
         if ($finalState === 'matched_final') {
             $settle = bc_cbs_settle_sell_deposit($db, $vendorId, (int)$rec['deposit_id'], (string)$order['fiat_minor']);
             $finalState = (string)($settle['state'] ?? $finalState);
+            if ($finalState === 'credited') {
+                $uo = $db->prepare("UPDATE sas_crypto_trade_orders SET state='confirmed', tx_hash=? WHERE id=? AND vendor_id=? AND state='never_attempted'");
+                $uo->bind_param('sii', $txHash, $orderId, $vendorId);
+                $uo->execute();
+                $uo->close();
+            }
         }
         $results[] = [
             'order_id'   => $orderId,
