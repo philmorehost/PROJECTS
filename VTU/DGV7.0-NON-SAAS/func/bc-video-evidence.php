@@ -55,13 +55,15 @@ function bc_video_evidence_inspect($tmp,$mime) {
         $args=[$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska','-show_packets','-show_entries','packet=pts_time,duration_time:format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic','-of','json',$path];
         $process=@proc_open($args,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);
         if(!is_resource($process))return false;
-        fclose($pipes[0]);stream_set_blocking($pipes[1],false);stream_set_blocking($pipes[2],false);
+        fclose($pipes[0]);
+        if(!stream_set_blocking($pipes[1],false)||!stream_set_blocking($pipes[2],false))return false;
         $deadline=microtime(true)+5;
         do {
             $output.=stream_get_contents($pipes[1],262145-strlen($output));
             $errors.=stream_get_contents($pipes[2],8193-strlen($errors));
             if(strlen($output)>262144||strlen($errors)>8192)break;
             $state=proc_get_status($process);
+            if(!is_array($state)||!array_key_exists('running',$state))return false;
             if(!$state['running']){$finished=true;$exit=(int)$state['exitcode'];break;}
             usleep(10000);
         } while(microtime(true)<$deadline);
